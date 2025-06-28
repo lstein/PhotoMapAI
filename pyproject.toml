@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imagematch"
+version = "0.1.0"
+description = "Image indexing and retrieval using CLIP"
+authors = [
+    { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "torch",
+    "Pillow",
+    "clip-anytorch",
+]
+
+[project.scripts]
+index_images = "imagetool:main"
+search_images = "imagetool:main"
