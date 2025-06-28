@@ -1,0 +1,35 @@
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import JSONResponse
+from pathlib import Path
+import shutil
+import tempfile
+from image_search import search_images
+
+app = FastAPI(title="CLIP Image Search API")
+
+@app.post("/search/")
+async def search(
+    file: UploadFile = File(...),
+    embeddings_file: str = Form("clip_image_embeddings.npz"),
+    top_k: int = Form(5)
+):
+    # Save uploaded file to a temporary location
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = Path(tmp.name)
+
+    # Call the search_images function
+    results, scores = search_images(tmp_path, embeddings_file, top_k)
+
+    # Clean up temp file
+    tmp_path.unlink(missing_ok=True)
+
+    # Return results as JSON
+    return JSONResponse(
+        content={
+            "results": [
+                {"filename": str(filename), "score": float(score)}
+                for filename, score in zip(results, scores)
+            ]
+        }
+    )

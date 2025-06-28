@@ -63,7 +63,7 @@ def index_images(image_paths_or_dir: list[Path] | Path, output_file="clip_image_
         try:
             image = (
                 preprocess(Image.open(image_path).convert("RGB"))
-                .unsqueeze(0)
+                .unsqueeze(0)  # type: ignore
                 .to(device)
             )
             with torch.no_grad():
@@ -102,7 +102,7 @@ def search_images(
 
     # Load and preprocess the query image
     query_image = (
-        preprocess(Image.open(query_image_path).convert("RGB")).unsqueeze(0).to(device)
+        preprocess(Image.open(query_image_path).convert("RGB")).unsqueeze(0).to(device)  # type: ignore
     )
 
     # Encode the query image
