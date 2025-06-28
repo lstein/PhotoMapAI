@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CLIP Image Search</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>CLIP Image Search</h1>
+        <form id="upload-form" method="post" enctype="multipart/form-data">
+            <div id="upload-area" class="upload-area"
+                style="display: flex; align-items: center; gap: 16px; padding: 16px 20px;">
+                <label for="file" class="upload-label"
+                    style="margin-bottom: 0; cursor: pointer; white-space: nowrap;">
+                    Click to select or drag an image here
+                </label>
+                <input type="file" id="file" name="file" accept="image/*" required style="display: none;">
+                <div id="preview" style="margin-top: 0;">
+                    {% if uploaded_image_url %}
+                    <img src="{{ uploaded_image_url }}"
+                        style="max-width:80px;max-height:80px;border-radius:8px;box-shadow:0 1px 6px #0006;">
+                    {% endif %}
+                </div>
+            </div>
+            <input type="hidden" name="embeddings_file" value="clip_image_embeddings.npz">
+            <input type="hidden" name="top_k" value="9">
+        </form>
+        {% if results %}
+        <h2>Top 9 Matches</h2>
+        <div class="results-scroll">
+            <div class="grid">
+                {% for img in results %}
+                <div class="tile">
+                    <img src="{{ img.filename }}" alt="Match">
+                    <div class="score">Score: {{ img.score }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <script>
+        const uploadForm = document.getElementById('upload-form');
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file');
+        const preview = document.getElementById('preview');
+
+        uploadArea.addEventListener('click', (e) => {
+            // Only trigger if the click is directly on the upload area, not on its children
+            if (e.target === uploadArea) {
+                fileInput.click();
+            }
+        });
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                showThumbnail(e.dataTransfer.files[0]);
+                uploadForm.submit(); // Automatically submit the form
+            }
+        });
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) {
+                showThumbnail(fileInput.files[0]);
+                uploadForm.submit(); // Automatically submit the form
+            }
+        });
+
+        function showThumbnail(file) {
+            if (!file.type.startsWith('image/')) {
+                preview.innerHTML = '';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                preview.innerHTML = `<img src="${e.target.result}" style="max-width:80px;max-height:80px;border-radius:8px;box-shadow:0 1px 6px #0006;">`;
+            };
+            reader.readAsDataURL(file);
+        }
+    </script>
+</body>
+
+</html>

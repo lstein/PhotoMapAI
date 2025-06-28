@@ -12,18 +12,10 @@ def do_index():
 
     parser = argparse.ArgumentParser(description="Index and search images using CLIP.")
     parser.add_argument(
-        "--index", nargs="+", 
-        type=Path,
-        help="Paths to images or a directory to index."
-    )
-    parser.add_argument(
         "--embeddings",
         type=str,
         default="clip_image_embeddings.npz",
         help="Output file for indexed embeddings.",
-    )
-    parser.add_argument(
-        "--top_k", type=int, default=5, help="Number of top similar images to return."
     )
     # Additional arguments are specify the image files or directories to Index.
     parser.add_argument(
