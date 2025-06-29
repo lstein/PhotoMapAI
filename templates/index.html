@@ -8,6 +8,16 @@
         input[type="number"] {
             color: #fff;
         }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 
@@ -29,10 +39,7 @@
                         title="Click to search with this image">
                     {% endif %}
                 </div>
-                <!-- <button type="submit" id="search-btn"
-                    style="margin-left: 12px; margin-right: 12px; padding: 8px 18px; border-radius: 6px; background: #ffb86c; color: #23272a; border: none; font-weight: bold; cursor: pointer;">
-                    Search
-                </button> -->
+
                 <div
                     style="display: flex; flex-direction: column; gap: 8px; margin-left: 8px; color: #ccc; font-size: 0.95em; min-width: 140px;">
                     <label style="display: flex; justify-content: space-between; align-items: center;">
@@ -65,11 +72,26 @@
         </div>
         {% endif %}
     </div>
+    <div id="spinner"
+        style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:#23272acc; z-index:9999; align-items:center; justify-content:center;">
+        <div style="display:flex; flex-direction:column; align-items:center;">
+            <div
+                style="border:8px solid #444; border-top:8px solid #ffb86c; border-radius:50%; width:64px; height:64px; animation:spin 1s linear infinite;">
+            </div>
+            <div style="color:#fff; margin-top:18px; font-size:1.2em;">Searching...</div>
+        </div>
+    </div>
     <script>
         const uploadForm = document.getElementById('upload-form');
         const uploadArea = document.getElementById('upload-area');
         const fileInput = document.getElementById('file');
         const preview = document.getElementById('preview');
+        const spinner = document.getElementById('spinner');
+
+        // Show spinner on form submit
+        uploadForm.addEventListener('submit', function () {
+            spinner.style.display = 'flex';
+        });
 
         // Restore thumbnail from localStorage if present and no file selected
         document.addEventListener('DOMContentLoaded', () => {
@@ -84,6 +106,7 @@
                             const dt = new DataTransfer();
                             dt.items.add(file);
                             fileInput.files = dt.files;
+                            spinner.style.display = 'flex';
                             uploadForm.submit();
                         });
                 };
@@ -93,6 +116,7 @@
             if (previewImg) {
                 previewImg.onclick = () => {
                     if (fileInput.files.length) {
+                        spinner.style.display = 'flex';
                         uploadForm.submit();
                     } else {
                         const dataUrl = localStorage.getItem('queryImage');
@@ -104,6 +128,7 @@
                                     const dt = new DataTransfer();
                                     dt.items.add(file);
                                     fileInput.files = dt.files;
+                                    spinner.style.display = 'flex';
                                     uploadForm.submit();
                                 });
                         } else {
@@ -130,16 +155,20 @@
         });
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             uploadArea.classList.remove('dragover');
             if (e.dataTransfer.files.length) {
                 fileInput.files = e.dataTransfer.files;
                 showThumbnail(e.dataTransfer.files[0]);
+                spinner.style.display = 'flex';
                 uploadForm.submit();
             }
         });
         fileInput.addEventListener('change', () => {
             if (fileInput.files.length) {
                 showThumbnail(fileInput.files[0]);
+                spinner.style.display = 'flex';
+                uploadForm.submit();
             }
         });
 
@@ -155,7 +184,10 @@
                 // Save to localStorage
                 localStorage.setItem('queryImage', dataUrl);
                 // Add click handler to the new thumbnail
-                document.getElementById('preview-img').onclick = () => uploadForm.submit();
+                document.getElementById('preview-img').onclick = () => {
+                    spinner.style.display = 'flex';
+                    uploadForm.submit();
+                }
             };
             reader.readAsDataURL(file);
         }

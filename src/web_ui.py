@@ -26,7 +26,6 @@ async def form_post(
     top_k: int = Form(9),
     cosine_cutoff: float = Form(0.0)
 ):
-    print(f"Received file: {file.filename}, embeddings_file: {embeddings_file}, top_k: {top_k}, cosine_cutoff: {cosine_cutoff}")
     # Save uploaded file to a temporary location
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         shutil.copyfileobj(file.file, tmp)
