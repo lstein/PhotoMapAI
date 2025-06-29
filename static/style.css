@@ -113,3 +113,7 @@ img {
     box-shadow: 0 2px 16px #000a;
     padding: 16px 8px;
 }
+
+input[type="number"] {
+    color: #fff;
+}

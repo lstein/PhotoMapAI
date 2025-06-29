@@ -4,6 +4,11 @@
 <head>
     <title>CLIP Image Search</title>
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        input[type="number"] {
+            color: #fff;
+        }
+    </style>
 </head>
 
 <body>
@@ -11,21 +16,40 @@
         <h1>CLIP Image Search</h1>
         <form id="upload-form" method="post" enctype="multipart/form-data">
             <div id="upload-area" class="upload-area"
-                style="display: flex; align-items: center; gap: 16px; padding: 16px 20px;">
-                <label for="file" class="upload-label"
-                    style="margin-bottom: 0; cursor: pointer; white-space: nowrap;">
+                style="display: flex; align-items: center; gap: 16px; padding: 12px 16px;">
+                <label for="file" class="upload-label" style="margin-bottom: 0; cursor: pointer; white-space: nowrap;">
                     Click to select or drag an image here
                 </label>
-                <input type="file" id="file" name="file" accept="image/*" required style="display: none;">
+                <input type="file" id="file" name="file" accept="image/*" required
+                    style="opacity:0;position:absolute;left:-9999px;">
                 <div id="preview" style="margin-top: 0;">
                     {% if uploaded_image_url %}
-                    <img src="{{ uploaded_image_url }}"
-                        style="max-width:80px;max-height:80px;border-radius:8px;box-shadow:0 1px 6px #0006;">
+                    <img src="{{ uploaded_image_url }}" id="preview-img"
+                        style="max-width:80px;max-height:80px;border-radius:8px;box-shadow:0 1px 6px #0006; cursor: pointer;"
+                        title="Click to search with this image">
                     {% endif %}
+                </div>
+                <!-- <button type="submit" id="search-btn"
+                    style="margin-left: 12px; margin-right: 12px; padding: 8px 18px; border-radius: 6px; background: #ffb86c; color: #23272a; border: none; font-weight: bold; cursor: pointer;">
+                    Search
+                </button> -->
+                <div
+                    style="display: flex; flex-direction: column; gap: 8px; margin-left: 8px; color: #ccc; font-size: 0.95em; min-width: 140px;">
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        Top K:
+                        <input type="number" id="top_k" name="top_k" min="1" max="50"
+                            value="{{ top_k if top_k is defined else 9 }}"
+                            style="width: 60px; margin-left: 4px; background: transparent; border: 1px solid #444; border-radius: 4px; color: #fff; text-align: right;">
+                    </label>
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        Cosine Cutoff:
+                        <input type="number" id="cosine_cutoff" name="cosine_cutoff" min="0" max="1" step="0.01"
+                            value="{{ cosine_cutoff if cosine_cutoff is defined else 0.6 }}"
+                            style="width: 70px; margin-left: 4px; background: transparent; border: 1px solid #444; border-radius: 4px; color: #fff; text-align: right;">
+                    </label>
                 </div>
             </div>
             <input type="hidden" name="embeddings_file" value="clip_image_embeddings.npz">
-            <input type="hidden" name="top_k" value="9">
         </form>
         {% if results %}
         <h2>Top 9 Matches</h2>
@@ -47,6 +71,49 @@
         const fileInput = document.getElementById('file');
         const preview = document.getElementById('preview');
 
+        // Restore thumbnail from localStorage if present and no file selected
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!fileInput.files.length && !document.getElementById('preview-img') && localStorage.getItem('queryImage')) {
+                const dataUrl = localStorage.getItem('queryImage');
+                preview.innerHTML = `<img src="${dataUrl}" id="preview-img" style="max-width:80px;max-height:80px;border-radius:8px;box-shadow:0 1px 6px #0006; cursor: pointer;" title="Click to search with this image">`;
+                document.getElementById('preview-img').onclick = () => {
+                    fetch(dataUrl)
+                        .then(res => res.blob())
+                        .then(blob => {
+                            const file = new File([blob], "query.jpg", { type: blob.type });
+                            const dt = new DataTransfer();
+                            dt.items.add(file);
+                            fileInput.files = dt.files;
+                            uploadForm.submit();
+                        });
+                };
+            }
+            // Add click handler to server-rendered thumbnail
+            const previewImg = document.getElementById('preview-img');
+            if (previewImg) {
+                previewImg.onclick = () => {
+                    if (fileInput.files.length) {
+                        uploadForm.submit();
+                    } else {
+                        const dataUrl = localStorage.getItem('queryImage');
+                        if (dataUrl) {
+                            fetch(dataUrl)
+                                .then(res => res.blob())
+                                .then(blob => {
+                                    const file = new File([blob], "query.jpg", { type: blob.type });
+                                    const dt = new DataTransfer();
+                                    dt.items.add(file);
+                                    fileInput.files = dt.files;
+                                    uploadForm.submit();
+                                });
+                        } else {
+                            fileInput.click();
+                        }
+                    }
+                };
+            }
+        });
+
         uploadArea.addEventListener('click', (e) => {
             // Only trigger if the click is directly on the upload area, not on its children
             if (e.target === uploadArea) {
@@ -67,13 +134,11 @@
             if (e.dataTransfer.files.length) {
                 fileInput.files = e.dataTransfer.files;
                 showThumbnail(e.dataTransfer.files[0]);
-                uploadForm.submit(); // Automatically submit the form
             }
         });
         fileInput.addEventListener('change', () => {
             if (fileInput.files.length) {
                 showThumbnail(fileInput.files[0]);
-                uploadForm.submit(); // Automatically submit the form
             }
         });
 
@@ -84,7 +149,12 @@
             }
             const reader = new FileReader();
             reader.onload = function (e) {
-                preview.innerHTML = `<img src="${e.target.result}" style="max-width:80px;max-height:80px;border-radius:8px;box-shadow:0 1px 6px #0006;">`;
+                const dataUrl = e.target.result;
+                preview.innerHTML = `<img src="${dataUrl}" id="preview-img" style="max-width:80px;max-height:80px;border-radius:8px;box-shadow:0 1px 6px #0006; cursor: pointer;" title="Click to search with this image">`;
+                // Save to localStorage
+                localStorage.setItem('queryImage', dataUrl);
+                // Add click handler to the new thumbnail
+                document.getElementById('preview-img').onclick = () => uploadForm.submit();
             };
             reader.readAsDataURL(file);
         }

@@ -23,8 +23,10 @@ async def form_post(
     request: Request,
     file: UploadFile,
     embeddings_file: str = Form("clip_image_embeddings.npz"),
-    top_k: int = Form(9)
+    top_k: int = Form(9),
+    cosine_cutoff: float = Form(0.0)
 ):
+    print(f"Received file: {file.filename}, embeddings_file: {embeddings_file}, top_k: {top_k}, cosine_cutoff: {cosine_cutoff}")
     # Save uploaded file to a temporary location
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         shutil.copyfileobj(file.file, tmp)
@@ -33,11 +35,20 @@ async def form_post(
     # Call the search_images function
     results, scores = search_images(tmp_path, embeddings_file, top_k)
 
-    # Prepare results for display (assuming filenames are accessible via /images/)
-    image_tiles = [
-        {"filename": f"{re.sub('/net/cubox/CineRAID', '/images', filename)}", 
-         "score": f"{score:.4f}"}
+    # Apply cosine similarity cutoff
+    filtered = [
+        (filename, score)
         for filename, score in zip(results, scores)
+        if score >= cosine_cutoff
+    ]
+    # If not enough results after cutoff, pad with top results
+    # if len(filtered) < top_k:
+    #     filtered = list(zip(results, scores))[:top_k]
+
+    image_tiles = [
+        {"filename": f"{re.sub('/net/cubox/CineRAID', '/images', filename)}",
+         "score": f"{score:.4f}"}
+        for filename, score in filtered
     ]
 
     with open(tmp_path, "rb") as f:
@@ -48,5 +59,11 @@ async def form_post(
 
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "results": image_tiles, "uploaded_image_url": uploaded_image_url}
+        {
+            "request": request,
+            "results": image_tiles,
+            "uploaded_image_url": uploaded_image_url,
+            "top_k": top_k,
+            "cosine_cutoff": cosine_cutoff,
+        }
     )
