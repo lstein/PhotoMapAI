@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from image_search import index_images, search_images
+from image_search import index_images, search_images, search_images_by_text
 
 def do_index():
     import argparse
@@ -58,15 +58,43 @@ def do_search():
         print(f"{filename}: {score:.4f}")
 
 
+def do_text_search():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Search images using CLIP and a text query.")
+    parser.add_argument("query", 
+                        type=str, 
+                        help="Text query for searching images.")
+    parser.add_argument(
+        "--embeddings",
+        type=str,
+        default="clip_image_embeddings.npz",
+        help="File containing indexed embeddings and filenames.",
+    )
+    parser.add_argument(
+        "--top_k", type=int, default=5, help="Number of top similar images to return."
+    )
+
+    args = parser.parse_args()
+
+    results, scores = search_images_by_text(args.query, args.embeddings, args.top_k)
+    print("Top similar images for query:")
+    for filename, score in zip(results, scores):
+        print(f"{filename}: {score:.4f}")
+
+
 def main():
-    if Path(sys.argv[0]).name == "index_images":
+    prog = Path(sys.argv[0]).name
+    if prog == "index_images":
         do_index()
-    elif Path(sys.argv[0]).name == "search_images":
+    elif prog == "search_images":
         do_search()
+    elif prog == "search_text":
+        do_text_search()
     else:
-        print("Usage: index_images or search_images")
+        print("Usage: index_images, search_images, or search_text")
         print(
-            "Run 'index_images --help' or 'search_images --help' for more information."
+            "Run 'index_images --help', 'search_images --help', or 'search_text --help' for more information."
         )
 
 

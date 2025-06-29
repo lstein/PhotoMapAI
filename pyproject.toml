@@ -20,3 +20,5 @@ dependencies = [
 [project.scripts]
 index_images = "imagetool:main"
 search_images = "imagetool:main"
+search_text = "imagetool:main"
+

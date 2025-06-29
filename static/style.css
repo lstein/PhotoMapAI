@@ -45,9 +45,18 @@ h2 {
 .upload-label {
     font-weight: bold;
     color: #ffb86c;
-    text-decoration: underline;
+    /* text-decoration: underline; */
     cursor: pointer;
     margin-bottom: 0;
+}
+
+.upload-label .upload-note {
+    display: block;
+    font-size: 0.92em;
+    color: #aaa;
+    font-weight: normal;
+    text-decoration: none !important;
+    cursor: default;
 }
 
 button {
@@ -116,4 +125,8 @@ img {
 
 input[type="number"] {
     color: #fff;
+}
+
+.upload-label span {
+    text-decoration: none !important;
 }

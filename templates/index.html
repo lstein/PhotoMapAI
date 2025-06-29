@@ -23,12 +23,16 @@
 
 <body>
     <div class="container">
-        <h1>CLIP Image Search</h1>
+        <h1>Image Search</h1>
         <form id="upload-form" method="post" enctype="multipart/form-data">
             <div id="upload-area" class="upload-area"
                 style="display: flex; align-items: center; gap: 16px; padding: 12px 16px;">
                 <label for="file" class="upload-label" style="margin-bottom: 0; cursor: pointer; white-space: nowrap;">
-                    Click to select or drag an image here
+                    Click to select or drag an image here.
+                    <br>
+                    <span class="upload-note">
+                        You can also paste an image directly.<br>Click on the thumbnail to repeat the search.
+                    </span>
                 </label>
                 <input type="file" id="file" name="file" accept="image/*" required
                     style="opacity:0;position:absolute;left:-9999px;">
@@ -49,7 +53,7 @@
                             style="width: 60px; margin-left: 4px; background: transparent; border: 1px solid #444; border-radius: 4px; color: #fff; text-align: right;">
                     </label>
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        Cosine Cutoff:
+                        Minimum Score:
                         <input type="number" id="cosine_cutoff" name="cosine_cutoff" min="0" max="1" step="0.01"
                             value="{{ cosine_cutoff if cosine_cutoff is defined else 0.6 }}"
                             style="width: 70px; margin-left: 4px; background: transparent; border: 1px solid #444; border-radius: 4px; color: #fff; text-align: right;">
@@ -58,18 +62,28 @@
             </div>
             <input type="hidden" name="embeddings_file" value="clip_image_embeddings.npz">
         </form>
-        {% if results %}
-        <h2>Top 9 Matches</h2>
-        <div class="results-scroll">
-            <div class="grid">
-                {% for img in results %}
-                <div class="tile">
-                    <img src="{{ img.filename }}" alt="Match">
-                    <div class="score">Score: {{ img.score }}</div>
+        {% if results is defined %}
+            {% if results %}
+                <h2>
+                    Top {{ results|length }} Match{{ 'es' if results|length != 1 else '' }}
+                </h2>
+                <div class="results-scroll">
+                    <div class="grid">
+                        {% for img in results %}
+                        <div class="tile">
+                            <img src="{{ img.filename }}" alt="Match">
+                            <div class="score">Score: {{ img.score }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
-                {% endfor %}
-            </div>
-        </div>
+            {% else %}
+                {% if request.method == 'POST' %}
+                <div class="results-scroll" style="text-align:center; color:#ffb86c; font-size:1.2em; padding:32px;">
+                    No matches found for your query.
+                </div>
+                {% endif %}
+            {% endif %}
         {% endif %}
     </div>
     <div id="spinner"
@@ -87,8 +101,26 @@
         const fileInput = document.getElementById('file');
         const preview = document.getElementById('preview');
         const spinner = document.getElementById('spinner');
+        const topKInput = document.getElementById('top_k');
+        const cosineCutoffInput = document.getElementById('cosine_cutoff');
 
-        // Show spinner on form submit
+        // --- Persist top_k and cosine_cutoff values in localStorage ---
+        document.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('top_k')) {
+                topKInput.value = localStorage.getItem('top_k');
+            }
+            if (localStorage.getItem('cosine_cutoff')) {
+                cosineCutoffInput.value = localStorage.getItem('cosine_cutoff');
+            }
+        });
+
+        topKInput.addEventListener('change', () => {
+            localStorage.setItem('top_k', topKInput.value);
+        });
+        cosineCutoffInput.addEventListener('change', () => {
+            localStorage.setItem('cosine_cutoff', cosineCutoffInput.value);
+        });
+
         uploadForm.addEventListener('submit', function () {
             spinner.style.display = 'flex';
         });
@@ -140,7 +172,6 @@
         });
 
         uploadArea.addEventListener('click', (e) => {
-            // Only trigger if the click is directly on the upload area, not on its children
             if (e.target === uploadArea) {
                 fileInput.click();
             }
@@ -172,6 +203,25 @@
             }
         });
 
+        document.addEventListener('paste', (e) => {
+            const items = (e.clipboardData || window.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        const dt = new DataTransfer();
+                        dt.items.add(file);
+                        fileInput.files = dt.files;
+                        showThumbnail(file);
+                        spinner.style.display = 'flex';
+                        uploadForm.submit();
+                    }
+                    e.preventDefault();
+                    break;
+                }
+            }
+        });
+
         function showThumbnail(file) {
             if (!file.type.startsWith('image/')) {
                 preview.innerHTML = '';
@@ -181,13 +231,11 @@
             reader.onload = function (e) {
                 const dataUrl = e.target.result;
                 preview.innerHTML = `<img src="${dataUrl}" id="preview-img" style="max-width:80px;max-height:80px;border-radius:8px;box-shadow:0 1px 6px #0006; cursor: pointer;" title="Click to search with this image">`;
-                // Save to localStorage
                 localStorage.setItem('queryImage', dataUrl);
-                // Add click handler to the new thumbnail
                 document.getElementById('preview-img').onclick = () => {
                     spinner.style.display = 'flex';
                     uploadForm.submit();
-                }
+                };
             };
             reader.readAsDataURL(file);
         }

@@ -123,3 +123,45 @@ def search_images(
     top_indices = similarities.argsort()[-top_k:][::-1]
 
     return filenames[top_indices], similarities[top_indices]
+
+
+def search_images_by_text(
+    text_query: str, embeddings_file="clip_image_embeddings.npz", top_k=5
+):
+    """
+    Search for similar images using a natural language text query.
+
+    Args:
+        text_query (str): The text query to search for.
+        embeddings_file (str): File containing indexed embeddings and filenames.
+        top_k (int): Number of top similar images to return.
+    """
+    import clip
+
+    # Load the saved embeddings and filenames
+    data = np.load(embeddings_file, allow_pickle=True)
+    embeddings = data["embeddings"]  # shape: (N, 512)
+    filenames = data["filenames"]  # shape: (N,)
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model, preprocess = clip.load("ViT-B/32", device=device)
+
+    # Encode the text query
+    with torch.no_grad():
+        text_tokens = clip.tokenize([text_query]).to(device)
+        text_embedding = model.encode_text(text_tokens).cpu().numpy().flatten()
+
+    # Normalize embeddings for cosine similarity
+    def normalize(x):
+        return x / np.linalg.norm(x, axis=-1, keepdims=True)
+
+    embeddings_norm = normalize(embeddings)
+    text_embedding_norm = normalize(text_embedding)
+
+    # Compute cosine similarity
+    similarities = embeddings_norm @ text_embedding_norm
+
+    # Get top K most similar images
+    top_indices = similarities.argsort()[-top_k:][::-1]
+
+    return filenames[top_indices], similarities[top_indices]
