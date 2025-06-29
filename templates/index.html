@@ -134,6 +134,7 @@
             if (e.dataTransfer.files.length) {
                 fileInput.files = e.dataTransfer.files;
                 showThumbnail(e.dataTransfer.files[0]);
+                uploadForm.submit();
             }
         });
         fileInput.addEventListener('change', () => {
