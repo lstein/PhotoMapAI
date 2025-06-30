@@ -103,6 +103,21 @@
             <div style="color:#fff; margin-top:18px; font-size:1.2em;">Searching...</div>
         </div>
     </div>
+    <div id="popup-preview" style="
+    display: none;
+    position: fixed;
+    z-index: 10000;
+    pointer-events: none;
+    border: 2px solid #444;
+    background: #111;
+    padding: 8px;
+    border-radius: 8px;
+    box-shadow: 0 4px 32px #000a;
+    max-width: 800px;
+    max-height: 800px;
+">
+        <img id="popup-preview-img" src="" style="max-width: 800px; max-height: 800px; display: block; border-radius: 6px;">
+    </div>
     <script>
         const uploadForm = document.getElementById('upload-form');
         const uploadArea = document.getElementById('upload-area');
@@ -280,6 +295,101 @@
                 localStorage.removeItem('queryImage');
                 fileInput.value = '';
                 uploadForm.submit();
+            }
+        });
+
+        // --- Popup preview on tile hover with delay ---
+        const popup = document.getElementById('popup-preview');
+        const popupImg = document.getElementById('popup-preview-img');
+        let popupTimer = null;
+        let lastMouseMove = 0;
+        let mouseX = 0;
+        let mouseY = 0;
+
+        document.querySelectorAll('.tile img').forEach(img => {
+            let hoverActive = false;
+
+            img.addEventListener('mouseenter', function (e) {
+                hoverActive = true;
+                lastMouseMove = Date.now();
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+
+                function onMove(moveEvent) {
+                    lastMouseMove = Date.now();
+                    mouseX = moveEvent.clientX;
+                    mouseY = moveEvent.clientY;
+                }
+                img.addEventListener('mousemove', onMove);
+
+                // Start a timer to show the popup after 0.5 seconds of no movement
+                popupTimer = setInterval(() => {
+                    if (hoverActive && Date.now() - lastMouseMove > 500) {
+                        popupImg.src = img.src;
+                        popup.style.display = 'block';
+                        // Force layout to get correct dimensions
+                        popup.style.left = '-9999px';
+                        popup.style.top = '-9999px';
+                        setTimeout(() => {
+                            document.onmousemove = function (moveEvent) {
+                                let x = moveEvent.clientX + 24;
+                                let y = moveEvent.clientY + 24;
+                                const pad = 16;
+                                const w = popup.offsetWidth;
+                                const h = popup.offsetHeight;
+                                if (x + w > window.innerWidth - pad) x = window.innerWidth - w - pad;
+                                if (y + h > window.innerHeight - pad) y = window.innerHeight - h - pad;
+                                popup.style.left = x + 'px';
+                                popup.style.top = y + 'px';
+                            };
+                            // Immediately position at last known mouse location
+                            let x = mouseX + 24;
+                            let y = mouseY + 24;
+                            const pad = 16;
+                            const w = popup.offsetWidth;
+                            const h = popup.offsetHeight;
+                            if (x + w > window.innerWidth - pad) x = window.innerWidth - w - pad;
+                            if (y + h > window.innerHeight - pad) y = window.innerHeight - h - pad;
+                            popup.style.left = x + 'px';
+                            popup.style.top = y + 'px';
+                        }, 0);
+                        clearInterval(popupTimer);
+                        popupTimer = null;
+                        img.removeEventListener('mousemove', onMove);
+                    }
+                }, 100);
+            });
+
+            img.addEventListener('mouseleave', function () {
+                hoverActive = false;
+                popup.style.display = 'none';
+                popupImg.src = '';
+                document.onmousemove = null;
+                if (popupTimer) {
+                    clearInterval(popupTimer);
+                    popupTimer = null;
+                }
+                img.removeEventListener('mousemove', null);
+            });
+        });
+
+        // Hide popup preview on mousedown and drag events
+        document.addEventListener('mousedown', () => {
+            popup.style.display = 'none';
+            popupImg.src = '';
+            document.onmousemove = null;
+            if (popupTimer) {
+                clearInterval(popupTimer);
+                popupTimer = null;
+            }
+        });
+        document.addEventListener('dragstart', () => {
+            popup.style.display = 'none';
+            popupImg.src = '';
+            document.onmousemove = null;
+            if (popupTimer) {
+                clearInterval(popupTimer);
+                popupTimer = null;
             }
         });
     </script>
