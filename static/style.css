@@ -130,3 +130,26 @@ input[type="number"] {
 .upload-label span {
     text-decoration: none !important;
 }
+
+#clear-preview {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    margin: 0px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: #222c;
+    color: #fff;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+    z-index: 2;
+}
+ 

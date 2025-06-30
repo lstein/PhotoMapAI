@@ -30,8 +30,8 @@ async def form_post(
     file: UploadFile = None,
     text_query: str = Form(None),
     embeddings_file: str = Form(EMBEDDINGS_FILE),
-    top_k: int = Form(9),
-    cosine_cutoff: float = Form(0.0)
+    top_k: int = Form(20),
+    cosine_cutoff: float = Form(0.25)  # Default cosine similarity cutoff
 ):
     image_tiles = []
     uploaded_image_url = None
@@ -79,5 +79,6 @@ async def form_post(
             "uploaded_image_url": uploaded_image_url,
             "top_k": top_k,
             "cosine_cutoff": cosine_cutoff,
+            "text_query": text_query, 
         }
     )

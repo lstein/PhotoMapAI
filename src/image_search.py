@@ -186,8 +186,6 @@ def search_images_by_text(
         embeddings_file (str): File containing indexed embeddings and filenames.
         top_k (int): Number of top similar images to return.
     """
-    import clip
-
     # Load the saved embeddings and filenames
     data = np.load(embeddings_file, allow_pickle=True)
     embeddings = data["embeddings"]  # shape: (N, 512)

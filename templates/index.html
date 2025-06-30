@@ -42,27 +42,7 @@
                     <img src="{{ uploaded_image_url }}" id="preview-img"
                         style="max-width:100%; max-height:100%; display:block; border-radius:8px; box-shadow:0 1px 6px #0006; cursor:pointer;"
                         title="Click to search with this image">
-                    <button type="button" id="clear-preview" style="
-            position: absolute;
-            top: 0px;
-            left: 0px;
-            margin: 0px;
-            width: 22px;
-            height: 22px;
-            padding: 0;
-            border: none;
-            border-radius: 4px;
-            background: #222c;
-            color: #fff;
-            font-size: 1.1em;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0.8;
-            z-index: 2;
-        " title="Clear image">&#10005;</button>
+                    <button type="button" id="clear-preview" title="Clear image">&#10005;</button>
                     {% endif %}
                 </div>
 
@@ -85,6 +65,7 @@
             <label for="text_query" style="margin-bottom: 0; color: #ccc; font-size: 0.95em;">
                 Or search by text:
                 <input type="text" id="text_query" name="text_query" placeholder="Describe what you're looking for"
+                    value="{{ text_query if text_query is defined else '' }}"
                     style="width: 260px; margin-left: 8px; background: transparent; border: 1px solid #444; border-radius: 4px; color: #fff; padding: 4px;">
             </label>
             <!-- <input type="hidden" name="embeddings_file" value="clip_image_embeddings.npz"> -->
