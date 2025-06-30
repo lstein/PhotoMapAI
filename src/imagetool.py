@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from image_search import index_images, search_images, search_images_by_text
+from image_search import index_images, update_embeddings, search_images, search_images_by_text
 
 def do_index():
     import argparse
@@ -32,6 +32,34 @@ def do_index():
     else:
         index_images(args.image_paths, args.embeddings)
 
+def do_update_index():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Update the CLIP search index.")
+    parser.add_argument(
+        "--embeddings",
+        type=str,
+        default="clip_image_embeddings.npz",
+        help="Output file for indexed embeddings.",
+    )
+    # Additional arguments are specify the image files or directories to Index.
+    parser.add_argument(
+        "image_paths",
+        nargs="+",
+        type=Path,
+        help="Paths to images or a directory to index. If a directory is provided, all images in that directory will be indexed.",
+    )  
+
+    args = parser.parse_args()
+    # raise an exception of args.embeddings does not exist
+    if not os.path.exists(args.embeddings):
+        raise FileNotFoundError(f"Embeddings file '{args.embeddings}' does not exist. Please index images first.")  
+
+    # If a single argument is given and it's a directory, treat as directory
+    if len(args.image_paths) == 1 and os.path.isdir(args.image_paths[0]):
+        update_embeddings(args.image_paths[0], args.embeddings)
+    else:
+        update_embeddings(args.image_paths, args.embeddings)
 
 def do_search():
     import argparse
@@ -91,6 +119,8 @@ def main():
         do_search()
     elif prog == "search_text":
         do_text_search()
+    elif prog == "update_index":
+        do_update_index()
     else:
         print("Usage: index_images, search_images, or search_text")
         print(

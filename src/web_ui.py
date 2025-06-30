@@ -1,3 +1,5 @@
+import os
+import sys
 from fastapi import FastAPI, UploadFile, Form, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,8 +11,12 @@ import base64
 from pathlib import Path
 from image_search import search_images
 
+# Read from environment variables or use defaults
+IMAGES_DIR = os.environ.get("IMAGES_DIR", "/net/cubox/CineRAID")
+EMBEDDINGS_FILE = os.environ.get("EMBEDDINGS_FILE", "clip_image_embeddings.npz")
+
 app = FastAPI(title="CLIP Image Search Web UI")
-app.mount("/images", StaticFiles(directory="/net/cubox/CineRAID"), name="images")
+app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
@@ -22,7 +28,7 @@ async def form_get(request: Request):
 async def form_post(
     request: Request,
     file: UploadFile,
-    embeddings_file: str = Form("clip_image_embeddings.npz"),
+    embeddings_file: str = Form(EMBEDDINGS_FILE),
     top_k: int = Form(9),
     cosine_cutoff: float = Form(0.0)
 ):
@@ -40,12 +46,9 @@ async def form_post(
         for filename, score in zip(results, scores)
         if score >= cosine_cutoff
     ]
-    # If not enough results after cutoff, pad with top results
-    # if len(filtered) < top_k:
-    #     filtered = list(zip(results, scores))[:top_k]
 
     image_tiles = [
-        {"filename": f"{re.sub('/net/cubox/CineRAID', '/images', filename)}",
+        {"filename": f"{re.sub(IMAGES_DIR, '/images', filename)}",
          "score": f"{score:.4f}"}
         for filename, score in filtered
     ]

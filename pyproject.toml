@@ -21,4 +21,5 @@ dependencies = [
 index_images = "imagetool:main"
 search_images = "imagetool:main"
 search_text = "imagetool:main"
+update_index = "imagetool:main"
 
