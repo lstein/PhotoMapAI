@@ -11,8 +11,9 @@ app = FastAPI(title="CLIP Image Search API")
 async def search(
     file: UploadFile = File(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
-    top_k: int = Form(5)
+    top_k: int = Form(20)
 ):
+    '''Search for similar images using a query image.'''
     # Save uploaded file to a temporary location
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         shutil.copyfileobj(file.file, tmp)
