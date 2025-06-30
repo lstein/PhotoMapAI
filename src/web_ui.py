@@ -31,7 +31,7 @@ async def form_post(
     text_query: str = Form(None),
     embeddings_file: str = Form(EMBEDDINGS_FILE),
     top_k: int = Form(20),
-    cosine_cutoff: float = Form(0.25)  # Default cosine similarity cutoff
+    cosine_cutoff: float = Form(0.25)
 ):
     image_tiles = []
     uploaded_image_url = None
@@ -49,8 +49,10 @@ async def form_post(
              "score": f"{score:.4f}"}
             for filename, score in filtered
         ]
+        uploaded_image_url = None  # Clear image preview on text search
+
     elif file:
-        # Image search (existing logic)
+        # Image search
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
             shutil.copyfileobj(file.file, tmp)
             tmp_path = Path(tmp.name)
@@ -70,6 +72,7 @@ async def form_post(
             uploaded_image_data = base64.b64encode(f.read()).decode("utf-8")
         uploaded_image_url = f"data:image/jpeg;base64,{uploaded_image_data}"
         tmp_path.unlink(missing_ok=True)
+        text_query = ""  # Clear text input on image search
 
     return templates.TemplateResponse(
         "index.html",
@@ -79,6 +82,6 @@ async def form_post(
             "uploaded_image_url": uploaded_image_url,
             "top_k": top_k,
             "cosine_cutoff": cosine_cutoff,
-            "text_query": text_query, 
+            "text_query": text_query,
         }
     )
