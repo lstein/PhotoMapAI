@@ -78,9 +78,30 @@
         <div class="results-scroll">
             <div class="grid">
                 {% for img in results %}
-                <div class="tile">
+                <div class="tile" style="position: relative;">
                     <img src="{{ img.filename }}" alt="Match">
                     <div class="score">Score: {{ img.score }}</div>
+                    <button class="search-this" data-src="{{ img.filename }}" title="Search with this image"
+                        style="
+            position: absolute;
+            right: 6px;
+            bottom: 6px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            background: #222c;
+            color: #fff;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            opacity: 0.85;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 1px 4px #0006;
+        ">?</button>
                 </div>
                 {% endfor %}
             </div>
@@ -158,11 +179,7 @@
                         .then(res => res.blob())
                         .then(blob => {
                             const file = new File([blob], "query.jpg", { type: blob.type });
-                            const dt = new DataTransfer();
-                            dt.items.add(file);
-                            fileInput.files = dt.files;
-                            spinner.style.display = 'flex';
-                            uploadForm.submit();
+                            submitImageSearch(file);
                         });
                 };
             }
@@ -181,12 +198,7 @@
                                 .then(res => res.blob())
                                 .then(blob => {
                                     const file = new File([blob], "query.jpg", { type: blob.type });
-                                    const dt = new DataTransfer();
-                                    dt.items.add(file);
-                                    fileInput.files = dt.files;
-                                    document.getElementById('text_query').value = ''; // Clear text field
-                                    spinner.style.display = 'flex';
-                                    uploadForm.submit();
+                                    submitImageSearch(file);
                                 });
                         } else {
                             fileInput.click();
@@ -236,13 +248,7 @@
                 if (items[i].type.indexOf('image') !== -1) {
                     const file = items[i].getAsFile();
                     if (file) {
-                        const dt = new DataTransfer();
-                        dt.items.add(file);
-                        fileInput.files = dt.files;
-                        showThumbnail(file);
-                        document.getElementById('text_query').value = ''; // Clear text field
-                        spinner.style.display = 'flex';
-                        uploadForm.submit();
+                        submitImageSearch(file);
                     }
                     e.preventDefault();
                     break;
@@ -392,6 +398,30 @@
                 popupTimer = null;
             }
         });
+
+        // "Search with this image" button for each tile (works on iPad and desktop)
+        document.querySelectorAll('.search-this').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const imgUrl = btn.dataset.src;
+                fetch(imgUrl)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        const file = new File([blob], "query.jpg", { type: blob.type });
+                        submitImageSearch(file);
+                    });
+            });
+        });
+
+        function submitImageSearch(file) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+            showThumbnail(file);
+            document.getElementById('text_query').value = ''; // Clear text field
+            spinner.style.display = 'flex';
+            uploadForm.submit();
+        }
     </script>
 </body>
 
