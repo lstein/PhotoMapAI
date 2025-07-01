@@ -17,6 +17,12 @@ def do_index():
         default="clip_image_embeddings.npz",
         help="Output file for indexed embeddings.",
     )
+    parser.add_argument(
+        '--print_bad_files',
+        action='store_true',
+        help="Print the list of files that failed to process during indexing.",
+    )
+
     # Additional arguments are specify the image files or directories to Index.
     parser.add_argument(
         "image_paths",
@@ -28,9 +34,13 @@ def do_index():
     args = parser.parse_args()
     # If a single argument is given and it's a directory, treat as directory
     if len(args.image_paths) == 1 and os.path.isdir(args.image_paths[0]):
-        index_images(args.image_paths[0], args.embeddings)
+        _, _, bad_files = index_images(args.image_paths[0], args.embeddings)
     else:
-        index_images(args.image_paths, args.embeddings)
+        _, _, bad_files = index_images(args.image_paths, args.embeddings)
+    if args.print_bad_files and bad_files:
+        print("Failed to process the following files:")
+        for f in bad_files:
+            print(f)
 
 def do_update_index():
     import argparse
@@ -41,6 +51,11 @@ def do_update_index():
         type=str,
         default="clip_image_embeddings.npz",
         help="Output file for indexed embeddings.",
+    )
+    parser.add_argument(
+        '--print_bad_files',
+        action='store_true',
+        help="Print the list of files that failed to process during indexing.",
     )
     # Additional arguments are specify the image files or directories to Index.
     parser.add_argument(
@@ -57,9 +72,13 @@ def do_update_index():
 
     # If a single argument is given and it's a directory, treat as directory
     if len(args.image_paths) == 1 and os.path.isdir(args.image_paths[0]):
-        update_embeddings(args.image_paths[0], args.embeddings)
+        _, _, bad_files = update_embeddings(args.image_paths[0], args.embeddings)
     else:
-        update_embeddings(args.image_paths, args.embeddings)
+        _, _, bad_files = update_embeddings(args.image_paths, args.embeddings)
+    if args.print_bad_files and bad_files:
+        print("Failed to process the following files:")
+        for f in bad_files:
+            print(f)
 
 def do_search():
     import argparse

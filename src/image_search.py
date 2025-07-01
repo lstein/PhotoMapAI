@@ -54,7 +54,7 @@ def get_image_files(image_paths_or_dir: list[Path] | Path) -> list[Path]:
         raise ValueError("Input must be a Path object or a list of Paths.")
 
 def index_images(image_paths_or_dir: list[Path] | Path, 
-                 output_file: Optional[str]="clip_image_embeddings.npz") -> tuple[np.ndarray, np.ndarray]:
+                 output_file: Optional[str]="clip_image_embeddings.npz") -> tuple[np.ndarray, np.ndarray, list[Path]]:
     """
     Index images using CLIP and save their embeddings.
 
@@ -70,6 +70,7 @@ def index_images(image_paths_or_dir: list[Path] | Path,
 
     embeddings = []
     filenames = []
+    bad_files = []  # List to store files that failed to process
 
     # Ensure image_paths is a list of paths (strings)
     if isinstance(image_paths, Path):
@@ -88,6 +89,8 @@ def index_images(image_paths_or_dir: list[Path] | Path,
             filenames.append(image_path.resolve().as_posix())  # Store the full path as a string
         except Exception as e:
             print(f"Error processing {image_path}: {e}")
+            # add failed image to a list for debugging
+            bad_files.append(image_path)
 
     embeddings = np.array(embeddings)
     filenames = np.array(filenames)
@@ -97,11 +100,11 @@ def index_images(image_paths_or_dir: list[Path] | Path,
         np.savez(output_file, embeddings=embeddings, filenames=filenames)
         print(f"Indexed {len(embeddings)} images and saved to {output_file}")
 
-    return embeddings, filenames
+    return embeddings, filenames, bad_files
 
 def update_embeddings(
     image_paths_or_dir: list[Path] | Path, embeddings_file="clip_image_embeddings.npz"
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, list[Path]]:
     """
     Update existing embeddings with new images.
 
@@ -137,15 +140,15 @@ def update_embeddings(
     if not new_image_paths:
         print("No new images to index. Existing embeddings are up-to-date.")
         np.savez(embeddings_file, embeddings=existing_embeddings, filenames=existing_filenames)
-        return existing_embeddings, existing_filenames
+        return existing_embeddings, existing_filenames, bad_files
 
     # Index new images
-    new_embeddings, new_filenames = index_images(list(new_image_paths), output_file=None)
+    new_embeddings, new_filenames, bad_files = index_images(list(new_image_paths), output_file=None)
 
     if new_embeddings.shape[0] == 0:
         print("No new images were indexed (possibly all failed to process).")
         np.savez(embeddings_file, embeddings=existing_embeddings, filenames=existing_filenames)
-        return existing_embeddings, existing_filenames
+        return existing_embeddings, existing_filenames, bad_files
 
     # Combine existing and new embeddings
     updated_embeddings = np.vstack((existing_embeddings, new_embeddings))
@@ -155,7 +158,7 @@ def update_embeddings(
     np.savez(embeddings_file, embeddings=updated_embeddings, filenames=updated_filenames)
     print(f"Updated embeddings saved to {embeddings_file}")
 
-    return updated_embeddings, updated_filenames
+    return updated_embeddings, updated_filenames, bad_files
 
 def search_images(
     query_image_path: Path, embeddings_file="clip_image_embeddings.npz", top_k=5
