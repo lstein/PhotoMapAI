@@ -17,6 +17,8 @@ from tqdm import tqdm
 
 from typing import Optional
 
+MINIMUM_IMAGE_SIZE = 100 * 1024  # Minimum image size in bytes (100K)
+
 def get_image_files_from_directory(
     directory, exts={".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"}
 ) -> list[Path]:
@@ -26,7 +28,9 @@ def get_image_files_from_directory(
     image_files = []
     for root, _, files in os.walk(directory):
         for file in files:
-            if os.path.splitext(file)[1].lower() in exts:
+            # Check if the file has a valid image extension
+            # and that it's length is > MINIMUM_IMAGE_SIZE (i.e. not a thumbnail) 
+            if os.path.splitext(file)[1].lower() in exts and os.path.getsize(Path(root, file)) > MINIMUM_IMAGE_SIZE:
                 image_files.append(Path(root, file).resolve())
     return image_files
 
@@ -132,13 +136,15 @@ def update_embeddings(
 
     if not new_image_paths:
         print("No new images to index. Existing embeddings are up-to-date.")
-        return np.empty((0, 512)), np.empty((0,), dtype=object)
+        np.savez(embeddings_file, embeddings=existing_embeddings, filenames=existing_filenames)
+        return existing_embeddings, existing_filenames
 
     # Index new images
     new_embeddings, new_filenames = index_images(list(new_image_paths), output_file=None)
 
     if new_embeddings.shape[0] == 0:
         print("No new images were indexed (possibly all failed to process).")
+        np.savez(embeddings_file, embeddings=existing_embeddings, filenames=existing_filenames)
         return existing_embeddings, existing_filenames
 
     # Combine existing and new embeddings
