@@ -114,12 +114,32 @@ def update_embeddings(
     image_path_set = set(get_image_files(image_paths_or_dir))
     existing_filenames_set = set(Path(p) for p in existing_filenames)
     new_image_paths = image_path_set - existing_filenames_set
+    
+    # find images that have been indexed but no longer exist
+    missing_image_paths = existing_filenames_set - image_path_set
+
+    if missing_image_paths:
+        # remove missing images from existing embeddings
+        print(f"Removing {len(missing_image_paths)} missing images from existing embeddings.")
+        existing_embeddings = np.array([
+            emb for emb, fname in zip(existing_embeddings, existing_filenames)
+            if Path(fname) not in missing_image_paths
+        ])
+        existing_filenames = np.array([
+            fname for fname in existing_filenames
+            if Path(fname) not in missing_image_paths
+        ])
+
     if not new_image_paths:
         print("No new images to index. Existing embeddings are up-to-date.")
-        return  
+        return np.empty((0, 512)), np.empty((0,), dtype=object)
 
     # Index new images
     new_embeddings, new_filenames = index_images(list(new_image_paths), output_file=None)
+
+    if new_embeddings.shape[0] == 0:
+        print("No new images were indexed (possibly all failed to process).")
+        return existing_embeddings, existing_filenames
 
     # Combine existing and new embeddings
     updated_embeddings = np.vstack((existing_embeddings, new_embeddings))
