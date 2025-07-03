@@ -14,6 +14,8 @@ import numpy as np
 import torch
 from PIL import Image
 from tqdm import tqdm  
+from sklearn.neighbors import NearestNeighbors
+import networkx as nx
 
 from typing import Optional
 
@@ -140,7 +142,7 @@ def update_embeddings(
     if not new_image_paths:
         print("No new images to index. Existing embeddings are up-to-date.")
         np.savez(embeddings_file, embeddings=existing_embeddings, filenames=existing_filenames)
-        return existing_embeddings, existing_filenames, bad_files
+        return existing_embeddings, existing_filenames, []
 
     # Index new images
     new_embeddings, new_filenames, bad_files = index_images(list(new_image_paths), output_file=None)
@@ -242,3 +244,114 @@ def search_images_by_text(
     top_indices = similarities.argsort()[-top_k:][::-1]
 
     return filenames[top_indices], similarities[top_indices]
+
+def find_similar_images_by_embedding(embeddings_file, similarity_threshold=0.98):
+    """
+    Find and print pairs of images with cosine similarity above the threshold.
+    """
+    data = np.load(embeddings_file, allow_pickle=True)
+    embeddings = data["embeddings"]
+    filenames = data["filenames"]
+
+    # Normalize embeddings
+    norm_embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+    # Compute cosine similarity matrix
+    sim_matrix = np.dot(norm_embeddings, norm_embeddings.T)
+
+    n = len(filenames)
+    reported = set()
+    for i in range(n):
+        for j in range(i + 1, n):
+            if sim_matrix[i, j] >= similarity_threshold:
+                pair = tuple(sorted((filenames[i], filenames[j])))
+                if pair not in reported:
+                    print(f"{sim_matrix[i, j]:.4f}")
+                    print(filenames[i])
+                    print(filenames[j])
+                    print()
+                    reported.add(pair)
+
+def find_similar_images_fast(embeddings_file, similarity_threshold=0.98):
+    data = np.load(embeddings_file, allow_pickle=True)
+    embeddings = data["embeddings"]
+    filenames = data["filenames"]
+
+    # Normalize embeddings
+    norm_embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+    # Use NearestNeighbors with cosine metric (1 - cosine similarity)
+    nn = NearestNeighbors(metric='cosine', algorithm='brute')
+    nn.fit(norm_embeddings)
+    # radius = 1 - similarity_threshold (since cosine distance = 1 - cosine similarity)
+    radius = 1 - similarity_threshold
+    distances, indices = nn.radius_neighbors(norm_embeddings, radius=radius)
+
+    reported = set()
+    for i, (dists, nbrs) in enumerate(zip(distances, indices)):
+        for dist, j in zip(dists, nbrs):
+            if i < j:  # avoid duplicates and self-match
+                sim = 1 - dist
+                pair = tuple(sorted((filenames[i], filenames[j])))
+                if pair not in reported:
+                    print(f"{sim:.4f}")
+                    print(filenames[i])
+                    print(filenames[j])
+                    print()
+                    reported.add(pair)
+
+def find_similar_images_gpu(embeddings_file, similarity_threshold=0.98):
+    data = np.load(embeddings_file, allow_pickle=True)
+    embeddings = data["embeddings"]
+    filenames = data["filenames"]
+
+    # Move to GPU
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    emb = torch.tensor(embeddings, dtype=torch.float32, device=device)
+    emb = torch.nn.functional.normalize(emb, dim=1)
+
+    # Compute cosine similarity matrix on GPU
+    sim_matrix = emb @ emb.T
+
+    n = len(filenames)
+    reported = set()
+    sim_matrix = sim_matrix.cpu().numpy()
+    for i in range(n):
+        for j in range(i + 1, n):
+            if sim_matrix[i, j] >= similarity_threshold:
+                pair = tuple(sorted((filenames[i], filenames[j])))
+                if pair not in reported:
+                    print(f"{sim_matrix[i, j]:.4f}")
+                    print(filenames[i])
+                    print(filenames[j])
+                    print()
+                    reported.add(pair)
+
+def find_duplicate_clusters(embeddings_file, similarity_threshold=0.99):
+    data = np.load(embeddings_file, allow_pickle=True)
+    embeddings = data["embeddings"]
+    filenames = data["filenames"]
+
+    # Normalize embeddings
+    norm_embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+    # Use NearestNeighbors with cosine metric
+    nn = NearestNeighbors(metric='cosine', algorithm='brute')
+    nn.fit(norm_embeddings)
+    radius = 1 - similarity_threshold
+    distances, indices = nn.radius_neighbors(norm_embeddings, radius=radius)
+
+    # Build the graph
+    G = nx.Graph()
+    for i, nbrs in enumerate(indices):
+        for j in nbrs:
+            if i < j:  # avoid self and duplicate edges
+                G.add_edge(filenames[i], filenames[j])
+
+    # Find clusters (connected components)
+    clusters = list(nx.connected_components(G))
+    for idx, cluster in enumerate(clusters, 1):
+        print(f"Cluster {idx}:")
+        for fname in sorted(cluster):
+            print(fname)
+        print()

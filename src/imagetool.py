@@ -5,7 +5,16 @@ import os
 import sys
 from pathlib import Path
 
-from image_search import index_images, update_embeddings, search_images, search_images_by_text
+from image_search import (
+    index_images, 
+    update_embeddings, 
+    search_images, 
+    search_images_by_text, 
+    find_similar_images_by_embedding,
+    find_similar_images_fast,
+    find_similar_images_gpu,
+    find_duplicate_clusters,
+)
 
 def do_index():
     import argparse
@@ -129,6 +138,21 @@ def do_text_search():
     for filename, score in zip(results, scores):
         print(f"{filename}: {score:.4f}")
 
+def do_duplicate_search():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Find duplicate images in a directory.")
+    parser.add_argument(
+        "embeddings",
+        type=str,
+        default="clip_image_embeddings.npz",
+        help="File containing indexed embeddings and filenames.",
+    )
+
+    args = parser.parse_args()
+
+    # find_similar_images_fast(args.embeddings)
+    find_duplicate_clusters(args.embeddings)
 
 def main():
     prog = Path(sys.argv[0]).name
@@ -140,6 +164,9 @@ def main():
         do_text_search()
     elif prog == "update_index":
         do_update_index()
+    elif prog == "find_duplicate_images":
+        do_duplicate_search()
+
     else:
         print("Usage: index_images, search_images, or search_text")
         print(
