@@ -283,12 +283,10 @@ def update_hover_image(hover_data):
         return ""
     point = hover_data["points"][0]
     filename = point["customdata"][0]
-    cluster = point.get("marker.color", None)
-    if cluster is None and "curveNumber" in point:
-        idx = point["pointIndex"]
-        cluster = str(df.iloc[idx]["cluster"])
-    else:
-        cluster = str(cluster)
+    idx = point["pointIndex"]
+    cluster = str(df.iloc[idx]["cluster"])
+    if cluster == "-1":
+        cluster = "Noise"
     thumbnail = encode_image_to_base64(filename, size=(128, 128))
     x0, y0 = point["bbox"]["x0"], point["bbox"]["y0"]
     left = int(x0) + 10
