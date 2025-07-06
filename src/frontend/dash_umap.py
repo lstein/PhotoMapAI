@@ -21,7 +21,7 @@ from pathlib import Path
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.express as px
-from image_search import search_images_by_text, search_images
+from backend.image_search import search_images_by_text, search_images
 
 # load embeddings and filenames
 EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/embeddings.npz"
@@ -98,7 +98,11 @@ fig = px.scatter(
     color_discrete_sequence=custom_colors,
 )
 fig.update_traces(marker=dict(size=4), hovertemplate="<span></span>")
-fig.update_layout(height=PLOT_HEIGHT, title="CLIP Embeddings UMAP Explorer")
+fig.update_layout(
+    height=PLOT_HEIGHT,
+    title="CLIP Embeddings UMAP Explorer",
+    dragmode="pan",
+)
 
 ###
 # Components of the display
@@ -457,6 +461,12 @@ def update_clusters(eps, min_samples, highlight_cluster, search_matches):
             dragmode="pan",
         )
 
+    # Zoom to include 98% of points
+    x_min, x_max = np.percentile(df["x"], [1, 99])
+    y_min, y_max = np.percentile(df["y"], [1, 99])
+    fig.update_xaxes(range=[x_min, x_max])
+    fig.update_yaxes(range=[y_min, y_max])
+
     return fig
 
 
@@ -590,8 +600,8 @@ def update_search_matches(
         if not image_path:
             return []
         filenames, scores = search_images(
-                Path(image_path), embeddings_file=embeddings_file, top_k=200
-            )
+            Path(image_path), embeddings_file=embeddings_file, top_k=200
+        )
         # Return only filenames that have a score above a threshold of 0.6
         filenames = [f for f, s in zip(filenames, scores) if s > 0.6]
         return list(filenames)

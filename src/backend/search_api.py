@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from pathlib import Path
 import shutil
 import tempfile
-from image_search import search_images, search_images_by_text
+from backend.image_search import search_images, search_images_by_text
 
 app = FastAPI(title="CLIP Image Search API")
 

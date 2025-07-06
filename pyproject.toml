@@ -17,9 +17,12 @@ dependencies = [
     "clip-anytorch",
 ]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [project.scripts]
-index_images = "imagetool:main"
-search_images = "imagetool:main"
-search_text = "imagetool:main"
-update_index = "imagetool:main"
-find_duplicate_images = "imagetool:main"
+index_images = "backend.imagetool:main"
+search_images = "backend.imagetool:main"
+search_text = "backend.imagetool:main"
+update_index = "backend.imagetool:main"
+find_duplicate_images = "backend.imagetool:main"
