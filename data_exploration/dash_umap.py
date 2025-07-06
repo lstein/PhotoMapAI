@@ -96,11 +96,18 @@ app.layout = html.Div(
     [
         html.Div(
             [
-                dcc.Graph(
-                    id="umap-plot",
-                    style={"width": "85vw", "height": plot_height},
-                    config={"scrollZoom": True},
-                    clear_on_unhover=True,
+                dcc.Loading(
+                    id="umap-loading",
+                    type="circle",  # or "default", "dot", "cube"
+                    fullscreen=True,  # covers the whole app; set to False for just the graph area
+                    children=[
+                        dcc.Graph(
+                            id="umap-plot",
+                            style={"width": "85vw", "height": plot_height},
+                            config={"scrollZoom": True},
+                            clear_on_unhover=True,
+                        )
+                    ],
                 ),
                 html.Div(
                     [
@@ -172,7 +179,7 @@ app.layout = html.Div(
                                             style={
                                                 "display": "flex",
                                                 "flexDirection": "column",
-                                                "alignItems": "center",
+                                                "alignItems": "flex-start",  # <-- align left
                                                 "height": int(plot_height / 2),
                                                 "marginRight": "10px",
                                             },
@@ -200,7 +207,7 @@ app.layout = html.Div(
                                             style={
                                                 "display": "flex",
                                                 "flexDirection": "column",
-                                                "alignItems": "center",
+                                                "alignItems": "flex-start",  # <-- align left
                                                 "height": int(plot_height / 2),
                                                 "marginLeft": "10px",
                                             },
@@ -209,7 +216,7 @@ app.layout = html.Div(
                                     style={
                                         "display": "flex",
                                         "flexDirection": "row",
-                                        "justifyContent": "center",
+                                        "justifyContent": "flex-start",  # <-- align left
                                         "alignItems": "flex-start",
                                         "marginTop": "16px",
                                     },
@@ -218,7 +225,7 @@ app.layout = html.Div(
                             style={
                                 "display": "flex",
                                 "flexDirection": "column",
-                                "alignItems": "center",
+                                "alignItems": "flex-start",  # <-- align left
                                 "marginRight": "10px",
                             },
                         ),
@@ -226,7 +233,7 @@ app.layout = html.Div(
                     style={
                         "display": "flex",
                         "flexDirection": "row",
-                        "justifyContent": "center",
+                        "justifyContent": "flex-start",  # <-- align left
                         "alignItems": "flex-start",
                         "height": int(plot_height / 2),
                         "marginLeft": "20px",
@@ -455,14 +462,14 @@ def encode_image_to_base64(path, size=(64, 64)):
 @app.callback(
     Output("text-search-matches", "data"),
     Input("text-search-btn", "n_clicks"),
+    Input("text-search-input", "n_submit"),
     State("text-search-input", "value"),
     prevent_initial_call=True,
 )
-def run_text_search(n_clicks, text_query):
+def run_text_search(n_clicks, n_submit, text_query):
     if not text_query:
         return []
     filenames, _ = search_images_by_text(text_query, embeddings_file=embeddings_file, top_k=200)
-    # Convert to set for fast lookup
     return list(filenames)
 
 
