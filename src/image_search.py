@@ -12,7 +12,7 @@ import os
 import clip
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageOps
 from tqdm import tqdm  
 from sklearn.neighbors import NearestNeighbors
 import networkx as nx
@@ -80,8 +80,10 @@ def index_images(image_paths_or_dir: list[Path] | Path,
 
     for image_path in tqdm(image_paths, desc="Indexing images"):
         try:
+            pil_image = Image.open(image_path).convert("RGB")
+            pil_image = ImageOps.exif_transpose(pil_image)  # Handle EXIF orientation
             image = (
-                preprocess(Image.open(image_path).convert("RGB"))
+                preprocess(pil_image)
                 .unsqueeze(0)  # type: ignore
                 .to(device)
             )

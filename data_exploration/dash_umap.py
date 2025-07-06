@@ -10,17 +10,18 @@ import sys
 import base64
 import numpy as np
 import pandas as pd
-from PIL import Image
+from PIL import Image, ImageOps
 from io import BytesIO
 from sklearn.cluster import DBSCAN, KMeans
 import hashlib
 from cuml import UMAP
 from cuml.cluster import DBSCAN
+from pathlib import Path
 
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.express as px
-from image_search import search_images_by_text
+from image_search import search_images_by_text, search_images
 
 # load embeddings and filenames
 EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/embeddings.npz"
@@ -106,7 +107,11 @@ fig.update_layout(height=PLOT_HEIGHT, title="CLIP Embeddings UMAP Explorer")
 # The spinner overlay displayed during searches and other updates.
 dcc_loading = dcc.Loading(
     id="umap-loading",
-    overlay_style={"background": "rgba(255,255,255,0.5)", "visibility": "visible", "filter": "blur(2px)"},
+    overlay_style={
+        "background": "rgba(255,255,255,0.5)",
+        "visibility": "visible",
+        "filter": "blur(2px)",
+    },
     type="default",  # or "default", "dot", "cube"
     fullscreen=False,  # covers the whole app; set to False for just the graph area
     children=[
@@ -122,7 +127,6 @@ dcc_loading = dcc.Loading(
 # The search buttons and sliders
 dcc_controls = html.Div(
     [
-        # Controls column: highlight cluster, text search, and sliders
         html.Div(
             [
                 html.Label("Highlight cluster:", style={"marginBottom": "8px"}),
@@ -144,7 +148,6 @@ dcc_controls = html.Div(
                         "marginBottom": "16px",
                     },
                 ),
-                # Text search box below highlight cluster input
                 dcc.Input(
                     id="text-search-input",
                     type="text",
@@ -157,7 +160,26 @@ dcc_controls = html.Div(
                     n_clicks=0,
                     style={"marginTop": "8px"},
                 ),
-                # Sliders side-by-side in a row, inside the column
+                # --- Add Reset Search button here ---
+                html.Button(
+                    "Reset Search",
+                    id="reset-search-btn",
+                    n_clicks=0,
+                    style={
+                        "marginTop": "16px",
+                        "backgroundColor": "red",
+                        "color": "white",
+                        "fontWeight": "bold",
+                        "fontSize": "1.0em",
+                        "width": "160px",
+                        "border": "none",
+                        "borderRadius": "6px",
+                        "padding": "10px",
+                        "cursor": "pointer",
+                        "boxShadow": "0 2px 6px rgba(0,0,0,0.15)",
+                    },
+                ),
+                # --- End Reset Search button ---
                 html.Div(
                     [
                         html.Div(
@@ -191,7 +213,7 @@ dcc_controls = html.Div(
                             style={
                                 "display": "flex",
                                 "flexDirection": "column",
-                                "alignItems": "flex-start",  # <-- align left
+                                "alignItems": "flex-start",
                                 "height": int(PLOT_HEIGHT / 2),
                                 "marginRight": "10px",
                             },
@@ -225,7 +247,7 @@ dcc_controls = html.Div(
                             style={
                                 "display": "flex",
                                 "flexDirection": "column",
-                                "alignItems": "flex-start",  # <-- align left
+                                "alignItems": "flex-start",
                                 "height": int(PLOT_HEIGHT / 2),
                                 "marginLeft": "10px",
                             },
@@ -234,7 +256,7 @@ dcc_controls = html.Div(
                     style={
                         "display": "flex",
                         "flexDirection": "row",
-                        "justifyContent": "flex-start",  # <-- align left
+                        "justifyContent": "flex-start",
                         "alignItems": "flex-start",
                         "marginTop": "16px",
                     },
@@ -243,7 +265,7 @@ dcc_controls = html.Div(
             style={
                 "display": "flex",
                 "flexDirection": "column",
-                "alignItems": "flex-start",  # <-- align left
+                "alignItems": "flex-start",
                 "marginRight": "10px",
             },
         ),
@@ -261,6 +283,7 @@ dcc_hover = html.Div(
 # The modal dialogue for displaying full-size images
 dcc_modal = html.Div(
     id="modal",
+    n_clicks=0,
     style={
         "display": "none",
         "position": "fixed",
@@ -278,7 +301,7 @@ dcc_modal = html.Div(
             id="modal-content",
             style={
                 "background": "#fff",
-                "padding": "20px",
+                "padding": "30px",
                 "borderRadius": "8px",
                 "boxShadow": "0 2px 8px rgba(0,0,0,0.3)",
                 "maxWidth": "90vw",
@@ -286,8 +309,30 @@ dcc_modal = html.Div(
                 "display": "flex",
                 "flexDirection": "column",
                 "alignItems": "center",
+                "position": "relative",  # Needed for absolute positioning of close icon
             },
             children=[
+                # "X" close icon in the upper right
+                html.Button(
+                    "×",
+                    id="close-modal",
+                    n_clicks=0,
+                    style={
+                        "position": "absolute",
+                        "top": "8px",
+                        "right": "8px",
+                        "background": "none",
+                        "border": "none",
+                        "fontSize": "2rem",
+                        "fontWeight": "bold",
+                        "color": "#888",
+                        "cursor": "pointer",
+                        "zIndex": 10,
+                        "lineHeight": "1",
+                        "padding": "0",
+                    },
+                    title="Close",
+                ),
                 html.Img(
                     id="modal-image",
                     style={
@@ -296,7 +341,17 @@ dcc_modal = html.Div(
                         "marginBottom": "20px",
                     },
                 ),
-                html.Button("Close", id="close-modal", n_clicks=0),
+                html.Div(
+                    children=[
+                        html.Button(
+                            "Find Similar",
+                            id="find-similar-btn",
+                            n_clicks=0,
+                            style={"marginBottom": "10px"},
+                        ),
+                    ],
+                    style={"flexDirection": "row"},
+                ),
             ],
         )
     ],
@@ -317,7 +372,8 @@ app.layout = html.Div(
         ),
         dcc_hover,
         dcc_modal,
-        dcc.Store(id="text-search-matches"),
+        dcc.Store(id="search-matches"),
+        dcc.Store(id="modal-image-path"),
     ]
 )
 
@@ -328,7 +384,7 @@ app.layout = html.Div(
     Input("eps-slider", "value"),
     Input("min-samples-slider", "value"),
     Input("highlight-cluster-input", "value"),
-    Input("text-search-matches", "data"),
+    Input("search-matches", "data"),
 )
 def update_clusters(eps, min_samples, highlight_cluster, search_matches):
     clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(umap_embeddings)
@@ -398,6 +454,7 @@ def update_clusters(eps, min_samples, highlight_cluster, search_matches):
         fig.update_layout(
             height=800,
             title=f"CLIP Embeddings UMAP Explorer (eps={eps}, min_samples={min_samples})",
+            dragmode="pan",
         )
 
     return fig
@@ -455,28 +512,33 @@ def update_hover_image(hover_data):
 @app.callback(
     Output("modal", "style"),
     Output("modal-image", "src"),
+    Output("modal-image-path", "data"),
     Input("umap-plot", "clickData"),
     Input("close-modal", "n_clicks"),
+    Input("find-similar-btn", "n_clicks"),
+    Input("modal", "n_clicks"),
     State("modal", "style"),
     prevent_initial_call=True,
 )
-def show_modal(clickData, close_clicks, modal_style):
+def show_modal(
+    clickData, close_clicks, find_similar_clicks, modal_bg_clicks, modal_style
+):
     ctx = dash.callback_context
     if not ctx.triggered:
         raise dash.exceptions.PreventUpdate
 
     trigger = ctx.triggered[0]["prop_id"].split(".")[0]
-    if trigger == "close-modal":
+    if trigger in ["close-modal", "find-similar-btn", "modal"]:
         # Hide modal
         style = modal_style.copy() if modal_style else {}
         style["display"] = "none"
-        return style, ""
+        return style, "", ""
     elif trigger == "umap-plot" and clickData:
         filename = clickData["points"][0]["customdata"][0]
         img_src = encode_image_to_base64(filename, size=(600, 600))
         style = modal_style.copy() if modal_style else {}
         style["display"] = "flex"
-        return style, img_src
+        return style, img_src, filename
     else:
         raise dash.exceptions.PreventUpdate
 
@@ -484,6 +546,7 @@ def show_modal(clickData, close_clicks, modal_style):
 def encode_image_to_base64(path, size=(64, 64)):
     try:
         img = Image.open(path).convert("RGB")
+        img = ImageOps.exif_transpose(img)  # <-- Correct orientation using EXIF
         img.thumbnail(size)
         buffer = BytesIO()
         img.save(buffer, format="PNG")
@@ -495,19 +558,45 @@ def encode_image_to_base64(path, size=(64, 64)):
 
 
 @app.callback(
-    Output("text-search-matches", "data"),
+    Output("search-matches", "data"),
     Input("text-search-btn", "n_clicks"),
     Input("text-search-input", "n_submit"),
+    Input("find-similar-btn", "n_clicks"),
+    Input("reset-search-btn", "n_clicks"),  # <-- Add this line
     State("text-search-input", "value"),
+    State("modal-image-path", "data"),
     prevent_initial_call=True,
 )
-def run_text_search(n_clicks, n_submit, text_query):
-    if not text_query:
+def update_search_matches(
+    text_btn, text_submit, find_similar_btn, reset_btn, text_query, image_path
+):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        raise dash.exceptions.PreventUpdate
+
+    trigger = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if trigger == "reset-search-btn":
         return []
-    filenames, _ = search_images_by_text(
-        text_query, embeddings_file=embeddings_file, top_k=200
-    )
-    return list(filenames)
+    elif trigger in ["text-search-btn", "text-search-input"]:
+        if not text_query:
+            return []
+        filenames, scores = search_images_by_text(
+            text_query, embeddings_file=embeddings_file, top_k=200
+        )
+        filenames = [f for f, s in zip(filenames, scores) if s > 0.2]
+        return list(filenames)
+    elif trigger == "find-similar-btn":
+        if not image_path:
+            return []
+        filenames, scores = search_images(
+                Path(image_path), embeddings_file=embeddings_file, top_k=200
+            )
+        # Return only filenames that have a score above a threshold of 0.6
+        filenames = [f for f, s in zip(filenames, scores) if s > 0.6]
+        return list(filenames)
+    else:
+        raise dash.exceptions.PreventUpdate
 
 
 # === Run the app ===
