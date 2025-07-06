@@ -27,6 +27,7 @@ EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/embeddings.npz"
 embeddings_file = sys.argv[1] if len(sys.argv) > 1 else EMBEDDINGS_FILE
 
 PLOT_HEIGHT = 800
+MAX_COLORED_CLUSTERS = 75  # Maximum number of clusters to color distinctly
 
 
 # --- Generate a hash for the embeddings file path ---
@@ -82,9 +83,9 @@ custom_colors = (
     + px.colors.qualitative.Vivid
 )
 
-# Make sure you have at least 51 colors
-custom_colors = custom_colors * ((51 // len(custom_colors)) + 1)
-custom_colors = custom_colors[: max(51, df["cluster"].max() + 1)]
+# Make sure you have at least MAX_COLORED_CLUSTERS colors
+custom_colors = custom_colors * ((MAX_COLORED_CLUSTERS // len(custom_colors)) + 1)
+custom_colors = custom_colors[: max(MAX_COLORED_CLUSTERS, df["cluster"].max() + 1)]
 
 fig = px.scatter(
     df,
@@ -380,7 +381,7 @@ def update_clusters(eps, min_samples, highlight_cluster, search_matches):
         color_map = {
             c: (
                 "rgba(200,200,200,0.4)"
-                if cluster_sizes[c] < 50 or c == -1
+                if cluster_sizes[c] < MAX_COLORED_CLUSTERS or c == -1
                 else custom_colors[c % len(custom_colors)]
             )
             for c in df["cluster"].unique()
@@ -398,6 +399,7 @@ def update_clusters(eps, min_samples, highlight_cluster, search_matches):
             height=800,
             title=f"CLIP Embeddings UMAP Explorer (eps={eps}, min_samples={min_samples})",
         )
+
     return fig
 
 
@@ -408,7 +410,7 @@ def update_clusters(eps, min_samples, highlight_cluster, search_matches):
 )
 def update_hover_image(hover_data):
     if hover_data is None:
-        return ""
+        return "", False
     point = hover_data["points"][0]
     filename = point["customdata"][0]
     idx = point["pointIndex"]
@@ -418,7 +420,7 @@ def update_hover_image(hover_data):
     thumbnail = encode_image_to_base64(filename, size=(128, 128))
     x0, y0 = point["bbox"]["x0"], point["bbox"]["y0"]
     left = int(x0) + 10
-    top = int(y0) + 10
+    top = int(y0) + 30
     hover_div = html.Div(
         [
             html.Div(
