@@ -20,6 +20,7 @@ from cuml.cluster import DBSCAN
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.express as px
+from image_search import search_images_by_text
 
 # load embeddings and filenames
 EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/embeddings.npz"
@@ -87,7 +88,9 @@ fig = px.scatter(
     color_discrete_sequence=px.colors.qualitative.Set1,
 )
 fig.update_traces(marker=dict(size=4))
-fig.update_layout(height=800, title="CLIP Embeddings UMAP Explorer")
+plot_height = 800
+fig.update_layout(height=plot_height, title="CLIP Embeddings UMAP Explorer")
+
 
 app.layout = html.Div(
     [
@@ -95,32 +98,121 @@ app.layout = html.Div(
             [
                 dcc.Graph(
                     id="umap-plot",
-                    style={"width": "85vw", "height": "90vh"},
+                    style={"width": "85vw", "height": plot_height},
                     config={"scrollZoom": True},
                     clear_on_unhover=True,
                 ),
                 html.Div(
                     [
+                        # Controls column: highlight cluster, text search, and sliders
                         html.Div(
                             [
-                                html.Label("DBSCAN eps:", style={"marginBottom": "8px"}),
-                                dcc.Slider(
-                                    id="eps-slider",
-                                    min=0.01,
-                                    max=0.3,
-                                    step=0.01,
-                                    value=0.05,
-                                    marks={
-                                        0.001: "0.001",
-                                        0.01: "0.01",
-                                        0.05: "0.05",
-                                        0.1: "0.1",
-                                        0.2: "0.2",
-                                        0.3: "0.3",
+                                html.Label(
+                                    "Highlight cluster:", style={"marginBottom": "8px"}
+                                ),
+                                dcc.Input(
+                                    id="highlight-cluster-input",
+                                    type="number",
+                                    min=-1,
+                                    max=int(df["cluster"].max()),
+                                    step=1,
+                                    value=-1,
+                                    style={"width": "100px"},
+                                ),
+                                html.Div(
+                                    "Enter -1 to show all clusters.",
+                                    style={
+                                        "fontSize": "12px",
+                                        "color": "#888",
+                                        "marginTop": "4px",
+                                        "marginBottom": "16px",
                                     },
-                                    tooltip={"placement": "bottom", "always_visible": True},
-                                    vertical=True,
-                                    updatemode="drag",
+                                ),
+                                # Text search box below highlight cluster input
+                                dcc.Input(
+                                    id="text-search-input",
+                                    type="text",
+                                    placeholder="Search images by text...",
+                                    style={"width": "180px", "marginRight": "8px"},
+                                ),
+                                html.Button(
+                                    "Text Search", id="text-search-btn", n_clicks=0,
+                                    style={"marginTop": "8px"}
+                                ),
+                                # Sliders side-by-side in a row, inside the column
+                                html.Div(
+                                    [
+                                        html.Div(
+                                            [
+                                                html.Label(
+                                                    "DBSCAN eps:", style={"marginBottom": "8px"}
+                                                ),
+                                                dcc.Slider(
+                                                    id="eps-slider",
+                                                    min=0.01,
+                                                    max=0.3,
+                                                    step=0.01,
+                                                    value=0.05,
+                                                    marks={
+                                                        0.001: "0.001",
+                                                        0.01: "0.01",
+                                                        0.05: "0.05",
+                                                        0.1: "0.1",
+                                                        0.2: "0.2",
+                                                        0.3: "0.3",
+                                                    },
+                                                    tooltip={
+                                                        "placement": "bottom",
+                                                        "always_visible": True,
+                                                    },
+                                                    vertical=True,
+                                                    updatemode="drag",
+                                                ),
+                                            ],
+                                            style={
+                                                "display": "flex",
+                                                "flexDirection": "column",
+                                                "alignItems": "center",
+                                                "height": int(plot_height / 2),
+                                                "marginRight": "10px",
+                                            },
+                                        ),
+                                        html.Div(
+                                            [
+                                                html.Label(
+                                                    "DBSCAN min_samples:", style={"marginBottom": "8px"}
+                                                ),
+                                                dcc.Slider(
+                                                    id="min-samples-slider",
+                                                    min=1,
+                                                    max=20,
+                                                    step=1,
+                                                    value=5,
+                                                    marks={1: "1", 5: "5", 10: "10", 20: "20"},
+                                                    tooltip={
+                                                        "placement": "bottom",
+                                                        "always_visible": True,
+                                                    },
+                                                    vertical=True,
+                                                    updatemode="drag",
+                                                ),
+                                            ],
+                                            style={
+                                                "display": "flex",
+                                                "flexDirection": "column",
+                                                "alignItems": "center",
+                                                "height": int(plot_height / 2),
+                                                "marginLeft": "10px",
+                                            },
+                                        ),
+                                    ],
+                                    style={
+                                        "display": "flex",
+                                        "flexDirection": "row",
+                                        "justifyContent": "center",
+                                        "alignItems": "flex-start",
+                                        "marginTop": "16px",
+                                    },
                                 ),
                             ],
                             style={
@@ -128,48 +220,6 @@ app.layout = html.Div(
                                 "flexDirection": "column",
                                 "alignItems": "center",
                                 "marginRight": "10px",
-                                "height": "250px",
-                            },
-                        ),
-                        html.Div(
-                            [
-                                html.Label("DBSCAN min_samples:", style={"marginBottom": "8px"}),
-                                dcc.Slider(
-                                    id="min-samples-slider",
-                                    min=1,
-                                    max=20,
-                                    step=1,
-                                    value=5,
-                                    marks={1: "1", 5: "5", 10: "10", 20: "20"},
-                                    tooltip={"placement": "bottom", "always_visible": True},
-                                    vertical=True,
-                                    updatemode="drag",
-                                ),
-                            ],
-                            style={
-                                "display": "flex",
-                                "flexDirection": "column",
-                                "alignItems": "center",
-                                "marginLeft": "10px",
-                                "height": "250px",
-                            },
-                        ),
-                        html.Div(
-                            [
-                                html.Label("Highlight cluster:"),
-                                dcc.Input(
-                                    id="highlight-cluster",
-                                    type="text",
-                                    placeholder="Enter cluster #",
-                                    debounce=True,
-                                    style={"width": "100px", "marginTop": "20px"},
-                                ),
-                            ],
-                            style={
-                                "display": "flex",
-                                "flexDirection": "column",
-                                "alignItems": "center",
-                                "marginTop": "20px",
                             },
                         ),
                     ],
@@ -178,7 +228,7 @@ app.layout = html.Div(
                         "flexDirection": "row",
                         "justifyContent": "center",
                         "alignItems": "flex-start",
-                        "height": "90vh",
+                        "height": int(plot_height / 2),
                         "marginLeft": "20px",
                         "gap": "0px",
                     },
@@ -237,40 +287,50 @@ app.layout = html.Div(
                 )
             ],
         ),
+        dcc.Store(id="text-search-matches"),
     ]
 )
 
 
+# --- Update the callback to use the slider value instead of the text input ---
 @app.callback(
     Output("umap-plot", "figure"),
     Input("eps-slider", "value"),
     Input("min-samples-slider", "value"),
-    Input("highlight-cluster", "value"),
+    Input("highlight-cluster-input", "value"),
+    Input("text-search-matches", "data"),
 )
-def update_clusters(eps, min_samples, highlight_cluster):
+def update_clusters(eps, min_samples, highlight_cluster, search_matches):
     clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(umap_embeddings)
     df["cluster_orig"] = clustering.labels_
-
-    # Exclude noise (-1) from relabeling, but keep it as -1
     cluster_counts = (
         df[df["cluster_orig"] != -1]["cluster_orig"]
         .value_counts()
         .sort_values(ascending=False)
     )
     cluster_map = {old: new for new, old in enumerate(cluster_counts.index)}
-    # Map noise to -1
     df["cluster"] = df["cluster_orig"].map(cluster_map).fillna(-1).astype(int)
-
     max_cluster = df["cluster"].max()
     try:
-        highlight = (
-            int(highlight_cluster) if highlight_cluster not in (None, "") else None
-        )
+        highlight = int(highlight_cluster)
     except Exception:
-        highlight = None
+        highlight = -1
 
-    if highlight is not None and 0 <= highlight <= max_cluster:
-        # Highlight selected cluster in red, others in semi-transparent grey
+    # --- Highlight search matches if present ---
+    if search_matches and len(search_matches) > 0:
+        color = df["filename"].apply(
+            lambda fname: "red" if fname in search_matches else "rgba(200,200,200,0.4)"
+        )
+        fig = px.scatter(
+            df,
+            x="x",
+            y="y",
+            custom_data=["filename"],
+            opacity=0.9,
+        )
+        fig.update_traces(marker=dict(color=color))
+        fig.update_layout(showlegend=False)
+    elif highlight != -1 and 0 <= highlight <= max_cluster:
         color = df["cluster"].apply(
             lambda c: "red" if c == highlight else "rgba(200,200,200,0.4)"
         )
@@ -278,14 +338,12 @@ def update_clusters(eps, min_samples, highlight_cluster):
             df,
             x="x",
             y="y",
-            # color=color,
             custom_data=["filename"],
             opacity=0.8,
         )
         fig.update_traces(marker=dict(color=color))
         fig.update_layout(showlegend=False)
     else:
-        # Default: color by cluster
         fig = px.scatter(
             df,
             x="x",
@@ -295,9 +353,7 @@ def update_clusters(eps, min_samples, highlight_cluster):
             opacity=0.6,
             color_discrete_sequence=px.colors.qualitative.Set1,
         )
-    fig.update_traces(
-        marker=dict(size=4), hovertemplate="<span></span>"
-    )  # This disables the default hover box with x, y
+    fig.update_traces(marker=dict(size=4), hovertemplate="<span></span>")
     fig.update_layout(
         height=800,
         title=f"CLIP Embeddings UMAP Explorer (eps={eps}, min_samples={min_samples})",
@@ -394,6 +450,20 @@ def encode_image_to_base64(path, size=(64, 64)):
     except Exception as e:
         print(f"Failed to load image {path}: {e}")
         return "Image error"
+
+
+@app.callback(
+    Output("text-search-matches", "data"),
+    Input("text-search-btn", "n_clicks"),
+    State("text-search-input", "value"),
+    prevent_initial_call=True,
+)
+def run_text_search(n_clicks, text_query):
+    if not text_query:
+        return []
+    filenames, _ = search_images_by_text(text_query, embeddings_file=embeddings_file, top_k=200)
+    # Convert to set for fast lookup
+    return list(filenames)
 
 
 # === Run the app ===
