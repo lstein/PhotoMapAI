@@ -26,6 +26,8 @@ from image_search import search_images_by_text
 EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/embeddings.npz"
 embeddings_file = sys.argv[1] if len(sys.argv) > 1 else EMBEDDINGS_FILE
 
+PLOT_HEIGHT = 800
+
 
 # --- Generate a hash for the embeddings file path ---
 def hash_filename(filename):
@@ -54,8 +56,6 @@ else:
     umap_embeddings = reducer.fit_transform(clip_embeddings)
     np.save(umap_file, umap_embeddings)
 
-# Fit DBSCAN on the 2D UMAP embeddings
-
 # Build dataframe
 df = pd.DataFrame(
     {
@@ -65,17 +65,26 @@ df = pd.DataFrame(
     }
 )
 
-# kmeans = KMeans(n_clusters=20, random_state=0).fit(umap_embeddings)
-# df["cluster"] = kmeans.labels_z
-
 # Uncomment the following lines to use DBSCAN instead of KMeans
 clustering = DBSCAN(eps=0.05, min_samples=5)
 labels = clustering.fit_predict(umap_embeddings)
 df["cluster"] = clustering.labels_
 
-# === Build Dash App ===
-app = dash.Dash(__name__)
-server = app.server  # for deployment if needed
+# Combine several qualitative color sets for more distinct colors
+custom_colors = (
+    px.colors.qualitative.Alphabet
+    + px.colors.qualitative.Set1
+    + px.colors.qualitative.Set2
+    + px.colors.qualitative.Set3
+    + px.colors.qualitative.Pastel1
+    + px.colors.qualitative.Pastel2
+    + px.colors.qualitative.Dark2
+    + px.colors.qualitative.Vivid
+)
+
+# Make sure you have at least 51 colors
+custom_colors = custom_colors * ((51 // len(custom_colors)) + 1)
+custom_colors = custom_colors[: max(51, df["cluster"].max() + 1)]
 
 fig = px.scatter(
     df,
@@ -84,149 +93,140 @@ fig = px.scatter(
     color="cluster",
     custom_data=["filename"],
     opacity=0.6,
-    # color_continuous_scale="Viridis"  # or any other scale you like
-    color_discrete_sequence=px.colors.qualitative.Set1,
+    color_discrete_sequence=custom_colors,
 )
-fig.update_traces(marker=dict(size=4))
-plot_height = 800
-fig.update_layout(height=plot_height, title="CLIP Embeddings UMAP Explorer")
+fig.update_traces(marker=dict(size=4), hovertemplate="<span></span>")
+fig.update_layout(height=PLOT_HEIGHT, title="CLIP Embeddings UMAP Explorer")
 
+###
+# Components of the display
+###
 
-app.layout = html.Div(
+# The spinner overlay displayed during searches and other updates.
+dcc_loading = dcc.Loading(
+    id="umap-loading",
+    overlay_style={"background": "rgba(255,255,255,0.5)", "visibility": "visible", "filter": "blur(2px)"},
+    type="default",  # or "default", "dot", "cube"
+    fullscreen=False,  # covers the whole app; set to False for just the graph area
+    children=[
+        dcc.Graph(
+            id="umap-plot",
+            style={"width": "85vw", "height": PLOT_HEIGHT},
+            config={"scrollZoom": True},
+            clear_on_unhover=True,
+        )
+    ],
+)
+
+# The search buttons and sliders
+dcc_controls = html.Div(
     [
+        # Controls column: highlight cluster, text search, and sliders
         html.Div(
             [
-                dcc.Loading(
-                    id="umap-loading",
-                    type="circle",  # or "default", "dot", "cube"
-                    fullscreen=True,  # covers the whole app; set to False for just the graph area
-                    children=[
-                        dcc.Graph(
-                            id="umap-plot",
-                            style={"width": "85vw", "height": plot_height},
-                            config={"scrollZoom": True},
-                            clear_on_unhover=True,
-                        )
-                    ],
+                html.Label("Highlight cluster:", style={"marginBottom": "8px"}),
+                dcc.Input(
+                    id="highlight-cluster-input",
+                    type="number",
+                    min=-1,
+                    max=int(df["cluster"].max()),
+                    step=1,
+                    value=-1,
+                    style={"width": "100px"},
                 ),
                 html.Div(
+                    "Enter -1 to show all clusters.",
+                    style={
+                        "fontSize": "12px",
+                        "color": "#888",
+                        "marginTop": "4px",
+                        "marginBottom": "16px",
+                    },
+                ),
+                # Text search box below highlight cluster input
+                dcc.Input(
+                    id="text-search-input",
+                    type="text",
+                    placeholder="Search images by text...",
+                    style={"width": "180px", "marginRight": "8px"},
+                ),
+                html.Button(
+                    "Text Search",
+                    id="text-search-btn",
+                    n_clicks=0,
+                    style={"marginTop": "8px"},
+                ),
+                # Sliders side-by-side in a row, inside the column
+                html.Div(
                     [
-                        # Controls column: highlight cluster, text search, and sliders
                         html.Div(
                             [
                                 html.Label(
-                                    "Highlight cluster:", style={"marginBottom": "8px"}
+                                    "DBSCAN eps:",
+                                    style={"marginBottom": "8px"},
                                 ),
-                                dcc.Input(
-                                    id="highlight-cluster-input",
-                                    type="number",
-                                    min=-1,
-                                    max=int(df["cluster"].max()),
-                                    step=1,
-                                    value=-1,
-                                    style={"width": "100px"},
-                                ),
-                                html.Div(
-                                    "Enter -1 to show all clusters.",
-                                    style={
-                                        "fontSize": "12px",
-                                        "color": "#888",
-                                        "marginTop": "4px",
-                                        "marginBottom": "16px",
+                                dcc.Slider(
+                                    id="eps-slider",
+                                    min=0.01,
+                                    max=0.3,
+                                    step=0.01,
+                                    value=0.05,
+                                    marks={
+                                        0.001: "0.001",
+                                        0.01: "0.01",
+                                        0.05: "0.05",
+                                        0.1: "0.1",
+                                        0.2: "0.2",
+                                        0.3: "0.3",
                                     },
-                                ),
-                                # Text search box below highlight cluster input
-                                dcc.Input(
-                                    id="text-search-input",
-                                    type="text",
-                                    placeholder="Search images by text...",
-                                    style={"width": "180px", "marginRight": "8px"},
-                                ),
-                                html.Button(
-                                    "Text Search", id="text-search-btn", n_clicks=0,
-                                    style={"marginTop": "8px"}
-                                ),
-                                # Sliders side-by-side in a row, inside the column
-                                html.Div(
-                                    [
-                                        html.Div(
-                                            [
-                                                html.Label(
-                                                    "DBSCAN eps:", style={"marginBottom": "8px"}
-                                                ),
-                                                dcc.Slider(
-                                                    id="eps-slider",
-                                                    min=0.01,
-                                                    max=0.3,
-                                                    step=0.01,
-                                                    value=0.05,
-                                                    marks={
-                                                        0.001: "0.001",
-                                                        0.01: "0.01",
-                                                        0.05: "0.05",
-                                                        0.1: "0.1",
-                                                        0.2: "0.2",
-                                                        0.3: "0.3",
-                                                    },
-                                                    tooltip={
-                                                        "placement": "bottom",
-                                                        "always_visible": True,
-                                                    },
-                                                    vertical=True,
-                                                    updatemode="drag",
-                                                ),
-                                            ],
-                                            style={
-                                                "display": "flex",
-                                                "flexDirection": "column",
-                                                "alignItems": "flex-start",  # <-- align left
-                                                "height": int(plot_height / 2),
-                                                "marginRight": "10px",
-                                            },
-                                        ),
-                                        html.Div(
-                                            [
-                                                html.Label(
-                                                    "DBSCAN min_samples:", style={"marginBottom": "8px"}
-                                                ),
-                                                dcc.Slider(
-                                                    id="min-samples-slider",
-                                                    min=1,
-                                                    max=20,
-                                                    step=1,
-                                                    value=5,
-                                                    marks={1: "1", 5: "5", 10: "10", 20: "20"},
-                                                    tooltip={
-                                                        "placement": "bottom",
-                                                        "always_visible": True,
-                                                    },
-                                                    vertical=True,
-                                                    updatemode="drag",
-                                                ),
-                                            ],
-                                            style={
-                                                "display": "flex",
-                                                "flexDirection": "column",
-                                                "alignItems": "flex-start",  # <-- align left
-                                                "height": int(plot_height / 2),
-                                                "marginLeft": "10px",
-                                            },
-                                        ),
-                                    ],
-                                    style={
-                                        "display": "flex",
-                                        "flexDirection": "row",
-                                        "justifyContent": "flex-start",  # <-- align left
-                                        "alignItems": "flex-start",
-                                        "marginTop": "16px",
+                                    tooltip={
+                                        "placement": "bottom",
+                                        "always_visible": True,
                                     },
+                                    vertical=True,
+                                    updatemode="drag",
                                 ),
                             ],
                             style={
                                 "display": "flex",
                                 "flexDirection": "column",
                                 "alignItems": "flex-start",  # <-- align left
+                                "height": int(PLOT_HEIGHT / 2),
                                 "marginRight": "10px",
+                            },
+                        ),
+                        html.Div(
+                            [
+                                html.Label(
+                                    "DBSCAN min_samples:",
+                                    style={"marginBottom": "8px"},
+                                ),
+                                dcc.Slider(
+                                    id="min-samples-slider",
+                                    min=1,
+                                    max=20,
+                                    step=1,
+                                    value=5,
+                                    marks={
+                                        1: "1",
+                                        5: "5",
+                                        10: "10",
+                                        20: "20",
+                                    },
+                                    tooltip={
+                                        "placement": "bottom",
+                                        "always_visible": True,
+                                    },
+                                    vertical=True,
+                                    updatemode="drag",
+                                ),
+                            ],
+                            style={
+                                "display": "flex",
+                                "flexDirection": "column",
+                                "alignItems": "flex-start",  # <-- align left
+                                "height": int(PLOT_HEIGHT / 2),
+                                "marginLeft": "10px",
                             },
                         ),
                     ],
@@ -235,65 +235,87 @@ app.layout = html.Div(
                         "flexDirection": "row",
                         "justifyContent": "flex-start",  # <-- align left
                         "alignItems": "flex-start",
-                        "height": int(plot_height / 2),
-                        "marginLeft": "20px",
-                        "gap": "0px",
+                        "marginTop": "16px",
                     },
                 ),
             ],
             style={
                 "display": "flex",
-                "flexDirection": "row",
-                "alignItems": "flex-start",
+                "flexDirection": "column",
+                "alignItems": "flex-start",  # <-- align left
+                "marginRight": "10px",
             },
         ),
+    ],
+    id="controls-container",
+)
+
+# the hover image container
+dcc_hover = html.Div(
+    id="hover-image-container",
+    style={"position": "absolute", "pointerEvents": "none", "zIndex": 1000},
+    children=[],
+)
+
+# The modal dialogue for displaying full-size images
+dcc_modal = html.Div(
+    id="modal",
+    style={
+        "display": "none",
+        "position": "fixed",
+        "top": 0,
+        "left": 0,
+        "width": "100vw",
+        "height": "100vh",
+        "backgroundColor": "rgba(0,0,0,0.7)",
+        "justifyContent": "center",
+        "alignItems": "center",
+        "zIndex": 2000,
+    },
+    children=[
         html.Div(
-            id="hover-image-container",
-            style={"position": "absolute", "pointerEvents": "none", "zIndex": 1000},
-            children=[],
-        ),
-        html.Div(
-            id="modal",
+            id="modal-content",
             style={
-                "display": "none",
-                "position": "fixed",
-                "top": 0,
-                "left": 0,
-                "width": "100vw",
-                "height": "100vh",
-                "backgroundColor": "rgba(0,0,0,0.7)",
-                "justifyContent": "center",
+                "background": "#fff",
+                "padding": "20px",
+                "borderRadius": "8px",
+                "boxShadow": "0 2px 8px rgba(0,0,0,0.3)",
+                "maxWidth": "90vw",
+                "maxHeight": "90vh",
+                "display": "flex",
+                "flexDirection": "column",
                 "alignItems": "center",
-                "zIndex": 2000,
             },
             children=[
-                html.Div(
-                    id="modal-content",
+                html.Img(
+                    id="modal-image",
                     style={
-                        "background": "#fff",
-                        "padding": "20px",
-                        "borderRadius": "8px",
-                        "boxShadow": "0 2px 8px rgba(0,0,0,0.3)",
-                        "maxWidth": "90vw",
-                        "maxHeight": "90vh",
-                        "display": "flex",
-                        "flexDirection": "column",
-                        "alignItems": "center",
+                        "maxWidth": "600px",
+                        "maxHeight": "80vh",
+                        "marginBottom": "20px",
                     },
-                    children=[
-                        html.Img(
-                            id="modal-image",
-                            style={
-                                "maxWidth": "600px",
-                                "maxHeight": "80vh",
-                                "marginBottom": "20px",
-                            },
-                        ),
-                        html.Button("Close", id="close-modal", n_clicks=0),
-                    ],
-                )
+                ),
+                html.Button("Close", id="close-modal", n_clicks=0),
             ],
+        )
+    ],
+)
+
+# set the title of the app
+app = dash.Dash(__name__)
+
+# Here's the main layout of the app.
+app.layout = html.Div(
+    [
+        html.Div(
+            [
+                dcc_loading,
+                dcc_controls,
+            ],
+            id="main-container",
         ),
+        dcc_hover,
+        dcc_modal,
         dcc.Store(id="text-search-matches"),
     ]
 )
@@ -351,20 +373,31 @@ def update_clusters(eps, min_samples, highlight_cluster, search_matches):
         fig.update_traces(marker=dict(color=color))
         fig.update_layout(showlegend=False)
     else:
+        # Compute cluster sizes
+        cluster_sizes = df["cluster"].value_counts()
+        # Map cluster number to color (grey if small, else from palette)
+        # Noise  clusters are colored grey as well
+        color_map = {
+            c: (
+                "rgba(200,200,200,0.4)"
+                if cluster_sizes[c] < 50 or c == -1
+                else custom_colors[c % len(custom_colors)]
+            )
+            for c in df["cluster"].unique()
+        }
+        color = df["cluster"].map(color_map)
         fig = px.scatter(
             df,
             x="x",
             y="y",
-            color="cluster",
             custom_data=["filename"],
             opacity=0.6,
-            color_discrete_sequence=px.colors.qualitative.Set1,
         )
-    fig.update_traces(marker=dict(size=4), hovertemplate="<span></span>")
-    fig.update_layout(
-        height=800,
-        title=f"CLIP Embeddings UMAP Explorer (eps={eps}, min_samples={min_samples})",
-    )
+        fig.update_traces(marker=dict(color=color))
+        fig.update_layout(
+            height=800,
+            title=f"CLIP Embeddings UMAP Explorer (eps={eps}, min_samples={min_samples})",
+        )
     return fig
 
 
@@ -469,7 +502,9 @@ def encode_image_to_base64(path, size=(64, 64)):
 def run_text_search(n_clicks, n_submit, text_query):
     if not text_query:
         return []
-    filenames, _ = search_images_by_text(text_query, embeddings_file=embeddings_file, top_k=200)
+    filenames, _ = search_images_by_text(
+        text_query, embeddings_file=embeddings_file, top_k=200
+    )
     return list(filenames)
 
 
