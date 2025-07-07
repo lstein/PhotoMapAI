@@ -157,6 +157,7 @@ dcc_controls = html.Div(
                     type="text",
                     placeholder="Search images by text...",
                     style={"width": "180px", "marginRight": "8px"},
+                    autoComplete="off",
                 ),
                 html.Button(
                     "Text Search",

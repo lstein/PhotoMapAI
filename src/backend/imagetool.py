@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from image_search import (
+from backend.image_search import (
     index_images, 
     update_embeddings, 
     search_images, 
