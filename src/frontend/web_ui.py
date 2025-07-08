@@ -9,7 +9,7 @@ import shutil
 import tempfile
 import base64
 from pathlib import Path
-from image_search import search_images, search_images_by_text
+from backend.embeddings import Embeddings
 
 # Read from environment variables or use defaults
 IMAGES_DIR = os.environ.get("IMAGES_DIR", "/net/cubox/CineRAID")
@@ -17,8 +17,8 @@ EMBEDDINGS_FILE = os.environ.get("EMBEDDINGS_FILE", "clip_image_embeddings.npz")
 
 app = FastAPI(title="CLIP Image Search Web UI")
 app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="./src/frontend/static"), name="static")
+templates = Jinja2Templates(directory="./src/frontend/templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def form_get(request: Request):
@@ -36,9 +36,11 @@ async def form_post(
     image_tiles = []
     uploaded_image_url = None
 
+    embeddings = Embeddings(embeddings_path=Path(embeddings_file))
+
     if text_query and text_query.strip():
         # Text search
-        results, scores = search_images_by_text(text_query.strip(), embeddings_file, top_k)
+        results, scores = embeddings.search_images_by_text(text_query.strip(), top_k)
         filtered = [
             (filename, score)
             for filename, score in zip(results, scores)
@@ -57,7 +59,7 @@ async def form_post(
             shutil.copyfileobj(file.file, tmp)
             tmp_path = Path(tmp.name)
 
-        results, scores = search_images(tmp_path, embeddings_file, top_k)
+        results, scores = embeddings.search_images_by_similarity(tmp_path, top_k)
         filtered = [
             (filename, score)
             for filename, score in zip(results, scores)

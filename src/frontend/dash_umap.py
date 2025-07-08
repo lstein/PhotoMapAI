@@ -21,7 +21,7 @@ from pathlib import Path
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.express as px
-from backend.embeddings import search_images_by_text, search_images
+from backend.embeddings import Embeddings
 
 # load embeddings and filenames
 EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/embeddings.npz"
@@ -30,6 +30,7 @@ embeddings_file = sys.argv[1] if len(sys.argv) > 1 else EMBEDDINGS_FILE
 PLOT_HEIGHT = 800
 MAX_COLORED_CLUSTERS = 75  # Maximum number of clusters to color distinctly
 
+embeddings = Embeddings(embeddings_path=Path(embeddings_file))
 
 # --- Generate a hash for the embeddings file path ---
 def hash_filename(filename):
@@ -485,7 +486,7 @@ def update_hover_image(hover_data):
     cluster = str(df.iloc[idx]["cluster"])
     if cluster == "-1":
         cluster = "Noise"
-    thumbnail = encode_image_to_base64(filename, size=(128, 128))
+    thumbnail = encode_image_to_base64(filename, size=(250, 256))
     x0, y0 = point["bbox"]["x0"], point["bbox"]["y0"]
     left = int(x0) + 10
     top = int(y0) + 30
@@ -592,16 +593,16 @@ def update_search_matches(
     elif trigger in ["text-search-btn", "text-search-input"]:
         if not text_query:
             return []
-        filenames, scores = search_images_by_text(
-            text_query, embeddings_file=embeddings_file, top_k=200
+        filenames, scores = embeddings.search_images_by_text(
+            text_query, top_k=200
         )
         filenames = [f for f, s in zip(filenames, scores) if s > 0.2]
         return list(filenames)
     elif trigger == "find-similar-btn":
         if not image_path:
             return []
-        filenames, scores = search_images(
-            Path(image_path), embeddings_file=embeddings_file, top_k=200
+        filenames, scores = embeddings.search_images_by_similarity(
+            Path(image_path), top_k=200
         )
         # Return only filenames that have a score above a threshold of 0.6
         filenames = [f for f, s in zip(filenames, scores) if s > 0.6]
