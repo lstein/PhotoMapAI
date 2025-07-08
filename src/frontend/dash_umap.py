@@ -21,7 +21,7 @@ from pathlib import Path
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.express as px
-from backend.image_search import search_images_by_text, search_images
+from backend.embeddings import search_images_by_text, search_images
 
 # load embeddings and filenames
 EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/embeddings.npz"

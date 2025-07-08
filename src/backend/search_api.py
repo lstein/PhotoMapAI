@@ -3,13 +3,13 @@ from fastapi.responses import JSONResponse
 from pathlib import Path
 import shutil
 import tempfile
-from backend.image_search import search_images, search_images_by_text
+from backend.embeddings import Embeddings
 
 app = FastAPI(title="CLIP Image Search API")
 
 
 @app.post("/search_with_image/")
-async def search(
+async def do_embedding_search_by_image(
     file: UploadFile = File(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
     top_k: int = Form(20),
@@ -21,7 +21,8 @@ async def search(
         tmp_path = Path(tmp.name)
 
     # Call the search_images function
-    results, scores = search_images(tmp_path, embeddings_file, top_k)
+    embeddings = Embeddings(embeddings_path=Path(embeddings_file))
+    results, scores = embeddings.search_images_by_similarity(tmp_path, top_k=top_k)
 
     # Clean up temp file
     tmp_path.unlink(missing_ok=True)
@@ -38,14 +39,15 @@ async def search(
 
 
 @app.post("/search_with_text/")
-async def search(
+async def do_embedding_search_by_text(
     text_query: str = Form(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
     top_k: int = Form(20),
 ):
     """Search for images semantically matching the query."""
     # Call the search_images function
-    results, scores = search_images_by_text(text_query, embeddings_file, top_k)
+    embeddings = Embeddings(embeddings_path=Path(embeddings_file))
+    results, scores = embeddings.search_images_by_text(text_query, top_k=top_k)
 
     # Return results as JSON
     return JSONResponse(

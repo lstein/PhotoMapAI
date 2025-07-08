@@ -5,16 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from backend.image_search import (
-    index_images, 
-    update_embeddings, 
-    search_images, 
-    search_images_by_text, 
-    find_similar_images_by_embedding,
-    find_similar_images_fast,
-    find_similar_images_gpu,
-    find_duplicate_clusters,
-)
+from backend.embeddings import Embeddings
 
 def do_index():
     import argparse
@@ -41,11 +32,13 @@ def do_index():
     )
 
     args = parser.parse_args()
+    embeddings = Embeddings(embeddings_path=args.embeddings)
+
     # If a single argument is given and it's a directory, treat as directory
     if len(args.image_paths) == 1 and os.path.isdir(args.image_paths[0]):
-        _, _, bad_files = index_images(args.image_paths[0], args.embeddings)
+        _, _, bad_files = embeddings.create_index(args.image_paths[0])
     else:
-        _, _, bad_files = index_images(args.image_paths, args.embeddings)
+        _, _, bad_files = embeddings.create_index(args.image_paths)
     if args.print_bad_files and bad_files:
         print("Failed to process the following files:")
         for f in bad_files:
@@ -79,11 +72,13 @@ def do_update_index():
     if not os.path.exists(args.embeddings):
         raise FileNotFoundError(f"Embeddings file '{args.embeddings}' does not exist. Please index images first.")  
 
+    embeddings = Embeddings(embeddings_path=args.embeddings)
+
     # If a single argument is given and it's a directory, treat as directory
     if len(args.image_paths) == 1 and os.path.isdir(args.image_paths[0]):
-        _, _, bad_files = update_embeddings(args.image_paths[0], args.embeddings)
+        _, _, bad_files = embeddings.update_index(args.image_paths[0])
     else:
-        _, _, bad_files = update_embeddings(args.image_paths, args.embeddings)
+        _, _, bad_files = embeddings.update_index(args.image_paths)
     if args.print_bad_files and bad_files:
         print("Failed to process the following files:")
         for f in bad_files:
@@ -107,8 +102,9 @@ def do_search():
     )
 
     args = parser.parse_args()
+    embeddings = Embeddings(embeddings_path=args.embeddings)
 
-    results, scores = search_images(args.search, args.embeddings, args.top_k)
+    results, scores = embeddings.search_images_by_similarity(args.search, top_k=args.top_k)
     print("Top similar images:")
     for filename, score in zip(results, scores):
         print(f"{filename}: {score:.4f}")
@@ -132,8 +128,9 @@ def do_text_search():
     )
 
     args = parser.parse_args()
+    embeddings = Embeddings(embeddings_path=args.embeddings)
 
-    results, scores = search_images_by_text(args.query, args.embeddings, args.top_k)
+    results, scores = embeddings.search_images_by_text(args.query, top_k=args.top_k)
     print("Top similar images for query:")
     for filename, score in zip(results, scores):
         print(f"{filename}: {score:.4f}")
@@ -150,9 +147,10 @@ def do_duplicate_search():
     )
 
     args = parser.parse_args()
+    embeddings = Embeddings(embeddings_path=args.embeddings)
 
     # find_similar_images_fast(args.embeddings)
-    find_duplicate_clusters(args.embeddings)
+    embeddings.find_duplicate_clusters()
 
 def main():
     prog = Path(sys.argv[0]).name
