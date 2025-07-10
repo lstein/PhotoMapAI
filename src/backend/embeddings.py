@@ -9,17 +9,20 @@ for image embeddings and similarity calculations.
 
 import os
 import clip
+import json
 import numpy as np
 import torch
 import torch.nn.functional as F
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ExifTags
 from tqdm import tqdm
 from sklearn.neighbors import NearestNeighbors
 import networkx as nx
 
-from typing import Optional, Set
+from typing import Optional, Set, Dict, Tuple
 from pathlib import Path
 from pydantic import BaseModel
+
+from .metadata import format_metadata
 
 
 class Embeddings(BaseModel):
@@ -51,10 +54,11 @@ class Embeddings(BaseModel):
                     image_files.append(Path(root, file).resolve())
         return image_files
 
-    def get_image_files(self,
-                        image_paths_or_dir: list[Path] | Path,
-                        exts: Set[str] = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
-                        ) -> list[Path]:
+    def get_image_files(
+        self,
+        image_paths_or_dir: list[Path] | Path,
+        exts: Set[str] = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
+    ) -> list[Path]:
         """
         Get a list of image file paths from a directory or a list of image paths.
 
@@ -82,7 +86,7 @@ class Embeddings(BaseModel):
         self,
         image_paths_or_dir: list[Path] | Path,
         create_index: bool = True,
-    ) -> tuple[np.ndarray, np.ndarray, list[Path]]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]]:
         """
         Index images using CLIP and save their embeddings.
 
@@ -98,6 +102,8 @@ class Embeddings(BaseModel):
 
         embeddings = []
         filenames = []
+        modification_times = []  # List to store file modification times
+        metadatas = []  # List to store file metadata
         bad_files = []  # List to store files that failed to process
 
         # Ensure image_paths is a list of paths (strings)
@@ -107,9 +113,27 @@ class Embeddings(BaseModel):
         for image_path in tqdm(image_paths, desc="Indexing images"):
             try:
                 pil_image = Image.open(image_path).convert("RGB")
-                pil_image = ImageOps.exif_transpose(
-                    pil_image
-                )  # Handle EXIF orientation
+                # Handle EXIF orientation
+                pil_image = ImageOps.exif_transpose(pil_image)
+                # get the file's modification time
+                modification_time = image_path.stat().st_mtime
+                # get the file's EXIF info or PNG metadata
+                # special case for invokeai metadata
+                if 'invokeai_metadata' in pil_image.info:
+                    metadata = json.loads(pil_image.info['invokeai_metadata'])
+                elif 'exif' in pil_image.info:
+                    # If the image has EXIF data, we can extract it
+                    metadata = pil_image.getexif()
+                    # Convert EXIF data to a dictionary
+                    metadata = {ExifTags.TAGS.get(k, k): v for k, v in metadata.items()}
+                else:
+                    metadata = {}  # No metadata available
+                    
+                # special case for invokeai metadata
+                if 'invokeai_metadata' in metadata:
+                    metadata = json.loads(metadata['invokeai_metadata'])
+
+                # Create the CLIP embedding
                 image = preprocess(pil_image).unsqueeze(0).to(device)  # type: ignore
                 with torch.no_grad():
                     embedding = model.encode_image(image).cpu().numpy().flatten()
@@ -117,6 +141,8 @@ class Embeddings(BaseModel):
                 filenames.append(
                     image_path.resolve().as_posix()
                 )  # Store the full path as a string
+                modification_times.append(modification_time)
+                metadatas.append(metadata)
             except Exception as e:
                 print(f"Error processing {image_path}: {e}")
                 # add failed image to a list for debugging
@@ -124,19 +150,27 @@ class Embeddings(BaseModel):
 
         embeddings = np.array(embeddings)  # shape: (N, 512)
         filenames = np.array(filenames)  # shape: (N,)
+        mod_times = np.array(modification_times)  # shape: (N,)
+        metadatas = np.array(metadatas, dtype=object)  # shape: (N,)
 
         # Save embeddings and filenames if requested
         if create_index:
-            np.savez(self.embeddings_path, embeddings=embeddings, filenames=filenames)
+            np.savez(
+                self.embeddings_path,
+                embeddings=embeddings,
+                filenames=filenames,
+                modification_times=mod_times,
+                metadata=metadatas,
+            )
             print(
                 f"Indexed {len(embeddings)} images and saved to {self.embeddings_path}"
             )
 
-        return embeddings, filenames, bad_files
+        return embeddings, filenames, mod_times, metadatas, bad_files
 
     def update_index(
         self, image_paths_or_dir: list[Path] | Path
-    ) -> tuple[np.ndarray, np.ndarray, list[Path]]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]]:
         """
         Update existing embeddings with new images.
 
@@ -152,6 +186,8 @@ class Embeddings(BaseModel):
         data = np.load(self.embeddings_path, allow_pickle=True)
         existing_embeddings = data["embeddings"]  # shape: (N, 512)
         existing_filenames = data["filenames"]  # shape: (N,)
+        existing_modtimes = data["modification_times"]  # shape: (N,)
+        existing_metadatas = data["metadata"]  # shape: (N,)
 
         # Get the image paths in the provided paths or directory, and identify the paths not already in existing_filenames
         image_path_set = set(self.get_image_files(image_paths_or_dir))
@@ -191,7 +227,7 @@ class Embeddings(BaseModel):
             return existing_embeddings, existing_filenames, []
 
         # Index new images
-        new_embeddings, new_filenames, bad_files = self.create_index(
+        new_embeddings, new_filenames, new_modification_times, new_metadatas, bad_files = self.create_index(
             list(new_image_paths), create_index=False
         )
 
@@ -206,21 +242,31 @@ class Embeddings(BaseModel):
 
         # After removing missing images and before vstack:
         if existing_embeddings.size == 0:
-            existing_embeddings = np.empty((0, new_embeddings.shape[1]), dtype=new_embeddings.dtype)
+            existing_embeddings = np.empty(
+                (0, new_embeddings.shape[1]), dtype=new_embeddings.dtype
+            )
 
         # Combine existing and new embeddings
         updated_embeddings = np.vstack((existing_embeddings, new_embeddings))
         updated_filenames = np.concatenate((existing_filenames, new_filenames))
+        updated_mod_times = np.concatenate(
+            (existing_modtimes, new_modification_times)
+        )
+        updated_metadatas = np.concatenate(
+            (existing_metadatas, new_metadatas)
+        )
 
         # Save updated embeddings and filenames
         np.savez(
             self.embeddings_path,
             embeddings=updated_embeddings,
             filenames=updated_filenames,
+            modification_times=updated_mod_times,
+            metadata=updated_metadatas,
         )
         print(f"Updated embeddings saved to {self.embeddings_path}")
 
-        return updated_embeddings, updated_filenames, bad_files
+        return updated_embeddings, updated_filenames, updated_mod_times, updated_metadatas, bad_files
 
     def search_images_by_similarity(
         self,
@@ -371,3 +417,101 @@ class Embeddings(BaseModel):
             for fname in sorted(cluster):
                 print(fname)
             print()
+
+    def retrieve_next_image(
+        self, current_image: Optional[Path] = None, random: bool = False
+    ) -> Tuple[Path, str]:
+        """
+        Retrieve the next image based on the current image.
+        If random is True, return a random image from the embeddings.
+
+        Args:
+            current_image (Path): Path to the current image.
+            random (bool): Whether to return a random image.
+
+        Returns:
+            tuple: (next_image_path, score)
+        """
+        data = np.load(self.embeddings_path, allow_pickle=True)
+        filenames = data["filenames"]
+        modtimes = data["modification_times"]
+        metadata = data["metadata"]
+
+        if random:
+            idx = np.random.randint(len(filenames))
+        else:
+            # sort the fields by modification time
+            sorted_indices = np.argsort(modtimes)
+            filenames = filenames[sorted_indices]
+            metadata = metadata[sorted_indices]
+            if not current_image:
+                return (Path(filenames[0]), format_metadata(metadata[0]))
+            idx = np.where(filenames == current_image.as_posix())[0]
+            if idx.size == 0:
+                raise ValueError(
+                    f"Current image {current_image} not found in embeddings."
+                )
+            idx = idx[0]  # Get the first index if multiple matches found
+            if idx + 1 < len(filenames):
+                idx += 1
+            else:
+                idx = 0
+        return (Path(filenames[idx]), format_metadata(metadata[idx]))
+
+    def pick_image_from_list(
+        self,
+        image_list: list[Path],
+        current_image: Optional[Path] = None,
+    ) -> Tuple[Path, str]:
+        """
+        Pick the next image from a list of images, cycling if at the end.
+
+        Args:
+            image_list (list of Path): List of image paths.
+            current_image (Optional[Path]): The current image.
+
+        Returns:
+            tuple: (next_image_path, formatted_metadata_str)
+        """
+        # Convert image_list to array of strings for np.where
+        image_strs = np.array([p.as_posix() for p in image_list])
+
+        if not current_image:
+            idx = 0  # pick the first image
+        else:
+            idxs = np.where(image_strs == current_image.as_posix())[0]
+            idx = idxs[0] if idxs.size > 0 else 0
+
+            # Move to next image, cycling if at the end
+            idx = (idx + 1) % len(image_list)
+
+        next_image = image_list[idx]
+
+        # get the metadata for the next image
+        data = np.load(self.embeddings_path, allow_pickle=True)
+        filenames = data["filenames"]
+        metadata = data["metadata"]
+        filenames_str = np.array(filenames)
+        meta_idx = np.where(filenames_str == next_image.as_posix())[0][0]
+        next_image_metadata = format_metadata(metadata[meta_idx])
+        return (next_image, next_image_metadata)
+
+    # Iterator over images in the embeddings file
+    def iterate_images(self, random: bool = False):
+        """
+        Iterate over images in the embeddings file.
+        Yields:
+            tuple: (image_path, formatted_metadata_str)
+        """
+        data = np.load(self.embeddings_path, allow_pickle=True)
+        filenames = data["filenames"]
+        metadata = data["metadata"]
+
+        if random:
+            indices = np.random.permutation(len(filenames))
+        else:
+            indices = np.arange(len(filenames))
+        for idx in indices:
+            image_path = Path(filenames[idx])
+            image_metadata = format_metadata(metadata[idx])
+            yield (image_path, image_metadata)
