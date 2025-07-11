@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from pathlib import Path
 import shutil
 import tempfile
-from backend.embeddings import Embeddings
+from .embeddings import Embeddings
 
 app = FastAPI(title="CLIP Image Search API")
 
