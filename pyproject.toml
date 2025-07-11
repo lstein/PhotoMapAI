@@ -15,6 +15,9 @@ dependencies = [
     "torch",
     "Pillow",
     "clip-anytorch",
+    "scikit-learn",
+    "pydantic",
+    "fastapi",
 ]
 
 [tool.setuptools.packages.find]
