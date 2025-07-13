@@ -8,10 +8,12 @@ from backend.embeddings import Embeddings
 from pydantic import BaseModel
 from typing import List
 
+from backend.metadata_modules import SlideMetadata
+
 app = FastAPI(title="CLIP Image Search API")
 
-class NextImageResponse(BaseModel):
-    filename: str
+class NextImageResponse(SlideMetadata):
+    pass
 
 class SearchResult(BaseModel):
     filename: str
@@ -64,12 +66,12 @@ async def do_embedding_search_by_text(
         ]
     )
 
-@app.post("/retrieve_next_image/", response_model=NextImageResponse)
+@app.post("/retrieve_next_image/", response_model=SlideMetadata)
 async def retrieve_next_image(
     current_image: str = Form(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
     random: bool = Form(False),
-) -> NextImageResponse:
+) -> SlideMetadata:
     """Retrieve the next image based on the current image."""
     # Load embeddings
     embeddings = Embeddings(embeddings_path=Path(embeddings_file))
@@ -77,10 +79,20 @@ async def retrieve_next_image(
     # Get the next image based on the current image
     if random:
         # If random is True, return a random image from the embeddings
-        image = embeddings.retrieve_next_image(random=True)
+        metadata = embeddings.retrieve_next_image(random=True)
     else:
-        image = embeddings.retrieve_next_image(current_image=Path(current_image),
+        metadata = embeddings.retrieve_next_image(current_image=Path(current_image),
                                                random=False)
 
     # Return results as JSON
-    return NextImageResponse(filename=image.as_posix())
+    return metadata
+
+@app.post("/retrieve_image/", response_model=SlideMetadata)
+async def retrieve_next_image(
+    current_image: str = Form(...),
+    embeddings_file: str = Form("clip_image_embeddings.npz"),
+) -> SlideMetadata:
+    """Retrieve the next image based on the current image."""
+    # Load embeddings
+    embeddings = Embeddings(embeddings_path=Path(embeddings_file))
+    return embeddings.retrieve_image(current_image=Path(current_image)

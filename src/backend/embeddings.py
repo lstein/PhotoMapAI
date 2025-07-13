@@ -23,7 +23,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .metadata import format_metadata
-
+from .metadata_modules import SlideMetadata
 
 class Embeddings(BaseModel):
     """
@@ -419,8 +419,10 @@ class Embeddings(BaseModel):
             print()
 
     def retrieve_next_image(
-        self, current_image: Optional[Path] = None, random: bool = False
-    ) -> Tuple[Path, str]:
+        self, 
+        current_image: Optional[Path] = None, 
+        random: bool = False
+    ) -> SlideMetadata:
         """
         Retrieve the next image based on the current image.
         If random is True, return a random image from the embeddings.
@@ -445,7 +447,8 @@ class Embeddings(BaseModel):
             filenames = filenames[sorted_indices]
             metadata = metadata[sorted_indices]
             if not current_image:
-                return (Path(filenames[0]), format_metadata(metadata[0]))
+                filepath = Path(filenames[0])
+                return format_metadata(filepath, metadata[0])
             idx = np.where(filenames == current_image.as_posix())[0]
             if idx.size == 0:
                 raise ValueError(
@@ -456,52 +459,75 @@ class Embeddings(BaseModel):
                 idx += 1
             else:
                 idx = 0
-        return (Path(filenames[idx]), format_metadata(metadata[idx]))
-
-    def pick_image_from_list(
-        self,
-        image_list: list[Path],
-        current_image: Optional[Path] = None,
-    ) -> Tuple[Path, str]:
+        return format_metadata(Path(filenames[idx]),metadata[idx])
+    
+    def retrieve_image(self, current_image: Path) -> SlideMetadata:
         """
-        Pick the next image from a list of images, cycling if at the end.
+        Retrieve the metadata for a specific image.
 
         Args:
-            image_list (list of Path): List of image paths.
-            current_image (Optional[Path]): The current image.
+            current_image (Path): Path to the image.
 
         Returns:
-            tuple: (next_image_path, formatted_metadata_str)
+            SlideMetadata: Metadata for the specified image.
         """
-        # Convert image_list to array of strings for np.where
-        image_strs = np.array([p.as_posix() for p in image_list])
-
-        if not current_image:
-            idx = 0  # pick the first image
-        else:
-            idxs = np.where(image_strs == current_image.as_posix())[0]
-            idx = idxs[0] if idxs.size > 0 else 0
-
-            # Move to next image, cycling if at the end
-            idx = (idx + 1) % len(image_list)
-
-        next_image = image_list[idx]
-
-        # get the metadata for the next image
         data = np.load(self.embeddings_path, allow_pickle=True)
         filenames = data["filenames"]
         metadata = data["metadata"]
-        filenames_str = np.array(filenames)
-        meta_idx = np.where(filenames_str == next_image.as_posix())[0][0]
-        next_image_metadata = format_metadata(metadata[meta_idx])
-        return (next_image, next_image_metadata)
+
+        idx = np.where(filenames == current_image.as_posix())[0]
+        if idx.size == 0:
+            raise ValueError(f"Image {current_image} not found in embeddings.")
+        
+        idx = idx[0]
+        return format_metadata(Path(filenames[idx]), metadata[idx])
+
+    # def pick_image_from_list(
+    #     self,
+    #     image_list: list[Path],
+    #     current_image: Optional[Path] = None,
+    # ) -> Tuple[Path, str]:
+    #     """
+    #     Pick the next image from a list of images, cycling if at the end.
+
+    #     Args:
+    #         image_list (list of Path): List of image paths.
+    #         current_image (Optional[Path]): The current image.
+
+    #     Returns:
+    #         tuple: (next_image_path, formatted_metadata_str)
+    #     """
+    #     # Convert image_list to array of strings for np.where
+    #     image_strs = np.array([p.as_posix() for p in image_list])
+
+    #     if not current_image:
+    #         idx = 0  # pick the first image
+    #     else:
+    #         idxs = np.where(image_strs == current_image.as_posix())[0]
+    #         idx = idxs[0] if idxs.size > 0 else 0
+
+    #         # Move to next image, cycling if at the end
+    #         idx = (idx + 1) % len(image_list)
+
+    #     next_image = image_list[idx]
+
+    #     # get the metadata for the next image
+    #     data = np.load(self.embeddings_path, allow_pickle=True)
+    #     filenames = data["filenames"]
+    #     metadata = data["metadata"]
+    #     filenames_str = np.array(filenames)
+    #     meta_idx = np.where(filenames_str == next_image.as_posix())[0][0]
+    #     next_image_metadata = format_metadata(metadata[meta_idx])
+    #     return (next_image, next_image_metadata)
 
     # Iterator over images in the embeddings file
-    def iterate_images(self, random: bool = False):
+    from typing import Generator
+
+    def iterate_images(self, random: bool = False) -> Generator[SlideMetadata, None, None]:
         """
         Iterate over images in the embeddings file.
         Yields:
-            tuple: (image_path, formatted_metadata_str)
+            SlideMetadata: Metadata for each image.
         """
         data = np.load(self.embeddings_path, allow_pickle=True)
         filenames = data["filenames"]
@@ -513,5 +539,4 @@ class Embeddings(BaseModel):
             indices = np.arange(len(filenames))
         for idx in indices:
             image_path = Path(filenames[idx])
-            image_metadata = format_metadata(metadata[idx])
-            yield (image_path, image_metadata)
+            yield format_metadata(image_path, metadata[idx])

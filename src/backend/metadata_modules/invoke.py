@@ -4,19 +4,23 @@ backend.metadata_modules.invoke
 Format metadata from invoke module, including human-readable tags.
 Returns an HTML representation of the metadata. 
 """
+from pathlib import Path
+from slide_metadata import SlideMetadata
 
-def format_invoke_metadata(metadata: dict) -> str:
+def format_invoke_metadata(slide_data: SlideMetadata, metadata: dict) -> SlideMetadata:
     """
     Format invoke metadata dictionary into an HTML string.
     
     Args:
+        filepath (Path): Path to the file.
         metadata (dict): Metadata dictionary containing invoke attributes.
         
     Returns:
-        str: HTML representation of the invoke metadata.
+        SlideMetadata: structured metadata appropriate for an InvokeAI image.
     """
     if not metadata:
-        return "<i>No invoke metadata available.</i>"
+        slide_data.description = "<i>No invoke metadata available.</i>"
+        return slide_data
     
     positive_prompt = metadata.get('positive_prompt', '') if 'positive_prompt' in metadata \
         else metadata['image'].get('positive_prompt', '') if 'image' in metadata \
@@ -51,7 +55,9 @@ def format_invoke_metadata(metadata: dict) -> str:
         html += f"<tr><th>IPAdapters</th><td>{ipadapters}</td></tr>"
     html += "</table>"
     
-    return html
+    slide_data.description = html
+    slide_data.textToCopy = positive_prompt if positive_prompt else filepath.name
+    return slide_data
 
 def _format_loras(loras: list) -> str | None:
     """    Format a list of loras into an HTML table.

@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Slideshow</title>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=10, user-scalable=yes"
+    />
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', path='slides.css') }}" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+    <script>
+      // Pass server data to JavaScript - this replaces loadParams()
+      window.slideshowConfig = {
+          slideshowType: {{ slideshow_type | tojson}},
+          currentDelay: {{ delay }},
+          mode: {{ mode | tojson}},
+          embeddings_file: {{ embeddings_file | tojson}},
+      };
+    </script>
+    <script src="{{ url_for('static', path='slides.js') }}"></script>
+  </head>
+
+  <body>
+    <div class="swiper" style="width: 100vw; height: 100dvh">
+      <div class="swiper-wrapper" id="carousel-wrapper">
+        <!-- Slides will be added dynamically -->
+      </div>
+      <div class="swiper-scrollbar"></div>
+    </div>
+
+    <div id="pauseOverlay" style="display: none">
+      <div class="overlay-bg"></div>
+      <div class="overlay-content">
+        <button id="closeOverlayBtn" title="Close overlay">✖</button>
+
+        <div
+          id="filenameBanner"
+          style="margin-bottom: 16px; border-radius: 12px"
+        >
+          <div class="filenameDescContainer">
+            <div class="filenameRow">
+              <span id="filenameText"></span>
+              <button id="copyTextBtn" title="Copy text">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="30"
+                  height="30"
+                  fill="#fff"
+                  viewBox="0 0 24 24"
+                >
+                  <rect
+                    x="9"
+                    y="9"
+                    width="13"
+                    height="13"
+                    rx="2"
+                    ry="2"
+                    fill="none"
+                    stroke="#fff"
+                    stroke-width="2"
+                  />
+                  <rect
+                    x="3"
+                    y="3"
+                    width="13"
+                    height="13"
+                    rx="2"
+                    ry="2"
+                    fill="none"
+                    stroke="#fff"
+                    stroke-width="2"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div id="descriptionText"></div>
+            <div id="filepathText"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="spinner"
+      style="
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1000;
+        display: none;
+      "
+    >
+      <svg width="60" height="60" viewBox="0 0 50 50">
+        <circle
+          cx="25"
+          cy="25"
+          r="20"
+          fill="none"
+          stroke="#888"
+          stroke-width="5"
+          stroke-linecap="round"
+          stroke-dasharray="31.4 31.4"
+          transform="rotate(-90 25 25)"
+        >
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            from="0 25 25"
+            to="360 25 25"
+            dur="1s"
+            repeatCount="indefinite"
+          />
+        </circle>
+      </svg>
+    </div>
+
+    <div id="swiperPrevBtnGroup">
+      <div class="swiper-button-prev"></div>
+    </div>
+    <div id="swiperNextBtnGroup">
+      <div class="swiper-button-next"></div>
+    </div>
+
+    <div id="bottomLeftBtnGroup">
+      <!-- Settings (gear) button, far left -->
+      <button id="settingsBtn" title="Settings" style="margin-right: 1em">
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#fff"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09A1.65 1.65 0 0 0 9 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+          />
+        </svg>
+      </button>
+
+      <button id="deleteCurrentFileBtn" title="Delete image">
+        <!-- Trash can SVG icon -->
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#fff"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="3 6 5 6 21 6" />
+          <path
+            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"
+          />
+          <line x1="10" y1="11" x2="10" y2="17" />
+          <line x1="14" y1="11" x2="14" y2="17" />
+        </svg>
+      </button>
+
+      <button id="fullscreenBtn" title="Fullscreen">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="#fff">
+          <path
+            d="M4 4h6V2H2v8h2V4zm16 0v6h2V2h-8v2h6zm0 16h-6v2h8v-8h-2v6zM4 20v-6H2v8h8v-2H4z"
+          />
+        </svg>
+      </button>
+
+      <button id="startStopSlideshowBtn" title="Start/Pause Slideshow">
+        <span id="slideshowIcon">
+          <!-- Play icon (shown when paused) -->
+          <svg
+            id="playIcon"
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="#fff"
+            style="display: inline"
+          >
+            <polygon points="5,3 19,12 5,21" />
+          </svg>
+          <!-- Pause icon (shown when playing) -->
+          <svg
+            id="pauseIcon"
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="#fff"
+            style="display: none"
+          >
+            <rect x="6" y="4" width="4" height="16" />
+            <rect x="14" y="4" width="4" height="16" />
+          </svg>
+        </span>
+      </button>
+    </div>
+
+    <div id="searchPanel">
+      <!-- New upload button (left of imageSearchBtn) -->
+      <button id="uploadImageFileBtn" title="Upload image for search">
+        <span id="uploadImageIcon">
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <path d="M12 8v8M8 12l4-4 4 4" />
+          </svg>
+        </span>
+        <input
+          type="file"
+          id="uploadImageInput"
+          accept="image/*"
+          style="display: none"
+        />
+      </button>
+      <button id="imageSearchBtn" title="Search for similar images">
+        <span id="imageSearchIcon">
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </span>
+      </button>
+      <button id="textSearchBtn" title="Search">
+        <span id="textSearchIcon">
+          <svg
+            id="searchIcon"
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </span>
+      </button>
+      <button id="clearSearchBtn" title="Clear Search" style="display: none">
+        <!-- Box X SVG icon -->
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#fff"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
+          <line x1="8" y1="8" x2="16" y2="16" />
+          <line x1="16" y1="8" x2="8" y2="16" />
+        </svg>
+      </button>
+    </div>
+
+    <div id="textSearchPanel">
+      <div
+        style="
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 0.5em;
+          position: relative;
+        "
+      >
+        <input id="searchInput" type="text" placeholder="Search..." />
+        <button id="clearTextSearchBtn" title="Clear search">&#10005;</button>
+        <button
+          id="doSearchBtn"
+          style="
+            padding: 0.4em 1em;
+            border-radius: 6px;
+            border: none;
+            background: #444;
+            color: #fff;
+            font-size: 1em;
+            cursor: pointer;
+          "
+        >
+          Search
+        </button>
+      </div>
+    </div>
+
+    <!-- Settings Overlay (hidden by default) -->
+    <div
+      id="settingsOverlay"
+      style="
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100dvh;
+        z-index: 2000;
+        background: rgba(0, 0, 0, 0.5);
+      "
+    >
+      <div
+        style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: #222;
+          border-radius: 16px;
+          padding: 2em;
+          min-width: 320px;
+          box-shadow: 0 4px 32px #000;
+        "
+      >
+        <button
+          id="closeSettingsBtn"
+          title="Close settings"
+          style="
+            position: absolute;
+            top: 0.5em;
+            right: 0.5em;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5em;
+            cursor: pointer;
+          "
+        >
+          ✖
+        </button>
+        <div
+          id="delayControls"
+          style="
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: center;
+          "
+        >
+          <!-- modeLabel in its own centered row at the top -->
+          <div style="width: 100%; display: flex; justify-content: center">
+            <span
+              id="modeLabel"
+              style="
+                color: #fff;
+                font-size: 0.4em;
+                margin-bottom: 0.1em;
+                opacity: 0.8;
+                text-align: center;
+              "
+            >
+              Slideshow Settings
+            </span>
+          </div>
+          <div
+            style="
+              display: flex;
+              flex-direction: row;
+              align-items: center;
+              justify-content: center;
+            "
+          >
+            <!-- Left column: Slower/Faster/Interval -->
+            <div
+              style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                margin-right: 2em;
+              "
+            >
+              <button id="slowerBtn" title="Slower" style="margin-top: 0.4em">
+                &#9650;
+              </button>
+              <span id="delayValue">10</span>
+              <button id="fasterBtn" title="Faster">&#9660;</button>
+              <div
+                id="delayLabel"
+                style="
+                  color: #fff;
+                  font-size: 0.4em;
+                  margin-top: 0.1em;
+                  opacity: 0.8;
+                  text-align: center;
+                "
+              >
+                Interval
+              </div>
+            </div>
+            <!-- Right column: Mode controls -->
+            <div
+              id="modeControls"
+              style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                color: #fff;
+                font-size: 0.7em;
+              "
+            >
+              <div
+                id="modeRadioGroup"
+                style="display: flex; flex-direction: column; gap: 0.5em"
+              >
+                <label
+                  ><input
+                    type="radio"
+                    id="modeRandom"
+                    name="mode"
+                    value="random"
+                    checked
+                  />
+                  Random</label
+                >
+                <label
+                  ><input
+                    type="radio"
+                    id="modeSequential"
+                    name="mode"
+                    value="sequential"
+                  />
+                  Sequential</label
+                >
+              </div>
+            </div>
+          </div>
+          <!-- Add this inside your #delayControls div in settingsOverlay -->
+          <div
+            style="
+              margin-top: 1em;
+              display: flex;
+              align-items: center;
+              gap: 0.5em;
+            "
+          >
+            <label for="highWaterMarkInput" style="font-size: 14px; color: #fff"
+              >Max Slides in History:</label
+            >
+            <input
+              id="highWaterMarkInput"
+              type="number"
+              min="2"
+              max="100"
+              value="10"
+              style="
+                width: 4em;
+                border-radius: 4px;
+                border: 1px solid #888;
+                padding: 0.2em;
+              "
+            />
+            <button
+              id="saveSettingsBtn"
+              style="
+                padding: 0.2em 0.2em;
+                margin-right: 0;
+                border-radius: 6px;
+                border: none;
+                background: #4caf50;
+                color: #fff;
+                font-size: 18px !important;
+                cursor: pointer;
+              "
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
