@@ -846,25 +846,7 @@ function hidePauseOverlay() {
   const pauseOverlay = document.getElementById("pauseOverlay");
   pauseOverlay.classList.remove("visible");
   pauseOverlay.style.display = "none";
-  // pauseOverlay.classList.remove('visible');
-  // // Wait for the transition to finish before hiding
-  // pauseOverlay.addEventListener('transitionend', function handler() {
-  //     if (!pauseOverlay.classList.contains('visible')) {
-  //         pauseOverlay.style.display = 'none';
-  //     }
-  //     pauseOverlay.removeEventListener('transitionend', handler);
-  // });
 }
-
-// NO LONGER USED: REMOVE
-// function flashPauseOverlay(duration = 1000) {
-//     const overlay = document.getElementById('pauseOverlay');
-//     if (overlay.style.display === 'flex') return; // Do nothing if already showing
-//     showPauseOverlay();
-//     setTimeout(() => {
-//         hidePauseOverlay();
-//     }, duration);
-// }
 
 async function deleteCurrentFile() {
   const filepath = getCurrentFilepath();

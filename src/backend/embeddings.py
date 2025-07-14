@@ -166,7 +166,7 @@ class Embeddings(BaseModel):
             
             # Clear cache after creating new index
             self.open_cached_embeddings.cache_clear()
-            self.open_cached_embeddings_optimized.cache_clear()
+            self.open_cached_embeddings.cache_clear()
             
             print(f"Indexed {len(embeddings)} images and saved to {self.embeddings_path}")
 
@@ -275,7 +275,7 @@ class Embeddings(BaseModel):
         
         # Clear cache after updating embeddings
         self.open_cached_embeddings.cache_clear()
-        self.open_cached_embeddings_optimized.cache_clear()
+        self.open_cached_embeddings.cache_clear()
         
         print(f"Updated embeddings saved to {self.embeddings_path}")
         return updated_embeddings, updated_filenames, updated_mod_times, updated_metadatas, bad_files
@@ -434,15 +434,7 @@ class Embeddings(BaseModel):
 
     @staticmethod
     @functools.lru_cache(maxsize=3)
-    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, np.ndarray]:
-        """Open the cached embeddings file."""
-        if not embeddings_path.exists():
-            raise FileNotFoundError(f"Embeddings file {embeddings_path} does not exist.")
-        return np.load(embeddings_path, allow_pickle=True)
-
-    @staticmethod
-    @functools.lru_cache(maxsize=3)
-    def open_cached_embeddings_optimized(embeddings_path: Path) -> Dict[str, any]:
+    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, any]:
         """
         Open embeddings with pre-computed lookup structures.
         """
@@ -462,6 +454,7 @@ class Embeddings(BaseModel):
         return {
             'filenames': data["filenames"],
             'metadata': data["metadata"],
+            'embeddings': data["embeddings"],
             'sorted_filenames': sorted_filenames,
             'sorted_metadata': data["metadata"][sorted_indices],
             'filename_map': filename_map
@@ -473,7 +466,7 @@ class Embeddings(BaseModel):
         random: bool = False
     ) -> SlideMetadata:
         """Simple optimized version."""
-        data = self.open_cached_embeddings_optimized(self.embeddings_path)
+        data = self.open_cached_embeddings(self.embeddings_path)
         
         if random:
             filenames = data["filenames"]
@@ -509,7 +502,7 @@ class Embeddings(BaseModel):
         Returns:
             SlideMetadata: Metadata for the specified image.
         """
-        data = self.open_cached_embeddings_optimized(self.embeddings_path)
+        data = self.open_cached_embeddings(self.embeddings_path)
         
         # Use the pre-computed filename map for O(1) lookup
         filename_map = data['filename_map']
@@ -532,7 +525,7 @@ class Embeddings(BaseModel):
         print(f"Removing {image_path} from embeddings.")
         
         # Use optimized version for O(1) lookup
-        data = self.open_cached_embeddings_optimized(self.embeddings_path)
+        data = self.open_cached_embeddings(self.embeddings_path)
         filename_map = data['filename_map']
         
         current_filename = image_path.as_posix()
@@ -569,7 +562,7 @@ class Embeddings(BaseModel):
         
         # CRITICAL: Clear the LRU cache since the file has changed
         self.open_cached_embeddings.cache_clear()
-        self.open_cached_embeddings_optimized.cache_clear()
+        self.open_cached_embeddings.cache_clear()
 
     def iterate_images(self, random: bool = False) -> Generator[SlideMetadata, None, None]:
         """
