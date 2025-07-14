@@ -44,7 +44,7 @@ def do_index():
         for f in bad_files:
             print(f)
 
-def do_update_index():
+def do_update_images():
     import argparse
 
     parser = argparse.ArgumentParser(description="Update the CLIP search index.")
@@ -160,8 +160,8 @@ def main():
         do_search()
     elif prog == "search_text":
         do_text_search()
-    elif prog == "update_index":
-        do_update_index()
+    elif prog == "update_images"    :
+        do_update_images()
     elif prog == "find_duplicate_images":
         do_duplicate_search()
 

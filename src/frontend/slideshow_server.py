@@ -1,16 +1,18 @@
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import List
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from .embeddings import Embeddings
+from backend.embeddings import Embeddings
+from backend.metadata_modules import SlideMetadata
 
 # Read from environment variables or use defaults
 IMAGES_ROOT = os.environ.get("IMAGES_ROOT", "/net/cubox/CineRAID")
@@ -19,11 +21,12 @@ IMAGES_ROOT = os.environ.get("IMAGES_ROOT", "/net/cubox/CineRAID")
 # This will ultimately be replaced with a system that lets the user configure albums
 # and their paths.
 PHOTO_ALBUMS = {
-    "family": os.path.join(IMAGES_ROOT,'Pictures'),
-    "smut": os.path.join(IMAGES_ROOT,'Archive/Pictures'),
-    "invoke": os.path.join(IMAGES_ROOT,'Archive/InvokeAI'),
+    "family": os.path.join(IMAGES_ROOT, "Pictures"),
+    "smut": os.path.join(IMAGES_ROOT, "Archive/Pictures"),
+    "invoke": os.path.join(IMAGES_ROOT, "Archive/InvokeAI"),
+    "test": os.path.join(IMAGES_ROOT, "Archive/InvokeAI/Yiffy"),
 }
-                            
+
 app = FastAPI(title="Slideshow")
 app.mount("/images", StaticFiles(directory=IMAGES_ROOT), name="images")
 app.mount("/static", StaticFiles(directory="./src/frontend/static"), name="static")
@@ -31,18 +34,11 @@ app.mount("/static", StaticFiles(directory="./src/frontend/static"), name="stati
 # Add templates
 templates = Jinja2Templates(directory="./src/frontend/templates")
 
-# Response models
-class NextImageResponse(BaseModel):
-    filename: str
-    description: str
-    filepath: str
-    url: str
-    relpath: str
-    textToCopy: str
 
 class SearchResult(BaseModel):
     filename: str
     score: float
+
 
 class SearchResultsResponse(BaseModel):
     results: List[SearchResult]
@@ -50,22 +46,29 @@ class SearchResultsResponse(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def get_root(
-    request: Request, 
+    request: Request,
     type: str = "family",  # Default to 'family' if not provided
-    delay: int = 5,        # Default delay
-    mode: str = "random"   # Default mode
+    delay: int = 5,  # Default delay
+    mode: str = "random",  # Default mode
 ):
     # Validate the type parameter
     if type not in PHOTO_ALBUMS:
         type = "family"  # Fallback to default if invalid
-    
-    return templates.TemplateResponse("slideshow.html", {
-        "request": request,
-        "delay": delay,
-        "mode": mode,
-        # the embeddings file is always at the root of the album
-        "embeddings_file": Path(PHOTO_ALBUMS[type],'embeddings.npz').as_posix(),
-    })
+
+    print(f"Serving slideshow for type: {type}, delay: {delay}, mode: {mode}")
+
+    return templates.TemplateResponse(
+        "slideshow.html",
+        {
+            "request": request,
+            "type": type,
+            "delay": delay,
+            "mode": mode,
+            # the embeddings file is always at the root of the album
+            "embeddings_file": Path(PHOTO_ALBUMS[type], "embeddings.npz").as_posix(),
+        },
+    )
+
 
 @app.post("/search_with_image/", response_model=SearchResultsResponse)
 async def do_embedding_search_by_image(
@@ -88,10 +91,14 @@ async def do_embedding_search_by_image(
 
     return SearchResultsResponse(
         results=[
-            SearchResult(filename=Path(filename).relative_to(IMAGES_ROOT).as_posix(), score=float(score))
+            SearchResult(
+                filename=Path(filename).relative_to(IMAGES_ROOT).as_posix(),
+                score=float(score),
+            )
             for filename, score in zip(results, scores)
         ]
     )
+
 
 @app.post("/search_with_text/", response_model=SearchResultsResponse)
 async def do_embedding_search_by_text(
@@ -106,34 +113,84 @@ async def do_embedding_search_by_text(
 
     return SearchResultsResponse(
         results=[
-            SearchResult(filename=Path(filename).relative_to(IMAGES_ROOT).as_posix(), score=float(score))
+            SearchResult(
+                filename=Path(filename).as_posix(),
+                score=float(score),
+            )
             for filename, score in zip(results, scores)
         ]
     )
 
-@app.post("/retrieve_next_image/", response_model=NextImageResponse)
-async def retrieve_next_image(
+
+@app.post("/retrieve_image/", response_model=SlideMetadata)
+async def retrieve_image(
     current_image: str = Form(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
-    random: bool = Form(False),
-) -> NextImageResponse:
+) -> SlideMetadata:
     """Retrieve the next image based on the current image."""
     # Load embeddings
     embeddings = Embeddings(embeddings_path=Path(embeddings_file))
-    
-    # Get the next image based on the current image
-    if random:
-        # If random is True, return a random image from the embeddings
-        image, description = embeddings.retrieve_next_image(random=True)
-    else:
-        image, description = embeddings.retrieve_next_image(current_image=Path(IMAGES_ROOT, current_image),
-                                                 random=False)
+    slide_metadata = embeddings.retrieve_image(Path(IMAGES_ROOT, current_image))
+    slide_metadata.url = (Path('/images') / Path(slide_metadata.filepath).relative_to(IMAGES_ROOT)).as_posix()
+    return slide_metadata
 
-    # Return results as JSON
-    image = Path(image)
-    return NextImageResponse(filename=image.name,
-                             description=description,
-                             filepath=image.as_posix(),
-                             url=image.relative_to(IMAGES_ROOT).as_posix(),
-                             relpath=image.relative_to(IMAGES_ROOT).as_posix(),  #  oops, dupe
-                             textToCopy=image.name)
+
+@app.post("/retrieve_next_image/", response_model=SlideMetadata)
+async def retrieve_next_image(
+    current_image: str = Form(None),
+    embeddings_file: str = Form("clip_image_embeddings.npz"),
+    random: bool = Form(False),
+) -> SlideMetadata:
+    """Retrieve the next image based on the current image."""
+    # Load embeddings
+    embeddings = Embeddings(embeddings_path=Path(embeddings_file))
+
+    if random:
+        # Return a random image from the embeddings
+        slide_metadata = embeddings.retrieve_next_image(random=True)
+    else:
+        # Get the next image based on the current image
+        slide_metadata = embeddings.retrieve_next_image(
+            current_image=Path(current_image) if current_image else None, 
+            random=False
+        )
+    slide_metadata.url = (Path('/images') / Path(slide_metadata.filepath).relative_to(IMAGES_ROOT)).as_posix()
+    return slide_metadata
+
+@app.delete("/delete_image/")
+async def delete_image(file_to_delete: str, embeddings_file: str) -> JSONResponse:
+    """Delete an image file."""
+    try:
+
+        image_path = Path(file_to_delete)
+        
+        # Security check: ensure the file is within IMAGES_ROOT
+        resolved_path = image_path.resolve()
+        images_root_resolved = Path(IMAGES_ROOT).resolve()
+        
+        if not str(resolved_path).startswith(str(images_root_resolved)):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if not image_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        if not image_path.is_file():
+            raise HTTPException(status_code=400, detail="Path is not a file")
+        
+        # Delete the file
+        try:
+            image_path.unlink()
+        except OSError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+        # And removing it from the embeddings file
+        embeddings = Embeddings(embeddings_path=Path(embeddings_file))
+        embeddings.remove_image_from_embeddings(image_path)
+
+        return JSONResponse(
+            content={"success": True, "message": f"Deleted {file_to_delete}"},
+            status_code=200
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")

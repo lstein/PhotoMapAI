@@ -7,22 +7,25 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=10, user-scalable=yes"
     />
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', path='slides.css') }}" />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="static/slides.css"
+    />
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
     />
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script>
-      // Pass server data to JavaScript - this replaces loadParams()
+      // Pass server data to JavaScript
       window.slideshowConfig = {
-          slideshowType: {{ slideshow_type | tojson}},
           currentDelay: {{ delay }},
           mode: {{ mode | tojson}},
           embeddings_file: {{ embeddings_file | tojson}},
       };
     </script>
-    <script src="{{ url_for('static', path='slides.js') }}"></script>
+    <script src="static/slides.js"></script>
   </head>
 
   <body>
@@ -129,7 +132,7 @@
 
     <div id="bottomLeftBtnGroup">
       <!-- Settings (gear) button, far left -->
-      <button id="settingsBtn" title="Settings" style="margin-right: 1em">
+      <button id="settingsBtn" title="Settings">
         <svg
           width="28"
           height="28"

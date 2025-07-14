@@ -5,7 +5,7 @@ Format metadata from invoke module, including human-readable tags.
 Returns an HTML representation of the metadata. 
 """
 from pathlib import Path
-from slide_metadata import SlideMetadata
+from .slide_metadata import SlideMetadata
 
 def format_invoke_metadata(slide_data: SlideMetadata, metadata: dict) -> SlideMetadata:
     """
@@ -56,7 +56,7 @@ def format_invoke_metadata(slide_data: SlideMetadata, metadata: dict) -> SlideMe
     html += "</table>"
     
     slide_data.description = html
-    slide_data.textToCopy = positive_prompt if positive_prompt else filepath.name
+    slide_data.textToCopy = positive_prompt if positive_prompt else slide_data.filepath
     return slide_data
 
 def _format_loras(loras: list) -> str | None:

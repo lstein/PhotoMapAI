@@ -1,3 +1,8 @@
+"""
+DEPRECATED. Do not use this file.
+"""
+
+
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from pathlib import Path
@@ -88,7 +93,7 @@ async def retrieve_next_image(
     return metadata
 
 @app.post("/retrieve_image/", response_model=SlideMetadata)
-async def retrieve_next_image(
+async def retrieve_image(
     current_image: str = Form(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
 ) -> SlideMetadata:

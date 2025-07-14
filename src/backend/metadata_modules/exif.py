@@ -6,7 +6,7 @@ Returns an HTML representation of the EXIF data.
 """
 
 from pathlib import Path
-from slide_metadata import SlideMetadata
+from .slide_metadata import SlideMetadata
 
 def format_exif_metadata(slide_data: SlideMetadata, metadata: dict) -> SlideMetadata:
     """
