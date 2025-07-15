@@ -30,9 +30,14 @@ dependencies = [
 where = ["."]  # Look in the current directory (repo root)
 include = ["clipslide*"]  # Include clipslide package and subpackages
 
+# Include package data files
+[tool.setuptools.package-data]
+"clipslide.frontend" = ["static/*", "templates/*"]
+
 [project.scripts]
 index_images = "clipslide.backend.imagetool:main"
 update_images = "clipslide.backend.imagetool:main"
 search_images = "clipslide.backend.imagetool:main"
 search_text = "clipslide.backend.imagetool:main"
 find_duplicate_images = "clipslide.backend.imagetool:main"
+start_slideshow = "clipslide.frontend.slideshow_server:main"

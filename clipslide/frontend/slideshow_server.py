@@ -5,6 +5,13 @@ import time
 from pathlib import Path
 from typing import List
 
+try:
+    # Python 3.9+
+    from importlib.resources import files
+except ImportError:
+    # Python 3.8 fallback
+    from importlib_resources import files
+
 from fastapi import FastAPI, File, Form, Request, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,8 +25,6 @@ from clipslide.backend.metadata_modules import SlideSummary
 IMAGES_ROOT = os.environ.get("IMAGES_ROOT", "/net/cubox/CineRAID")
 
 # Temporary dictionary to map photo album names to their paths under IMAGES_ROOT
-# This will ultimately be replaced with a system that lets the user configure albums
-# and their paths.
 PHOTO_ALBUMS = {
     "family": os.path.join(IMAGES_ROOT, "Pictures"),
     "smut": os.path.join(IMAGES_ROOT, "Archive/Pictures"),
@@ -28,12 +33,34 @@ PHOTO_ALBUMS = {
     "legacy": os.path.join(IMAGES_ROOT, "Archive/InvokeAI/2023/1"),
 }
 
+def get_package_resource_path(resource_name: str) -> str:
+    """Get the path to a package resource (static files or templates)."""
+    try:
+        # Get the package directory
+        package_files = files("clipslide.frontend")
+        resource_path = package_files / resource_name
+        
+        # For Python 3.9+, we can use as_posix() directly
+        if hasattr(resource_path, 'as_posix'):
+            return str(resource_path)
+        else:
+            # For older versions, we need to extract to a temporary location
+            with resource_path as path:
+                return str(path)
+    except Exception:
+        # Fallback for development mode - look relative to this file
+        return str(Path(__file__).parent / resource_name)
+
 app = FastAPI(title="Slideshow")
 app.mount("/images", StaticFiles(directory=IMAGES_ROOT), name="images")
-app.mount("/static", StaticFiles(directory="./clipslide/frontend/static"), name="static")
 
-# Add templates
-templates = Jinja2Templates(directory="./clipslide/frontend/templates")
+# Mount static files from package resources
+static_path = get_package_resource_path("static")
+app.mount("/static", StaticFiles(directory=static_path), name="static")
+
+# Set up templates from package resources
+templates_path = get_package_resource_path("templates")
+templates = Jinja2Templates(directory=templates_path)
 
 
 class SearchResult(BaseModel):
@@ -195,3 +222,11 @@ async def delete_image(file_to_delete: str, embeddings_file: str) -> JSONRespons
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+def main():
+    """Main entry point for the slideshow server."""
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8050)
+
+if __name__ == "__main__":
+    main()

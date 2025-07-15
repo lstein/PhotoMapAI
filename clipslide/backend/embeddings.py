@@ -637,4 +637,17 @@ class Embeddings(BaseModel):
     def _extract_exif_metadata(self, pil_image: Image.Image) -> dict:
         """Extract and format EXIF metadata from an image."""
         exif_data = pil_image.getexif()
-        return {ExifTags.TAGS.get(k, k): v for k, v in exif_data.items()}
+        exif_dict = {}
+        
+        # first get the base exif tags
+        for k, v in exif_data.items():
+            exif_dict[k] = ExifTags.TAGS.get(k, k)
+
+        # now get the tags in ExifTags.IFD
+        for ifd_id in ExifTags.IFD:
+            ifd = exif_data.get_ifd(ifd_id)
+            resolver = ExifTags.GPSTAGS if ifd_id == ExifTags.IFD.GPSInfo else ExifTags.TAGS
+            for k, v in ifd.items():
+                exif_dict[resolver.get(k, k)] = v
+
+        return exif_dict
