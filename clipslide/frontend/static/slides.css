@@ -263,9 +263,13 @@ body {
     color: #ccc;
     font-size: 1.0em;
     margin: 0.5em auto;
-    /* max-width: 600px; */
+    max-width: 75vw;
+    word-wrap: break-word; 
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    max-height: 40vh;
+    overflow-y: auto;
     text-align: left;
-    white-space: pre-line;
 }
 
 #filepathText {

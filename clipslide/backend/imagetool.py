@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from backend.embeddings import Embeddings
+from .embeddings import Embeddings
 
 def do_index():
     import argparse

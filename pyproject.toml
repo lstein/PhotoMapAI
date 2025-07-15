@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "clipshow"
+name = "clipslide"
 version = "0.2.0"
 description = "Image indexing and retrieval using CLIP"
 authors = [
@@ -25,15 +25,14 @@ dependencies = [
     "tqdm",
 ]
 
-[tool.setuptools]
-package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]  # Look in the current directory (repo root)
+include = ["clipslide*"]  # Include clipslide package and subpackages
 
 [project.scripts]
-index_images = "backend.imagetool:main"
-update_images = "backend.imagetool:main"
-search_images = "backend.imagetool:main"
-search_text = "backend.imagetool:main"
-find_duplicate_images = "backend.imagetool:main"
+index_images = "clipslide.backend.imagetool:main"
+update_images = "clipslide.backend.imagetool:main"
+search_images = "clipslide.backend.imagetool:main"
+search_text = "clipslide.backend.imagetool:main"
+find_duplicate_images = "clipslide.backend.imagetool:main"

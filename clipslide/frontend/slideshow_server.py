@@ -11,8 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from backend.embeddings import Embeddings
-from backend.metadata_modules import SlideMetadata
+from clipslide.backend.embeddings import Embeddings
+from clipslide.backend.metadata_modules import SlideSummary
 
 # Read from environment variables or use defaults
 IMAGES_ROOT = os.environ.get("IMAGES_ROOT", "/net/cubox/CineRAID")
@@ -24,15 +24,16 @@ PHOTO_ALBUMS = {
     "family": os.path.join(IMAGES_ROOT, "Pictures"),
     "smut": os.path.join(IMAGES_ROOT, "Archive/Pictures"),
     "invoke": os.path.join(IMAGES_ROOT, "Archive/InvokeAI"),
-    "test": os.path.join(IMAGES_ROOT, "Archive/InvokeAI/Yiffy"),
+    "yiffy": os.path.join(IMAGES_ROOT, "Archive/InvokeAI/Yiffy"),
+    "legacy": os.path.join(IMAGES_ROOT, "Archive/InvokeAI/2023/1"),
 }
 
 app = FastAPI(title="Slideshow")
 app.mount("/images", StaticFiles(directory=IMAGES_ROOT), name="images")
-app.mount("/static", StaticFiles(directory="./src/frontend/static"), name="static")
+app.mount("/static", StaticFiles(directory="./clipslide/frontend/static"), name="static")
 
 # Add templates
-templates = Jinja2Templates(directory="./src/frontend/templates")
+templates = Jinja2Templates(directory="./clipslide/frontend/templates")
 
 
 class SearchResult(BaseModel):
@@ -47,25 +48,25 @@ class SearchResultsResponse(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def get_root(
     request: Request,
-    type: str = "family",  # Default to 'family' if not provided
+    album: str = "family",  # Default to 'family' if not provided
     delay: int = 5,  # Default delay
     mode: str = "random",  # Default mode
 ):
-    # Validate the type parameter
-    if type not in PHOTO_ALBUMS:
-        type = "family"  # Fallback to default if invalid
+    # Validate the album parameter
+    if album not in PHOTO_ALBUMS:
+        album = "family"  # Fallback to default if invalid
 
-    print(f"Serving slideshow for type: {type}, delay: {delay}, mode: {mode}")
+    print(f"Serving slideshow for album: {album}, delay: {delay}, mode: {mode}")
 
     return templates.TemplateResponse(
         "slideshow.html",
         {
             "request": request,
-            "type": type,
+            "album": album,
             "delay": delay,
             "mode": mode,
             # the embeddings file is always at the root of the album
-            "embeddings_file": Path(PHOTO_ALBUMS[type], "embeddings.npz").as_posix(),
+            "embeddings_file": Path(PHOTO_ALBUMS[album], "embeddings.npz").as_posix(),
         },
     )
 
@@ -122,11 +123,11 @@ async def do_embedding_search_by_text(
     )
 
 
-@app.post("/retrieve_image/", response_model=SlideMetadata)
+@app.post("/retrieve_image/", response_model=SlideSummary)
 async def retrieve_image(
     current_image: str = Form(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
-) -> SlideMetadata:
+) -> SlideSummary:
     """Retrieve the next image based on the current image."""
     # Load embeddings
     embeddings = Embeddings(embeddings_path=Path(embeddings_file))
@@ -135,12 +136,12 @@ async def retrieve_image(
     return slide_metadata
 
 
-@app.post("/retrieve_next_image/", response_model=SlideMetadata)
+@app.post("/retrieve_next_image/", response_model=SlideSummary)
 async def retrieve_next_image(
     current_image: str = Form(None),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
     random: bool = Form(False),
-) -> SlideMetadata:
+) -> SlideSummary:
     """Retrieve the next image based on the current image."""
     # Load embeddings
     embeddings = Embeddings(embeddings_path=Path(embeddings_file))

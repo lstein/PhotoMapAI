@@ -14,6 +14,14 @@ class InvokeLegacyMetadata(InvokeMetadataABC):
         Returns:
             Prompts: A named tuple containing positive and negative prompts.
         """
+        # some ancient variant of InvokeAI metadata has a broken prompt structure
+        prompt = self.raw_metadata.get('image', {}).get('prompt', '')
+        if isinstance(prompt, list):
+            return Prompts(
+                positive_prompt=prompt[0].get('prompt',''),
+                negative_prompt=''
+            )
+        # otherwise, return the prompt as is
         return Prompts(
             positive_prompt=self.raw_metadata.get('image',{}).get('prompt', ''),
             negative_prompt=''

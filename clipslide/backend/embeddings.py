@@ -119,23 +119,10 @@ class Embeddings(BaseModel):
                 pil_image = Image.open(image_path).convert("RGB")
                 # Handle EXIF orientation
                 pil_image = ImageOps.exif_transpose(pil_image)
-                # get the file's modification time
-                modification_time = image_path.stat().st_mtime
-                # get the file's EXIF info or PNG metadata
-                # special case for invokeai metadata
-                if "invokeai_metadata" in pil_image.info:
-                    metadata = json.loads(pil_image.info["invokeai_metadata"])
-                elif "exif" in pil_image.info:
-                    # If the image has EXIF data, we can extract it
-                    metadata = pil_image.getexif()
-                    # Convert EXIF data to a dictionary
-                    metadata = {ExifTags.TAGS.get(k, k): v for k, v in metadata.items()}
-                else:
-                    metadata = {}  # No metadata available
 
-                # special case for invokeai metadata
-                if "invokeai_metadata" in metadata:
-                    metadata = json.loads(metadata["invokeai_metadata"])
+                # Get file metadata
+                modification_time = image_path.stat().st_mtime
+                metadata = self._extract_image_metadata(pil_image)
 
                 # Create the CLIP embedding
                 image = preprocess(pil_image).unsqueeze(0).to(device)  # type: ignore
@@ -618,3 +605,36 @@ class Embeddings(BaseModel):
         for idx in indices:
             image_path = Path(filenames[idx])
             yield format_metadata(image_path, metadata[idx])
+
+    def _extract_image_metadata(self, pil_image: Image.Image) -> dict:
+        """
+        Extract metadata from an image in order of preference.
+        
+        Args:
+            pil_image: PIL Image object
+            
+        Returns:
+            dict: Extracted metadata or empty dict if none found
+        """
+        # Define metadata extraction strategies in order of preference
+        metadata_extractors = [
+            ("invokeai_metadata", lambda img: json.loads(img.info["invokeai_metadata"])),
+            ("Sd-metadata", lambda img: json.loads(img.info["Sd-metadata"])),
+            ("sd-metadata", lambda img: json.loads(img.info["sd-metadata"])),
+            ("exif", self._extract_exif_metadata),
+        ]
+        
+        for key, extractor in metadata_extractors:
+            if key in pil_image.info:
+                try:
+                    return extractor(pil_image)
+                except (json.JSONDecodeError, Exception) as e:
+                    print(f"Warning: Failed to parse {key} metadata: {e}")
+                    continue
+        
+        return {}  # No metadata available
+
+    def _extract_exif_metadata(self, pil_image: Image.Image) -> dict:
+        """Extract and format EXIF metadata from an image."""
+        exif_data = pil_image.getexif()
+        return {ExifTags.TAGS.get(k, k): v for k, v in exif_data.items()}
