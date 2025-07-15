@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "imagematch"
-version = "0.1.0"
+name = "clipshow"
+version = "0.2.0"
 description = "Image indexing and retrieval using CLIP"
 authors = [
     { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
@@ -15,7 +15,18 @@ dependencies = [
     "torch",
     "Pillow",
     "clip-anytorch",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "jinja2",
+    "pydantic",
+    "scikit-learn",
+    "networkx",
+    "tqdm",
 ]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

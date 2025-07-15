@@ -6,9 +6,9 @@ This class is used to represent metadata for a slide, including filename, filepa
 from pydantic import BaseModel
 
 
-class SlideMetadata(BaseModel):
+class SlideSummary(BaseModel):
     """
-    Model to represent metadata for a slide.
+    Model to represent name and descriptive information for a slide.
     """
 
     filename: str

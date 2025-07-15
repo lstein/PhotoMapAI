@@ -24,7 +24,8 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .metadata import format_metadata
-from .metadata_modules import SlideMetadata
+from .metadata_modules import SlideSummary
+
 
 class Embeddings(BaseModel):
     """
@@ -87,7 +88,9 @@ class Embeddings(BaseModel):
         self,
         image_paths_or_dir: list[Path] | Path,
         create_index: bool = True,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]]:  # FIX THIS: Return an object instead
+    ) -> tuple[
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]
+    ]:  # FIX THIS: Return an object instead
         """
         Index images using CLIP and save their embeddings.
 
@@ -120,19 +123,19 @@ class Embeddings(BaseModel):
                 modification_time = image_path.stat().st_mtime
                 # get the file's EXIF info or PNG metadata
                 # special case for invokeai metadata
-                if 'invokeai_metadata' in pil_image.info:
-                    metadata = json.loads(pil_image.info['invokeai_metadata'])
-                elif 'exif' in pil_image.info:
+                if "invokeai_metadata" in pil_image.info:
+                    metadata = json.loads(pil_image.info["invokeai_metadata"])
+                elif "exif" in pil_image.info:
                     # If the image has EXIF data, we can extract it
                     metadata = pil_image.getexif()
                     # Convert EXIF data to a dictionary
                     metadata = {ExifTags.TAGS.get(k, k): v for k, v in metadata.items()}
                 else:
                     metadata = {}  # No metadata available
-                    
+
                 # special case for invokeai metadata
-                if 'invokeai_metadata' in metadata:
-                    metadata = json.loads(metadata['invokeai_metadata'])
+                if "invokeai_metadata" in metadata:
+                    metadata = json.loads(metadata["invokeai_metadata"])
 
                 # Create the CLIP embedding
                 image = preprocess(pil_image).unsqueeze(0).to(device)  # type: ignore
@@ -163,18 +166,22 @@ class Embeddings(BaseModel):
                 modification_times=mod_times,
                 metadata=metadatas,
             )
-            
+
             # Clear cache after creating new index
             self.open_cached_embeddings.cache_clear()
             self.open_cached_embeddings.cache_clear()
-            
-            print(f"Indexed {len(embeddings)} images and saved to {self.embeddings_path}")
+
+            print(
+                f"Indexed {len(embeddings)} images and saved to {self.embeddings_path}"
+            )
 
         return embeddings, filenames, mod_times, metadatas, bad_files
 
     def update_index(
         self, image_paths_or_dir: list[Path] | Path
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]]: # FIX THIS: Return an object instead
+    ) -> tuple[
+        np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]
+    ]:  # FIX THIS: Return an object instead
         """
         Update existing embeddings with new images.
 
@@ -230,12 +237,22 @@ class Embeddings(BaseModel):
                 modification_times=existing_modtimes,
                 metadata=existing_metadatas,
             )
-            return existing_embeddings, existing_filenames, existing_modtimes, existing_metadatas, []
+            return (
+                existing_embeddings,
+                existing_filenames,
+                existing_modtimes,
+                existing_metadatas,
+                [],
+            )
 
         # Index new images
-        new_embeddings, new_filenames, new_modification_times, new_metadatas, bad_files = self.create_index(
-            list(new_image_paths), create_index=False
-        )
+        (
+            new_embeddings,
+            new_filenames,
+            new_modification_times,
+            new_metadatas,
+            bad_files,
+        ) = self.create_index(list(new_image_paths), create_index=False)
 
         if new_embeddings.shape[0] == 0:
             print("No new images were indexed (possibly all failed to process).")
@@ -246,7 +263,13 @@ class Embeddings(BaseModel):
                 modification_times=existing_modtimes,
                 metadata=existing_metadatas,
             )
-            return existing_embeddings, existing_filenames, existing_modtimes, existing_metadatas, bad_files
+            return (
+                existing_embeddings,
+                existing_filenames,
+                existing_modtimes,
+                existing_metadatas,
+                bad_files,
+            )
 
         # After removing missing images and before vstack:
         if existing_embeddings.size == 0:
@@ -257,12 +280,8 @@ class Embeddings(BaseModel):
         # Combine existing and new embeddings
         updated_embeddings = np.vstack((existing_embeddings, new_embeddings))
         updated_filenames = np.concatenate((existing_filenames, new_filenames))
-        updated_mod_times = np.concatenate(
-            (existing_modtimes, new_modification_times)
-        )
-        updated_metadatas = np.concatenate(
-            (existing_metadatas, new_metadatas)
-        )
+        updated_mod_times = np.concatenate((existing_modtimes, new_modification_times))
+        updated_metadatas = np.concatenate((existing_metadatas, new_metadatas))
 
         # Save updated embeddings and filenames
         np.savez(
@@ -272,13 +291,19 @@ class Embeddings(BaseModel):
             modification_times=updated_mod_times,
             metadata=updated_metadatas,
         )
-        
+
         # Clear cache after updating embeddings
         self.open_cached_embeddings.cache_clear()
         self.open_cached_embeddings.cache_clear()
-        
+
         print(f"Updated embeddings saved to {self.embeddings_path}")
-        return updated_embeddings, updated_filenames, updated_mod_times, updated_metadatas, bad_files
+        return (
+            updated_embeddings,
+            updated_filenames,
+            updated_mod_times,
+            updated_metadatas,
+            bad_files,
+        )
 
     def search_images_by_similarity(
         self,
@@ -298,7 +323,7 @@ class Embeddings(BaseModel):
             tuple: (filenames, similarities)
         """
         # Load the saved embeddings and filenames
-        #data = np.load(self.embeddings_path, allow_pickle=True)
+        # data = np.load(self.embeddings_path, allow_pickle=True)
         data = self.open_cached_embeddings(self.embeddings_path)
         embeddings = data["embeddings"]  # shape: (N, 512)
         filenames = data["filenames"]  # shape: (N,)
@@ -358,7 +383,7 @@ class Embeddings(BaseModel):
             tuple: (filenames, similarities)
         """
         # Load the saved embeddings and filenames
-        #data = np.load(self.embeddings_path, allow_pickle=True)
+        # data = np.load(self.embeddings_path, allow_pickle=True)
         data = self.open_cached_embeddings(self.embeddings_path)
         embeddings = data["embeddings"]  # shape: (N, 512)
         filenames = data["filenames"]  # shape: (N,)
@@ -439,59 +464,68 @@ class Embeddings(BaseModel):
         Open embeddings with pre-computed lookup structures.
         """
         if not embeddings_path.exists():
-            raise FileNotFoundError(f"Embeddings file {embeddings_path} does not exist.")
-        
+            raise FileNotFoundError(
+                f"Embeddings file {embeddings_path} does not exist."
+            )
+
         data = np.load(embeddings_path, allow_pickle=True)
-        
+
         # Pre-compute sorted order
         modtimes = data["modification_times"]
         sorted_indices = np.argsort(modtimes)
-        
+
         # Create filename -> position mapping for O(1) lookup
         sorted_filenames = data["filenames"][sorted_indices]
         filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
-        
+
         return {
-            'filenames': data["filenames"],
-            'metadata': data["metadata"],
-            'embeddings': data["embeddings"],
-            'sorted_filenames': sorted_filenames,
-            'sorted_metadata': data["metadata"][sorted_indices],
-            'filename_map': filename_map
+            "filenames": data["filenames"],
+            "metadata": data["metadata"],
+            "embeddings": data["embeddings"],
+            "sorted_filenames": sorted_filenames,
+            "sorted_metadata": data["metadata"][sorted_indices],
+            "filename_map": filename_map,
         }
 
     def retrieve_next_image(
-        self, 
-        current_image: Optional[Path] = None, 
-        random: bool = False
-    ) -> SlideMetadata:
-        """Simple optimized version."""
+        self, current_image: Optional[Path] = None, random: bool = False
+    ) -> SlideSummary:
+        """
+        Retrieve the next image in the sequence or a random image if requested.
+        Args:
+            current_image (Path, optional): Path to the current image.
+            random (bool): If True, return a random image instead of the next one.
+            Returns:
+                SlideSummary: Path and description o the next image.
+        """
         data = self.open_cached_embeddings(self.embeddings_path)
-        
+
         if random:
             filenames = data["filenames"]
             metadata = data["metadata"]
             idx = np.random.randint(len(filenames))
             return format_metadata(Path(filenames[idx]), metadata[idx])
-        
+
         # Sequential mode with O(1) lookup
-        sorted_filenames = data['sorted_filenames']
-        sorted_metadata = data['sorted_metadata']
-        filename_map = data['filename_map']
-        
+        sorted_filenames = data["sorted_filenames"]
+        sorted_metadata = data["sorted_metadata"]
+        filename_map = data["filename_map"]
+
         if not current_image:
             return format_metadata(Path(sorted_filenames[0]), sorted_metadata[0])
-        
+
         current_filename = current_image.as_posix()
         if current_filename not in filename_map:
             raise ValueError(f"Current image {current_image} not found in embeddings.")
-        
+
         current_idx = filename_map[current_filename]
         next_idx = (current_idx + 1) % len(sorted_filenames)
-        
-        return format_metadata(Path(sorted_filenames[next_idx]), sorted_metadata[next_idx])
 
-    def retrieve_image(self, current_image: Path) -> SlideMetadata:
+        return format_metadata(
+            Path(sorted_filenames[next_idx]), sorted_metadata[next_idx]
+        )
+
+    def retrieve_image(self, current_image: Path) -> SlideSummary:
         """
         Retrieve the metadata for a specific image.
         Optimized version using O(1) lookup.
@@ -500,19 +534,19 @@ class Embeddings(BaseModel):
             current_image (Path): Path to the image.
 
         Returns:
-            SlideMetadata: Metadata for the specified image.
+            SlideSummary:  Path and description of the image.
         """
         data = self.open_cached_embeddings(self.embeddings_path)
-        
+
         # Use the pre-computed filename map for O(1) lookup
-        filename_map = data['filename_map']
-        sorted_filenames = data['sorted_filenames']
-        sorted_metadata = data['sorted_metadata']
-        
+        filename_map = data["filename_map"]
+        sorted_filenames = data["sorted_filenames"]
+        sorted_metadata = data["sorted_metadata"]
+
         current_filename = current_image.as_posix()
         if current_filename not in filename_map:
             raise ValueError(f"Image {current_image} not found in embeddings.")
-        
+
         # O(1) lookup instead of O(n) np.where search
         idx = filename_map[current_filename]
         return format_metadata(Path(sorted_filenames[idx]), sorted_metadata[idx])
@@ -523,34 +557,34 @@ class Embeddings(BaseModel):
         Optimized version with O(1) lookup and cache invalidation.
         """
         print(f"Removing {image_path} from embeddings.")
-        
+
         # Use optimized version for O(1) lookup
         data = self.open_cached_embeddings(self.embeddings_path)
-        filename_map = data['filename_map']
-        
+        filename_map = data["filename_map"]
+
         current_filename = image_path.as_posix()
         if current_filename not in filename_map:
             raise ValueError(f"Image {image_path} not found in embeddings.")
-        
+
         # Get the sorted index for removal
         sorted_idx = filename_map[current_filename]
-        
+
         # Load the raw data for modification
         raw_data = self.open_cached_embeddings(self.embeddings_path)
         filenames = raw_data["filenames"]
         embeddings = raw_data["embeddings"]
         modtimes = raw_data["modification_times"]
         metadata = raw_data["metadata"]
-        
+
         # Find the index in the original (unsorted) arrays
         original_idx = np.where(filenames == current_filename)[0][0]
-        
+
         # Remove from all arrays
         filenames = np.delete(filenames, original_idx)
         embeddings = np.delete(embeddings, original_idx, axis=0)
         modtimes = np.delete(modtimes, original_idx)
         metadata = np.delete(metadata, original_idx)
-        
+
         # Save updated data
         np.savez(
             self.embeddings_path,
@@ -559,16 +593,18 @@ class Embeddings(BaseModel):
             modification_times=modtimes,
             metadata=metadata,
         )
-        
+
         # CRITICAL: Clear the LRU cache since the file has changed
         self.open_cached_embeddings.cache_clear()
         self.open_cached_embeddings.cache_clear()
 
-    def iterate_images(self, random: bool = False) -> Generator[SlideMetadata, None, None]:
+    def iterate_images(
+        self, random: bool = False
+    ) -> Generator[SlideSummary, None, None]:
         """
         Iterate over images in the embeddings file.
         Yields:
-            SlideMetadata: Metadata for each image.
+            SlideSummary: Summary for each image.
         """
         # Use cached version instead of direct np.load
         data = self.open_cached_embeddings(self.embeddings_path)  # ✅ Already optimized

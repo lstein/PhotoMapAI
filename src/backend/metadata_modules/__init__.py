@@ -1,11 +1,11 @@
 
-from .invoke import format_invoke_metadata
-from .exif import format_exif_metadata
-from .slide_metadata import SlideMetadata
+from .invoke_formatter import format_invoke_metadata
+from .exif_formatter import format_exif_metadata
+from .slide_summary import SlideSummary
 
 # re-export the format_invoke_metadata and format_exif_metadata functions
 __all__ = [
-    "SlideMetadata",
+    "SlideSummary",
     "format_invoke_metadata",
     "format_exif_metadata",
 ]

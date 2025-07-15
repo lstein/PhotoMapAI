@@ -6,9 +6,9 @@ Returns an HTML representation of the metadata.
 """
 from pathlib import Path
 from pydantic import BaseModel
-from .metadata_modules import format_invoke_metadata, format_exif_metadata, SlideMetadata
+from .metadata_modules import format_invoke_metadata, format_exif_metadata, SlideSummary
 
-def format_metadata(filepath: Path, metadata: dict) -> SlideMetadata:
+def format_metadata(filepath: Path, metadata: dict) -> SlideSummary:
     """
     Format metadata dictionary into an HTML string.
     
@@ -19,15 +19,17 @@ def format_metadata(filepath: Path, metadata: dict) -> SlideMetadata:
     Returns:
         SlideMetadata: structured representation of the metadata.
     """
-    result = SlideMetadata(
+    result = SlideSummary(
         filename=filepath.name,
         filepath=filepath.as_posix()
-    )   
+    )
     if not metadata:
         result.description = "<i>No metadata available.</i>"
         return result
     
-    if 'model_weights' in metadata or 'generation_mode' in metadata:
+    # This is a fragile heuristic. Better to infer the type of metadata when the embeddings are
+    # created, but this is a quick fix to avoid breaking existing metadata.
+    if 'app_version' in metadata or 'generation_mode' in metadata or 'canvas_v2_metadata' in metadata:
         return format_invoke_metadata(result, metadata)
     else:
         return format_exif_metadata(result, metadata)

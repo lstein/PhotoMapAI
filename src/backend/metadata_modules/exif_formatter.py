@@ -6,9 +6,9 @@ Returns an HTML representation of the EXIF data.
 """
 
 from pathlib import Path
-from .slide_metadata import SlideMetadata
+from .slide_summary import SlideSummary
 
-def format_exif_metadata(slide_data: SlideMetadata, metadata: dict) -> SlideMetadata:
+def format_exif_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSummary:
     """
     Format EXIF metadata dictionary into an HTML string.
     
@@ -17,7 +17,7 @@ def format_exif_metadata(slide_data: SlideMetadata, metadata: dict) -> SlideMeta
         metadata (dict): Metadata dictionary containing EXIF attributes.
         
     Returns:
-        SlideMetadata: structured metadata appropriate for an image with EXIF data.
+        SlideSummary: structured metadata appropriate for an image with EXIF data.
     """
 
     if not metadata:
@@ -30,5 +30,5 @@ def format_exif_metadata(slide_data: SlideMetadata, metadata: dict) -> SlideMeta
     html += "</table>"
     
     slide_data.description = html
-    slide_data.textToCopy = filepath.name
+    slide_data.textToCopy = slide_data.filename
     return slide_data
