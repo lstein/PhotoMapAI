@@ -20,6 +20,7 @@ dependencies = [
     "python-multipart",
     "jinja2",
     "pydantic",
+    "requests",
     "scikit-learn",
     "networkx",
     "tqdm",

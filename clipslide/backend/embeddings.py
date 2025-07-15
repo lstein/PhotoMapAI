@@ -10,11 +10,10 @@ for image embeddings and similarity calculations.
 import os
 import clip
 import functools
-import json
 import numpy as np
 import torch
 import torch.nn.functional as F
-from PIL import Image, ImageOps, ExifTags
+from PIL import Image, ImageOps
 from tqdm import tqdm
 from sklearn.neighbors import NearestNeighbors
 import networkx as nx
@@ -23,8 +22,9 @@ from typing import Optional, Set, Dict, Tuple, Generator
 from pathlib import Path
 from pydantic import BaseModel
 
-from .metadata import format_metadata
+from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
+from .metadata_extraction import MetadataExtractor
 
 
 class Embeddings(BaseModel):
@@ -122,7 +122,7 @@ class Embeddings(BaseModel):
 
                 # Get file metadata
                 modification_time = image_path.stat().st_mtime
-                metadata = self._extract_image_metadata(pil_image)
+                metadata = self.extract_image_metadata(pil_image)
 
                 # Create the CLIP embedding
                 image = preprocess(pil_image).unsqueeze(0).to(device)  # type: ignore
@@ -545,23 +545,21 @@ class Embeddings(BaseModel):
         """
         print(f"Removing {image_path} from embeddings.")
 
+        # TODO: Fix this. It is incoherent (copilot sludge).
+        
         # Use optimized version for O(1) lookup
         data = self.open_cached_embeddings(self.embeddings_path)
-        filename_map = data["filename_map"]
 
-        current_filename = image_path.as_posix()
-        if current_filename not in filename_map:
-            raise ValueError(f"Image {image_path} not found in embeddings.")
-
-        # Get the sorted index for removal
-        sorted_idx = filename_map[current_filename]
 
         # Load the raw data for modification
-        raw_data = self.open_cached_embeddings(self.embeddings_path)
-        filenames = raw_data["filenames"]
-        embeddings = raw_data["embeddings"]
-        modtimes = raw_data["modification_times"]
-        metadata = raw_data["metadata"]
+        filenames = data["filenames"]
+        embeddings = data["embeddings"]
+        modtimes = data["modification_times"]
+        metadata = data["metadata"]
+
+        current_filename = image_path.as_posix()
+        if current_filename not in filenames:
+            raise ValueError(f"Image {image_path} not found in embeddings.")
 
         # Find the index in the original (unsorted) arrays
         original_idx = np.where(filenames == current_filename)[0][0]
@@ -581,7 +579,7 @@ class Embeddings(BaseModel):
             metadata=metadata,
         )
 
-        # CRITICAL: Clear the LRU cache since the file has changed
+        # Clear the LRU cache since the file has changed
         self.open_cached_embeddings.cache_clear()
         self.open_cached_embeddings.cache_clear()
 
@@ -606,48 +604,7 @@ class Embeddings(BaseModel):
             image_path = Path(filenames[idx])
             yield format_metadata(image_path, metadata[idx])
 
-    def _extract_image_metadata(self, pil_image: Image.Image) -> dict:
-        """
-        Extract metadata from an image in order of preference.
-        
-        Args:
-            pil_image: PIL Image object
-            
-        Returns:
-            dict: Extracted metadata or empty dict if none found
-        """
-        # Define metadata extraction strategies in order of preference
-        metadata_extractors = [
-            ("invokeai_metadata", lambda img: json.loads(img.info["invokeai_metadata"])),
-            ("Sd-metadata", lambda img: json.loads(img.info["Sd-metadata"])),
-            ("sd-metadata", lambda img: json.loads(img.info["sd-metadata"])),
-            ("exif", self._extract_exif_metadata),
-        ]
-        
-        for key, extractor in metadata_extractors:
-            if key in pil_image.info:
-                try:
-                    return extractor(pil_image)
-                except (json.JSONDecodeError, Exception) as e:
-                    print(f"Warning: Failed to parse {key} metadata: {e}")
-                    continue
-        
-        return {}  # No metadata available
-
-    def _extract_exif_metadata(self, pil_image: Image.Image) -> dict:
-        """Extract and format EXIF metadata from an image."""
-        exif_data = pil_image.getexif()
-        exif_dict = {}
-        
-        # first get the base exif tags
-        for k, v in exif_data.items():
-            exif_dict[k] = ExifTags.TAGS.get(k, k)
-
-        # now get the tags in ExifTags.IFD
-        for ifd_id in ExifTags.IFD:
-            ifd = exif_data.get_ifd(ifd_id)
-            resolver = ExifTags.GPSTAGS if ifd_id == ExifTags.IFD.GPSInfo else ExifTags.TAGS
-            for k, v in ifd.items():
-                exif_dict[resolver.get(k, k)] = v
-
-        return exif_dict
+    @staticmethod
+    def extract_image_metadata(pil_image: Image.Image) -> dict:
+        """Extract metadata from an image using the dedicated extractor."""
+        return MetadataExtractor.extract_image_metadata(pil_image)

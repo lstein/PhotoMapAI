@@ -31,6 +31,7 @@ PHOTO_ALBUMS = {
     "invoke": os.path.join(IMAGES_ROOT, "Archive/InvokeAI"),
     "yiffy": os.path.join(IMAGES_ROOT, "Archive/InvokeAI/Yiffy"),
     "legacy": os.path.join(IMAGES_ROOT, "Archive/InvokeAI/2023/1"),
+    "gps_test": os.path.join(IMAGES_ROOT, "Pictures/2020"),
 }
 
 def get_package_resource_path(resource_name: str) -> str:
@@ -226,7 +227,12 @@ async def delete_image(file_to_delete: str, embeddings_file: str) -> JSONRespons
 def main():
     """Main entry point for the slideshow server."""
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8050)
+    uvicorn.run("clipslide.frontend.slideshow_server:app", 
+                host="0.0.0.0", 
+                port=8050,
+                reload=True,
+                reload_dirs=["./clipslide", "./clipslide/frontend", "./clipslide/backend"],
+                )
 
 if __name__ == "__main__":
     main()

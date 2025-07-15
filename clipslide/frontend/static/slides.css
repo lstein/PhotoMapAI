@@ -266,7 +266,7 @@ body {
     max-width: 75vw;
     word-wrap: break-word; 
     overflow-wrap: break-word;
-    white-space: pre-wrap;
+    /* white-space: pre-wrap; */
     max-height: 40vh;
     overflow-y: auto;
     text-align: left;
@@ -679,4 +679,28 @@ body {
     flex-direction: column;
     gap: 0.5em;
     /* Optional: adds space between buttons */
+}
+
+.exif-metadata {
+    white-space: normal !important;
+}
+
+.exif-metadata table {
+    margin: 0 !important;
+    padding: 0 !important;
+    border-spacing: 0;
+    border-collapse: collapse;
+}
+
+.exif-metadata th,
+.exif-metadata td {
+    padding: 2px 6px !important;
+    margin: 0 !important;
+    font-size: 0.98em;
+    vertical-align: top;
+}
+
+.exif-metadata tr {
+    margin: 0 !important;
+    padding: 0 !important;
 }
