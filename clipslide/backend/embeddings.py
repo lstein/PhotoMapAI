@@ -469,6 +469,7 @@ class Embeddings(BaseModel):
             "filenames": data["filenames"],
             "metadata": data["metadata"],
             "embeddings": data["embeddings"],
+            "modification_times": data["modification_times"],
             "sorted_filenames": sorted_filenames,
             "sorted_metadata": data["metadata"][sorted_indices],
             "filename_map": filename_map,
@@ -544,12 +545,9 @@ class Embeddings(BaseModel):
         Optimized version with O(1) lookup and cache invalidation.
         """
         print(f"Removing {image_path} from embeddings.")
-
-        # TODO: Fix this. It is incoherent (copilot sludge).
         
         # Use optimized version for O(1) lookup
         data = self.open_cached_embeddings(self.embeddings_path)
-
 
         # Load the raw data for modification
         filenames = data["filenames"]

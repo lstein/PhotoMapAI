@@ -7,8 +7,9 @@ import {
   addNewSlide,
   updateSlideshowIcon,
 } from "./swiper.js";
-import { showPauseOverlay, hidePauseOverlay } from "./overlay.js";
+import { showPauseOverlay, hidePauseOverlay, updateOverlay } from "./overlay.js";
 import { showSpinner, hideSpinner } from "./utils.js";
+import { getCurrentFilepath, deleteCurrentFile } from "./api.js";
 
 // initialize event listeners after the DOM is fully loaded
 document.addEventListener("DOMContentLoaded", async function () {
@@ -176,7 +177,7 @@ function handleTouchEnd(e) {
   verticalSwipeDetected = false;
 }
 
-// Attach to the swiper container or document
+// Attach touch event handlers to the swiper container
 const swiperContainer = document.querySelector(".swiper");
 swiperContainer.addEventListener("touchstart", handleTouchStart, {
   passive: false,
@@ -187,3 +188,54 @@ swiperContainer.addEventListener("touchmove", handleTouchMove, {
 swiperContainer.addEventListener("touchend", handleTouchEnd, {
   passive: false,
 });
+
+// Handler for the delete (trash) button
+const delete_current_file_btn = document.getElementById("deleteCurrentFileBtn");
+if (delete_current_file_btn) {
+  delete_current_file_btn.addEventListener("click", async function () {
+    const currentFilepath = getCurrentFilepath();
+
+    if (!currentFilepath) {
+      alert("No image selected for deletion.");
+      return;
+    }
+
+    // Show confirmation dialog
+    const confirmDelete = confirm(
+      `Are you sure you want to delete this image?\n\n${currentFilepath}\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmDelete) {
+      return; // User cancelled, do nothing
+    }
+
+    try {
+      // Show spinner during deletion
+      showSpinner();
+
+      // Call the delete function
+      await deleteCurrentFile();
+
+      // Remove the current slide from swiper
+      if (state.swiper && state.swiper.slides && state.swiper.slides.length > 0) {
+        const currentIndex = state.swiper.activeIndex;
+        state.swiper.removeSlide(currentIndex);
+
+        // If no slides left, add a new one
+        if (state.swiper.slides.length === 0) {
+          await addNewSlide();
+        }
+
+        // Update overlay with new current slide
+        updateOverlay();
+      }
+
+      hideSpinner();
+      console.log("Image deleted successfully");
+    } catch (error) {
+      hideSpinner();
+      alert(`Failed to delete image: ${error.message}`);
+      console.error("Delete failed:", error);
+    }
+  });
+}
