@@ -11,3 +11,38 @@ export const state = {
   searchIndex: 0, // When in search mode, this is the index of the current slide in the search results
   searchResults: [], // List of file paths matching the current search query
 };
+
+document.addEventListener("DOMContentLoaded", async function () {
+  initializeFromServer();
+  restoreFromLocalStorage();
+});
+
+// Initialize the state from the initial URL.
+function initializeFromServer() {
+  if (window.slideshowConfig) {
+    state.currentDelay = window.slideshowConfig.currentDelay;
+    state.mode = window.slideshowConfig.mode;
+    state.embeddingsFile = window.slideshowConfig.embeddings_file;
+  }
+}
+
+// Restore state from local storage
+function restoreFromLocalStorage() {
+  const storedHighWaterMark = localStorage.getItem("highWaterMark");
+  if (storedHighWaterMark !== null)
+    state.highWaterMark = parseInt(storedHighWaterMark, 10);
+
+  const storedCurrentDelay = localStorage.getItem("currentDelay");
+  if (storedCurrentDelay !== null)
+    state.currentDelay = parseInt(storedCurrentDelay, 10);
+
+  const storedMode = localStorage.getItem("mode");
+  if (storedMode) state.mode = storedMode;
+}
+
+// Save state to local storage
+export function saveSettingsToLocalStorage() {
+  localStorage.setItem("highWaterMark", state.highWaterMark);
+  localStorage.setItem("currentDelay", state.currentDelay);
+  localStorage.setItem("mode", state.mode);
+}

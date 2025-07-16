@@ -1,142 +1,10 @@
 // This file actually drives the slideshow
 
 import {state} from './javascript/state.js';
-
-// These must mirror the nginx configuration.
-function initializeFromServer() {
-  if (window.slideshowConfig) {
-    state.currentDelay = window.slideshowConfig.currentDelay;
-    state.mode = window.slideshowConfig.mode;
-    state.embeddingsFile = window.slideshowConfig.embeddings_file;
-  }
-}
-
-// ShowSpinner and hideSpinner functions
-function showSpinner() {
-  document.getElementById("spinner").style.display = "block";
-}
-function hideSpinner() {
-  document.getElementById("spinner").style.display = "none";
-}
-
-// Fetch a random image and return its metadata
-async function fetchNextImage() {
-  let response;
-  let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
-  const formData = new URLSearchParams();
-
-  try {
-    // Handle the case of there already being a set of search results, in which case we step through.
-    if (state.searchResults && state.searchResults.length > 0) {
-      let currentFilepath = state.searchResults[state.searchIndex++];
-      if (state.searchIndex >= state.searchResults.length) state.searchIndex = 0; // Loop back to start
-      formData.append("embeddings_file", state.embeddingsFile);
-      formData.append("current_image", currentFilepath);
-      response = await fetch("retrieve_image/", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formData.toString(),
-      });
-
-      // Otherwise we let the server handle the logic of which image to return.
-    } else {
-      // Convert query parameters to form data
-      formData.append("embeddings_file", state.embeddingsFile);
-      if (state.mode === "random") {
-        formData.append("random", "true");
-      } else if (state.mode === "sequential") {
-        // Use the currently displayed slide, not the last in the buffer
-        const currentFilepath = getCurrentFilepath();
-        formData.append("current_image", currentFilepath);
-        formData.append("random", "false");
-      } else {
-        throw new Error(
-          "Invalid mode specified. Use 'random' or 'sequential'."
-        );
-      }
-
-      response = await fetch("retrieve_next_image/", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formData.toString(),
-      });
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    clearTimeout(spinnerTimeout);
-    hideSpinner();
-    return data;
-  } catch (e) {
-    clearTimeout(spinnerTimeout);
-    hideSpinner();
-    console.warn("Failed to load image.");
-    throw e;
-  }
-}
-
-// Add a new slide to Swiper with image and metadata
-async function addNewSlide() {
-  const data = await fetchNextImage();
-
-  // Stop if data is empty (null, undefined, or empty object)
-  if (!data || Object.keys(data).length === 0) {
-    return;
-  }
-
-  // Create a new slide element
-  const path = data.filepath; // Full path to the image
-  const url = data.url; // URL path to the image
-  const slide = document.createElement("div");
-  slide.className = "swiper-slide";
-  slide.innerHTML = `
-        <div style="position:relative; width:100%; height:100%;">
-            <img src="${url}" alt="" draggable="true" class="slide-image">
-        </div>
-    `;
-  slide.dataset.filename = data.filename || "";
-  slide.dataset.description = data.description || "";
-  slide.dataset.textToCopy = data.textToCopy || "";
-  slide.dataset.filepath = path || "";
-  state.swiper.appendSlide(slide);
-
-  const img = slide.querySelector("img");
-  img.addEventListener("dragstart", function (e) {
-    e.dataTransfer.setData(
-      "DownloadURL",
-      `image/jpeg:${data.filename || "image.jpg"}:${data.url}`
-    );
-    e.dataTransfer.setData("text/uri-list", data.url);
-    // Prevent Swiper from handling this drag as a swipe
-    e.stopPropagation();
-  });
-  // Prevent Swiper swipe on mouse drag
-  img.addEventListener("mousedown", function (e) {
-    e.stopPropagation();
-  });
-
-  updateOverlay();
-    // Delay the high water mark enforcement to let the slide addition complete
-  setTimeout(() => {
-    enforceHighWaterMark();
-  }, 200); // 200ms delay after slide is added
-}
-
-// Update overlay with current slide's metadata
-function updateOverlay() {
-  const slide = state.swiper.slides[state.swiper.activeIndex];
-  if (!slide) return;
-  document.getElementById("descriptionText").innerHTML =
-    slide.dataset.description || "";
-  document.getElementById("filenameText").textContent =
-    slide.dataset.filename || "";
-  document.getElementById("filepathText").textContent =
-    slide.dataset.filepath || "";
-  state.currentTextToCopy = slide.dataset.textToCopy || "";
-}
+import { pauseSlideshow, resumeSlideshow, addNewSlide } from './javascript/swiper.js';
+import { showSpinner, hideSpinner } from './javascript/utils.js';
+import { showPauseOverlay, hidePauseOverlay } from './javascript/overlay.js';
+import {} from './javascript/events.js';
 
 // Delay controls
 const delayStep = 1; // seconds to increase/decrease per click
@@ -160,137 +28,7 @@ function updateDelayDisplay(newDelay) {
 
 // Swiper initialization
 document.addEventListener("DOMContentLoaded", async function () {
-  // Initialize from server data instead of loadParams()
-  initializeFromServer();
 
-  // Restore from localStorage if present (this can override server defaults)
-  const storedHighWaterMark = localStorage.getItem("highWaterMark");
-  if (storedHighWaterMark !== null)
-    state.highWaterMark = parseInt(storedHighWaterMark, 10);
-
-  const storedCurrentDelay = localStorage.getItem("currentDelay");
-  if (storedCurrentDelay !== null)
-    state.currentDelay = parseInt(storedCurrentDelay, 10);
-
-  const storedMode = localStorage.getItem("mode");
-  if (storedMode) state.mode = storedMode;
-
-  // Initialize Swiper
-  state.swiper = new Swiper(".swiper", {
-    navigation: {
-      nextEl: ".swiper-button-next",
-      prevEl: ".swiper-button-prev",
-    },
-    autoplay: {
-      delay: state.currentDelay * 1000,
-      disableOnInteraction: false,
-    },
-    scrollbar: {
-      el: ".swiper-scrollbar",
-      draggable: true,
-      hide: false,
-    },
-    loop: false, // Enable looping to allow continuous navigation
-    on: {
-      slideNextTransitionStart: async function () {
-        // Only add a new slide if we're at the end and moving forward
-        if (
-          state.swiper.activeIndex >=
-          state.swiper.slides.length - 1
-          // state.swiper.activeIndex >= state.swiper.slides.length - 2 &&
-          // state.swiper.activeIndex > state.swiper.previousIndex // Only when moving forward
-        ) {
-          await addNewSlide();
-        }
-      },
-      sliderFirstMove: function () {
-        pauseSlideshow();
-      },
-    },
-  });
-
-  // Prevent overlay toggle when clicking Swiper navigation buttons
-  document
-    .querySelectorAll(".swiper-button-next, .swiper-button-prev")
-    .forEach((btn) => {
-      btn.addEventListener("click", function (event) {
-        pauseSlideshow(); // Pause slideshow on navigation
-        event.stopPropagation();
-        this.blur(); // Remove focus from button to prevent keyboard navigation issues
-      });
-      btn.addEventListener("mousedown", function (event) {
-        this.blur();
-      });
-    });
-
-  // Start/stop slideshow button
-  const startStopBtn = document.getElementById("startStopSlideshowBtn");
-  const playIcon = document.getElementById("playIcon");
-  const pauseIcon = document.getElementById("pauseIcon");
-
-  function updateSlideshowIcon() {
-    if (state.swiper && state.swiper.autoplay && state.swiper.autoplay.running) {
-      playIcon.style.display = "none";
-      pauseIcon.style.display = "inline";
-    } else {
-      playIcon.style.display = "inline";
-      pauseIcon.style.display = "none";
-    }
-  }
-
-  startStopBtn.addEventListener("click", function () {
-    if (state.swiper.autoplay.running) {
-      state.swiper.autoplay.stop();
-    } else {
-      state.swiper.autoplay.start();
-    }
-    updateSlideshowIcon();
-  });
-
-  // Update icon on slide change or autoplay events
-  if (state.swiper) {
-    state.swiper.on("autoplayStart", updateSlideshowIcon);
-    state.swiper.on("autoplayResume", updateSlideshowIcon);
-    state.swiper.on("autoplayStop", updateSlideshowIcon);
-    state.swiper.on("autoplayPause", updateSlideshowIcon);
-  }
-
-  // Initial icon state
-  updateSlideshowIcon();
-
-  // Fullscreen button
-  const fullscreenBtn = document.getElementById("fullscreenBtn");
-  if (fullscreenBtn) {
-    fullscreenBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      const elem = document.documentElement; // or use a specific container div
-      if (!document.fullscreenElement) {
-        elem.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
-    });
-  }
-
-  // Call after slides are loaded/added
-  await addNewSlide();
-  await addNewSlide();
-
-  // Now the DOM is ready, so the button exists:
-  document.getElementById("copyTextBtn").onclick = function () {
-    if (state.currentTextToCopy) {
-      navigator.clipboard.writeText(state.currentTextToCopy);
-    }
-  };
-
-  // Update overlay on slide change
-  state.swiper.on("slideChange", function () {
-    updateOverlay();
-  });
-
-  state.swiper.on("scrollbarDragStart", function () {
-    pauseSlideshow();
-  });
 
   let slowerBtn = document.getElementById("slowerBtn");
   let fasterBtn = document.getElementById("fasterBtn");
@@ -305,82 +43,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     setDelay(newDelay);
   };
   updateDelayDisplay(state.currentDelay);
-
-  document.getElementById("closeOverlayBtn").onclick = hidePauseOverlay;
-
-  // Keyboard navigation
-  window.addEventListener("keydown", function (e) {
-    // Prevent global shortcuts when typing in an input or textarea
-    if (
-      e.target.tagName === "INPUT" ||
-      e.target.tagName === "TEXTAREA" ||
-      e.target.isContentEditable
-    ) {
-      return;
-    }
-
-    if (e.key === "ArrowRight") {
-      pauseSlideshow(); // Pause on navigation
-      state.swiper.slideNext();
-    }
-    if (e.key === "ArrowLeft") {
-      pauseSlideshow(); // Pause on navigation
-      state.swiper.slidePrev();
-    }
-    if (e.key === "ArrowUp") showPauseOverlay();
-    if (e.key === "ArrowDown") hidePauseOverlay();
-    if (e.key === "i") {
-      const pauseOverlay = document.getElementById("pauseOverlay");
-      if (pauseOverlay.classList.contains("visible")) {
-        hidePauseOverlay();
-      } else {
-        showPauseOverlay();
-      }
-    }
-    if (e.key === "Escape") hidePauseOverlay();
-    if (e.key === "f") {
-      const elem = document.documentElement; // or use a specific container div
-      if (!document.fullscreenElement) {
-        elem.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
-    }
-    if (e.key === " ") {
-      e.preventDefault();
-      e.stopPropagation();
-      if (state.swiper && state.swiper.autoplay && state.swiper.autoplay.running) {
-        resumeSlideshow();
-      } else {
-        pauseSlideshow();
-      }
-    }
-  });
-
-  // Attach to the swiper container or document
-  const swiperContainer = document.querySelector(".swiper");
-  swiperContainer.addEventListener("touchstart", handleTouchStart, {
-    passive: false,
-  });
-  swiperContainer.addEventListener("touchmove", handleTouchMove, {
-    passive: false,
-  });
-  swiperContainer.addEventListener("touchend", handleTouchEnd, {
-    passive: false,
-  });
-
-  // Disable tabbing on buttons to prevent focus issues
-  document.querySelectorAll("button").forEach((btn) => (btn.tabIndex = -1));
-
-  document.querySelectorAll('input[type="radio"]').forEach((rb) => {
-    rb.tabIndex = -1; // Remove from tab order
-    rb.addEventListener("mousedown", function (e) {
-      e.preventDefault(); // Prevent focus on mouse down
-    });
-    rb.addEventListener("focus", function () {
-      this.blur(); // Remove focus if somehow focused
-    });
-  });
 
   // Set initial radio button state based on current mode
   document.getElementById("modeRandom").checked = state.mode === "random";
@@ -400,59 +62,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     });
   });
-
-  let touchStartY = null;
-  let touchStartX = null;
-  let touchEndY = null;
-  let verticalSwipeDetected;
-  const swipeThreshold = 50; // Minimum distance in px for a swipe
-
-  function handleTouchStart(e) {
-    if (e.touches && e.touches.length === 1) {
-      touchStartY = e.touches[0].clientY;
-      touchStartX = e.touches[0].clientX;
-      verticalSwipeDetected = false; // Reset swipe detection
-    }
-  }
-
-  function handleTouchMove(e) {
-    if (touchStartY === null || touchStartX === null) return;
-    const currentY = e.touches[0].clientY;
-    const currentX = e.touches[0].clientX;
-    const deltaY = currentY - touchStartY;
-    const deltaX = currentX - touchStartX;
-
-    // Only prevent default if vertical movement is dominant
-    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 10) {
-      e.preventDefault();
-      if (Math.abs(deltaY) > swipeThreshold && !verticalSwipeDetected) {
-        e.preventDefault(); // Prevent default scrolling behavior
-        verticalSwipeDetected = true;
-        if (deltaY < -swipeThreshold) showPauseOverlay();
-        else if (deltaY > swipeThreshold) hidePauseOverlay();
-      }
-    }
-  }
-
-  function handleTouchEnd(e) {
-    if (touchStartY === null || touchStartX === null) return;
-    const touch = (e.changedTouches && e.changedTouches[0]) || null;
-    if (!touch) return;
-    const deltaY = touch.clientY - touchStartY;
-    const deltaX = touch.clientX - touchStartX;
-
-    // Detect horizontal swipe (left/right)
-    if (
-      Math.abs(deltaX) > Math.abs(deltaY) &&
-      Math.abs(deltaX) > swipeThreshold
-    ) {
-      pauseSlideshow();
-    }
-    // No pause on vertical swipe
-    touchStartY = null;
-    touchStartX = null;
-    verticalSwipeDetected = false;
-  }
 
   const textSearchPanel = document.getElementById("textSearchPanel");
   const textSearchBtn = document.getElementById("textSearchBtn");
@@ -789,18 +398,6 @@ async function createSearchImageSlide(file) {
   });
 }
 
-function resumeSlideshow() {
-  if (state.swiper && !state.swiper.autoplay.running) {
-    state.swiper.autoplay.start();
-  }
-}
-
-function pauseSlideshow() {
-  if (state.swiper && state.swiper.autoplay.running) {
-    state.swiper.autoplay.stop();
-  }
-}
-
 // Show/hide the clearSearchBtn based on searchResults
 function updateSearchCheckmarks() {
   const searchIcon = document.getElementById("searchIcon");
@@ -816,19 +413,6 @@ function updateSearchCheckmarks() {
   }
 }
 
-function showPauseOverlay() {
-  const pauseOverlay = document.getElementById("pauseOverlay");
-  pauseOverlay.style.display = "flex";
-  // Force reflow to ensure the transition works when toggling quickly
-  // void pauseOverlay.offsetWidth;
-  pauseOverlay.classList.add("visible");
-}
-
-function hidePauseOverlay() {
-  const pauseOverlay = document.getElementById("pauseOverlay");
-  pauseOverlay.classList.remove("visible");
-  pauseOverlay.style.display = "none";
-}
 
 async function deleteCurrentFile() {
   const filepath = getCurrentFilepath();
@@ -998,24 +582,6 @@ function setCheckmarkOnIcon(iconElement, show) {
     iconElement.parentElement.style.position = "relative";
     iconElement.parentElement.appendChild(check);
   }
-}
-
-function enforceHighWaterMark() {
-  if (!state.swiper) return;
-
-  const slideShowActive = state.swiper.autoplay && state.swiper.autoplay.running;
-  if (slideShowActive) state.swiper.autoplay.stop();
-
-  while (state.swiper.slides.length > state.highWaterMark) {
-    if (state.swiper.activeIndex > 0) {
-      state.swiper.removeSlide(0);
-      state.swiper.slideTo(state.swiper.activeIndex, 0, false);
-    } else {
-      state.swiper.removeSlide(state.swiper.slides.length - 1);
-    }
-  }
-
-  if (slideShowActive) state.swiper.autoplay.start();
 }
 
 function saveSettingsToLocalStorage() {
