@@ -2,6 +2,7 @@
 // This file initializes the Swiper instance and manages slide transitions.
 import { state } from "./state.js";
 import { fetchNextImage } from "./api.js";
+import { updateOverlay } from "./overlay.js";
 import { showSpinner, hideSpinner } from "./utils.js";
 
 // Swiper initialization
@@ -140,18 +141,6 @@ export async function addNewSlide() {
   }, 200); // 200ms delay after slide is added
 }
 
-// Update overlay with current slide's metadata
-export function updateOverlay() {
-  const slide = state.swiper.slides[state.swiper.activeIndex];
-  if (!slide) return;
-  document.getElementById("descriptionText").innerHTML =
-    slide.dataset.description || "";
-  document.getElementById("filenameText").textContent =
-    slide.dataset.filename || "";
-  document.getElementById("filepathText").textContent =
-    slide.dataset.filepath || "";
-  state.currentTextToCopy = slide.dataset.textToCopy || "";
-}
 
 // Enforce the high water mark by removing excess slides
 function enforceHighWaterMark() {
