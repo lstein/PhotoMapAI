@@ -141,6 +141,15 @@ export async function addNewSlide() {
   }, 200); // 200ms delay after slide is added
 }
 
+export function removeSlidesAfterCurrent() {
+  if (!state.swiper) return;
+    const activeIndex = state.swiper.activeIndex;
+    const slidesToRemove = state.swiper.slides.length - activeIndex - 1;
+    if (slidesToRemove > 0) {
+      state.swiper.removeSlide(activeIndex + 1, slidesToRemove);
+    }
+    enforceHighWaterMark();
+}
 
 // Enforce the high water mark by removing excess slides
 function enforceHighWaterMark() {

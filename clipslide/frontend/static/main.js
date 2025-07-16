@@ -5,63 +5,10 @@ import { pauseSlideshow, resumeSlideshow, addNewSlide } from './javascript/swipe
 import { showSpinner, hideSpinner } from './javascript/utils.js';
 import { showPauseOverlay, hidePauseOverlay } from './javascript/overlay.js';
 import {} from './javascript/events.js';
-
-// Delay controls
-const delayStep = 1; // seconds to increase/decrease per click
-const minDelay = 1; // minimum delay in seconds
-const maxDelay = 60; // maximum delay in seconds
-
-function setDelay(newDelay) {
-  newDelay = Math.max(minDelay, Math.min(maxDelay, newDelay));
-  state.currentDelay = newDelay;
-  state.swiper.params.autoplay.delay = state.currentDelay * 1000;
-  updateDelayDisplay(newDelay);
-  saveSettingsToLocalStorage();
-}
-
-function updateDelayDisplay(newDelay) {
-  const delayValueSpan = document.getElementById("delayValue");
-  if (delayValueSpan) {
-    delayValueSpan.textContent = newDelay;
-  }
-}
+import {} from './javascript/settings.js';
 
 // Swiper initialization
 document.addEventListener("DOMContentLoaded", async function () {
-
-
-  let slowerBtn = document.getElementById("slowerBtn");
-  let fasterBtn = document.getElementById("fasterBtn");
-
-  slowerBtn.onclick = function () {
-    let newDelay = Math.min(maxDelay, state.currentDelay + delayStep);
-    setDelay(newDelay);
-  };
-
-  fasterBtn.onclick = function () {
-    let newDelay = Math.max(minDelay, state.currentDelay - delayStep);
-    setDelay(newDelay);
-  };
-  updateDelayDisplay(state.currentDelay);
-
-  // Set initial radio button state based on current mode
-  document.getElementById("modeRandom").checked = state.mode === "random";
-  document.getElementById("modeSequential").checked = state.mode === "sequential";
-
-  // Listen for changes to the radio buttons
-  document.querySelectorAll('input[name="mode"]').forEach((radio) => {
-    radio.addEventListener("change", function () {
-      if (this.checked) {
-        state.mode = this.value;
-        saveSettingsToLocalStorage();
-        // Remove all slides from the current position to the end
-        for (let i = state.swiper.slides.length - 1; i > state.swiper.activeIndex; i--) {
-          state.swiper.removeSlide(i);
-        }
-        addNewSlide(); // Add a new slide based on the new mode
-      }
-    });
-  });
 
   const textSearchPanel = document.getElementById("textSearchPanel");
   const textSearchBtn = document.getElementById("textSearchBtn");
@@ -227,71 +174,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-
-  // Handlers for the settings modal
-  const settingsBtn = document.getElementById("settingsBtn");
-  const settingsOverlay = document.getElementById("settingsOverlay");
-  const closeSettingsBtn = document.getElementById("closeSettingsBtn");
-  const saveSettingsBtn = document.getElementById("saveSettingsBtn");
-  const highWaterMarkInput = document.getElementById("highWaterMarkInput");
-  const delayValueSpan = document.getElementById("delayValue");
-  const modeRandom = document.getElementById("modeRandom");
-  const modeSequential = document.getElementById("modeSequential");
-
-  // Open settings modal and populate fields
-  settingsBtn.addEventListener("click", () => {
-    if (settingsOverlay.style.display === "none") {
-      // Populate fields with current values
-      highWaterMarkInput.value = state.highWaterMark;
-      delayValueSpan.textContent = state.currentDelay;
-      if (state.mode === "random") modeRandom.checked = true;
-      if (state.mode === "sequential") modeSequential.checked = true;
-      settingsOverlay.style.display = "block";
-    } else {
-      settingsOverlay.style.display = "none";
-    }
-  });
-
-  // Close modal without saving
-  closeSettingsBtn.addEventListener("click", () => {
-    settingsOverlay.style.display = "none";
-  });
-
-  // Optional: close overlay when clicking outside the modal
-  settingsOverlay.addEventListener("click", (e) => {
-    if (e.target === settingsOverlay) {
-      settingsOverlay.style.display = "none";
-    }
-  });
-
-  // Save settings and close modal
-  saveSettingsBtn.addEventListener("click", () => {
-    // Get values from fields
-    let newHighWaterMark = parseInt(highWaterMarkInput.value, 10);
-    if (isNaN(newHighWaterMark) || newHighWaterMark < 2) newHighWaterMark = 2;
-    if (newHighWaterMark > 100) newHighWaterMark = 100;
-
-    let newDelay = parseInt(delayValueSpan.textContent, 10);
-    if (isNaN(newDelay) || newDelay < minDelay) newDelay = minDelay;
-    if (newDelay > maxDelay) newDelay = maxDelay;
-
-    let newMode = modeRandom.checked ? "random" : "sequential";
-
-    // Apply and save
-    setHighWaterMark(newHighWaterMark);
-    state.currentDelay = newDelay;
-    state.swiper.params.autoplay.delay = state.currentDelay * 1000; // convert to milliseconds;
-
-    state.mode = newMode;
-    saveSettingsToLocalStorage();
-
-    // Update radio buttons if needed
-    document.getElementById("modeRandom").checked = state.mode === "random";
-    document.getElementById("modeSequential").checked = state.mode === "sequential";
-
-    settingsOverlay.style.display = "none";
-  });
 });
+
 async function searchWithImage(file, first_slide) {
   const formData = new FormData();
   formData.append("file", file); // file is a File object from an <input type="file">
@@ -533,16 +417,3 @@ function setCheckmarkOnIcon(iconElement, show) {
     iconElement.parentElement.appendChild(check);
   }
 }
-
-function saveSettingsToLocalStorage() {
-  localStorage.setItem("highWaterMark", state.highWaterMark);
-  localStorage.setItem("currentDelay", state.currentDelay);
-  localStorage.setItem("mode", state.mode);
-}
-
-// Call this function whenever you update any of the three values:
-function setHighWaterMark(newMark) {
-  state.highWaterMark = newMark;
-  saveSettingsToLocalStorage();
-}
-
