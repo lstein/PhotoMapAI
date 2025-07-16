@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from backend.embeddings import Embeddings
+from .embeddings import Embeddings
 
 def do_index():
     import argparse
@@ -36,15 +36,15 @@ def do_index():
 
     # If a single argument is given and it's a directory, treat as directory
     if len(args.image_paths) == 1 and os.path.isdir(args.image_paths[0]):
-        _, _, bad_files = embeddings.create_index(args.image_paths[0])
+        _, _, _, _, bad_files = embeddings.create_index(args.image_paths[0])
     else:
-        _, _, bad_files = embeddings.create_index(args.image_paths)
+        _, _, _, _, bad_files = embeddings.create_index(args.image_paths)
     if args.print_bad_files and bad_files:
         print("Failed to process the following files:")
         for f in bad_files:
             print(f)
 
-def do_update_index():
+def do_update_images():
     import argparse
 
     parser = argparse.ArgumentParser(description="Update the CLIP search index.")
@@ -76,9 +76,9 @@ def do_update_index():
 
     # If a single argument is given and it's a directory, treat as directory
     if len(args.image_paths) == 1 and os.path.isdir(args.image_paths[0]):
-        _, _, bad_files = embeddings.update_index(args.image_paths[0])
+        _, _, _, _,  bad_files = embeddings.update_index(args.image_paths[0])
     else:
-        _, _, bad_files = embeddings.update_index(args.image_paths)
+        _, _, _, _,  bad_files = embeddings.update_index(args.image_paths)
     if args.print_bad_files and bad_files:
         print("Failed to process the following files:")
         for f in bad_files:
@@ -160,8 +160,8 @@ def main():
         do_search()
     elif prog == "search_text":
         do_text_search()
-    elif prog == "update_index":
-        do_update_index()
+    elif prog == "update_images"    :
+        do_update_images()
     elif prog == "find_duplicate_images":
         do_duplicate_search()
 

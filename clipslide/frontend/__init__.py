@@ -1,0 +1,1 @@
+# This file makes clipslide.frontend a package
