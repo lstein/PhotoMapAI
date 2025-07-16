@@ -45,10 +45,8 @@ def format_exif_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSumma
 
         coord_str = ""
         if LOCATIONIQ_API_KEY:
-            place_name = get_locationiq_place_name(gps_lat, gps_lon, LOCATIONIQ_API_KEY)
-            if place_name:
-                coord_str = place_name
-        coord_str = coord_str or f"{gps_lat:.6f}, {gps_lon:.6f}"
+            coord_str = get_locationiq_place_name(gps_lat, gps_lon, LOCATIONIQ_API_KEY)
+        coord_str = coord_str if coord_str else f"{gps_lat:.6f}, {gps_lon:.6f}"
 
         static_map_url = _get_static_map_url(gps_lat, gps_lon, LOCATIONIQ_API_KEY)
 
@@ -167,14 +165,14 @@ def _format_field_value(field_name: str, value) -> str:
     return str(value)
 
 
-def _get_static_map_url(latitude, longitude, api_key, width=200, height=150, zoom=14):
+def _get_static_map_url(latitude, longitude, api_key, width=200, height=150, zoom=8):
     return (
         f"https://maps.locationiq.com/v3/staticmap"
         f"?key={api_key}"
         f"&center={latitude},{longitude}"
         f"&zoom={zoom}"
         f"&size={width}x{height}"
-        f"&markers=icon:large-red-cutout|{latitude},{longitude}"
+        f"&markers=icon:small-red-cutout|{latitude},{longitude}"
     )
 
 
