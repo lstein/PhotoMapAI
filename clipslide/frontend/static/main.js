@@ -1,20 +1,13 @@
 // This file actually drives the slideshow
 
-let swiper;
-let currentTextToCopy = "";
-let currentDelay = 5; // Will be overridden
-let mode = "random"; // Will be overridden
-let embeddings_file = ""; // Will be overriden by initializeFromServer()
-let highWaterMark = 20; // Default value, can be changed dynamically
-let searchIndex = 0; // Global variable indicates where we are on the search list
-let searchResults = []; // Global variable to store search results
+import {state} from './javascript/state.js';
 
 // These must mirror the nginx configuration.
 function initializeFromServer() {
   if (window.slideshowConfig) {
-    currentDelay = window.slideshowConfig.currentDelay;
-    mode = window.slideshowConfig.mode;
-    embeddings_file = window.slideshowConfig.embeddings_file;
+    state.currentDelay = window.slideshowConfig.currentDelay;
+    state.mode = window.slideshowConfig.mode;
+    state.embeddingsFile = window.slideshowConfig.embeddings_file;
   }
 }
 
@@ -34,10 +27,10 @@ async function fetchNextImage() {
 
   try {
     // Handle the case of there already being a set of search results, in which case we step through.
-    if (searchResults && searchResults.length > 0) {
-      let currentFilepath = searchResults[searchIndex++];
-      if (searchIndex >= searchResults.length) searchIndex = 0; // Loop back to start
-      formData.append("embeddings_file", embeddings_file);
+    if (state.searchResults && state.searchResults.length > 0) {
+      let currentFilepath = state.searchResults[state.searchIndex++];
+      if (state.searchIndex >= state.searchResults.length) state.searchIndex = 0; // Loop back to start
+      formData.append("embeddings_file", state.embeddingsFile);
       formData.append("current_image", currentFilepath);
       response = await fetch("retrieve_image/", {
         method: "POST",
@@ -48,10 +41,10 @@ async function fetchNextImage() {
       // Otherwise we let the server handle the logic of which image to return.
     } else {
       // Convert query parameters to form data
-      formData.append("embeddings_file", embeddings_file);
-      if (mode === "random") {
+      formData.append("embeddings_file", state.embeddingsFile);
+      if (state.mode === "random") {
         formData.append("random", "true");
-      } else if (mode === "sequential") {
+      } else if (state.mode === "sequential") {
         // Use the currently displayed slide, not the last in the buffer
         const currentFilepath = getCurrentFilepath();
         formData.append("current_image", currentFilepath);
@@ -73,7 +66,7 @@ async function fetchNextImage() {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    data = await response.json();
+    const data = await response.json();
     clearTimeout(spinnerTimeout);
     hideSpinner();
     return data;
@@ -108,7 +101,7 @@ async function addNewSlide() {
   slide.dataset.description = data.description || "";
   slide.dataset.textToCopy = data.textToCopy || "";
   slide.dataset.filepath = path || "";
-  swiper.appendSlide(slide);
+  state.swiper.appendSlide(slide);
 
   const img = slide.querySelector("img");
   img.addEventListener("dragstart", function (e) {
@@ -132,20 +125,9 @@ async function addNewSlide() {
   }, 200); // 200ms delay after slide is added
 }
 
-// Optional: function to set high-water mark dynamically
-function setHighWaterMark(newMark) {
-  highWaterMark = newMark;
-  saveSettingsToLocalStorage();
-  enforceHighWaterMark();
-  // Remove excess slides immediately if needed
-  while (swiper.slides.length > highWaterMark) {
-    swiper.removeSlide(0);
-  }
-}
-
 // Update overlay with current slide's metadata
 function updateOverlay() {
-  const slide = swiper.slides[swiper.activeIndex];
+  const slide = state.swiper.slides[state.swiper.activeIndex];
   if (!slide) return;
   document.getElementById("descriptionText").innerHTML =
     slide.dataset.description || "";
@@ -153,7 +135,7 @@ function updateOverlay() {
     slide.dataset.filename || "";
   document.getElementById("filepathText").textContent =
     slide.dataset.filepath || "";
-  currentTextToCopy = slide.dataset.textToCopy || "";
+  state.currentTextToCopy = slide.dataset.textToCopy || "";
 }
 
 // Delay controls
@@ -162,8 +144,9 @@ const minDelay = 1; // minimum delay in seconds
 const maxDelay = 60; // maximum delay in seconds
 
 function setDelay(newDelay) {
-  // Clamp delay between min and max
   newDelay = Math.max(minDelay, Math.min(maxDelay, newDelay));
+  state.currentDelay = newDelay;
+  state.swiper.params.autoplay.delay = state.currentDelay * 1000;
   updateDelayDisplay(newDelay);
   saveSettingsToLocalStorage();
 }
@@ -183,23 +166,23 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Restore from localStorage if present (this can override server defaults)
   const storedHighWaterMark = localStorage.getItem("highWaterMark");
   if (storedHighWaterMark !== null)
-    highWaterMark = parseInt(storedHighWaterMark, 10);
+    state.highWaterMark = parseInt(storedHighWaterMark, 10);
 
   const storedCurrentDelay = localStorage.getItem("currentDelay");
   if (storedCurrentDelay !== null)
-    currentDelay = parseInt(storedCurrentDelay, 10);
+    state.currentDelay = parseInt(storedCurrentDelay, 10);
 
   const storedMode = localStorage.getItem("mode");
-  if (storedMode) mode = storedMode;
+  if (storedMode) state.mode = storedMode;
 
   // Initialize Swiper
-  swiper = new Swiper(".swiper", {
+  state.swiper = new Swiper(".swiper", {
     navigation: {
       nextEl: ".swiper-button-next",
       prevEl: ".swiper-button-prev",
     },
     autoplay: {
-      delay: currentDelay * 1000,
+      delay: state.currentDelay * 1000,
       disableOnInteraction: false,
     },
     scrollbar: {
@@ -212,10 +195,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       slideNextTransitionStart: async function () {
         // Only add a new slide if we're at the end and moving forward
         if (
-          swiper.activeIndex >=
-          swiper.slides.length - 1
-          // swiper.activeIndex >= swiper.slides.length - 2 &&
-          // swiper.activeIndex > swiper.previousIndex // Only when moving forward
+          state.swiper.activeIndex >=
+          state.swiper.slides.length - 1
+          // state.swiper.activeIndex >= state.swiper.slides.length - 2 &&
+          // state.swiper.activeIndex > state.swiper.previousIndex // Only when moving forward
         ) {
           await addNewSlide();
         }
@@ -246,7 +229,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   const pauseIcon = document.getElementById("pauseIcon");
 
   function updateSlideshowIcon() {
-    if (swiper && swiper.autoplay && swiper.autoplay.running) {
+    if (state.swiper && state.swiper.autoplay && state.swiper.autoplay.running) {
       playIcon.style.display = "none";
       pauseIcon.style.display = "inline";
     } else {
@@ -256,20 +239,20 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 
   startStopBtn.addEventListener("click", function () {
-    if (swiper.autoplay.running) {
-      swiper.autoplay.stop();
+    if (state.swiper.autoplay.running) {
+      state.swiper.autoplay.stop();
     } else {
-      swiper.autoplay.start();
+      state.swiper.autoplay.start();
     }
     updateSlideshowIcon();
   });
 
   // Update icon on slide change or autoplay events
-  if (swiper) {
-    swiper.on("autoplayStart", updateSlideshowIcon);
-    swiper.on("autoplayResume", updateSlideshowIcon);
-    swiper.on("autoplayStop", updateSlideshowIcon);
-    swiper.on("autoplayPause", updateSlideshowIcon);
+  if (state.swiper) {
+    state.swiper.on("autoplayStart", updateSlideshowIcon);
+    state.swiper.on("autoplayResume", updateSlideshowIcon);
+    state.swiper.on("autoplayStop", updateSlideshowIcon);
+    state.swiper.on("autoplayPause", updateSlideshowIcon);
   }
 
   // Initial icon state
@@ -295,17 +278,17 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // Now the DOM is ready, so the button exists:
   document.getElementById("copyTextBtn").onclick = function () {
-    if (currentTextToCopy) {
-      navigator.clipboard.writeText(currentTextToCopy);
+    if (state.currentTextToCopy) {
+      navigator.clipboard.writeText(state.currentTextToCopy);
     }
   };
 
   // Update overlay on slide change
-  swiper.on("slideChange", function () {
+  state.swiper.on("slideChange", function () {
     updateOverlay();
   });
 
-  swiper.on("scrollbarDragStart", function () {
+  state.swiper.on("scrollbarDragStart", function () {
     pauseSlideshow();
   });
 
@@ -313,15 +296,15 @@ document.addEventListener("DOMContentLoaded", async function () {
   let fasterBtn = document.getElementById("fasterBtn");
 
   slowerBtn.onclick = function () {
-    let newDelay = Math.min(maxDelay, currentDelay + delayStep);
+    let newDelay = Math.min(maxDelay, state.currentDelay + delayStep);
     setDelay(newDelay);
   };
 
   fasterBtn.onclick = function () {
-    let newDelay = Math.max(minDelay, currentDelay - delayStep);
+    let newDelay = Math.max(minDelay, state.currentDelay - delayStep);
     setDelay(newDelay);
   };
-  updateDelayDisplay(currentDelay);
+  updateDelayDisplay(state.currentDelay);
 
   document.getElementById("closeOverlayBtn").onclick = hidePauseOverlay;
 
@@ -338,11 +321,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     if (e.key === "ArrowRight") {
       pauseSlideshow(); // Pause on navigation
-      swiper.slideNext();
+      state.swiper.slideNext();
     }
     if (e.key === "ArrowLeft") {
       pauseSlideshow(); // Pause on navigation
-      swiper.slidePrev();
+      state.swiper.slidePrev();
     }
     if (e.key === "ArrowUp") showPauseOverlay();
     if (e.key === "ArrowDown") hidePauseOverlay();
@@ -366,7 +349,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (e.key === " ") {
       e.preventDefault();
       e.stopPropagation();
-      if (swiper && swiper.autoplay && swiper.autoplay.running) {
+      if (state.swiper && state.swiper.autoplay && state.swiper.autoplay.running) {
         resumeSlideshow();
       } else {
         pauseSlideshow();
@@ -400,18 +383,18 @@ document.addEventListener("DOMContentLoaded", async function () {
   });
 
   // Set initial radio button state based on current mode
-  document.getElementById("modeRandom").checked = mode === "random";
-  document.getElementById("modeSequential").checked = mode === "sequential";
+  document.getElementById("modeRandom").checked = state.mode === "random";
+  document.getElementById("modeSequential").checked = state.mode === "sequential";
 
   // Listen for changes to the radio buttons
   document.querySelectorAll('input[name="mode"]').forEach((radio) => {
     radio.addEventListener("change", function () {
       if (this.checked) {
-        mode = this.value;
+        state.mode = this.value;
         saveSettingsToLocalStorage();
         // Remove all slides from the current position to the end
-        for (let i = swiper.slides.length - 1; i > swiper.activeIndex; i--) {
-          swiper.removeSlide(i);
+        for (let i = state.swiper.slides.length - 1; i > state.swiper.activeIndex; i--) {
+          state.swiper.removeSlide(i);
         }
         addNewSlide(); // Add a new slide based on the new mode
       }
@@ -500,19 +483,19 @@ document.addEventListener("DOMContentLoaded", async function () {
     const formData = new FormData();
     formData.append("text_query", query);
     formData.append("top_k", 100);
-    formData.append("embeddings_file", embeddings_file);
+    formData.append("embeddings_file", state.embeddingsFile);
 
     try {
       showSpinner();
-      searchResults = [];
-      searchIndex = 0; // Reset search index for new search
+      state.searchResults = [];
+      state.searchIndex = 0; // Reset search index for new search
       const response = await fetch("search_with_text/", {
         method: "POST",
         body: formData,
       });
       const result = await response.json();
       result.results = result.results.filter((item) => item.score >= 0.2);
-      searchResults = result.results.map((item) => item.filename);
+      state.searchResults = result.results.map((item) => item.filename);
       await showSearchResults();
       hideSpinner();
       // Set checkmarks on icons based on the current mode
@@ -539,7 +522,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
     const slideShowRunning =
-      swiper && swiper.autoplay && swiper.autoplay.running;
+      state.swiper && state.swiper.autoplay && state.swiper.autoplay.running;
     clearSearchAndResetCarousel();
     if (slideShowRunning) resumeSlideshow(); // Resume slideshow if it was running
   });
@@ -557,7 +540,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Image search button handler
   imageSearchBtn.addEventListener("click", async function () {
     // Get the current slide's image URL and filename
-    const slide = swiper.slides[swiper.activeIndex];
+    const slide = state.swiper.slides[state.swiper.activeIndex];
     if (!slide) return;
     const imgUrl = slide.querySelector("img")?.src;
     const filename = slide.dataset.filename || "image.jpg";
@@ -571,7 +554,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const file = new File([blob], filename, { type: blob.type });
       await searchWithImage(file);
       hideSpinner();
-      if (!(swiper && swiper.autoplay && swiper.autoplay.running)) {
+      if (!(state.swiper && state.swiper.autoplay && state.swiper.autoplay.running)) {
         resumeSlideshow(); // Resume slideshow after search
       }
     } catch (err) {
@@ -664,12 +647,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       await deleteCurrentFile();
 
       // Remove the current slide from swiper
-      if (swiper && swiper.slides && swiper.slides.length > 0) {
-        const currentIndex = swiper.activeIndex;
-        swiper.removeSlide(currentIndex);
+      if (state.swiper && state.swiper.slides && state.swiper.slides.length > 0) {
+        const currentIndex = state.swiper.activeIndex;
+        state.swiper.removeSlide(currentIndex);
 
         // If no slides left, add a new one
-        if (swiper.slides.length === 0) {
+        if (state.swiper.slides.length === 0) {
           await addNewSlide();
         }
 
@@ -700,10 +683,10 @@ document.addEventListener("DOMContentLoaded", async function () {
   settingsBtn.addEventListener("click", () => {
     if (settingsOverlay.style.display === "none") {
       // Populate fields with current values
-      highWaterMarkInput.value = highWaterMark;
-      delayValueSpan.textContent = currentDelay;
-      if (mode === "random") modeRandom.checked = true;
-      if (mode === "sequential") modeSequential.checked = true;
+      highWaterMarkInput.value = state.highWaterMark;
+      delayValueSpan.textContent = state.currentDelay;
+      if (state.mode === "random") modeRandom.checked = true;
+      if (state.mode === "sequential") modeSequential.checked = true;
       settingsOverlay.style.display = "block";
     } else {
       settingsOverlay.style.display = "none";
@@ -737,16 +720,15 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     // Apply and save
     setHighWaterMark(newHighWaterMark);
-    currentDelay = newDelay;
-    swiper.params.autoplay.delay = currentDelay * 1000; // convert to milliseconds;
-    swiper.autoplay.start();
+    state.currentDelay = newDelay;
+    state.swiper.params.autoplay.delay = state.currentDelay * 1000; // convert to milliseconds;
 
-    mode = newMode;
+    state.mode = newMode;
     saveSettingsToLocalStorage();
 
     // Update radio buttons if needed
-    document.getElementById("modeRandom").checked = mode === "random";
-    document.getElementById("modeSequential").checked = mode === "sequential";
+    document.getElementById("modeRandom").checked = state.mode === "random";
+    document.getElementById("modeSequential").checked = state.mode === "sequential";
 
     settingsOverlay.style.display = "none";
   });
@@ -755,12 +737,12 @@ async function searchWithImage(file, first_slide) {
   const formData = new FormData();
   formData.append("file", file); // file is a File object from an <input type="file">
   formData.append("top_k", 100); // Default to 100 results
-  formData.append("embeddings_file", embeddings_file);
+  formData.append("embeddings_file", state.embeddingsFile);
 
   try {
     showSpinner();
-    searchResults = [];
-    searchIndex = 0; // Reset search index for new search
+    state.searchResults = [];
+    state.searchIndex = 0; // Reset search index for new search
 
     const response = await fetch("search_with_image/", {
       method: "POST",
@@ -770,7 +752,7 @@ async function searchWithImage(file, first_slide) {
 
     // filter the results by score, keeping everything with a score >= 0.6
     result.results = result.results.filter((item) => item.score >= 0.6);
-    searchResults = result.results.map((item) => item.filename);
+    state.searchResults = result.results.map((item) => item.filename);
     await showSearchResults(first_slide);
     // Set checkmarks on icons based on the current mode
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
@@ -808,14 +790,14 @@ async function createSearchImageSlide(file) {
 }
 
 function resumeSlideshow() {
-  if (swiper && !swiper.autoplay.running) {
-    swiper.autoplay.start();
+  if (state.swiper && !state.swiper.autoplay.running) {
+    state.swiper.autoplay.start();
   }
 }
 
 function pauseSlideshow() {
-  if (swiper && swiper.autoplay.running) {
-    swiper.autoplay.stop();
+  if (state.swiper && state.swiper.autoplay.running) {
+    state.swiper.autoplay.stop();
   }
 }
 
@@ -827,7 +809,7 @@ function updateSearchCheckmarks() {
   let checkOverlay =
     searchIcon?.parentElement?.querySelector(".checkmark-overlay");
   if (checkOverlay) checkOverlay.remove();
-  if (searchResults && searchResults.length > 0) {
+  if (state.searchResults && state.searchResults.length > 0) {
     clearSearchBtn.style.display = "flex";
   } else {
     clearSearchBtn.style.display = "none";
@@ -860,7 +842,7 @@ async function deleteCurrentFile() {
     const response = await fetch(
       `delete_image/?file_to_delete=${encodeURIComponent(
         filepath
-      )}&embeddings_file=${encodeURIComponent(embeddings_file)}`,
+      )}&embeddings_file=${encodeURIComponent(state.embeddingsFile)}`,
       {
         method: "DELETE",
       }
@@ -872,9 +854,9 @@ async function deleteCurrentFile() {
     }
     const data = await response.json();
     // remove current slide from swiper
-    const currentSlide = swiper.slides[swiper.activeIndex];
+    const currentSlide = state.swiper.slides[state.swiper.activeIndex];
     if (currentSlide && currentSlide.dataset.filepath === filepath) {
-      swiper.removeSlide(swiper.activeIndex);
+      state.swiper.removeSlide(state.swiper.activeIndex);
     }
     updateOverlay();
     // addNewSlide(); // Add a new slide after deletion
@@ -896,14 +878,14 @@ function getCurrentFilepath() {
 async function clearSearchAndResetCarousel() {
   const searchInput = document.getElementById("searchInput");
 
-  if (swiper && swiper.autoplay && swiper.autoplay.running) {
+  if (state.swiper && state.swiper.autoplay && state.swiper.autoplay.running) {
     pauseSlideshow(); // Pause the slideshow if it's running
   }
   searchInput.value = "";
-  searchResults = [];
-  searchIndex = 0; // Reset search index
-  if (swiper && swiper.slides && swiper.slides.length > 0) {
-    swiper.removeAllSlides();
+  state.searchResults = [];
+  state.searchIndex = 0; // Reset search index
+  if (state.swiper && state.swiper.slides && state.swiper.slides.length > 0) {
+    state.swiper.removeAllSlides();
   }
   await addNewSlide();
   await addNewSlide();
@@ -922,13 +904,13 @@ async function clearSearchAndResetCarousel() {
 
 // Utility: Show search results in the carousel
 async function showSearchResults(first_slide) {
-  const slideShowRunning = swiper && swiper.autoplay && swiper.autoplay.running;
+  const slideShowRunning = state.swiper && state.swiper.autoplay && state.swiper.autoplay.running;
   pauseSlideshow(); // Pause the slideshow if it's running
-  if (swiper && swiper.slides && swiper.slides.length > 0) {
-    swiper.removeAllSlides();
+  if (state.swiper && state.swiper.slides && state.swiper.slides.length > 0) {
+    state.swiper.removeAllSlides();
   }
   if (first_slide) {
-    swiper.appendSlide(first_slide);
+    state.swiper.appendSlide(first_slide);
   } else {
     await addNewSlide();
   }
@@ -968,7 +950,7 @@ window.addEventListener("paste", async function (e) {
             slide.dataset.textToCopy = "";
             slide.dataset.filepath = "";
             await searchWithImage(file, slide);
-            swiper.slideTo(0); // Go to the first slide
+            state.swiper.slideTo(0); // Go to the first slide
             hideSpinner();
           };
           reader.readAsDataURL(file);
@@ -1019,40 +1001,32 @@ function setCheckmarkOnIcon(iconElement, show) {
 }
 
 function enforceHighWaterMark() {
-  if (!swiper) return;
+  if (!state.swiper) return;
 
-  const slideShowActive = swiper.autoplay && swiper.autoplay.running;
-  if (slideShowActive) swiper.autoplay.stop();
+  const slideShowActive = state.swiper.autoplay && state.swiper.autoplay.running;
+  if (slideShowActive) state.swiper.autoplay.stop();
 
-  while (swiper.slides.length > highWaterMark) {
-    if (swiper.activeIndex > 0) {
-      swiper.removeSlide(0);
-      swiper.slideTo(swiper.activeIndex, 0, false);
+  while (state.swiper.slides.length > state.highWaterMark) {
+    if (state.swiper.activeIndex > 0) {
+      state.swiper.removeSlide(0);
+      state.swiper.slideTo(state.swiper.activeIndex, 0, false);
     } else {
-      swiper.removeSlide(swiper.slides.length - 1);
+      state.swiper.removeSlide(state.swiper.slides.length - 1);
     }
   }
 
-  if (slideShowActive) swiper.autoplay.start();
+  if (slideShowActive) state.swiper.autoplay.start();
 }
 
 function saveSettingsToLocalStorage() {
-  localStorage.setItem("highWaterMark", highWaterMark);
-  localStorage.setItem("currentDelay", currentDelay);
-  localStorage.setItem("mode", mode);
+  localStorage.setItem("highWaterMark", state.highWaterMark);
+  localStorage.setItem("currentDelay", state.currentDelay);
+  localStorage.setItem("mode", state.mode);
 }
 
 // Call this function whenever you update any of the three values:
 function setHighWaterMark(newMark) {
-  highWaterMark = newMark;
+  state.highWaterMark = newMark;
   saveSettingsToLocalStorage();
 }
 
-function setDelay(newDelay) {
-  newDelay = Math.max(minDelay, Math.min(maxDelay, newDelay));
-  currentDelay = newDelay;
-  swiper.params.autoplay.delay = currentDelay * 1000;
-  swiper.autoplay.start();
-  updateDelayDisplay(newDelay);
-  saveSettingsToLocalStorage();
-}
