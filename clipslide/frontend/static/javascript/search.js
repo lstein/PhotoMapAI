@@ -1,0 +1,293 @@
+// search.js
+// This file handles the search functionality for the Clipslide application.
+// Swiper initialization
+import { state } from "./state.js";
+import { resetAllSlides, resetSlidesAndAppend, insertUploadedImageFile } from "./swiper.js";
+import { showSpinner, hideSpinner } from "./utils.js";
+import { setCheckmarkOnIcon } from "./utils.js";
+
+document.addEventListener("DOMContentLoaded", async function () {
+
+  const textSearchPanel = document.getElementById("textSearchPanel");
+  const textSearchBtn = document.getElementById("textSearchBtn");
+
+  textSearchBtn.addEventListener("click", function (e) {
+    if (
+      textSearchPanel.style.display === "none" ||
+      textSearchPanel.style.display === ""
+    ) {
+      textSearchPanel.focus();
+      setTimeout(() => {
+        textSearchPanel.style.display = "block";
+        textSearchPanel.style.opacity = 1;
+      }, 20);
+    } else {
+      textSearchPanel.style.display = "none";
+      textSearchPanel.style.opacity = 0;
+    }
+  });
+
+  const doSearchBtn = document.getElementById("doSearchBtn");
+  const searchInput = document.getElementById("searchInput");
+
+  // Text search handler
+  doSearchBtn.addEventListener("click", async function () {
+    const query = searchInput.value.trim();
+    if (!query) return;
+    const formData = new FormData();
+    formData.append("text_query", query);
+    formData.append("top_k", 100);
+    formData.append("embeddings_file", state.embeddingsFile);
+
+    try {
+      showSpinner();
+      state.searchResults = [];
+      state.searchIndex = 0; // Reset search index for new search
+      const response = await fetch("search_with_text/", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await response.json();
+      result.results = result.results.filter((item) => item.score >= 0.2);
+      state.searchResults = result.results.map((item) => item.filename);
+      await resetSlidesAndAppend();
+      updateSearchCheckmarks();
+      hideSpinner();
+      // Set checkmarks on icons based on the current mode
+      setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
+      setCheckmarkOnIcon(document.getElementById("textSearchIcon"), true);
+      setTimeout(() => {
+        textSearchPanel.style.opacity = 0;
+        textSearchPanel.style.display = "none";
+      }, 200);
+    } catch (err) {
+      hideSpinner();
+      console.error("Search request failed:", err);
+    }
+  });
+
+  searchInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      doSearchBtn.click();
+    }
+  });
+
+  // Clear search button handler
+  const clearSearchBtn = document.getElementById("clearSearchBtn");
+  clearSearchBtn.addEventListener("click", function () {
+    const slideShowRunning =
+      state.swiper && state.swiper.autoplay && state.swiper.autoplay.running;
+    clearSearchAndResetCarousel();
+    if (slideShowRunning) resumeSlideshow(); // Resume slideshow if it was running
+  });
+
+  // Clear text search handler
+  const clearTextSearchBtn = document.getElementById("clearTextSearchBtn");
+  clearTextSearchBtn.addEventListener("click", function () {
+    searchInput.value = "";
+  });
+
+  // Initial call to set visibility based on default searchResults value
+  updateSearchCheckmarks();
+
+  const imageSearchBtn = document.getElementById("imageSearchBtn");
+  // Image search button handler
+  imageSearchBtn.addEventListener("click", async function () {
+    // Get the current slide's image URL and filename
+    const slide = state.swiper.slides[state.swiper.activeIndex];
+    if (!slide) return;
+    const imgUrl = slide.querySelector("img")?.src;
+    const filename = slide.dataset.filename || "image.jpg";
+    if (!imgUrl) return;
+
+    try {
+      showSpinner();
+      // Fetch the image as a Blob and send to searchWithImage
+      const imgResponse = await fetch(imgUrl);
+      const blob = await imgResponse.blob();
+      const file = new File([blob], filename, { type: blob.type });
+      await searchWithImage(file);
+      hideSpinner();
+      if (!(state.swiper && state.swiper.autoplay && state.swiper.autoplay.running)) {
+        resumeSlideshow(); // Resume slideshow after search
+      }
+    } catch (err) {
+      hideSpinner();
+      console.error("Image similarity search failed:", err);
+    }
+  });
+
+  // --- Upload Image File Button Logic ---
+  const uploadImageFileBtn = document.getElementById("uploadImageFileBtn");
+  const uploadImageInput = document.getElementById("uploadImageInput");
+
+  // Click opens file dialog
+  uploadImageFileBtn.addEventListener("click", function (e) {
+    uploadImageInput.value = ""; // Reset so same file can be uploaded again
+    uploadImageInput.click();
+  });
+
+  // File selected via dialog
+  uploadImageInput.addEventListener("change", async function (e) {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith("image/")) {
+      showSpinner();
+      try {
+        slide = await createSearchImageSlide(file); // Insert the image as the first slide
+        await searchWithImage(file, slide);
+      } finally {
+        hideSpinner();
+      }
+      updateSearchCheckmarks();
+    }
+  });
+
+  // Drag and drop functionality for search panel
+  const searchPanel = document.getElementById("searchPanel");
+  searchPanel.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    searchPanel.classList.add("dragover");
+  });
+  searchPanel.addEventListener("dragleave", function (e) {
+    e.preventDefault();
+    searchPanel.classList.remove("dragover");
+  });
+  searchPanel.addEventListener("drop", async function (e) {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (!file.type.startsWith("image/")) return;
+
+    showSpinner();
+    try {
+      slide = await insertUploadedImageFile(file); // Insert the image as the first slide
+      await searchWithImage(file, slide);
+      updateSearchCheckmarks();
+    } catch (err) {
+      console.error("Image search failed:", err);
+      alert("Failed to search with image: " + err.message);
+    } finally {
+      searchPanel.classList.remove("dragover");
+      hideSpinner();
+    }
+  });
+
+});
+
+async function searchWithImage(file, first_slide) {
+  const formData = new FormData();
+  formData.append("file", file); // file is a File object from an <input type="file">
+  formData.append("top_k", 100); // Default to 100 results
+  formData.append("embeddings_file", state.embeddingsFile);
+
+  try {
+    showSpinner();
+    state.searchResults = [];
+    state.searchIndex = 0; // Reset search index for new search
+
+    const response = await fetch("search_with_image/", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await response.json();
+
+    // filter the results by score, keeping everything with a score >= 0.6
+    result.results = result.results.filter((item) => item.score >= 0.6);
+    state.searchResults = result.results.map((item) => item.filename);
+    await resetSlidesAndAppend(first_slide);
+    updateSearchCheckmarks();
+    // Set checkmarks on icons based on the current mode
+    setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
+    setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
+    hideSpinner();
+  } catch (err) {
+    console.error("Image search request failed:", err);
+    return [];
+  }
+}
+
+
+// Show/hide the clearSearchBtn based on searchResults
+function updateSearchCheckmarks() {
+  const searchIcon = document.getElementById("searchIcon");
+  const clearSearchBtn = document.getElementById("clearSearchBtn");
+  // Remove any existing checkmark overlay
+  let checkOverlay =
+    searchIcon?.parentElement?.querySelector(".checkmark-overlay");
+  if (checkOverlay) checkOverlay.remove();
+  if (state.searchResults && state.searchResults.length > 0) {
+    clearSearchBtn.style.display = "flex";
+  } else {
+    clearSearchBtn.style.display = "none";
+  }
+}
+
+// Utility: Clear search results and reset the carousel
+async function clearSearchAndResetCarousel() {
+  const searchInput = document.getElementById("searchInput");
+
+  if (state.swiper && state.swiper.autoplay && state.swiper.autoplay.running) {
+    pauseSlideshow(); // Pause the slideshow if it's running
+  }
+  searchInput.value = "";
+  state.searchResults = [];
+  state.searchIndex = 0; // Reset search index
+  await resetAllSlides(); // Clear all slides in the carousel
+  updateSearchCheckmarks();
+  // Hide the search panel if open
+  if (typeof textSearchPanel !== "undefined") {
+    textSearchPanel.style.opacity = 0;
+    setTimeout(() => {
+      textSearchPanel.style.display = "none";
+    }, 200);
+  }
+
+  setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
+  setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
+}
+
+window.addEventListener("paste", async function (e) {
+  if (!e.clipboardData) return;
+  const items = e.clipboardData.items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) {
+        showSpinner();
+        try {
+          // Add the pasted image as the first slide
+          const reader = new FileReader();
+          reader.onload = async function (event) {
+            const url = event.target.result;
+            const slide = document.createElement("div");
+            slide.className = "swiper-slide";
+            slide.innerHTML = `
+                            <div style="position:relative; width:100%; height:100%;">
+                                <span class="query-image-label">Query Image</span>
+                                <img src="${url}" alt="" draggable="true" class="slide-image">
+                            </div>
+                        `;
+            slide.dataset.filename = file.name || "";
+            slide.dataset.description = "Query image";
+            slide.dataset.textToCopy = "";
+            slide.dataset.filepath = "";
+            await searchWithImage(file, slide);
+            state.swiper.slideTo(0); // Go to the first slide
+            hideSpinner();
+          };
+          reader.readAsDataURL(file);
+          updateSearchCheckmarks();
+        } catch (err) {
+          hideSpinner();
+          console.error("Image similarity search failed:", err);
+        }
+        break; // Only handle the first image
+      }
+    }
+  }
+});
+

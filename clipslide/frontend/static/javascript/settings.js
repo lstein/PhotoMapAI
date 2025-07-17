@@ -88,31 +88,6 @@ document.addEventListener("DOMContentLoaded", async function () {
   
   // Save settings and close modal
   saveSettingsBtn.addEventListener("click", () => {
-    // I think none of this is needed, as the settings are already saved in state
-    // Get values from fields
-    // let newHighWaterMark = parseInt(highWaterMarkInput.value, 10);
-    // if (isNaN(newHighWaterMark) || newHighWaterMark < 2) newHighWaterMark = 2;
-    // if (newHighWaterMark > 100) newHighWaterMark = 100;
-
-    // let newDelay = parseInt(delayValueSpan.textContent, 10);
-    // if (isNaN(newDelay) || newDelay < minDelay) newDelay = minDelay;
-    // if (newDelay > maxDelay) newDelay = maxDelay;
-
-    // let newMode = modeRandom.checked ? "random" : "sequential";
-
-    // // Apply and save
-    // setHighWaterMark(newHighWaterMark);
-    // state.currentDelay = newDelay;
-    // state.swiper.params.autoplay.delay = state.currentDelay * 1000; // convert to milliseconds;
-
-    // state.mode = newMode;
-    // saveSettingsToLocalStorage();
-
-    // // Update radio buttons if needed
-    // document.getElementById("modeRandom").checked = state.mode === "random";
-    // document.getElementById("modeSequential").checked =
-    //   state.mode === "sequential";
-
     settingsOverlay.style.display = "none";
   });
 });

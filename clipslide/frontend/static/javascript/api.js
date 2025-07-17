@@ -2,6 +2,7 @@
 // This file contains functions to interact with the backend API for slide management.
 import { state } from "./state.js";
 import { showSpinner, hideSpinner } from "./utils.js";
+import { updateOverlay } from "./overlay.js";
 
 // Call the server to fetch the next image based on the current mode (random or sequential).
 export async function fetchNextImage() {
@@ -63,28 +64,45 @@ export async function fetchNextImage() {
   }
 }
 
-// Get the current file path from the DOM
+export async function deleteCurrentFile() {
+  const filepath = getCurrentFilepath();
+  if (!filepath) {
+    console.warn("No filepath available to delete.");
+    return;
+  }
+  showSpinner();
+  try {
+    // Use DELETE method with filepath as query parameter
+    const response = await fetch(
+      `delete_image/?file_to_delete=${encodeURIComponent(
+        filepath
+      )}&embeddings_file=${encodeURIComponent(state.embeddingsFile)}`,
+      {
+        method: "DELETE",
+      }
+    );
+
+    // check status
+    if (!response.ok) {
+      throw new Error(`Failed to delete image: ${response.statusText}`);
+    }
+    const data = await response.json();
+    // remove current slide from swiper
+    const currentSlide = state.swiper.slides[state.swiper.activeIndex];
+    if (currentSlide && currentSlide.dataset.filepath === filepath) {
+      state.swiper.removeSlide(state.swiper.activeIndex);
+    }
+    updateOverlay();
+    hideSpinner();
+    return data;
+  } catch (e) {
+    hideSpinner();
+    console.warn("Failed to delete image.");
+    throw e;
+  }
+}
+
 export function getCurrentFilepath() {
   return document.getElementById("filepathText")?.textContent?.trim();
 }
 
-// Delete the current file
-export async function deleteCurrentFile() {
-  const filepath = getCurrentFilepath();
-  if (!filepath) {
-    throw new Error("No filepath available to delete.");
-  }
-
-  const response = await fetch(
-    `delete_image/?file_to_delete=${encodeURIComponent(
-      filepath
-    )}&embeddings_file=${encodeURIComponent(state.embeddingsFile)}`,
-    { method: "DELETE" }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to delete image: ${response.statusText}`);
-  }
-
-  return await response.json();
-}

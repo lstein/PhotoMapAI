@@ -143,12 +143,63 @@ export async function addNewSlide() {
 
 export function removeSlidesAfterCurrent() {
   if (!state.swiper) return;
-    const activeIndex = state.swiper.activeIndex;
-    const slidesToRemove = state.swiper.slides.length - activeIndex - 1;
-    if (slidesToRemove > 0) {
-      state.swiper.removeSlide(activeIndex + 1, slidesToRemove);
-    }
-    enforceHighWaterMark();
+  const activeIndex = state.swiper.activeIndex;
+  const slidesToRemove = state.swiper.slides.length - activeIndex - 1;
+  if (slidesToRemove > 0) {
+    state.swiper.removeSlide(activeIndex + 1, slidesToRemove);
+  }
+  enforceHighWaterMark();
+}
+
+export async function resetAllSlides() {
+  if (state.swiper?.slides?.length > 0) {
+    state.swiper.removeAllSlides();
+  }
+  await addNewSlide();
+  await addNewSlide();
+  updateOverlay();
+}
+
+// Clear carousel and optionally append a first slide
+export async function resetSlidesAndAppend(first_slide) {
+  const slideShowRunning = state.swiper?.autoplay?.running;
+  pauseSlideshow(); // Pause the slideshow if it's running
+  if (state.swiper?.slides?.length > 0) {
+    state.swiper.removeAllSlides();
+  }
+  if (first_slide) {
+    state.swiper.appendSlide(first_slide);
+  } else {
+    await addNewSlide();
+  }
+  await addNewSlide(); // needed to enable navigation buttons
+  // restart the slideshow if it was running
+  if (slideShowRunning) resumeSlideshow();
+}
+
+// Insert an uploaded file into the carousel
+export async function insertUploadedImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = function (event) {
+      const url = event.target.result;
+      const slide = document.createElement("div");
+      slide.className = "swiper-slide";
+      slide.innerHTML = `
+                <div style="position:relative; width:100%; height:100%;">
+                    <span class="query-image-label">Query Image</span>
+                    <img src="${url}" alt="" draggable="true" class="slide-image">
+                </div>
+            `;
+      slide.dataset.filename = file.name || "";
+      slide.dataset.description = "Query image";
+      slide.dataset.textToCopy = "";
+      slide.dataset.filepath = "";
+      resolve(slide);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 // Enforce the high water mark by removing excess slides
