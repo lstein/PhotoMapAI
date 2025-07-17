@@ -64,13 +64,7 @@ export async function fetchNextImage() {
   }
 }
 
-export async function deleteCurrentFile() {
-  const filepath = getCurrentFilepath();
-  if (!filepath) {
-    console.warn("No filepath available to delete.");
-    return;
-  }
-  showSpinner();
+export async function deleteImage(filepath) {
   try {
     // Use DELETE method with filepath as query parameter
     const response = await fetch(
@@ -87,16 +81,8 @@ export async function deleteCurrentFile() {
       throw new Error(`Failed to delete image: ${response.statusText}`);
     }
     const data = await response.json();
-    // remove current slide from swiper
-    const currentSlide = state.swiper.slides[state.swiper.activeIndex];
-    if (currentSlide && currentSlide.dataset.filepath === filepath) {
-      state.swiper.removeSlide(state.swiper.activeIndex);
-    }
-    updateOverlay();
-    hideSpinner();
     return data;
   } catch (e) {
-    hideSpinner();
     console.warn("Failed to delete image.");
     throw e;
   }

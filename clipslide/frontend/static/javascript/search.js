@@ -2,12 +2,16 @@
 // This file handles the search functionality for the Clipslide application.
 // Swiper initialization
 import { state } from "./state.js";
-import { resetAllSlides, resetSlidesAndAppend, insertUploadedImageFile } from "./swiper.js";
+import {
+  resetAllSlides,
+  resetSlidesAndAppend,
+  pauseSlideshow,
+  resumeSlideshow,
+} from "./swiper.js";
 import { showSpinner, hideSpinner } from "./utils.js";
 import { setCheckmarkOnIcon } from "./utils.js";
 
 document.addEventListener("DOMContentLoaded", async function () {
-
   const textSearchPanel = document.getElementById("textSearchPanel");
   const textSearchBtn = document.getElementById("textSearchBtn");
 
@@ -109,7 +113,13 @@ document.addEventListener("DOMContentLoaded", async function () {
       const file = new File([blob], filename, { type: blob.type });
       await searchWithImage(file);
       hideSpinner();
-      if (!(state.swiper && state.swiper.autoplay && state.swiper.autoplay.running)) {
+      if (
+        !(
+          state.swiper &&
+          state.swiper.autoplay &&
+          state.swiper.autoplay.running
+        )
+      ) {
         resumeSlideshow(); // Resume slideshow after search
       }
     } catch (err) {
@@ -134,7 +144,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (file && file.type.startsWith("image/")) {
       showSpinner();
       try {
-        slide = await createSearchImageSlide(file); // Insert the image as the first slide
+        let slide = await insertUploadedImageFile(file); // Insert the image as the first slide
         await searchWithImage(file, slide);
       } finally {
         hideSpinner();
@@ -162,7 +172,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     showSpinner();
     try {
-      slide = await insertUploadedImageFile(file); // Insert the image as the first slide
+      let slide = await insertUploadedImageFile(file); // Insert the image as the first slide
       await searchWithImage(file, slide);
       updateSearchCheckmarks();
     } catch (err) {
@@ -173,10 +183,9 @@ document.addEventListener("DOMContentLoaded", async function () {
       hideSpinner();
     }
   });
-
 });
 
-async function searchWithImage(file, first_slide) {
+export async function searchWithImage(file, first_slide) {
   const formData = new FormData();
   formData.append("file", file); // file is a File object from an <input type="file">
   formData.append("top_k", 100); // Default to 100 results
@@ -208,6 +217,30 @@ async function searchWithImage(file, first_slide) {
   }
 }
 
+// Insert an uploaded file into the carousel
+async function insertUploadedImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = function (event) {
+      const url = event.target.result;
+      const slide = document.createElement("div");
+      slide.className = "swiper-slide";
+      slide.innerHTML = `
+                <div style="position:relative; width:100%; height:100%;">
+                    <span class="query-image-label">Query Image</span>
+                    <img src="${url}" alt="" draggable="true" class="slide-image">
+                </div>
+            `;
+      slide.dataset.filename = file.name || "";
+      slide.dataset.description = "Query image";
+      slide.dataset.textToCopy = "";
+      slide.dataset.filepath = "";
+      resolve(slide);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 // Show/hide the clearSearchBtn based on searchResults
 function updateSearchCheckmarks() {
@@ -290,4 +323,3 @@ window.addEventListener("paste", async function (e) {
     }
   }
 });
-

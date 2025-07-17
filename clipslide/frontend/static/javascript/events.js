@@ -9,7 +9,7 @@ import {
 } from "./swiper.js";
 import { showPauseOverlay, hidePauseOverlay, updateOverlay } from "./overlay.js";
 import { showSpinner, hideSpinner } from "./utils.js";
-import { getCurrentFilepath, deleteCurrentFile } from "./api.js";
+import { getCurrentFilepath, deleteImage } from "./api.js";
 
 // initialize event listeners after the DOM is fully loaded
 document.addEventListener("DOMContentLoaded", async function () {
@@ -214,7 +214,7 @@ if (delete_current_file_btn) {
       showSpinner();
 
       // Call the delete function
-      await deleteCurrentFile();
+      await deleteImage(currentFilepath);
 
       // Remove the current slide from swiper
       if (state.swiper && state.swiper.slides && state.swiper.slides.length > 0) {

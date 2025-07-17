@@ -1,12 +1,17 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { state } from "./state.js";
+import { saveSettingsToLocalStorage } from "./state.js"; 
 import { removeSlidesAfterCurrent } from "./swiper.js";
 
-// Initialize settings from the server and local storage
+// Delay settings
+const delayStep = 1; // seconds to increase/decrease per click
+const minDelay = 1; // minimum delay in seconds
+const maxDelay = 60; // maximum delay in seconds
+
+
+// Initialize settings from the server and local storageu
 document.addEventListener("DOMContentLoaded", async function () {
-  initializeFromServer();
-  restoreFromLocalStorage();
 
   let slowerBtn = document.getElementById("slowerBtn");
   let fasterBtn = document.getElementById("fasterBtn");
@@ -92,10 +97,6 @@ document.addEventListener("DOMContentLoaded", async function () {
   });
 });
 
-// Delay controls
-const delayStep = 1; // seconds to increase/decrease per click
-const minDelay = 1; // minimum delay in seconds
-const maxDelay = 60; // maximum delay in seconds
 
 function setDelay(newDelay) {
   newDelay = Math.max(minDelay, Math.min(maxDelay, newDelay));
@@ -111,34 +112,4 @@ function updateDelayDisplay(newDelay) {
   if (delayValueSpan) {
     delayValueSpan.textContent = newDelay;
   }
-}
-
-// Initialize the state from the initial URL.
-function initializeFromServer() {
-  if (window.slideshowConfig) {
-    state.currentDelay = window.slideshowConfig.currentDelay;
-    state.mode = window.slideshowConfig.mode;
-    state.embeddingsFile = window.slideshowConfig.embeddings_file;
-  }
-}
-
-// Restore state from local storage
-function restoreFromLocalStorage() {
-  const storedHighWaterMark = localStorage.getItem("highWaterMark");
-  if (storedHighWaterMark !== null)
-    state.highWaterMark = parseInt(storedHighWaterMark, 10);
-
-  const storedCurrentDelay = localStorage.getItem("currentDelay");
-  if (storedCurrentDelay !== null)
-    state.currentDelay = parseInt(storedCurrentDelay, 10);
-
-  const storedMode = localStorage.getItem("mode");
-  if (storedMode) state.mode = storedMode;
-}
-
-// Save state to local storage
-export function saveSettingsToLocalStorage() {
-  localStorage.setItem("highWaterMark", state.highWaterMark);
-  localStorage.setItem("currentDelay", state.currentDelay);
-  localStorage.setItem("mode", state.mode);
 }

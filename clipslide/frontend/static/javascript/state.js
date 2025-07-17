@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 });
 
 // Initialize the state from the initial URL.
-function initializeFromServer() {
+export function initializeFromServer() {
   if (window.slideshowConfig) {
     state.currentDelay = window.slideshowConfig.currentDelay;
     state.mode = window.slideshowConfig.mode;
@@ -27,7 +27,7 @@ function initializeFromServer() {
 }
 
 // Restore state from local storage
-function restoreFromLocalStorage() {
+export function restoreFromLocalStorage() {
   const storedHighWaterMark = localStorage.getItem("highWaterMark");
   if (storedHighWaterMark !== null)
     state.highWaterMark = parseInt(storedHighWaterMark, 10);

@@ -177,31 +177,6 @@ export async function resetSlidesAndAppend(first_slide) {
   if (slideShowRunning) resumeSlideshow();
 }
 
-// Insert an uploaded file into the carousel
-export async function insertUploadedImageFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = function (event) {
-      const url = event.target.result;
-      const slide = document.createElement("div");
-      slide.className = "swiper-slide";
-      slide.innerHTML = `
-                <div style="position:relative; width:100%; height:100%;">
-                    <span class="query-image-label">Query Image</span>
-                    <img src="${url}" alt="" draggable="true" class="slide-image">
-                </div>
-            `;
-      slide.dataset.filename = file.name || "";
-      slide.dataset.description = "Query image";
-      slide.dataset.textToCopy = "";
-      slide.dataset.filepath = "";
-      resolve(slide);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 // Enforce the high water mark by removing excess slides
 function enforceHighWaterMark() {
   if (!state.swiper) return;
