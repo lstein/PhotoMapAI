@@ -8,3 +8,38 @@ export function showSpinner() {
 export function hideSpinner() {
   document.getElementById("spinner").style.display = "none";
 }
+
+export function joinPath(dir, relpath) {
+  if (dir.endsWith("/")) dir = dir.slice(0, -1);
+  if (relpath.startsWith("/")) relpath = relpath.slice(1);
+  return dir + "/" + relpath;
+}
+
+export function setCheckmarkOnIcon(iconElement, show) {
+  // Remove any existing checkmark
+  let checkOverlay =
+    iconElement?.parentElement?.querySelector(".checkmark-overlay");
+  if (checkOverlay) checkOverlay.remove();
+
+  if (show) {
+    const check = document.createElement("div");
+    check.className = "checkmark-overlay";
+    check.innerHTML = `
+            <svg width="38" height="38" viewBox="0 0 32 32" style="position:absolute;top:-8px;left:-8px;pointer-events:none;">
+                <circle cx="16" cy="16" r="15" fill="limegreen" opacity="0.8"/>
+                <polyline points="10,17 15,22 23,12" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        `;
+    check.style.position = "absolute";
+    check.style.top = "0";
+    check.style.left = "0";
+    check.style.width = "100%";
+    check.style.height = "100%";
+    check.style.display = "flex";
+    check.style.alignItems = "center";
+    check.style.justifyContent = "center";
+    check.style.pointerEvents = "none";
+    iconElement.parentElement.style.position = "relative";
+    iconElement.parentElement.appendChild(check);
+  }
+}
