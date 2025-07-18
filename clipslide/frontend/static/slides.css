@@ -636,51 +636,48 @@ body {
     box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
     padding: 1.2em 1.5em 1.2em 1.5em;
     z-index: 2000;
-    min-width: 260px;
+    width: 33vw; /* 25% of viewport width */
+    min-width: 300px; /* Keep a minimum for mobile */
+    max-width: 500px; /* Set a maximum to prevent it from getting too wide */
     transition: opacity 0.2s;
 }
 
-#clearTextSearchBtn {
-    position: absolute;
-    right: 5.2em;
-    top: 50%;
-    transform: translateY(-50%);
-    background: #333;
-    border: none;
-    border-radius: 4px;
-    width: 1.8em;
-    height: 1.8em;
-    color: #fff;
-    font-size: 1.1em;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
+.search-input-container {
+  position: relative;
+  display: flex;
+  width: 100%;
 }
 
 #searchInput {
-    flex: 1;
-    font-size: 1.1em;
-    padding: 0.4em 2.2em 0.4em 0.7em;
-    border-radius: 6px;
-    border: 1px solid #888;
-    background: #222;
-    color: #fff;
+  flex: 1;
+  font-size: 1.1em;
+  padding: 0.4em 2.2em 0.4em 0.7em; /* Keep right padding for button space */
+  border-radius: 6px;
+  border: 1px solid #888;
+  background: #222;
+  color: #fff;
 }
 
-#uploadImageFileBtn.dragover {
-    outline: 2px solid #4caf50;
-    background: rgba(76, 175, 80, 0.1);
+#clearTextSearchBtn {
+  position: absolute;
+  right: 0.2em; /* Distance from right edge of input */
+  top: 50%;
+  transform: translateY(-50%);
+  background: #333;
+  border: none;
+  border-radius: 6px;
+  width: 1.8em;
+  height: 1.8em;
+  color: #fff;
+  font-size: 1.1em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 
-#modeRadioGroup {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5em;
-    /* Optional: adds space between buttons */
-}
-
+/* .exif-metadata styles */
 .exif-metadata {
     white-space: normal !important;
 }
@@ -703,4 +700,17 @@ body {
 .exif-metadata tr {
     margin: 0 !important;
     padding: 0 !important;
+}
+
+.score-display {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  font-size: 1.0em;
+  border-radius: 3px;
+  z-index: 10;
+  pointer-events: none; /* Prevent interfering with image interactions */
 }

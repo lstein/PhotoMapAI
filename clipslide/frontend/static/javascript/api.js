@@ -7,6 +7,8 @@ import { updateOverlay } from "./overlay.js";
 // Call the server to fetch the next image based on the current mode (random or sequential).
 export async function fetchNextImage() {
   let response;
+  let currentScore = state.searchResults[state.searchIndex]?.score || 0;
+
   let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
   const formData = new URLSearchParams();
 
@@ -53,6 +55,8 @@ export async function fetchNextImage() {
     }
 
     const data = await response.json();
+    if (currentScore)
+      data.score = currentScore; // Preserve the score from search results
     clearTimeout(spinnerTimeout);
     hideSpinner();
     return data;

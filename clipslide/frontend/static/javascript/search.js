@@ -41,6 +41,9 @@ document.addEventListener("DOMContentLoaded", async function () {
   async function searchWithText() {
     const query = searchInput.value.trim();
     if (!query) return;
+    const slideShowRunning = state.swiper?.autoplay?.running;
+    pauseSlideshow();
+
     try {
       showSpinner();
       state.searchResults = [];
@@ -61,6 +64,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       console.error("Search request failed:", err);
     } finally {
       hideSpinner();
+      if (slideShowRunning) resumeSlideshow(); // Resume slideshow after search
     }
   }
 
@@ -76,13 +80,14 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     try {
       const slideShowRunning = state.swiper?.autoplay?.running;
-      pauseSlideshow;
+      pauseSlideshow();
       showSpinner();
       // Fetch the image as a Blob and send to searchWithImage
       const imgResponse = await fetch(imgUrl);
       const blob = await imgResponse.blob();
       const file = new File([blob], filename, { type: blob.type });
-      await searchWithImage(file);
+      let querySlide = createQuerySlide(imgUrl, `Search slide ${filename}`); // Insert the image as the first slide
+      await searchWithImage(file, querySlide);
       hideSpinner();
       if (slideShowRunning) resumeSlideshow(); // Resume slideshow after search
     } catch (err) {
@@ -198,24 +203,32 @@ export async function searchWithImage(file, first_slide) {
   }
 }
 
+// Create a new slide with the uploaded image file
+function createQuerySlide(url, filename) {
+  const displayLabel = filename || "Query Image";
+  // Create a new slide element
+  const slide = document.createElement("div");
+  slide.className = "swiper-slide";
+  slide.innerHTML = `
+            <div style="position:relative; width:100%; height:100%;">
+                <span class="query-image-label">${displayLabel}</span>
+                <img src="${url}" alt="" draggable="true" class="slide-image">
+            </div>
+        `;
+  slide.dataset.filename = filename || "";
+  slide.dataset.description = "Query image";
+  slide.dataset.textToCopy = "";
+  slide.dataset.filepath = "";
+  return slide;
+}
+
 // Insert an uploaded file into the carousel
 async function insertUploadedImageFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = function (event) {
       const url = event.target.result;
-      const slide = document.createElement("div");
-      slide.className = "swiper-slide";
-      slide.innerHTML = `
-                <div style="position:relative; width:100%; height:100%;">
-                    <span class="query-image-label">Query Image</span>
-                    <img src="${url}" alt="" draggable="true" class="slide-image">
-                </div>
-            `;
-      slide.dataset.filename = file.name || "";
-      slide.dataset.description = "Query image";
-      slide.dataset.textToCopy = "";
-      slide.dataset.filepath = "";
+      const slide = createQuerySlide(url, file.name);
       resolve(slide);
     };
     reader.onerror = reject;

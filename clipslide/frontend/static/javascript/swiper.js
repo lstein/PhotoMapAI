@@ -108,8 +108,15 @@ export async function addNewSlide() {
   const url = data.url; // URL path to the image
   const slide = document.createElement("div");
   slide.className = "swiper-slide";
+
+  // Conditionally add score display if present
+  const scoreDisplay = data.score
+    ? `<span class="score-display">match score=${data.score.toFixed(3)}</span>`
+    : "";
+
   slide.innerHTML = `
         <div style="position:relative; width:100%; height:100%;">
+            ${scoreDisplay}
             <img src="${url}" alt="" draggable="true" class="slide-image">
         </div>
     `;
