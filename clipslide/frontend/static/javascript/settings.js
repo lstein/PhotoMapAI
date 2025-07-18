@@ -1,17 +1,48 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { state } from "./state.js";
-import { saveSettingsToLocalStorage } from "./state.js"; 
-import { removeSlidesAfterCurrent } from "./swiper.js";
+import { saveSettingsToLocalStorage } from "./state.js";
+import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
 
 // Delay settings
 const delayStep = 1; // seconds to increase/decrease per click
 const minDelay = 1; // minimum delay in seconds
 const maxDelay = 60; // maximum delay in seconds
 
+// Load available albums from server
+async function loadAvailableAlbums() {
+  try {
+    const response = await fetch("available_albums/");
+    const albums = await response.json();
 
-// Initialize settings from the server and local storageu
+    const albumSelect = document.getElementById("albumSelect");
+    albumSelect.innerHTML = ""; // Clear placeholder
+
+    albums.forEach((album) => {
+      const option = document.createElement("option");
+      option.value = album.key;
+      option.textContent = album.name;
+      option.dataset.embeddingsFile = album.embeddings_file; // Store embeddings path
+      albumSelect.appendChild(option);
+    });
+
+    // Set current album after populating options
+    albumSelect.value = state.album;
+  } catch (error) {
+    console.error("Failed to load albums:", error);
+    // Fallback to hardcoded options
+    const albumSelect = document.getElementById("albumSelect");
+    albumSelect.innerHTML = `
+      <option value="family" data-embeddings-file="/net/cubox/CineRAID/Pictures/embeddings.npz">Family</option>
+    `;
+    albumSelect.value = state.album;
+  }
+}
+
+// Initialize settings from the server and local storage
 document.addEventListener("DOMContentLoaded", async function () {
+  // Load albums first
+  await loadAvailableAlbums();
 
   let slowerBtn = document.getElementById("slowerBtn");
   let fasterBtn = document.getElementById("fasterBtn");
@@ -38,20 +69,20 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (this.checked) {
         state.mode = this.value;
         saveSettingsToLocalStorage();
-        removeSlidesAfterCurrent(); // Remove slides after the current one when changing mode
+        removeSlidesAfterCurrent();
       }
     });
-  }); // ✅ Added missing closing brace here!
+  });
 
   // Handlers for the settings modal
   const settingsBtn = document.getElementById("settingsBtn");
   const settingsOverlay = document.getElementById("settingsOverlay");
   const closeSettingsBtn = document.getElementById("closeSettingsBtn");
-  const saveSettingsBtn = document.getElementById("saveSettingsBtn");
   const highWaterMarkInput = document.getElementById("highWaterMarkInput");
   const delayValueSpan = document.getElementById("delayValue");
   const modeRandom = document.getElementById("modeRandom");
   const modeSequential = document.getElementById("modeSequential");
+  const albumSelect = document.getElementById("albumSelect"); // ✅ Add album selector
 
   // Open settings modal and populate fields
   settingsBtn.addEventListener("click", () => {
@@ -59,11 +90,38 @@ document.addEventListener("DOMContentLoaded", async function () {
       // Populate fields with current values
       highWaterMarkInput.value = state.highWaterMark;
       delayValueSpan.textContent = state.currentDelay;
+      albumSelect.value = state.album;
       if (state.mode === "random") modeRandom.checked = true;
       if (state.mode === "sequential") modeSequential.checked = true;
       settingsOverlay.style.display = "block";
     } else {
       settingsOverlay.style.display = "none";
+    }
+  });
+
+  albumSelect.addEventListener("change", function () {
+    const newAlbum = this.value;
+    if (newAlbum !== state.album) {
+      state.album = newAlbum;
+
+      // Get embeddings file from the selected option
+      const selectedOption = this.options[this.selectedIndex];
+      state.embeddingsFile = selectedOption.dataset.embeddingsFile;
+
+      // Clear search results when switching albums
+      state.searchResults = [];
+      state.searchIndex = 0;
+
+      // Remove all slides after current when switching albums
+      removeSlidesAfterCurrent();
+      saveSettingsToLocalStorage();
+
+      // Update page title
+      const titleElement = document.getElementById("slideshow_title");
+      if (titleElement) {
+        titleElement.textContent = `Slideshow - ${newAlbum}`;
+      }
+      resetAllSlides();
     }
   });
 
@@ -90,13 +148,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     state.highWaterMark = newHighWaterMark;
     saveSettingsToLocalStorage();
   });
-  
-  // Save settings and close modal
-  saveSettingsBtn.addEventListener("click", () => {
-    settingsOverlay.style.display = "none";
-  });
 });
-
 
 function setDelay(newDelay) {
   newDelay = Math.max(minDelay, Math.min(maxDelay, newDelay));

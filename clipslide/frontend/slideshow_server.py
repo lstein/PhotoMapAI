@@ -255,6 +255,18 @@ async def serve_image(album: str, path: str):
     from fastapi.responses import FileResponse
     return FileResponse(full_path)
 
+@app.get("/available_albums/")
+async def get_available_albums():
+    """Return list of available albums with embeddings paths."""
+    return [
+        {
+            "key": album_name, 
+            "name": album_name.capitalize(),
+            "embeddings_file": str(Path(PHOTO_ALBUMS[album_name]) / "embeddings.npz")
+        } 
+        for album_name in PHOTO_ALBUMS.keys()
+    ]
+
 def main():
     """Main entry point for the slideshow server."""
     import uvicorn

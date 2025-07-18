@@ -714,3 +714,33 @@ body {
   z-index: 10;
   pointer-events: none; /* Prevent interfering with image interactions */
 }
+
+/* In your slides.css */
+.setting-group {
+  margin-bottom: 1em;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+}
+
+.setting-group label {
+  font-weight: bold;
+  min-width: 120px;
+  color: #fff;
+}
+
+#albumSelect {
+  padding: 0.5em;
+  border-radius: 4px;
+  border: 1px solid #888;
+  background: #333;
+  color: #fff;
+  font-size: 0.8em;
+  min-width: 150px;
+}
+
+#albumSelect:focus {
+  outline: none;
+  border-color: #00ff99;
+  box-shadow: 0 0 4px rgba(0, 255, 153, 0.3);
+}
