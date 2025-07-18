@@ -13,7 +13,7 @@ export async function fetchNextImage() {
   try {
     // Handle the case of there already being a set of search results, in which case we step through.
     if (state.searchResults?.length > 0) {
-      let currentFilepath = state.searchResults[state.searchIndex++];
+      let currentFilepath = state.searchResults[state.searchIndex++].filename;
       if (state.searchIndex >= state.searchResults.length)
         state.searchIndex = 0; // Loop back to start
       formData.append("embeddings_file", state.embeddingsFile);
@@ -62,6 +62,46 @@ export async function fetchNextImage() {
     console.warn("Failed to load image.");
     throw e;
   }
+}
+
+// Perform an image search and return a list of {filename, score} objects.
+export async function searchImage(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("top_k", 100);
+  formData.append("embeddings_file", state.embeddingsFile);
+
+  try {
+    const response = await fetch("search_with_image/", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await response.json();
+    return result.results;
+  } catch (err) {
+    console.error("Image search request failed:", err);
+    return [];
+  }
+}
+
+// Perform a text search and return a list of {filename, score} objects.
+export async function searchText(query) {
+    const formData = new FormData();
+    formData.append("text_query", query);
+    formData.append("top_k", 100);
+    formData.append("embeddings_file", state.embeddingsFile);
+
+    try {
+      const response = await fetch("search_with_text/", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await response.json();
+      return result.results
+    } catch (err) {
+      console.error("Text search request failed:", err);
+      return [];
+    }
 }
 
 export async function deleteImage(filepath) {

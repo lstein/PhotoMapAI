@@ -8,6 +8,7 @@ import {
   pauseSlideshow,
   resumeSlideshow,
 } from "./swiper.js";
+import { searchImage, searchText } from "./api.js";
 import { showSpinner, hideSpinner } from "./utils.js";
 import { setCheckmarkOnIcon } from "./utils.js";
 
@@ -35,28 +36,19 @@ document.addEventListener("DOMContentLoaded", async function () {
   const searchInput = document.getElementById("searchInput");
 
   // Text search handler
-  doSearchBtn.addEventListener("click", async function () {
+  doSearchBtn.addEventListener("click", searchWithText);
+
+  async function searchWithText() {
     const query = searchInput.value.trim();
     if (!query) return;
-    const formData = new FormData();
-    formData.append("text_query", query);
-    formData.append("top_k", 100);
-    formData.append("embeddings_file", state.embeddingsFile);
-
     try {
       showSpinner();
       state.searchResults = [];
       state.searchIndex = 0; // Reset search index for new search
-      const response = await fetch("search_with_text/", {
-        method: "POST",
-        body: formData,
-      });
-      const result = await response.json();
-      result.results = result.results.filter((item) => item.score >= 0.2);
-      state.searchResults = result.results.map((item) => item.filename);
+      const results = await searchText(query);
+      state.searchResults = results.filter((item) => item.score >= 0.2);
       await resetSlidesAndAppend();
       updateSearchCheckmarks();
-      hideSpinner();
       // Set checkmarks on icons based on the current mode
       setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
       setCheckmarkOnIcon(document.getElementById("textSearchIcon"), true);
@@ -67,33 +59,10 @@ document.addEventListener("DOMContentLoaded", async function () {
     } catch (err) {
       hideSpinner();
       console.error("Search request failed:", err);
+    } finally {
+      hideSpinner();
     }
-  });
-
-  searchInput.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      doSearchBtn.click();
-    }
-  });
-
-  // Clear search button handler
-  const clearSearchBtn = document.getElementById("clearSearchBtn");
-  clearSearchBtn.addEventListener("click", function () {
-    const slideShowRunning =
-      state.swiper && state.swiper.autoplay && state.swiper.autoplay.running;
-    clearSearchAndResetCarousel();
-    if (slideShowRunning) resumeSlideshow(); // Resume slideshow if it was running
-  });
-
-  // Clear text search handler
-  const clearTextSearchBtn = document.getElementById("clearTextSearchBtn");
-  clearTextSearchBtn.addEventListener("click", function () {
-    searchInput.value = "";
-  });
-
-  // Initial call to set visibility based on default searchResults value
-  updateSearchCheckmarks();
+  }
 
   // Image search button handler
   const imageSearchBtn = document.getElementById("imageSearchBtn");
@@ -147,6 +116,32 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
+  // Handle Enter key in search input
+  searchInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      doSearchBtn.click();
+    }
+  });
+
+  // Clear search button handler
+  const clearSearchBtn = document.getElementById("clearSearchBtn");
+  clearSearchBtn.addEventListener("click", function () {
+    const slideShowRunning =
+      state.swiper && state.swiper.autoplay && state.swiper.autoplay.running;
+    clearSearchAndResetCarousel();
+    if (slideShowRunning) resumeSlideshow(); // Resume slideshow if it was running
+  });
+
+  // Clear text search handler
+  const clearTextSearchBtn = document.getElementById("clearTextSearchBtn");
+  clearTextSearchBtn.addEventListener("click", function () {
+    searchInput.value = "";
+  });
+
+  // Initial call to set visibility based on default searchResults value
+  updateSearchCheckmarks();
+
   // Drag and drop functionality for search panel
   const searchPanel = document.getElementById("searchPanel");
   searchPanel.addEventListener("dragover", function (e) {
@@ -179,35 +174,27 @@ document.addEventListener("DOMContentLoaded", async function () {
   });
 });
 
+// This searches by an image. first_slide, if provided, is an additional
+// slide (external image) to be added to the carousel at the front.
 export async function searchWithImage(file, first_slide) {
-  const formData = new FormData();
-  formData.append("file", file); // file is a File object from an <input type="file">
-  formData.append("top_k", 100); // Default to 100 results
-  formData.append("embeddings_file", state.embeddingsFile);
-
   try {
     showSpinner();
     state.searchResults = [];
     state.searchIndex = 0; // Reset search index for new search
-
-    const response = await fetch("search_with_image/", {
-      method: "POST",
-      body: formData,
-    });
-    const result = await response.json();
-
+    const results = await searchImage(file);
     // filter the results by score, keeping everything with a score >= 0.6
-    result.results = result.results.filter((item) => item.score >= 0.6);
-    state.searchResults = result.results.map((item) => item.filename);
+    state.searchResults = results.filter((item) => item.score >= 0.6);
+
     await resetSlidesAndAppend(first_slide);
     updateSearchCheckmarks();
     // Set checkmarks on icons based on the current mode
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
-    hideSpinner();
   } catch (err) {
     console.error("Image search request failed:", err);
     return [];
+  } finally {
+    hideSpinner();
   }
 }
 
