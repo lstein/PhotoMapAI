@@ -245,7 +245,7 @@ async function insertUploadedImageFile(file) {
 
 // Show/hide the clearSearchBtn based on searchResults
 function updateSearchCheckmarks() {
-  if (state.searchResults && state.searchResults.length > 0) {
+  if (state.searchResults?.length > 0) {
     clearSearchBtn.style.display = "flex";
   } else {
     clearSearchBtn.style.display = "none";
