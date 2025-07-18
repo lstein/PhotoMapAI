@@ -10,10 +10,14 @@ import {
 import { showPauseOverlay, hidePauseOverlay, updateOverlay } from "./overlay.js";
 import { showSpinner, hideSpinner } from "./utils.js";
 import { getCurrentFilepath, deleteImage } from "./api.js";
+import {} from "./touch.js"; // Import touch event handlers
 
 // initialize event listeners after the DOM is fully loaded
 document.addEventListener("DOMContentLoaded", async function () {
+
+  // Initialize the slideshow title
   document.getElementById("slideshow_title").textContent = "Slideshow - " + state.album;
+
   // Fullscreen button
   const fullscreenBtn = document.getElementById("fullscreenBtn");
   if (fullscreenBtn) {
@@ -124,71 +128,6 @@ document.querySelectorAll('input[type="radio"]').forEach((rb) => {
   });
 });
 
-// Touch events
-let touchStartY = null;
-let touchStartX = null;
-let touchEndY = null;
-let verticalSwipeDetected;
-const swipeThreshold = 50; // Minimum distance in px for a swipe
-
-function handleTouchStart(e) {
-  if (e.touches && e.touches.length === 1) {
-    touchStartY = e.touches[0].clientY;
-    touchStartX = e.touches[0].clientX;
-    verticalSwipeDetected = false; // Reset swipe detection
-  }
-}
-
-function handleTouchMove(e) {
-  if (touchStartY === null || touchStartX === null) return;
-  const currentY = e.touches[0].clientY;
-  const currentX = e.touches[0].clientX;
-  const deltaY = currentY - touchStartY;
-  const deltaX = currentX - touchStartX;
-
-  // Only prevent default if vertical movement is dominant
-  if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 10) {
-    e.preventDefault();
-    if (Math.abs(deltaY) > swipeThreshold && !verticalSwipeDetected) {
-      e.preventDefault(); // Prevent default scrolling behavior
-      verticalSwipeDetected = true;
-      if (deltaY < -swipeThreshold) showPauseOverlay();
-      else if (deltaY > swipeThreshold) hidePauseOverlay();
-    }
-  }
-}
-
-function handleTouchEnd(e) {
-  if (touchStartY === null || touchStartX === null) return;
-  const touch = (e.changedTouches && e.changedTouches[0]) || null;
-  if (!touch) return;
-  const deltaY = touch.clientY - touchStartY;
-  const deltaX = touch.clientX - touchStartX;
-
-  // Detect horizontal swipe (left/right)
-  if (
-    Math.abs(deltaX) > Math.abs(deltaY) &&
-    Math.abs(deltaX) > swipeThreshold
-  ) {
-    pauseSlideshow();
-  }
-  // No pause on vertical swipe
-  touchStartY = null;
-  touchStartX = null;
-  verticalSwipeDetected = false;
-}
-
-// Attach touch event handlers to the swiper container
-const swiperContainer = document.querySelector(".swiper");
-swiperContainer.addEventListener("touchstart", handleTouchStart, {
-  passive: false,
-});
-swiperContainer.addEventListener("touchmove", handleTouchMove, {
-  passive: false,
-});
-swiperContainer.addEventListener("touchend", handleTouchEnd, {
-  passive: false,
-});
 
 // Handler for the delete (trash) button
 const delete_current_file_btn = document.getElementById("deleteCurrentFileBtn");

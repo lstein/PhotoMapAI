@@ -95,8 +95,8 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Initial call to set visibility based on default searchResults value
   updateSearchCheckmarks();
 
-  const imageSearchBtn = document.getElementById("imageSearchBtn");
   // Image search button handler
+  const imageSearchBtn = document.getElementById("imageSearchBtn");
   imageSearchBtn.addEventListener("click", async function () {
     // Get the current slide's image URL and filename
     const slide = state.swiper.slides[state.swiper.activeIndex];
@@ -106,6 +106,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (!imgUrl) return;
 
     try {
+      const slideShowRunning = state.swiper?.autoplay?.running;
+      pauseSlideshow;
       showSpinner();
       // Fetch the image as a Blob and send to searchWithImage
       const imgResponse = await fetch(imgUrl);
@@ -113,15 +115,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const file = new File([blob], filename, { type: blob.type });
       await searchWithImage(file);
       hideSpinner();
-      if (
-        !(
-          state.swiper &&
-          state.swiper.autoplay &&
-          state.swiper.autoplay.running
-        )
-      ) {
-        resumeSlideshow(); // Resume slideshow after search
-      }
+      if (slideShowRunning) resumeSlideshow(); // Resume slideshow after search
     } catch (err) {
       hideSpinner();
       console.error("Image similarity search failed:", err);
@@ -261,7 +255,7 @@ function updateSearchCheckmarks() {
 async function clearSearchAndResetCarousel() {
   const searchInput = document.getElementById("searchInput");
 
-  if (state.swiper && state.swiper.autoplay && state.swiper.autoplay.running) {
+  if (state.swiper?.autoplay?.running) {
     pauseSlideshow(); // Pause the slideshow if it's running
   }
   searchInput.value = "";

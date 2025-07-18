@@ -181,8 +181,7 @@ export async function resetSlidesAndAppend(first_slide) {
 function enforceHighWaterMark() {
   if (!state.swiper) return;
 
-  const slideShowActive =
-    state.swiper.autoplay && state.swiper.autoplay.running;
+  const slideShowActive = state.swiper?.autoplay?.running;
   if (slideShowActive) state.swiper.autoplay.stop();
 
   while (state.swiper.slides.length > state.highWaterMark) {
