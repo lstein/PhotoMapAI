@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 try:
     # Python 3.9+
@@ -12,7 +12,7 @@ except ImportError:
     # Python 3.8 fallback
     from importlib_resources import files
 
-from fastapi import FastAPI, File, Form, Request, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, Request, UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from clipslide.backend.embeddings import Embeddings
 from clipslide.backend.metadata_modules import SlideSummary
 from clipslide.backend.config import ConfigManager
+from clipslide.backend.progress import progress_tracker, ProgressInfo
 
 # Initialize configuration manager
 config_manager = ConfigManager()
@@ -59,6 +60,17 @@ class SearchResult(BaseModel):
 
 class SearchResultsResponse(BaseModel):
     results: List[SearchResult]
+
+class ProgressResponse(BaseModel):
+    album_key: str
+    status: str
+    current_step: str
+    images_processed: int
+    total_images: int
+    progress_percentage: float
+    elapsed_time: float
+    estimated_time_remaining: Optional[float]
+    error_message: Optional[str] = None
 
 @app.get("/", response_class=HTMLResponse)
 async def get_root(
@@ -203,7 +215,7 @@ async def delete_image(
         if not image_path:
             raise HTTPException(status_code=404, detail="File not found")
         
-        # Security check: ensure the file is within one of the album directories
+        # Security check: ensure the file is within one of the album's directories
         album_config = config_manager.get_album(album)
         if not album_config:
             raise HTTPException(status_code=404, detail="Album not found")
@@ -292,6 +304,156 @@ async def get_available_albums():
         }
         for album in albums.values()
     ]
+
+@app.post("/update_index_async/", response_model=dict)
+async def update_index_async(
+    background_tasks: BackgroundTasks,
+    album_key: str = Form(...),
+) -> dict:
+    """Start an asynchronous index update for the specified album."""
+    try:
+        # Check if already running
+        if progress_tracker.is_running(album_key):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Index update already running for album '{album_key}'"
+            )
+        
+        # Get album configuration
+        album_config = config_manager.get_album(album_key)
+        if not album_config:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Album '{album_key}' not found"
+            )
+        
+        # Add the update task to background tasks
+        background_tasks.add_task(
+            _update_index_background_async,
+            album_key,
+            album_config
+        )
+        
+        return {
+            "success": True,
+            "message": f"Index update for album '{album_key}' started in background",
+            "album_key": album_key
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start background index update: {str(e)}"
+        )
+
+async def _update_index_background_async(album_key: str, album_config):
+    """Background task for updating index with async support."""
+    try:
+        # Convert string paths to Path objects
+        image_paths = [Path(path) for path in album_config.image_paths]
+        index_path = Path(album_config.index)
+        
+        # Validate that at least one image path exists
+        existing_paths = [path for path in image_paths if path.exists()]
+        if not existing_paths:
+            progress_tracker.set_error(
+                album_key, 
+                f"None of the image paths exist: {album_config.image_paths}"
+            )
+            return
+        
+        # Create embeddings instance
+        embeddings = Embeddings(embeddings_path=index_path)
+        
+        # Check if index file exists to determine operation type
+        if index_path.exists():
+            print(f"Updating existing index for album '{album_key}'...")
+            await embeddings.update_index_async(image_paths, album_key)
+        else:
+            print(f"Creating new index for album '{album_key}'...")
+            await embeddings.create_index_async(image_paths, album_key, create_index=True)
+            
+        print(f"Index update completed for album '{album_key}'")
+        
+    except Exception as e:
+        print(f"Background index update failed for album '{album_key}': {e}")
+        progress_tracker.set_error(album_key, str(e))
+
+@app.get("/index_progress/{album_key}", response_model=ProgressResponse)
+async def get_index_progress(album_key: str) -> ProgressResponse:
+    """Get the current progress of an index update operation."""
+    try:
+        progress = progress_tracker.get_progress(album_key)
+        if not progress:
+            # Check if album exists
+            album_config = config_manager.get_album(album_key)
+            if not album_config:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Album '{album_key}' not found"
+                )
+            
+            # No active operation
+            return ProgressResponse(
+                album_key=album_key,
+                status="idle",
+                current_step="No operation in progress",
+                images_processed=0,
+                total_images=0,
+                progress_percentage=0.0,
+                elapsed_time=0.0,
+                estimated_time_remaining=None
+            )
+        
+        return ProgressResponse(
+            album_key=progress.album_key,
+            status=progress.status.value,
+            current_step=progress.current_step,
+            images_processed=progress.images_processed,
+            total_images=progress.total_images,
+            progress_percentage=progress.progress_percentage,
+            elapsed_time=progress.elapsed_time,
+            estimated_time_remaining=progress.estimated_time_remaining,
+            error_message=progress.error_message
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get progress: {str(e)}"
+        )
+
+@app.delete("/cancel_index/{album_key}")
+async def cancel_index_operation(album_key: str) -> dict:
+    """Cancel an ongoing index operation."""
+    try:
+        if not progress_tracker.is_running(album_key):
+            raise HTTPException(
+                status_code=404,
+                detail=f"No active operation for album '{album_key}'"
+            )
+        
+        # Note: This is a simple cancellation - you might want to implement
+        # more sophisticated cancellation with asyncio.Task cancellation
+        progress_tracker.set_error(album_key, "Operation cancelled by user")
+        
+        return {
+            "success": True,
+            "message": f"Index operation for album '{album_key}' cancelled",
+            "album_key": album_key
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to cancel operation: {str(e)}"
+        )
 
 def main():
     """Main entry point for the slideshow server."""
