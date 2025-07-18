@@ -196,9 +196,7 @@ export async function searchWithImage(file, first_slide) {
     const results = await searchImage(file);
     // filter the results by score, keeping everything with a score >= 0.6
     state.searchResults = results.filter((item) => item.score >= 0.6);
-
     await resetSlidesAndAppend(first_slide);
-    updateSearchCheckmarks();
     // Set checkmarks on icons based on the current mode
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
