@@ -11,6 +11,7 @@ import {
 import { searchImage, searchText } from "./api.js";
 import { showSpinner, hideSpinner } from "./utils.js";
 import { setCheckmarkOnIcon } from "./utils.js";
+import { scoreDisplay } from "./score-display.js";
 
 document.addEventListener("DOMContentLoaded", async function () {
   const textSearchPanel = document.getElementById("textSearchPanel");
@@ -59,7 +60,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         textSearchPanel.style.opacity = 0;
         textSearchPanel.style.display = "none";
       }, 200);
+
+      if (state.searchResults.length > 0) {
+        // Search completed - score display will be controlled by slide changes
+        console.log("Search completed, score display ready");
+      }
     } catch (err) {
+      scoreDisplay.hide(); // Hide on error
       hideSpinner();
       console.error("Search request failed:", err);
     } finally {
@@ -238,16 +245,12 @@ async function insertUploadedImageFile(file) {
 
 // Show/hide the clearSearchBtn based on searchResults
 function updateSearchCheckmarks() {
-  const searchIcon = document.getElementById("searchIcon");
-  const clearSearchBtn = document.getElementById("clearSearchBtn");
-  // Remove any existing checkmark overlay
-  let checkOverlay =
-    searchIcon?.parentElement?.querySelector(".checkmark-overlay");
-  if (checkOverlay) checkOverlay.remove();
   if (state.searchResults && state.searchResults.length > 0) {
     clearSearchBtn.style.display = "flex";
   } else {
     clearSearchBtn.style.display = "none";
+    setCheckmarkOnIcon(imageSearchIcon, false);
+    setCheckmarkOnIcon(textSearchIcon, false);
   }
 }
 
@@ -258,9 +261,7 @@ async function clearSearchAndResetCarousel() {
   if (state.swiper?.autoplay?.running) {
     pauseSlideshow(); // Pause the slideshow if it's running
   }
-  searchInput.value = "";
-  state.searchResults = [];
-  state.searchIndex = 0; // Reset search index
+  exitSearchMode(); // Clear search results and reset index
   await resetAllSlides(); // Clear all slides in the carousel
   updateSearchCheckmarks();
   // Hide the search panel if open
@@ -317,3 +318,13 @@ window.addEventListener("paste", async function (e) {
     }
   }
 });
+
+// In resetAllSlides or when exiting search mode:
+export function exitSearchMode() {
+  state.searchResults = [];
+  state.searchIndex = 0;
+  scoreDisplay.hide(); // Hide score when exiting search
+  searchInput.value = "";
+  updateSearchCheckmarks();
+  console.log("Exited search mode");
+}

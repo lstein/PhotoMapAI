@@ -3,7 +3,7 @@
 import { state } from "./state.js";
 import { fetchNextImage } from "./api.js";
 import { updateOverlay } from "./overlay.js";
-import { showSpinner, hideSpinner } from "./utils.js";
+import { scoreDisplay } from "./score-display.js";
 
 // Swiper initialization
 document.addEventListener("DOMContentLoaded", async function () {
@@ -56,7 +56,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     state.swiper.on("autoplayResume", updateSlideshowIcon);
     state.swiper.on("autoplayStop", updateSlideshowIcon);
     state.swiper.on("autoplayPause", updateSlideshowIcon);
-    state.swiper.on("slideChange", updateOverlay);
+    state.swiper.on("slideChange", handleSlideChange);
     state.swiper.on("scrollbarDragStart", pauseSlideshow);
   }
 
@@ -109,21 +109,18 @@ export async function addNewSlide() {
   const slide = document.createElement("div");
   slide.className = "swiper-slide";
 
-  // Conditionally add score display if present
-  const scoreDisplay = data.score
-    ? `<span class="score-display">match score=${data.score.toFixed(3)}</span>`
-    : "";
-
   slide.innerHTML = `
-        <div style="position:relative; width:100%; height:100%;">
-            ${scoreDisplay}
-            <img src="${url}" alt="" draggable="true" class="slide-image">
-        </div>
-    `;
+    <div style="position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
+      <img src="${url}" alt="" draggable="true" class="slide-image">
+    </div>
+  `;
+
   slide.dataset.filename = data.filename || "";
   slide.dataset.description = data.description || "";
   slide.dataset.textToCopy = data.textToCopy || "";
   slide.dataset.filepath = path || "";
+  slide.dataset.score = data.score || ""; // Store score in dataset
+
   state.swiper.appendSlide(slide);
 
   const img = slide.querySelector("img");
@@ -132,20 +129,26 @@ export async function addNewSlide() {
       "DownloadURL",
       `image/jpeg:${data.filename || "image.jpg"}:${data.url}`
     );
-    e.dataTransfer.setData("text/uri-list", data.url);
-    // Prevent Swiper from handling this drag as a swipe
-    e.stopPropagation();
   });
-  // Prevent Swiper swipe on mouse drag
-  img.addEventListener("mousedown", function (e) {
-    e.stopPropagation();
-  });
+}
 
+// Add function to handle slide changes
+export function handleSlideChange() {
   updateOverlay();
-  // Delay the high water mark enforcement to let the slide addition complete
-  setTimeout(() => {
-    enforceHighWaterMark();
-  }, 200); // 200ms delay after slide is added
+
+  const activeSlide = state.swiper.slides[state.swiper.activeIndex];
+  if (
+    activeSlide &&
+    activeSlide.dataset.score &&
+    state.searchResults.length > 0
+  ) {
+    // Show score if we're in search mode and slide has a score
+    const score = parseFloat(activeSlide.dataset.score);
+    scoreDisplay.show(score);
+  } else {
+    // Hide score if not in search mode or no score
+    scoreDisplay.hide();
+  }
 }
 
 export function removeSlidesAfterCurrent() {

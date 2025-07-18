@@ -702,20 +702,39 @@ body {
     padding: 0 !important;
 }
 
-.score-display {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: rgba(0, 0, 0, 0.7);
+.fixed-score-display {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.8);
   color: white;
-  padding: 4px 8px;
-  font-size: 1.0em;
-  border-radius: 3px;
-  z-index: 10;
-  pointer-events: none; /* Prevent interfering with image interactions */
+  padding: 8px 16px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 6px;
+  z-index: 5000; /* Higher than other elements */
+  pointer-events: none;
+  
+  /* Mobile-specific fixes */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-font-smoothing: antialiased;
+  
+  /* Smooth transitions */
+  transition: opacity 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* In your slides.css */
+.fixed-score-display.visible {
+  display: block;
+  opacity: 0.5;
+}
+
+.fixed-score-display.hidden {
+  display: none;
+  opacity: 0;
+}
+
 .setting-group {
   margin-bottom: 1em;
   display: flex;

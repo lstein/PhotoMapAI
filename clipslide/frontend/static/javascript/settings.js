@@ -1,5 +1,6 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
+import { exitSearchMode } from "./search.js";
 import { state } from "./state.js";
 import { saveSettingsToLocalStorage } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
@@ -109,8 +110,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       state.embeddingsFile = selectedOption.dataset.embeddingsFile;
 
       // Clear search results when switching albums
-      state.searchResults = [];
-      state.searchIndex = 0;
+      exitSearchMode();
 
       // Remove all slides after current when switching albums
       removeSlidesAfterCurrent();
