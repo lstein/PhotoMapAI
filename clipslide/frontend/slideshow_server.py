@@ -84,8 +84,6 @@ async def get_root(
     if album not in PHOTO_ALBUMS:
         album = "family"  # Fallback to default if invalid
 
-    print(f"Serving slideshow for album: {album}, delay: {delay}, mode: {mode}")
-
     return templates.TemplateResponse(
         "slideshow.html",
         {

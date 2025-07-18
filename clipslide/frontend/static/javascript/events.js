@@ -13,6 +13,7 @@ import { getCurrentFilepath, deleteImage } from "./api.js";
 
 // initialize event listeners after the DOM is fully loaded
 document.addEventListener("DOMContentLoaded", async function () {
+  document.getElementById("slideshow_title").textContent = "Slideshow - " + state.album;
   // Fullscreen button
   const fullscreenBtn = document.getElementById("fullscreenBtn");
   if (fullscreenBtn) {

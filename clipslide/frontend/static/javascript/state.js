@@ -10,7 +10,8 @@ export const state = {
   highWaterMark: 20, // Maximum number of slides to load at once
   searchIndex: 0, // When in search mode, this is the index of the current slide in the search results
   searchResults: [], // List of file paths matching the current search query
-};
+  album: "family", // Default album to use}
+}
 
 document.addEventListener("DOMContentLoaded", async function () {
   initializeFromServer();
@@ -23,6 +24,7 @@ export function initializeFromServer() {
     state.currentDelay = window.slideshowConfig.currentDelay;
     state.mode = window.slideshowConfig.mode;
     state.embeddingsFile = window.slideshowConfig.embeddings_file;
+    state.album = window.slideshowConfig.album || "family"; // Default to "family" if not set
   }
 }
 

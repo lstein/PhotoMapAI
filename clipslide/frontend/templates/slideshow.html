@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Slideshow</title>
+    <title id="slideshow_title">Slideshow</title>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
@@ -25,6 +25,7 @@
           currentDelay: {{ delay }},
           mode: {{ mode | tojson}},
           embeddings_file: {{ embeddings_file | tojson}},
+          album: "{{ album | escape }}",
       };
     </script>
     <script type="module" src="static/main.js"></script>

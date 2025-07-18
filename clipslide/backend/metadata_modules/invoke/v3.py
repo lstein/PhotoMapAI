@@ -31,7 +31,7 @@ class Invoke3Metadata(InvokeMetadataABC):
         Returns:
             str: The name of the model used for generation.
         """
-        return self.raw_metadata.get("model", {}).get("model_name", "")
+        return self.raw_metadata.get("model", {}).get("name", "")
 
     def get_seed(self) -> int:
         """
