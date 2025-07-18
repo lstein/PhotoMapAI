@@ -32,6 +32,22 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
   }
 
+  // Fullscreen change event listener
+  document.addEventListener("fullscreenchange", function() {
+    const bottomLeftBtnGroup = document.getElementById("bottomLeftBtnGroup");
+    const searchPanel = document.getElementById("searchPanel");
+    
+    if (document.fullscreenElement) {
+      // Entering fullscreen - hide panels
+      bottomLeftBtnGroup?.classList.add("hidden-fullscreen");
+      searchPanel?.classList.add("hidden-fullscreen");
+    } else {
+      // Exiting fullscreen - show panels
+      bottomLeftBtnGroup?.classList.remove("hidden-fullscreen");
+      searchPanel?.classList.remove("hidden-fullscreen");
+    }
+  });
+
   // Copy text button - ADD THE MISSING EVENT LISTENER
   const copyTextBtn = document.getElementById("copyTextBtn");
   if (copyTextBtn) {
@@ -93,12 +109,13 @@ window.addEventListener("keydown", function (e) {
   }
   if (e.key === "Escape") hidePauseOverlay();
   if (e.key === "f") {
-    const elem = document.documentElement; // or use a specific container div
+    const elem = document.documentElement;
     if (!document.fullscreenElement) {
       elem.requestFullscreen();
     } else {
       document.exitFullscreen();
     }
+    // No need to manually hide/show panels here - the fullscreenchange event will handle it
   }
   if (e.key === " ") {
     e.preventDefault();
@@ -109,11 +126,51 @@ window.addEventListener("keydown", function (e) {
       state.swiper.autoplay.running
     ) {
       pauseSlideshow();
+      showFullscreenIndicator(false); // Show pause indicator
     } else {
       resumeSlideshow();
+      showFullscreenIndicator(true); // Show play indicator
     }
   }
 });
+
+// Function to show fullscreen play/pause indicator
+function showFullscreenIndicator(isPlaying) {
+  // Only show in fullscreen mode
+  if (!document.fullscreenElement) return;
+  
+  // Remove any existing indicator
+  const existingIndicator = document.getElementById('fullscreen-indicator');
+  if (existingIndicator) {
+    existingIndicator.remove();
+  }
+  
+  // Create the indicator element
+  const indicator = document.createElement('div');
+  indicator.id = 'fullscreen-indicator';
+  indicator.className = 'fullscreen-playback-indicator';
+  
+  // Add the appropriate icon (using Unicode symbols or you can replace with SVG/Font Awesome)
+  indicator.innerHTML = isPlaying ? '▶' : '⏸'; // Play or Pause symbol
+  
+  // Add to body
+  document.body.appendChild(indicator);
+  
+  // Trigger animation
+  requestAnimationFrame(() => {
+    indicator.classList.add('show');
+  });
+  
+  // Remove after animation completes
+  setTimeout(() => {
+    indicator.classList.remove('show');
+    setTimeout(() => {
+      if (indicator.parentNode) {
+        indicator.parentNode.removeChild(indicator);
+      }
+    }, 300); // Wait for fade out animation
+  }, 800); // Show for 800ms
+}
 
 // Disable tabbing on buttons to prevent focus issues
 document.querySelectorAll("button").forEach((btn) => (btn.tabIndex = -1));
@@ -179,3 +236,4 @@ if (delete_current_file_btn) {
     }
   });
 }
+searchPanel

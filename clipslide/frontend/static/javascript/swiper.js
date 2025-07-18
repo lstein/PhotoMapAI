@@ -162,12 +162,17 @@ export function removeSlidesAfterCurrent() {
 }
 
 export async function resetAllSlides() {
+  const slideShowRunning = state.swiper?.autoplay?.running;
+  pauseSlideshow(); // Pause the slideshow if it's running
   if (state.swiper?.slides?.length > 0) {
     state.swiper.removeAllSlides();
   }
   await addNewSlide();
   await addNewSlide();
   updateOverlay();
+  if (slideShowRunning) {
+    resumeSlideshow();
+  }
 }
 
 // Clear carousel and optionally append a first slide

@@ -763,3 +763,67 @@ body {
   border-color: #00ff99;
   box-shadow: 0 0 4px rgba(0, 255, 153, 0.3);
 }
+
+.hidden-fullscreen {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+/* Alternative approach using transform if you prefer sliding animation */
+.hidden-fullscreen-slide {
+  transform: translateY(100%) !important;
+  transition: transform 0.3s ease;
+}
+
+.fullscreen-playback-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 4rem;
+  padding: 20px;
+  border-radius: 50%;
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  pointer-events: none;
+}
+
+.fullscreen-playback-indicator.show {
+  opacity: 1;
+}
+
+/* Alternative with scaling animation */
+.fullscreen-playback-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.5);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 4rem;
+  padding: 20px;
+  border-radius: 50%;
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  pointer-events: none;
+}
+
+.fullscreen-playback-indicator.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}

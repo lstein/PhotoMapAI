@@ -83,7 +83,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   const delayValueSpan = document.getElementById("delayValue");
   const modeRandom = document.getElementById("modeRandom");
   const modeSequential = document.getElementById("modeSequential");
-  const albumSelect = document.getElementById("albumSelect"); // ✅ Add album selector
+  const albumSelect = document.getElementById("albumSelect");
 
   // Open settings modal and populate fields
   settingsBtn.addEventListener("click", () => {

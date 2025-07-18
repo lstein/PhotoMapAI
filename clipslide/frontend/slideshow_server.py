@@ -20,16 +20,10 @@ from pydantic import BaseModel
 
 from clipslide.backend.embeddings import Embeddings
 from clipslide.backend.metadata_modules import SlideSummary
+from clipslide.backend.config import ConfigManager
 
-# Temporary dictionary to map photo album names to their paths under IMAGES_ROOT
-PHOTO_ALBUMS = {
-    "family": "/net/cubox/CineRAID/Pictures",
-    "smut": "/net/cubox/CineRAID/Archive/Pictures", 
-    "invoke": "/net/cubox/CineRAID/Archive/InvokeAI",
-    "yiffy": "/net/cubox/CineRAID/Archive/InvokeAI/Yiffy",
-    "legacy": "/net/cubox/CineRAID/Archive/InvokeAI/2023/1",
-    "gps_test": "/net/cubox/CineRAID/Pictures/2020",
-}
+# Initialize configuration manager
+config_manager = ConfigManager()
 
 def get_package_resource_path(resource_name: str) -> str:
     """Get the path to a package resource (static files or templates)."""
@@ -59,15 +53,12 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 templates_path = get_package_resource_path("templates")
 templates = Jinja2Templates(directory=templates_path)
 
-
 class SearchResult(BaseModel):
     filename: str
     score: float
 
-
 class SearchResultsResponse(BaseModel):
     results: List[SearchResult]
-
 
 @app.get("/", response_class=HTMLResponse)
 async def get_root(
@@ -77,8 +68,15 @@ async def get_root(
     mode: str = "random",  # Default mode
 ):
     # Validate the album parameter
-    if album not in PHOTO_ALBUMS:
-        album = "family"  # Fallback to default if invalid
+    album_config = config_manager.get_album(album)
+    if not album_config:
+        # Try to get first available album
+        albums = config_manager.get_albums()
+        if albums:
+            album = list(albums.keys())[0]
+            album_config = albums[album]
+        else:
+            raise HTTPException(status_code=404, detail="No albums configured")
 
     return templates.TemplateResponse(
         "slideshow.html",
@@ -87,17 +85,15 @@ async def get_root(
             "album": album,
             "delay": delay,
             "mode": mode,
-            # the embeddings file is always at the root of the album
-            "embeddings_file": Path(PHOTO_ALBUMS[album], "embeddings.npz").as_posix(),
+            "embeddings_file": album_config.index,
         },
     )
-
 
 @app.post("/search_with_image/", response_model=SearchResultsResponse)
 async def do_embedding_search_by_image(
     file: UploadFile = File(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
-    album: str = Form("family"),  # Add album parameter
+    album: str = Form("family"),
     top_k: int = Form(20),
 ) -> SearchResultsResponse:
     """Search for similar images using a query image."""
@@ -116,19 +112,18 @@ async def do_embedding_search_by_image(
     return SearchResultsResponse(
         results=[
             SearchResult(
-                filename=Path(filename).relative_to(PHOTO_ALBUMS[album]).as_posix(),
+                filename=config_manager.get_relative_path(filename, album) or Path(filename).name,
                 score=float(score),
             )
             for filename, score in zip(results, scores)
         ]
     )
 
-
 @app.post("/search_with_text/", response_model=SearchResultsResponse)
 async def do_embedding_search_by_text(
     text_query: str = Form(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
-    album: str = Form("family"),  # Add album parameter
+    album: str = Form("family"),
     top_k: int = Form(20),
 ) -> SearchResultsResponse:
     """Search for images semantically matching the query."""
@@ -139,35 +134,40 @@ async def do_embedding_search_by_text(
     return SearchResultsResponse(
         results=[
             SearchResult(
-                filename=Path(filename).relative_to(PHOTO_ALBUMS[album]).as_posix(),
+                filename=config_manager.get_relative_path(filename, album) or Path(filename).name,
                 score=float(score),
             )
             for filename, score in zip(results, scores)
         ]
     )
 
-
 @app.post("/retrieve_image/", response_model=SlideSummary)
 async def retrieve_image(
     current_image: str = Form(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
-    album: str = Form("family"),  # Add album parameter
+    album: str = Form("family"),
 ) -> SlideSummary:
     """Retrieve the next image based on the current image."""
     # Load embeddings
     embeddings = Embeddings(embeddings_path=Path(embeddings_file))
-    slide_metadata = embeddings.retrieve_image(Path(PHOTO_ALBUMS[album], current_image))
+    
+    # Find the image in any of the album's paths
+    image_path = config_manager.find_image_in_album(album, current_image)
+    if not image_path:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    slide_metadata = embeddings.retrieve_image(image_path)
     
     # Create album-specific URL
-    slide_metadata.url = f"/images/{album}/{Path(slide_metadata.filepath).relative_to(PHOTO_ALBUMS[album]).as_posix()}"
+    relative_path = config_manager.get_relative_path(str(slide_metadata.filepath), album)
+    slide_metadata.url = f"/images/{album}/{relative_path}"
     return slide_metadata
-
 
 @app.post("/retrieve_next_image/", response_model=SlideSummary)
 async def retrieve_next_image(
     current_image: str = Form(None),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
-    album: str = Form("family"),  # Add album parameter
+    album: str = Form("family"),
     random: bool = Form(False),
 ) -> SlideSummary:
     """Retrieve the next image based on the current image."""
@@ -177,31 +177,46 @@ async def retrieve_next_image(
     if random:
         slide_metadata = embeddings.retrieve_next_image(random=True)
     else:
+        current_path = None
+        if current_image:
+            current_path = config_manager.find_image_in_album(album, current_image)
         slide_metadata = embeddings.retrieve_next_image(
-            current_image=Path(PHOTO_ALBUMS[album], current_image) if current_image else None, 
+            current_image=current_path, 
             random=False
         )
     
     # Create album-specific URL
-    slide_metadata.url = f"/images/{album}/{Path(slide_metadata.filepath).relative_to(PHOTO_ALBUMS[album]).as_posix()}"
+    relative_path = config_manager.get_relative_path(str(slide_metadata.filepath), album)
+    slide_metadata.url = f"/images/{album}/{relative_path}"
     return slide_metadata
 
 @app.delete("/delete_image/")
 async def delete_image(
     file_to_delete: str, 
     embeddings_file: str,
-    album: str = Form("family")  # Add album parameter
+    album: str = Form("family")
 ) -> JSONResponse:
     """Delete an image file."""
     try:
-        # Use album-specific path
-        image_path = Path(PHOTO_ALBUMS[album]) / file_to_delete
+        # Find the image in any of the album's paths
+        image_path = config_manager.find_image_in_album(album, file_to_delete)
+        if not image_path:
+            raise HTTPException(status_code=404, detail="File not found")
         
-        # Security check: ensure the file is within the album directory
+        # Security check: ensure the file is within one of the album directories
+        album_config = config_manager.get_album(album)
+        if not album_config:
+            raise HTTPException(status_code=404, detail="Album not found")
+        
         resolved_path = image_path.resolve()
-        album_root = Path(PHOTO_ALBUMS[album]).resolve()
+        allowed = False
+        for allowed_path in album_config.image_paths:
+            album_root = Path(allowed_path).resolve()
+            if str(resolved_path).startswith(str(album_root)):
+                allowed = True
+                break
         
-        if not str(resolved_path).startswith(str(album_root)):
+        if not allowed:
             raise HTTPException(status_code=403, detail="Access denied")
         
         if not image_path.exists():
@@ -231,40 +246,51 @@ async def delete_image(
 @app.get("/images/{album}/{path:path}")
 async def serve_image(album: str, path: str):
     """Serve images from different albums dynamically."""
-    # Validate album
-    if album not in PHOTO_ALBUMS:
+    # Find the image in any of the album's paths
+    image_path = config_manager.find_image_in_album(album, path)
+    if not image_path:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Security check - ensure path is within one of the album directories
+    album_config = config_manager.get_album(album)
+    if not album_config:
         raise HTTPException(status_code=404, detail="Album not found")
     
-    # Construct full path
-    full_path = Path(PHOTO_ALBUMS[album]) / path
-    
-    # Security check - ensure path is within album directory
     try:
-        resolved_path = full_path.resolve()
-        album_root = Path(PHOTO_ALBUMS[album]).resolve()
-        if not str(resolved_path).startswith(str(album_root)):
+        resolved_path = image_path.resolve()
+        allowed = False
+        for allowed_path in album_config.image_paths:
+            album_root = Path(allowed_path).resolve()
+            if str(resolved_path).startswith(str(album_root)):
+                allowed = True
+                break
+        
+        if not allowed:
             raise HTTPException(status_code=403, detail="Access denied")
     except Exception:
         raise HTTPException(status_code=403, detail="Invalid path")
     
     # Check if file exists
-    if not full_path.exists() or not full_path.is_file():
+    if not image_path.exists() or not image_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     
     # Serve the file
     from fastapi.responses import FileResponse
-    return FileResponse(full_path)
+    return FileResponse(image_path)
 
 @app.get("/available_albums/")
 async def get_available_albums():
-    """Return list of available albums with embeddings paths."""
+    """Return list of available albums with embeddings paths and metadata."""
+    albums = config_manager.get_albums()
     return [
         {
-            "key": album_name, 
-            "name": album_name.capitalize(),
-            "embeddings_file": str(Path(PHOTO_ALBUMS[album_name]) / "embeddings.npz")
-        } 
-        for album_name in PHOTO_ALBUMS.keys()
+            "key": album.key,
+            "name": album.name,
+            "description": album.description,
+            "image_paths": album.image_paths,
+            "embeddings_file": album.index
+        }
+        for album in albums.values()
     ]
 
 def main():

@@ -1,0 +1,346 @@
+# clipslide/backend/config.py
+"""
+Configuration management for ClipSlide backend.
+This module handles loading, saving, and managing photo album configurations.
+It uses a YAML file to store album details and provides methods to manipulate albums.
+"""
+import os
+import yaml
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+from platformdirs import user_config_dir
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+class Album(BaseModel):
+    """Represents a photo album configuration."""
+    
+    key: str = Field(..., description="Unique album identifier")
+    name: str = Field(..., description="Display name for the album")
+    image_paths: List[str] = Field(..., min_length=1, description="List of paths containing images")
+    index: str = Field(..., description="Path to the embeddings index file")
+    description: str = Field(default="", description="Album description")
+    
+    @field_validator('image_paths')
+    @classmethod
+    def validate_image_paths(cls, v: List[str]) -> List[str]:
+        """Validate that image paths exist."""
+        for path in v:
+            path_obj = Path(path)
+            if not path_obj.exists():
+                # Just warn, don't fail - paths might be mounted later
+                print(f"Warning: Image path does not exist: {path}")
+        return v
+    
+    @field_validator('index')
+    @classmethod
+    def validate_index_path(cls, v: str) -> str:
+        """Validate index path format."""
+        index_path = Path(v)
+        if not index_path.suffix == '.npz':
+            raise ValueError("Index file must have .npz extension")
+        return v
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert album to dictionary format for YAML."""
+        return {
+            "name": self.name,
+            "image_paths": self.image_paths,
+            "index": self.index,
+            "description": self.description
+        }
+    
+    @classmethod
+    def from_dict(cls, key: str, data: Dict[str, Any]) -> 'Album':
+        """Create Album from dictionary."""
+        return cls(
+            key=key,
+            name=data.get("name", key.capitalize()),
+            image_paths=data.get("image_paths", []),
+            index=data["index"],
+            description=data.get("description", "")
+        )
+
+class Config(BaseModel):
+    """Main configuration model."""
+    
+    config_version: str = Field("1.0.0", description="Configuration format version")
+    albums: Dict[str, Album] = Field(default_factory=dict, description="Album configurations")
+    
+    @field_validator('config_version')
+    @classmethod
+    def validate_version(cls, v: str) -> str:
+        """Validate configuration version format."""
+        try:
+            # Simple version validation - should be in format x.y.z
+            parts = v.split('.')
+            if len(parts) != 3 or not all(part.isdigit() for part in parts):
+                raise ValueError("Version must be in format x.y.z")
+        except Exception:
+            raise ValueError("Invalid version format")
+        return v
+    
+    @model_validator(mode='after')
+    def validate_albums(self) -> 'Config':
+        """Validate albums configuration."""
+        if not self.albums:
+            print("Warning: No albums configured")
+        return self
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert config to dictionary format for YAML."""
+        return {
+            "config_version": self.config_version,
+            "albums": {
+                key: album.to_dict() 
+                for key, album in self.albums.items()
+            }
+        }
+
+class ConfigManager:
+    """Manages ClipSlide configuration file with Pydantic validation."""
+    
+    def __init__(self, config_path: Optional[Path] = None):
+        """Initialize configuration manager.
+        
+        Args:
+            config_path: Optional custom path to config file. If None, uses platform default.
+        """
+        self.config_path = config_path or self._get_default_config_path()
+        self._config: Optional[Config] = None
+    
+    def _get_default_config_path(self) -> Path:
+        """Get platform-specific default configuration file path."""
+        # Try environment variable first
+        if "CLIPSLIDE_CONFIG" in os.environ:
+            return Path(os.environ["CLIPSLIDE_CONFIG"])
+        
+        # Use platformdirs for cross-platform config directory
+        config_dir = Path(user_config_dir("clipslide", "clipslide"))
+        config_dir.mkdir(parents=True, exist_ok=True)
+        return config_dir / "config.yaml"
+    
+    def load_config(self) -> Config:
+        """Load configuration from YAML file."""
+        if self._config is None:
+            if not self.config_path.exists():
+                # Create default config if it doesn't exist
+                self._create_default_config()
+            
+            try:
+                with open(self.config_path, 'r') as f:
+                    config_data = yaml.safe_load(f)
+                
+                # Convert album dictionaries to Album objects
+                albums = {}
+                for key, album_data in config_data.get('albums', {}).items():
+                    albums[key] = Album.from_dict(key, album_data)
+                
+                self._config = Config(
+                    config_version=config_data.get('config_version', '1.0.0'),
+                    albums=albums
+                )
+                
+            except Exception as e:
+                raise RuntimeError(f"Failed to load configuration from {self.config_path}: {e}")
+        
+        return self._config
+    
+    def _create_default_config(self):
+        """Create a default configuration file."""
+        default_album = Album(
+            key="family",
+            name="Family Photos",
+            image_paths=[str(Path.home() / "Pictures")],
+            index=str(Path.home() / "Pictures" / "embeddings.npz"),
+            description="Family photo collection"
+        )
+        
+        default_config = Config(
+            config_version="1.0.0",
+            albums={"family": default_album}
+        )
+        
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.config_path, 'w') as f:
+            yaml.safe_dump(default_config.to_dict(), f, default_flow_style=False, indent=2)
+        
+        self._config = default_config
+    
+    def save_config(self):
+        """Save current configuration to file."""
+        if self._config is None:
+            raise RuntimeError("No configuration loaded")
+        
+        try:
+            with open(self.config_path, 'w') as f:
+                yaml.safe_dump(self._config.to_dict(), f, default_flow_style=False, indent=2)
+        except Exception as e:
+            raise RuntimeError(f"Failed to save configuration to {self.config_path}: {e}")
+    
+    def get_albums(self) -> Dict[str, Album]:
+        """Get all albums."""
+        config = self.load_config()
+        return config.albums.copy()
+    
+    def get_album(self, key: str) -> Optional[Album]:
+        """Get a specific album by key."""
+        albums = self.get_albums()
+        return albums.get(key)
+    
+    def add_album(self, album: Album) -> bool:
+        """Add a new album.
+        
+        Args:
+            album: Album object to add
+            
+        Returns:
+            True if added successfully, False if key already exists
+        """
+        config = self.load_config()
+        
+        if album.key in config.albums:
+            return False
+        
+        config.albums[album.key] = album
+        self._config = config
+        self.save_config()
+        return True
+    
+    def update_album(self, album: Album) -> bool:
+        """Update an existing album.
+        
+        Args:
+            album: Album object with updated data
+            
+        Returns:
+            True if updated successfully, False if key doesn't exist
+        """
+        config = self.load_config()
+        
+        if album.key not in config.albums:
+            return False
+        
+        config.albums[album.key] = album
+        self._config = config
+        self.save_config()
+        return True
+    
+    def delete_album(self, key: str) -> bool:
+        """Delete an album by key.
+        
+        Args:
+            key: Album key to delete
+            
+        Returns:
+            True if deleted successfully, False if key doesn't exist
+        """
+        config = self.load_config()
+        
+        if key not in config.albums:
+            return False
+        
+        del config.albums[key]
+        self._config = config
+        self.save_config()
+        return True
+    
+    def get_photo_albums_dict(self) -> Dict[str, str]:
+        """Get albums in the old PHOTO_ALBUMS format for backward compatibility.
+        
+        Returns:
+            Dictionary mapping album keys to their first image path
+        """
+        albums = self.get_albums()
+        return {
+            key: album.image_paths[0] if album.image_paths else ""
+            for key, album in albums.items()
+        }
+    
+    def find_image_in_album(self, album_key: str, relative_path: str) -> Optional[Path]:
+        """Find the full path of an image in any of the album's image paths.
+        
+        Args:
+            album_key: Album key
+            relative_path: Relative path to the image
+            
+        Returns:
+            Full path to the image if found, None otherwise
+        """
+        album = self.get_album(album_key)
+        if not album:
+            return None
+        
+        for image_path in album.image_paths:
+            full_path = Path(image_path) / relative_path
+            if full_path.exists():
+                return full_path
+        
+        # If not found, return path from first directory (for error handling)
+        if album.image_paths:
+            return Path(album.image_paths[0]) / relative_path
+        return None
+    
+    def get_relative_path(self, full_path: str, album_key: str) -> Optional[str]:
+        """Get relative path of image within album's image paths.
+        
+        Args:
+            full_path: Full path to the image
+            album_key: Album key
+            
+        Returns:
+            Relative path if found, None otherwise
+        """
+        album = self.get_album(album_key)
+        if not album:
+            return None
+        
+        full_path = Path(full_path)
+        for image_path in album.image_paths:
+            try:
+                return full_path.relative_to(image_path).as_posix()
+            except ValueError:
+                continue
+        
+        # If not found in any path, return the filename
+        return full_path.name
+    
+    def validate_config(self) -> bool:
+        """Validate the current configuration.
+        
+        Returns:
+            True if configuration is valid
+        """
+        try:
+            self.load_config()
+            return True
+        except Exception as e:
+            print(f"Configuration validation failed: {e}")
+            return False
+
+# Convenience functions for creating albums
+def create_album(
+    key: str,
+    name: str,
+    image_paths: List[str],
+    index: str,
+    description: str = ""
+) -> Album:
+    """Create a new Album instance with validation.
+    
+    Args:
+        key: Unique album identifier
+        name: Display name for the album
+        image_paths: List of paths containing images
+        index: Path to the embeddings index file
+        description: Album description
+        
+    Returns:
+        Validated Album instance
+    """
+    return Album(
+        key=key,
+        name=name,
+        image_paths=image_paths,
+        index=index,
+        description=description
+    )
