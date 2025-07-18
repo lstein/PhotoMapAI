@@ -20,6 +20,7 @@ export async function fetchNextImage() {
         state.searchIndex = 0; // Loop back to start
       formData.append("embeddings_file", state.embeddingsFile);
       formData.append("current_image", currentFilepath);
+      formData.append("album", state.album);
       response = await fetch("retrieve_image/", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -30,6 +31,7 @@ export async function fetchNextImage() {
     } else {
       // Convert query parameters to form data
       formData.append("embeddings_file", state.embeddingsFile);
+      formData.append("album", state.album);
       if (state.mode === "random") {
         formData.append("random", "true");
       } else if (state.mode === "sequential") {
@@ -74,6 +76,7 @@ export async function searchImage(file) {
   formData.append("file", file);
   formData.append("top_k", 100);
   formData.append("embeddings_file", state.embeddingsFile);
+  formData.append("album", state.album);
 
   try {
     const response = await fetch("search_with_image/", {
@@ -94,6 +97,7 @@ export async function searchText(query) {
     formData.append("text_query", query);
     formData.append("top_k", 100);
     formData.append("embeddings_file", state.embeddingsFile);
+    formData.append("album", state.album);
 
     try {
       const response = await fetch("search_with_text/", {

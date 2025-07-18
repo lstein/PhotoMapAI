@@ -21,17 +21,14 @@ from pydantic import BaseModel
 from clipslide.backend.embeddings import Embeddings
 from clipslide.backend.metadata_modules import SlideSummary
 
-# Read from environment variables or use defaults
-IMAGES_ROOT = os.environ.get("IMAGES_ROOT", "/net/cubox/CineRAID")
-
 # Temporary dictionary to map photo album names to their paths under IMAGES_ROOT
 PHOTO_ALBUMS = {
-    "family": os.path.join(IMAGES_ROOT, "Pictures"),
-    "smut": os.path.join(IMAGES_ROOT, "Archive/Pictures"),
-    "invoke": os.path.join(IMAGES_ROOT, "Archive/InvokeAI"),
-    "yiffy": os.path.join(IMAGES_ROOT, "Archive/InvokeAI/Yiffy"),
-    "legacy": os.path.join(IMAGES_ROOT, "Archive/InvokeAI/2023/1"),
-    "gps_test": os.path.join(IMAGES_ROOT, "Pictures/2020"),
+    "family": "/net/cubox/CineRAID/Pictures",
+    "smut": "/net/cubox/CineRAID/Archive/Pictures", 
+    "invoke": "/net/cubox/CineRAID/Archive/InvokeAI",
+    "yiffy": "/net/cubox/CineRAID/Archive/InvokeAI/Yiffy",
+    "legacy": "/net/cubox/CineRAID/Archive/InvokeAI/2023/1",
+    "gps_test": "/net/cubox/CineRAID/Pictures/2020",
 }
 
 def get_package_resource_path(resource_name: str) -> str:
@@ -53,7 +50,6 @@ def get_package_resource_path(resource_name: str) -> str:
         return str(Path(__file__).parent / resource_name)
 
 app = FastAPI(title="Slideshow")
-app.mount("/images", StaticFiles(directory=IMAGES_ROOT), name="images")
 
 # Mount static files from package resources
 static_path = get_package_resource_path("static")
@@ -101,6 +97,7 @@ async def get_root(
 async def do_embedding_search_by_image(
     file: UploadFile = File(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
+    album: str = Form("family"),  # Add album parameter
     top_k: int = Form(20),
 ) -> SearchResultsResponse:
     """Search for similar images using a query image."""
@@ -119,7 +116,7 @@ async def do_embedding_search_by_image(
     return SearchResultsResponse(
         results=[
             SearchResult(
-                filename=Path(filename).relative_to(IMAGES_ROOT).as_posix(),
+                filename=Path(filename).relative_to(PHOTO_ALBUMS[album]).as_posix(),
                 score=float(score),
             )
             for filename, score in zip(results, scores)
@@ -131,6 +128,7 @@ async def do_embedding_search_by_image(
 async def do_embedding_search_by_text(
     text_query: str = Form(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
+    album: str = Form("family"),  # Add album parameter
     top_k: int = Form(20),
 ) -> SearchResultsResponse:
     """Search for images semantically matching the query."""
@@ -141,7 +139,7 @@ async def do_embedding_search_by_text(
     return SearchResultsResponse(
         results=[
             SearchResult(
-                filename=Path(filename).as_posix(),
+                filename=Path(filename).relative_to(PHOTO_ALBUMS[album]).as_posix(),
                 score=float(score),
             )
             for filename, score in zip(results, scores)
@@ -153,12 +151,15 @@ async def do_embedding_search_by_text(
 async def retrieve_image(
     current_image: str = Form(...),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
+    album: str = Form("family"),  # Add album parameter
 ) -> SlideSummary:
     """Retrieve the next image based on the current image."""
     # Load embeddings
     embeddings = Embeddings(embeddings_path=Path(embeddings_file))
-    slide_metadata = embeddings.retrieve_image(Path(IMAGES_ROOT, current_image))
-    slide_metadata.url = (Path('/images') / Path(slide_metadata.filepath).relative_to(IMAGES_ROOT)).as_posix()
+    slide_metadata = embeddings.retrieve_image(Path(PHOTO_ALBUMS[album], current_image))
+    
+    # Create album-specific URL
+    slide_metadata.url = f"/images/{album}/{Path(slide_metadata.filepath).relative_to(PHOTO_ALBUMS[album]).as_posix()}"
     return slide_metadata
 
 
@@ -166,6 +167,7 @@ async def retrieve_image(
 async def retrieve_next_image(
     current_image: str = Form(None),
     embeddings_file: str = Form("clip_image_embeddings.npz"),
+    album: str = Form("family"),  # Add album parameter
     random: bool = Form(False),
 ) -> SlideSummary:
     """Retrieve the next image based on the current image."""
@@ -173,29 +175,33 @@ async def retrieve_next_image(
     embeddings = Embeddings(embeddings_path=Path(embeddings_file))
 
     if random:
-        # Return a random image from the embeddings
         slide_metadata = embeddings.retrieve_next_image(random=True)
     else:
-        # Get the next image based on the current image
         slide_metadata = embeddings.retrieve_next_image(
-            current_image=Path(current_image) if current_image else None, 
+            current_image=Path(PHOTO_ALBUMS[album], current_image) if current_image else None, 
             random=False
         )
-    slide_metadata.url = (Path('/images') / Path(slide_metadata.filepath).relative_to(IMAGES_ROOT)).as_posix()
+    
+    # Create album-specific URL
+    slide_metadata.url = f"/images/{album}/{Path(slide_metadata.filepath).relative_to(PHOTO_ALBUMS[album]).as_posix()}"
     return slide_metadata
 
 @app.delete("/delete_image/")
-async def delete_image(file_to_delete: str, embeddings_file: str) -> JSONResponse:
+async def delete_image(
+    file_to_delete: str, 
+    embeddings_file: str,
+    album: str = Form("family")  # Add album parameter
+) -> JSONResponse:
     """Delete an image file."""
     try:
-
-        image_path = Path(file_to_delete)
+        # Use album-specific path
+        image_path = Path(PHOTO_ALBUMS[album]) / file_to_delete
         
-        # Security check: ensure the file is within IMAGES_ROOT
+        # Security check: ensure the file is within the album directory
         resolved_path = image_path.resolve()
-        images_root_resolved = Path(IMAGES_ROOT).resolve()
+        album_root = Path(PHOTO_ALBUMS[album]).resolve()
         
-        if not str(resolved_path).startswith(str(images_root_resolved)):
+        if not str(resolved_path).startswith(str(album_root)):
             raise HTTPException(status_code=403, detail="Access denied")
         
         if not image_path.exists():
@@ -210,7 +216,7 @@ async def delete_image(file_to_delete: str, embeddings_file: str) -> JSONRespons
         except OSError as e:
             raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
-        # And removing it from the embeddings file
+        # Remove from embeddings
         embeddings = Embeddings(embeddings_path=Path(embeddings_file))
         embeddings.remove_image_from_embeddings(image_path)
 
@@ -221,6 +227,33 @@ async def delete_image(file_to_delete: str, embeddings_file: str) -> JSONRespons
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+@app.get("/images/{album}/{path:path}")
+async def serve_image(album: str, path: str):
+    """Serve images from different albums dynamically."""
+    # Validate album
+    if album not in PHOTO_ALBUMS:
+        raise HTTPException(status_code=404, detail="Album not found")
+    
+    # Construct full path
+    full_path = Path(PHOTO_ALBUMS[album]) / path
+    
+    # Security check - ensure path is within album directory
+    try:
+        resolved_path = full_path.resolve()
+        album_root = Path(PHOTO_ALBUMS[album]).resolve()
+        if not str(resolved_path).startswith(str(album_root)):
+            raise HTTPException(status_code=403, detail="Access denied")
+    except Exception:
+        raise HTTPException(status_code=403, detail="Invalid path")
+    
+    # Check if file exists
+    if not full_path.exists() or not full_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Serve the file
+    from fastapi.responses import FileResponse
+    return FileResponse(full_path)
 
 def main():
     """Main entry point for the slideshow server."""
