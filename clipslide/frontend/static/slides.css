@@ -36,7 +36,9 @@ body {
   margin: 0 auto;
   background: #000;
   -webkit-user-drag: none;
-  user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
 }
 
 .swiper-scrollbar {
@@ -1039,15 +1041,6 @@ body {
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
-}
-
-/* Remove focus styles for buttons and radio buttons */
-button {
-  tabindex: -1;
-}
-
-input[type="radio"] {
-  tabindex: -1;
 }
 
 /* ===== RESPONSIVE DESIGN ===== */
