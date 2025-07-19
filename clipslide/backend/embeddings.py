@@ -7,6 +7,7 @@ and to search for similar images using a query image. It uses the CLIP model fro
 for image embeddings and similarity calculations.
 """
 
+from ast import Index
 import os
 import clip
 import functools
@@ -27,6 +28,19 @@ from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
 from .metadata_extraction import MetadataExtractor
 from .progress import progress_tracker, IndexStatus
+
+class IndexResult(BaseModel):
+    """
+    Result of an indexing operation.
+    Contains the embeddings, filenames, modification times, metadata, and any bad files encountered.
+    """
+    model_config = {"arbitrary_types_allowed": True}
+    
+    embeddings: np.ndarray
+    filenames: np.ndarray
+    modification_times: np.ndarray
+    metadata: np.ndarray
+    bad_files: list[Path] = []
 
 
 class Embeddings(BaseModel):
@@ -90,7 +104,7 @@ class Embeddings(BaseModel):
         self,
         image_paths_or_dir: list[Path] | Path,
         create_index: bool = True,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]]:
+    ) -> IndexResult:
         """
         Index images using CLIP and save their embeddings.
 
@@ -161,14 +175,21 @@ class Embeddings(BaseModel):
                 f"Indexed {len(embeddings)} images and saved to {self.embeddings_path}"
             )
 
-        return embeddings, filenames, mod_times, metadatas, bad_files
+        return IndexResult(
+            embeddings=embeddings,
+            filenames=filenames,
+            modification_times=mod_times,
+            metadata=metadatas,
+            bad_files=bad_files,
+        )
+
 
     async def create_index_async(
         self,
         image_paths_or_dir: list[Path] | Path,
         album_key: str,
         create_index: bool = True,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]]:
+    ) -> IndexResult:
         """
         Asynchronously index images using CLIP with progress tracking.
         """
@@ -254,7 +275,13 @@ class Embeddings(BaseModel):
             # Mark as completed
             progress_tracker.update_progress(album_key, total_images, "Completed")
 
-            return embeddings, filenames, mod_times, metadatas, bad_files
+            return IndexResult(
+                embeddings=embeddings,
+                filenames=filenames,
+                modification_times=mod_times,
+                metadata=metadatas,
+                bad_files=bad_files,
+            )
 
         except Exception as e:
             progress_tracker.set_error(album_key, str(e))
@@ -262,7 +289,7 @@ class Embeddings(BaseModel):
 
     def update_index(
         self, image_paths_or_dir: list[Path] | Path
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]]:
+    ) -> IndexResult:
         """
         Update existing embeddings with new images.
 
@@ -313,27 +340,22 @@ class Embeddings(BaseModel):
                     modification_times=existing_modtimes,
                     metadata=existing_metadatas,
                 )
-                return (
-                    existing_embeddings,
-                    existing_filenames,
-                    existing_modtimes,
-                    existing_metadatas,
-                    [],
+                print("No new images found to index.")
+                return IndexResult(
+                    embeddings=existing_embeddings,
+                    filenames=existing_filenames,
+                    modification_times=existing_modtimes,
+                    metadata=existing_metadatas,
+                    bad_files=[],
                 )
 
             # Index new images
-            (
-                new_embeddings,
-                new_filenames,
-                new_modification_times,
-                new_metadatas,
-                bad_files,
-            ) = self.create_index(
+            index_result = self.create_index(
                 list(new_image_paths),
                 create_index=False,
             )
 
-            if new_embeddings.shape[0] == 0:
+            if index_result.embeddings.shape[0] == 0:
                 np.savez(
                     self.embeddings_path,
                     embeddings=existing_embeddings,
@@ -341,26 +363,27 @@ class Embeddings(BaseModel):
                     modification_times=existing_modtimes,
                     metadata=existing_metadatas,
                 )
-                return (
-                    existing_embeddings,
-                    existing_filenames,
-                    existing_modtimes,
-                    existing_metadatas,
-                    bad_files,
+
+                return IndexResult(
+                    embeddings=existing_embeddings,
+                    filenames=existing_filenames,
+                    modification_times=existing_modtimes,
+                    metadata=existing_metadatas,
+                    bad_files=[],
                 )
 
             # Combine existing and new embeddings
             if existing_embeddings.size == 0:
                 existing_embeddings = np.empty(
-                    (0, new_embeddings.shape[1]), dtype=new_embeddings.dtype
+                    (0, index_result.embeddings.shape[1]), dtype=index_result.embeddings.dtype
                 )
 
-            updated_embeddings = np.vstack((existing_embeddings, new_embeddings))
-            updated_filenames = np.concatenate((existing_filenames, new_filenames))
+            updated_embeddings = np.vstack((existing_embeddings, index_result.embeddings))
+            updated_filenames = np.concatenate((existing_filenames, index_result.filenames))
             updated_mod_times = np.concatenate(
-                (existing_modtimes, new_modification_times)
+                (existing_modtimes, index_result.modification_times)
             )
-            updated_metadatas = np.concatenate((existing_metadatas, new_metadatas))
+            updated_metadatas = np.concatenate((existing_metadatas, index_result.metadata))
 
             # Save updated embeddings and filenames
             np.savez(
@@ -374,12 +397,12 @@ class Embeddings(BaseModel):
             # Clear cache after updating embeddings
             self.open_cached_embeddings.cache_clear()
 
-            return (
-                updated_embeddings,
-                updated_filenames,
-                updated_mod_times,
-                updated_metadatas,
-                bad_files,
+            return IndexResult(
+                embeddings=updated_embeddings,
+                filenames=updated_filenames,
+                modification_times=updated_mod_times,
+                metadata=updated_metadatas,
+                bad_files=index_result.bad_files,
             )
 
         except Exception as e:
@@ -389,7 +412,7 @@ class Embeddings(BaseModel):
         self, 
         image_paths_or_dir: list[Path] | Path,
         album_key: str
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[Path]]:
+    ) -> IndexResult:
         """
         Asynchronously update existing embeddings with new images.
         """
@@ -426,31 +449,43 @@ class Embeddings(BaseModel):
 
             if not new_image_paths:
                 progress_tracker.update_progress(album_key, 0, "No new images found")
-                return (existing_embeddings, existing_filenames, existing_modtimes, existing_metadatas, [])
+                return IndexResult(
+                    embeddings=existing_embeddings,
+                    filenames=existing_filenames,
+                    modification_times=existing_modtimes,
+                    metadata=existing_metadatas,
+                    bad_files=[]
+                )
 
             # Update progress tracker with actual count
             total_new_images = len(new_image_paths)
             progress_tracker.start_operation(album_key, total_new_images, "indexing")
 
             # Index new images
-            (new_embeddings, new_filenames, new_modification_times, new_metadatas, bad_files) = await self.create_index_async(
+            index_result = await self.create_index_async(
                 list(new_image_paths), 
                 album_key,
                 create_index=False
             )
-
-            if new_embeddings.shape[0] == 0:
+            progress_tracker.update_progress(album_key, total_new_images, "Indexing completed")
+            if index_result.embeddings.shape[0] == 0:
                 progress_tracker.update_progress(album_key, total_new_images, "No new images were successfully indexed")
-                return (existing_embeddings, existing_filenames, existing_modtimes, existing_metadatas, bad_files)
+                return IndexResult(
+                    embeddings=existing_embeddings,
+                    filenames=existing_filenames,
+                    modification_times=existing_modtimes,
+                    metadata=existing_metadatas,
+                    bad_files=index_result.bad_files,
+                )
 
             # Combine existing and new embeddings
             if existing_embeddings.size == 0:
-                existing_embeddings = np.empty((0, new_embeddings.shape[1]), dtype=new_embeddings.dtype)
+                existing_embeddings = np.empty((0, index_result.embeddings.shape[1]), dtype=index_result.embeddings.dtype)
 
-            updated_embeddings = np.vstack((existing_embeddings, new_embeddings))
-            updated_filenames = np.concatenate((existing_filenames, new_filenames))
-            updated_mod_times = np.concatenate((existing_modtimes, new_modification_times))
-            updated_metadatas = np.concatenate((existing_metadatas, new_metadatas))
+            updated_embeddings = np.vstack((existing_embeddings, index_result.embeddings))
+            updated_filenames = np.concatenate((existing_filenames, index_result.filenames))
+            updated_mod_times = np.concatenate((existing_modtimes, index_result.modification_times))
+            updated_metadatas = np.concatenate((existing_metadatas, index_result.metadata))
 
             # Save updated embeddings
             np.savez(
@@ -464,8 +499,14 @@ class Embeddings(BaseModel):
             # Clear cache after updating embeddings
             self.open_cached_embeddings.cache_clear()
 
-            return (updated_embeddings, updated_filenames, updated_mod_times, updated_metadatas, bad_files)
-            
+            return IndexResult(
+                embeddings=updated_embeddings,
+                filenames=updated_filenames,
+                modification_times=updated_mod_times,
+                metadata=updated_metadatas,
+                bad_files=index_result.bad_files
+            )
+
         except Exception as e:
             progress_tracker.set_error(album_key, str(e))
             raise
@@ -783,4 +824,3 @@ class Embeddings(BaseModel):
     def extract_image_metadata(pil_image: Image.Image) -> dict:
         """Extract metadata from an image using the dedicated extractor."""
         return MetadataExtractor.extract_image_metadata(pil_image)
-    

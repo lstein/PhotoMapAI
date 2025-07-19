@@ -36,12 +36,12 @@ def do_index():
 
     # If a single argument is given and it's a directory, treat as directory
     if len(args.image_paths) == 1 and os.path.isdir(args.image_paths[0]):
-        _, _, _, _, bad_files = embeddings.create_index(args.image_paths[0])
+        index_results = embeddings.create_index(args.image_paths[0])
     else:
-        _, _, _, _, bad_files = embeddings.create_index(args.image_paths)
-    if args.print_bad_files and bad_files:
+        index_results = embeddings.create_index(args.image_paths)
+    if args.print_bad_files and index_results.bad_files:
         print("Failed to process the following files:")
-        for f in bad_files:
+        for f in index_results.bad_files:
             print(f)
 
 def do_update_images():
@@ -76,12 +76,12 @@ def do_update_images():
 
     # If a single argument is given and it's a directory, treat as directory
     if len(args.image_paths) == 1 and os.path.isdir(args.image_paths[0]):
-        _, _, _, _,  bad_files = embeddings.update_index(args.image_paths[0])
+       index_results = embeddings.update_index(args.image_paths[0])
     else:
-        _, _, _, _,  bad_files = embeddings.update_index(args.image_paths)
-    if args.print_bad_files and bad_files:
+        index_results = embeddings.update_index(args.image_paths)
+    if args.print_bad_files and index_results.bad_files:
         print("Failed to process the following files:")
-        for f in bad_files:
+        for f in index_results.bad_files:
             print(f)
 
 def do_search():
