@@ -11,6 +11,7 @@ from .invoke_metadata_abc import (
     ControlLayer,
 )
 
+
 class Invoke3Metadata(InvokeMetadataABC):
     def get_prompts(self) -> Prompts:
         """
@@ -31,7 +32,9 @@ class Invoke3Metadata(InvokeMetadataABC):
         Returns:
             str: The name of the model used for generation.
         """
-        return self.raw_metadata.get("model", {}).get("name", "")
+        return self.raw_metadata.get("model", {}).get(
+            "name", ""
+        ) or self.raw_metadata.get("model", {}).get("model_name", "")
 
     def get_seed(self) -> int:
         """
@@ -75,7 +78,9 @@ class Invoke3Metadata(InvokeMetadataABC):
         reference_images = self.raw_metadata.get("ipAdapters", [])
         return [
             ReferenceImage(
-                model_name=image.get("ip_adapter_model", {}).get('model_name', 'Unknown Model'),
+                model_name=image.get("ip_adapter_model", {}).get(
+                    "model_name", "Unknown Model"
+                ),
                 reference_image=image.get("image", {}).get("image_name", ""),
                 weight=image.get("weight", 1.0),
             )
