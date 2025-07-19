@@ -20,7 +20,7 @@ from sklearn.neighbors import NearestNeighbors
 import networkx as nx
 import asyncio
 
-from typing import Optional, Set, Dict, Tuple, Generator
+from typing import Optional, Set, Dict, Callable, Generator
 from pathlib import Path
 from pydantic import BaseModel
 
@@ -100,89 +100,230 @@ class Embeddings(BaseModel):
             raise ValueError("Input must be a Path object or a list of Paths.")
         return images
 
-    def create_index(
+    def _process_single_image(
+        self, 
+        image_path: Path, 
+        model, 
+        preprocess, 
+        device: str
+    ) -> tuple[Optional[np.ndarray], Optional[float], Optional[dict]]:
+        """
+        Process a single image and return its embedding, modification time, and metadata.
+        
+        Returns:
+            tuple: (embedding, modification_time, metadata) or (None, None, None) if failed
+        """
+        try:
+            pil_image = Image.open(image_path).convert("RGB")
+            pil_image = ImageOps.exif_transpose(pil_image)
+
+            # Get file metadata
+            modification_time = image_path.stat().st_mtime
+            metadata = self.extract_image_metadata(pil_image)
+
+            # Create the CLIP embedding
+            image = preprocess(pil_image).unsqueeze(0).to(device)
+            with torch.no_grad():
+                embedding = model.encode_image(image).cpu().numpy().flatten()
+            
+            return embedding, modification_time, metadata
+        except Exception as e:
+            print(f"Error processing {image_path}: {e}")
+            return None, None, None
+
+    def _process_images_batch(
         self,
-        image_paths_or_dir: list[Path] | Path,
-        create_index: bool = True,
+        image_paths: list[Path],
+        progress_callback: Optional[Callable] = None
     ) -> IndexResult:
         """
-        Index images using CLIP and save their embeddings.
-
+        Process a batch of images and return IndexResult.
+        
         Args:
-            image_paths_or_dir (list of str or str): List of image paths or a directory path.
-            create_index (bool): Whether to save the index to disk.
+            image_paths: List of image paths to process
+            progress_callback: Optional callback function(index, total, message) for progress updates
         """
-        # Accept either a directory or a list of image paths
-        image_paths = self.get_image_files(image_paths_or_dir)
-
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model, preprocess = clip.load("ViT-B/32", device=device)
 
         embeddings = []
         filenames = []
-        modification_times = []  # List to store file modification times
-        metadatas = []  # List to store file metadata
-        bad_files = []  # List to store files that failed to process
+        modification_times = []
+        metadatas = []
+        bad_files = []
 
-        # Ensure image_paths is a list of paths (strings)
-        if isinstance(image_paths, Path):
-            image_paths = [image_paths]
-
-        for image_path in tqdm(image_paths, desc="Indexing images"):
-            try:
-                pil_image = Image.open(image_path).convert("RGB")
-                # Handle EXIF orientation
-                pil_image = ImageOps.exif_transpose(pil_image)
-
-                # Get file metadata
-                modification_time = image_path.stat().st_mtime
-                metadata = self.extract_image_metadata(pil_image)
-
-                # Create the CLIP embedding
-                image = preprocess(pil_image).unsqueeze(0).to(device)  # type: ignore
-                with torch.no_grad():
-                    embedding = model.encode_image(image).cpu().numpy().flatten()
+        total_images = len(image_paths)
+        
+        for i, image_path in enumerate(image_paths):
+            if progress_callback:
+                progress_callback(i, total_images, f"Processing {image_path.name}")
+            
+            embedding, mod_time, metadata = self._process_single_image(
+                image_path, model, preprocess, device
+            )
+            
+            if embedding is not None:
                 embeddings.append(embedding)
-                filenames.append(
-                    image_path.resolve().as_posix()
-                )  # Store the full path as a string
-                modification_times.append(modification_time)
+                filenames.append(image_path.resolve().as_posix())
+                modification_times.append(mod_time)
                 metadatas.append(metadata)
-            except Exception as e:
-                print(f"Error processing {image_path}: {e}")
-                # add failed image to a list for debugging
+            else:
                 bad_files.append(image_path)
 
-        embeddings = np.array(embeddings)  # shape: (N, 512)
-        filenames = np.array(filenames)  # shape: (N,)
-        mod_times = np.array(modification_times)  # shape: (N,)
-        metadatas = np.array(metadatas, dtype=object)  # shape: (N,)
-
-        # Save embeddings and filenames if requested
-        if create_index:
-            np.savez(
-                self.embeddings_path,
-                embeddings=embeddings,
-                filenames=filenames,
-                modification_times=mod_times,
-                metadata=metadatas,
-            )
-
-            # Clear cache after creating new index
-            self.open_cached_embeddings.cache_clear()
-
-            print(
-                f"Indexed {len(embeddings)} images and saved to {self.embeddings_path}"
-            )
-
         return IndexResult(
-            embeddings=embeddings,
-            filenames=filenames,
-            modification_times=mod_times,
-            metadata=metadatas,
-            bad_files=bad_files,
+            embeddings=np.array(embeddings) if embeddings else np.empty((0, 512)),
+            filenames=np.array(filenames),
+            modification_times=np.array(modification_times),
+            metadata=np.array(metadatas, dtype=object),
+            bad_files=bad_files
         )
 
+    async def _process_images_batch_async(
+        self,
+        image_paths: list[Path],
+        album_key: str,
+        yield_interval: int = 10
+    ) -> IndexResult:
+        """
+        Async version of _process_images_batch with progress tracking.
+        """
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model, preprocess = clip.load("ViT-B/32", device=device)
+
+        embeddings = []
+        filenames = []
+        modification_times = []
+        metadatas = []
+        bad_files = []
+
+        total_images = len(image_paths)
+        
+        for i, image_path in enumerate(image_paths):
+            # Update progress
+            progress_tracker.update_progress(
+                album_key, i, f"Processing {image_path.name}"
+            )
+            
+            embedding, mod_time, metadata = self._process_single_image(
+                image_path, model, preprocess, device
+            )
+            
+            if embedding is not None:
+                embeddings.append(embedding)
+                filenames.append(image_path.resolve().as_posix())
+                modification_times.append(mod_time)
+                metadatas.append(metadata)
+            else:
+                bad_files.append(image_path)
+
+            # Yield control periodically
+            if i % yield_interval == 0:
+                await asyncio.sleep(0.01)
+
+        return IndexResult(
+            embeddings=np.array(embeddings) if embeddings else np.empty((0, 512)),
+            filenames=np.array(filenames),
+            modification_times=np.array(modification_times),
+            metadata=np.array(metadatas, dtype=object),
+            bad_files=bad_files
+        )
+
+    def _save_embeddings(self, index_result: IndexResult) -> None:
+        """Save embeddings to disk and clear cache."""
+        # Ensure directory exists
+        self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        np.savez(
+            self.embeddings_path,
+            embeddings=index_result.embeddings,
+            filenames=index_result.filenames,
+            modification_times=index_result.modification_times,
+            metadata=index_result.metadata,
+        )
+        
+        # Clear cache after saving
+        self.open_cached_embeddings.cache_clear()
+
+    def _get_new_and_missing_images(
+        self,
+        image_paths_or_dir: list[Path] | Path,
+        existing_filenames: np.ndarray
+    ) -> tuple[set[Path], set[Path]]:
+        """Determine which images are new and which are missing."""
+        image_path_set = set(self.get_image_files(image_paths_or_dir))
+        existing_filenames_set = set(Path(p) for p in existing_filenames)
+        
+        new_image_paths = image_path_set - existing_filenames_set
+        missing_image_paths = existing_filenames_set - image_path_set
+        
+        return new_image_paths, missing_image_paths
+
+    def _filter_missing_images(
+        self,
+        missing_image_paths: set[Path],
+        existing_embeddings: np.ndarray,
+        existing_filenames: np.ndarray,
+        existing_modtimes: np.ndarray,
+        existing_metadatas: np.ndarray
+    ) -> IndexResult:
+        """Remove missing images from existing arrays."""
+        if not missing_image_paths:
+            return IndexResult(
+                embeddings=existing_embeddings,
+                filenames=existing_filenames,
+                modification_times=existing_modtimes,
+                metadata=existing_metadatas,
+                bad_files=[]
+            )
+        
+        print(f"Removing {len(missing_image_paths)} missing images from existing embeddings.")
+        
+        # Create mask for images that still exist
+        mask = np.array([Path(fname) not in missing_image_paths for fname in existing_filenames])
+        
+        return IndexResult(
+            embeddings=existing_embeddings[mask],
+            filenames=existing_filenames[mask],
+            modification_times=existing_modtimes[mask],
+            metadata=existing_metadatas[mask],
+            bad_files=[]
+        )
+
+    def _combine_index_results(
+        self,
+        existing_result: IndexResult,
+        new_result: IndexResult
+    ) -> IndexResult:
+        """Combine existing and new IndexResults."""
+        # Handle empty existing embeddings
+        if existing_result.embeddings.size == 0:
+            existing_embeddings = np.empty((0, new_result.embeddings.shape[1]), dtype=new_result.embeddings.dtype)
+        else:
+            existing_embeddings = existing_result.embeddings
+        
+        return IndexResult(
+            embeddings=np.vstack((existing_embeddings, new_result.embeddings)),
+            filenames=np.concatenate((existing_result.filenames, new_result.filenames)),
+            modification_times=np.concatenate((existing_result.modification_times, new_result.modification_times)),
+            metadata=np.concatenate((existing_result.metadata, new_result.metadata)),
+            bad_files=existing_result.bad_files + new_result.bad_files
+        )
+
+    def create_index(
+        self,
+        image_paths_or_dir: list[Path] | Path,
+        create_index: bool = True,
+    ) -> IndexResult:
+        """Index images using CLIP and save their embeddings."""
+        image_paths = self.get_image_files(image_paths_or_dir)
+        
+        result = self._process_images_batch(image_paths)
+        
+        if create_index:
+            self._save_embeddings(result)
+            print(f"Indexed {len(result.embeddings)} images and saved to {self.embeddings_path}")
+        
+        return result
 
     async def create_index_async(
         self,
@@ -190,221 +331,79 @@ class Embeddings(BaseModel):
         album_key: str,
         create_index: bool = True,
     ) -> IndexResult:
-        """
-        Asynchronously index images using CLIP with progress tracking.
-        """
-        # Accept either a directory or a list of image paths
+        """Asynchronously index images using CLIP with progress tracking."""
         image_paths = self.get_image_files(image_paths_or_dir)
         total_images = len(image_paths)
-
+        
         # Start progress tracking
         progress_tracker.start_operation(album_key, total_images, "indexing")
-
+        
         try:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            model, preprocess = clip.load("ViT-B/32", device=device)
-
-            embeddings = []
-            filenames = []
-            modification_times = []
-            metadatas = []
-            bad_files = []
-
-            # Ensure image_paths is a list of paths
-            if isinstance(image_paths, Path):
-                image_paths = [image_paths]
-
-            for i, image_path in enumerate(image_paths):
-                try:
-                    # Update progress
-                    progress_tracker.update_progress(
-                        album_key, i, f"Processing {image_path.name}"
-                    )
-
-                    pil_image = Image.open(image_path).convert("RGB")
-                    pil_image = ImageOps.exif_transpose(pil_image)
-
-                    # Get file metadata
-                    modification_time = image_path.stat().st_mtime
-                    metadata = self.extract_image_metadata(pil_image)
-
-                    # Create the CLIP embedding
-                    image = preprocess(pil_image).unsqueeze(0).to(device)
-                    with torch.no_grad():
-                        embedding = model.encode_image(image).cpu().numpy().flatten()
-
-                    embeddings.append(embedding)
-                    filenames.append(image_path.resolve().as_posix())
-                    modification_times.append(modification_time)
-                    metadatas.append(metadata)
-
-                    # Yield control periodically to allow other async operations
-                    if i % 10 == 0:  # Every 10 images
-                        await asyncio.sleep(0.01)
-
-                except Exception as e:
-                    print(f"Error processing {image_path}: {e}")
-                    bad_files.append(image_path)
-
+            result = await self._process_images_batch_async(image_paths, album_key)
+            
             # Final progress update
-            progress_tracker.update_progress(
-                album_key, total_images, "Saving index file"
-            )
-
-            embeddings = np.array(embeddings)
-            filenames = np.array(filenames)
-            mod_times = np.array(modification_times)
-            metadatas = np.array(metadatas, dtype=object)
-
-            # Save embeddings and filenames if requested
+            progress_tracker.update_progress(album_key, total_images, "Saving index file")
+            
             if create_index:
-                # Ensure directory exists
-                self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
-
-                np.savez(
-                    self.embeddings_path,
-                    embeddings=embeddings,
-                    filenames=filenames,
-                    modification_times=mod_times,
-                    metadata=metadatas,
-                )
-
-                # Clear cache after creating new index
-                self.open_cached_embeddings.cache_clear()
-
+                self._save_embeddings(result)
+            
             # Mark as completed
             progress_tracker.update_progress(album_key, total_images, "Completed")
-
-            return IndexResult(
-                embeddings=embeddings,
-                filenames=filenames,
-                modification_times=mod_times,
-                metadata=metadatas,
-                bad_files=bad_files,
-            )
-
+            
+            return result
+        
         except Exception as e:
             progress_tracker.set_error(album_key, str(e))
             raise
 
-    def update_index(
-        self, image_paths_or_dir: list[Path] | Path
-    ) -> IndexResult:
-        """
-        Update existing embeddings with new images.
-
-        Args:
-            image_paths_or_dir (list of str or str): List of image paths or a directory path.
-        """
-        assert (
-            self.embeddings_path.exists()
-        ), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
-
+    def update_index(self, image_paths_or_dir: list[Path] | Path) -> IndexResult:
+        """Update existing embeddings with new images."""
+        assert self.embeddings_path.exists(), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
+        
         try:
-            # Load existing embeddings and filenames
+            # Load existing data
             data = np.load(self.embeddings_path, allow_pickle=True)
-            existing_embeddings = data["embeddings"]  # shape: (N, 512)
-            existing_filenames = data["filenames"]  # shape: (N,)
-            existing_modtimes = data["modification_times"]  # shape: (N,)
-            existing_metadatas = data["metadata"]  # shape: (N,)
-
-            image_path_set = set(self.get_image_files(image_paths_or_dir))
-            existing_filenames_set = set(Path(p) for p in existing_filenames)
-            new_image_paths = image_path_set - existing_filenames_set
-            missing_image_paths = existing_filenames_set - image_path_set
-
-            if missing_image_paths:
-                print(
-                    f"Removing {len(missing_image_paths)} missing images from existing embeddings."
-                )
-                existing_embeddings = np.array(
-                    [
-                        emb
-                        for emb, fname in zip(existing_embeddings, existing_filenames)
-                        if Path(fname) not in missing_image_paths
-                    ]
-                )
-                existing_filenames = np.array(
-                    [
-                        fname
-                        for fname in existing_filenames
-                        if Path(fname) not in missing_image_paths
-                    ]
-                )
-
+            existing_embeddings = data["embeddings"]
+            existing_filenames = data["filenames"]
+            existing_modtimes = data["modification_times"]
+            existing_metadatas = data["metadata"]
+            
+            # Identify new and missing images
+            new_image_paths, missing_image_paths = self._get_new_and_missing_images(
+                image_paths_or_dir, existing_filenames
+            )
+            
+            # Filter out missing images
+            filtered_existing = self._filter_missing_images(
+                missing_image_paths, existing_embeddings, existing_filenames, existing_modtimes, existing_metadatas
+            )
+            
+            # If no new images, save filtered data and return
             if not new_image_paths:
-                np.savez(
-                    self.embeddings_path,
-                    embeddings=existing_embeddings,
-                    filenames=existing_filenames,
-                    modification_times=existing_modtimes,
-                    metadata=existing_metadatas,
-                )
+                self._save_embeddings(filtered_existing)
                 print("No new images found to index.")
+                return filtered_existing
+            
+            # Process new images
+            new_result = self._process_images_batch(list(new_image_paths))
+            
+            # If no new embeddings were created, return existing data
+            if new_result.embeddings.shape[0] == 0:
+                self._save_embeddings(filtered_existing)
                 return IndexResult(
-                    embeddings=existing_embeddings,
-                    filenames=existing_filenames,
-                    modification_times=existing_modtimes,
-                    metadata=existing_metadatas,
-                    bad_files=[],
+                    embeddings=filtered_existing.embeddings,
+                    filenames=filtered_existing.filenames,
+                    modification_times=filtered_existing.modification_times,
+                    metadata=filtered_existing.metadata,
+                    bad_files=new_result.bad_files
                 )
-
-            # Index new images
-            index_result = self.create_index(
-                list(new_image_paths),
-                create_index=False,
-            )
-
-            if index_result.embeddings.shape[0] == 0:
-                np.savez(
-                    self.embeddings_path,
-                    embeddings=existing_embeddings,
-                    filenames=existing_filenames,
-                    modification_times=existing_modtimes,
-                    metadata=existing_metadatas,
-                )
-
-                return IndexResult(
-                    embeddings=existing_embeddings,
-                    filenames=existing_filenames,
-                    modification_times=existing_modtimes,
-                    metadata=existing_metadatas,
-                    bad_files=[],
-                )
-
-            # Combine existing and new embeddings
-            if existing_embeddings.size == 0:
-                existing_embeddings = np.empty(
-                    (0, index_result.embeddings.shape[1]), dtype=index_result.embeddings.dtype
-                )
-
-            updated_embeddings = np.vstack((existing_embeddings, index_result.embeddings))
-            updated_filenames = np.concatenate((existing_filenames, index_result.filenames))
-            updated_mod_times = np.concatenate(
-                (existing_modtimes, index_result.modification_times)
-            )
-            updated_metadatas = np.concatenate((existing_metadatas, index_result.metadata))
-
-            # Save updated embeddings and filenames
-            np.savez(
-                self.embeddings_path,
-                embeddings=updated_embeddings,
-                filenames=updated_filenames,
-                modification_times=updated_mod_times,
-                metadata=updated_metadatas,
-            )
-
-            # Clear cache after updating embeddings
-            self.open_cached_embeddings.cache_clear()
-
-            return IndexResult(
-                embeddings=updated_embeddings,
-                filenames=updated_filenames,
-                modification_times=updated_mod_times,
-                metadata=updated_metadatas,
-                bad_files=index_result.bad_files,
-            )
-
+            
+            # Combine and save
+            combined_result = self._combine_index_results(filtered_existing, new_result)
+            self._save_embeddings(combined_result)
+            
+            return combined_result
+            
         except Exception as e:
             raise
 
@@ -413,100 +412,58 @@ class Embeddings(BaseModel):
         image_paths_or_dir: list[Path] | Path,
         album_key: str
     ) -> IndexResult:
-        """
-        Asynchronously update existing embeddings with new images.
-        """
-        assert (
-            self.embeddings_path.exists()
-        ), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
-
+        """Asynchronously update existing embeddings with new images."""
+        assert self.embeddings_path.exists(), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
+        
         try:
-            # Load existing embeddings and filenames
+            # Load existing data
             data = np.load(self.embeddings_path, allow_pickle=True)
             existing_embeddings = data["embeddings"]
             existing_filenames = data["filenames"]
             existing_modtimes = data["modification_times"]
             existing_metadatas = data["metadata"]
-
-            # Get the image paths and identify new ones
+            
             progress_tracker.start_operation(album_key, 0, "scanning")
             
-            image_path_set = set(self.get_image_files(image_paths_or_dir))
-            existing_filenames_set = set(Path(p) for p in existing_filenames)
-            new_image_paths = image_path_set - existing_filenames_set
-            missing_image_paths = existing_filenames_set - image_path_set
-
-            if missing_image_paths:
-                print(f"Removing {len(missing_image_paths)} missing images from existing embeddings.")
-                existing_embeddings = np.array([
-                    emb for emb, fname in zip(existing_embeddings, existing_filenames)
-                    if Path(fname) not in missing_image_paths
-                ])
-                existing_filenames = np.array([
-                    fname for fname in existing_filenames
-                    if Path(fname) not in missing_image_paths
-                ])
-
+            # Identify new and missing images
+            new_image_paths, missing_image_paths = self._get_new_and_missing_images(
+                image_paths_or_dir, existing_filenames
+            )
+            
+            # Filter out missing images
+            filtered_existing = self._filter_missing_images(
+                missing_image_paths, existing_embeddings, existing_filenames, existing_modtimes, existing_metadatas
+            )
+            
+            # If no new images, return early
             if not new_image_paths:
                 progress_tracker.update_progress(album_key, 0, "No new images found")
-                return IndexResult(
-                    embeddings=existing_embeddings,
-                    filenames=existing_filenames,
-                    modification_times=existing_modtimes,
-                    metadata=existing_metadatas,
-                    bad_files=[]
-                )
-
+                return filtered_existing
+            
             # Update progress tracker with actual count
             total_new_images = len(new_image_paths)
             progress_tracker.start_operation(album_key, total_new_images, "indexing")
-
-            # Index new images
-            index_result = await self.create_index_async(
-                list(new_image_paths), 
-                album_key,
-                create_index=False
-            )
-            progress_tracker.update_progress(album_key, total_new_images, "Indexing completed")
-            if index_result.embeddings.shape[0] == 0:
+            
+            # Process new images
+            new_result = await self._process_images_batch_async(list(new_image_paths), album_key)
+            
+            # If no new embeddings were created, return existing data
+            if new_result.embeddings.shape[0] == 0:
                 progress_tracker.update_progress(album_key, total_new_images, "No new images were successfully indexed")
                 return IndexResult(
-                    embeddings=existing_embeddings,
-                    filenames=existing_filenames,
-                    modification_times=existing_modtimes,
-                    metadata=existing_metadatas,
-                    bad_files=index_result.bad_files,
+                    embeddings=filtered_existing.embeddings,
+                    filenames=filtered_existing.filenames,
+                    modification_times=filtered_existing.modification_times,
+                    metadata=filtered_existing.metadata,
+                    bad_files=new_result.bad_files
                 )
-
-            # Combine existing and new embeddings
-            if existing_embeddings.size == 0:
-                existing_embeddings = np.empty((0, index_result.embeddings.shape[1]), dtype=index_result.embeddings.dtype)
-
-            updated_embeddings = np.vstack((existing_embeddings, index_result.embeddings))
-            updated_filenames = np.concatenate((existing_filenames, index_result.filenames))
-            updated_mod_times = np.concatenate((existing_modtimes, index_result.modification_times))
-            updated_metadatas = np.concatenate((existing_metadatas, index_result.metadata))
-
-            # Save updated embeddings
-            np.savez(
-                self.embeddings_path,
-                embeddings=updated_embeddings,
-                filenames=updated_filenames,
-                modification_times=updated_mod_times,
-                metadata=updated_metadatas,
-            )
-
-            # Clear cache after updating embeddings
-            self.open_cached_embeddings.cache_clear()
-
-            return IndexResult(
-                embeddings=updated_embeddings,
-                filenames=updated_filenames,
-                modification_times=updated_mod_times,
-                metadata=updated_metadatas,
-                bad_files=index_result.bad_files
-            )
-
+            
+            # Combine and save
+            combined_result = self._combine_index_results(filtered_existing, new_result)
+            self._save_embeddings(combined_result)
+            
+            return combined_result
+            
         except Exception as e:
             progress_tracker.set_error(album_key, str(e))
             raise

@@ -23,7 +23,6 @@ export function initializeFromServer() {
   if (window.slideshowConfig) {
     state.currentDelay = window.slideshowConfig.currentDelay;
     state.mode = window.slideshowConfig.mode;
-    state.embeddingsFile = window.slideshowConfig.embeddings_file;
     state.album = window.slideshowConfig.album || "family"; // Default to "family" if not set
   }
 }
@@ -40,6 +39,9 @@ export function restoreFromLocalStorage() {
 
   const storedMode = localStorage.getItem("mode");
   if (storedMode) state.mode = storedMode;
+
+  const storedAlbum = localStorage.getItem("album");
+  if (storedAlbum) state.album = storedAlbum;
 }
 
 // Save state to local storage
@@ -47,4 +49,5 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("highWaterMark", state.highWaterMark);
   localStorage.setItem("currentDelay", state.currentDelay);
   localStorage.setItem("mode", state.mode);
+  localStorage.setItem("album", state.album);
 }

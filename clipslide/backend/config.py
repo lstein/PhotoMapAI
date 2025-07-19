@@ -294,15 +294,15 @@ class ConfigManager:
         if not album:
             return None
         
-        full_path = Path(full_path)
+        fp = Path(full_path)
         for image_path in album.image_paths:
             try:
-                return full_path.relative_to(image_path).as_posix()
+                return fp.relative_to(image_path).as_posix()
             except ValueError:
                 continue
         
         # If not found in any path, return the filename
-        return full_path.name
+        return fp.name
     
     def validate_config(self) -> bool:
         """Validate the current configuration.

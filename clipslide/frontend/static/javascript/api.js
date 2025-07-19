@@ -18,7 +18,6 @@ export async function fetchNextImage() {
       let currentFilepath = state.searchResults[state.searchIndex++].filename;
       if (state.searchIndex >= state.searchResults.length)
         state.searchIndex = 0; // Loop back to start
-      formData.append("embeddings_file", state.embeddingsFile);
       formData.append("current_image", currentFilepath);
       formData.append("album", state.album);
       response = await fetch("retrieve_image/", {
@@ -30,7 +29,6 @@ export async function fetchNextImage() {
       // Otherwise we let the server handle the logic of which image to return.
     } else {
       // Convert query parameters to form data
-      formData.append("embeddings_file", state.embeddingsFile);
       formData.append("album", state.album);
       if (state.mode === "random") {
         formData.append("random", "true");
@@ -75,7 +73,6 @@ export async function searchImage(file) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("top_k", 100);
-  formData.append("embeddings_file", state.embeddingsFile);
   formData.append("album", state.album);
 
   try {
@@ -96,7 +93,6 @@ export async function searchText(query) {
     const formData = new FormData();
     formData.append("text_query", query);
     formData.append("top_k", 100);
-    formData.append("embeddings_file", state.embeddingsFile);
     formData.append("album", state.album);
 
     try {
@@ -118,7 +114,7 @@ export async function deleteImage(filepath) {
     const response = await fetch(
       `delete_image/?file_to_delete=${encodeURIComponent(
         filepath
-      )}&embeddings_file=${encodeURIComponent(state.embeddingsFile)}`,
+      )}&album=${encodeURIComponent(state.album)}`,
       {
         method: "DELETE",
       }
