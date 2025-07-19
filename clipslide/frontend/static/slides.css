@@ -1,25 +1,18 @@
-body {
-    background-color: black;
-    width: 100%;
-    height: 100%;
-    margin: 0px;
-    padding: 0px;
-    overflow-y: hidden;
-}
-
-html,
-body {
+/* ===== RESET & BASE STYLES ===== */
+html, body {
     font-family: 'Segoe UI', 'Arial', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     touch-action: none;
     overflow: hidden;
     margin: 0;
     padding: 0;
+    background-color: black;
+    width: 100%;
+    height: 100%;
 }
 
-/* Swiper base styles */
+/* ===== SWIPER CORE STYLES ===== */
 .swiper {
     width: 100vw;
-    /* height: 100dvh; */
     height: 100dvh;
     box-sizing: border-box;
     background: #111;
@@ -37,19 +30,29 @@ body {
     width: 100vw;
     height: 100dvh;
     object-fit: contain;
-    /* object-fit: scale-down; */
-    /* or use 'cover' for cropping/filling */
     display: block;
     margin: 0 auto;
     background: #000;
-    /* optional: black bars for letterboxing */
     -webkit-user-drag: none;
     user-drag: none;
 }
 
-/* Navigation buttons */
-.swiper-button-next,
-.swiper-button-prev {
+.swiper-scrollbar {
+    background: rgba(255, 255, 255, 0.15);
+    height: 10px !important;
+    border-radius: 8px;
+}
+
+.swiper-scrollbar-drag {
+    background: #00ff99 !important;
+    border-radius: 8px;
+    height: 10px !important;
+    box-shadow: 0 0 6px #00ff99, 0 0 2px #fff;
+    opacity: 1 !important;
+}
+
+/* ===== NAVIGATION BUTTONS ===== */
+.swiper-button-next, .swiper-button-prev {
     color: #fff !important;
     opacity: 0.6;
     --swiper-navigation-color: #fff;
@@ -65,40 +68,103 @@ body {
     transition: opacity 0.2s, background 0.2s, box-shadow 0.2s;
 }
 
-.swiper-button-next::after,
-.swiper-button-prev::after {
+.swiper-button-next::after, .swiper-button-prev::after {
     color: #fff !important;
-    /* Ensure arrow is white */
     font-weight: bold;
     font-size: 2.7em;
-    /* Slightly larger for thickness */
     text-shadow: 0 0 4px #000;
-    /* Optional: subtle glow for contrast */
-    /* Make the arrow thicker */
     -webkit-text-stroke: 1.5px #fff;
     stroke: 1.5px #fff;
 }
 
-.swiper-button-next {
-    right: 20px;
-}
-
-.swiper-button-prev {
-    left: 20px;
-}
-
-.swiper-button-next:hover,
-.swiper-button-prev:hover {
+.swiper-button-next:hover, .swiper-button-prev:hover {
     opacity: 1;
 }
 
-.swiper-button-next:focus,
-.swiper-button-prev:focus {
+.swiper-button-next:focus, .swiper-button-prev:focus {
     outline: none;
     box-shadow: none;
 }
 
-/* Overlay styles */
+/* ===== BUTTON GROUPS ===== */
+#bottomLeftBtnGroup, #searchPanel {
+    position: fixed;
+    bottom: 20px;
+    display: flex;
+    flex-direction: row;
+    gap: 0.5em;
+    z-index: 4000;
+    background: rgba(30, 30, 30, 0.35);
+    border-radius: 0.7em;
+    padding: 0.4em 0.8em;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+}
+
+#bottomLeftBtnGroup {
+    left: 20px;
+}
+
+#searchPanel {
+    right: 20px;
+}
+
+#bottomLeftBtnGroup button, #searchPanel button {
+    background: none;
+    border: none;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8em;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    pointer-events: auto;
+}
+
+#bottomLeftBtnGroup button:hover, #searchPanel button:hover {
+    opacity: 1;
+}
+
+/* ===== SWIPER BUTTON GROUPS ===== */
+#swiperPrevBtnGroup, #swiperNextBtnGroup {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(30, 30, 30, 0.35);
+    border-radius: 0.7em;
+    padding: 0.8em 0.4em;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+    z-index: 3500;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+}
+
+#swiperPrevBtnGroup {
+    left: 0;
+}
+
+#swiperNextBtnGroup {
+    right: 0;
+}
+
+#swiperPrevBtnGroup .swiper-button-prev,
+#swiperNextBtnGroup .swiper-button-next {
+    pointer-events: auto;
+    position: static !important;
+    margin: 0 !important;
+    left: unset !important;
+    right: unset !important;
+    top: unset !important;
+    bottom: unset !important;
+    transform: none !important;
+}
+
+/* ===== OVERLAY STYLES ===== */
 #pauseOverlay {
     position: fixed;
     top: 0;
@@ -112,21 +178,12 @@ body {
     opacity: 0;
     transition: opacity 0.3s;
     pointer-events: none;
-    /* disables all pointer events by default */
 }
 
 #pauseOverlay.visible {
     opacity: 1;
     display: flex;
     pointer-events: none;
-    /* keep pointer-events: none on the overlay itself */
-}
-
-#pauseOverlay .pausedLabel {
-    background: rgba(0, 0, 0, 0.4);
-    padding: 0.5em 1em;
-    border-radius: 0.3em;
-    margin-bottom: 1em;
 }
 
 .overlay-bg {
@@ -137,7 +194,6 @@ body {
     height: 100dvh;
     background: rgba(0, 0, 0, 0.1);
     pointer-events: none;
-    /* allow swipes/clicks to pass through */
 }
 
 .overlay-content {
@@ -149,7 +205,6 @@ body {
     z-index: 1;
     background: rgba(30, 30, 30, 0.0);
     border-radius: 0;
-    /* Remove rounded corners for full screen */
     padding: 0;
     box-shadow: none;
     display: flex;
@@ -157,24 +212,6 @@ body {
     align-items: stretch;
     justify-content: flex-start;
     pointer-events: none;
-}
-
-#filenameBanner {
-    position: static;
-    left: unset;
-    bottom: unset;
-    margin: auto auto auto auto;
-    /* top margin, auto left/right, no bottom margin */
-    width: 100%;
-    /* max-width: calc(100vw - 400px); */
-    background: rgba(0, 0, 0, 0.5);
-    color: #fff;
-    z-index: 10;
-    /* padding-bottom: 0.5em; */
-    padding-bottom: 4em;
-    box-sizing: border-box;
-    pointer-events: auto;
-    text-align: center;
 }
 
 #closeOverlayBtn {
@@ -190,30 +227,21 @@ body {
     height: 36px;
     font-size: 1.2em;
     cursor: pointer;
-}
-
-#infoBtn,
-#fullscreenBtn {
-    z-index: 4000;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    width: 48px;
-    height: 48px;
-    font-size: 1.8em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    margin: 0;
     pointer-events: auto;
 }
 
-#closeOverlayBtn,
-#delayControls,
+/* ===== FILE INFO BANNER ===== */
 #filenameBanner {
+    position: static;
+    margin: auto auto auto auto;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    z-index: 10;
+    padding-bottom: 4em;
+    box-sizing: border-box;
     pointer-events: auto;
+    text-align: center;
 }
 
 .filenameDescContainer {
@@ -230,9 +258,7 @@ body {
     align-items: center;
     justify-content: left;
     gap: 0.5em;
-    /* space between filename and button */
     white-space: nowrap;
-    /* prevent line break */
 }
 
 #filenameText {
@@ -266,7 +292,6 @@ body {
     max-width: 75vw;
     word-wrap: break-word; 
     overflow-wrap: break-word;
-    /* white-space: pre-wrap; */
     max-height: 40vh;
     overflow-y: auto;
     text-align: left;
@@ -280,14 +305,12 @@ body {
     text-align: left;
     word-break: break-word;
     white-space: pre-line;
-    /* Preserve newlines and wrap text */
 }
 
-#delayControls {
+/* ===== DELAY CONTROLS ===== */
+/* #delayControls {
     position: static;
     margin: auto auto 0 auto;
-    /* top margin, auto left/right, no bottom margin */
-
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -296,16 +319,7 @@ body {
     padding: 0.2em 0.2em;
     font-size: 2em;
     max-width: 600px;
-}
-
-#delayLabel {
-    font-size: 0.4em !important;
-}
-
-#delayControls button,
-#delayControls span {
-    font-size: 0.9em !important;
-    /* padding: 0.2em 0.2em !important; */
+    pointer-events: auto;
 }
 
 #delayControls button {
@@ -315,250 +329,596 @@ body {
     font-size: 1.5em;
     cursor: pointer;
     opacity: 0.7;
-    /* margin: 0.2em 0.3em; */
     transition: opacity 0.2s;
-    /* padding: 0.2em 0.4em; */
 }
 
 #delayControls button:hover {
     opacity: 1;
 }
+} */
 
-#delayControls #delayValue {
+#delayValue {
     color: #fff;
-    font-size: 0.5em !important;
     min-width: 2em;
     text-align: center;
     font-weight: bold;
     margin: 0.2em 0;
 }
 
-#historyProgressBar {
-    width: 100%;
-    height: 10px;
-    background: #222;
-    border-radius: 5px;
+#delayLabel {
+    /* font-size: 0.4em !important; */
+    color: #fff;
+}
+
+/* ===== FIXED SCORE DISPLAY ===== */
+.fixed-score-display {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 6px;
+    z-index: 5000;
+    pointer-events: none;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    -webkit-font-smoothing: antialiased;
+    transition: opacity 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.fixed-score-display.visible {
+    display: block;
+    opacity: 0.5;
+}
+
+.fixed-score-display.hidden {
+    display: none;
+    opacity: 0;
+}
+
+/* ===== SPINNER ===== */
+#spinner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    display: none;
+}
+
+/* ===== TEXT SEARCH PANEL ===== */
+#textSearchPanel {
+    display: none;
+    position: fixed;
+    bottom: 80px;
+    right: 40px;
+    background: rgba(30, 30, 30, 0.75);
+    border-radius: 12px;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+    padding: 1.2em 1.5em;
+    z-index: 2000;
+    width: 33vw;
+    min-width: 300px;
+    max-width: 500px;
+    transition: opacity 0.2s;
+}
+
+.search-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5em;
     position: relative;
-    margin-top: 0.5em;
+}
+
+.search-input-container {
+    position: relative;
+    display: flex;
+    width: 100%;
+}
+
+#searchInput {
+    flex: 1;
+    font-size: 1.1em;
+    padding: 0.4em 2.2em 0.4em 0.7em;
+    border-radius: 6px;
+    border: 1px solid #888;
+    background: #222;
+    color: #fff;
+}
+
+#clearTextSearchBtn {
+    position: absolute;
+    right: 0.2em;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #333;
+    border: none;
+    border-radius: 6px;
+    width: 1.8em;
+    height: 1.8em;
+    color: #fff;
+    font-size: 1.1em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+#doSearchBtn {
+    padding: 0.4em 1em;
+    border-radius: 6px;
+    border: none;
+    background: #444;
+    color: #fff;
+    font-size: 1em;
+    cursor: pointer;
+}
+
+/* ===== MODAL BASE STYLES ===== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  pointer-events: none;
+}
+
+.modal-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.modal-overlay.album-management {
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.modal-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #222;
+    border-radius: 16px;
+    padding: 2em;
+    box-shadow: 0 4px 32px #000;
+}
+
+.modal-close {
+    position: absolute;
+    top: 0.5em;
+    right: 0.5em;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.5em;
+    cursor: pointer;
+}
+
+/* ===== SETTINGS MODAL ===== */
+.settings-modal {
+    min-width: 320px;
+}
+
+.settings-header {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+#modeLabel {
+    color: #fff;
+    margin-bottom: 0.1em;
+    font-size: 1.5em !important;
+    text-align: center;
+}
+
+.settings-main {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.delay-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-right: 2em;
+}
+
+.delay-controls button {
+    margin-top: 0.4em;
+}
+
+#modeControls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #fff;
+}
+
+#modeRadioGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+}
+
+
+.setting-row {
+    margin-top: 1em;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.setting-row label {
+    font-size: 16px;
+    color: #fff;
+}
+
+#highWaterMarkInput {
+    width: 4em;
+    border-radius: 4px;
+    border: 1px solid #888;
+    padding: 0.2em;
+}
+
+#albumSelect {
+    padding: 0.5em;
+    border-radius: 4px;
+    border: 1px solid #888;
+    background: #333;
+    color: #fff;
+    /* font-size: 0.5em; */
+    min-width: 150px;
+}
+
+#albumSelect:focus {
+    outline: none;
+    border-color: #00ff99;
+    box-shadow: 0 0 4px rgba(0, 255, 153, 0.3);
+}
+
+/* ===== ALBUM MANAGEMENT MODAL ===== */
+.album-management-modal {
+    color: #fff;
+    margin: 0;
+}
+
+.album-management-modal {
+    width: 80vw;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.album-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5em;
+}
+
+.album-header h2 {
+    color: #fff;
+    margin: 0;
+    font-size: 1.5em;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 1em;
+    align-items: center;
+}
+
+/* ===== ADD ALBUM SECTION ===== */
+.add-album-section {
+    display: none;
+    margin-bottom: 2em;
+    padding: 1em;
+    background: #333;
+    border-radius: 8px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1em;
+}
+
+.section-header h3 {
+    color: #fff;
+    margin: 0;
+}
+
+.cancel-btn {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 1.2em;
+    cursor: pointer;
+}
+
+/* ===== FORM STYLES ===== */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1em;
+    margin-bottom: 1em;
+}
+
+.form-group {
+    margin-bottom: 1em;
+}
+
+.form-group label {
+    color: #fff;
+    font-size: 14px;
+    display: block;
+    margin-bottom: 0.5em;
+}
+
+.form-group input, .form-group textarea {
+    width: 100%;
+    padding: 0.5em;
+    border-radius: 4px;
+    border: 1px solid #888;
+    background: #444;
+    color: #fff;
+}
+
+.form-group textarea {
+    resize: vertical;
+}
+
+.form-buttons {
+    display: flex;
+    gap: 0.5em;
+}
+
+/* ===== ALBUM CARD STYLES ===== */
+.album-card {
+    background: #333;
+    border-radius: 8px;
+    margin-bottom: 1em;
+    padding: 1em;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.album-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.album-details {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1em;
+    align-items: start;
+}
+
+.album-name {
+    color: #fff;
+    margin: 0 0 0.5em 0;
+    font-size: 1.1em;
+}
+
+.album-key {
+    color: #aaa;
+    font-size: 0.9em;
+    margin-bottom: 0.3em;
+}
+
+.album-description {
+    color: #ccc;
+    font-size: 0.9em;
+    margin-bottom: 0.3em;
+}
+
+.album-paths {
+    color: #aaa;
+    font-size: 0.85em;
+    margin-bottom: 0.5em;
+}
+
+.indexing-section {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 200px;
+}
+
+.index-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+.index-status {
+    color: #aaa;
+    font-size: 0.9em;
+}
+
+.index-status.indexing {
+    color: #ff9800;
+}
+
+.index-status.completed {
+    color: #4caf50;
+}
+
+.index-status.error {
+    color: #f44336;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 0.5em;
+    margin-top: 1em;
+    justify-content: flex-end;
+}
+
+.edit-form {
+    display: none;
+}
+
+.edit-form h5 {
+    color: #fff;
+    margin-top: 0;
+}
+
+/* ===== PROGRESS STYLES ===== */
+.progress-container {
+    display: none;
+    width: 100%;
+    position: relative;
     overflow: hidden;
 }
 
-#historyProgressFill {
-    background: #3498db;
+.progress-bar-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    margin-bottom: 0.3em;
+}
+
+.progress-bar-track {
+    flex: 1;
+    height: 8px;
+    background: #555;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar {
     height: 100%;
     width: 0%;
-    transition: width 0.3s;
+    background: linear-gradient(90deg, #4caf50, #2196f3);
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
 }
 
-#historyProgressMarker {
+.progress-bar::before {
+    content: '';
     position: absolute;
     top: 0;
-    width: 2px;
+    left: -100%;
+    width: 100%;
     height: 100%;
-    background: red;
-    left: 0;
-    transition: left 0.3s;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    animation: shimmer 2s infinite;
 }
 
-/* Spinner styles */
-#spinner {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 50%;
-    padding: 1em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Info button styles */
-#infoBtn {
-    pointer-events: auto;
-    z-index: 4000;
-    /* higher than #pauseOverlay */
-}
-
-#delayControls #playPauseBtn {
-    font-size: 0.6em !important;
-}
-
-/* Favorite button styles */
-#favoriteBtn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    pointer-events: auto;
-    z-index: 5000;
-}
-
-#favoriteStar.favorited polygon {
-    fill: gold;
-    stroke: gold;
-}
-
-/* Bottom left button group */
-#bottomLeftBtnGroup {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    display: flex;
-    flex-direction: row;
-    gap: 0.5em;
-    /* space between buttons */
-    z-index: 4000;
-}
-
-#bottomLeftBtnGroup button {
-    background: none;
-    border: none;
-    border-radius: 50%;
-    width: 48px;
-    height: 48px;
+.progress-text {
     color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.8em;
-    cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.2s;
-    pointer-events: auto;
+    font-size: 0.85em;
+    min-width: 40px;
+    text-align: right;
 }
 
-#bottomLeftBtnGroup button:hover {
-    opacity: 1;
+.estimated-time {
+    color: #aaa;
+    font-size: 0.8em;
+    text-align: right;
+    min-height: 1.2em;
 }
 
-/* Bottom right button group */
-#searchPanel {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    display: flex;
-    flex-direction: row;
-    gap: 0.5em;
-    /* space between buttons */
-    z-index: 4000;
-}
-
-#searchPanel button {
-    background: none;
+/* ===== BUTTON STYLES ===== */
+.btn-primary {
+    background: #4caf50;
     border: none;
-    border-radius: 50%;
-    width: 48px;
-    height: 48px;
     color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.8em;
+    padding: 0.5em 1em;
+    border-radius: 6px;
     cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.2s;
-    pointer-events: auto;
+    font-size: 14px;
 }
 
-#searchPanel button:hover {
-    opacity: 1;
+.btn-secondary {
+    background: #666;
+    border: none;
+    color: #fff;
+    padding: 0.5em 1em;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
 }
 
-#bottomLeftBtnGroup,
-#searchPanel {
-    background: rgba(30, 30, 30, 0.35);
-    /* subtle dark shade */
-    border-radius: 0.7em;
+.btn-edit {
+    background: #ff9800;
+    border: none;
+    color: #fff;
     padding: 0.4em 0.8em;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
-    /* optional: soft shadow */
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
 }
 
-/* Swiper prev button group (left center) */
-#swiperPrevBtnGroup {
-    position: fixed;
-    top: 50%;
-    left: 0;
-    transform: translateY(-50%);
-    background: rgba(30, 30, 30, 0.35);
-    border-radius: 0.7em;
-    padding: 0.8em 0.4em;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
-    z-index: 3500;
-    display: flex;
-    align-items: center;
-    pointer-events: none;
-    /* let button handle events */
+.btn-delete {
+    background: #f44336;
+    border: none;
+    color: #fff;
+    padding: 0.4em 0.8em;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
 }
 
-#swiperPrevBtnGroup .swiper-button-prev {
-    pointer-events: auto;
-    position: static !important;
-    margin: 0 !important;
-    left: unset !important;
-    right: unset !important;
-    top: unset !important;
-    bottom: unset !important;
-    transform: none !important;
+.btn-index {
+    background: #2196f3;
+    border: none;
+    color: #fff;
+    padding: 0.4em 0.8em;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
 }
 
-/* Swiper next button group (right center) */
-#swiperNextBtnGroup {
-    position: fixed;
-    top: 50%;
-    right: 0;
-    transform: translateY(-50%);
-    background: rgba(30, 30, 30, 0.35);
-    border-radius: 0.7em;
-    padding: 0.8em 0.4em;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
-    z-index: 3500;
-    display: flex;
-    align-items: center;
-    pointer-events: none;
+.btn-cancel {
+    display: none;
+    background: #f44336;
+    border: none;
+    color: #fff;
+    padding: 0.4em 0.8em;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
 }
 
-#swiperNextBtnGroup .swiper-button-next {
-    pointer-events: auto;
-    position: static !important;
-    margin: 0 !important;
-    left: unset !important;
-    right: unset !important;
-    top: unset !important;
-    bottom: unset !important;
-    transform: none !important;
+/* ===== UTILITY CLASSES ===== */
+.hidden-fullscreen {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-/* Responsive adjustments */
-@media (max-width: 100%) {
-    #filenameBanner {
-        min-width: 180px;
-        padding: 0.5em 1em;
-        font-size: 0.95em;
-    }
-
-    #descriptionText {
-        font-size: 1em;
-    }
+.slide-image {
+    max-width: 100vw;
+    max-height: 100dvh;
+    display: block;
+    margin: auto;
 }
 
-#modeControls label {
-    font-size: 0.6em !important;
-}
-
-#imageSearchBtn.dragover,
-#searchPanel.dragover {
-    outline: 2px dashed limegreen;
-    background: rgba(0, 255, 0, 0.1);
-}
-
-/* Add to your CSS file */
-#imageSearchBtn,
-#textSearchBtn {
-    touch-action: manipulation;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
-.query-image-label {
+.query-image-label, .query-image {
     position: absolute;
     top: 12px;
     left: 50%;
@@ -572,13 +932,6 @@ body {
     z-index: 5000;
     pointer-events: none;
     user-select: none;
-}
-
-.slide-image {
-    max-width: 100vw;
-    max-height: 100dvh;
-    display: block;
-    margin: auto;
 }
 
 .checkmark-overlay {
@@ -593,91 +946,34 @@ body {
     pointer-events: none;
 }
 
-.query-image {
-    position: absolute;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.5);
-    color: #fff;
-    padding: 0.3em 0.8em;
-    border-radius: 6px;
-    font-size: 1.1em;
-    font-weight: bold;
-    z-index: 5000;
-    pointer-events: none;
-    user-select: none;
-}
-
-.swiper-scrollbar {
-    background: rgba(255, 255, 255, 0.15);
-    /* Track color */
-    height: 10px !important;
-    /* Make the scrollbar thicker */
-    border-radius: 8px;
-}
-
-.swiper-scrollbar-drag {
-    background: #00ff99 !important;
-    /* Bright green thumb */
-    border-radius: 8px;
-    height: 10px !important;
-    box-shadow: 0 0 6px #00ff99, 0 0 2px #fff;
-    opacity: 1 !important;
-}
-
-#textSearchPanel {
-    display: none;
+/* ===== FULLSCREEN INDICATOR ===== */
+.fullscreen-playback-indicator {
     position: fixed;
-    bottom: 80px;
-    right: 40px;
-    background: rgba(30, 30, 30, 0.75);
-    border-radius: 12px;
-    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
-    padding: 1.2em 1.5em 1.2em 1.5em;
-    z-index: 2000;
-    width: 33vw; /* 25% of viewport width */
-    min-width: 300px; /* Keep a minimum for mobile */
-    max-width: 500px; /* Set a maximum to prevent it from getting too wide */
-    transition: opacity 0.2s;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 4rem;
+    padding: 20px;
+    border-radius: 50%;
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+    pointer-events: none;
 }
 
-.search-input-container {
-  position: relative;
-  display: flex;
-  width: 100%;
+.fullscreen-playback-indicator.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
 }
 
-#searchInput {
-  flex: 1;
-  font-size: 1.1em;
-  padding: 0.4em 2.2em 0.4em 0.7em; /* Keep right padding for button space */
-  border-radius: 6px;
-  border: 1px solid #888;
-  background: #222;
-  color: #fff;
-}
-
-#clearTextSearchBtn {
-  position: absolute;
-  right: 0.2em; /* Distance from right edge of input */
-  top: 50%;
-  transform: translateY(-50%);
-  background: #333;
-  border: none;
-  border-radius: 6px;
-  width: 1.8em;
-  height: 1.8em;
-  color: #fff;
-  font-size: 1.1em;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-/* .exif-metadata styles */
+/* ===== EXIF METADATA ===== */
 .exif-metadata {
     white-space: normal !important;
 }
@@ -689,8 +985,7 @@ body {
     border-collapse: collapse;
 }
 
-.exif-metadata th,
-.exif-metadata td {
+.exif-metadata th, .exif-metadata td {
     padding: 2px 6px !important;
     margin: 0 !important;
     font-size: 0.98em;
@@ -702,231 +997,142 @@ body {
     padding: 0 !important;
 }
 
-.fixed-score-display {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 8px 16px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 6px;
-  z-index: 5000; /* Higher than other elements */
-  pointer-events: none;
-  
-  /* Mobile-specific fixes */
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-font-smoothing: antialiased;
-  
-  /* Smooth transitions */
-  transition: opacity 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.fixed-score-display.visible {
-  display: block;
-  opacity: 0.5;
-}
-
-.fixed-score-display.hidden {
-  display: none;
-  opacity: 0;
-}
-
-.setting-group {
-  margin-bottom: 1em;
-  display: flex;
-  align-items: center;
-  gap: 1em;
-}
-
-.setting-group label {
-  font-weight: bold;
-  min-width: 120px;
-  color: #fff;
-}
-
-#albumSelect {
-  padding: 0.5em;
-  border-radius: 4px;
-  border: 1px solid #888;
-  background: #333;
-  color: #fff;
-  font-size: 0.8em;
-  min-width: 150px;
-}
-
-#albumSelect:focus {
-  outline: none;
-  border-color: #00ff99;
-  box-shadow: 0 0 4px rgba(0, 255, 153, 0.3);
-}
-
-.hidden-fullscreen {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-}
-
-/* Alternative approach using transform if you prefer sliding animation */
-.hidden-fullscreen-slide {
-  transform: translateY(100%) !important;
-  transition: transform 0.3s ease;
-}
-
-.fullscreen-playback-indicator {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  font-size: 4rem;
-  padding: 20px;
-  border-radius: 50%;
-  width: 100px;
-  height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  opacity: 0;
-  transition: opacity 0.2s ease-in-out;
-  pointer-events: none;
-}
-
-.fullscreen-playback-indicator.show {
-  opacity: 1;
-}
-
-/* Alternative with scaling animation */
-.fullscreen-playback-indicator {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) scale(0.5);
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  font-size: 4rem;
-  padding: 20px;
-  border-radius: 50%;
-  width: 100px;
-  height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  opacity: 0;
-  transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
-  pointer-events: none;
-}
-
-.fullscreen-playback-indicator.show {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-.album-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.album-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-
-.progress-container {
-  position: relative;
-  overflow: hidden;
-}
-
-.progress-bar {
-  position: relative;
-  overflow: hidden;
-}
-
-.progress-bar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  animation: shimmer 2s infinite;
-}
-
+/* ===== ANIMATIONS ===== */
 @keyframes shimmer {
-  0% { left: -100%; }
-  100% { left: 100%; }
-}
-
-.edit-form {
-  animation: slideDown 0.3s ease;
+    0% { left: -100%; }
+    100% { left: 100%; }
 }
 
 @keyframes slideDown {
-  from {
-    opacity: 0;
-    max-height: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    max-height: 600px;
-    transform: translateY(0);
-  }
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        max-height: 600px;
+        transform: translateY(0);
+    }
 }
 
 @keyframes slideUp {
-  from {
-    opacity: 1;
-    max-height: 600px;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    max-height: 0;
-    transform: translateY(-10px);
-  }
+    from {
+        opacity: 1;
+        max-height: 600px;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
 }
 
 .slide-down {
-  animation: slideDown 0.3s ease forwards;
+    animation: slideDown 0.3s ease forwards;
 }
 
 .slide-up {
-  animation: slideUp 0.3s ease forwards;
+    animation: slideUp 0.3s ease forwards;
 }
 
-/* Status indicators */
-.index-status.indexing {
-  color: #ff9800;
+/* ===== ELEMENT STATE STYLES ===== */
+#uploadImageInput {
+    display: none;
 }
 
-.index-status.completed {
-  color: #4caf50;
+#playIcon {
+    display: inline;
 }
 
-.index-status.error {
-  color: #f44336;
+#pauseIcon {
+    display: none;
 }
 
-/* Responsive design */
+#clearSearchBtn {
+    display: none;
+}
+
+#imageSearchBtn.dragover, #searchPanel.dragover {
+    outline: 2px dashed limegreen;
+    background: rgba(0, 255, 0, 0.1);
+}
+
+#imageSearchBtn, #textSearchBtn {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Remove focus styles for buttons and radio buttons */
+button {
+    tabIndex: -1;
+}
+
+input[type="radio"] {
+    tabIndex: -1;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
 @media (max-width: 768px) {
-  #albumManagementOverlay > div {
-    width: 95vw;
-    max-height: 90vh;
-    padding: 1em;
-  }
-  
-  .album-card .album-info {
-    font-size: 0.9em;
-  }
-  
-  .album-card .edit-form {
-    grid-template-columns: 1fr;
-  }
+    .album-management-modal {
+        width: 95vw;
+        max-height: 90vh;
+        padding: 1em;
+    }
+    
+    .album-card {
+        font-size: 0.9em;
+    }
+    
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    #filenameBanner {
+        min-width: 180px;
+        padding: 0.5em 1em;
+        font-size: 0.95em;
+    }
+    
+    #descriptionText {
+        font-size: 1em;
+    }
+}
+
+@media (max-width: 100%) {
+    #filenameBanner {
+        min-width: 180px;
+        padding: 0.5em 1em;
+        font-size: 0.95em;
+    }
+    
+    #descriptionText {
+        font-size: 1em;
+    }
+}
+
+/* ===== ALBUM SELECTOR GROUP ===== */
+.album-selector-group {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+    flex: 1;
+}
+
+.album-selector-group #albumSelect {
+    flex: 1;
+    min-width: 150px;
+}
+
+.album-selector-group #manageAlbumsBtn {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 0.4em 0.8em;
+}
+
+/* Move Add Album button 2-3 pixels to the left to avoid collision with close box */
+#showAddAlbumBtn {
+    transform: translateX(-3px);
 }

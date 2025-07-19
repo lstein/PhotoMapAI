@@ -130,18 +130,18 @@ function adjustDelay(direction) {
 //  Model window management
 function openSettingsModal() {
   populateModalFields();
-  elements.settingsOverlay.style.display = "block";
+  elements.settingsOverlay.classList.add('visible');
 }
 
 function closeSettingsModal() {
-  elements.settingsOverlay.style.display = "none";
+  elements.settingsOverlay.classList.remove('visible');
 }
 
 function toggleSettingsModal() {
-  if (elements.settingsOverlay.style.display === "none") {
-    openSettingsModal();
-  } else {
+  if (elements.settingsOverlay.classList.contains('visible')) {
     closeSettingsModal();
+  } else {
+    openSettingsModal();
   }
 }
 

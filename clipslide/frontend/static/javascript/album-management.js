@@ -154,7 +154,7 @@ export class AlbumManager {
   // Main show/hide methods
   async show() {
     await this.loadAlbums();
-    this.overlay.style.display = 'block';
+    this.overlay.classList.add('visible');
     
     // Ensure add album form is hidden when opening normally
     if (!this.isSetupMode) {
@@ -172,7 +172,7 @@ export class AlbumManager {
       return; // Don't allow closing in setup mode
     }
     
-    this.overlay.style.display = 'none';
+    this.overlay.classList.remove('visible');
     this.hideAddAlbumForm();
     
     // Stop all progress polling
