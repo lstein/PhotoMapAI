@@ -5,10 +5,36 @@ import { state } from "./state.js";
 import { saveSettingsToLocalStorage } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
 
-// Delay settings
-const delayStep = 1; // seconds to increase/decrease per click
-const minDelay = 1; // minimum delay in seconds
-const maxDelay = 60; // maximum delay in seconds
+// Constants
+const DELAY_CONFIG = {
+  step: 1,        // seconds to increase/decrease per click
+  min: 1,         // minimum delay in seconds
+  max: 60         // maximum delay in seconds
+};
+
+const WATERMARK_CONFIG = {
+  min: 2,
+  max: 100
+};
+
+// Cache DOM elements to avoid repeated queries
+let elements = {};
+
+function cacheElements() {
+  elements = {
+    settingsBtn: document.getElementById("settingsBtn"),
+    settingsOverlay: document.getElementById("settingsOverlay"),
+    closeSettingsBtn: document.getElementById("closeSettingsBtn"),
+    highWaterMarkInput: document.getElementById("highWaterMarkInput"),
+    delayValueSpan: document.getElementById("delayValue"),
+    modeRandom: document.getElementById("modeRandom"),
+    modeSequential: document.getElementById("modeSequential"),
+    albumSelect: document.getElementById("albumSelect"),
+    titleElement: document.getElementById("slideshow_title"),
+    slowerBtn: document.getElementById("slowerBtn"),
+    fasterBtn: document.getElementById("fasterBtn")
+  };
+}
 
 // Export the function so other modules can use it
 export async function loadAvailableAlbums() {
@@ -16,69 +42,141 @@ export async function loadAvailableAlbums() {
     const response = await fetch("available_albums/");
     const albums = await response.json();
 
-    const albumSelect = document.getElementById("albumSelect");
-    albumSelect.innerHTML = ""; // Clear placeholder
+    elements.albumSelect.innerHTML = ""; // Clear placeholder
 
-    // ✅ CHECK IF NO ALBUMS EXIST
+    // Check if there are no albums
     if (albums.length === 0) {
-      // Show "no albums" message in dropdown
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = "No albums available";
-      option.disabled = true;
-      option.selected = true;
-      albumSelect.appendChild(option);
-
-      // ✅ FORCE OPEN ALBUM MANAGER IN SETUP MODE
-      window.dispatchEvent(new CustomEvent("noAlbumsFound"));
+      addNoAlbumsOption();
+      triggerSetupMode();
       return;
     }
 
-    albums.forEach((album) => {
-      const option = document.createElement("option");
-      option.value = album.key;
-      option.textContent = album.name;
-      option.dataset.embeddingsFile = album.embeddings_file; // Store embeddings path
-      albumSelect.appendChild(option);
-    });
-
-    // Set current album after populating options
-    albumSelect.value = state.album;
+    populateAlbumOptions(albums);
+    elements.albumSelect.value = state.album;
   } catch (error) {
     console.error("Failed to load albums:", error);
-    // On error, also trigger setup mode
-    window.dispatchEvent(new CustomEvent("noAlbumsFound"));
+    triggerSetupMode();
   }
 }
 
-// Load available albums from server (keep the existing function for backward compatibility)
-async function loadAvailableAlbumsInternal() {
-  return loadAvailableAlbums();
+function addNoAlbumsOption() {
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = "No albums available";
+  option.disabled = true;
+  option.selected = true;
+  elements.albumSelect.appendChild(option);
 }
 
-// Initialize settings from the server and local storage
-document.addEventListener("DOMContentLoaded", async function () {
-  // Load albums first
-  await loadAvailableAlbumsInternal();
+function populateAlbumOptions(albums) {
+  albums.forEach((album) => {
+    const option = document.createElement("option");
+    option.value = album.key;
+    option.textContent = album.name;
+    option.dataset.embeddingsFile = album.embeddings_file; // Store embeddings path
+    elements.albumSelect.appendChild(option);
+  });
+}
 
-  let slowerBtn = document.getElementById("slowerBtn");
-  let fasterBtn = document.getElementById("fasterBtn");
+function triggerSetupMode() {
+  window.dispatchEvent(new CustomEvent("noAlbumsFound"));
+}
 
-  slowerBtn.onclick = function () {
-    let newDelay = Math.min(maxDelay, state.currentDelay + delayStep);
-    setDelay(newDelay);
-  };
+// Album switching logic
+function switchAlbum(newAlbum, selectedOption) {
+  state.album = newAlbum;
+  state.embeddingsFile = selectedOption.dataset.embeddingsFile;
 
-  fasterBtn.onclick = function () {
-    let newDelay = Math.max(minDelay, state.currentDelay - delayStep);
-    setDelay(newDelay);
-  };
+  // Clear search results when switching albums
+  exitSearchMode();
+  removeSlidesAfterCurrent();
+  saveSettingsToLocalStorage();
+
+  updatePageTitle(newAlbum);
+  resetAllSlides();
+}
+
+// Update the page title based on the current album
+// This function is called when the album is switched
+function updatePageTitle(albumName) {
+  if (elements.titleElement) {
+    elements.titleElement.textContent = `Slideshow - ${albumName}`;
+  }
+}
+
+// Delay management
+function setDelay(newDelay) {
+  newDelay = Math.max(DELAY_CONFIG.min, Math.min(DELAY_CONFIG.max, newDelay));
+  state.currentDelay = newDelay;
+  state.swiper.params.autoplay.delay = state.currentDelay * 1000;
+  updateDelayDisplay(newDelay);
+  saveSettingsToLocalStorage();
+}
+
+function updateDelayDisplay(newDelay) {
+  if (elements.delayValueSpan) {
+    elements.delayValueSpan.textContent = newDelay;
+  }
+}
+
+function adjustDelay(direction) {
+  const adjustment = direction === 'slower' ? DELAY_CONFIG.step : -DELAY_CONFIG.step;
+  const newDelay = direction === 'slower' 
+    ? Math.min(DELAY_CONFIG.max, state.currentDelay + adjustment)
+    : Math.max(DELAY_CONFIG.min, state.currentDelay + adjustment);
+  setDelay(newDelay);
+}
+
+//  Model window management
+function openSettingsModal() {
+  populateModalFields();
+  elements.settingsOverlay.style.display = "block";
+}
+
+function closeSettingsModal() {
+  elements.settingsOverlay.style.display = "none";
+}
+
+function toggleSettingsModal() {
+  if (elements.settingsOverlay.style.display === "none") {
+    openSettingsModal();
+  } else {
+    closeSettingsModal();
+  }
+}
+
+function populateModalFields() {
+  elements.highWaterMarkInput.value = state.highWaterMark;
+  elements.delayValueSpan.textContent = state.currentDelay;
+  elements.albumSelect.value = state.album;
+  elements.modeRandom.checked = state.mode === "random";
+  elements.modeSequential.checked = state.mode === "sequential";
+}
+
+// Function to validate the high water mark
+function validateAndSetHighWaterMark(value) {
+  let newHighWaterMark = parseInt(value, 10);
+  if (isNaN(newHighWaterMark) || newHighWaterMark < WATERMARK_CONFIG.min) {
+    newHighWaterMark = WATERMARK_CONFIG.min;
+  }
+  if (newHighWaterMark > WATERMARK_CONFIG.max) {
+    newHighWaterMark = WATERMARK_CONFIG.max;
+  }
+  state.highWaterMark = newHighWaterMark;
+  saveSettingsToLocalStorage();
+}
+
+// Event listener setup
+function setupDelayControls() {
+  elements.slowerBtn.onclick = () => adjustDelay('slower');
+  elements.fasterBtn.onclick = () => adjustDelay('faster');
   updateDelayDisplay(state.currentDelay);
+}
 
+function setupModeControls() {
   // Set initial radio button state based on current mode
-  document.getElementById("modeRandom").checked = state.mode === "random";
-  document.getElementById("modeSequential").checked =
-    state.mode === "sequential";
+  elements.modeRandom.checked = state.mode === "random";
+  elements.modeSequential.checked = state.mode === "sequential";
 
   // Listen for changes to the radio buttons
   document.querySelectorAll('input[name="mode"]').forEach((radio) => {
@@ -90,94 +188,53 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     });
   });
+}
 
-  // Handlers for the settings modal
-  const settingsBtn = document.getElementById("settingsBtn");
-  const settingsOverlay = document.getElementById("settingsOverlay");
-  const closeSettingsBtn = document.getElementById("closeSettingsBtn");
-  const highWaterMarkInput = document.getElementById("highWaterMarkInput");
-  const delayValueSpan = document.getElementById("delayValue");
-  const modeRandom = document.getElementById("modeRandom");
-  const modeSequential = document.getElementById("modeSequential");
-  const albumSelect = document.getElementById("albumSelect");
-
-  // Open settings modal and populate fields
-  settingsBtn.addEventListener("click", () => {
-    if (settingsOverlay.style.display === "none") {
-      // Populate fields with current values
-      highWaterMarkInput.value = state.highWaterMark;
-      delayValueSpan.textContent = state.currentDelay;
-      albumSelect.value = state.album;
-      if (state.mode === "random") modeRandom.checked = true;
-      if (state.mode === "sequential") modeSequential.checked = true;
-      settingsOverlay.style.display = "block";
-    } else {
-      settingsOverlay.style.display = "none";
+function setupModalControls() {
+  // Toggle modal
+  elements.settingsBtn.addEventListener("click", toggleSettingsModal);
+  
+  // Close modal
+  elements.closeSettingsBtn.addEventListener("click", closeSettingsModal);
+  
+  // Close when clicking outside
+  elements.settingsOverlay.addEventListener("click", (e) => {
+    if (e.target === elements.settingsOverlay) {
+      closeSettingsModal();
     }
   });
+}
 
-  albumSelect.addEventListener("change", function () {
+function setupAlbumSelector() {
+  elements.albumSelect.addEventListener("change", function () {
     const newAlbum = this.value;
     if (newAlbum !== state.album) {
-      state.album = newAlbum;
-
-      // Get embeddings file from the selected option
       const selectedOption = this.options[this.selectedIndex];
-      state.embeddingsFile = selectedOption.dataset.embeddingsFile;
-
-      // Clear search results when switching albums
-      exitSearchMode();
-
-      // Remove all slides after current when switching albums
-      removeSlidesAfterCurrent();
-      saveSettingsToLocalStorage();
-
-      // Update page title
-      const titleElement = document.getElementById("slideshow_title");
-      if (titleElement) {
-        titleElement.textContent = `Slideshow - ${newAlbum}`;
-      }
-      resetAllSlides();
+      switchAlbum(newAlbum, selectedOption);
     }
   });
-
-  // Close modal without saving
-  closeSettingsBtn.addEventListener("click", () => {
-    settingsOverlay.style.display = "none";
-  });
-
-  // Optional: close overlay when clicking outside the modal
-  settingsOverlay.addEventListener("click", (e) => {
-    if (e.target === settingsOverlay) {
-      settingsOverlay.style.display = "none";
-    }
-  });
-
-  highWaterMarkInput.addEventListener("input", function () {
-    let newHighWaterMark = parseInt(highWaterMarkInput.value, 10);
-    if (isNaN(newHighWaterMark) || newHighWaterMark < 2) {
-      newHighWaterMark = 2;
-    }
-    if (newHighWaterMark > 100) {
-      newHighWaterMark = 100;
-    }
-    state.highWaterMark = newHighWaterMark;
-    saveSettingsToLocalStorage();
-  });
-});
-
-function setDelay(newDelay) {
-  newDelay = Math.max(minDelay, Math.min(maxDelay, newDelay));
-  state.currentDelay = newDelay;
-  state.swiper.params.autoplay.delay = state.currentDelay * 1000;
-  updateDelayDisplay(newDelay);
-  saveSettingsToLocalStorage();
 }
 
-// Update the displayed delay value
-function updateDelayDisplay(newDelay) {
-  const delayValueSpan = document.getElementById("delayValue");
-  if (delayValueSpan) {
-    delayValueSpan.textContent = newDelay;
-  }
+function setupHighWaterMarkControl() {
+  elements.highWaterMarkInput.addEventListener("input", function () {
+    validateAndSetHighWaterMark(this.value);
+  });
 }
+
+// MAIN INITIALIZATION FUNCTION
+async function initializeSettings() {
+  cacheElements();
+  
+  // Load albums first
+  await loadAvailableAlbums();
+  
+  // Setup all controls
+  setupDelayControls();
+  setupModeControls();
+  setupModalControls();
+  setupAlbumSelector();
+  setupHighWaterMarkControl();
+}
+
+// Initialize settings from the server and local storage
+document.addEventListener("DOMContentLoaded", initializeSettings);

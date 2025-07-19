@@ -12,150 +12,190 @@ import { showSpinner, hideSpinner } from "./utils.js";
 import { getCurrentFilepath, deleteImage } from "./api.js";
 import {} from "./touch.js"; // Import touch event handlers
 
-// initialize event listeners after the DOM is fully loaded
-document.addEventListener("DOMContentLoaded", async function () {
+// Constants
+const FULLSCREEN_INDICATOR_CONFIG = {
+  showDuration: 800,    // How long to show the indicator
+  fadeOutDuration: 300, // Fade out animation duration
+  playSymbol: '▶',      // Play symbol
+  pauseSymbol: '⏸'      // Pause symbol
+};
 
-  // Initialize the slideshow title
-  document.getElementById("slideshow_title").textContent = "Slideshow - " + state.album;
+const KEYBOARD_SHORTCUTS = {
+  ArrowRight: () => navigateSlide('next'),
+  ArrowLeft: () => navigateSlide('prev'),
+  ArrowUp: () => showPauseOverlay(),
+  ArrowDown: () => hidePauseOverlay(),
+  i: () => togglePauseOverlay(),
+  Escape: () => hidePauseOverlay(),
+  f: () => toggleFullscreen(),
+  ' ': (e) => handleSpacebarToggle(e)
+};
 
-  // Fullscreen button
-  const fullscreenBtn = document.getElementById("fullscreenBtn");
-  if (fullscreenBtn) {
-    fullscreenBtn.addEventListener("click", function (e) {
-      e.stopPropagation();
-      const elem = document.documentElement;
-      if (!document.fullscreenElement) {
-        elem.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
-    });
+// Cache DOM elements
+let elements = {};
+
+function cacheElements() {
+  elements = {
+    slideshow_title: document.getElementById("slideshow_title"),
+    fullscreenBtn: document.getElementById("fullscreenBtn"),
+    copyTextBtn: document.getElementById("copyTextBtn"),
+    startStopBtn: document.getElementById("startStopSlideshowBtn"),
+    closeOverlayBtn: document.getElementById("closeOverlayBtn"),
+    deleteCurrentFileBtn: document.getElementById("deleteCurrentFileBtn"),
+    bottomLeftBtnGroup: document.getElementById("bottomLeftBtnGroup"),
+    searchPanel: document.getElementById("searchPanel"),
+    pauseOverlay: document.getElementById("pauseOverlay")
+  };
+}
+
+// Toggle fullscreen mode
+function toggleFullscreen() {
+  const elem = document.documentElement;
+  if (!document.fullscreenElement) {
+    elem.requestFullscreen();
+  } else {
+    document.exitFullscreen();
   }
+}
 
-  // Fullscreen change event listener
-  document.addEventListener("fullscreenchange", function() {
-    const bottomLeftBtnGroup = document.getElementById("bottomLeftBtnGroup");
-    const searchPanel = document.getElementById("searchPanel");
-    
-    if (document.fullscreenElement) {
-      // Entering fullscreen - hide panels
-      bottomLeftBtnGroup?.classList.add("hidden-fullscreen");
-      searchPanel?.classList.add("hidden-fullscreen");
-    } else {
-      // Exiting fullscreen - show panels
-      bottomLeftBtnGroup?.classList.remove("hidden-fullscreen");
-      searchPanel?.classList.remove("hidden-fullscreen");
+function handleFullscreenChange() {
+  const isFullscreen = !!document.fullscreenElement;
+  
+  // Toggle visibility of UI panels
+  [elements.bottomLeftBtnGroup, elements.searchPanel].forEach(panel => {
+    if (panel) {
+      panel.classList.toggle("hidden-fullscreen", isFullscreen);
     }
   });
+}
 
-  // Copy text button - ADD THE MISSING EVENT LISTENER
-  const copyTextBtn = document.getElementById("copyTextBtn");
-  if (copyTextBtn) {
-    copyTextBtn.addEventListener("click", function () {
-      if (state.currentTextToCopy) {
-        navigator.clipboard.writeText(state.currentTextToCopy);
-      }
-    });
+// Toggle slideshow controls
+function toggleSlideshow() {
+  if (state.swiper?.autoplay?.running) {
+    state.swiper.autoplay.stop();
+  } else if (state.swiper?.autoplay) {
+    state.swiper.autoplay.start();
   }
+  updateSlideshowIcon();
+}
 
-  // Start/stop slideshow button
-  const startStopBtn = document.getElementById("startStopSlideshowBtn");
-  if (startStopBtn) {
-    startStopBtn.addEventListener("click", function () {
-      if (state.swiper?.autoplay?.running) {
-        state.swiper.autoplay.stop();
-      } else if (state.swiper?.autoplay) {
-        state.swiper.autoplay.start();
-      }
-      updateSlideshowIcon();
-    });
+function navigateSlide(direction) {
+  pauseSlideshow(); // Pause on navigation
+  if (direction === 'next') {
+    state.swiper.slideNext();
+  } else {
+    state.swiper.slidePrev();
   }
+}
 
-  // The X in the right corner of the pause overlay
-  const closeOverlayBtn = document.getElementById("closeOverlayBtn");
-  if (closeOverlayBtn) {
-    document.getElementById("closeOverlayBtn").onclick = hidePauseOverlay;
+function togglePauseOverlay() {
+  const isVisible = elements.pauseOverlay?.classList.contains("visible");
+  if (isVisible) {
+    hidePauseOverlay();
+  } else {
+    showPauseOverlay();
   }
-});
+}
 
-// Keyboard navigation
-window.addEventListener("keydown", function (e) {
-  // Prevent global shortcuts when typing in an input or textarea
-  if (
-    e.target.tagName === "INPUT" ||
-    e.target.tagName === "TEXTAREA" ||
-    e.target.isContentEditable
-  ) {
+// Toggle the play/pause state using the spacebar
+function handleSpacebarToggle(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const isRunning = state.swiper?.autoplay?.running;
+  
+  if (isRunning) {
+    pauseSlideshow();
+    showFullscreenIndicator(false); // Show pause indicator
+  } else {
+    resumeSlideshow();
+    showFullscreenIndicator(true); // Show play indicator
+  }
+}
+
+// Copy text to clipboard
+function handleCopyText() {
+  if (state.currentTextToCopy) {
+    navigator.clipboard.writeText(state.currentTextToCopy);
+  }
+}
+
+// Delete the current file
+async function handleDeleteCurrentFile() {
+  const currentFilepath = getCurrentFilepath();
+
+  if (!currentFilepath) {
+    alert("No image selected for deletion.");
     return;
   }
 
-  if (e.key === "ArrowRight") {
-    pauseSlideshow(); // Pause on navigation
-    state.swiper.slideNext();
+  if (!confirmDelete(currentFilepath)) {
+    return;
   }
-  if (e.key === "ArrowLeft") {
-    pauseSlideshow(); // Pause on navigation
-    state.swiper.slidePrev();
-  }
-  if (e.key === "ArrowUp") showPauseOverlay();
-  if (e.key === "ArrowDown") hidePauseOverlay();
-  if (e.key === "i") {
-    const pauseOverlay = document.getElementById("pauseOverlay");
-    if (pauseOverlay.classList.contains("visible")) {
-      hidePauseOverlay();
-    } else {
-      showPauseOverlay();
-    }
-  }
-  if (e.key === "Escape") hidePauseOverlay();
-  if (e.key === "f") {
-    const elem = document.documentElement;
-    if (!document.fullscreenElement) {
-      elem.requestFullscreen();
-    } else {
-      document.exitFullscreen();
-    }
-    // No need to manually hide/show panels here - the fullscreenchange event will handle it
-  }
-  if (e.key === " ") {
-    e.preventDefault();
-    e.stopPropagation();
-    if (
-      state.swiper &&
-      state.swiper.autoplay &&
-      state.swiper.autoplay.running
-    ) {
-      pauseSlideshow();
-      showFullscreenIndicator(false); // Show pause indicator
-    } else {
-      resumeSlideshow();
-      showFullscreenIndicator(true); // Show play indicator
-    }
-  }
-});
 
-// Function to show fullscreen play/pause indicator
+  try {
+    showSpinner();
+    await deleteImage(currentFilepath);
+    await handleSuccessfulDelete();
+    hideSpinner();
+    console.log("Image deleted successfully");
+  } catch (error) {
+    hideSpinner();
+    alert(`Failed to delete image: ${error.message}`);
+    console.error("Delete failed:", error);
+  }
+}
+
+function confirmDelete(filepath) {
+  return confirm(
+    `Are you sure you want to delete this image?\n\n${filepath}\n\nThis action cannot be undone.`
+  );
+}
+
+async function handleSuccessfulDelete() {
+  if (state.swiper?.slides?.length > 0) {
+    const currentIndex = state.swiper.activeIndex;
+    state.swiper.removeSlide(currentIndex);
+
+    // If no slides left, add a new one
+    if (state.swiper.slides.length === 0) {
+      await addNewSlide();
+    }
+
+    updateOverlay();
+  }
+}
+
+// Toggle visibility of the fullscreen indicator
 function showFullscreenIndicator(isPlaying) {
   // Only show in fullscreen mode
   if (!document.fullscreenElement) return;
   
-  // Remove any existing indicator
+  removeExistingIndicator();
+  const indicator = createIndicator(isPlaying);
+  showIndicatorWithAnimation(indicator);
+}
+
+function removeExistingIndicator() {
   const existingIndicator = document.getElementById('fullscreen-indicator');
   if (existingIndicator) {
     existingIndicator.remove();
   }
-  
-  // Create the indicator element
+}
+
+function createIndicator(isPlaying) {
   const indicator = document.createElement('div');
   indicator.id = 'fullscreen-indicator';
   indicator.className = 'fullscreen-playback-indicator';
+  indicator.innerHTML = isPlaying 
+    ? FULLSCREEN_INDICATOR_CONFIG.playSymbol 
+    : FULLSCREEN_INDICATOR_CONFIG.pauseSymbol;
   
-  // Add the appropriate icon (using Unicode symbols or you can replace with SVG/Font Awesome)
-  indicator.innerHTML = isPlaying ? '▶' : '⏸'; // Play or Pause symbol
-  
-  // Add to body
   document.body.appendChild(indicator);
-  
+  return indicator;
+}
+
+function showIndicatorWithAnimation(indicator) {
   // Trigger animation
   requestAnimationFrame(() => {
     indicator.classList.add('show');
@@ -168,72 +208,100 @@ function showFullscreenIndicator(isPlaying) {
       if (indicator.parentNode) {
         indicator.parentNode.removeChild(indicator);
       }
-    }, 300); // Wait for fade out animation
-  }, 800); // Show for 800ms
+    }, FULLSCREEN_INDICATOR_CONFIG.fadeOutDuration);
+  }, FULLSCREEN_INDICATOR_CONFIG.showDuration);
 }
 
-// Disable tabbing on buttons to prevent focus issues
-document.querySelectorAll("button").forEach((btn) => (btn.tabIndex = -1));
+// Keyboard event handling
+function handleKeydown(e) {
+  // Prevent global shortcuts when typing in input fields
+  if (shouldIgnoreKeyEvent(e)) {
+    return;
+  }
 
-document.querySelectorAll('input[type="radio"]').forEach((rb) => {
-  rb.tabIndex = -1; // Remove from tab order
-  rb.addEventListener("mousedown", function (e) {
-    e.preventDefault(); // Prevent focus on mouse down
-  });
-  rb.addEventListener("focus", function () {
-    this.blur(); // Remove focus if somehow focused
-  });
-});
+  const handler = KEYBOARD_SHORTCUTS[e.key];
+  if (handler) {
+    handler(e);
+  }
+}
 
+function shouldIgnoreKeyEvent(e) {
+  return (
+    e.target.tagName === "INPUT" ||
+    e.target.tagName === "TEXTAREA" ||
+    e.target.isContentEditable
+  );
+}
 
-// Handler for the delete (trash) button
-const delete_current_file_btn = document.getElementById("deleteCurrentFileBtn");
-if (delete_current_file_btn) {
-  delete_current_file_btn.addEventListener("click", async function () {
-    const currentFilepath = getCurrentFilepath();
+// Button event listeners
+function setupButtonEventListeners() {
+  // Fullscreen button
+  if (elements.fullscreenBtn) {
+    elements.fullscreenBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      toggleFullscreen();
+    });
+  }
 
-    if (!currentFilepath) {
-      alert("No image selected for deletion.");
-      return;
-    }
+  // Copy text button
+  if (elements.copyTextBtn) {
+    elements.copyTextBtn.addEventListener("click", handleCopyText);
+  }
 
-    // Show confirmation dialog
-    const confirmDelete = confirm(
-      `Are you sure you want to delete this image?\n\n${currentFilepath}\n\nThis action cannot be undone.`
-    );
+  // Start/stop slideshow button
+  if (elements.startStopBtn) {
+    elements.startStopBtn.addEventListener("click", toggleSlideshow);
+  }
 
-    if (!confirmDelete) {
-      return; // User cancelled, do nothing
-    }
+  // Close overlay button
+  if (elements.closeOverlayBtn) {
+    elements.closeOverlayBtn.onclick = hidePauseOverlay;
+  }
 
-    try {
-      // Show spinner during deletion
-      showSpinner();
+  // Delete current file button
+  if (elements.deleteCurrentFileBtn) {
+    elements.deleteCurrentFileBtn.addEventListener("click", handleDeleteCurrentFile);
+  }
+}
 
-      // Call the delete function
-      await deleteImage(currentFilepath);
+function setupGlobalEventListeners() {
+  // Fullscreen change event
+  document.addEventListener("fullscreenchange", handleFullscreenChange);
+  
+  // Keyboard navigation
+  window.addEventListener("keydown", handleKeydown);
+}
 
-      // Remove the current slide from swiper
-      if (state.swiper && state.swiper.slides && state.swiper.slides.length > 0) {
-        const currentIndex = state.swiper.activeIndex;
-        state.swiper.removeSlide(currentIndex);
+function setupAccessibility() {
+  // Disable tabbing on buttons to prevent focus issues
+  document.querySelectorAll("button").forEach((btn) => (btn.tabIndex = -1));
 
-        // If no slides left, add a new one
-        if (state.swiper.slides.length === 0) {
-          await addNewSlide();
-        }
-
-        // Update overlay with new current slide
-        updateOverlay();
-      }
-
-      hideSpinner();
-      console.log("Image deleted successfully");
-    } catch (error) {
-      hideSpinner();
-      alert(`Failed to delete image: ${error.message}`);
-      console.error("Delete failed:", error);
-    }
+  // Handle radio button accessibility
+  document.querySelectorAll('input[type="radio"]').forEach((rb) => {
+    rb.tabIndex = -1; // Remove from tab order
+    rb.addEventListener("mousedown", function (e) {
+      e.preventDefault(); // Prevent focus on mouse down
+    });
+    rb.addEventListener("focus", function () {
+      this.blur(); // Remove focus if somehow focused
+    });
   });
 }
-searchPanel
+
+function initializeTitle() {
+  if (elements.slideshow_title && state.album) {
+    elements.slideshow_title.textContent = "Slideshow - " + state.album;
+  }
+}
+
+// MAIN INITIALIZATION FUNCTION
+function initializeEvents() {
+  cacheElements();
+  initializeTitle();
+  setupButtonEventListeners();
+  setupGlobalEventListeners();
+  setupAccessibility();
+}
+
+// Initialize event listeners after the DOM is fully loaded
+document.addEventListener("DOMContentLoaded", initializeEvents);
