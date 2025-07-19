@@ -62,8 +62,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       }, 200);
 
       if (state.searchResults.length > 0) {
-        // Search completed - score display will be controlled by slide changes
-        console.log("Search completed, score display ready");
+        scoreDisplay.show(state.searchResults[0].score);
       }
     } catch (err) {
       scoreDisplay.hide(); // Hide on error

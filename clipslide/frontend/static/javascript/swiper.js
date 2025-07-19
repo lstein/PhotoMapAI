@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     autoplay: {
       delay: state.currentDelay * 1000,
       disableOnInteraction: false,
+      enabled: false,
     },
     scrollbar: {
       el: ".swiper-scrollbar",
@@ -60,12 +61,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     state.swiper.on("scrollbarDragStart", pauseSlideshow);
   }
 
-  // Initial icon state
-  updateSlideshowIcon();
-
   // Call twice to initialize the carousel and start slideshow if requested
   await addNewSlide();
   await addNewSlide();
+
+  // Initial icon state and overlay
+  updateSlideshowIcon();
+  updateOverlay();
 });
 
 export function pauseSlideshow() {

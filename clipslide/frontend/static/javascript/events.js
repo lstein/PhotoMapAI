@@ -7,7 +7,7 @@ import {
   addNewSlide,
   updateSlideshowIcon,
 } from "./swiper.js";
-import { showPauseOverlay, hidePauseOverlay, updateOverlay } from "./overlay.js";
+import { showPauseOverlay, hidePauseOverlay, updateOverlay, togglePauseOverlay } from "./overlay.js";
 import { showSpinner, hideSpinner } from "./utils.js";
 import { getCurrentFilepath, deleteImage } from "./api.js";
 import {} from "./touch.js"; // Import touch event handlers
@@ -44,7 +44,9 @@ function cacheElements() {
     deleteCurrentFileBtn: document.getElementById("deleteCurrentFileBtn"),
     bottomLeftBtnGroup: document.getElementById("bottomLeftBtnGroup"),
     searchPanel: document.getElementById("searchPanel"),
-    pauseOverlay: document.getElementById("pauseOverlay")
+    pauseOverlay: document.getElementById("pauseOverlay"),
+    bannerDrawerContainer: document.getElementById("bannerDrawerContainer"),
+    overlayDrawer: document.getElementById("overlayDrawer"),
   };
 }
 
@@ -85,15 +87,6 @@ function navigateSlide(direction) {
     state.swiper.slideNext();
   } else {
     state.swiper.slidePrev();
-  }
-}
-
-function togglePauseOverlay() {
-  const isVisible = elements.pauseOverlay?.classList.contains("visible");
-  if (isVisible) {
-    hidePauseOverlay();
-  } else {
-    showPauseOverlay();
   }
 }
 
@@ -261,6 +254,14 @@ function setupButtonEventListeners() {
   // Delete current file button
   if (elements.deleteCurrentFileBtn) {
     elements.deleteCurrentFileBtn.addEventListener("click", handleDeleteCurrentFile);
+  }
+
+  // Overlay drawer button
+  if (elements.overlayDrawer) {
+    elements.overlayDrawer.addEventListener("click", function (e) {
+      e.stopPropagation();
+      togglePauseOverlay();
+    });
   }
 }
 

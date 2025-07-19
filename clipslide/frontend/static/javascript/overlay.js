@@ -3,23 +3,31 @@
 // TO DO: Change the name of the element from 'pauseOverlay' to 'overlay' to make it more generic.
 import { state } from "./state.js";
 
-// Show the overlay with the slide metadata
+// Show the banner by moving container up
 export function showPauseOverlay() {
-  const pauseOverlay = document.getElementById("pauseOverlay");
-  pauseOverlay.style.display = "flex";
-  // Force reflow to ensure the transition works when toggling quickly
-  // void pauseOverlay.offsetWidth;
-  pauseOverlay.classList.add("visible");
+  const container = document.getElementById("bannerDrawerContainer");
+  container.classList.add("visible");
 }
 
-// Hide the overlay with the slide metadata
+// Hide the banner by moving container down
 export function hidePauseOverlay() {
-  const pauseOverlay = document.getElementById("pauseOverlay");
-  pauseOverlay.classList.remove("visible");
-  pauseOverlay.style.display = "none";
+  const container = document.getElementById("bannerDrawerContainer");
+  container.classList.remove("visible");
 }
 
-// Update overlay with current slide's metadata
+// Toggle the banner container
+export function togglePauseOverlay() {
+  const container = document.getElementById("bannerDrawerContainer");
+  const isVisible = container.classList.contains("visible");
+
+  if (isVisible) {
+    hidePauseOverlay();
+  } else {
+    showPauseOverlay();
+  }
+}
+
+// Update banner with current slide's metadata
 export function updateOverlay() {
   const slide = state.swiper.slides[state.swiper.activeIndex];
   if (!slide) return;

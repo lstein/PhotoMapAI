@@ -1,7 +1,7 @@
 // touch.js
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
-import { showPauseOverlay, hidePauseOverlay } from "./overlay.js";
+import { togglePauseOverlay } from "./overlay.js";
 import { pauseSlideshow } from "./swiper.js";
 import { state } from "./state.js";
 
@@ -52,17 +52,7 @@ function handleTouchEnd(e) {
     touchDuration < tapTimeThreshold;
 
   if (isTap) {
-    // Handle tap gesture - toggle overlay
-    const overlay = document.getElementById("pauseOverlay");
-    if (
-      overlay &&
-      overlay.style.display !== "none" &&
-      overlay.style.display !== ""
-    ) {
-      hidePauseOverlay();
-    } else {
-      showPauseOverlay();
-    }
+    togglePauseOverlay(); // Toggle overlay on tap
   } else {
     // Detect horizontal swipe (left/right) for pausing slideshow
     if (
@@ -83,24 +73,13 @@ function handleTouchEnd(e) {
 document.addEventListener("DOMContentLoaded", async function () {
   // Attach touch event handlers to the swiper container
   const swiperContainer = document.querySelector(".swiper");
-  const pauseOverlay = document.getElementById("pauseOverlay");
-
-  // Function to attach handlers to an element
-  function attachTouchHandlers(element) {
-    if (element) {
-      element.addEventListener("touchstart", handleTouchStart, {
-        passive: false,
-      });
-      element.addEventListener("touchmove", handleTouchMove, {
-        passive: false,
-      });
-      element.addEventListener("touchend", handleTouchEnd, {
-        passive: false,
-      });
-    }
-  }
-
-  // Attach handlers to both swiper container and overlay
-  attachTouchHandlers(swiperContainer);
-  attachTouchHandlers(pauseOverlay);
+  swiperContainer.addEventListener("touchstart", handleTouchStart, {
+    passive: false,
+  });
+  swiperContainer.addEventListener("touchmove", handleTouchMove, {
+    passive: false,
+  });
+  swiperContainer.addEventListener("touchend", handleTouchEnd, {
+    passive: false,
+  });
 });
