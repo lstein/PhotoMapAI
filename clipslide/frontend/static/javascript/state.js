@@ -23,7 +23,17 @@ export function initializeFromServer() {
   if (window.slideshowConfig) {
     state.currentDelay = window.slideshowConfig.currentDelay;
     state.mode = window.slideshowConfig.mode;
-    state.album = window.slideshowConfig.album || "family"; // Default to "family" if not set
+    
+    // ✅ HANDLE NULL ALBUM CASE
+    if (window.slideshowConfig.album) {
+      state.album = window.slideshowConfig.album;
+    } else {
+      state.album = null;
+      // ✅ TRIGGER ALBUM MANAGER SETUP MODE
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('noAlbumsFound'));
+      }, 100);
+    }
   }
 }
 
@@ -41,7 +51,12 @@ export function restoreFromLocalStorage() {
   if (storedMode) state.mode = storedMode;
 
   const storedAlbum = localStorage.getItem("album");
-  if (storedAlbum) state.album = storedAlbum;
+  // ✅ ONLY RESTORE ALBUM IF IT'S NOT NULL/EMPTY
+  if (storedAlbum && storedAlbum !== "null") {
+    state.album = storedAlbum;
+  } else {
+    state.album = null;
+  }
 }
 
 // Save state to local storage

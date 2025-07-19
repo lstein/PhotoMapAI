@@ -123,55 +123,40 @@ class ConfigManager:
         """Load configuration from YAML file."""
         if self._config is None:
             if not self.config_path.exists():
-                # Create default config if it doesn't exist
-                self._create_default_config()
-            
-            try:
-                with open(self.config_path, 'r') as f:
-                    config_data = yaml.safe_load(f)
-                
-                # Convert album dictionaries to Album objects
-                albums = {}
-                for key, album_data in config_data.get('albums', {}).items():
-                    albums[key] = Album.from_dict(key, album_data)
-                
+                # ✅ DON'T create default config - return empty config instead
                 self._config = Config(
-                    config_version=config_data.get('config_version', '1.0.0'),
-                    albums=albums
+                    config_version="1.0.0",
+                    albums={}
                 )
-                
-            except Exception as e:
-                raise RuntimeError(f"Failed to load configuration from {self.config_path}: {e}")
+            else:
+                try:
+                    with open(self.config_path, 'r') as f:
+                        config_data = yaml.safe_load(f)
+                    
+                    # Convert album dictionaries to Album objects
+                    albums = {}
+                    for key, album_data in config_data.get('albums', {}).items():
+                        albums[key] = Album.from_dict(key, album_data)
+                    
+                    self._config = Config(
+                        config_version=config_data.get('config_version', '1.0.0'),
+                        albums=albums
+                    )
+                    
+                except Exception as e:
+                    raise RuntimeError(f"Failed to load configuration from {self.config_path}: {e}")
         
         return self._config
-    
-    def _create_default_config(self):
-        """Create a default configuration file."""
-        default_album = Album(
-            key="family",
-            name="Family Photos",
-            image_paths=[str(Path.home() / "Pictures")],
-            index=str(Path.home() / "Pictures" / "embeddings.npz"),
-            description="Family photo collection"
-        )
         
-        default_config = Config(
-            config_version="1.0.0",
-            albums={"family": default_album}
-        )
-        
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.config_path, 'w') as f:
-            yaml.safe_dump(default_config.to_dict(), f, default_flow_style=False, indent=2)
-        
-        self._config = default_config
-    
     def save_config(self):
         """Save current configuration to file."""
         if self._config is None:
             raise RuntimeError("No configuration loaded")
         
         try:
+            # ✅ CREATE CONFIG DIRECTORY IF IT DOESN'T EXIST
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            
             with open(self.config_path, 'w') as f:
                 yaml.safe_dump(self._config.to_dict(), f, default_flow_style=False, indent=2)
         except Exception as e:
@@ -316,6 +301,23 @@ class ConfigManager:
         except Exception as e:
             print(f"Configuration validation failed: {e}")
             return False
+    
+    def has_albums(self) -> bool:
+        """Check if any albums are configured.
+        
+        Returns:
+            True if at least one album exists, False otherwise
+        """
+        config = self.load_config()
+        return len(config.albums) > 0
+
+    def is_first_run(self) -> bool:
+        """Check if this is the first run (no config file and no albums).
+        
+        Returns:
+            True if this appears to be the first run
+        """
+        return not self.config_path.exists() or not self.has_albums()
 
 # Convenience functions for creating albums
 def create_album(

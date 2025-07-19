@@ -27,7 +27,7 @@ from pydantic import BaseModel
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
 from .metadata_extraction import MetadataExtractor
-from .progress import progress_tracker, IndexStatus
+from .progress import progress_tracker
 
 class IndexResult(BaseModel):
     """
@@ -278,8 +278,15 @@ class Embeddings(BaseModel):
         
         print(f"Removing {len(missing_image_paths)} missing images from existing embeddings.")
         
-        # Create mask for images that still exist
-        mask = np.array([Path(fname) not in missing_image_paths for fname in existing_filenames])
+        # Convert missing paths to strings for comparison
+        missing_image_strings = {str(path) for path in missing_image_paths}
+        
+        # Create mask for images that still exist (NOT in missing set)
+        mask = np.array([fname not in missing_image_strings for fname in existing_filenames])
+        
+        # Debug output
+        removed_count = len(existing_filenames) - np.sum(mask)
+        print(f"Actually removing {removed_count} images from index")
         
         return IndexResult(
             embeddings=existing_embeddings[mask],
@@ -341,14 +348,14 @@ class Embeddings(BaseModel):
         try:
             result = await self._process_images_batch_async(image_paths, album_key)
             
-            # Final progress update
+            # Final progress update - processing complete
             progress_tracker.update_progress(album_key, total_images, "Saving index file")
             
             if create_index:
                 self._save_embeddings(result)
             
-            # Mark as completed
-            progress_tracker.update_progress(album_key, total_images, "Completed")
+            # Mark as completed - THIS IS THE KEY FIX
+            progress_tracker.complete_operation(album_key, "Indexing completed successfully")
             
             return result
         
@@ -437,7 +444,8 @@ class Embeddings(BaseModel):
             
             # If no new images, return early
             if not new_image_paths:
-                progress_tracker.update_progress(album_key, 0, "No new images found")
+                self._save_embeddings(filtered_existing)
+                progress_tracker.complete_operation(album_key, "No new images found")
                 return filtered_existing
             
             # Update progress tracker with actual count
@@ -447,9 +455,12 @@ class Embeddings(BaseModel):
             # Process new images
             new_result = await self._process_images_batch_async(list(new_image_paths), album_key)
             
+            # Final progress update
+            progress_tracker.update_progress(album_key, total_new_images, "Saving updated index")
+            
             # If no new embeddings were created, return existing data
             if new_result.embeddings.shape[0] == 0:
-                progress_tracker.update_progress(album_key, total_new_images, "No new images were successfully indexed")
+                progress_tracker.complete_operation(album_key, "No new images were successfully indexed")
                 return IndexResult(
                     embeddings=filtered_existing.embeddings,
                     filenames=filtered_existing.filenames,
@@ -461,6 +472,9 @@ class Embeddings(BaseModel):
             # Combine and save
             combined_result = self._combine_index_results(filtered_existing, new_result)
             self._save_embeddings(combined_result)
+            
+            # Mark as completed - THIS IS THE KEY FIX
+            progress_tracker.complete_operation(album_key, f"Successfully indexed {len(new_result.embeddings)} new images")
             
             return combined_result
             

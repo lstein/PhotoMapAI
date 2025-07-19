@@ -10,14 +10,29 @@ const delayStep = 1; // seconds to increase/decrease per click
 const minDelay = 1; // minimum delay in seconds
 const maxDelay = 60; // maximum delay in seconds
 
-// Load available albums from server
-async function loadAvailableAlbums() {
+// Export the function so other modules can use it
+export async function loadAvailableAlbums() {
   try {
     const response = await fetch("available_albums/");
     const albums = await response.json();
 
     const albumSelect = document.getElementById("albumSelect");
     albumSelect.innerHTML = ""; // Clear placeholder
+
+    // ✅ CHECK IF NO ALBUMS EXIST
+    if (albums.length === 0) {
+      // Show "no albums" message in dropdown
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No albums available";
+      option.disabled = true;
+      option.selected = true;
+      albumSelect.appendChild(option);
+
+      // ✅ FORCE OPEN ALBUM MANAGER IN SETUP MODE
+      window.dispatchEvent(new CustomEvent("noAlbumsFound"));
+      return;
+    }
 
     albums.forEach((album) => {
       const option = document.createElement("option");
@@ -31,19 +46,20 @@ async function loadAvailableAlbums() {
     albumSelect.value = state.album;
   } catch (error) {
     console.error("Failed to load albums:", error);
-    // Fallback to hardcoded options
-    const albumSelect = document.getElementById("albumSelect");
-    albumSelect.innerHTML = `
-      <option value="family" data-embeddings-file="/net/cubox/CineRAID/Pictures/embeddings.npz">Family</option>
-    `;
-    albumSelect.value = state.album;
+    // On error, also trigger setup mode
+    window.dispatchEvent(new CustomEvent("noAlbumsFound"));
   }
+}
+
+// Load available albums from server (keep the existing function for backward compatibility)
+async function loadAvailableAlbumsInternal() {
+  return loadAvailableAlbums();
 }
 
 // Initialize settings from the server and local storage
 document.addEventListener("DOMContentLoaded", async function () {
   // Load albums first
-  await loadAvailableAlbums();
+  await loadAvailableAlbumsInternal();
 
   let slowerBtn = document.getElementById("slowerBtn");
   let fasterBtn = document.getElementById("fasterBtn");

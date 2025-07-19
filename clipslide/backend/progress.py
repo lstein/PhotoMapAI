@@ -46,13 +46,8 @@ class ProgressInfo:
 class ProgressTracker:
     """Global progress tracker for indexing operations."""
     
-    _instance = None
-    _progress: Dict[str, ProgressInfo] = {}
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+    def __init__(self):
+        self._progress: Dict[str, ProgressInfo] = {}
     
     def start_operation(self, album_key: str, total_images: int, operation_type: str):
         """Start tracking progress for an album."""
@@ -93,6 +88,14 @@ class ProgressTracker:
         """Check if an operation is currently running for an album."""
         progress = self._progress.get(album_key)
         return progress is not None and progress.status in [IndexStatus.SCANNING, IndexStatus.INDEXING]
+    
+    def complete_operation(self, album_key: str, message: str = "Operation completed") -> None:
+        """Mark an operation as completed."""
+        if album_key in self._progress:
+            progress = self._progress[album_key]
+            progress.status = IndexStatus.COMPLETED
+            progress.current_step = message
+            progress.images_processed = progress.total_images
 
 # Global instance
 progress_tracker = ProgressTracker()

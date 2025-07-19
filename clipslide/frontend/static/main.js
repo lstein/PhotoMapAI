@@ -1,10 +1,11 @@
-// This file actually drives the slideshow
+// main.js
+// This file initializes the application by importing necessary modules and setting up event listeners.
 
-import {} from './javascript/state.js';
-import {} from './javascript/swiper.js';
-import {} from './javascript/utils.js';
-import {} from './javascript/overlay.js';
-import {} from './javascript/events.js';
-import {} from './javascript/settings.js';
-import {} from './javascript/search.js';
-
+import './javascript/state.js';
+import './javascript/swiper.js';
+import './javascript/utils.js';
+import './javascript/overlay.js';
+import './javascript/events.js';
+import './javascript/settings.js';
+import './javascript/search.js';
+import './javascript/album-management.js';

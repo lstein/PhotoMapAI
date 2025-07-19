@@ -23,9 +23,18 @@
       // Pass server data to JavaScript
       window.slideshowConfig = {
           currentDelay: {{ delay }},
-          mode: {{ mode | tojson}},
-          album: "{{ album | escape }}",
+          mode: "{{ mode }}",
+          album: {% if album %}"{{ album }}"{% else %}null{% endif %},
+          setupMode: {{ setup_mode|lower }}
       };
+      
+      {% if setup_mode %}
+      // ✅ AUTOMATICALLY OPEN ALBUM MANAGER IN SETUP MODE
+      document.addEventListener('DOMContentLoaded', function() {
+        // Trigger the "no albums found" event to open album manager
+        window.dispatchEvent(new CustomEvent('noAlbumsFound'));
+      });
+      {% endif %}
     </script>
     <script type="module" src="static/main.js"></script>
   </head>
@@ -523,8 +532,387 @@
               <option value="">Loading albums...</option>
             </select>
           </div>
+
+          <div style="margin-top: 1em; display: flex; align-items: center; gap: 0.5em;">
+            <button
+              id="manageAlbumsBtn"
+              style="
+                padding: 0.5em 1em;
+                border-radius: 6px;
+                border: none;
+                background: #2196f3;
+                color: #fff;
+                cursor: pointer;
+                font-size: 0.5em !important;
+                width: 100%;
+              "
+            >
+              Manage Albums
+            </button>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- Album Management Overlay -->
+    <div
+      id="albumManagementOverlay"
+      style="
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100dvh;
+        z-index: 3000;
+        background: rgba(0, 0, 0, 0.7);
+      "
+    >
+      <div
+        style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: #222;
+          border-radius: 16px;
+          padding: 2em;
+          width: 80vw;
+          max-width: 800px;
+          max-height: 80vh;
+          overflow-y: auto;
+          box-shadow: 0 4px 32px #000;
+        "
+      >
+        <!-- Header with Add Album Button -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5em;">
+          <h2 style="color: #fff; margin: 0; font-size: 1.5em;">Album Management</h2>
+          <div style="display: flex; gap: 1em; align-items: center;">
+            <button
+              id="showAddAlbumBtn"
+              style="
+                background: #4caf50;
+                border: none;
+                color: #fff;
+                padding: 0.5em 1em;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+              "
+            >
+              + Add Album
+            </button>
+            <button
+              id="closeAlbumManagementBtn"
+              title="Close"
+              style="
+                background: none;
+                border: none;
+                color: #fff;
+                font-size: 1.5em;
+                cursor: pointer;
+              "
+            >
+              ✖
+            </button>
+          </div>
+        </div>
+
+        <!-- Add New Album Section (initially hidden) -->
+        <div 
+          id="addAlbumSection" 
+          style="
+            display: none;
+            margin-bottom: 2em; 
+            padding: 1em; 
+            background: #333; 
+            border-radius: 8px;
+            animation: slideDown 0.3s ease;
+          "
+        >
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em;">
+            <h3 style="color: #fff; margin: 0;">Add New Album</h3>
+            <button
+              id="cancelAddAlbumBtn"
+              title="Cancel"
+              style="
+                background: none;
+                border: none;
+                color: #aaa;
+                font-size: 1.2em;
+                cursor: pointer;
+              "
+            >
+              ✖
+            </button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em; margin-bottom: 1em;">
+            <div>
+              <label style="color: #fff; font-size: 14px; display: block; margin-bottom: 0.5em;">Album Key</label>
+              <input
+                id="newAlbumKey"
+                type="text"
+                placeholder="e.g., vacation_2024"
+                style="width: 100%; padding: 0.5em; border-radius: 4px; border: 1px solid #888; background: #444; color: #fff;"
+              />
+            </div>
+            <div>
+              <label style="color: #fff; font-size: 14px; display: block; margin-bottom: 0.5em;">Display Name</label>
+              <input
+                id="newAlbumName"
+                type="text"
+                placeholder="e.g., Vacation 2024"
+                style="width: 100%; padding: 0.5em; border-radius: 4px; border: 1px solid #888; background: #444; color: #fff;"
+              />
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 1em;">
+            <label style="color: #fff; font-size: 14px; display: block; margin-bottom: 0.5em;">Description</label>
+            <input
+              id="newAlbumDescription"
+              type="text"
+              placeholder="Optional description"
+              style="width: 100%; padding: 0.5em; border-radius: 4px; border: 1px solid #888; background: #444; color: #fff;"
+            />
+          </div>
+
+          <div style="margin-bottom: 1em;">
+            <label style="color: #fff; font-size: 14px; display: block; margin-bottom: 0.5em;">
+              Image Paths (one per line)
+            </label>
+            <textarea
+              id="newAlbumPaths"
+              placeholder="/path/to/images&#10;/another/path/to/images"
+              rows="3"
+              style="width: 100%; padding: 0.5em; border-radius: 4px; border: 1px solid #888; background: #444; color: #fff; resize: vertical;"
+            ></textarea>
+          </div>
+
+          <div style="display: flex; gap: 0.5em;">
+            <button
+              id="addAlbumBtn"
+              style="
+                padding: 0.5em 1em;
+                border-radius: 6px;
+                border: none;
+                background: #4caf50;
+                color: #fff;
+                cursor: pointer;
+                font-size: 16px;
+              "
+            >
+              Add Album
+            </button>
+            <button
+              id="cancelAddAlbumBtn2"
+              style="
+                padding: 0.5em 1em;
+                border-radius: 6px;
+                border: none;
+                background: #666;
+                color: #fff;
+                cursor: pointer;
+                font-size: 16px;
+              "
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Existing Albums Section -->
+        <div id="existingAlbumsSection">
+          <h3 style="color: #fff; margin-top: 0;">Albums</h3>
+          <div id="albumsList">
+            <!-- Albums will be populated here -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Album Card Template -->
+    <template id="albumCardTemplate">
+      <div class="album-card" style="background: #333; border-radius: 8px; margin-bottom: 1em; padding: 1em;">
+        
+        <!-- Album Info Section -->
+        <div class="album-info">
+          <div style="display: grid; grid-template-columns: 1fr auto; gap: 1em; align-items: start;">
+            
+            <!-- Left side - Album details -->
+            <div>
+              <h4 class="album-name" style="color: #fff; margin: 0 0 0.5em 0; font-size: 1.1em;"></h4>
+              <div class="album-key" style="color: #aaa; font-size: 0.9em; margin-bottom: 0.3em;"></div>
+              <div class="album-description" style="color: #ccc; font-size: 0.9em; margin-bottom: 0.3em;"></div>
+              <div class="album-paths" style="color: #aaa; font-size: 0.85em; margin-bottom: 0.5em;"></div>
+              <!-- ❌ REMOVED THE EMBEDDING INDEX LINE -->
+            </div>
+            
+            <!-- Right side - Index controls aligned with details -->
+            <div class="indexing-section" style="display: flex; flex-direction: column; align-items: flex-end; min-width: 200px;">
+              
+              <!-- Index Status and Button -->
+              <div style="display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.5em;">
+                <div class="index-status" style="color: #aaa; font-size: 0.9em;">Ready to index</div>
+                <button
+                  class="create-index-btn"
+                  style="
+                    background: #2196f3;
+                    border: none;
+                    color: #fff;
+                    padding: 0.4em 0.8em;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 0.85em;
+                  "
+                >
+                  Update Index
+                </button>
+                <button
+                  class="cancel-index-btn"
+                  style="
+                    display: none;
+                    background: #f44336;
+                    border: none;
+                    color: #fff;
+                    padding: 0.4em 0.8em;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 0.85em;
+                  "
+                >
+                  Cancel
+                </button>
+              </div>
+              
+              <!-- Progress Container -->
+              <div class="progress-container" style="display: none; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.3em;">
+                  <div
+                    class="progress-bar-container"
+                    style="
+                      flex: 1;
+                      height: 8px;
+                      background: #555;
+                      border-radius: 4px;
+                      overflow: hidden;
+                      position: relative;
+                    "
+                  >
+                    <div
+                      class="progress-bar"
+                      style="
+                        height: 100%;
+                        width: 0%;
+                        background: linear-gradient(90deg, #4caf50, #2196f3);
+                        transition: width 0.3s ease;
+                        position: relative;
+                      "
+                    ></div>
+                    <div
+                      class="progress-bar-shimmer"
+                      style="
+                        position: absolute;
+                        top: 0;
+                        left: -100%;
+                        width: 100%;
+                        height: 100%;
+                        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+                        animation: shimmer 2s infinite;
+                      "
+                    ></div>
+                  </div>
+                  <div class="progress-text" style="color: #fff; font-size: 0.85em; min-width: 40px; text-align: right;">0%</div>
+                </div>
+                
+                <!-- ✅ ADDED ESTIMATED TIME REMAINING -->
+                <div class="estimated-time" style="color: #aaa; font-size: 0.8em; text-align: right; min-height: 1.2em;">
+                  <!-- Time estimate will appear here -->
+                </div>
+              </div>
+              
+            </div>
+          </div>
+          
+          <!-- Action Buttons Row -->
+          <div style="display: flex; gap: 0.5em; margin-top: 1em; justify-content: flex-end;">
+            <button
+              class="edit-album-btn"
+              style="
+                background: #ff9800;
+                border: none;
+                color: #fff;
+                padding: 0.4em 0.8em;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.85em;
+              "
+            >
+              Edit
+            </button>
+            <button
+              class="delete-album-btn"
+              style="
+                background: #f44336;
+                border: none;
+                color: #fff;
+                padding: 0.4em 0.8em;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.85em;
+              "
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+        
+        <!-- Edit Form (initially hidden) -->
+        <div class="edit-form" style="display: none;">
+          <h5 style="color: #fff; margin-top: 0;">Edit Album</h5>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em; margin-bottom: 1em;">
+            <div>
+              <label style="color: #fff; font-size: 14px; display: block; margin-bottom: 0.5em;">Display Name</label>
+              <input class="edit-album-name" type="text" style="width: 100%; padding: 0.5em; border-radius: 4px; border: 1px solid #888; background: #444; color: #fff;" />
+            </div>
+            <div>
+              <label style="color: #fff; font-size: 14px; display: block; margin-bottom: 0.5em;">Description</label>
+              <input class="edit-album-description" type="text" style="width: 100%; padding: 0.5em; border-radius: 4px; border: 1px solid #888; background: #444; color: #fff;" />
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 1em;">
+            <label style="color: #fff; font-size: 14px; display: block; margin-bottom: 0.5em;">Image Paths (one per line)</label>
+            <textarea class="edit-album-paths" rows="3" style="width: 100%; padding: 0.5em; border-radius: 4px; border: 1px solid #888; background: #444; color: #fff; resize: vertical;"></textarea>
+          </div>
+
+          <div style="display: flex; gap: 0.5em;">
+            <button class="save-album-btn" style="
+              padding: 0.5em 1em;
+              border-radius: 6px;
+              border: none;
+              background: #4caf50;
+              color: #fff;
+              cursor: pointer;
+              font-size: 14px;
+            ">
+              Save Changes
+            </button>
+            <button class="cancel-edit-btn" style="
+              padding: 0.5em 1em;
+              border-radius: 6px;
+              border: none;
+              background: #666;
+              color: #fff;
+              cursor: pointer;
+              font-size: 14px;
+            ">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
   </body>
 </html>

@@ -30,6 +30,7 @@ from clipslide.backend.embeddings import Embeddings
 from clipslide.backend.metadata_modules import SlideSummary
 from clipslide.backend.config import ConfigManager
 from clipslide.backend.progress import progress_tracker, ProgressInfo
+from clipslide.backend.config import create_album
 
 # Initialize configuration manager
 config_manager = ConfigManager()
@@ -93,16 +94,27 @@ async def get_root(
     delay: int = 5,  # Default delay
     mode: str = "random",  # Default mode
 ):
+    # ✅ CHECK IF ANY ALBUMS EXIST FIRST
+    albums = config_manager.get_albums()
+    if not albums:
+        # No albums configured - render page in "setup mode"
+        return templates.TemplateResponse(
+            "slideshow.html",
+            {
+                "request": request,
+                "album": None,  # No album available
+                "delay": delay,
+                "mode": mode,
+                "setup_mode": True,  # Flag to indicate setup is needed
+            },
+        )
+    
     # Validate the album parameter
     album_config = config_manager.get_album(album)
     if not album_config:
-        # Try to get first available album
-        albums = config_manager.get_albums()
-        if albums:
-            album = list(albums.keys())[0]
-            album_config = albums[album]
-        else:
-            raise HTTPException(status_code=404, detail="No albums configured")
+        # Requested album doesn't exist - use first available album
+        album = list(albums.keys())[0]
+        album_config = albums[album]
 
     return templates.TemplateResponse(
         "slideshow.html",
@@ -111,6 +123,7 @@ async def get_root(
             "album": album,
             "delay": delay,
             "mode": mode,
+            "setup_mode": False,  # Normal operation
         },
     )
 
@@ -323,18 +336,30 @@ async def serve_image(album: str, path: str):
 
 @app.get("/available_albums/")
 async def get_available_albums():
-    """Return list of available albums with embeddings paths and metadata."""
-    albums = config_manager.get_albums()
-    return [
-        {
-            "key": album.key,
-            "name": album.name,
-            "description": album.description,
-            "image_paths": album.image_paths,
-            "embeddings_file": album.index,
-        }
-        for album in albums.values()
-    ]
+    """Get list of available albums."""
+    try:
+        config_manager = ConfigManager()
+        albums = config_manager.get_albums()
+        
+        # ✅ RETURN EMPTY LIST IF NO ALBUMS (instead of error)
+        if not albums:
+            return []
+        
+        album_list = []
+        for key, album in albums.items():
+            album_list.append({
+                "key": key,
+                "name": album.name,
+                "description": album.description,
+                "embeddings_file": album.index,
+                "image_paths": album.image_paths  # This was missing!
+            })
+        
+        return album_list
+    except Exception as e:
+        logger.error(f"Failed to get albums: {e}")
+        # ✅ RETURN EMPTY LIST ON ERROR TOO
+        return []
 
 
 @app.post("/update_index_async/", response_model=dict)
@@ -480,6 +505,69 @@ async def cancel_index_operation(album_key: str) -> dict:
         raise HTTPException(
             status_code=500, detail=f"Failed to cancel operation: {str(e)}"
         )
+
+
+@app.post("/add_album/")
+async def add_album(album_data: dict) -> JSONResponse:
+    """Add a new album to the configuration."""
+    try:
+        
+        album = create_album(
+            key=album_data['key'],
+            name=album_data['name'],
+            image_paths=album_data['image_paths'],
+            index=album_data['index'],
+            description=album_data.get('description', '')
+        )
+        
+        if config_manager.add_album(album):
+            return JSONResponse(
+                content={"success": True, "message": f"Album '{album.key}' added successfully"},
+                status_code=201
+            )
+        else:
+            raise HTTPException(status_code=409, detail=f"Album '{album.key}' already exists")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add album: {str(e)}")
+
+@app.post("/update_album/")
+async def update_album(album_data: dict) -> JSONResponse:
+    """Update an existing album in the configuration."""
+    try:        
+        album = create_album(
+            key=album_data['key'],
+            name=album_data['name'],
+            image_paths=album_data['image_paths'],
+            index=album_data['index'],
+            description=album_data.get('description', '')
+        )
+        
+        if config_manager.update_album(album):
+            return JSONResponse(
+                content={"success": True, "message": f"Album '{album.key}' updated successfully"},
+                status_code=200
+            )
+        else:
+            raise HTTPException(status_code=404, detail=f"Album '{album.key}' not found")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update album: {str(e)}")
+
+@app.delete("/delete_album/{album_key}")
+async def delete_album(album_key: str) -> JSONResponse:
+    """Delete an album from the configuration."""
+    try:
+        if config_manager.delete_album(album_key):
+            return JSONResponse(
+                content={"success": True, "message": f"Album '{album_key}' deleted successfully"},
+                status_code=200
+            )
+        else:
+            raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete album: {str(e)}")
 
 
 def main():
