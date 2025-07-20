@@ -1,16 +1,16 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
+import { deleteImage, getCurrentFilepath } from "./api.js";
+import { hidePauseOverlay, showPauseOverlay, togglePauseOverlay, updateOverlay } from "./overlay.js";
 import { state } from "./state.js";
 import {
+  addNewSlide,
   pauseSlideshow,
   resumeSlideshow,
-  addNewSlide,
   updateSlideshowIcon,
 } from "./swiper.js";
-import { showPauseOverlay, hidePauseOverlay, updateOverlay, togglePauseOverlay } from "./overlay.js";
-import { showSpinner, hideSpinner } from "./utils.js";
-import { getCurrentFilepath, deleteImage } from "./api.js";
-import {} from "./touch.js"; // Import touch event handlers
+import { } from "./touch.js"; // Import touch event handlers
+import { hideSpinner, showSpinner } from "./utils.js";
 
 // Constants
 const FULLSCREEN_INDICATOR_CONFIG = {
@@ -21,8 +21,8 @@ const FULLSCREEN_INDICATOR_CONFIG = {
 };
 
 const KEYBOARD_SHORTCUTS = {
-  ArrowRight: () => navigateSlide('next'),
-  ArrowLeft: () => navigateSlide('prev'),
+  // ArrowRight: () => navigateSlide('next'),
+  // ArrowLeft: () => navigateSlide('prev'),
   ArrowUp: () => showPauseOverlay(),
   ArrowDown: () => hidePauseOverlay(),
   i: () => togglePauseOverlay(),

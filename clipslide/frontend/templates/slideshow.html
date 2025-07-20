@@ -192,43 +192,38 @@
     </div>
 
     <div id="searchPanel">
-      <button id="uploadImageFileBtn" title="Upload image for search">
-        <span id="uploadImageIcon">
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#fff"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <path d="M12 8v8M8 12l4-4 4 4" />
-          </svg>
-        </span>
-        <input type="file" id="uploadImageInput" accept="image/*" />
-      </button>
+      <!-- Wrap imageSearchBtn and upload link together -->
+      <div class="image-search-container">
+        <button id="imageSearchBtn" title="Search for similar images">
+          <span id="imageSearchIcon">
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          </span>
+        </button>
 
-      <button id="imageSearchBtn" title="Search for similar images">
-        <span id="imageSearchIcon">
-          <svg
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#fff"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <polyline points="21 15 16 10 5 21" />
-          </svg>
-        </span>
-      </button>
+        <!-- Upload link positioned below the button -->
+        <div class="upload-link-container">
+          <a href="#" id="uploadImageLink" class="upload-link">Upload</a>
+          <input
+            type="file"
+            id="uploadImageInput"
+            accept="image/*"
+            style="display: none"
+          />
+        </div>
+      </div>
 
       <button id="textSearchBtn" title="Search">
         <span id="textSearchIcon">
@@ -289,20 +284,25 @@
         </button>
 
         <div class="settings-header">
-          <span id="modeLabel">Slideshow Settings</span>
+          <span id="slideshowSettingsLabel">Slideshow Settings</span>
         </div>
 
         <div class="settings-main">
           <!-- Left column: Slower/Faster/Interval -->
           <div class="delay-controls">
-            <button id="slowerBtn" title="Slower">&#9650;</button>
-            <span id="delayValue">10</span>
-            <button id="fasterBtn" title="Faster">&#9660;</button>
-            <div id="delayLabel">Interval</div>
+            <div id="delayLabel">Slide Change Interval</div>
+
+            <div class="delay-control-buttons">
+              <button id="fasterBtn" title="Faster">&#9664;</button>
+              <span id="delayValue">10</span>
+              <button id="slowerBtn" title="Slower">&#9654;</button>
+            </div>
           </div>
 
           <!-- Right column: Mode controls -->
           <div id="modeControls">
+            <div id="modeLabel">Slide Browse Order:</div>
+
             <div id="modeRadioGroup">
               <label
                 ><input
@@ -337,6 +337,43 @@
             max="100"
             value="10"
           />
+        </div>
+
+        <!-- Input for the LocationIQ API Key -->
+        <div class="setting-row">
+          <label for="locationiqApiKeyInput"
+            >LocationIQ API Key (for maps):</label
+          >
+          <form style="display: inline; margin: 0">
+            <input
+              type="password"
+              id="locationiqApiKeyInput"
+              placeholder="Enter your LocationIQ API key (optional)"
+              autocomplete="pk-xxxxxxxx"
+              style="
+                width: 100%;
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+              "
+            />
+            <small
+              style="
+                color: #666;
+                font-size: 0.85em;
+                display: block;
+                margin-top: 4px;
+              "
+            >
+              Optional: Enables location names and maps in EXIF data.
+              <a
+                href="https://locationiq.com"
+                target="_blank"
+                style="color: #007bff"
+                >Get a free key</a
+              >
+            </small>
+          </form>
         </div>
 
         <div class="setting-row">

@@ -1,11 +1,11 @@
 # slideshow_server.py
+import logging
 import os
 import shutil
 import tempfile
 import time
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-import logging
+from typing import Any, Dict, List, Optional
 
 try:
     # Python 3.9+
@@ -15,23 +15,23 @@ except ImportError:
     from importlib_resources import files
 
 from fastapi import (
+    BackgroundTasks,
     FastAPI,
     File,
     Form,
+    HTTPException,
     Request,
     UploadFile,
-    HTTPException,
-    BackgroundTasks,
 )
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+from clipslide.backend.config import ConfigManager, create_album
 from clipslide.backend.embeddings import Embeddings
 from clipslide.backend.metadata_modules import SlideSummary
-from clipslide.backend.config import ConfigManager, create_album
-from clipslide.backend.progress import progress_tracker, ProgressInfo
+from clipslide.backend.progress import ProgressInfo, progress_tracker
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -45,13 +45,16 @@ DEFAULT_DELAY = 5
 DEFAULT_MODE = "random"
 DEFAULT_TOP_K = 20
 
+
 # Response Models
 class SearchResult(BaseModel):
     filename: str
     score: float
 
+
 class SearchResultsResponse(BaseModel):
     results: List[SearchResult]
+
 
 class ProgressResponse(BaseModel):
     album_key: str
@@ -64,10 +67,12 @@ class ProgressResponse(BaseModel):
     estimated_time_remaining: Optional[float]
     error_message: Optional[str] = None
 
+
 class StandardResponse(BaseModel):
     success: bool
     message: str
     album_key: Optional[str] = None
+
 
 # Utility Functions
 def get_package_resource_path(resource_name: str) -> str:
@@ -84,12 +89,14 @@ def get_package_resource_path(resource_name: str) -> str:
     except Exception:
         return str(Path(__file__).parent / resource_name)
 
+
 def validate_album_exists(album_key: str):
     """Validate that an album exists, raise HTTPException if not."""
     album_config = config_manager.get_album(album_key)
     if not album_config:
         raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
     return album_config
+
 
 def validate_image_access(album_config, image_path: Path) -> bool:
     """Validate that an image path is within allowed album directories."""
@@ -103,27 +110,36 @@ def validate_image_access(album_config, image_path: Path) -> bool:
     except Exception:
         return False
 
-def create_search_results(results: List[str], scores: List[float], album: str) -> SearchResultsResponse:
+
+def create_search_results(
+    results: List[str], scores: List[float], album: str
+) -> SearchResultsResponse:
     """Create a standardized search results response."""
     return SearchResultsResponse(
         results=[
             SearchResult(
-                filename=config_manager.get_relative_path(filename, album) or Path(filename).name,
+                filename=config_manager.get_relative_path(filename, album)
+                or Path(filename).name,
                 score=float(score),
             )
             for filename, score in zip(results, scores)
         ]
     )
 
+
 def get_embeddings_for_album(album_key: str) -> Embeddings:
     """Get embeddings instance for a given album."""
     album_config = validate_album_exists(album_key)
     return Embeddings(embeddings_path=Path(album_config.index))
 
+
 def create_slide_url(slide_metadata: SlideSummary, album: str) -> None:
     """Add URL to slide metadata."""
-    relative_path = config_manager.get_relative_path(str(slide_metadata.filepath), album)
+    relative_path = config_manager.get_relative_path(
+        str(slide_metadata.filepath), album
+    )
     slide_metadata.url = f"/images/{album}/{relative_path}"
+
 
 # Initialize FastAPI app
 app = FastAPI(title="Slideshow")
@@ -135,6 +151,7 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 templates_path = get_package_resource_path("templates")
 templates = Jinja2Templates(directory=templates_path)
 
+
 # Main Routes
 @app.get("/", response_class=HTMLResponse)
 async def get_root(
@@ -145,7 +162,7 @@ async def get_root(
 ):
     """Serve the main slideshow page."""
     albums = config_manager.get_albums()
-    
+
     if not albums:
         return templates.TemplateResponse(
             "slideshow.html",
@@ -157,7 +174,7 @@ async def get_root(
                 "setup_mode": True,
             },
         )
-    
+
     # Validate album or use first available
     if album not in albums:
         album = list(albums.keys())[0]
@@ -173,23 +190,24 @@ async def get_root(
         },
     )
 
+
 # Album Management Routes
 @app.get("/available_albums/")
 async def get_available_albums() -> List[Dict[str, Any]]:
     """Get list of available albums."""
     try:
         albums = config_manager.get_albums()
-        
+
         if not albums:
             return []
-        
+
         return [
             {
                 "key": key,
                 "name": album.name,
                 "description": album.description,
                 "embeddings_file": album.index,
-                "image_paths": album.image_paths
+                "image_paths": album.image_paths,
             }
             for key, album in albums.items()
         ]
@@ -197,51 +215,64 @@ async def get_available_albums() -> List[Dict[str, Any]]:
         logger.error(f"Failed to get albums: {e}")
         return []
 
+
 @app.post("/add_album/")
 async def add_album(album_data: dict) -> JSONResponse:
     """Add a new album to the configuration."""
     try:
         album = create_album(
-            key=album_data['key'],
-            name=album_data['name'],
-            image_paths=album_data['image_paths'],
-            index=album_data['index'],
-            description=album_data.get('description', '')
+            key=album_data["key"],
+            name=album_data["name"],
+            image_paths=album_data["image_paths"],
+            index=album_data["index"],
+            description=album_data.get("description", ""),
         )
-        
+
         if config_manager.add_album(album):
             return JSONResponse(
-                content={"success": True, "message": f"Album '{album.key}' added successfully"},
-                status_code=201
+                content={
+                    "success": True,
+                    "message": f"Album '{album.key}' added successfully",
+                },
+                status_code=201,
             )
         else:
-            raise HTTPException(status_code=409, detail=f"Album '{album.key}' already exists")
-            
+            raise HTTPException(
+                status_code=409, detail=f"Album '{album.key}' already exists"
+            )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to add album: {str(e)}")
+
 
 @app.post("/update_album/")
 async def update_album(album_data: dict) -> JSONResponse:
     """Update an existing album in the configuration."""
-    try:        
+    try:
         album = create_album(
-            key=album_data['key'],
-            name=album_data['name'],
-            image_paths=album_data['image_paths'],
-            index=album_data['index'],
-            description=album_data.get('description', '')
+            key=album_data["key"],
+            name=album_data["name"],
+            image_paths=album_data["image_paths"],
+            index=album_data["index"],
+            description=album_data.get("description", ""),
         )
-        
+
         if config_manager.update_album(album):
             return JSONResponse(
-                content={"success": True, "message": f"Album '{album.key}' updated successfully"},
-                status_code=200
+                content={
+                    "success": True,
+                    "message": f"Album '{album.key}' updated successfully",
+                },
+                status_code=200,
             )
         else:
-            raise HTTPException(status_code=404, detail=f"Album '{album.key}' not found")
-            
+            raise HTTPException(
+                status_code=404, detail=f"Album '{album.key}' not found"
+            )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update album: {str(e)}")
+
 
 @app.delete("/delete_album/{album_key}")
 async def delete_album(album_key: str) -> JSONResponse:
@@ -249,14 +280,51 @@ async def delete_album(album_key: str) -> JSONResponse:
     try:
         if config_manager.delete_album(album_key):
             return JSONResponse(
-                content={"success": True, "message": f"Album '{album_key}' deleted successfully"},
-                status_code=200
+                content={
+                    "success": True,
+                    "message": f"Album '{album_key}' deleted successfully",
+                },
+                status_code=200,
             )
         else:
-            raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
-            
+            raise HTTPException(
+                status_code=404, detail=f"Album '{album_key}' not found"
+            )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete album: {str(e)}")
+
+
+# The LocationIQ API key for showing GPS locations
+@app.get("/locationiq_key/")
+async def get_locationiq_key():
+    """Get the current LocationIQ API key (masked for security)."""
+    api_key = config_manager.get_locationiq_api_key()
+    if api_key:
+        # Return masked version for security
+        return {
+            "has_key": True,
+            "key": (
+                "●" * (len(api_key) - 4) + api_key[-4:]
+                if len(api_key) > 4
+                else "●" * len(api_key)
+            ),
+        }
+    return {"has_key": False, "key": ""}
+
+
+@app.post("/locationiq_key/")
+async def set_locationiq_key(request: dict):
+    """Set the LocationIQ API key."""
+    api_key = request.get("api_key")
+    try:
+        config_manager.set_locationiq_api_key(api_key)
+        # Force reload to ensure other parts of app see the change
+        config_manager.reload_config()
+        return {"success": True, "message": "API key updated successfully"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
 
 # Search Routes
 @app.post("/search_with_image/", response_model=SearchResultsResponse)
@@ -276,13 +344,14 @@ async def search_with_image(
         # Perform search
         embeddings = get_embeddings_for_album(album)
         results, scores = embeddings.search_images_by_similarity(temp_path, top_k=top_k)
-        
+
         return create_search_results(results, scores, album)
-        
+
     finally:
         # Clean up temp file
         if temp_path and temp_path.exists():
             temp_path.unlink(missing_ok=True)
+
 
 @app.post("/search_with_text/", response_model=SearchResultsResponse)
 async def search_with_text(
@@ -294,6 +363,7 @@ async def search_with_text(
     embeddings = get_embeddings_for_album(album)
     results, scores = embeddings.search_images_by_text(text_query, top_k=top_k)
     return create_search_results(results, scores, album)
+
 
 # Image Retrieval Routes
 @app.post("/retrieve_image/", response_model=SlideSummary)
@@ -311,6 +381,7 @@ async def retrieve_image(
     create_slide_url(slide_metadata, album)
     return slide_metadata
 
+
 @app.post("/retrieve_next_image/", response_model=SlideSummary)
 async def retrieve_next_image(
     current_image: str = Form(None),
@@ -319,7 +390,7 @@ async def retrieve_next_image(
 ) -> SlideSummary:
     """Retrieve the next image in sequence."""
     embeddings = get_embeddings_for_album(album)
-    
+
     if random:
         slide_metadata = embeddings.retrieve_next_image(random=True)
     else:
@@ -333,6 +404,7 @@ async def retrieve_next_image(
     create_slide_url(slide_metadata, album)
     return slide_metadata
 
+
 # File Management Routes
 @app.get("/images/{album}/{path:path}")
 async def serve_image(album: str, path: str) -> FileResponse:
@@ -342,7 +414,7 @@ async def serve_image(album: str, path: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="Image not found")
 
     album_config = validate_album_exists(album)
-    
+
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -351,10 +423,10 @@ async def serve_image(album: str, path: str) -> FileResponse:
 
     return FileResponse(image_path)
 
+
 @app.delete("/delete_image/")
 async def delete_image(
-    file_to_delete: str, 
-    album: str = Form(DEFAULT_ALBUM)
+    file_to_delete: str, album: str = Form(DEFAULT_ALBUM)
 ) -> JSONResponse:
     """Delete an image file."""
     try:
@@ -363,7 +435,7 @@ async def delete_image(
             raise HTTPException(status_code=404, detail="File not found")
 
         album_config = validate_album_exists(album)
-        
+
         if not validate_image_access(album_config, image_path):
             raise HTTPException(status_code=403, detail="Access denied")
 
@@ -387,6 +459,7 @@ async def delete_image(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
+
 # Index Management Routes
 @app.post("/update_index_async/", response_model=dict)
 async def update_index_async(
@@ -402,7 +475,9 @@ async def update_index_async(
             )
 
         album_config = validate_album_exists(album_key)
-        background_tasks.add_task(_update_index_background_async, album_key, album_config)
+        background_tasks.add_task(
+            _update_index_background_async, album_key, album_config
+        )
 
         return {
             "success": True,
@@ -417,6 +492,7 @@ async def update_index_async(
             status_code=500, detail=f"Failed to start background index update: {str(e)}"
         )
 
+
 @app.get("/index_progress/{album_key}", response_model=ProgressResponse)
 async def get_index_progress(album_key: str) -> ProgressResponse:
     """Get the current progress of an index update operation."""
@@ -424,7 +500,7 @@ async def get_index_progress(album_key: str) -> ProgressResponse:
         progress = progress_tracker.get_progress(album_key)
         if not progress:
             validate_album_exists(album_key)  # Ensure album exists
-            
+
             return ProgressResponse(
                 album_key=album_key,
                 status="idle",
@@ -453,6 +529,7 @@ async def get_index_progress(album_key: str) -> ProgressResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get progress: {str(e)}")
 
+
 @app.delete("/cancel_index/{album_key}")
 async def cancel_index_operation(album_key: str) -> dict:
     """Cancel an ongoing index operation."""
@@ -477,6 +554,7 @@ async def cancel_index_operation(album_key: str) -> dict:
             status_code=500, detail=f"Failed to cancel operation: {str(e)}"
         )
 
+
 # Background Tasks
 async def _update_index_background_async(album_key: str, album_config):
     """Background task for updating index with async support."""
@@ -499,13 +577,16 @@ async def _update_index_background_async(album_key: str, album_config):
             await embeddings.update_index_async(image_paths, album_key)
         else:
             logger.info(f"Creating new index for album '{album_key}'...")
-            await embeddings.create_index_async(image_paths, album_key, create_index=True)
+            await embeddings.create_index_async(
+                image_paths, album_key, create_index=True
+            )
 
         logger.info(f"Index update completed for album '{album_key}'")
 
     except Exception as e:
         logger.error(f"Background index update failed for album '{album_key}': {e}")
         progress_tracker.set_error(album_key, str(e))
+
 
 # Main Entry Point
 def main():
@@ -519,6 +600,7 @@ def main():
         reload=True,
         reload_dirs=["./clipslide", "./clipslide/frontend", "./clipslide/backend"],
     )
+
 
 if __name__ == "__main__":
     main()
