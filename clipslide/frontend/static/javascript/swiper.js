@@ -6,9 +6,15 @@ import { scoreDisplay } from "./score-display.js";
 import { state } from "./state.js";
 
 // Check if the device is mobile
-const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-  navigator.userAgent
-);
+function isTouchDevice() {
+  return (
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0 ||
+    navigator.msMaxTouchPoints > 0
+  );
+}
+
+const hasTouchCapability = isTouchDevice();
 
 // Swiper initialization
 document.addEventListener("DOMContentLoaded", async function () {
@@ -54,8 +60,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     },
   };
 
-  // Only add zoom on mobile devices
-  if (isMobileDevice) {
+  // Enable zoom on any device with touch capability
+  if (hasTouchCapability) {
     swiperConfig.zoom = {
       maxRatio: 3,
       minRatio: 1,
@@ -140,18 +146,16 @@ export async function addNewSlide() {
   const slide = document.createElement("div");
   slide.className = "swiper-slide";
 
-  // Check if this is a mobile device
-  const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-  if (isMobileDevice) {
-    // Mobile - with zoom container for pinch-zoom
+  // Use feature detection instead of user agent
+  if (hasTouchCapability) {
+    // Touch-capable device - with zoom container
     slide.innerHTML = `
       <div class="swiper-zoom-container">
         <img src="${url}" alt="${data.filename}" />
       </div>
     `;
   } else {
-    // Desktop - direct image for mouse drag navigation
+    // Non-touch device - direct image
     slide.innerHTML = `
       <img src="${url}" alt="${data.filename}" />
     `;
