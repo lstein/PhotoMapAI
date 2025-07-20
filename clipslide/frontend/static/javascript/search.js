@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   const textSearchBtn = document.getElementById("textSearchBtn");
 
   textSearchBtn.addEventListener("click", function (e) {
+    e.stopPropagation(); // Prevent this click from bubbling up
     if (
       textSearchPanel.style.display === "none" ||
       textSearchPanel.style.display === ""
@@ -30,6 +31,29 @@ document.addEventListener("DOMContentLoaded", async function () {
       textSearchPanel.style.display = "none";
       textSearchPanel.style.opacity = 0;
     }
+  });
+
+  // Add click-outside-to-close functionality
+  document.addEventListener("click", function (e) {
+    // Check if the panel is visible
+    if (textSearchPanel.style.display === "block") {
+      // Check if the click was outside the panel and not on the button
+      if (
+        !textSearchPanel.contains(e.target) &&
+        !textSearchBtn.contains(e.target)
+      ) {
+        // Hide the panel
+        textSearchPanel.style.opacity = 0;
+        setTimeout(() => {
+          textSearchPanel.style.display = "none";
+        }, 200);
+      }
+    }
+  });
+
+  // Prevent clicks inside the panel from closing it
+  textSearchPanel.addEventListener("click", function (e) {
+    e.stopPropagation();
   });
 
   const doSearchBtn = document.getElementById("doSearchBtn");
