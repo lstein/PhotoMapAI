@@ -3,7 +3,7 @@ html,
 body {
   font-family: "Segoe UI", "Arial", "Helvetica Neue", Helvetica, Arial,
     sans-serif;
-  touch-action: none;
+  touch-action: pan-x pan-y pinch-zoom; /* Changed from 'none' to allow pinch-zoom */
   overflow: hidden;
   margin: 0;
   padding: 0;
@@ -39,6 +39,8 @@ body {
   -khtml-user-drag: none;
   -moz-user-drag: none;
   -o-user-drag: none;
+  /* Add this line for native pinch-zoom */
+  touch-action: pinch-zoom;
 }
 
 .swiper-scrollbar {
@@ -1211,4 +1213,31 @@ body {
 #copyTextBtn svg {
   color: #fff;
   fill: currentColor;
+}
+
+/* Add this to your slides.css */
+
+/* Zoom container for mobile devices */
+.swiper-zoom-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.swiper-zoom-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+  background: #000;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* When zoomed, show move cursor */
+.swiper-slide-zoomed .swiper-zoom-container {
+  cursor: move;
 }

@@ -1,14 +1,19 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
-import { state } from "./state.js";
 import { fetchNextImage } from "./api.js";
 import { updateOverlay } from "./overlay.js";
 import { scoreDisplay } from "./score-display.js";
+import { state } from "./state.js";
+
+// Check if the device is mobile
+const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+  navigator.userAgent
+);
 
 // Swiper initialization
 document.addEventListener("DOMContentLoaded", async function () {
-  // Initialize Swiper
-  state.swiper = new Swiper(".swiper", {
+  // Create base Swiper configuration
+  const swiperConfig = {
     navigation: {
       nextEl: ".swiper-button-next",
       prevEl: ".swiper-button-prev",
@@ -23,7 +28,19 @@ document.addEventListener("DOMContentLoaded", async function () {
       draggable: true,
       hide: false,
     },
-    loop: false, // Enable looping to allow continuous navigation
+    loop: false,
+    allowTouchMove: true,
+    simulateTouch: true,
+    touchStartPreventDefault: false,
+    touchMoveStopPropagation: false,
+    mousewheel: {
+      enabled: true,
+      forceToAxis: true,
+    },
+    keyboard: {
+      enabled: true,
+      onlyInViewport: true,
+    },
     on: {
       slideNextTransitionStart: async function () {
         // Only add a new slide if we're at the end and moving forward
@@ -35,7 +52,21 @@ document.addEventListener("DOMContentLoaded", async function () {
         pauseSlideshow();
       },
     },
-  });
+  };
+
+  // Only add zoom on mobile devices
+  if (isMobileDevice) {
+    swiperConfig.zoom = {
+      maxRatio: 3,
+      minRatio: 1,
+      toggle: true,
+      containerClass: "swiper-zoom-container",
+      zoomedSlideClass: "swiper-slide-zoomed",
+    };
+  }
+
+  // Initialize Swiper with conditional config
+  state.swiper = new Swiper(".swiper", swiperConfig);
 
   // Prevent overlay toggle when clicking Swiper navigation buttons
   document
@@ -100,28 +131,37 @@ export function updateSlideshowIcon() {
 export async function addNewSlide() {
   const data = await fetchNextImage();
 
-  // Stop if data is empty (null, undefined, or empty object)
   if (!data || Object.keys(data).length === 0) {
     return;
   }
 
-  // Create a new slide element
-  const path = data.filepath; // Full path to the image
-  const url = data.url; // URL path to the image
+  const path = data.filepath;
+  const url = data.url;
   const slide = document.createElement("div");
   slide.className = "swiper-slide";
 
-  slide.innerHTML = `
-    <div style="position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
-      <img src="${url}" alt="" draggable="true" class="slide-image">
-    </div>
-  `;
+  // Check if this is a mobile device
+  const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  if (isMobileDevice) {
+    // Mobile - with zoom container for pinch-zoom
+    slide.innerHTML = `
+      <div class="swiper-zoom-container">
+        <img src="${url}" alt="${data.filename}" />
+      </div>
+    `;
+  } else {
+    // Desktop - direct image for mouse drag navigation
+    slide.innerHTML = `
+      <img src="${url}" alt="${data.filename}" />
+    `;
+  }
 
   slide.dataset.filename = data.filename || "";
   slide.dataset.description = data.description || "";
   slide.dataset.textToCopy = data.textToCopy || "";
   slide.dataset.filepath = path || "";
-  slide.dataset.score = data.score || ""; // Store score in dataset
+  slide.dataset.score = data.score || "";
 
   state.swiper.appendSlide(slide);
 
