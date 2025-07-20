@@ -1,17 +1,16 @@
 // search.js
 // This file handles the search functionality for the Clipslide application.
 // Swiper initialization
+import { searchImage, searchText } from "./api.js";
+import { scoreDisplay } from "./score-display.js";
 import { state } from "./state.js";
 import {
+  pauseSlideshow,
   resetAllSlides,
   resetSlidesAndAppend,
-  pauseSlideshow,
   resumeSlideshow,
 } from "./swiper.js";
-import { searchImage, searchText } from "./api.js";
-import { showSpinner, hideSpinner } from "./utils.js";
-import { setCheckmarkOnIcon } from "./utils.js";
-import { scoreDisplay } from "./score-display.js";
+import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
 document.addEventListener("DOMContentLoaded", async function () {
   const textSearchPanel = document.getElementById("textSearchPanel");
@@ -191,11 +190,11 @@ export async function searchWithImage(file, first_slide) {
   try {
     showSpinner();
     state.searchResults = [];
-    state.searchIndex = 0; // Reset search index for new search
+    state.searchIndex = 0;
     const results = await searchImage(file);
-    // filter the results by score, keeping everything with a score >= 0.6
     state.searchResults = results.filter((item) => item.score >= 0.6);
     await resetSlidesAndAppend(first_slide);
+    updateSearchCheckmarks(); // Add this line!
     // Set checkmarks on icons based on the current mode
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
@@ -242,12 +241,14 @@ async function insertUploadedImageFile(file) {
 
 // Show/hide the clearSearchBtn based on searchResults
 function updateSearchCheckmarks() {
+  const clearSearchBtn = document.getElementById("clearSearchBtn"); // Add this line
+
   if (state.searchResults?.length > 0) {
     clearSearchBtn.style.display = "flex";
   } else {
     clearSearchBtn.style.display = "none";
-    setCheckmarkOnIcon(imageSearchIcon, false);
-    setCheckmarkOnIcon(textSearchIcon, false);
+    setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
+    setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
   }
 }
 
