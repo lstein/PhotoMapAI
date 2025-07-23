@@ -1304,7 +1304,7 @@ body {
   position: absolute;
   top: 100%; /* Position below the button */
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%,-18px);
   margin-top: 2px; /* Small gap below button */
   white-space: nowrap;
 }
