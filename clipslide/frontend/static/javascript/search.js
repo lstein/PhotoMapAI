@@ -181,6 +181,44 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Initial call to set visibility based on default searchResults value
   updateSearchCheckmarks();
 
+  // Drag and drop functionality for textSearchPanel
+  textSearchPanel.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    textSearchPanel.classList.add("dragover");
+  });
+  
+  textSearchPanel.addEventListener("dragleave", function (e) {
+    e.preventDefault();
+    textSearchPanel.classList.remove("dragover");
+  });
+  
+  textSearchPanel.addEventListener("drop", async function (e) {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (!file.type.startsWith("image/")) return;
+
+    showSpinner();
+    try {
+      let slide = await insertUploadedImageFile(file); // Insert the image as the first slide
+      await searchWithImage(file, slide);
+      updateSearchCheckmarks();
+      
+      // Hide the panel after successful image search
+      textSearchPanel.style.opacity = 0;
+      setTimeout(() => {
+        textSearchPanel.style.display = "none";
+      }, 200);
+    } catch (err) {
+      console.error("Image search failed:", err);
+      alert("Failed to search with image: " + err.message);
+    } finally {
+      textSearchPanel.classList.remove("dragover");
+      hideSpinner();
+    }
+  });
+
   // Drag and drop functionality for search panel
   const searchPanel = document.getElementById("searchPanel");
   searchPanel.addEventListener("dragover", function (e) {
