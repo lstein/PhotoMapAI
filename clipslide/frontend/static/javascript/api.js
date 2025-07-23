@@ -4,7 +4,7 @@ import { state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
 // Call the server to fetch the next image based on the current mode (random or sequential).
-export async function fetchNextImage(lastImage = null) {
+export async function fetchNextImage(lastImage = null, backward = false) {
   let response;
   let currentScore = state.searchResults[state.searchIndex]?.score || 0;
 
@@ -12,32 +12,28 @@ export async function fetchNextImage(lastImage = null) {
   const formData = new URLSearchParams();
 
   try {
-    // Handle the case of there already being a set of search results, in which case we step through.
     if (state.searchResults?.length > 0) {
       let currentFilepath = state.searchResults[state.searchIndex++].filename;
       if (state.searchIndex >= state.searchResults.length)
         state.searchIndex = 0; // Loop back to start
       formData.append("current_image", currentFilepath);
       formData.append("album", state.album);
+      // Optionally handle backward for search results if needed
       response = await fetch("retrieve_image/", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: formData.toString(),
       });
-
-      // Otherwise we let the server handle the logic of which image to return.
     } else {
-      // Convert query parameters to form data
       formData.append("album", state.album);
       if (state.mode === "random") {
         formData.append("random", "true");
       } else if (state.mode === "sequential") {
-        // Use the currently displayed slide, not the last in the buffer
         if (lastImage) {
           const currentFilepath = lastImage.dataset?.filepath;
           formData.append("current_image", currentFilepath);
+          formData.append("offset", backward ? -1 : 1);
         }
-        formData.append("offset", 1);
         formData.append("random", "false");
       } else {
         throw new Error(
@@ -57,8 +53,7 @@ export async function fetchNextImage(lastImage = null) {
     }
 
     const data = await response.json();
-    if (currentScore)
-      data.score = currentScore; // Preserve the score from search results
+    if (currentScore) data.score = currentScore; // Preserve the score from search results
     clearTimeout(spinnerTimeout);
     hideSpinner();
     return data;
@@ -92,22 +87,22 @@ export async function searchImage(file) {
 
 // Perform a text search and return a list of {filename, score} objects.
 export async function searchText(query) {
-    const formData = new FormData();
-    formData.append("text_query", query);
-    formData.append("top_k", 100);
-    formData.append("album", state.album);
+  const formData = new FormData();
+  formData.append("text_query", query);
+  formData.append("top_k", 100);
+  formData.append("album", state.album);
 
-    try {
-      const response = await fetch("search_with_text/", {
-        method: "POST",
-        body: formData,
-      });
-      const result = await response.json();
-      return result.results
-    } catch (err) {
-      console.error("Text search request failed:", err);
-      return [];
-    }
+  try {
+    const response = await fetch("search_with_text/", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await response.json();
+    return result.results;
+  } catch (err) {
+    console.error("Text search request failed:", err);
+    return [];
+  }
 }
 
 export async function deleteImage(filepath) {
