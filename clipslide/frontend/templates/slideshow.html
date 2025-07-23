@@ -237,22 +237,25 @@
         <div class="button-label">Search</div>
       </div>
 
-      <button id="clearSearchBtn" title="Clear Search">
-        <svg
-          width="32"
-          height="32"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#fff"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
-          <line x1="8" y1="8" x2="16" y2="16" />
-          <line x1="16" y1="8" x2="8" y2="16" />
-        </svg>
-      </button>
+      <div class="clear-search-container">
+        <button id="clearSearchBtn" title="Clear Search" style="display: none;">
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
+            <line x1="8" y1="8" x2="16" y2="16" />
+            <line x1="16" y1="8" x2="8" y2="16" />
+          </svg>
+        </button>
+        <div class="button-label">Clear</div>
+      </div>
     </div>
 
     <div id="textSearchPanel">
@@ -265,7 +268,13 @@
       </div>
       <span style="color: white; font-size: 80%"
         >Or paste, drag or
-        <a href="#" id="uploadImageLink" class="upload-link" style="font-size: inherit;">upload</a>
+        <a
+          href="#"
+          id="uploadImageLink"
+          class="upload-link"
+          style="font-size: inherit"
+          >upload</a
+        >
         <input
           type="file"
           id="uploadImageInput"

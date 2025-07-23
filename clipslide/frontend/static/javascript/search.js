@@ -270,10 +270,10 @@ async function insertUploadedImageFile(file) {
 
 // Show/hide the clearSearchBtn based on searchResults
 function updateSearchCheckmarks() {
-  const clearSearchBtn = document.getElementById("clearSearchBtn"); // Add this line
+  const clearSearchBtn = document.getElementById("clearSearchBtn");
 
   if (state.searchResults?.length > 0) {
-    clearSearchBtn.style.display = "flex";
+    clearSearchBtn.style.display = "block";
   } else {
     clearSearchBtn.style.display = "none";
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);

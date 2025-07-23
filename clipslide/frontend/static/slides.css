@@ -124,8 +124,8 @@ body {
   background: none;
   border: none;
   border-radius: 50%;
-  width: 48px;
-  height: 48px;
+  /* width: 48px;
+  height: 48px; */
   color: #fff;
   display: flex;
   align-items: center;
@@ -1085,6 +1085,7 @@ body {
 #searchPanel.dragover {
   outline: 2px dashed limegreen;
   background: rgba(0, 255, 0, 0.1);
+  padding: 0;
 }
 
 #imageSearchBtn,
@@ -1186,7 +1187,9 @@ body {
 
 /* Make sure only drawer is visible at left when container is hidden */
 .banner-drawer-container:not(.visible) {
-  transform: translateX(calc(-100% + 20px)); /* Show only drawer tab from left */
+  transform: translateX(
+    calc(-100% + 20px)
+  ); /* Show only drawer tab from left */
 }
 
 /* ===== OVERLAY DRAWER ===== */
@@ -1206,7 +1209,12 @@ body {
   height: 100%;
   /* File folder tab shape - now narrower at right since it's on the right */
   background: rgba(0, 0, 0, 0.5);
-  clip-path: polygon(0% 0%, 80% 20%, 80% 80%, 0% 100%); /* Vertical trapezoid on right */
+  clip-path: polygon(
+    0% 0%,
+    80% 20%,
+    80% 80%,
+    0% 100%
+  ); /* Vertical trapezoid on right */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1291,20 +1299,13 @@ body {
   cursor: move;
 }
 
-/* Container for image search button and upload link */
-.image-search-container {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
 
 /* Upload link positioning */
 .upload-link-container {
   position: absolute;
   top: 100%; /* Position below the button */
   left: 50%;
-  transform: translate(-50%,-18px);
+  transform: translate(-50%, -18px);
   margin-top: 2px; /* Small gap below button */
   white-space: nowrap;
 }
@@ -1328,4 +1329,32 @@ body {
 
 .upload-link:active {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.button-label {
+  font-size: 12px;
+  color: #fff;
+  text-align: center;
+  /* transform: translateY(-100%); */
+  /* margin-top: 2px; */
+  opacity: 0.8;
+}
+
+.image-search-container,
+.text-search-container,
+.clear-search-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Hide the entire container when the button is hidden */
+.clear-search-container:has(#clearSearchBtn[style*="display: none"]) {
+  display: none;
+}
+
+/* Alternative approach if :has() isn't supported */
+#clearSearchBtn[style*="display: none"] + .button-label {
+  display: none;
 }
