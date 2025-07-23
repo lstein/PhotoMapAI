@@ -306,15 +306,18 @@ body {
 
 #delayValue {
   color: #fff;
-  min-width: 2em;
-  text-align: center;
   font-weight: bold;
-  margin: 0.2em 0;
+  min-width: 30px;
+  text-align: center;
+  font-size: 16px;
 }
 
-#delayLabel {
+#delayLabel,
+#modeLabel {
   /* font-size: 0.4em !important; */
   color: #fff;
+  white-space: nowrap;
+  margin-bottom: 0.5em; /* Add consistent spacing below the label */
 }
 
 /* ===== FIXED SCORE DISPLAY ===== */
@@ -486,9 +489,9 @@ body {
   justify-content: center;
 }
 
-#modeLabel {
-  color: #fff;
-  margin-bottom: 0.1em;
+#slideshowSettingsLabel {
+  color: #f3ef0a;
+  margin-bottom: 1em;
   font-size: 1.5em !important;
   text-align: center;
 }
@@ -496,7 +499,7 @@ body {
 .settings-main {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start; /* Changed from 'center' to 'flex-start' */
   justify-content: center;
 }
 
@@ -504,12 +507,35 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   margin-right: 2em;
 }
 
-.delay-controls button {
-  margin-top: 0.4em;
+/* New horizontal layout for the controls */
+.delay-control-buttons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+#slowerBtn,
+#fasterBtn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+#slowerBtn:hover,
+#fasterBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 #modeControls {
@@ -517,12 +543,35 @@ body {
   flex-direction: column;
   align-items: center;
   color: #fff;
+  justify-content: flex-start; /* Add this line */
+}
+
+#modeControls > span {
+  margin-bottom: 0.5em; /* Add consistent spacing below the label */
 }
 
 #modeRadioGroup {
   display: flex;
-  flex-direction: column;
-  gap: 0.5em;
+  flex-direction: row;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+}
+
+#modeLabel {
+  margin-bottom: 1.2em;
+}
+
+#modeRadioGroup label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+#modeRadioGroup input[type="radio"] {
+  margin: 0;
 }
 
 .setting-row {
@@ -1240,4 +1289,43 @@ body {
 /* When zoomed, show move cursor */
 .swiper-slide-zoomed .swiper-zoom-container {
   cursor: move;
+}
+
+/* Container for image search button and upload link */
+.image-search-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Upload link positioning */
+.upload-link-container {
+  position: absolute;
+  top: 100%; /* Position below the button */
+  left: 50%;
+  transform: translate(-50%,-18px);
+  margin-top: 2px; /* Small gap below button */
+  white-space: nowrap;
+}
+
+.upload-link {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.upload-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+}
+
+.upload-link:active {
+  background: rgba(255, 255, 255, 0.2);
 }

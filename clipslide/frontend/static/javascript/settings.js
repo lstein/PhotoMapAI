@@ -1,8 +1,7 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { exitSearchMode } from "./search.js";
-import { state } from "./state.js";
-import { saveSettingsToLocalStorage } from "./state.js";
+import { saveSettingsToLocalStorage, state } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
 
 // Constants
@@ -32,7 +31,8 @@ function cacheElements() {
     albumSelect: document.getElementById("albumSelect"),
     titleElement: document.getElementById("slideshow_title"),
     slowerBtn: document.getElementById("slowerBtn"),
-    fasterBtn: document.getElementById("fasterBtn")
+    fasterBtn: document.getElementById("fasterBtn"),
+    locationiqApiKeyInput: document.getElementById("locationiqApiKeyInput"),
   };
 }
 
@@ -145,12 +145,14 @@ function toggleSettingsModal() {
   }
 }
 
-function populateModalFields() {
+async function populateModalFields() {
   elements.highWaterMarkInput.value = state.highWaterMark;
   elements.delayValueSpan.textContent = state.currentDelay;
   elements.albumSelect.value = state.album;
   elements.modeRandom.checked = state.mode === "random";
   elements.modeSequential.checked = state.mode === "sequential";
+
+  await loadLocationIQApiKey();
 }
 
 // Function to validate the high water mark
@@ -221,6 +223,56 @@ function setupHighWaterMarkControl() {
   });
 }
 
+async function loadLocationIQApiKey() {
+  try {
+    const response = await fetch('locationiq_key/');
+    const data = await response.json();
+    
+    if (data.has_key) {
+      elements.locationiqApiKeyInput.placeholder = `Current key: ${data.key}`;
+    } else {
+      elements.locationiqApiKeyInput.placeholder = "Enter your LocationIQ API key (optional)";
+    }
+  } catch (error) {
+    console.error("Failed to load LocationIQ API key:", error);
+  }
+}
+
+async function saveLocationIQApiKey(apiKey) {
+  try {
+    const response = await fetch('locationiq_key/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ api_key: apiKey })
+    });
+    
+    const result = await response.json();
+    if (!result.success) {
+      console.error("Failed to save API key:", result.message);
+    }
+  } catch (error) {
+    console.error("Failed to save LocationIQ API key:", error);
+  }
+}
+
+function setupLocationIQApiKeyControl() {
+  elements.locationiqApiKeyInput.addEventListener("input", function () {
+    // Debounce the save operation
+    clearTimeout(this.saveTimeout);
+    this.saveTimeout = setTimeout(() => {
+      saveLocationIQApiKey(this.value);
+    }, 1000); // Save 1 second after user stops typing
+  });
+  
+  elements.locationiqApiKeyInput.addEventListener("blur", function () {
+    // Save immediately when field loses focus
+    clearTimeout(this.saveTimeout);
+    saveLocationIQApiKey(this.value);
+  });
+}
+
 // MAIN INITIALIZATION FUNCTION
 async function initializeSettings() {
   cacheElements();
@@ -234,6 +286,7 @@ async function initializeSettings() {
   setupModalControls();
   setupAlbumSelector();
   setupHighWaterMarkControl();
+  setupLocationIQApiKeyControl();
 }
 
 // Initialize settings from the server and local storage

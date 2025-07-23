@@ -126,12 +126,12 @@ document.addEventListener("DOMContentLoaded", async function () {
   });
 
   // --- Upload Image File Button Logic ---
-  const uploadImageFileBtn = document.getElementById("uploadImageFileBtn");
+  const uploadImageLink = document.getElementById("uploadImageLink");
   const uploadImageInput = document.getElementById("uploadImageInput");
 
   // Click opens file dialog
-  uploadImageFileBtn.addEventListener("click", function (e) {
-    uploadImageInput.value = ""; // Reset so same file can be uploaded again
+  uploadImageLink.addEventListener("click", function (e) {
+    e.preventDefault();
     uploadImageInput.click();
   });
 

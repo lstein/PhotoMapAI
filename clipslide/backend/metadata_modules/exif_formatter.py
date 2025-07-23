@@ -5,22 +5,24 @@ Format EXIF metadata for images, including human-readable tags.
 Returns an HTML representation of the EXIF data.
 """
 
-import requests
 from pathlib import Path
 from typing import Optional, Tuple
+
+import requests
+
 from .slide_summary import SlideSummary
 
-# NOTE: Eventually get this from a config file or environment variable. DO NOT RELEASE WITH A HARD-CODED KEY!
-LOCATIONIQ_API_KEY = "pk.177360e26db81e6534db388b4f5e5d07"
 
-
-def format_exif_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSummary:
+def format_exif_metadata(
+    slide_data: SlideSummary, metadata: dict, locationiq_api_key: Optional[str] = None
+) -> SlideSummary:
     """
     Format EXIF metadata dictionary into an HTML string.
 
     Args:
         slide_data (SlideSummary): Slide data to update
         metadata (dict): Metadata dictionary containing EXIF attributes.
+        locationiq_api_key (Optional[str]): LocationIQ API key for map services
 
     Returns:
         SlideSummary: structured metadata appropriate for an image with EXIF data.
@@ -44,11 +46,30 @@ def format_exif_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSumma
         google_maps_link = f"https://www.google.com/maps?q={gps_lat},{gps_lon}"
 
         coord_str = ""
-        if LOCATIONIQ_API_KEY:
-            coord_str = get_locationiq_place_name(gps_lat, gps_lon, LOCATIONIQ_API_KEY)
+        api_key_valid = False
+
+        if locationiq_api_key:  # Only try if API key is provided
+            coord_str = get_locationiq_place_name(gps_lat, gps_lon, locationiq_api_key)
+            # Check if the API key worked
+            api_key_valid = coord_str is not None
+
         coord_str = coord_str if coord_str else f"{gps_lat:.6f}, {gps_lon:.6f}"
 
-        static_map_url = _get_static_map_url(gps_lat, gps_lon, LOCATIONIQ_API_KEY)
+        # Only show static map if API key is available AND valid
+        if locationiq_api_key and api_key_valid:
+            static_map_url = _get_static_map_url(gps_lat, gps_lon, locationiq_api_key)
+            map_html = f"""
+            <div style="font-size:0.98em; margin:0; padding:0; text-align:left;">
+                <a href="{google_maps_link}" target="_blank" style="display:block; margin:0; padding:0; color: white; text-decoration: none;">
+                    <img src="{static_map_url}" alt="Static Map"
+                         style="width:160px; height:120px; border:1.5px solid #bbb; border-radius:6px; margin:0; box-shadow:1px 1px 4px #ccc; display:block;">
+                </a>
+            </div>
+            """
+        elif locationiq_api_key and not api_key_valid:
+            map_html = '<div style="font-size:0.9em; color:#888; font-style:italic;">Map unavailable (invalid API key)</div>'
+        else:
+            map_html = '<div style="font-size:0.9em; color:#888; font-style:italic;">Map unavailable (no API key)</div>'
 
         html += f"""
         <div class='gps-info' style="min-width:180px; max-width:220px; margin:0; padding:0; text-align:left; vertical-align:top;">
@@ -57,12 +78,7 @@ def format_exif_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSumma
                     <a href="{google_maps_link}" target="_blank" style="color: white; text-decoration: none"
                        onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" style="text-align: left;">{coord_str}</a>
             </div>
-            <div style="font-size:0.98em; margin:0; padding:0; text-align:left;">
-                <a href="{google_maps_link}" target="_blank" style="display:block; margin:0; padding:0; color: white; text-decoration: none;">
-                    <img src="{static_map_url}" alt="Static Map"
-                         style="width:160px; height:120px; border:1.5px solid #bbb; border-radius:6px; margin:0; box-shadow:1px 1px 4px #ccc; display:block;">
-                </a>
-            </div>
+            {map_html}
         </div>
         """
     else:
@@ -177,15 +193,42 @@ def _get_static_map_url(latitude, longitude, api_key, width=200, height=150, zoo
 
 
 def get_locationiq_place_name(latitude, longitude, api_key):
+    """Get place name from LocationIQ API.
+
+    Returns:
+        str: Place name if successful
+        None: If API key is invalid or request fails
+    """
     url = "https://us1.locationiq.com/v1/reverse"
     params = {"key": api_key, "lat": latitude, "lon": longitude, "format": "json"}
     headers = {"User-Agent": "ClipSlide/1.0 (Image Slideshow Application)"}
+
     try:
         response = requests.get(url, params=params, headers=headers, timeout=5)
+
         if response.status_code == 200:
             data = response.json()
-            # 'display_name' is a human-readable address
             return data.get("display_name")
+        elif response.status_code == 401:
+            # Unauthorized - invalid API key
+            print(f"LocationIQ API key is invalid (401 Unauthorized)")
+            return None
+        elif response.status_code == 403:
+            # Forbidden - API key might be expired or quota exceeded
+            print(f"LocationIQ API access forbidden (403) - check API key and quota")
+            return None
+        else:
+            print(
+                f"LocationIQ reverse geocoding failed with status {response.status_code}"
+            )
+            return None
+
+    except requests.exceptions.Timeout:
+        print("LocationIQ reverse geocoding timed out")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"LocationIQ reverse geocoding failed: {e}")
+        return None
     except Exception as e:
         print(f"LocationIQ reverse geocoding failed: {e}")
-    return None
+        return None
