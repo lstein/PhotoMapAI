@@ -368,39 +368,23 @@ async def search_with_text(
 # Image Retrieval Routes
 @app.post("/retrieve_image/", response_model=SlideSummary)
 async def retrieve_image(
-    current_image: str = Form(...),
-    album: str = Form(DEFAULT_ALBUM),
-) -> SlideSummary:
-    """Retrieve metadata for a specific image."""
-    image_path = config_manager.find_image_in_album(album, current_image)
-    if not image_path:
-        raise HTTPException(status_code=404, detail="Image not found")
-
-    embeddings = get_embeddings_for_album(album)
-    slide_metadata = embeddings.retrieve_image(image_path)
-    create_slide_url(slide_metadata, album)
-    return slide_metadata
-
-
-@app.post("/retrieve_next_image/", response_model=SlideSummary)
-async def retrieve_next_image(
     current_image: str = Form(None),
+    offset: int = Form(0),
     album: str = Form(DEFAULT_ALBUM),
     random: bool = Form(False),
 ) -> SlideSummary:
-    """Retrieve the next image in sequence."""
-    embeddings = get_embeddings_for_album(album)
-
-    if random:
-        slide_metadata = embeddings.retrieve_next_image(random=True)
+    """Retrieve metadata for a specific image."""
+    if current_image is not None:
+        image_path = config_manager.find_image_in_album(album, current_image)
+        if not image_path:
+          raise HTTPException(status_code=404, detail="Image not found")
     else:
-        current_path = None
-        if current_image:
-            current_path = config_manager.find_image_in_album(album, current_image)
-        slide_metadata = embeddings.retrieve_next_image(
-            current_image=current_path, random=False
-        )
+        image_path = None
 
+    embeddings = get_embeddings_for_album(album)
+    slide_metadata = embeddings.retrieve_image(image_path, 
+                                               offset=offset, 
+                                               random=random)
     create_slide_url(slide_metadata, album)
     return slide_metadata
 

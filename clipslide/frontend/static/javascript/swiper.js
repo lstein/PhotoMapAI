@@ -135,7 +135,9 @@ export function updateSlideshowIcon() {
 
 // Add a new slide to Swiper with image and metadata
 export async function addNewSlide() {
-  const data = await fetchNextImage();
+
+  // new syntax for fetchNextImage -- provide the last image as context
+  const data = await fetchNextImage(state.swiper?.slides[state.swiper.slides.length - 1]);
 
   if (!data || Object.keys(data).length === 0) {
     return;

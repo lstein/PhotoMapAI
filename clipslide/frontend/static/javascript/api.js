@@ -1,11 +1,10 @@
 // api.js
 // This file contains functions to interact with the backend API for slide management.
 import { state } from "./state.js";
-import { showSpinner, hideSpinner } from "./utils.js";
-import { updateOverlay } from "./overlay.js";
+import { hideSpinner, showSpinner } from "./utils.js";
 
 // Call the server to fetch the next image based on the current mode (random or sequential).
-export async function fetchNextImage() {
+export async function fetchNextImage(lastImage = null) {
   let response;
   let currentScore = state.searchResults[state.searchIndex]?.score || 0;
 
@@ -34,8 +33,11 @@ export async function fetchNextImage() {
         formData.append("random", "true");
       } else if (state.mode === "sequential") {
         // Use the currently displayed slide, not the last in the buffer
-        const currentFilepath = getCurrentFilepath();
-        formData.append("current_image", currentFilepath);
+        if (lastImage) {
+          const currentFilepath = lastImage.dataset?.filepath;
+          formData.append("current_image", currentFilepath);
+        }
+        formData.append("offset", 1);
         formData.append("random", "false");
       } else {
         throw new Error(
@@ -43,7 +45,7 @@ export async function fetchNextImage() {
         );
       }
 
-      response = await fetch("retrieve_next_image/", {
+      response = await fetch("retrieve_image/", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: formData.toString(),
@@ -135,4 +137,3 @@ export async function deleteImage(filepath) {
 export function getCurrentFilepath() {
   return document.getElementById("filepathText")?.textContent?.trim();
 }
-

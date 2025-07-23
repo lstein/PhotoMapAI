@@ -2,7 +2,7 @@
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { exitSearchMode } from "./search.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
-import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
+import { addNewSlide, removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
 
 // Constants
 const DELAY_CONFIG = {
@@ -89,7 +89,6 @@ function switchAlbum(newAlbum, selectedOption) {
 
   // Clear search results when switching albums
   exitSearchMode();
-  removeSlidesAfterCurrent();
   saveSettingsToLocalStorage();
 
   updatePageTitle(newAlbum);
@@ -187,6 +186,7 @@ function setupModeControls() {
         state.mode = this.value;
         saveSettingsToLocalStorage();
         removeSlidesAfterCurrent();
+        addNewSlide();
       }
     });
   });

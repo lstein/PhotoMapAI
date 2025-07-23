@@ -664,8 +664,11 @@ class Embeddings(BaseModel):
             "filename_map": filename_map,
         }
 
-    def retrieve_next_image(
-        self, current_image: Optional[Path] = None, random: bool = False
+    def retrieve_image(
+        self, 
+        current_image: Optional[Path] = None,
+        offset: int = 0,
+        random: bool = False
     ) -> SlideSummary:
         """
         Retrieve the next image in the sequence or a random image if requested.
@@ -689,44 +692,18 @@ class Embeddings(BaseModel):
         filename_map = data["filename_map"]
 
         if not current_image:
-            return format_metadata(Path(sorted_filenames[0]), sorted_metadata[0])
+            return format_metadata(Path(sorted_filenames[offset]), sorted_metadata[offset])
 
         current_filename = current_image.as_posix()
         if current_filename not in filename_map:
             raise ValueError(f"Current image {current_image} not found in embeddings.")
 
         current_idx = filename_map[current_filename]
-        next_idx = (current_idx + 1) % len(sorted_filenames)
+        next_idx = (current_idx + offset) % len(sorted_filenames)
 
         return format_metadata(
             Path(sorted_filenames[next_idx]), sorted_metadata[next_idx]
         )
-
-    def retrieve_image(self, current_image: Path) -> SlideSummary:
-        """
-        Retrieve the metadata for a specific image.
-        Optimized version using O(1) lookup.
-
-        Args:
-            current_image (Path): Path to the image.
-
-        Returns:
-            SlideSummary:  Path and description of the image.
-        """
-        data = self.open_cached_embeddings(self.embeddings_path)
-
-        # Use the pre-computed filename map for O(1) lookup
-        filename_map = data["filename_map"]
-        sorted_filenames = data["sorted_filenames"]
-        sorted_metadata = data["sorted_metadata"]
-
-        current_filename = current_image.as_posix()
-        if current_filename not in filename_map:
-            raise ValueError(f"Image {current_image} not found in embeddings.")
-
-        # O(1) lookup instead of O(n) np.where search
-        idx = filename_map[current_filename]
-        return format_metadata(Path(sorted_filenames[idx]), sorted_metadata[idx])
 
     def remove_image_from_embeddings(self, image_path: Path):
         """
