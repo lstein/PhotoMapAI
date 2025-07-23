@@ -50,8 +50,14 @@ document.addEventListener("DOMContentLoaded", async function () {
     on: {
       slideNextTransitionStart: async function () {
         // Only add a new slide if we're at the end and moving forward
-        if (state.swiper.activeIndex >= state.swiper.slides.length - 1) {
+        if (this.activeIndex >= this.slides.length - 1) {
           await addNewSlide();
+        }
+      },
+      slidePrevTransitionStart: async function () {
+        // Only add a new slide if we're at the beginning and moving backward
+        if (this.activeIndex === 0) {
+          await addNewSlide(true);
         }
       },
       sliderFirstMove: function () {
@@ -99,8 +105,9 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 
   // Call twice to initialize the carousel and start slideshow if requested
-  await addNewSlide();
-  await addNewSlide();
+  await addNewSlide(false);
+  await addNewSlide(false);
+  // state.swiper.slideTo(0);
 
   // Initial icon state and overlay
   updateSlideshowIcon();
@@ -134,8 +141,12 @@ export function updateSlideshowIcon() {
 }
 
 // Add a new slide to Swiper with image and metadata
-export async function addNewSlide() {
-  const data = await fetchNextImage();
+export async function addNewSlide(backward = false) {
+  // new syntax for fetchNextImage -- provide the last image as context
+  const lastImage = backward
+    ? state.swiper.slides[0]
+    : state.swiper.slides[state.swiper.slides.length - 1];
+  const data = await fetchNextImage(lastImage, backward);
 
   if (!data || Object.keys(data).length === 0) {
     return;
@@ -167,7 +178,15 @@ export async function addNewSlide() {
   slide.dataset.filepath = path || "";
   slide.dataset.score = data.score || "";
 
-  state.swiper.appendSlide(slide);
+  if (backward) {
+    // Prepend to the beginning of the Swiper
+    state.swiper.prependSlide(slide);
+    // state.swiper.slideTo(0); // Optionally move to the new first slide
+  } else {
+    // Append to the end (default behavior)
+    state.swiper.appendSlide(slide);
+    // state.swiper.slideTo(state.swiper.slides.length - 1); // Optionally move to the new last slide
+  }
 
   const img = slide.querySelector("img");
   img.addEventListener("dragstart", function (e) {
@@ -176,6 +195,8 @@ export async function addNewSlide() {
       `image/jpeg:${data.filename || "image.jpg"}:${data.url}`
     );
   });
+
+  enforceHighWaterMark(backward); // Pass backward flag
 }
 
 // Add function to handle slide changes
@@ -213,8 +234,8 @@ export async function resetAllSlides() {
   if (state.swiper?.slides?.length > 0) {
     state.swiper.removeAllSlides();
   }
-  await addNewSlide();
-  await addNewSlide();
+  await addNewSlide(false); // Add a new slide to start fresh
+  await addNewSlide(false); // Add another slide to ensure navigation works
   updateOverlay();
   if (slideShowRunning) {
     resumeSlideshow();
@@ -239,20 +260,18 @@ export async function resetSlidesAndAppend(first_slide) {
 }
 
 // Enforce the high water mark by removing excess slides
-function enforceHighWaterMark() {
-  if (!state.swiper) return;
+export function enforceHighWaterMark(backward = false) {
+  const maxSlides = state.maxSlides || 50;
+  const swiper = state.swiper;
+  const slides = swiper.slides.length;
 
-  const slideShowActive = state.swiper?.autoplay?.running;
-  if (slideShowActive) state.swiper.autoplay.stop();
-
-  while (state.swiper.slides.length > state.highWaterMark) {
-    if (state.swiper.activeIndex > 0) {
-      state.swiper.removeSlide(0);
-      state.swiper.slideTo(state.swiper.activeIndex, 0, false);
+  if (slides > maxSlides) {
+    if (backward) {
+      // Remove from end
+      swiper.removeSlide(swiper.slides.length - 1);
     } else {
-      state.swiper.removeSlide(state.swiper.slides.length - 1);
+      // Remove from beginning
+      swiper.removeSlide(0);
     }
   }
-
-  if (slideShowActive) state.swiper.autoplay.start();
 }
