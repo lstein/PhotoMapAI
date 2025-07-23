@@ -7,7 +7,6 @@ and to search for similar images using a query image. It uses the CLIP model fro
 for image embeddings and similarity calculations.
 """
 
-from ast import Index
 import os
 import clip
 import functools
