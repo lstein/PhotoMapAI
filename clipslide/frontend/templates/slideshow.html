@@ -212,37 +212,30 @@
             </svg>
           </span>
         </button>
-
-        <!-- Upload link positioned below the button -->
-        <div class="upload-link-container">
-          <a href="#" id="uploadImageLink" class="upload-link">Upload</a>
-          <input
-            type="file"
-            id="uploadImageInput"
-            accept="image/*"
-            style="display: none"
-          />
-        </div>
+        <div class="button-label">Similar</div>
       </div>
 
-      <button id="textSearchBtn" title="Search">
-        <span id="textSearchIcon">
-          <svg
-            id="searchIcon"
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#fff"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </span>
-      </button>
+      <div class="text-search-container">
+        <button id="textSearchBtn" title="Search">
+          <span id="textSearchIcon">
+            <svg
+              id="searchIcon"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </span>
+        </button>
+        <div class="button-label">Search</div>
+      </div>
 
       <button id="clearSearchBtn" title="Clear Search">
         <svg
@@ -270,6 +263,17 @@
         </div>
         <button id="doSearchBtn">Search</button>
       </div>
+      <span style="color: white; font-size: 80%"
+        >Or paste, drag or
+        <a href="#" id="uploadImageLink" class="upload-link" style="font-size: inherit;">upload</a>
+        <input
+          type="file"
+          id="uploadImageInput"
+          accept="image/*"
+          style="display: none"
+        />
+        a search image.</span
+      >
     </div>
 
     <!-- Settings Overlay -->

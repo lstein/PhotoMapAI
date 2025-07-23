@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Add click-outside-to-close functionality
+  // Add click-outside-to-close functionality with event prevention
   document.addEventListener("click", function (e) {
     // Check if the panel is visible
     if (textSearchPanel.style.display === "block") {
@@ -42,6 +42,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         !textSearchPanel.contains(e.target) &&
         !textSearchBtn.contains(e.target)
       ) {
+        // Prevent the event from triggering other handlers
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
         // Hide the panel
         textSearchPanel.style.opacity = 0;
         setTimeout(() => {
@@ -49,7 +54,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         }, 200);
       }
     }
-  });
+  }, true); // Use capture phase to intercept events early
 
   // Prevent clicks inside the panel from closing it
   textSearchPanel.addEventListener("click", function (e) {

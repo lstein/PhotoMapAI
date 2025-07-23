@@ -3,7 +3,6 @@
 
 import { togglePauseOverlay } from "./overlay.js";
 import { pauseSlideshow } from "./swiper.js";
-import { state } from "./state.js";
 
 // Touch events
 let touchStartY = null;
@@ -50,6 +49,43 @@ function handleTouchEnd(e) {
     Math.abs(deltaX) < tapThreshold &&
     Math.abs(deltaY) < tapThreshold &&
     touchDuration < tapTimeThreshold;
+
+  // Check if text search panel is open
+  const textSearchPanel = document.getElementById("textSearchPanel");
+  const textSearchBtn = document.getElementById("textSearchBtn");
+  
+  if (textSearchPanel && textSearchPanel.style.display === "block") {
+    // If panel is open, check if tap was outside it
+    if (isTap && 
+        !textSearchPanel.contains(e.target) && 
+        !textSearchBtn.contains(e.target)) {
+      // Close the panel without triggering other events
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      
+      textSearchPanel.style.opacity = 0;
+      setTimeout(() => {
+        textSearchPanel.style.display = "none";
+      }, 200);
+      
+      // Reset touch tracking and return early
+      touchStartY = null;
+      touchStartX = null;
+      touchStartTime = null;
+      verticalSwipeDetected = false;
+      return;
+    }
+    
+    // If tap was inside the panel, don't trigger any other actions
+    if (textSearchPanel.contains(e.target)) {
+      touchStartY = null;
+      touchStartX = null;
+      touchStartTime = null;
+      verticalSwipeDetected = false;
+      return;
+    }
+  }
 
   if (isTap) {
     togglePauseOverlay(); // Toggle overlay on tap
