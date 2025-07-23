@@ -499,8 +499,7 @@ async def get_index_progress(album_key: str) -> ProgressResponse:
     try:
         progress = progress_tracker.get_progress(album_key)
         if not progress:
-            validate_album_exists(album_key)  # Ensure album exists
-
+            validate_album_exists(album_key)
             return ProgressResponse(
                 album_key=album_key,
                 status="idle",
@@ -512,13 +511,17 @@ async def get_index_progress(album_key: str) -> ProgressResponse:
                 estimated_time_remaining=None,
             )
 
+        # Ensure numbers are always valid
+        images_processed = progress.images_processed or 0
+        total_images = progress.total_images or 1  # Avoid division by zero
+
         return ProgressResponse(
             album_key=progress.album_key,
             status=progress.status.value,
             current_step=progress.current_step,
-            images_processed=progress.images_processed,
-            total_images=progress.total_images,
-            progress_percentage=progress.progress_percentage,
+            images_processed=images_processed,
+            total_images=total_images,
+            progress_percentage=progress.progress_percentage if hasattr(progress, "progress_percentage") else 0.0,
             elapsed_time=progress.elapsed_time,
             estimated_time_remaining=progress.estimated_time_remaining,
             error_message=progress.error_message,

@@ -772,6 +772,10 @@ body {
   font-size: 0.9em;
 }
 
+.index-status.scanning {
+  color: #636ceb;
+}
+
 .index-status.indexing {
   color: #ff9800;
 }

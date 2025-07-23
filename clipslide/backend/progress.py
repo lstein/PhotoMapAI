@@ -7,6 +7,10 @@ from typing import Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
 import time
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class IndexStatus(Enum):
     IDLE = "idle"
@@ -53,12 +57,17 @@ class ProgressTracker:
         """Start tracking progress for an album."""
         self._progress[album_key] = ProgressInfo(
             album_key=album_key,
-            status=IndexStatus.SCANNING if operation_type == "scan" else IndexStatus.INDEXING,
+            status=IndexStatus.SCANNING if operation_type == "scanning" else IndexStatus.INDEXING,
             current_step=f"Starting {operation_type}",
             images_processed=0,
             total_images=total_images,
             start_time=time.time()
         )
+    
+    def update_total_images(self, album_key: str, total_images: int):
+        """Update the total number of images for an operation."""
+        if album_key in self._progress:
+            self._progress[album_key].total_images = total_images
     
     def update_progress(self, album_key: str, images_processed: int, current_step: str = ""):
         """Update progress for an album."""
@@ -66,7 +75,7 @@ class ProgressTracker:
             progress = self._progress[album_key]
             progress.images_processed = images_processed
             progress.current_step = current_step
-            if images_processed >= progress.total_images:
+            if images_processed >= progress.total_images and progress.status != IndexStatus.SCANNING:
                 progress.status = IndexStatus.COMPLETED
     
     def set_error(self, album_key: str, error_message: str):

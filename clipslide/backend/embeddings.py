@@ -18,6 +18,7 @@ from tqdm import tqdm
 from sklearn.neighbors import NearestNeighbors
 import networkx as nx
 import asyncio
+import logging
 
 from typing import Optional, Set, Dict, Callable, Generator
 from pathlib import Path
@@ -55,13 +56,25 @@ class Embeddings(BaseModel):
         self,
         directory: Path,
         exts: Set[str] = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
+        progress_callback: Optional[Callable] = None,
+        update_interval: int = 100
     ) -> list[Path]:
         """
         Recursively collect all image files from a directory.
+        
+        Args:
+            directory: Directory to scan
+            exts: File extensions to include
+            progress_callback: Optional callback function(count, message) for progress updates
+            update_interval: How often to call progress_callback (every N files found)
         """
         image_files = []
+        files_checked = 0
+        
         for root, _, files in os.walk(directory):
             for file in [Path(x) for x in files]:
+                files_checked += 1
+                
                 # Check if the file has a valid image extension
                 # and that it's length is > minimum_image_size (i.e. not a thumbnail)
                 if (
@@ -69,30 +82,41 @@ class Embeddings(BaseModel):
                     and os.path.getsize(Path(root, file)) > self.minimum_image_size
                 ):
                     image_files.append(Path(root, file).resolve())
+                
+                # Provide progress updates at regular intervals
+                if progress_callback and files_checked % update_interval == 0:
+                    progress_callback(len(image_files), f"Traversing image files... {len(image_files)} found")
+        
+        # Final update with total count
+        if progress_callback:
+            progress_callback(len(image_files), f"File traversal complete - {len(image_files)} images found")
+            
         return image_files
 
     def get_image_files(
         self,
         image_paths_or_dir: list[Path] | Path,
         exts: Set[str] = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
+        progress_callback: Optional[Callable] = None
     ) -> list[Path]:
         """
         Get a list of image file paths from a directory or a list of image paths.
 
         Args:
             image_paths_or_dir (list of str or str): List of image paths or a directory path.
+            progress_callback: Optional callback function for progress updates
 
         Returns:
             list of Path: List of image file paths.
         """
         if isinstance(image_paths_or_dir, Path):
             # If it's a single Path object, treat it as a directory
-            images = self.get_image_files_from_directory(image_paths_or_dir)
+            images = self.get_image_files_from_directory(image_paths_or_dir, exts, progress_callback)
         elif isinstance(image_paths_or_dir, list):
             images = []
             for p in image_paths_or_dir:
                 if p.is_dir():
-                    images.extend(self.get_image_files_from_directory(p, exts))
+                    images.extend(self.get_image_files_from_directory(p, exts, progress_callback))
                 elif p.suffix.lower() in exts:
                     images.append(p)
         else:
@@ -246,10 +270,11 @@ class Embeddings(BaseModel):
     def _get_new_and_missing_images(
         self,
         image_paths_or_dir: list[Path] | Path,
-        existing_filenames: np.ndarray
+        existing_filenames: np.ndarray,
+        progress_callback: Optional[Callable] = None
     ) -> tuple[set[Path], set[Path]]:
         """Determine which images are new and which are missing."""
-        image_path_set = set(self.get_image_files(image_paths_or_dir))
+        image_path_set = set(self.get_image_files(image_paths_or_dir, progress_callback=progress_callback))
         existing_filenames_set = set(Path(p) for p in existing_filenames)
         
         new_image_paths = image_path_set - existing_filenames_set
@@ -338,26 +363,31 @@ class Embeddings(BaseModel):
         create_index: bool = True,
     ) -> IndexResult:
         """Asynchronously index images using CLIP with progress tracking."""
-        image_paths = self.get_image_files(image_paths_or_dir)
+
+        progress_tracker.start_operation(album_key, 1, "scanning")
+
+        def traversal_callback(count, message):
+            progress_tracker.update_total_images(album_key, max(count, 1))
+            progress_tracker.update_progress(album_key, count, message)
+
+        # Offload the blocking traversal to a thread
+        image_paths = await asyncio.to_thread(
+            self.get_image_files,
+            image_paths_or_dir,
+            {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
+            traversal_callback,
+        )
         total_images = len(image_paths)
-        
-        # Start progress tracking
+
         progress_tracker.start_operation(album_key, total_images, "indexing")
-        
+
         try:
             result = await self._process_images_batch_async(image_paths, album_key)
-            
-            # Final progress update - processing complete
             progress_tracker.update_progress(album_key, total_images, "Saving index file")
-            
             if create_index:
                 self._save_embeddings(result)
-            
-            # Mark as completed - THIS IS THE KEY FIX
             progress_tracker.complete_operation(album_key, "Indexing completed successfully")
-            
             return result
-        
         except Exception as e:
             progress_tracker.set_error(album_key, str(e))
             raise
@@ -376,7 +406,7 @@ class Embeddings(BaseModel):
             
             # Identify new and missing images
             new_image_paths, missing_image_paths = self._get_new_and_missing_images(
-                image_paths_or_dir, existing_filenames
+                image_paths_or_dir, existing_filenames,
             )
             
             # Filter out missing images
@@ -429,13 +459,23 @@ class Embeddings(BaseModel):
             existing_modtimes = data["modification_times"]
             existing_metadatas = data["metadata"]
             
-            progress_tracker.start_operation(album_key, 0, "scanning")
+            # Start scanning phase
+            progress_tracker.start_operation(album_key, 1, "scanning")
             
-            # Identify new and missing images
-            new_image_paths, missing_image_paths = self._get_new_and_missing_images(
-                image_paths_or_dir, existing_filenames
+            # Create progress callback for file traversal
+            def traversal_callback(count, message):
+                # Update the total as we discover more files
+                progress_tracker.update_total_images(album_key, max(count, 1))
+                progress_tracker.update_progress(album_key, count, message)
+            
+            # Identify new and missing images with progress feedback
+            new_image_paths, missing_image_paths = await asyncio.to_thread(
+                self._get_new_and_missing_images,
+                image_paths_or_dir, 
+                existing_filenames, 
+                progress_callback=traversal_callback
             )
-            
+
             # Filter out missing images
             filtered_existing = self._filter_missing_images(
                 missing_image_paths, existing_embeddings, existing_filenames, existing_modtimes, existing_metadatas
@@ -472,7 +512,7 @@ class Embeddings(BaseModel):
             combined_result = self._combine_index_results(filtered_existing, new_result)
             self._save_embeddings(combined_result)
             
-            # Mark as completed - THIS IS THE KEY FIX
+            # Mark as completed
             progress_tracker.complete_operation(album_key, f"Successfully indexed {len(new_result.embeddings)} new images")
             
             return combined_result
