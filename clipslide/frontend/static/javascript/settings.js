@@ -164,6 +164,7 @@ function validateAndSetHighWaterMark(value) {
     newHighWaterMark = WATERMARK_CONFIG.max;
   }
   state.highWaterMark = newHighWaterMark;
+  console.log(`High water mark set to: ${newHighWaterMark}`);
   saveSettingsToLocalStorage();
 }
 

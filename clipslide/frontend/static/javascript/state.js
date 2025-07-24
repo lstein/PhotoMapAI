@@ -8,9 +8,9 @@ export const state = {
   mode: "random", // next slide selection when no search is active ("random", "sequential", "search")
   embeddingsFile: null, // Path to the current embeddings file
   highWaterMark: 20, // Maximum number of slides to load at once
-  searchIndex: 0, // When in search mode, this is the index of the current slide in the search results
+  searchOrigin: 0, // When in search mode, this is the index of the first slide in swiper
   searchResults: [], // List of file paths matching the current search query
-  album: "family", // Default album to use}
+  album: "family", // Default album to use
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -24,12 +24,10 @@ export function initializeFromServer() {
     state.currentDelay = window.slideshowConfig.currentDelay;
     state.mode = window.slideshowConfig.mode;
     
-    // ✅ HANDLE NULL ALBUM CASE
     if (window.slideshowConfig.album) {
       state.album = window.slideshowConfig.album;
     } else {
       state.album = null;
-      // ✅ TRIGGER ALBUM MANAGER SETUP MODE
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('noAlbumsFound'));
       }, 100);

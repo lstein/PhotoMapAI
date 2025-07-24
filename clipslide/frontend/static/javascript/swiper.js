@@ -49,14 +49,14 @@ document.addEventListener("DOMContentLoaded", async function () {
     },
     on: {
       slideNextTransitionStart: async function () {
-        // Only add a new slide if we're at the end and moving forward
+     // Only add a new slide if we're at the end and moving forward
         if (this.activeIndex >= this.slides.length - 1) {
           await addNewSlide();
         }
       },
       slidePrevTransitionStart: async function () {
-        // Only add a new slide if we're at the beginning and moving backward
-        if (this.activeIndex === 0) {
+     // Only add a new slide if we're at the beginning and moving backward
+        if (this.activeIndex <= 0) {
           await addNewSlide(true);
         }
       },
@@ -261,7 +261,7 @@ export async function resetSlidesAndAppend(first_slide) {
 
 // Enforce the high water mark by removing excess slides
 export function enforceHighWaterMark(backward = false) {
-  const maxSlides = state.maxSlides || 50;
+  const maxSlides = state.highWaterMark || 50;
   const swiper = state.swiper;
   const slides = swiper.slides.length;
 
@@ -272,6 +272,7 @@ export function enforceHighWaterMark(backward = false) {
     } else {
       // Remove from beginning
       swiper.removeSlide(0);
+      state.searchOrigin += 1; // Adjust the searchOrigin so that it reflects the searchIndex of the first slide
     }
   }
 }

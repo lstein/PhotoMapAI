@@ -34,27 +34,31 @@ document.addEventListener("DOMContentLoaded", async function () {
   });
 
   // Add click-outside-to-close functionality with event prevention
-  document.addEventListener("click", function (e) {
-    // Check if the panel is visible
-    if (textSearchPanel.style.display === "block") {
-      // Check if the click was outside the panel and not on the button
-      if (
-        !textSearchPanel.contains(e.target) &&
-        !textSearchBtn.contains(e.target)
-      ) {
-        // Prevent the event from triggering other handlers
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        
-        // Hide the panel
-        textSearchPanel.style.opacity = 0;
-        setTimeout(() => {
-          textSearchPanel.style.display = "none";
-        }, 200);
+  document.addEventListener(
+    "click",
+    function (e) {
+      // Check if the panel is visible
+      if (textSearchPanel.style.display === "block") {
+        // Check if the click was outside the panel and not on the button
+        if (
+          !textSearchPanel.contains(e.target) &&
+          !textSearchBtn.contains(e.target)
+        ) {
+          // Prevent the event from triggering other handlers
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+
+          // Hide the panel
+          textSearchPanel.style.opacity = 0;
+          setTimeout(() => {
+            textSearchPanel.style.display = "none";
+          }, 200);
+        }
       }
-    }
-  }, true); // Use capture phase to intercept events early
+    },
+    true
+  ); // Use capture phase to intercept events early
 
   // Prevent clicks inside the panel from closing it
   textSearchPanel.addEventListener("click", function (e) {
@@ -76,7 +80,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     try {
       showSpinner();
       state.searchResults = [];
-      state.searchIndex = 0; // Reset search index for new search
+      state.searchOrigin = 0; // Reset search origin for new search
       const results = await searchText(query);
       state.searchResults = results.filter((item) => item.score >= 0.2);
       await resetSlidesAndAppend();
@@ -186,12 +190,12 @@ document.addEventListener("DOMContentLoaded", async function () {
     e.preventDefault();
     textSearchPanel.classList.add("dragover");
   });
-  
+
   textSearchPanel.addEventListener("dragleave", function (e) {
     e.preventDefault();
     textSearchPanel.classList.remove("dragover");
   });
-  
+
   textSearchPanel.addEventListener("drop", async function (e) {
     e.preventDefault();
     const files = e.dataTransfer.files;
@@ -204,7 +208,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       let slide = await insertUploadedImageFile(file); // Insert the image as the first slide
       await searchWithImage(file, slide);
       updateSearchCheckmarks();
-      
+
       // Hide the panel after successful image search
       textSearchPanel.style.opacity = 0;
       setTimeout(() => {
@@ -257,7 +261,7 @@ export async function searchWithImage(file, first_slide) {
   try {
     showSpinner();
     state.searchResults = [];
-    state.searchIndex = 0;
+    state.searchOrigin = 0; // Reset search origin for new search
     const results = await searchImage(file);
     state.searchResults = results.filter((item) => item.score >= 0.6);
     await resetSlidesAndAppend(first_slide);
@@ -321,8 +325,6 @@ function updateSearchCheckmarks() {
 
 // Utility: Clear search results and reset the carousel
 async function clearSearchAndResetCarousel() {
-  const searchInput = document.getElementById("searchInput");
-
   if (state.swiper?.autoplay?.running) {
     pauseSlideshow(); // Pause the slideshow if it's running
   }
@@ -387,7 +389,6 @@ window.addEventListener("paste", async function (e) {
 // In resetAllSlides or when exiting search mode:
 export function exitSearchMode() {
   state.searchResults = [];
-  state.searchIndex = 0;
   scoreDisplay.hide(); // Hide score when exiting search
   searchInput.value = "";
   updateSearchCheckmarks();

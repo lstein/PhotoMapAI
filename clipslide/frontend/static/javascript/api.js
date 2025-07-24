@@ -6,19 +6,24 @@ import { hideSpinner, showSpinner } from "./utils.js";
 // Call the server to fetch the next image based on the current mode (random or sequential).
 export async function fetchNextImage(lastImage = null, backward = false) {
   let response;
-  let currentScore = state.searchResults[state.searchIndex]?.score || 0;
-
   let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
   const formData = new URLSearchParams();
+  let currentScore;
 
   try {
     if (state.searchResults?.length > 0) {
-      let currentFilepath = state.searchResults[state.searchIndex++].filename;
-      if (state.searchIndex >= state.searchResults.length)
-        state.searchIndex = 0; // Loop back to start
-      formData.append("current_image", currentFilepath);
+      let indexToRetrieve = backward
+        ? --state.searchOrigin
+        : state.searchOrigin + state.swiper.slides?.length;
+      indexToRetrieve =
+        (indexToRetrieve + state.searchResults.length - 1) %
+        state.searchResults.length; // wrap
+      const fileToRetrieve = state.searchResults[indexToRetrieve]?.filename;
+      currentScore = state.searchResults[indexToRetrieve]?.score || 0;
+      formData.append("current_image", fileToRetrieve);
+      formData.append("offset", 0); // No offset for search results
       formData.append("album", state.album);
-      // Optionally handle backward for search results if needed
+
       response = await fetch("retrieve_image/", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
