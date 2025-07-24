@@ -1,11 +1,13 @@
 # slideshow_server.py
 import logging
 import os
+import numpy as np
 import shutil
 import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from sklearn.cluster import DBSCAN
 
 try:
     # Python 3.9+
@@ -15,6 +17,7 @@ except ImportError:
     from importlib_resources import files
 
 from fastapi import (
+    APIRouter,
     BackgroundTasks,
     FastAPI,
     File,
@@ -73,8 +76,13 @@ class StandardResponse(BaseModel):
     message: str
     album_key: Optional[str] = None
 
+class UmapEpsSetRequest(BaseModel):
+    album: str
+    eps: float
 
-# Utility Functions
+class UmapEpsGetRequest(BaseModel):
+    album: str
+
 def get_package_resource_path(resource_name: str) -> str:
     """Get the path to a package resource (static files or templates)."""
     try:
@@ -90,57 +98,6 @@ def get_package_resource_path(resource_name: str) -> str:
         return str(Path(__file__).parent / resource_name)
 
 
-def validate_album_exists(album_key: str):
-    """Validate that an album exists, raise HTTPException if not."""
-    album_config = config_manager.get_album(album_key)
-    if not album_config:
-        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
-    return album_config
-
-
-def validate_image_access(album_config, image_path: Path) -> bool:
-    """Validate that an image path is within allowed album directories."""
-    try:
-        resolved_path = image_path.resolve()
-        for allowed_path in album_config.image_paths:
-            album_root = Path(allowed_path).resolve()
-            if str(resolved_path).startswith(str(album_root)):
-                return True
-        return False
-    except Exception:
-        return False
-
-
-def create_search_results(
-    results: List[str], scores: List[float], album: str
-) -> SearchResultsResponse:
-    """Create a standardized search results response."""
-    return SearchResultsResponse(
-        results=[
-            SearchResult(
-                filename=config_manager.get_relative_path(filename, album)
-                or Path(filename).name,
-                score=float(score),
-            )
-            for filename, score in zip(results, scores)
-        ]
-    )
-
-
-def get_embeddings_for_album(album_key: str) -> Embeddings:
-    """Get embeddings instance for a given album."""
-    album_config = validate_album_exists(album_key)
-    return Embeddings(embeddings_path=Path(album_config.index))
-
-
-def create_slide_url(slide_metadata: SlideSummary, album: str) -> None:
-    """Add URL to slide metadata."""
-    relative_path = config_manager.get_relative_path(
-        str(slide_metadata.filepath), album
-    )
-    slide_metadata.url = f"/images/{album}/{relative_path}"
-
-
 # Initialize FastAPI app
 app = FastAPI(title="Slideshow")
 
@@ -151,9 +108,13 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 templates_path = get_package_resource_path("templates")
 templates = Jinja2Templates(directory=templates_path)
 
+umap_router = APIRouter()
+search_router = APIRouter()
+index_router = APIRouter()
+album_router = APIRouter()
 
 # Main Routes
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, tags=["Main"])
 async def get_root(
     request: Request,
     album: str = DEFAULT_ALBUM,
@@ -192,7 +153,7 @@ async def get_root(
 
 
 # Album Management Routes
-@app.get("/available_albums/")
+@album_router.get("/available_albums/", tags=["Albums"])
 async def get_available_albums() -> List[Dict[str, Any]]:
     """Get list of available albums."""
     try:
@@ -207,6 +168,7 @@ async def get_available_albums() -> List[Dict[str, Any]]:
                 "name": album.name,
                 "description": album.description,
                 "embeddings_file": album.index,
+                "umap_eps": album.umap_eps,
                 "image_paths": album.image_paths,
             }
             for key, album in albums.items()
@@ -216,7 +178,7 @@ async def get_available_albums() -> List[Dict[str, Any]]:
         return []
 
 
-@app.post("/add_album/")
+@album_router.post("/add_album/", tags=["Albums"])
 async def add_album(album_data: dict) -> JSONResponse:
     """Add a new album to the configuration."""
     try:
@@ -225,6 +187,7 @@ async def add_album(album_data: dict) -> JSONResponse:
             name=album_data["name"],
             image_paths=album_data["image_paths"],
             index=album_data["index"],
+            umap_eps=album_data.get("umap_eps", 0.07),
             description=album_data.get("description", ""),
         )
 
@@ -245,7 +208,7 @@ async def add_album(album_data: dict) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to add album: {str(e)}")
 
 
-@app.post("/update_album/")
+@album_router.post("/update_album/", tags=["Albums"])
 async def update_album(album_data: dict) -> JSONResponse:
     """Update an existing album in the configuration."""
     try:
@@ -254,6 +217,7 @@ async def update_album(album_data: dict) -> JSONResponse:
             name=album_data["name"],
             image_paths=album_data["image_paths"],
             index=album_data["index"],
+            umap_eps=album_data.get("umap_eps", 0.07),
             description=album_data.get("description", ""),
         )
 
@@ -274,7 +238,7 @@ async def update_album(album_data: dict) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to update album: {str(e)}")
 
 
-@app.delete("/delete_album/{album_key}")
+@album_router.delete("/delete_album/{album_key}", tags=["Albums"])
 async def delete_album(album_key: str) -> JSONResponse:
     """Delete an album from the configuration."""
     try:
@@ -296,7 +260,7 @@ async def delete_album(album_key: str) -> JSONResponse:
 
 
 # The LocationIQ API key for showing GPS locations
-@app.get("/locationiq_key/")
+@album_router.get("/locationiq_key/", tags=["Albums"])
 async def get_locationiq_key():
     """Get the current LocationIQ API key (masked for security)."""
     api_key = config_manager.get_locationiq_api_key()
@@ -313,7 +277,7 @@ async def get_locationiq_key():
     return {"has_key": False, "key": ""}
 
 
-@app.post("/locationiq_key/")
+@album_router.post("/locationiq_key/", tags=["Albums"])
 async def set_locationiq_key(request: dict):
     """Set the LocationIQ API key."""
     api_key = request.get("api_key")
@@ -325,9 +289,63 @@ async def set_locationiq_key(request: dict):
     except Exception as e:
         return {"success": False, "message": str(e)}
 
+@album_router.post("/set_umap_eps/", tags=["Albums"])
+async def set_umap_eps(request: UmapEpsSetRequest):
+    album_config = config_manager.get_album(request.album)
+    if not album_config:
+        raise HTTPException(status_code=404, detail="Album not found")
+    album_config.umap_eps = request.eps
+    config_manager.update_album(album_config)
+    return {"success": True, "eps": request.eps}
+
+@album_router.post("/get_umap_eps/", tags=["Albums"])
+async def get_umap_eps(request: UmapEpsGetRequest):
+    album_config = config_manager.get_album(request.album)
+    if not album_config:
+        raise HTTPException(status_code=404, detail="Album not found")
+    return {"success": True, "eps": album_config.umap_eps}
+
+# UMAP Routes
+@umap_router.get("/umap_data/", tags=["UMAP"])
+async def get_umap_data(
+    album: str = DEFAULT_ALBUM,
+    cluster_eps: float = 0.07,
+    cluster_min_samples: int = 5,
+) -> JSONResponse:
+    # Instantiate your Embeddings object (adjust path as needed)
+    embeddings = get_embeddings_for_album(album)
+    album_config = config_manager.get_album(album)
+    cluster_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
+
+    # Load cached UMAP embeddings (will compute/cache if missing)
+    umap_embeddings = embeddings.umap_embeddings
+    filenames = embeddings.open_cached_embeddings(embeddings.embeddings_path)[
+        "filenames"
+    ]
+
+    # Cluster with DBSCAN (can be moved to a method if you want)
+    if umap_embeddings.shape[0] > 0:
+        clustering = DBSCAN(eps=cluster_eps, min_samples=cluster_min_samples).fit(umap_embeddings)
+        labels = clustering.labels_
+    else:
+        labels = np.array([])
+
+    # Prepare data for frontend
+    points = [
+        {
+            "x": float(x),
+            "y": float(y),
+            "filename": str(fname),
+            "cluster": int(cluster),
+        }
+        for (x, y, fname, cluster) in zip(
+            umap_embeddings[:, 0], umap_embeddings[:, 1], filenames, labels
+        )
+    ]
+    return JSONResponse(points)
 
 # Search Routes
-@app.post("/search_with_image/", response_model=SearchResultsResponse)
+@search_router.post("/search_with_image/", response_model=SearchResultsResponse, tags=["Search"])
 async def search_with_image(
     file: UploadFile = File(...),
     album: str = Form(DEFAULT_ALBUM),
@@ -353,7 +371,7 @@ async def search_with_image(
             temp_path.unlink(missing_ok=True)
 
 
-@app.post("/search_with_text/", response_model=SearchResultsResponse)
+@search_router.post("/search_with_text/", response_model=SearchResultsResponse, tags=["Search"])
 async def search_with_text(
     text_query: str = Form(...),
     album: str = Form(DEFAULT_ALBUM),
@@ -366,7 +384,7 @@ async def search_with_text(
 
 
 # Image Retrieval Routes
-@app.post("/retrieve_image/", response_model=SlideSummary)
+@search_router.post("/retrieve_image/", response_model=SlideSummary, tags=["Search"])
 async def retrieve_image(
     current_image: str = Form(None),
     offset: int = Form(0),
@@ -390,7 +408,7 @@ async def retrieve_image(
 
 
 # File Management Routes
-@app.get("/images/{album}/{path:path}")
+@search_router.get("/images/{album}/{path:path}", tags=["Search"])
 async def serve_image(album: str, path: str) -> FileResponse:
     """Serve images from different albums dynamically."""
     image_path = config_manager.find_image_in_album(album, path)
@@ -408,7 +426,7 @@ async def serve_image(album: str, path: str) -> FileResponse:
     return FileResponse(image_path)
 
 
-@app.delete("/delete_image/")
+@search_router.delete("/delete_image/", tags=["Search"])
 async def delete_image(
     file_to_delete: str, album: str = Form(DEFAULT_ALBUM)
 ) -> JSONResponse:
@@ -445,7 +463,7 @@ async def delete_image(
 
 
 # Index Management Routes
-@app.post("/update_index_async/", response_model=dict)
+@index_router.post("/update_index_async/", response_model=dict, tags=["Index"])
 async def update_index_async(
     background_tasks: BackgroundTasks,
     album_key: str = Form(...),
@@ -477,7 +495,7 @@ async def update_index_async(
         )
 
 
-@app.get("/index_progress/{album_key}", response_model=ProgressResponse)
+@index_router.get("/index_progress/{album_key}", response_model=ProgressResponse, tags=["Index"])
 async def get_index_progress(album_key: str) -> ProgressResponse:
     """Get the current progress of an index update operation."""
     try:
@@ -517,7 +535,7 @@ async def get_index_progress(album_key: str) -> ProgressResponse:
         raise HTTPException(status_code=500, detail=f"Failed to get progress: {str(e)}")
 
 
-@app.delete("/cancel_index/{album_key}")
+@index_router.delete("/cancel_index/{album_key}", tags=["Index"])
 async def cancel_index_operation(album_key: str) -> dict:
     """Cancel an ongoing index operation."""
     try:
@@ -573,6 +591,61 @@ async def _update_index_background_async(album_key: str, album_config):
     except Exception as e:
         logger.error(f"Background index update failed for album '{album_key}': {e}")
         progress_tracker.set_error(album_key, str(e))
+
+# Various utility functions - might want to move them into their own module later
+def validate_album_exists(album_key: str):
+    """Validate that an album exists, raise HTTPException if not."""
+    album_config = config_manager.get_album(album_key)
+    if not album_config:
+        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
+    return album_config
+
+
+def validate_image_access(album_config, image_path: Path) -> bool:
+    """Validate that an image path is within allowed album directories."""
+    try:
+        resolved_path = image_path.resolve()
+        for allowed_path in album_config.image_paths:
+            album_root = Path(allowed_path).resolve()
+            if str(resolved_path).startswith(str(album_root)):
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def create_search_results(
+    results: List[str], scores: List[float], album: str
+) -> SearchResultsResponse:
+    """Create a standardized search results response."""
+    return SearchResultsResponse(
+        results=[
+            SearchResult(
+                filename=config_manager.get_relative_path(filename, album)
+                or Path(filename).name,
+                score=float(score),
+            )
+            for filename, score in zip(results, scores)
+        ]
+    )
+
+
+def get_embeddings_for_album(album_key: str) -> Embeddings:
+    """Get embeddings instance for a given album."""
+    album_config = validate_album_exists(album_key)
+    return Embeddings(embeddings_path=Path(album_config.index))
+
+
+def create_slide_url(slide_metadata: SlideSummary, album: str) -> None:
+    """Add URL to slide metadata."""
+    relative_path = config_manager.get_relative_path(
+        str(slide_metadata.filepath), album
+    )
+    slide_metadata.url = f"/images/{album}/{relative_path}"
+
+# Include routers
+for router in [umap_router, search_router, index_router, album_router]:
+    app.include_router(router)
 
 
 # Main Entry Point

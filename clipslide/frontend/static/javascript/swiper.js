@@ -1,8 +1,10 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
 import { fetchNextImage } from "./api.js";
+import { clusterDisplay } from "./cluster-display.js";
 import { updateOverlay } from "./overlay.js";
 import { scoreDisplay } from "./score-display.js";
+
 import { state } from "./state.js";
 
 // Check if the device is mobile
@@ -49,13 +51,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     },
     on: {
       slideNextTransitionStart: async function () {
-     // Only add a new slide if we're at the end and moving forward
+        // Only add a new slide if we're at the end and moving forward
         if (this.activeIndex >= this.slides.length - 1) {
           await addNewSlide();
         }
       },
       slidePrevTransitionStart: async function () {
-     // Only add a new slide if we're at the beginning and moving backward
+        // Only add a new slide if we're at the beginning and moving backward
         if (this.activeIndex <= 0) {
           await addNewSlide(true);
         }
@@ -177,6 +179,8 @@ export async function addNewSlide(backward = false) {
   slide.dataset.textToCopy = data.textToCopy || "";
   slide.dataset.filepath = path || "";
   slide.dataset.score = data.score || "";
+  slide.dataset.cluster = data.cluster || "";
+  slide.dataset.color = data.color || "#000000"; // Default color if not provided
 
   if (backward) {
     state.swiper.prependSlide(slide);
@@ -196,7 +200,6 @@ export async function addNewSlide(backward = false) {
       `image/jpeg:${data.filename || "image.jpg"}:${data.url}`
     );
   });
-
 }
 
 // Add function to handle slide changes
@@ -212,6 +215,8 @@ export function handleSlideChange() {
     // Show score if we're in search mode and slide has a score
     const score = parseFloat(activeSlide.dataset.score);
     scoreDisplay.show(score);
+  } else if (activeSlide && activeSlide?.dataset?.cluster) {
+    clusterDisplay.show(activeSlide.dataset.cluster);
   } else {
     // Hide score if not in search mode or no score
     scoreDisplay.hide();

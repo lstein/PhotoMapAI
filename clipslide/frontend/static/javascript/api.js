@@ -9,6 +9,8 @@ export async function fetchNextImage(lastImage = null, backward = false) {
   let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
   const formData = new URLSearchParams();
   let currentScore;
+  let currentCluster;
+  let currentColor;
 
   try {
     if (state.searchResults?.length > 0) {
@@ -20,6 +22,8 @@ export async function fetchNextImage(lastImage = null, backward = false) {
         state.searchResults.length; // wrap
       const fileToRetrieve = state.searchResults[indexToRetrieve]?.filename;
       currentScore = state.searchResults[indexToRetrieve]?.score || 0;
+      currentCluster = state.searchResults[indexToRetrieve]?.cluster || null;
+      currentColor = state.searchResults[indexToRetrieve]?.color || "#000000";
       formData.append("current_image", fileToRetrieve);
       formData.append("offset", 0); // No offset for search results
       formData.append("album", state.album);
@@ -59,6 +63,8 @@ export async function fetchNextImage(lastImage = null, backward = false) {
 
     const data = await response.json();
     if (currentScore) data.score = currentScore; // Preserve the score from search results
+    if (currentCluster) data.cluster = currentCluster; // Preserve the cluster from umap search results  
+    if (currentColor) data.color = currentColor; // Preserve the color from search results
     clearTimeout(spinnerTimeout);
     hideSpinner();
     return data;

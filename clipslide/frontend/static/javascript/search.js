@@ -2,6 +2,7 @@
 // This file handles the search functionality for the Clipslide application.
 // Swiper initialization
 import { searchImage, searchText } from "./api.js";
+import { clusterDisplay } from "./cluster-display.js";
 import { scoreDisplay } from "./score-display.js";
 import { state } from "./state.js";
 import {
@@ -253,6 +254,20 @@ document.addEventListener("DOMContentLoaded", async function () {
       hideSpinner();
     }
   });
+
+  window.addEventListener("umapClusterSelected", async function (e) {
+    state.searchResults = e.detail;
+    state.searchOrigin = 0; // Reset search origin for new search
+    await resetSlidesAndAppend();
+    updateSearchCheckmarks();
+    setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
+    setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
+    if (state.searchResults.length > 0) {
+      clusterDisplay.show(state.searchResults[0].cluster,
+        state.searchResults[0].color || "#000000"
+      );
+    }
+  });
 });
 
 // This searches by an image. first_slide, if provided, is an additional
@@ -265,7 +280,7 @@ export async function searchWithImage(file, first_slide) {
     const results = await searchImage(file);
     state.searchResults = results.filter((item) => item.score >= 0.6);
     await resetSlidesAndAppend(first_slide);
-    updateSearchCheckmarks(); // Add this line!
+    updateSearchCheckmarks();
     // Set checkmarks on icons based on the current mode
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);

@@ -25,7 +25,7 @@ import plotly.express as px
 from clipslide.backend.embeddings import Embeddings
 
 # load embeddings and filenames
-EMBEDDINGS_FILE = "/net/cubox/CineRAID/Pictures/clipslide/embeddings.npz"
+EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/Keepers/clipslide_index/embeddings.npz"
 embeddings_file = sys.argv[1] if len(sys.argv) > 1 else EMBEDDINGS_FILE
 
 PLOT_HEIGHT = 800

@@ -19,6 +19,10 @@
       href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
     />
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+    <script
+      src="https://cdn.plot.ly/plotly-3.0.1.min.js"
+      charset="utf-8"
+    ></script>
     <script>
       // Pass server data to JavaScript
       window.slideshowConfig = {
@@ -238,7 +242,7 @@
       </div>
 
       <div class="clear-search-container">
-        <button id="clearSearchBtn" title="Clear Search" style="display: none;">
+        <button id="clearSearchBtn" title="Clear Search" style="display: none">
           <svg
             width="32"
             height="32"
@@ -557,5 +561,63 @@
         </div>
       </div>
     </template>
+
+    <!-- UMAP Floating Window -->
+    <!-- TODO: replace inline style with slides.css -->
+    <div
+      id="umapFloatingWindow"
+      style="
+        position: fixed;
+        top: 60px;
+        right: 40px;
+        width: 600px;
+        height: 500px;
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        z-index: 9999;
+        display: none;
+        overflow: hidden;
+      "
+    >
+      <!-- DBSCAN eps Control -->
+      <div style="padding: 8px">
+        <label for="umapEpsSpinner">DBSCAN eps:</label>
+        <input
+          type="number"
+          id="umapEpsSpinner"
+          min="0.01"
+          max="0.5"
+          step="0.01"
+          value="0.07"
+          style="width: 60px"
+        />
+      </div>
+      <div id="umapPlot" style="width: 100%; height: 100%"></div>
+      <button
+        id="umapCloseBtn"
+        style="
+          position: absolute;
+          top: 20px;
+          right: 8px;
+          background: #eee;
+          border: none;
+          border-radius: 50%;
+          width: 32px;
+          height: 32px;
+          font-size: 1.5em;
+          cursor: pointer;
+          z-index: 10000;
+        "
+      >
+        &times;
+      </button>
+    </div>
+    <button
+      id="showUmapBtn"
+      style="position: fixed; top: 20px; right: 40px; z-index: 9999"
+    >
+      Show UMAP
+    </button>
   </body>
 </html>

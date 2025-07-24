@@ -11,6 +11,7 @@ export const state = {
   searchOrigin: 0, // When in search mode, this is the index of the first slide in swiper
   searchResults: [], // List of file paths matching the current search query
   album: "family", // Default album to use
+  availableAlbums: [], // List of available albums
 }
 
 document.addEventListener("DOMContentLoaded", async function () {

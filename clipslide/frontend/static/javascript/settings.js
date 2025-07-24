@@ -2,18 +2,22 @@
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { exitSearchMode } from "./search.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
-import { addNewSlide, removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
+import {
+  addNewSlide,
+  removeSlidesAfterCurrent,
+  resetAllSlides,
+} from "./swiper.js";
 
 // Constants
 const DELAY_CONFIG = {
-  step: 1,        // seconds to increase/decrease per click
-  min: 1,         // minimum delay in seconds
-  max: 60         // maximum delay in seconds
+  step: 1, // seconds to increase/decrease per click
+  min: 1, // minimum delay in seconds
+  max: 60, // maximum delay in seconds
 };
 
 const WATERMARK_CONFIG = {
   min: 2,
-  max: 100
+  max: 100,
 };
 
 // Cache DOM elements to avoid repeated queries
@@ -74,6 +78,7 @@ function populateAlbumOptions(albums) {
     option.value = album.key;
     option.textContent = album.name;
     option.dataset.embeddingsFile = album.embeddings_file; // Store embeddings path
+    option.dataset.umapEps = album.umap_eps || 0.07; // Store EPS
     elements.albumSelect.appendChild(option);
   });
 }
@@ -86,6 +91,7 @@ function triggerSetupMode() {
 function switchAlbum(newAlbum, selectedOption) {
   state.album = newAlbum;
   state.embeddingsFile = selectedOption.dataset.embeddingsFile;
+  state.umapEps = parseFloat(selectedOption.dataset.umapEps) || 0.07;
 
   // Clear search results when switching albums
   exitSearchMode();
@@ -119,25 +125,27 @@ function updateDelayDisplay(newDelay) {
 }
 
 function adjustDelay(direction) {
-  const adjustment = direction === 'slower' ? DELAY_CONFIG.step : -DELAY_CONFIG.step;
-  const newDelay = direction === 'slower' 
-    ? Math.min(DELAY_CONFIG.max, state.currentDelay + adjustment)
-    : Math.max(DELAY_CONFIG.min, state.currentDelay + adjustment);
+  const adjustment =
+    direction === "slower" ? DELAY_CONFIG.step : -DELAY_CONFIG.step;
+  const newDelay =
+    direction === "slower"
+      ? Math.min(DELAY_CONFIG.max, state.currentDelay + adjustment)
+      : Math.max(DELAY_CONFIG.min, state.currentDelay + adjustment);
   setDelay(newDelay);
 }
 
 //  Model window management
 function openSettingsModal() {
   populateModalFields();
-  elements.settingsOverlay.classList.add('visible');
+  elements.settingsOverlay.classList.add("visible");
 }
 
 function closeSettingsModal() {
-  elements.settingsOverlay.classList.remove('visible');
+  elements.settingsOverlay.classList.remove("visible");
 }
 
 function toggleSettingsModal() {
-  if (elements.settingsOverlay.classList.contains('visible')) {
+  if (elements.settingsOverlay.classList.contains("visible")) {
     closeSettingsModal();
   } else {
     openSettingsModal();
@@ -170,8 +178,8 @@ function validateAndSetHighWaterMark(value) {
 
 // Event listener setup
 function setupDelayControls() {
-  elements.slowerBtn.onclick = () => adjustDelay('slower');
-  elements.fasterBtn.onclick = () => adjustDelay('faster');
+  elements.slowerBtn.onclick = () => adjustDelay("slower");
+  elements.fasterBtn.onclick = () => adjustDelay("faster");
   updateDelayDisplay(state.currentDelay);
 }
 
@@ -196,10 +204,10 @@ function setupModeControls() {
 function setupModalControls() {
   // Toggle modal
   elements.settingsBtn.addEventListener("click", toggleSettingsModal);
-  
+
   // Close modal
   elements.closeSettingsBtn.addEventListener("click", closeSettingsModal);
-  
+
   // Close when clicking outside
   elements.settingsOverlay.addEventListener("click", (e) => {
     if (e.target === elements.settingsOverlay) {
@@ -226,13 +234,14 @@ function setupHighWaterMarkControl() {
 
 async function loadLocationIQApiKey() {
   try {
-    const response = await fetch('locationiq_key/');
+    const response = await fetch("locationiq_key/");
     const data = await response.json();
-    
+
     if (data.has_key) {
       elements.locationiqApiKeyInput.placeholder = `Current key: ${data.key}`;
     } else {
-      elements.locationiqApiKeyInput.placeholder = "Enter your LocationIQ API key (optional)";
+      elements.locationiqApiKeyInput.placeholder =
+        "Enter your LocationIQ API key (optional)";
     }
   } catch (error) {
     console.error("Failed to load LocationIQ API key:", error);
@@ -241,14 +250,14 @@ async function loadLocationIQApiKey() {
 
 async function saveLocationIQApiKey(apiKey) {
   try {
-    const response = await fetch('locationiq_key/', {
-      method: 'POST',
+    const response = await fetch("locationiq_key/", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ api_key: apiKey })
+      body: JSON.stringify({ api_key: apiKey }),
     });
-    
+
     const result = await response.json();
     if (!result.success) {
       console.error("Failed to save API key:", result.message);
@@ -266,7 +275,7 @@ function setupLocationIQApiKeyControl() {
       saveLocationIQApiKey(this.value);
     }, 1000); // Save 1 second after user stops typing
   });
-  
+
   elements.locationiqApiKeyInput.addEventListener("blur", function () {
     // Save immediately when field loses focus
     clearTimeout(this.saveTimeout);
@@ -277,10 +286,10 @@ function setupLocationIQApiKeyControl() {
 // MAIN INITIALIZATION FUNCTION
 async function initializeSettings() {
   cacheElements();
-  
+
   // Load albums first
   await loadAvailableAlbums();
-  
+
   // Setup all controls
   setupDelayControls();
   setupModeControls();

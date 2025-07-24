@@ -836,9 +836,38 @@ export class AlbumManager {
       }
     }, AlbumManager.SETUP_EXIT_DELAY);
   }
+
+  relativePath(fullPath, album) {
+    // Get the current album's image_paths from state or settings
+    let imagePaths = album.image_paths || [];
+
+    // Try to make fullPath relative to any image path
+    for (const imagePath of imagePaths) {
+      // Normalize paths to handle
+      if (fullPath.startsWith(imagePath)) {
+        // Remove the imagePath prefix and any leading slash
+        let rel = fullPath.slice(imagePath.length);
+        if (rel.startsWith("/") || rel.startsWith("\\")) rel = rel.slice(1);
+        return rel;
+      }
+    }
+    // If not found, return the basename
+    return fullPath.split("/").pop();
+  }
+
+  async getCurrentAlbum() {
+    // Get the current album key from state
+    const albumKey = state.album;
+    if (!albumKey) return null;
+
+    // Fetch albums from the backend
+    const response = await fetch("available_albums/");
+    const albums = await response.json();
+
+    // Find the album with the matching key
+    const album = albums.find((a) => a.key === albumKey);
+    return album || null;
+  }
 }
 
-// Initialize when DOM is loaded
-document.addEventListener("DOMContentLoaded", () => {
-  new AlbumManager();
-});
+export const albumManager = new AlbumManager();

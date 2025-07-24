@@ -22,6 +22,7 @@ class Album(BaseModel):
         ..., min_length=1, description="List of paths containing images"
     )
     index: str = Field(..., description="Path to the embeddings index file")
+    umap_eps: float = Field(default=0.7, description="UMAP epsilon parameter")
     description: str = Field(default="", description="Album description")
 
     @field_validator("image_paths")
@@ -50,6 +51,7 @@ class Album(BaseModel):
             "name": self.name,
             "image_paths": self.image_paths,
             "index": self.index,
+            "umap_eps": self.umap_eps,
             "description": self.description,
         }
 
@@ -61,6 +63,7 @@ class Album(BaseModel):
             name=data.get("name", key.capitalize()),
             image_paths=data.get("image_paths", []),
             index=data["index"],
+            umap_eps=data.get("umap_eps", 0.07),
             description=data.get("description", ""),
         )
 
@@ -189,7 +192,6 @@ class ConfigManager:
             raise RuntimeError("No configuration loaded")
 
         try:
-            # ✅ CREATE CONFIG DIRECTORY IF IT DOESN'T EXIST
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
 
             with open(self.config_path, "w") as f:

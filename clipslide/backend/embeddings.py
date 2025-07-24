@@ -565,6 +565,7 @@ class Embeddings(BaseModel):
         umap_embeddings = umap_model.fit_transform(embeddings)
         cache_file = self.embeddings_path.parent / "umap.npz"
         np.savez(cache_file, umap=umap_embeddings)
+        logging.info(f"UMAP embeddings shape: {umap_embeddings.shape}")
         return umap_embeddings
     
     @property
@@ -576,8 +577,9 @@ class Embeddings(BaseModel):
             np.ndarray: The UMAP embeddings.
         """
         cache_file = self.embeddings_path.parent / "umap.npz"
-        if not cache_file.exists():
-            return np.empty((0, 2))
+        if not cache_file.exists(): # If UMAP index does not exist, create it, this is pretty quick
+            embeddings = self.open_cached_embeddings(self.embeddings_path)['embeddings']
+            return self.create_umap_index(embeddings)
         data = np.load(cache_file, allow_pickle=True)
         return data["umap"]
 
