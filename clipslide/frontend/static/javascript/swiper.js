@@ -179,14 +179,15 @@ export async function addNewSlide(backward = false) {
   slide.dataset.score = data.score || "";
 
   if (backward) {
-    // Prepend to the beginning of the Swiper
     state.swiper.prependSlide(slide);
-    // state.swiper.slideTo(0); // Optionally move to the new first slide
+    // Optionally: state.swiper.slideTo(0);
   } else {
-    // Append to the end (default behavior)
     state.swiper.appendSlide(slide);
-    // state.swiper.slideTo(state.swiper.slides.length - 1); // Optionally move to the new last slide
+    // Optionally: state.swiper.slideTo(state.swiper.slides.length - 1);
   }
+
+  // Delay high water mark enforcement to allow transition to finish
+  setTimeout(() => enforceHighWaterMark(backward), 500);
 
   const img = slide.querySelector("img");
   img.addEventListener("dragstart", function (e) {
@@ -196,7 +197,6 @@ export async function addNewSlide(backward = false) {
     );
   });
 
-  enforceHighWaterMark(backward); // Pass backward flag
 }
 
 // Add function to handle slide changes
@@ -225,7 +225,7 @@ export function removeSlidesAfterCurrent() {
   if (slidesToRemove > 0) {
     state.swiper.removeSlide(activeIndex + 1, slidesToRemove);
   }
-  enforceHighWaterMark();
+  setTimeout(() => enforceHighWaterMark(backward), 500);
 }
 
 export async function resetAllSlides() {
