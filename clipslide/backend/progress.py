@@ -16,6 +16,7 @@ class IndexStatus(Enum):
     IDLE = "idle"
     SCANNING = "scanning"
     INDEXING = "indexing"
+    UMAPPING = "umapping"
     COMPLETED = "completed"
     ERROR = "error"
 
@@ -57,7 +58,7 @@ class ProgressTracker:
         """Start tracking progress for an album."""
         self._progress[album_key] = ProgressInfo(
             album_key=album_key,
-            status=IndexStatus.SCANNING if operation_type == "scanning" else IndexStatus.INDEXING,
+            status=IndexStatus(operation_type),
             current_step=f"Starting {operation_type}",
             images_processed=0,
             total_images=total_images,
@@ -96,7 +97,7 @@ class ProgressTracker:
     def is_running(self, album_key: str) -> bool:
         """Check if an operation is currently running for an album."""
         progress = self._progress.get(album_key)
-        return progress is not None and progress.status in [IndexStatus.SCANNING, IndexStatus.INDEXING]
+        return progress is not None and progress.status in [IndexStatus.SCANNING, IndexStatus.INDEXING, IndexStatus.UMAPPING]
     
     def complete_operation(self, album_key: str, message: str = "Operation completed") -> None:
         """Mark an operation as completed."""

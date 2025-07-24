@@ -14,7 +14,9 @@ export class AlbumManager {
   static SCROLL_DELAY = 100;
 
   static STATUS_CLASSES = {
+    SCANNING: "index-status scanning",
     INDEXING: "index-status indexing",
+    UMAPPING: "index-status umapping",
     COMPLETED: "index-status completed",
     ERROR: "index-status error",
     DEFAULT: "index-status",
@@ -704,6 +706,10 @@ export class AlbumManager {
     } else if (progress.status === "scanning") {
       status.className = AlbumManager.STATUS_CLASSES.INDEXING;
       status.textContent = progress.current_step || "Scanning for images...";
+      estimatedTime.textContent = "";
+    } else if (progress.status === "umapping") {
+      status.className = AlbumManager.STATUS_CLASSES.UMAPPING;
+      status.textContent = progress.current_step || "Generating image umap...";
       estimatedTime.textContent = "";
     } else {
       // Defensive: fallback to 0 if undefined

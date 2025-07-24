@@ -15,7 +15,6 @@ from io import BytesIO
 from sklearn.cluster import DBSCAN, KMeans
 import hashlib
 from umap import UMAP
-from sklearn.cluster import DBSCAN
 from pathlib import Path
 import time
 from contextlib import contextmanager
@@ -26,7 +25,7 @@ import plotly.express as px
 from clipslide.backend.embeddings import Embeddings
 
 # load embeddings and filenames
-EMBEDDINGS_FILE = "/net/cubox/CineRAID/Pictures/embeddings.npz"
+EMBEDDINGS_FILE = "/net/cubox/CineRAID/Pictures/clipslide/embeddings.npz"
 embeddings_file = sys.argv[1] if len(sys.argv) > 1 else EMBEDDINGS_FILE
 
 PLOT_HEIGHT = 800
