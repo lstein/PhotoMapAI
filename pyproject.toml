@@ -13,10 +13,12 @@ requires-python = ">=3.8"
 dependencies = [
     "Pillow",
     "clip-anytorch",
+    "dash",
     "fastapi",
     "jinja2",
     "networkx",
     "numpy",
+    "pandas",
     "platformdirs",
     "pydantic",
     "python-multipart",
@@ -25,6 +27,7 @@ dependencies = [
     "scikit-learn",
     "torch",
     "tqdm",
+    "umap",
     "uvicorn",
 ]
 
@@ -44,3 +47,4 @@ search_images = "clipslide.backend.imagetool:main"
 search_text = "clipslide.backend.imagetool:main"
 find_duplicate_images = "clipslide.backend.imagetool:main"
 start_slideshow = "clipslide.frontend.slideshow_server:main"
+start_umap = "clipslide.frontend.dash_umap:main"
