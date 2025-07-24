@@ -255,7 +255,6 @@ class Embeddings(BaseModel):
         """Save embeddings to disk and clear cache."""
         # Ensure directory exists
         self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
-        
         np.savez(
             self.embeddings_path,
             embeddings=index_result.embeddings,
@@ -775,6 +774,7 @@ class Embeddings(BaseModel):
         metadata = np.delete(metadata, original_idx)
 
         # Save updated data
+        self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
         np.savez(
             self.embeddings_path,
             embeddings=embeddings,

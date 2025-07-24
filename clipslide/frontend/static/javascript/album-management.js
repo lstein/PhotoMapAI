@@ -397,7 +397,7 @@ export class AlbumManager {
       name: formData.name,
       description: formData.description,
       image_paths: paths,
-      index: `${paths[0]}/embeddings.npz`,
+      index: `${paths[0]}/clipslide_index/embeddings.npz`,
     };
 
     try {
