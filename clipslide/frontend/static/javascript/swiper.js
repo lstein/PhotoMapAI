@@ -225,7 +225,7 @@ export function removeSlidesAfterCurrent() {
   if (slidesToRemove > 0) {
     state.swiper.removeSlide(activeIndex + 1, slidesToRemove);
   }
-  setTimeout(() => enforceHighWaterMark(backward), 500);
+  setTimeout(() => enforceHighWaterMark(), 500);
 }
 
 export async function resetAllSlides() {
