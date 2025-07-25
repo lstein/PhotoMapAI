@@ -5,6 +5,9 @@ import { getCurrentFilepath } from "./api.js";
 import { state } from "./state.js";
 import { getPercentile } from "./utils.js";
 
+const PLOT_HEIGHT= 300;
+const PLOT_WIDTH = 400;
+
 // Umap drawing and interaction logic
 document.getElementById("showUmapBtn").onclick = async () => {
   document.getElementById("umapFloatingWindow").style.display = "block";
@@ -171,6 +174,11 @@ async function fetchUmapData() {
         opacity: 0.75,
       };
 
+      const highlightColor =
+        state.searchResults.length > 0 && state.searchResults[0].color
+          ? state.searchResults[0].color
+          : "#ff4b4bda"; // fallback to red if not set
+
       const redTrace = {
         x: highlighted.map((p) => p.x),
         y: highlighted.map((p) => p.y),
@@ -178,7 +186,7 @@ async function fetchUmapData() {
         mode: "markers",
         type: "scattergl",
         marker: {
-          color: "#ff4b4bda", // brighter red for dark bg
+          color: highlightColor,
           size: 5,
         },
         customdata: highlighted.map((p) => p.filename),
@@ -194,10 +202,12 @@ async function fetchUmapData() {
         title: {
           text: "UMAP Embeddings",
           font: { color: "#eee" },
+          x: 0,           // Align to left
+          xanchor: "left" // Anchor to left
         },
         dragmode: "pan",
-        height: 500,
-        width: 600,
+        height: PLOT_HEIGHT,
+        width: PLOT_WIDTH,
         plot_bgcolor: "rgba(32,32,48,0.95)", // dark plot area
         paper_bgcolor: "rgba(24,24,32,0.97)", // dark outer background
         font: { color: "#eee" }, // light text for axes, legend, etc.
@@ -254,10 +264,12 @@ async function fetchUmapData() {
         title: {
           text: "Semantic Map",
           font: { color: "#eee" },
+          x: 0,           // Align to left
+          xanchor: "left" // Anchor to left
         },
         dragmode: "pan",
-        height: 500,
-        width: 600,
+        height: PLOT_HEIGHT,
+        width: PLOT_WIDTH,
         plot_bgcolor: "rgba(32,32,48,0.95)", // dark plot area
         paper_bgcolor: "rgba(24,24,32,0.97)", // dark outer background
         font: { color: "#eee" }, // light text for axes, legend, etc.
