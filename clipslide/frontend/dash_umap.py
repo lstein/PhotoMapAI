@@ -14,23 +14,31 @@ from PIL import Image, ImageOps
 from io import BytesIO
 from sklearn.cluster import DBSCAN, KMeans
 import hashlib
-from cuml import UMAP
-from cuml.cluster import DBSCAN
+from umap import UMAP
 from pathlib import Path
+import time
+from contextlib import contextmanager
 
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.express as px
-from backend.embeddings import Embeddings
+from clipslide.backend.embeddings import Embeddings
 
 # load embeddings and filenames
-EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/embeddings.npz"
+EMBEDDINGS_FILE = "/net/cubox/CineRAID/Archive/InvokeAI/Keepers/clipslide_index/embeddings.npz"
 embeddings_file = sys.argv[1] if len(sys.argv) > 1 else EMBEDDINGS_FILE
 
 PLOT_HEIGHT = 800
 MAX_COLORED_CLUSTERS = 75  # Maximum number of clusters to color distinctly
 
 embeddings = Embeddings(embeddings_path=Path(embeddings_file))
+
+@contextmanager
+def elapsed_timer(label="Elapsed"):
+    start = time.time()
+    yield
+    end = time.time()
+    print(f"{label}: {end - start:.2f} seconds")
 
 # --- Generate a hash for the embeddings file path ---
 def hash_filename(filename):
@@ -55,9 +63,11 @@ if os.path.exists(umap_file):
         np.save(umap_file, umap_embeddings)
 else:
     print("Running UMAP...")
-    reducer = UMAP(n_components=2)
-    umap_embeddings = reducer.fit_transform(clip_embeddings)
-    np.save(umap_file, umap_embeddings)
+    with elapsed_timer("UMAP fit_transform time"):
+        reducer = UMAP(n_components=2)
+        umap_embeddings = reducer.fit_transform(clip_embeddings)
+        np.save(umap_file, umap_embeddings)
+    print("UMAP embeddings saved to", umap_file)
 
 # Build dataframe
 df = pd.DataFrame(
@@ -69,6 +79,7 @@ df = pd.DataFrame(
 )
 
 # Uncomment the following lines to use DBSCAN instead of KMeans
+print("Running DBSCAN clustering...")
 clustering = DBSCAN(eps=0.05, min_samples=5)
 labels = clustering.fit_predict(umap_embeddings)
 df["cluster"] = clustering.labels_
@@ -486,7 +497,7 @@ def update_hover_image(hover_data):
     cluster = str(df.iloc[idx]["cluster"])
     if cluster == "-1":
         cluster = "Noise"
-    thumbnail = encode_image_to_base64(filename, size=(250, 256))
+    thumbnail = encode_image_to_base64(filename, size=(250, 250))
     x0, y0 = point["bbox"]["x0"], point["bbox"]["y0"]
     left = int(x0) + 10
     top = int(y0) + 30
@@ -505,14 +516,14 @@ def update_hover_image(hover_data):
             ),
             html.Img(
                 src=thumbnail,
-                style={"width": "128px", "border": "1px solid #ccc"},
+                style={"width": "250px", "border": "1px solid #ccc"},
             ),
         ],
         style={
             "position": "fixed",
             "top": f"{top}px",
             "left": f"{left}px",
-            "width": "128px",
+            "width": "250px",
             "zIndex": 1000,
             "pointerEvents": "none",
             "background": "none",
@@ -610,7 +621,7 @@ def update_search_matches(
     else:
         raise dash.exceptions.PreventUpdate
 
-
-# === Run the app ===
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=8050)
+def main():
+    # Run the app
+    print("Starting UMAP Dash app on port 8060...")
+    app.run(debug=True, host="0.0.0.0", port=8060)

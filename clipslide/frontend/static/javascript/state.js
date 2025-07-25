@@ -11,6 +11,8 @@ export const state = {
   searchOrigin: 0, // When in search mode, this is the index of the first slide in swiper
   searchResults: [], // List of file paths matching the current search query
   album: "family", // Default album to use
+  availableAlbums: [], // List of available albums
+  dataChanged: true, // Flag to indicate if umap data has changed
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -25,9 +27,9 @@ export function initializeFromServer() {
     state.mode = window.slideshowConfig.mode;
     
     if (window.slideshowConfig.album) {
-      state.album = window.slideshowConfig.album;
+      setAlbum(window.slideshowConfig.album);
     } else {
-      state.album = null;
+      setAlbum(null);
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('noAlbumsFound'));
       }, 100);
@@ -51,9 +53,9 @@ export function restoreFromLocalStorage() {
   const storedAlbum = localStorage.getItem("album");
   // ✅ ONLY RESTORE ALBUM IF IT'S NOT NULL/EMPTY
   if (storedAlbum && storedAlbum !== "null") {
-    state.album = storedAlbum;
+    setAlbum(storedAlbum);
   } else {
-    state.album = null;
+    setAlbum(null);
   }
 }
 
@@ -63,4 +65,12 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("currentDelay", state.currentDelay);
   localStorage.setItem("mode", state.mode);
   localStorage.setItem("album", state.album);
+}
+
+export function setAlbum(newAlbum) {
+  if (state.album !== newAlbum) {
+    state.album = newAlbum;
+    state.dataChanged = true;
+    window.dispatchEvent(new CustomEvent("albumChanged", { detail: { album: newAlbum } }));
+  }
 }

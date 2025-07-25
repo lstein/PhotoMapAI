@@ -1,9 +1,11 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
 import { fetchNextImage } from "./api.js";
+import { clusterDisplay } from "./cluster-display.js";
 import { updateOverlay } from "./overlay.js";
 import { scoreDisplay } from "./score-display.js";
 import { state } from "./state.js";
+import { updateCurrentImageMarker } from "./umap.js";
 
 // Check if the device is mobile
 function isTouchDevice() {
@@ -16,9 +18,7 @@ function isTouchDevice() {
 
 const hasTouchCapability = isTouchDevice();
 
-// Swiper initialization
 document.addEventListener("DOMContentLoaded", async function () {
-  // Create base Swiper configuration
   const swiperConfig = {
     navigation: {
       nextEl: ".swiper-button-next",
@@ -49,13 +49,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     },
     on: {
       slideNextTransitionStart: async function () {
-     // Only add a new slide if we're at the end and moving forward
+        // Only add a new slide if we're at the end and moving forward
         if (this.activeIndex >= this.slides.length - 1) {
           await addNewSlide();
         }
       },
       slidePrevTransitionStart: async function () {
-     // Only add a new slide if we're at the beginning and moving backward
+        // Only add a new slide if we're at the beginning and moving backward
         if (this.activeIndex <= 0) {
           await addNewSlide(true);
         }
@@ -177,6 +177,8 @@ export async function addNewSlide(backward = false) {
   slide.dataset.textToCopy = data.textToCopy || "";
   slide.dataset.filepath = path || "";
   slide.dataset.score = data.score || "";
+  slide.dataset.cluster = data.cluster || "";
+  slide.dataset.color = data.color || "#000000"; // Default color if not provided
 
   if (backward) {
     state.swiper.prependSlide(slide);
@@ -196,7 +198,6 @@ export async function addNewSlide(backward = false) {
       `image/jpeg:${data.filename || "image.jpg"}:${data.url}`
     );
   });
-
 }
 
 // Add function to handle slide changes
@@ -212,10 +213,15 @@ export function handleSlideChange() {
     // Show score if we're in search mode and slide has a score
     const score = parseFloat(activeSlide.dataset.score);
     scoreDisplay.show(score);
+  } else if (activeSlide && activeSlide?.dataset?.cluster) {
+    clusterDisplay.show(activeSlide.dataset.cluster, activeSlide.dataset.color);
   } else {
     // Hide score if not in search mode or no score
     scoreDisplay.hide();
   }
+  // Delay moving the umap marker until the slide transition is complete.
+  // Otherwise, on the iPad, there is an obvious hesitation.
+    setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
 }
 
 export function removeSlidesAfterCurrent() {
@@ -242,7 +248,6 @@ export async function resetAllSlides() {
   }
 }
 
-// Clear carousel and optionally append a first slide
 export async function resetSlidesAndAppend(first_slide) {
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow(); // Pause the slideshow if it's running
@@ -255,6 +260,8 @@ export async function resetSlidesAndAppend(first_slide) {
     await addNewSlide();
   }
   await addNewSlide(); // needed to enable navigation buttons
+  state.swiper.slideTo(0); // Reset to the first slide
+  handleSlideChange(); // Update the overlay and displays
   // restart the slideshow if it was running
   if (slideShowRunning) resumeSlideshow();
 }

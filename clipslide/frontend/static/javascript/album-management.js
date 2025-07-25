@@ -1,7 +1,8 @@
 // album-management.js
 import { exitSearchMode } from "./search.js";
+
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
-import { saveSettingsToLocalStorage, state } from "./state.js";
+import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
 
 export class AlbumManager {
@@ -14,7 +15,9 @@ export class AlbumManager {
   static SCROLL_DELAY = 100;
 
   static STATUS_CLASSES = {
+    SCANNING: "index-status scanning",
     INDEXING: "index-status indexing",
+    UMAPPING: "index-status umapping",
     COMPLETED: "index-status completed",
     ERROR: "index-status error",
     DEFAULT: "index-status",
@@ -105,7 +108,7 @@ export class AlbumManager {
 
   async updateCurrentAlbum(album) {
     // Update state and localStorage
-    state.album = album.key;
+    setAlbum(album.key);
     state.embeddingsFile = album.embeddings_file;
     saveSettingsToLocalStorage();
 
@@ -398,7 +401,7 @@ export class AlbumManager {
       name: formData.name,
       description: formData.description,
       image_paths: paths,
-      index: `${paths[0]}/embeddings.npz`,
+      index: `${paths[0]}/clipslide_index/embeddings.npz`,
     };
 
     try {
@@ -706,6 +709,10 @@ export class AlbumManager {
       status.className = AlbumManager.STATUS_CLASSES.INDEXING;
       status.textContent = progress.current_step || "Scanning for images...";
       estimatedTime.textContent = "";
+    } else if (progress.status === "umapping") {
+      status.className = AlbumManager.STATUS_CLASSES.UMAPPING;
+      status.textContent = progress.current_step || "Generating image umap...";
+      estimatedTime.textContent = "";
     } else {
       // Defensive: fallback to 0 if undefined
       const processed = progress.images_processed ?? 0;
@@ -831,9 +838,38 @@ export class AlbumManager {
       }
     }, AlbumManager.SETUP_EXIT_DELAY);
   }
+
+  relativePath(fullPath, album) {
+    // Get the current album's image_paths from state or settings
+    let imagePaths = album.image_paths || [];
+
+    // Try to make fullPath relative to any image path
+    for (const imagePath of imagePaths) {
+      // Normalize paths to handle
+      if (fullPath.startsWith(imagePath)) {
+        // Remove the imagePath prefix and any leading slash
+        let rel = fullPath.slice(imagePath.length);
+        if (rel.startsWith("/") || rel.startsWith("\\")) rel = rel.slice(1);
+        return rel;
+      }
+    }
+    // If not found, return the basename
+    return fullPath.split("/").pop();
+  }
+
+  async getCurrentAlbum() {
+    // Get the current album key from state
+    const albumKey = state.album;
+    if (!albumKey) return null;
+
+    // Fetch albums from the backend
+    const response = await fetch("available_albums/");
+    const albums = await response.json();
+
+    // Find the album with the matching key
+    const album = albums.find((a) => a.key === albumKey);
+    return album || null;
+  }
 }
 
-// Initialize when DOM is loaded
-document.addEventListener("DOMContentLoaded", () => {
-  new AlbumManager();
-});
+export const albumManager = new AlbumManager();
