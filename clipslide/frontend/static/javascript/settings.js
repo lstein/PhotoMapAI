@@ -1,7 +1,7 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { exitSearchMode } from "./search.js";
-import { saveSettingsToLocalStorage, state } from "./state.js";
+import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
 import {
   addNewSlide,
   removeSlidesAfterCurrent,
@@ -89,7 +89,7 @@ function triggerSetupMode() {
 
 // Album switching logic
 function switchAlbum(newAlbum, selectedOption) {
-  state.album = newAlbum;
+  setAlbum(newAlbum);
   state.embeddingsFile = selectedOption.dataset.embeddingsFile;
   state.umapEps = parseFloat(selectedOption.dataset.umapEps) || 0.07;
 
@@ -222,6 +222,7 @@ function setupAlbumSelector() {
     if (newAlbum !== state.album) {
       const selectedOption = this.options[this.selectedIndex];
       switchAlbum(newAlbum, selectedOption);
+      closeSettingsModal();
     }
   });
 }

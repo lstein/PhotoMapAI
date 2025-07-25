@@ -254,6 +254,8 @@ export async function fetchUmapData() {
           .filter((p) => p.cluster === clickedCluster)
           .map((p) => p.filename);
 
+        console.log(clickedFilename);
+        // If the clicked cluster is unclustered, we treat it as a special case
         // Promote the clicked filename to the first position
         const sortedClusterFilenames = [
           clickedFilename,
@@ -324,6 +326,52 @@ export async function updateCurrentImageMarker() {
     },
     1 // current image marker trace is always index 1
   );
+  ensureCurrentMarkerInView(0.1); // Ensure it's in view with 10% padding
+}
+
+// --- Ensure Current Marker in View ---
+export async function ensureCurrentMarkerInView(padFraction = 0.1) {
+  if (!points.length) return;
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.layout) return;
+
+  let currentImageFilename = getCurrentFilepath();
+  const album = await getCachedAlbum();
+  currentImageFilename = albumManager.relativePath(currentImageFilename, album);
+  const currentPoint = points.find((p) => p.filename === currentImageFilename);
+  if (!currentPoint) return;
+
+  const x = currentPoint.x;
+  const y = currentPoint.y;
+  let [xMin, xMax] = plotDiv.layout.xaxis.range;
+  let [yMin, yMax] = plotDiv.layout.yaxis.range;
+
+  let changed = false;
+  // Add a small padding so the marker isn't right at the edge
+  const xPad = (xMax - xMin) * padFraction;
+  const yPad = (yMax - yMin) * padFraction;
+
+  if (x < xMin + xPad || x > xMax - xPad) {
+    const xCenter = x;
+    const halfWidth = (xMax - xMin) / 2;
+    xMin = xCenter - halfWidth;
+    xMax = xCenter + halfWidth;
+    changed = true;
+  }
+  if (y < yMin + yPad || y > yMax - yPad) {
+    const yCenter = y;
+    const halfHeight = (yMax - yMin) / 2;
+    yMin = yCenter - halfHeight;
+    yMax = yCenter + halfHeight;
+    changed = true;
+  }
+
+  if (changed) {
+    Plotly.relayout(plotDiv, {
+      "xaxis.range": [xMin, xMax],
+      "yaxis.range": [yMin, yMax],
+    });
+  }
 }
 
 // --- React to Search/Cluster Selection ---
@@ -341,4 +389,20 @@ window.addEventListener("searchResultsChanged", () => {
 // --- Initial Data Fetch on Show ---
 document.addEventListener("DOMContentLoaded", () => {
   // Optionally, fetch data on load or when needed
+});
+
+window.addEventListener("albumChanged", async () => {
+  // Fetch the album's default EPS value and update the spinner
+  const result = await fetch("get_umap_eps/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ album: state.album }),
+  });
+  const data = await result.json();
+  if (data.success) {
+    const epsSpinner = document.getElementById("umapEpsSpinner");
+    if (epsSpinner) epsSpinner.value = data.eps;
+  }
+  state.dataChanged = true;
+  fetchUmapData();
 });

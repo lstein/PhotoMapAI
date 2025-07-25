@@ -1,7 +1,7 @@
 // album-management.js
 import { exitSearchMode } from "./search.js";
 import { loadAvailableAlbums } from "./settings.js";
-import { saveSettingsToLocalStorage, state } from "./state.js";
+import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
 
 export class AlbumManager {
@@ -106,7 +106,7 @@ export class AlbumManager {
 
   async updateCurrentAlbum(album) {
     // Update state and localStorage
-    state.album = album.key;
+    setAlbum(album.key);
     state.embeddingsFile = album.embeddings_file;
     saveSettingsToLocalStorage();
 

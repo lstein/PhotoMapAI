@@ -6,11 +6,12 @@ import { hideSpinner, showSpinner } from "./utils.js";
 // Call the server to fetch the next image based on the current mode (random or sequential).
 export async function fetchNextImage(lastImage = null, backward = false) {
   let response;
-  let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
-  const formData = new URLSearchParams();
   let currentScore;
   let currentCluster;
   let currentColor;
+
+  let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
+  const formData = new URLSearchParams();
 
   try {
     if (state.searchResults?.length > 0) {
@@ -18,7 +19,7 @@ export async function fetchNextImage(lastImage = null, backward = false) {
         ? --state.searchOrigin
         : state.searchOrigin + state.swiper.slides?.length;
       indexToRetrieve =
-        (indexToRetrieve + state.searchResults.length - 1) %
+        (indexToRetrieve + state.searchResults.length) %
         state.searchResults.length; // wrap
       const fileToRetrieve = state.searchResults[indexToRetrieve]?.filename;
       currentScore = state.searchResults[indexToRetrieve]?.score || 0;
@@ -63,7 +64,7 @@ export async function fetchNextImage(lastImage = null, backward = false) {
 
     const data = await response.json();
     if (currentScore) data.score = currentScore; // Preserve the score from search results
-    if (currentCluster) data.cluster = currentCluster; // Preserve the cluster from umap search results  
+    if (currentCluster) data.cluster = currentCluster; // Preserve the cluster from umap search results
     if (currentColor) data.color = currentColor; // Preserve the color from search results
     clearTimeout(spinnerTimeout);
     hideSpinner();
