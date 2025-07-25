@@ -71,14 +71,16 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     try {
       showSpinner();
-      state.searchResults = [];
-      state.searchOrigin = 0;
       const results = await searchText(query);
       state.searchResults = results.filter((item) => item.score >= 0.2);
       await resetSlidesAndAppend();
       updateSearchCheckmarks();
       setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
       setCheckmarkOnIcon(document.getElementById("textSearchIcon"), true);
+      window.dispatchEvent(
+        new CustomEvent("searchResultsChanged", { detail: state.searchResults })
+      );
+
       setTimeout(() => {
         textSearchPanel.style.opacity = 0;
         textSearchPanel.style.display = "none";
@@ -245,19 +247,30 @@ document.addEventListener("DOMContentLoaded", async function () {
       );
     }
   });
+
+  // Called whenever the search results are updated
+  window.addEventListener("searchResultsChanged", async function (e) {
+    state.searchResults = e.detail;
+    state.searchOrigin = 0;
+    await resetSlidesAndAppend();
+    updateSearchCheckmarks();
+    // setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
+    // setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
+  });
 });
 
 export async function searchWithImage(file, first_slide) {
   try {
     showSpinner();
-    state.searchResults = [];
-    state.searchOrigin = 0;
     const results = await searchImage(file);
     state.searchResults = results.filter((item) => item.score >= 0.6);
     await resetSlidesAndAppend(first_slide);
     updateSearchCheckmarks();
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
+    window.dispatchEvent(
+      new CustomEvent("searchResultsChanged", { detail: state.searchResults })
+    );
   } catch (err) {
     console.error("Image search request failed:", err);
     return [];
@@ -305,7 +318,6 @@ function updateSearchCheckmarks() {
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
   }
-  window.dispatchEvent(new CustomEvent("searchResultsChanged"));
 }
 
 export async function clearSearchAndResetCarousel() {
@@ -323,6 +335,9 @@ export async function clearSearchAndResetCarousel() {
   }
   setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
   setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
+  window.dispatchEvent(
+    new CustomEvent("searchResultsChanged", { detail: [] })
+  );
 }
 
 window.addEventListener("paste", async function (e) {

@@ -221,12 +221,12 @@ export function handleSlideChange() {
   }
 
   // Update the current image marker if available, and if the umap floating window is open
-  if (
-    window.umapPoints &&
-    document.getElementById("umapFloatingWindow").style.display === "block"
-  ) {
+  // if (
+  //   window.umapPoints &&
+  //   document.getElementById("umapFloatingWindow").style.display === "block"
+  // ) {
     setTimeout(() => updateCurrentImageMarker(window.umapPoints), 0);
-  }
+  // }
 }
 
 export function removeSlidesAfterCurrent() {

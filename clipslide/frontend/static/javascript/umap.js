@@ -38,7 +38,6 @@ function getClusterColor(cluster) {
   return colors[idx % colors.length];
 }
 
-
 // --- Spinner UI ---
 function showUmapSpinner() {
   document.getElementById("umapSpinner").style.display = "block";
@@ -80,7 +79,7 @@ document.getElementById("showUmapBtn").onclick = async () => {
   }
   const epsSpinner = document.getElementById("umapEpsSpinner");
   if (epsSpinner) epsSpinner.value = data.eps;
-  state.dataChanged = true;
+  // state.dataChanged = true;
   await fetchUmapData();
 };
 document.getElementById("umapCloseBtn").onclick = () => {
@@ -200,44 +199,51 @@ export async function fetchUmapData() {
           hoverinfo: "text",
         };
 
-    Plotly.newPlot("umapPlot", [allPointsTrace, currentImageTrace], {
-      title: {
-        text: "Semantic Map",
+    Plotly.newPlot(
+      "umapPlot",
+      [allPointsTrace, currentImageTrace],
+      {
+        title: {
+          text: "Semantic Map",
+          font: { color: "#eee" },
+          x: 0,
+          xanchor: "left",
+        },
+        showlegend: false,
+        dragmode: "pan",
+        height: PLOT_HEIGHT,
+        width: PLOT_WIDTH,
+        plot_bgcolor: "rgba(32,32,48,0.95)",
+        paper_bgcolor: "rgba(24,24,32,0.97)",
         font: { color: "#eee" },
-        x: 0,
-        xanchor: "left",
+        xaxis: {
+          gridcolor: "rgba(255,255,255,0.1)",
+          zerolinecolor: "rgba(255,255,255,0.2)",
+          color: "#eee",
+          linecolor: "#888",
+          tickcolor: "#888",
+          range: [xMin, xMax],
+        },
+        yaxis: {
+          gridcolor: "rgba(255,255,255,0.1)",
+          zerolinecolor: "rgba(255,255,255,0.2)",
+          color: "#eee",
+          linecolor: "#888",
+          tickcolor: "#888",
+          range: [yMin, yMax],
+        },
+        margin: {
+          t: 30,
+          r: 30,
+          b: 30,
+          l: 30,
+          pad: 0,
+        },
       },
-      showlegend: false,
-      dragmode: "pan",
-      height: PLOT_HEIGHT,
-      width: PLOT_WIDTH,
-      plot_bgcolor: "rgba(32,32,48,0.95)",
-      paper_bgcolor: "rgba(24,24,32,0.97)",
-      font: { color: "#eee" },
-      xaxis: {
-        gridcolor: "rgba(255,255,255,0.1)",
-        zerolinecolor: "rgba(255,255,255,0.2)",
-        color: "#eee",
-        linecolor: "#888",
-        tickcolor: "#888",
-        range: [xMin, xMax],
-      },
-      yaxis: {
-        gridcolor: "rgba(255,255,255,0.1)",
-        zerolinecolor: "rgba(255,255,255,0.2)",
-        color: "#eee",
-        linecolor: "#888",
-        tickcolor: "#888",
-        range: [yMin, yMax],
-      },
-      margin: {
-        t: 30,
-        r: 30,
-        b: 30,
-        l: 30,
-        pad: 0,
-      },
-    }).then((gd) => {
+      {
+        modeBarButtonsToRemove: ["select2d", "lasso2d"],
+      }
+    ).then((gd) => {
       gd.on("plotly_hover", function (eventData) {
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
@@ -254,6 +260,30 @@ export async function fetchUmapData() {
 
       gd.on("plotly_unhover", function () {
         removeUmapThumbnail();
+      });
+
+      gd.on("plotly_selected", function (eventData) {
+        if (!eventData || !eventData.points || !eventData.points.length) return;
+        const selectedFilenames = eventData.points
+          .filter((pt) => pt.curveNumber === 0)
+          .map((pt) => pt.customdata);
+
+        const selectedResults = selectedFilenames.map((filename) => {
+          const point = points.find((p) => p.filename === filename);
+          return {
+            filename,
+            color: getClusterColor(point?.cluster ?? -1),
+            score: point?.score ?? 1.0,
+          };
+        });
+
+        window.dispatchEvent(
+          new CustomEvent("searchResultsChanged", { detail: selectedResults })
+        );
+        colorizeUmap({
+          mode: "search",
+          searchResults: selectedResults,
+        });
       });
     });
 
@@ -290,10 +320,23 @@ export async function fetchUmapData() {
         window.dispatchEvent(
           new CustomEvent("umapClusterSelected", { detail: clusterMembers })
         );
+        colorizeUmap({
+          mode: "search",
+          searchResults: clusterMembers,
+        });
       });
 
     window.umapPoints = points;
     state.dataChanged = false;
+
+    // Ensure correct colorization after plot is rebuilt
+    colorizeUmap({
+      mode:
+        state.searchResults && state.searchResults.length > 0
+          ? "search"
+          : "cluster",
+      searchResults: state.searchResults,
+    });
   } finally {
     hideUmapSpinner();
   }
@@ -316,6 +359,12 @@ export function colorizeUmap({ mode = "cluster", searchResults = [] } = {}) {
     markerColors = points.map((p) => getClusterColor(p.cluster));
     markerAlphas = points.map((p) => (p.cluster === -1 ? 0.01 : 0.5));
   }
+  console.log(
+    "colorizeUmap, mode:",
+    mode,
+    "searchResults:",
+    searchResults.length
+  );
   Plotly.restyle(
     "umapPlot",
     {
