@@ -4,9 +4,8 @@ import { fetchNextImage } from "./api.js";
 import { clusterDisplay } from "./cluster-display.js";
 import { updateOverlay } from "./overlay.js";
 import { scoreDisplay } from "./score-display.js";
-import { updateCurrentImageMarker } from "./umap.js";
-
 import { state } from "./state.js";
+import { updateCurrentImageMarker } from "./umap.js";
 
 // Check if the device is mobile
 function isTouchDevice() {
@@ -19,9 +18,7 @@ function isTouchDevice() {
 
 const hasTouchCapability = isTouchDevice();
 
-// Swiper initialization
 document.addEventListener("DOMContentLoaded", async function () {
-  // Create base Swiper configuration
   const swiperConfig = {
     navigation: {
       nextEl: ".swiper-button-next",
@@ -217,15 +214,18 @@ export function handleSlideChange() {
     const score = parseFloat(activeSlide.dataset.score);
     scoreDisplay.show(score);
   } else if (activeSlide && activeSlide?.dataset?.cluster) {
-    clusterDisplay.show(activeSlide.dataset.cluster);
+    clusterDisplay.show(activeSlide.dataset.cluster, activeSlide.dataset.color);
   } else {
     // Hide score if not in search mode or no score
     scoreDisplay.hide();
   }
 
   // Update the current image marker if available, and if the umap floating window is open
-  if (window.umapPoints && document.getElementById("umapFloatingWindow").style.display === "block") {
-    setTimeout(() => updateCurrentImageMarker(window.umapPoints), 300);
+  if (
+    window.umapPoints &&
+    document.getElementById("umapFloatingWindow").style.display === "block"
+  ) {
+    setTimeout(() => updateCurrentImageMarker(window.umapPoints), 0);
   }
 }
 
@@ -253,7 +253,6 @@ export async function resetAllSlides() {
   }
 }
 
-// Clear carousel and optionally append a first slide
 export async function resetSlidesAndAppend(first_slide) {
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow(); // Pause the slideshow if it's running

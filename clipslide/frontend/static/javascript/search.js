@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   const textSearchBtn = document.getElementById("textSearchBtn");
 
   textSearchBtn.addEventListener("click", function (e) {
-    e.stopPropagation(); // Prevent this click from bubbling up
+    e.stopPropagation();
     if (
       textSearchPanel.style.display === "none" ||
       textSearchPanel.style.display === ""
@@ -34,23 +34,17 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Add click-outside-to-close functionality with event prevention
   document.addEventListener(
     "click",
     function (e) {
-      // Check if the panel is visible
       if (textSearchPanel.style.display === "block") {
-        // Check if the click was outside the panel and not on the button
         if (
           !textSearchPanel.contains(e.target) &&
           !textSearchBtn.contains(e.target)
         ) {
-          // Prevent the event from triggering other handlers
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
-
-          // Hide the panel
           textSearchPanel.style.opacity = 0;
           setTimeout(() => {
             textSearchPanel.style.display = "none";
@@ -59,17 +53,14 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     },
     true
-  ); // Use capture phase to intercept events early
+  );
 
-  // Prevent clicks inside the panel from closing it
   textSearchPanel.addEventListener("click", function (e) {
     e.stopPropagation();
   });
 
   const doSearchBtn = document.getElementById("doSearchBtn");
   const searchInput = document.getElementById("searchInput");
-
-  // Text search handler
   doSearchBtn.addEventListener("click", searchWithText);
 
   async function searchWithText() {
@@ -81,12 +72,11 @@ document.addEventListener("DOMContentLoaded", async function () {
     try {
       showSpinner();
       state.searchResults = [];
-      state.searchOrigin = 0; // Reset search origin for new search
+      state.searchOrigin = 0;
       const results = await searchText(query);
       state.searchResults = results.filter((item) => item.score >= 0.2);
       await resetSlidesAndAppend();
       updateSearchCheckmarks();
-      // Set checkmarks on icons based on the current mode
       setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
       setCheckmarkOnIcon(document.getElementById("textSearchIcon"), true);
       setTimeout(() => {
@@ -98,19 +88,17 @@ document.addEventListener("DOMContentLoaded", async function () {
         scoreDisplay.show(state.searchResults[0].score);
       }
     } catch (err) {
-      scoreDisplay.hide(); // Hide on error
+      scoreDisplay.hide();
       hideSpinner();
       console.error("Search request failed:", err);
     } finally {
       hideSpinner();
-      if (slideShowRunning) resumeSlideshow(); // Resume slideshow after search
+      if (slideShowRunning) resumeSlideshow();
     }
   }
 
-  // Image search button handler
   const imageSearchBtn = document.getElementById("imageSearchBtn");
   imageSearchBtn.addEventListener("click", async function () {
-    // Get the current slide's image URL and filename
     const slide = state.swiper.slides[state.swiper.activeIndex];
     if (!slide) return;
     const imgUrl = slide.querySelector("img")?.src;
@@ -121,37 +109,33 @@ document.addEventListener("DOMContentLoaded", async function () {
       const slideShowRunning = state.swiper?.autoplay?.running;
       pauseSlideshow();
       showSpinner();
-      // Fetch the image as a Blob and send to searchWithImage
       const imgResponse = await fetch(imgUrl);
       const blob = await imgResponse.blob();
       const file = new File([blob], filename, { type: blob.type });
-      let querySlide = createQuerySlide(imgUrl, `Search slide ${filename}`); // Insert the image as the first slide
+      let querySlide = createQuerySlide(imgUrl, `Search slide ${filename}`);
       await searchWithImage(file, querySlide);
       hideSpinner();
-      if (slideShowRunning) resumeSlideshow(); // Resume slideshow after search
+      if (slideShowRunning) resumeSlideshow();
     } catch (err) {
       hideSpinner();
       console.error("Image similarity search failed:", err);
     }
   });
 
-  // --- Upload Image File Button Logic ---
   const uploadImageLink = document.getElementById("uploadImageLink");
   const uploadImageInput = document.getElementById("uploadImageInput");
 
-  // Click opens file dialog
   uploadImageLink.addEventListener("click", function (e) {
     e.preventDefault();
     uploadImageInput.click();
   });
 
-  // File selected via dialog
   uploadImageInput.addEventListener("change", async function (e) {
     const file = e.target.files[0];
     if (file && file.type.startsWith("image/")) {
       showSpinner();
       try {
-        let slide = await insertUploadedImageFile(file); // Insert the image as the first slide
+        let slide = await insertUploadedImageFile(file);
         await searchWithImage(file, slide);
       } finally {
         hideSpinner();
@@ -160,7 +144,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Handle Enter key in search input
   searchInput.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -168,25 +151,21 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Clear search button handler
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
     const slideShowRunning =
       state.swiper && state.swiper.autoplay && state.swiper.autoplay.running;
     clearSearchAndResetCarousel();
-    if (slideShowRunning) resumeSlideshow(); // Resume slideshow if it was running
+    if (slideShowRunning) resumeSlideshow();
   });
 
-  // Clear text search handler
   const clearTextSearchBtn = document.getElementById("clearTextSearchBtn");
   clearTextSearchBtn.addEventListener("click", function () {
     searchInput.value = "";
   });
 
-  // Initial call to set visibility based on default searchResults value
   updateSearchCheckmarks();
 
-  // Drag and drop functionality for textSearchPanel
   textSearchPanel.addEventListener("dragover", function (e) {
     e.preventDefault();
     textSearchPanel.classList.add("dragover");
@@ -206,11 +185,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     showSpinner();
     try {
-      let slide = await insertUploadedImageFile(file); // Insert the image as the first slide
+      let slide = await insertUploadedImageFile(file);
       await searchWithImage(file, slide);
       updateSearchCheckmarks();
-
-      // Hide the panel after successful image search
       textSearchPanel.style.opacity = 0;
       setTimeout(() => {
         textSearchPanel.style.display = "none";
@@ -224,7 +201,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Drag and drop functionality for search panel
   const searchPanel = document.getElementById("searchPanel");
   searchPanel.addEventListener("dragover", function (e) {
     e.preventDefault();
@@ -243,7 +219,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     showSpinner();
     try {
-      let slide = await insertUploadedImageFile(file); // Insert the image as the first slide
+      let slide = await insertUploadedImageFile(file);
       await searchWithImage(file, slide);
       updateSearchCheckmarks();
     } catch (err) {
@@ -257,7 +233,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   window.addEventListener("umapClusterSelected", async function (e) {
     state.searchResults = e.detail;
-    state.searchOrigin = 0; // Reset search origin for new search
+    state.searchOrigin = 0;
     await resetSlidesAndAppend();
     updateSearchCheckmarks();
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
@@ -271,18 +247,15 @@ document.addEventListener("DOMContentLoaded", async function () {
   });
 });
 
-// This searches by an image. first_slide, if provided, is an additional
-// slide (external image) to be added to the carousel at the front.
 export async function searchWithImage(file, first_slide) {
   try {
     showSpinner();
     state.searchResults = [];
-    state.searchOrigin = 0; // Reset search origin for new search
+    state.searchOrigin = 0;
     const results = await searchImage(file);
     state.searchResults = results.filter((item) => item.score >= 0.6);
     await resetSlidesAndAppend(first_slide);
     updateSearchCheckmarks();
-    // Set checkmarks on icons based on the current mode
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
   } catch (err) {
@@ -293,10 +266,8 @@ export async function searchWithImage(file, first_slide) {
   }
 }
 
-// Create a new slide with the uploaded image file
 function createQuerySlide(url, filename) {
   const displayLabel = filename || "Query Image";
-  // Create a new slide element
   const slide = document.createElement("div");
   slide.className = "swiper-slide";
   slide.innerHTML = `
@@ -312,7 +283,6 @@ function createQuerySlide(url, filename) {
   return slide;
 }
 
-// Insert an uploaded file into the carousel
 async function insertUploadedImageFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -326,10 +296,8 @@ async function insertUploadedImageFile(file) {
   });
 }
 
-// Show/hide the clearSearchBtn based on searchResults
 function updateSearchCheckmarks() {
   const clearSearchBtn = document.getElementById("clearSearchBtn");
-
   if (state.searchResults?.length > 0) {
     clearSearchBtn.style.display = "block";
   } else {
@@ -337,26 +305,22 @@ function updateSearchCheckmarks() {
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
   }
-  // Alert the system that the search results have changed.
   window.dispatchEvent(new CustomEvent("searchResultsChanged"));
 }
 
-// Utility: Clear search results and reset the carousel
-async function clearSearchAndResetCarousel() {
+export async function clearSearchAndResetCarousel() {
   if (state.swiper?.autoplay?.running) {
-    pauseSlideshow(); // Pause the slideshow if it's running
+    pauseSlideshow();
   }
-  exitSearchMode(); // Clear search results and reset index
-  await resetAllSlides(); // Clear all slides in the carousel
+  exitSearchMode();
+  await resetAllSlides();
   updateSearchCheckmarks();
-  // Hide the search panel if open
   if (typeof textSearchPanel !== "undefined") {
     textSearchPanel.style.opacity = 0;
     setTimeout(() => {
       textSearchPanel.style.display = "none";
     }, 200);
   }
-
   setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
   setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
 }
@@ -372,7 +336,6 @@ window.addEventListener("paste", async function (e) {
       if (file) {
         showSpinner();
         try {
-          // Add the pasted image as the first slide
           const reader = new FileReader();
           reader.onload = async function (event) {
             const url = event.target.result;
@@ -389,7 +352,7 @@ window.addEventListener("paste", async function (e) {
             slide.dataset.textToCopy = "";
             slide.dataset.filepath = "";
             await searchWithImage(file, slide);
-            state.swiper.slideTo(0); // Go to the first slide
+            state.swiper.slideTo(0);
             hideSpinner();
           };
           reader.readAsDataURL(file);
@@ -398,19 +361,19 @@ window.addEventListener("paste", async function (e) {
           hideSpinner();
           console.error("Image similarity search failed:", err);
         }
-        break; // Only handle the first image
+        break;
       }
     }
   }
 });
 
-// In resetAllSlides or when exiting search mode:
 export function exitSearchMode() {
   state.searchResults = [];
-  state.searchOrigin = 0; // Reset search origin
-  state.dataChanged = true; // Mark state as changed
-  scoreDisplay.hide(); // Hide score when exiting search
-  searchInput.value = "";
+  state.searchOrigin = 0;
+  state.dataChanged = true;
+  scoreDisplay.hide();
+  const searchInput = document.getElementById("searchInput");
+  if (searchInput) searchInput.value = "";
   updateSearchCheckmarks();
   console.log("Exited search mode");
 }
