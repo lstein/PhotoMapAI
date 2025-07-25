@@ -43,3 +43,13 @@ export function setCheckmarkOnIcon(iconElement, show) {
     iconElement.parentElement.appendChild(check);
   }
 }
+
+export function getPercentile(arr, p) {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const idx = (p / 100) * (sorted.length - 1);
+  const lower = Math.floor(idx);
+  const upper = Math.ceil(idx);
+  if (lower === upper) return sorted[lower];
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (idx - lower);
+}

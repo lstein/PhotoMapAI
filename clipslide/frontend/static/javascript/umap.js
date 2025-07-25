@@ -3,7 +3,9 @@
 import { albumManager } from "./album-management.js";
 import { getCurrentFilepath } from "./api.js";
 import { state } from "./state.js";
+import { getPercentile } from "./utils.js";
 
+// Umap drawing and interaction logic
 document.getElementById("showUmapBtn").onclick = async () => {
   document.getElementById("umapFloatingWindow").style.display = "block";
   // Update spinner value
@@ -38,6 +40,7 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ album: state.album, eps }),
   });
+  state.dataChanged = true; // Mark state as changed
   fetchUmapData();
 };
 
@@ -58,6 +61,15 @@ async function fetchUmapData() {
       `umap_data/?album=${encodeURIComponent(state.album)}&cluster_eps=${eps}`
     );
     const points = await response.json();
+
+    // Calculate bounding box to capture 98% of points
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+
+    const xMin = getPercentile(xs, 1);
+    const xMax = getPercentile(xs, 99);
+    const yMin = getPercentile(ys, 1);
+    const yMax = getPercentile(ys, 99);
 
     // Always define clusters, palette, and colors
     const clusters = [...new Set(points.map((p) => p.cluster))];
@@ -159,7 +171,7 @@ async function fetchUmapData() {
         mode: "markers",
         type: "scattergl",
         marker: {
-          color: "#ff4b4b", // brighter red for dark bg
+          color: "#ff4b4bda", // brighter red for dark bg
           size: 5,
         },
         customdata: highlighted.map((p) => p.filename),
@@ -188,6 +200,7 @@ async function fetchUmapData() {
           color: "#eee",
           linecolor: "#888",
           tickcolor: "#888",
+          range: [xMin, xMax], // Set x-axis range
         },
         yaxis: {
           gridcolor: "rgba(255,255,255,0.1)",
@@ -195,6 +208,7 @@ async function fetchUmapData() {
           color: "#eee",
           linecolor: "#888",
           tickcolor: "#888",
+          range: [yMin, yMax], // Set y-axis range
         },
         margin: {
           t: 30, // top margin
@@ -242,6 +256,7 @@ async function fetchUmapData() {
           color: "#eee",
           linecolor: "#888",
           tickcolor: "#888",
+          range: [xMin, xMax], // Set x-axis range
         },
         yaxis: {
           gridcolor: "rgba(255,255,255,0.1)",
@@ -249,6 +264,7 @@ async function fetchUmapData() {
           color: "#eee",
           linecolor: "#888",
           tickcolor: "#888",
+          range: [yMin, yMax], // Set y-axis range
         },
         margin: {
           t: 30, // top margin

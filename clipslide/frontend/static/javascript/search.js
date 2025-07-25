@@ -407,6 +407,8 @@ window.addEventListener("paste", async function (e) {
 // In resetAllSlides or when exiting search mode:
 export function exitSearchMode() {
   state.searchResults = [];
+  state.searchOrigin = 0; // Reset search origin
+  state.dataChanged = true; // Mark state as changed
   scoreDisplay.hide(); // Hide score when exiting search
   searchInput.value = "";
   updateSearchCheckmarks();
