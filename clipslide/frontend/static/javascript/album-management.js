@@ -1,6 +1,6 @@
 // album-management.js
 import { exitSearchMode } from "./search.js";
-import { loadAvailableAlbums } from "./settings.js";
+import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
 
@@ -50,6 +50,7 @@ export class AlbumManager {
   initializeEventListeners() {
     // Main management button
     document.getElementById("manageAlbumsBtn").addEventListener("click", () => {
+      closeSettingsModal();
       this.show();
     });
 

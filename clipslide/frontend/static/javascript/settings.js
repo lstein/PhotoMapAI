@@ -127,12 +127,12 @@ function adjustDelay(direction) {
 }
 
 //  Model window management
-function openSettingsModal() {
+export function openSettingsModal() {
   populateModalFields();
   elements.settingsOverlay.classList.add('visible');
 }
 
-function closeSettingsModal() {
+export function closeSettingsModal() {
   elements.settingsOverlay.classList.remove('visible');
 }
 
