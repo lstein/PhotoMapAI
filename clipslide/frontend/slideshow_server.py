@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from sklearn.cluster import DBSCAN
+from PIL import Image
 
 try:
     # Python 3.9+
@@ -406,6 +407,37 @@ async def retrieve_image(
     create_slide_url(slide_metadata, album)
     return slide_metadata
 
+@search_router.get("/thumbnails/{album}/{path:path}", tags=["Search"])
+async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileResponse:
+    """Serve a reduced-size thumbnail for an image."""
+    image_path = config_manager.find_image_in_album(album, path)
+    if not image_path:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    album_config = validate_album_exists(album)
+    if not validate_image_access(album_config, image_path):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Store thumbnails next to the embedding index for the album
+    index_path = Path(album_config.index)
+    thumb_dir = index_path.parent / "thumbnails"
+    thumb_dir.mkdir(exist_ok=True)
+
+    # Use a safe filename for the thumbnail
+    relative_path = config_manager.get_relative_path(str(image_path), album)
+    safe_rel_path = relative_path.replace("/", "_").replace("\\", "_")
+    thumb_path = thumb_dir / f"{Path(safe_rel_path).stem}_{size}{Path(safe_rel_path).suffix}"
+
+    # Generate thumbnail if not cached
+    if not thumb_path.exists() or thumb_path.stat().st_mtime < image_path.stat().st_mtime:
+        try:
+            with Image.open(image_path) as im:
+                im.thumbnail((size, size))
+                im.save(thumb_path, quality=85)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}")
+
+    return FileResponse(thumb_path)
 
 # File Management Routes
 @search_router.get("/images/{album}/{path:path}", tags=["Search"])

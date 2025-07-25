@@ -505,8 +505,8 @@ function createUmapThumbnail({ x, y, filename, cluster }) {
     ? "0 1px 2px #fff, 0 0px 8px #fff"
     : "0 1px 2px #000, 0 0px 8px #000";
 
-  // Build image URL (adjust if your backend uses a different route)
-  const imgUrl = `/images/${state.album}/${filename}`;
+  // Build image URL (use thumbnail endpoint)
+  const imgUrl = `thumbnails/${state.album}/${filename}?size=256`;
 
   // Create the thumbnail div
   umapThumbnailDiv = document.createElement("div");
