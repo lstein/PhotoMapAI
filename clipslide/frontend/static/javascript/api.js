@@ -16,8 +16,9 @@ export async function fetchNextImage(lastImage = null, backward = false) {
         ? --state.searchOrigin
         : state.searchOrigin + state.swiper.slides?.length;
       indexToRetrieve =
-        (indexToRetrieve + state.searchResults.length - 1) %
+        (indexToRetrieve + state.searchResults.length) %
         state.searchResults.length; // wrap
+      console.log("Retrieving index:", indexToRetrieve);
       const fileToRetrieve = state.searchResults[indexToRetrieve]?.filename;
       currentScore = state.searchResults[indexToRetrieve]?.score || 0;
       formData.append("current_image", fileToRetrieve);
