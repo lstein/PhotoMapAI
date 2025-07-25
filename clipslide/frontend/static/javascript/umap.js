@@ -3,7 +3,7 @@
 import { albumManager } from "./album-management.js";
 import { getCurrentFilepath } from "./api.js";
 import { state } from "./state.js";
-import { getPercentile } from "./utils.js";
+import { getPercentile, isColorLight } from "./utils.js";
 
 const PLOT_HEIGHT = 300;
 const PLOT_WIDTH = 400;
@@ -37,6 +37,7 @@ function getClusterColor(cluster) {
   const idx = clusters.indexOf(cluster);
   return colors[idx % colors.length];
 }
+
 
 // --- Spinner UI ---
 function showUmapSpinner() {
@@ -159,7 +160,7 @@ export async function fetchUmapData() {
       },
       customdata: points.map((p) => p.filename),
       name: "All Points",
-      hoverinfo: "text",
+      hoverinfo: "none",
     };
 
     // Current image marker trace
@@ -236,7 +237,26 @@ export async function fetchUmapData() {
         l: 30,
         pad: 0,
       },
+    }).then((gd) => {
+      gd.on("plotly_hover", function (eventData) {
+        if (!eventData || !eventData.points || !eventData.points.length) return;
+        const pt = eventData.points[0];
+        if (pt.curveNumber !== 0) return;
+        const filename = pt.customdata;
+        const cluster = points[pt.pointIndex]?.cluster ?? -1;
+        createUmapThumbnail({
+          x: eventData.event.clientX,
+          y: eventData.event.clientY,
+          filename,
+          cluster,
+        });
+      });
+
+      gd.on("plotly_unhover", function () {
+        removeUmapThumbnail();
+      });
     });
+
     // Ensure the current image marker is visible after plot initialization
     setTimeout(() => updateCurrentImageMarker(), 0);
 
@@ -406,3 +426,105 @@ window.addEventListener("albumChanged", async () => {
   state.dataChanged = true;
   fetchUmapData();
 });
+
+// --- Thumbnail Preview on Hover ---
+let umapThumbnailDiv = null;
+
+function createUmapThumbnail({ x, y, filename, cluster }) {
+  // Remove any existing thumbnail
+  if (umapThumbnailDiv) {
+    umapThumbnailDiv.remove();
+    umapThumbnailDiv = null;
+  }
+
+  // Find cluster color and label
+  const clusterIdx = clusters.indexOf(cluster);
+  const clusterColor = getClusterColor(cluster);
+  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster}`; // <-- Add this line
+  const textIsDark = isColorLight(clusterColor) ? "#222" : "#fff";
+  const textShadow = isColorLight(clusterColor)
+    ? "0 1px 2px #fff, 0 0px 8px #fff"
+    : "0 1px 2px #000, 0 0px 8px #000";
+
+  // Build image URL (adjust if your backend uses a different route)
+  const imgUrl = `/images/${state.album}/${filename}`;
+
+  // Create the thumbnail div
+  umapThumbnailDiv = document.createElement("div");
+  umapThumbnailDiv.style.position = "fixed";
+  umapThumbnailDiv.style.zIndex = 99999;
+  umapThumbnailDiv.style.background = clusterColor;
+  umapThumbnailDiv.style.border = "2px solid #222";
+  umapThumbnailDiv.style.borderRadius = "10px";
+  umapThumbnailDiv.style.boxShadow = "0 4px 24px rgba(0,0,0,0.7)";
+  umapThumbnailDiv.style.padding = "12px 12px 0 12px";
+  umapThumbnailDiv.style.pointerEvents = "none";
+  umapThumbnailDiv.style.transition = "opacity 0.1s";
+  umapThumbnailDiv.style.opacity = "0.98";
+  umapThumbnailDiv.style.minWidth = "160px";
+  umapThumbnailDiv.style.maxWidth = "260px";
+  umapThumbnailDiv.style.maxHeight = "400px";
+  umapThumbnailDiv.style.display = "flex";
+  umapThumbnailDiv.style.flexDirection = "column";
+  umapThumbnailDiv.style.alignItems = "center";
+  umapThumbnailDiv.style.fontFamily = "inherit";
+
+  // Thumbnail image
+  const img = document.createElement("img");
+  img.src = imgUrl;
+  img.alt = filename.split("/").pop();
+  img.style.maxWidth = "240px";
+  img.style.maxHeight = "360px";
+  img.style.borderRadius = "8px";
+  img.style.display = "block";
+  img.style.margin = "0 auto";
+  img.style.background = "#222";
+  img.style.boxShadow = "0 2px 8px rgba(0,0,0,0.4)";
+  umapThumbnailDiv.appendChild(img);
+
+  // Filename
+  const fnameDiv = document.createElement("div");
+  fnameDiv.textContent = filename.split("/").pop();
+  fnameDiv.style.fontSize = "0.95em";
+  fnameDiv.style.color = textIsDark;
+  fnameDiv.style.textShadow = textShadow;
+  fnameDiv.style.marginTop = "6px";
+  fnameDiv.style.marginBottom = "2px";
+  fnameDiv.style.textAlign = "center";
+  fnameDiv.style.wordBreak = "break-all";
+  umapThumbnailDiv.appendChild(fnameDiv);
+
+  // Cluster label
+  const clusterDiv = document.createElement("div");
+  clusterDiv.textContent = clusterLabel;
+  clusterDiv.style.fontSize = "0.95em";
+  clusterDiv.style.fontWeight = "bold";
+  clusterDiv.style.color = textIsDark;
+  clusterDiv.style.textShadow = textShadow;
+  clusterDiv.style.background = "rgba(0,0,0,0.25)";
+  clusterDiv.style.width = "100%";
+  clusterDiv.style.textAlign = "center";
+  clusterDiv.style.borderRadius = "0 0 8px 8px";
+  clusterDiv.style.padding = "2px 0 4px 0";
+  clusterDiv.style.marginTop = "2px";
+  umapThumbnailDiv.appendChild(clusterDiv);
+
+  document.body.appendChild(umapThumbnailDiv);
+
+  // Position the window near the mouse pointer, but not off-screen
+  const pad = 12;
+  let left = x + pad;
+  let top = y + pad;
+  const rect = umapThumbnailDiv.getBoundingClientRect();
+  if (left + rect.width > window.innerWidth - 10) left = x - rect.width - pad;
+  if (top + rect.height > window.innerHeight - 10) top = y - rect.height - pad;
+  umapThumbnailDiv.style.left = `${Math.max(0, left)}px`;
+  umapThumbnailDiv.style.top = `${Math.max(0, top)}px`;
+}
+
+function removeUmapThumbnail() {
+  if (umapThumbnailDiv) {
+    umapThumbnailDiv.remove();
+    umapThumbnailDiv = null;
+  }
+}

@@ -53,3 +53,16 @@ export function getPercentile(arr, p) {
   if (lower === upper) return sorted[lower];
   return sorted[lower] + (sorted[upper] - sorted[lower]) * (idx - lower);
 }
+
+export function isColorLight(hex) {
+  // Remove hash if present
+  hex = hex.replace("#", "");
+  // Convert 3-digit to 6-digit
+  if (hex.length === 3) hex = hex.split("").map((x) => x + x).join("");
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+  // Perceived brightness formula
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 180;
+}
