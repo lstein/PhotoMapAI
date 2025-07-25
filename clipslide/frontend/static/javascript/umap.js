@@ -22,6 +22,7 @@ document.getElementById("showUmapBtn").onclick = async () => {
   if (epsSpinner) epsSpinner.value = data.eps;
 
   fetchUmapData();
+  updateCurrentImageMarker(window.umapPoints);
 };
 document.getElementById("umapCloseBtn").onclick = () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
@@ -48,6 +49,7 @@ function hideUmapSpinner() {
 }
 
 async function fetchUmapData() {
+  if (!state.dataChanged) return;
   showUmapSpinner();
   try {
     const eps =
@@ -97,7 +99,7 @@ async function fetchUmapData() {
           marker: {
             color: "#FFD700",
             size: 18,
-            symbol: "star",
+            symbol: "circle-dot", // This is the closest to a map pin
             line: { color: "#000", width: 2 },
           },
           name: "Current Image",
@@ -112,7 +114,7 @@ async function fetchUmapData() {
           marker: {
             color: "#FFD700",
             size: 18,
-            symbol: "star",
+            symbol: "marker", // This is the closest to a map pin
             line: { color: "#000", width: 2 },
           },
           name: "Current Image",
@@ -141,7 +143,7 @@ async function fetchUmapData() {
         mode: "markers",
         type: "scattergl",
         marker: {
-          color: "rgba(204,204,204,0.1)",
+          color: "rgba(200,200,200,0.18)", // lighter gray for dark bg
           size: 5,
         },
         customdata: background.map((p) => p.filename),
@@ -157,7 +159,7 @@ async function fetchUmapData() {
         mode: "markers",
         type: "scattergl",
         marker: {
-          color: "#e41a1c",
+          color: "#ff4b4b", // brighter red for dark bg
           size: 5,
         },
         customdata: highlighted.map((p) => p.filename),
@@ -170,12 +172,37 @@ async function fetchUmapData() {
       const traces = [grayTrace, redTrace, currentImageTrace];
 
       Plotly.newPlot("umapPlot", traces, {
-        title: "UMAP Embeddings",
+        title: {
+          text: "UMAP Embeddings",
+          font: { color: "#eee" },
+        },
         dragmode: "pan",
         height: 500,
         width: 600,
-        plot_bgcolor: "rgba(255,255,255,0.25)", // plot area background
-        paper_bgcolor: "rgba(255,255,255,0.5)", // entire plot background
+        plot_bgcolor: "rgba(32,32,48,0.95)", // dark plot area
+        paper_bgcolor: "rgba(24,24,32,0.97)", // dark outer background
+        font: { color: "#eee" }, // light text for axes, legend, etc.
+        xaxis: {
+          gridcolor: "rgba(255,255,255,0.1)",
+          zerolinecolor: "rgba(255,255,255,0.2)",
+          color: "#eee",
+          linecolor: "#888",
+          tickcolor: "#888",
+        },
+        yaxis: {
+          gridcolor: "rgba(255,255,255,0.1)",
+          zerolinecolor: "rgba(255,255,255,0.2)",
+          color: "#eee",
+          linecolor: "#888",
+          tickcolor: "#888",
+        },
+        margin: {
+          t: 30, // top margin
+          r: 30, // right margin
+          b: 30, // bottom margin
+          l: 30, // left margin
+          pad: 0, // padding
+        },
       });
     } else {
       // Default: color by cluster
@@ -199,12 +226,30 @@ async function fetchUmapData() {
       });
       traces.push(currentImageTrace);
       Plotly.newPlot("umapPlot", traces, {
-        title: "UMAP Embeddings",
+        title: {
+          text: "UMAP Embeddings",
+          font: { color: "#eee" },
+        },
         dragmode: "pan",
         height: 500,
         width: 600,
-        plot_bgcolor: "rgba(255,255,255,0.25)", // plot area background
-        paper_bgcolor: "rgba(255,255,255,0.5)", // entire plot background
+        plot_bgcolor: "rgba(32,32,48,0.95)", // dark plot area
+        paper_bgcolor: "rgba(24,24,32,0.97)", // dark outer background
+        font: { color: "#eee" }, // light text for axes, legend, etc.
+        xaxis: {
+          gridcolor: "rgba(255,255,255,0.1)",
+          zerolinecolor: "rgba(255,255,255,0.2)",
+          color: "#eee",
+          linecolor: "#888",
+          tickcolor: "#888",
+        },
+        yaxis: {
+          gridcolor: "rgba(255,255,255,0.1)",
+          zerolinecolor: "rgba(255,255,255,0.2)",
+          color: "#eee",
+          linecolor: "#888",
+          tickcolor: "#888",
+        },
         margin: {
           t: 30, // top margin
           r: 30, // right margin
@@ -250,15 +295,18 @@ async function fetchUmapData() {
     window.umapPoints = points;
   } finally {
     hideUmapSpinner();
+    state.dataChanged = false; // Reset the flag after fetching
   }
 }
 
 // Update the map when the search results have changed.
 window.addEventListener("searchResultsChanged", () => {
+  state.dataChanged = true; // Set the flag to true when search results change
   fetchUmapData();
 });
 
 export async function updateCurrentImageMarker(points) {
+  if (!points || points.length === 0) return;
   const plotDiv = document.getElementById("umapPlot");
   if (!plotDiv || !plotDiv.data || plotDiv.data.length === 0) return;
 

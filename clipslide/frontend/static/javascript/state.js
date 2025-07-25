@@ -12,6 +12,7 @@ export const state = {
   searchResults: [], // List of file paths matching the current search query
   album: "family", // Default album to use
   availableAlbums: [], // List of available albums
+  dataChanged: true, // Flag to indicate if umap data has changed
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
