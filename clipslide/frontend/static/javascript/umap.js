@@ -92,12 +92,8 @@ async function fetchUmapData() {
         relPath: albumManager.relativePath(p.filename, album),
       }));
 
-      const highlighted = pointsWithRel.filter((p) =>
-        searchSet.has(p.relPath)
-      );
-      const background = pointsWithRel.filter((p) =>
-        !searchSet.has(p.relPath)
-      );
+      const highlighted = pointsWithRel.filter((p) => searchSet.has(p.relPath));
+      const background = pointsWithRel.filter((p) => !searchSet.has(p.relPath));
 
       const grayTrace = {
         x: background.map((p) => p.x),
@@ -112,6 +108,7 @@ async function fetchUmapData() {
         customdata: background.map((p) => p.filename),
         name: "Other Points",
         hoverinfo: "text",
+        opacity: 0.75,
       };
 
       const redTrace = {
@@ -127,6 +124,7 @@ async function fetchUmapData() {
         customdata: highlighted.map((p) => p.filename),
         name: "Search Results",
         hoverinfo: "text",
+        opacity: 0.75,
       };
 
       Plotly.newPlot("umapPlot", [grayTrace, redTrace], {
@@ -134,6 +132,8 @@ async function fetchUmapData() {
         dragmode: "pan",
         height: 500,
         width: 600,
+        plot_bgcolor: "rgba(255,255,255,0.25)", // plot area background
+        paper_bgcolor: "rgba(255,255,255,0.5)", // entire plot background
       });
     } else {
       // Default: color by cluster
@@ -152,6 +152,7 @@ async function fetchUmapData() {
           customdata: points
             .filter((p) => p.cluster === cluster)
             .map((p) => p.filename),
+          opacity: 0.75,
         };
       });
       Plotly.newPlot("umapPlot", traces, {
@@ -159,37 +160,41 @@ async function fetchUmapData() {
         dragmode: "pan",
         height: 500,
         width: 600,
+        plot_bgcolor: "rgba(255,255,255,0.25)", // plot area background
+        paper_bgcolor: "rgba(255,255,255,0.5)", // entire plot background
       });
     }
 
-    document.getElementById("umapPlot").on("plotly_click", async function (data) {
-      // Get the cluster of the clicked point
-      const clickedFilename = data.points[0].customdata;
-      const clickedPoint = points.find((p) => p.filename === clickedFilename);
-      if (!clickedPoint) return;
-      const clickedCluster = clickedPoint.cluster;
+    document
+      .getElementById("umapPlot")
+      .on("plotly_click", async function (data) {
+        // Get the cluster of the clicked point
+        const clickedFilename = data.points[0].customdata;
+        const clickedPoint = points.find((p) => p.filename === clickedFilename);
+        if (!clickedPoint) return;
+        const clickedCluster = clickedPoint.cluster;
 
-      // Find the color for this cluster
-      const clusterIndex = clusters.indexOf(clickedCluster);
-      const clusterColor = colors[clusterIndex % colors.length];
+        // Find the color for this cluster
+        const clusterIndex = clusters.indexOf(clickedCluster);
+        const clusterColor = colors[clusterIndex % colors.length];
 
-      // Get all filenames in the same cluster as relative paths
-      let album = await albumManager.getCurrentAlbum();
-      const clusterFilenames = points
-        .filter((p) => p.cluster === clickedCluster)
-        .map((p) => albumManager.relativePath(p.filename, album));
+        // Get all filenames in the same cluster as relative paths
+        let album = await albumManager.getCurrentAlbum();
+        const clusterFilenames = points
+          .filter((p) => p.cluster === clickedCluster)
+          .map((p) => albumManager.relativePath(p.filename, album));
 
-      // Convert clusterFilenames into an array of search results, including color
-      const clusterMembers = clusterFilenames.map((filename) => ({
-        filename: filename,
-        cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
-        color: clusterColor,
-      }));
+        // Convert clusterFilenames into an array of search results, including color
+        const clusterMembers = clusterFilenames.map((filename) => ({
+          filename: filename,
+          cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
+          color: clusterColor,
+        }));
 
-      window.dispatchEvent(
-        new CustomEvent("umapClusterSelected", { detail: clusterMembers })
-      );
-    });
+        window.dispatchEvent(
+          new CustomEvent("umapClusterSelected", { detail: clusterMembers })
+        );
+      });
   } finally {
     hideUmapSpinner();
   }

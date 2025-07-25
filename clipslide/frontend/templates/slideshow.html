@@ -569,17 +569,33 @@
       style="
         position: fixed;
         display: none;
-        top: 10vh;
-        left: 10vw;
-        width: 80vw;
-        height: 80vh;
-        background: #fff;
+        top: 24px;
+        right: 24px;
+        left: auto;
+        bottom: auto;
+        background: rgba(255,255,255,0.75);
         box-shadow: 0 4px 32px rgba(0,0,0,0.3);
         border-radius: 12px;
         z-index: 10001;
+        width: auto;
+        height: auto;
+        max-width: 90vw;
+        max-height: 90vh;
+        overflow: auto;
+        {# padding: 24px 32px; #}
       "
     >
-      <div id="umapSpinner" style="display:none; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1000;">
+      <div
+        id="umapSpinner"
+        style="
+          display: none;
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          z-index: 1000;
+        "
+      >
         <div class="umap-spinner"></div>
       </div>
       <div id="umapPlot"></div>
