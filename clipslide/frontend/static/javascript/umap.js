@@ -1,6 +1,7 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-management.js";
+import { getCurrentFilepath } from "./api.js";
 import { state } from "./state.js";
 
 document.getElementById("showUmapBtn").onclick = async () => {
@@ -78,13 +79,51 @@ async function fetchUmapData() {
       "#b3b3b3",
     ];
     const colors = clusters.map((c, i) => palette[i % palette.length]);
+    let album = await albumManager.getCurrentAlbum();
+
+    // Current image trace
+    const currentImageFilename = getCurrentFilepath();
+    const currentPoint = points.find(
+      (p) => p.filename === currentImageFilename
+    );
+
+    const currentImageTrace = currentPoint
+      ? {
+          x: [currentPoint.x],
+          y: [currentPoint.y],
+          text: [currentPoint.filename.split("/").pop()],
+          mode: "markers",
+          type: "scattergl",
+          marker: {
+            color: "#FFD700",
+            size: 18,
+            symbol: "star",
+            line: { color: "#000", width: 2 },
+          },
+          name: "Current Image",
+          hoverinfo: "text",
+        }
+      : {
+          x: [],
+          y: [],
+          text: [],
+          mode: "markers",
+          type: "scattergl",
+          marker: {
+            color: "#FFD700",
+            size: 18,
+            symbol: "star",
+            line: { color: "#000", width: 2 },
+          },
+          name: "Current Image",
+          hoverinfo: "text",
+        };
 
     // If searchResults is not empty, highlight those points in red, others in gray
     if (state.searchResults && state.searchResults.length > 0) {
       const searchSet = new Set(
         state.searchResults.map((r) => (typeof r === "string" ? r : r.filename))
       );
-      let album = await albumManager.getCurrentAlbum();
 
       // Map points to include their relative path once
       const pointsWithRel = points.map((p) => ({
@@ -127,7 +166,10 @@ async function fetchUmapData() {
         opacity: 0.75,
       };
 
-      Plotly.newPlot("umapPlot", [grayTrace, redTrace], {
+      // When plotting:
+      const traces = [grayTrace, redTrace, currentImageTrace];
+
+      Plotly.newPlot("umapPlot", traces, {
         title: "UMAP Embeddings",
         dragmode: "pan",
         height: 500,
@@ -155,6 +197,7 @@ async function fetchUmapData() {
           opacity: 0.75,
         };
       });
+      traces.push(currentImageTrace);
       Plotly.newPlot("umapPlot", traces, {
         title: "UMAP Embeddings",
         dragmode: "pan",
@@ -195,6 +238,9 @@ async function fetchUmapData() {
           new CustomEvent("umapClusterSelected", { detail: clusterMembers })
         );
       });
+
+    // Stash the points so that they can passed to swiper.js for slide changes:
+    window.umapPoints = points;
   } finally {
     hideUmapSpinner();
   }
@@ -204,3 +250,28 @@ async function fetchUmapData() {
 window.addEventListener("searchResultsChanged", () => {
   fetchUmapData();
 });
+
+export function updateCurrentImageMarker(points) {
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.data || plotDiv.data.length === 0) return;
+
+  const currentImageFilename = getCurrentFilepath();
+  const currentPoint = points.find((p) => p.filename === currentImageFilename);
+  if (!currentPoint) return;
+
+  // Find the trace index for the current image marker by name
+  const traceIndex = plotDiv.data.findIndex(
+    (trace) => trace.name === "Current Image"
+  );
+  if (traceIndex === -1) return; // No marker trace to update
+
+  Plotly.restyle(
+    "umapPlot",
+    {
+      x: [[currentPoint.x]],
+      y: [[currentPoint.y]],
+      text: [[currentPoint.filename.split("/").pop()]],
+    },
+    traceIndex
+  );
+}

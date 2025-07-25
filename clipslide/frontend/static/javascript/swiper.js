@@ -4,6 +4,7 @@ import { fetchNextImage } from "./api.js";
 import { clusterDisplay } from "./cluster-display.js";
 import { updateOverlay } from "./overlay.js";
 import { scoreDisplay } from "./score-display.js";
+import { updateCurrentImageMarker } from "./umap.js";
 
 import { state } from "./state.js";
 
@@ -220,6 +221,9 @@ export function handleSlideChange() {
   } else {
     // Hide score if not in search mode or no score
     scoreDisplay.hide();
+  }
+  if (window.umapPoints) {
+    updateCurrentImageMarker(window.umapPoints);
   }
 }
 
