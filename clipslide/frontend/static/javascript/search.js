@@ -263,7 +263,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
     if (state.searchResults.length > 0) {
-      clusterDisplay.show(state.searchResults[0].cluster,
+      clusterDisplay.show(
+        state.searchResults[0].cluster,
         state.searchResults[0].color || "#000000"
       );
     }
@@ -336,6 +337,8 @@ function updateSearchCheckmarks() {
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
   }
+  // Alert the system that the search results have changed.
+  window.dispatchEvent(new CustomEvent("searchResultsChanged"));
 }
 
 // Utility: Clear search results and reset the carousel

@@ -134,3 +134,8 @@ async function fetchUmapData() {
     );
   });
 }
+
+// Update the map when the search results have changed.
+window.addEventListener("searchResultsChanged", () => {
+  fetchUmapData();
+});
