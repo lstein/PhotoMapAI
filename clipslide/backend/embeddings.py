@@ -561,7 +561,8 @@ class Embeddings(BaseModel):
         if embeddings.size == 0:
             print("No embeddings provided for UMAP index creation.")
             return np.empty((0, 2))
-        umap_model = UMAP(n_neighbors=15, n_components=2, metric="cosine")
+        # umap_model = UMAP(n_neighbors=15, n_components=2, min_dist=0.05, metric="cosine")
+        umap_model = UMAP(n_components=2, min_dist=0.05, metric="cosine")
         umap_embeddings = umap_model.fit_transform(embeddings)
         cache_file = self.embeddings_path.parent / "umap.npz"
         np.savez(cache_file, umap=umap_embeddings)

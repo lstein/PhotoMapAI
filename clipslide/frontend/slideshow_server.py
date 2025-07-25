@@ -310,7 +310,7 @@ async def get_umap_eps(request: UmapEpsGetRequest):
 async def get_umap_data(
     album: str = DEFAULT_ALBUM,
     cluster_eps: float = 0.07,
-    cluster_min_samples: int = 5,
+    cluster_min_samples: int = 10,
 ) -> JSONResponse:
     # Instantiate your Embeddings object (adjust path as needed)
     embeddings = get_embeddings_for_album(album)
