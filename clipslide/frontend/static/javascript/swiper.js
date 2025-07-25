@@ -266,6 +266,8 @@ export async function resetSlidesAndAppend(first_slide) {
     await addNewSlide();
   }
   await addNewSlide(); // needed to enable navigation buttons
+  state.swiper.slideTo(0); // Reset to the first slide
+  handleSlideChange(); // Update the overlay and displays
   // restart the slideshow if it was running
   if (slideShowRunning) resumeSlideshow();
 }

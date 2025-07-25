@@ -24,24 +24,31 @@ document.getElementById("showUmapBtn").onclick = async () => {
   if (epsSpinner) epsSpinner.value = data.eps;
 
   fetchUmapData();
-  updateCurrentImageMarker(window.umapPoints);
 };
 document.getElementById("umapCloseBtn").onclick = () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
 };
+
+let epsUpdateTimer = null;
 
 // Add event listener to spinner
 document.getElementById("umapEpsSpinner").oninput = async () => {
   const eps =
     parseFloat(document.getElementById("umapEpsSpinner").value) || 0.07;
 
-  await fetch("set_umap_eps/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ album: state.album, eps }),
-  });
-  state.dataChanged = true; // Mark state as changed
-  fetchUmapData();
+  // Cancel any previous timer
+  if (epsUpdateTimer) clearTimeout(epsUpdateTimer);
+
+  // Set a new timer
+  epsUpdateTimer = setTimeout(async () => {
+    await fetch("set_umap_eps/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ album: state.album, eps }),
+    });
+    state.dataChanged = true; // Mark state as changed
+    fetchUmapData();
+  }, 1000); // 1000ms debounce delay
 };
 
 function showUmapSpinner() {
@@ -218,30 +225,34 @@ async function fetchUmapData() {
           pad: 0, // padding
         },
       });
+
+      // Color by cluster if no search results
     } else {
-      // Default: color by cluster
       const traces = clusters.map((cluster, i) => {
         const isNoise = cluster === -1;
+        const clusterPoints = points.filter((p) => p.cluster === cluster);
         return {
-          x: points.filter((p) => p.cluster === cluster).map((p) => p.x),
-          y: points.filter((p) => p.cluster === cluster).map((p) => p.y),
-          text: points
-            .filter((p) => p.cluster === cluster)
-            .map((p) => p.filename.split("/").pop()),
+          x: clusterPoints.map((p) => p.x),
+          y: clusterPoints.map((p) => p.y),
+          text: clusterPoints.map(
+            (p) =>
+              `${isNoise ? "Unclustered" : `Cluster ${cluster}`}<br>${p.filename
+                .split("/")
+                .pop()}`
+          ),
           mode: "markers",
           type: "scattergl",
           name: isNoise ? "Unclustered" : `Cluster ${cluster}`,
           marker: { color: isNoise ? "#cccccc" : colors[i], size: 5 },
-          customdata: points
-            .filter((p) => p.cluster === cluster)
-            .map((p) => p.filename),
+          customdata: clusterPoints.map((p) => p.filename),
           opacity: 0.75,
+          hoverinfo: "text",
         };
       });
       traces.push(currentImageTrace);
       Plotly.newPlot("umapPlot", traces, {
         title: {
-          text: "UMAP Embeddings",
+          text: "Semantic Map",
           font: { color: "#eee" },
         },
         dragmode: "pan",
