@@ -116,7 +116,17 @@ body {
 }
 
 #searchPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   right: 20px;
+  bottom: 20px;
+  position: fixed;
+  z-index: 4000;
+  background: rgba(30, 30, 30, 0.35);
+  border-radius: 0.7em;
+  padding: 0.4em 0.8em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 #bottomLeftBtnGroup button,
@@ -1331,7 +1341,6 @@ body {
   cursor: move;
 }
 
-
 /* Upload link positioning */
 .upload-link-container {
   position: absolute;
@@ -1372,9 +1381,7 @@ body {
   opacity: 0.8;
 }
 
-.image-search-container,
-.text-search-container,
-.clear-search-container {
+.search-icon-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1394,4 +1401,54 @@ body {
 #umapFloatingWindow {
   position: fixed;
   z-index: 9000; /* or higher than main content, but lower than spinner */
+  position: fixed;
+  display: none;
+  top: 24px;
+  right: 24px;
+  background: rgba(24, 24, 32, 0.75) !important; /* dark background */
+  color: #eee; /* light text */
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.7);
+  border-radius: 12px;
+  z-index: 10001;
+  min-width: 100px;
+  min-height: 100px;
+  width: auto;
+  height: auto;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+  padding: 16px 24px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  margin: 0 4px;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+.icon-btn:hover,
+.icon-btn:focus {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.search-panel-title {
+  color: #fff;
+  font-size: 1em;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 0px;
+  letter-spacing: 0.5px;
+  width: 100%;
+}
+
+.search-icons-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1em;
+  width: 100%;
 }

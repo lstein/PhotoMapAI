@@ -65,25 +65,34 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
 
 // --- Show/Hide UMAP Window ---
 document.getElementById("showUmapBtn").onclick = async () => {
-  document.getElementById("umapFloatingWindow").style.display = "block";
-  // Update spinner value
-  const result = await fetch("get_umap_eps/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ album: state.album }),
-  });
-  const data = await result.json();
-  if (!data.success) {
-    console.error("Failed to fetch UMAP EPS value:", data.message);
-    return;
+  const umapWindow = document.getElementById("umapFloatingWindow");
+  const labelDiv = document.querySelector('#showUmapBtn + .button-label');
+  if (umapWindow.style.display === "block") {
+    umapWindow.style.display = "none";
+    if (labelDiv) labelDiv.textContent = "Show Map";
+  } else {
+    umapWindow.style.display = "block";
+    if (labelDiv) labelDiv.textContent = "Hide Map";
+    // Update spinner value and fetch data as before
+    const result = await fetch("get_umap_eps/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ album: state.album }),
+    });
+    const data = await result.json();
+    if (!data.success) {
+      console.error("Failed to fetch UMAP EPS value:", data.message);
+      return;
+    }
+    const epsSpinner = document.getElementById("umapEpsSpinner");
+    if (epsSpinner) epsSpinner.value = data.eps;
+    await fetchUmapData();
   }
-  const epsSpinner = document.getElementById("umapEpsSpinner");
-  if (epsSpinner) epsSpinner.value = data.eps;
-  // state.dataChanged = true;
-  await fetchUmapData();
 };
 document.getElementById("umapCloseBtn").onclick = () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
+  const labelDiv = document.querySelector('#showUmapBtn + .button-label');
+  if (labelDiv) labelDiv.textContent = "Show Map";
 };
 
 let cachedAlbum = null;
@@ -213,20 +222,20 @@ export async function fetchUmapData() {
         dragmode: "pan",
         height: PLOT_HEIGHT,
         width: PLOT_WIDTH,
-        plot_bgcolor: "rgba(32,32,48,0.95)",
-        paper_bgcolor: "rgba(24,24,32,0.97)",
+        plot_bgcolor: "rgba(0,0,0,0)",      // transparent plot area
+        paper_bgcolor: "rgba(0,0,0,0)",     // transparent paper
         font: { color: "#eee" },
         xaxis: {
-          gridcolor: "rgba(255,255,255,0.1)",
-          zerolinecolor: "rgba(255,255,255,0.2)",
+          gridcolor: "rgba(255,255,255,0.15)",
+          zerolinecolor: "rgba(255,255,255,0.25)",
           color: "#eee",
           linecolor: "#888",
           tickcolor: "#888",
           range: [xMin, xMax],
         },
         yaxis: {
-          gridcolor: "rgba(255,255,255,0.1)",
-          zerolinecolor: "rgba(255,255,255,0.2)",
+          gridcolor: "rgba(255,255,255,0.15)",
+          zerolinecolor: "rgba(255,255,255,0.25)",
           color: "#eee",
           linecolor: "#888",
           tickcolor: "#888",
@@ -242,6 +251,7 @@ export async function fetchUmapData() {
       },
       {
         modeBarButtonsToRemove: ["select2d", "lasso2d"],
+        scrollZoom: true, // <--- Enable scroll wheel zoom
       }
     ).then((gd) => {
       gd.on("plotly_hover", function (eventData) {

@@ -219,14 +219,9 @@ export function handleSlideChange() {
     // Hide score if not in search mode or no score
     scoreDisplay.hide();
   }
-
-  // Update the current image marker if available, and if the umap floating window is open
-  // if (
-  //   window.umapPoints &&
-  //   document.getElementById("umapFloatingWindow").style.display === "block"
-  // ) {
-    setTimeout(() => updateCurrentImageMarker(window.umapPoints), 0);
-  // }
+  // Delay moving the umap marker until the slide transition is complete.
+  // Otherwise, on the iPad, there is an obvious hesitation.
+    setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
 }
 
 export function removeSlidesAfterCurrent() {
