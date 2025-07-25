@@ -205,6 +205,13 @@ async function fetchUmapData() {
         width: 600,
         plot_bgcolor: "rgba(255,255,255,0.25)", // plot area background
         paper_bgcolor: "rgba(255,255,255,0.5)", // entire plot background
+        margin: {
+          t: 30, // top margin
+          r: 30, // right margin
+          b: 30, // bottom margin
+          l: 30, // left margin
+          pad: 0, // padding
+        },
       });
     }
 
