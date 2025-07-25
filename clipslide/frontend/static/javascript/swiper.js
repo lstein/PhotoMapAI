@@ -222,8 +222,10 @@ export function handleSlideChange() {
     // Hide score if not in search mode or no score
     scoreDisplay.hide();
   }
-  if (window.umapPoints) {
-    updateCurrentImageMarker(window.umapPoints);
+
+  // Update the current image marker if available, and if the umap floating window is open
+  if (window.umapPoints && document.getElementById("umapFloatingWindow").style.display === "block") {
+    setTimeout(() => updateCurrentImageMarker(window.umapPoints), 300);
   }
 }
 

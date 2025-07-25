@@ -251,7 +251,7 @@ window.addEventListener("searchResultsChanged", () => {
   fetchUmapData();
 });
 
-export function updateCurrentImageMarker(points) {
+export async function updateCurrentImageMarker(points) {
   const plotDiv = document.getElementById("umapPlot");
   if (!plotDiv || !plotDiv.data || plotDiv.data.length === 0) return;
 
