@@ -2,11 +2,7 @@
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { exitSearchMode } from "./search.js";
 import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
-import {
-  addNewSlide,
-  removeSlidesAfterCurrent,
-  resetAllSlides,
-} from "./swiper.js";
+import { addNewSlide, removeSlidesAfterCurrent } from "./swiper.js";
 
 // Constants
 const DELAY_CONFIG = {
@@ -92,13 +88,14 @@ function switchAlbum(newAlbum, selectedOption) {
   setAlbum(newAlbum);
   state.embeddingsFile = selectedOption.dataset.embeddingsFile;
   state.umapEps = parseFloat(selectedOption.dataset.umapEps) || 0.07;
+  state.dataChanged = true; // Force reload of UMAP data -- this should probably be an event!
 
   // Clear search results when switching albums
-  exitSearchMode();
   saveSettingsToLocalStorage();
-
   updatePageTitle(newAlbum);
-  resetAllSlides();
+  console.log("data dirty:", state.dataChanged);
+  exitSearchMode();
+  // resetAllSlides();
 }
 
 // Update the page title based on the current album
@@ -141,7 +138,7 @@ export function openSettingsModal() {
 }
 
 export function closeSettingsModal() {
-  elements.settingsOverlay.classList.remove('visible');
+  elements.settingsOverlay.classList.remove("visible");
 }
 
 function toggleSettingsModal() {

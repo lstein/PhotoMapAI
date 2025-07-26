@@ -223,6 +223,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Called whenever the search results are updated
   window.addEventListener("searchResultsChanged", async function (e) {
     console.log("Search results changed:", e.detail);
+    console.log("Dirty flag:", state.dataChanged);
     const searchType = e.detail.searchType || "image";
     state.searchResults = e.detail.results || [];
     state.searchOrigin = 0;
@@ -386,6 +387,7 @@ window.addEventListener("paste", async function (e) {
 });
 
 export function exitSearchMode() {
+  console.log("Exiting search mode");
   scoreDisplay.hide();
   clusterDisplay.hide();
   const searchInput = document.getElementById("searchInput");
@@ -395,5 +397,4 @@ export function exitSearchMode() {
       detail: { results: [], searchType: null },
     })
   );
-  console.log("Exited search mode");
 }

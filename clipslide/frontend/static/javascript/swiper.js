@@ -222,7 +222,7 @@ export function handleSlideChange() {
   }
   // Delay moving the umap marker until the slide transition is complete.
   // Otherwise, on the iPad, there is an obvious hesitation.
-    setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
+  setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
 }
 
 export function removeSlidesAfterCurrent() {
@@ -236,12 +236,21 @@ export function removeSlidesAfterCurrent() {
 }
 
 export async function resetAllSlides(keep_current_slide = false) {
+  if (!state.swiper?.slides?.length) return; // Nothing to reset
+  console.log("Resetting all slides, keeping current slide:", keep_current_slide);
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow(); // Pause the slideshow if it's running
-  if (state.swiper?.slides?.length > 0) {
+  if (keep_current_slide && !state.dataChanged) {
+    // Keep the current slide and remove others
+    const currentSlide = state.swiper.slides[state.swiper.activeIndex];
     state.swiper.removeAllSlides();
+
+    state.swiper.appendSlide(currentSlide);
+  } else {
+    // Remove all slides
+    state.swiper.removeAllSlides();
+    await addNewSlide(false);
   }
-  await addNewSlide(false); // Add a new slide to start fresh
   await addNewSlide(false); // Add another slide to ensure navigation works
   updateOverlay();
   if (slideShowRunning) {

@@ -338,6 +338,7 @@ export async function fetchUmapData() {
       });
 
     window.umapPoints = points;
+    console.log("Umap changing dataChanged")
     state.dataChanged = false;
 
     // Ensure correct colorization after plot is rebuilt
@@ -453,7 +454,6 @@ export async function ensureCurrentMarkerInView(padFraction = 0.1) {
 // --- React to Search/Cluster Selection ---
 window.addEventListener("searchResultsChanged", async function (e) {
   console.log("umap searchResultsChanged event received");
-  state.dataChanged = false; // Don't refetch, just recolor
   const results = e.detail.results || [];
   colorizeUmap({
     mode:
