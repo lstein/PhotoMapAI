@@ -13,6 +13,8 @@ export class ScoreDisplay {
       this.scoreElement.style.display = 'block';
       this.scoreElement.classList.add('visible');
       this.scoreElement.classList.remove('hidden');
+      this.scoreElement.style.backgroundColor = "rgba(0, 0, 0, 0.5)"; // Default background color
+      this.scoreElement.style.color = "#fff"; // Default text color
       this.isVisible = true;
     }
   }

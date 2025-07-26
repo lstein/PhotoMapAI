@@ -1,5 +1,7 @@
 // cluster-display.js
 // This file manages the cluster display functionality, piggybacking on the score element.
+import { isColorLight } from "./utils.js";
+
 export class ClusterDisplay {
   constructor() {
     this.scoreElement = document.getElementById('fixedScoreDisplay');
@@ -17,6 +19,12 @@ export class ClusterDisplay {
 
       if (color) {
         this.scoreElement.style.backgroundColor = color;
+        if (isColorLight(color)) {
+          this.scoreElement.style.color = "#000"; // Dark text for light background
+        }
+        else {
+          this.scoreElement.style.color = "#fff"; // Light text for dark background
+        }
       }
     }
   }

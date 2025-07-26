@@ -216,6 +216,7 @@ export function handleSlideChange() {
   } else if (activeSlide && activeSlide?.dataset?.cluster) {
     clusterDisplay.show(activeSlide.dataset.cluster, activeSlide.dataset.color);
   } else {
+    console.log("No score or cluster data available for this slide.");
     // Hide score if not in search mode or no score
     scoreDisplay.hide();
   }
@@ -234,7 +235,7 @@ export function removeSlidesAfterCurrent() {
   setTimeout(() => enforceHighWaterMark(), 500);
 }
 
-export async function resetAllSlides() {
+export async function resetAllSlides(keep_current_slide = false) {
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow(); // Pause the slideshow if it's running
   if (state.swiper?.slides?.length > 0) {

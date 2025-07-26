@@ -286,7 +286,7 @@ export async function fetchUmapData() {
         });
 
         window.dispatchEvent(
-          new CustomEvent("searchResultsChanged", { detail: selectedResults })
+          new CustomEvent("searchResultsChanged", { detail: { results: selectedResults, searchType: "cluster" } })
         );
         // Colorize UMAP based on search results
         colorizeUmap({
@@ -329,7 +329,7 @@ export async function fetchUmapData() {
           color: clusterColor,
         }));
         window.dispatchEvent(
-          new CustomEvent("umapClusterSelected", { detail: clusterMembers })
+          new CustomEvent("searchResultsChanged", { detail: { results: clusterMembers, searchType: "cluster" } })
         );
         colorizeUmap({
           mode: "search",
@@ -451,14 +451,16 @@ export async function ensureCurrentMarkerInView(padFraction = 0.1) {
 }
 
 // --- React to Search/Cluster Selection ---
-window.addEventListener("searchResultsChanged", () => {
+window.addEventListener("searchResultsChanged", async function (e) {
+  console.log("umap searchResultsChanged event received");
   state.dataChanged = false; // Don't refetch, just recolor
+  const results = e.detail.results || [];
   colorizeUmap({
     mode:
-      state.searchResults && state.searchResults.length > 0
+      results?.length
         ? "search"
         : "cluster",
-    searchResults: state.searchResults,
+    searchResults: results,
   });
 });
 

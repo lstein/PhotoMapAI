@@ -8,8 +8,7 @@ import { state } from "./state.js";
 import {
   pauseSlideshow,
   resetAllSlides,
-  resetSlidesAndAppend,
-  resumeSlideshow,
+  resumeSlideshow
 } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
@@ -71,24 +70,18 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     try {
       showSpinner();
-      const results = await searchText(query);
-      state.searchResults = results.filter((item) => item.score >= 0.2);
-      await resetSlidesAndAppend();
-      updateSearchCheckmarks();
-      setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
-      setCheckmarkOnIcon(document.getElementById("textSearchIcon"), true);
+      let results = await searchText(query);
+      results = results.filter((item) => item.score >= 0.2);
       window.dispatchEvent(
-        new CustomEvent("searchResultsChanged", { detail: state.searchResults })
+        new CustomEvent("searchResultsChanged", {
+          detail: { results: results, searchType: "text" },
+        })
       );
 
       setTimeout(() => {
         textSearchPanel.style.opacity = 0;
         textSearchPanel.style.display = "none";
       }, 200);
-
-      if (state.searchResults.length > 0) {
-        scoreDisplay.show(state.searchResults[0].score);
-      }
     } catch (err) {
       scoreDisplay.hide();
       hideSpinner();
@@ -99,6 +92,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   }
 
+  // Image Search
   const imageSearchBtn = document.getElementById("imageSearchBtn");
   imageSearchBtn.addEventListener("click", async function () {
     const slide = state.swiper.slides[state.swiper.activeIndex];
@@ -155,18 +149,13 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
-    const slideShowRunning =
-      state.swiper && state.swiper.autoplay && state.swiper.autoplay.running;
-    clearSearchAndResetCarousel();
-    if (slideShowRunning) resumeSlideshow();
+    exitSearchMode();
   });
 
   const clearTextSearchBtn = document.getElementById("clearTextSearchBtn");
   clearTextSearchBtn.addEventListener("click", function () {
     searchInput.value = "";
   });
-
-  updateSearchCheckmarks();
 
   textSearchPanel.addEventListener("dragover", function (e) {
     e.preventDefault();
@@ -189,7 +178,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     try {
       let slide = await insertUploadedImageFile(file);
       await searchWithImage(file, slide);
-      updateSearchCheckmarks();
       textSearchPanel.style.opacity = 0;
       setTimeout(() => {
         textSearchPanel.style.display = "none";
@@ -223,7 +211,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     try {
       let slide = await insertUploadedImageFile(file);
       await searchWithImage(file, slide);
-      updateSearchCheckmarks();
     } catch (err) {
       console.error("Image search failed:", err);
       alert("Failed to search with image: " + err.message);
@@ -233,44 +220,48 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  window.addEventListener("umapClusterSelected", async function (e) {
-    state.searchResults = e.detail;
-    state.searchOrigin = 0;
-    await resetSlidesAndAppend();
-    updateSearchCheckmarks();
-    setCheckmarkOnIcon(document.getElementById("showUmapBtn"), true);
-    setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
-    setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
-    if (state.searchResults.length > 0) {
-      clusterDisplay.show(
-        state.searchResults[0].cluster,
-        state.searchResults[0].color || "#000000"
-      );
-    }
-  });
-
   // Called whenever the search results are updated
   window.addEventListener("searchResultsChanged", async function (e) {
-    state.searchResults = e.detail;
+    console.log("Search results changed:", e.detail);
+    const searchType = e.detail.searchType || "image";
+    state.searchResults = e.detail.results || [];
     state.searchOrigin = 0;
-    await resetSlidesAndAppend();
-    updateSearchCheckmarks();
-    // setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
-    // setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
+    let keep_current_slide = state.searchResults.length == 0;
+    await resetAllSlides(keep_current_slide);
+    updateSearchCheckmarks(searchType);
+    updateScoreDisplay(searchType);
   });
 });
+
+function updateScoreDisplay(searchType) {
+  if (searchType === "cluster" && state.searchResults.length > 0) {
+    console.log("Showing cluster display for:", state.searchResults[0]);
+    clusterDisplay.show(
+      state.searchResults[0].cluster,
+      state.searchResults[0].color || "#000000"
+    );
+  } else if (
+    ["image", "text"].includes(searchType) &&
+    state.searchResults.length > 0
+  ) {
+    const score = state.searchResults[0].score || 0;
+    scoreDisplay.show(score);
+  }
+}
 
 export async function searchWithImage(file, first_slide) {
   try {
     showSpinner();
-    const results = await searchImage(file);
-    state.searchResults = results.filter((item) => item.score >= 0.6);
-    await resetSlidesAndAppend(first_slide);
-    updateSearchCheckmarks();
-    setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
-    setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
+    let results = await searchImage(file);
+    results = results.filter((item) => item.score >= 0.6);
     window.dispatchEvent(
-      new CustomEvent("searchResultsChanged", { detail: state.searchResults })
+      new CustomEvent("searchResultsChanged", {
+        detail: {
+          results: results,
+          searchType: "image",
+          search_slide: first_slide, // not currently used, but could be useful for displaying the search image
+        },
+      })
     );
   } catch (err) {
     console.error("Image search request failed:", err);
@@ -310,34 +301,47 @@ async function insertUploadedImageFile(file) {
   });
 }
 
-function updateSearchCheckmarks() {
+function updateSearchCheckmarks(searchType = null) {
+  console.log("Updating search checkmarks for type:", searchType);
+  const searchTypeToIconMap = {
+    cluster: document.getElementById("showUmapBtn"),
+    image: document.getElementById("imageSearchIcon"),
+    text: document.getElementById("textSearchIcon"),
+  };
   const clearSearchBtn = document.getElementById("clearSearchBtn");
-  if (state.searchResults?.length > 0) {
+  if (searchType && state.searchResults?.length > 0) {
     clearSearchBtn.style.display = "block";
+    for (const [type, iconElement] of Object.entries(searchTypeToIconMap)) {
+      setCheckmarkOnIcon(iconElement, type === searchType);
+    }
   } else {
     clearSearchBtn.style.display = "none";
-    setCheckmarkOnIcon(document.getElementById("showUmapBtn"), false);
-    setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
-    setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
+    for (const iconElement of Object.values(searchTypeToIconMap)) {
+      setCheckmarkOnIcon(iconElement, false);
+    }
   }
 }
 
 export async function clearSearchAndResetCarousel() {
+    console.log("Legacy call to clearSearcAndResetCarousel");
+
+  return;
   if (state.swiper?.autoplay?.running) {
     pauseSlideshow();
   }
   exitSearchMode();
   await resetAllSlides();
-  updateSearchCheckmarks();
   if (typeof textSearchPanel !== "undefined") {
     textSearchPanel.style.opacity = 0;
     setTimeout(() => {
       textSearchPanel.style.display = "none";
     }, 200);
   }
-  setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
-  setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
-  window.dispatchEvent(new CustomEvent("searchResultsChanged", { detail: [] }));
+  window.dispatchEvent(
+    new CustomEvent("searchResultsChanged", {
+      detail: { results: [], searchType: null },
+    })
+  );
 }
 
 window.addEventListener("paste", async function (e) {
@@ -371,7 +375,6 @@ window.addEventListener("paste", async function (e) {
             hideSpinner();
           };
           reader.readAsDataURL(file);
-          updateSearchCheckmarks();
         } catch (err) {
           hideSpinner();
           console.error("Image similarity search failed:", err);
@@ -383,12 +386,14 @@ window.addEventListener("paste", async function (e) {
 });
 
 export function exitSearchMode() {
-  state.searchResults = [];
-  state.searchOrigin = 0;
-  state.dataChanged = true;
   scoreDisplay.hide();
+  clusterDisplay.hide();
   const searchInput = document.getElementById("searchInput");
   if (searchInput) searchInput.value = "";
-  updateSearchCheckmarks();
+  window.dispatchEvent(
+    new CustomEvent("searchResultsChanged", {
+      detail: { results: [], searchType: null },
+    })
+  );
   console.log("Exited search mode");
 }
