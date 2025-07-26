@@ -324,7 +324,7 @@ async def get_umap_data(
         "filenames"
     ]
 
-    # Cluster with DBSCAN (can be moved to a method if you want)
+    # Cluster with DBSCAN 
     if umap_embeddings.shape[0] > 0:
         clustering = DBSCAN(eps=cluster_eps, min_samples=cluster_min_samples).fit(umap_embeddings)
         labels = clustering.labels_

@@ -578,8 +578,9 @@ class Embeddings(BaseModel):
             np.ndarray: The UMAP embeddings.
         """
         cache_file = self.embeddings_path.parent / "umap.npz"
-        if not cache_file.exists(): # If UMAP index does not exist, create it, this is pretty quick
+        if not cache_file.exists() or cache_file.stat().st_mtime < self.embeddings_path.stat().st_mtime:  # If UMAP index does not exist or is outdated, create it
             embeddings = self.open_cached_embeddings(self.embeddings_path)['embeddings']
+            logging.info(f"Creating UMAP index for {embeddings.shape[0]} embeddings")
             return self.create_umap_index(embeddings)
         data = np.load(cache_file, allow_pickle=True)
         return data["umap"]

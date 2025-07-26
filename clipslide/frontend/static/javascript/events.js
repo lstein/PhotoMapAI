@@ -1,7 +1,12 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
 import { deleteImage, getCurrentFilepath } from "./api.js";
-import { hidePauseOverlay, showPauseOverlay, togglePauseOverlay, updateOverlay } from "./overlay.js";
+import {
+  hidePauseOverlay,
+  showPauseOverlay,
+  togglePauseOverlay,
+  updateOverlay,
+} from "./overlay.js";
 import { state } from "./state.js";
 import {
   addNewSlide,
@@ -14,10 +19,10 @@ import { hideSpinner, showSpinner } from "./utils.js";
 
 // Constants
 const FULLSCREEN_INDICATOR_CONFIG = {
-  showDuration: 800,    // How long to show the indicator
+  showDuration: 800, // How long to show the indicator
   fadeOutDuration: 300, // Fade out animation duration
-  playSymbol: '▶',      // Play symbol
-  pauseSymbol: '⏸'      // Pause symbol
+  playSymbol: "▶", // Play symbol
+  pauseSymbol: "⏸", // Pause symbol
 };
 
 const KEYBOARD_SHORTCUTS = {
@@ -28,7 +33,7 @@ const KEYBOARD_SHORTCUTS = {
   i: () => togglePauseOverlay(),
   Escape: () => hidePauseOverlay(),
   f: () => toggleFullscreen(),
-  ' ': (e) => handleSpacebarToggle(e)
+  " ": (e) => handleSpacebarToggle(e),
 };
 
 // Cache DOM elements
@@ -62,9 +67,9 @@ function toggleFullscreen() {
 
 function handleFullscreenChange() {
   const isFullscreen = !!document.fullscreenElement;
-  
+
   // Toggle visibility of UI panels
-  [elements.bottomLeftBtnGroup, elements.searchPanel].forEach(panel => {
+  [elements.bottomLeftBtnGroup, elements.searchPanel].forEach((panel) => {
     if (panel) {
       panel.classList.toggle("hidden-fullscreen", isFullscreen);
     }
@@ -83,7 +88,7 @@ function toggleSlideshow() {
 
 function navigateSlide(direction) {
   pauseSlideshow(); // Pause on navigation
-  if (direction === 'next') {
+  if (direction === "next") {
     state.swiper.slideNext();
   } else {
     state.swiper.slidePrev();
@@ -94,9 +99,9 @@ function navigateSlide(direction) {
 function handleSpacebarToggle(e) {
   e.preventDefault();
   e.stopPropagation();
-  
+
   const isRunning = state.swiper?.autoplay?.running;
-  
+
   if (isRunning) {
     pauseSlideshow();
     showFullscreenIndicator(false); // Show pause indicator
@@ -146,12 +151,22 @@ function confirmDelete(filepath) {
 }
 
 async function handleSuccessfulDelete() {
+  // remove from search results if applicable
+  if (state.searchResults?.length > 0) {
+    state.searchResults = state.searchResults.filter(
+      (slide) => slide.filepath !== getCurrentFilepath()
+    );
+    state.searchOrigin = 0; // Reset search origin
+  }
+  console.log("current file path:", getCurrentFilepath());
+  console.log("swiper slide:", state.swiper.slides[state.swiper.activeIndex]);
+  // Remove the current slide from the swiper
   if (state.swiper?.slides?.length > 0) {
     const currentIndex = state.swiper.activeIndex;
     state.swiper.removeSlide(currentIndex);
 
     // If no slides left, add a new one
-    if (state.swiper.slides.length === 0) {
+    if (state.swiper.slides.length <= 1) {
       await addNewSlide();
     }
 
@@ -163,27 +178,27 @@ async function handleSuccessfulDelete() {
 function showFullscreenIndicator(isPlaying) {
   // Only show in fullscreen mode
   if (!document.fullscreenElement) return;
-  
+
   removeExistingIndicator();
   const indicator = createIndicator(isPlaying);
   showIndicatorWithAnimation(indicator);
 }
 
 function removeExistingIndicator() {
-  const existingIndicator = document.getElementById('fullscreen-indicator');
+  const existingIndicator = document.getElementById("fullscreen-indicator");
   if (existingIndicator) {
     existingIndicator.remove();
   }
 }
 
 function createIndicator(isPlaying) {
-  const indicator = document.createElement('div');
-  indicator.id = 'fullscreen-indicator';
-  indicator.className = 'fullscreen-playback-indicator';
-  indicator.innerHTML = isPlaying 
-    ? FULLSCREEN_INDICATOR_CONFIG.playSymbol 
+  const indicator = document.createElement("div");
+  indicator.id = "fullscreen-indicator";
+  indicator.className = "fullscreen-playback-indicator";
+  indicator.innerHTML = isPlaying
+    ? FULLSCREEN_INDICATOR_CONFIG.playSymbol
     : FULLSCREEN_INDICATOR_CONFIG.pauseSymbol;
-  
+
   document.body.appendChild(indicator);
   return indicator;
 }
@@ -191,12 +206,12 @@ function createIndicator(isPlaying) {
 function showIndicatorWithAnimation(indicator) {
   // Trigger animation
   requestAnimationFrame(() => {
-    indicator.classList.add('show');
+    indicator.classList.add("show");
   });
-  
+
   // Remove after animation completes
   setTimeout(() => {
-    indicator.classList.remove('show');
+    indicator.classList.remove("show");
     setTimeout(() => {
       if (indicator.parentNode) {
         indicator.parentNode.removeChild(indicator);
@@ -253,7 +268,10 @@ function setupButtonEventListeners() {
 
   // Delete current file button
   if (elements.deleteCurrentFileBtn) {
-    elements.deleteCurrentFileBtn.addEventListener("click", handleDeleteCurrentFile);
+    elements.deleteCurrentFileBtn.addEventListener(
+      "click",
+      handleDeleteCurrentFile
+    );
   }
 
   // Overlay drawer button
@@ -268,7 +286,7 @@ function setupButtonEventListeners() {
 function setupGlobalEventListeners() {
   // Fullscreen change event
   document.addEventListener("fullscreenchange", handleFullscreenChange);
-  
+
   // Keyboard navigation
   window.addEventListener("keydown", handleKeydown);
 }
