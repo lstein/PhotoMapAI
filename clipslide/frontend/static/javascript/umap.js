@@ -362,7 +362,6 @@ export async function fetchUmapData() {
       });
 
     window.umapPoints = points;
-    console.log("Umap changing dataChanged");
     state.dataChanged = false;
 
     // Ensure correct colorization after plot is rebuilt
@@ -605,7 +604,6 @@ export function setUmapColorMode(mode) {
     searchResults: mode === "search" ? state.searchResults : [],
   });
   // Update radio buttons
-  console.log("Setting UMAP color mode to:", mode);
   document.getElementById("umapColorClusters").checked = mode === "cluster";
   document.getElementById("umapColorSearch").checked = mode === "search";
 }
@@ -641,7 +639,6 @@ window.addEventListener("searchResultsChanged", function (e) {
 });
 
 function updateUmapColorModeAvailability(searchResults = []) {
-  console.log("Updating UMAP color mode availability, results:", state.searchResults);
   const searchRadio = document.getElementById("umapColorSearch");
   if (searchResults.length > 0) {
     searchRadio.disabled = false;

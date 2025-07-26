@@ -136,7 +136,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       } finally {
         hideSpinner();
       }
-      updateSearchSearchCheckmarks();
     }
   });
 
@@ -222,8 +221,6 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // Called whenever the search results are updated
   window.addEventListener("searchResultsChanged", async function (e) {
-    console.log("Search results changed:", e.detail);
-    console.log("Dirty flag:", state.dataChanged);
     const searchType = e.detail.searchType || "image";
     state.searchResults = e.detail.results || [];
     state.searchOrigin = 0;
@@ -236,7 +233,6 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 function updateScoreDisplay(searchType) {
   if (searchType === "cluster" && state.searchResults.length > 0) {
-    console.log("Showing cluster display for:", state.searchResults[0]);
     clusterDisplay.show(
       state.searchResults[0].cluster,
       state.searchResults[0].color || "#000000"
@@ -303,7 +299,6 @@ async function insertUploadedImageFile(file) {
 }
 
 function updateSearchCheckmarks(searchType = null) {
-  console.log("Updating search checkmarks for type:", searchType);
   const searchTypeToIconMap = {
     cluster: document.getElementById("showUmapBtn"),
     image: document.getElementById("imageSearchIcon"),
@@ -321,28 +316,6 @@ function updateSearchCheckmarks(searchType = null) {
       setCheckmarkOnIcon(iconElement, false);
     }
   }
-}
-
-export async function clearSearchAndResetCarousel() {
-    console.log("Legacy call to clearSearcAndResetCarousel");
-
-  return;
-  if (state.swiper?.autoplay?.running) {
-    pauseSlideshow();
-  }
-  exitSearchMode();
-  await resetAllSlides();
-  if (typeof textSearchPanel !== "undefined") {
-    textSearchPanel.style.opacity = 0;
-    setTimeout(() => {
-      textSearchPanel.style.display = "none";
-    }, 200);
-  }
-  window.dispatchEvent(
-    new CustomEvent("searchResultsChanged", {
-      detail: { results: [], searchType: null },
-    })
-  );
 }
 
 window.addEventListener("paste", async function (e) {
@@ -387,7 +360,6 @@ window.addEventListener("paste", async function (e) {
 });
 
 export function exitSearchMode() {
-  console.log("Exiting search mode");
   scoreDisplay.hide();
   clusterDisplay.hide();
   const searchInput = document.getElementById("searchInput");
