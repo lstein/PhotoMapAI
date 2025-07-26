@@ -142,7 +142,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       } finally {
         hideSpinner();
       }
-      updateSearchCheckmarks();
+      updateSearchSearchCheckmarks();
     }
   });
 
@@ -238,7 +238,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     state.searchOrigin = 0;
     await resetSlidesAndAppend();
     updateSearchCheckmarks();
-    setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), true);
+    setCheckmarkOnIcon(document.getElementById("showUmapBtn"), true);
+    setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
     if (state.searchResults.length > 0) {
       clusterDisplay.show(
@@ -315,6 +316,7 @@ function updateSearchCheckmarks() {
     clearSearchBtn.style.display = "block";
   } else {
     clearSearchBtn.style.display = "none";
+    setCheckmarkOnIcon(document.getElementById("showUmapBtn"), false);
     setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
     setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
   }
@@ -335,9 +337,7 @@ export async function clearSearchAndResetCarousel() {
   }
   setCheckmarkOnIcon(document.getElementById("imageSearchIcon"), false);
   setCheckmarkOnIcon(document.getElementById("textSearchIcon"), false);
-  window.dispatchEvent(
-    new CustomEvent("searchResultsChanged", { detail: [] })
-  );
+  window.dispatchEvent(new CustomEvent("searchResultsChanged", { detail: [] }));
 }
 
 window.addEventListener("paste", async function (e) {

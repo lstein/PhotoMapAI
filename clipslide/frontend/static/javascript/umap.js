@@ -30,6 +30,7 @@ let palette = [
   "#e5c494",
   "#b3b3b3",
 ];
+let mapExists = false;
 
 // --- Utility ---
 function getClusterColor(cluster) {
@@ -69,11 +70,8 @@ document.getElementById("showUmapBtn").onclick = async () => {
   const labelDiv = document.querySelector("#showUmapBtn + .button-label");
   if (umapWindow.style.display === "block") {
     umapWindow.style.display = "none";
-    if (labelDiv) labelDiv.textContent = "Show Map";
   } else {
     umapWindow.style.display = "block";
-    if (labelDiv) labelDiv.textContent = "Hide Map";
-    // Update spinner value and fetch data as before
     const result = await fetch("get_umap_eps/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -110,7 +108,7 @@ async function getCachedAlbum() {
 
 // --- Main UMAP Data Fetch and Plot ---
 export async function fetchUmapData() {
-  if (!state.dataChanged) return;
+  if (mapExists && !state.dataChanged) return;
   showUmapSpinner();
   try {
     const eps =
@@ -319,8 +317,6 @@ export async function fetchUmapData() {
           .filter((p) => p.cluster === clickedCluster)
           .map((p) => p.filename);
 
-        console.log(clickedFilename);
-        // If the clicked cluster is unclustered, we treat it as a special case
         // Promote the clicked filename to the first position
         const sortedClusterFilenames = [
           clickedFilename,
@@ -355,6 +351,8 @@ export async function fetchUmapData() {
   } finally {
     hideUmapSpinner();
   }
+
+  mapExists = true;
 }
 
 // --- Dynamic Colorization ---
@@ -374,12 +372,6 @@ export function colorizeUmap({ mode = "cluster", searchResults = [] } = {}) {
     markerColors = points.map((p) => getClusterColor(p.cluster));
     markerAlphas = points.map((p) => (p.cluster === -1 ? 0.01 : 0.5));
   }
-  console.log(
-    "colorizeUmap, mode:",
-    mode,
-    "searchResults:",
-    searchResults.length
-  );
   Plotly.restyle(
     "umapPlot",
     {
