@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from sklearn.cluster import DBSCAN
-from PIL import Image
+from PIL import Image, ImageOps
 
 try:
     # Python 3.9+
@@ -432,6 +432,7 @@ async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileRespons
     if not thumb_path.exists() or thumb_path.stat().st_mtime < image_path.stat().st_mtime:
         try:
             with Image.open(image_path) as im:
+                im = ImageOps.exif_transpose(im)  # Correct orientation using EXIF
                 im.thumbnail((size, size))
                 im.save(thumb_path, quality=85)
         except Exception as e:
