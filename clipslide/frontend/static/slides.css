@@ -517,7 +517,9 @@ body {
 
 /* ===== SETTINGS MODAL ===== */
 .settings-modal {
+  position: fixed;
   min-width: 320px;
+  z-index: 11000;  // higher than the umap window
 }
 
 .settings-header {
@@ -1400,11 +1402,11 @@ body {
 
 #umapFloatingWindow {
   position: fixed;
-  z-index: 9000; /* or higher than main content, but lower than spinner */
+  z-index: 2000; /* or higher than main content, but lower than spinner */
   position: fixed;
   display: none;
-  top: 24px;
-  right: 24px;
+  top: 8px;
+  right: 8px;
   background: rgba(24, 24, 32, 0.75) !important; /* dark background */
   color: #eee; /* light text */
   box-shadow: 0 4px 32px rgba(0, 0, 0, 0.7);

@@ -5,7 +5,7 @@ import { getCurrentFilepath } from "./api.js";
 import { state } from "./state.js";
 import { getPercentile, isColorLight } from "./utils.js";
 
-const PLOT_HEIGHT = 300;
+const PLOT_HEIGHT = 280;
 const PLOT_WIDTH = 400;
 
 let points = [];
