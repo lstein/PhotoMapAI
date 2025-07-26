@@ -237,7 +237,10 @@ export function removeSlidesAfterCurrent() {
 
 export async function resetAllSlides(keep_current_slide = false) {
   if (!state.swiper?.slides?.length) return; // Nothing to reset
-  console.log("Resetting all slides, keeping current slide:", keep_current_slide);
+  console.log(
+    "Resetting all slides, keeping current slide:",
+    keep_current_slide
+  );
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow(); // Pause the slideshow if it's running
   if (keep_current_slide && !state.dataChanged) {
@@ -256,6 +259,7 @@ export async function resetAllSlides(keep_current_slide = false) {
   if (slideShowRunning) {
     resumeSlideshow();
   }
+  setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
 }
 
 export async function resetSlidesAndAppend(first_slide) {

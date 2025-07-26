@@ -31,6 +31,7 @@ let palette = [
   "#b3b3b3",
 ];
 let mapExists = false;
+let umapColorMode = "cluster"; // Default mode
 
 // --- Utility ---
 function getClusterColor(cluster) {
@@ -252,21 +253,30 @@ export async function fetchUmapData() {
         scrollZoom: true, // <--- Enable scroll wheel zoom
       }
     ).then((gd) => {
+      let hoverTimer = null;
+
       gd.on("plotly_hover", function (eventData) {
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
         if (pt.curveNumber !== 0) return;
         const filename = pt.customdata;
         const cluster = points[pt.pointIndex]?.cluster ?? -1;
-        createUmapThumbnail({
-          x: eventData.event.clientX,
-          y: eventData.event.clientY,
-          filename,
-          cluster,
-        });
+        // Add hover delay
+        hoverTimer = setTimeout(() => {
+          createUmapThumbnail({
+            x: eventData.event.clientX,
+            y: eventData.event.clientY,
+            filename,
+            cluster,
+          });
+        }, 200); // 200ms delay (adjust as desired)
       });
 
       gd.on("plotly_unhover", function () {
+        if (hoverTimer) {
+          clearTimeout(hoverTimer);
+          hoverTimer = null;
+        }
         removeUmapThumbnail();
       });
 
@@ -286,13 +296,16 @@ export async function fetchUmapData() {
         });
 
         window.dispatchEvent(
-          new CustomEvent("searchResultsChanged", { detail: { results: selectedResults, searchType: "cluster" } })
+          new CustomEvent("searchResultsChanged", {
+            detail: { results: selectedResults, searchType: "cluster" },
+          })
         );
+        setUmapColorMode("search");
         // Colorize UMAP based on search results
-        colorizeUmap({
-          mode: "search",
-          searchResults: selectedResults,
-        });
+        // colorizeUmap({
+        //   mode: "search",
+        //   searchResults: selectedResults,
+        // });
       });
 
       // Show the EPS spinner container now that the plot is ready
@@ -329,16 +342,19 @@ export async function fetchUmapData() {
           color: clusterColor,
         }));
         window.dispatchEvent(
-          new CustomEvent("searchResultsChanged", { detail: { results: clusterMembers, searchType: "cluster" } })
+          new CustomEvent("searchResultsChanged", {
+            detail: { results: clusterMembers, searchType: "cluster" },
+          })
         );
-        colorizeUmap({
-          mode: "search",
-          searchResults: clusterMembers,
-        });
+        setUmapColorMode("search");
+        // colorizeUmap({
+        //   mode: "search",
+        //   searchResults: clusterMembers,
+        // });
       });
 
     window.umapPoints = points;
-    console.log("Umap changing dataChanged")
+    console.log("Umap changing dataChanged");
     state.dataChanged = false;
 
     // Ensure correct colorization after plot is rebuilt
@@ -450,19 +466,6 @@ export async function ensureCurrentMarkerInView(padFraction = 0.1) {
     });
   }
 }
-
-// --- React to Search/Cluster Selection ---
-window.addEventListener("searchResultsChanged", async function (e) {
-  console.log("umap searchResultsChanged event received");
-  const results = e.detail.results || [];
-  colorizeUmap({
-    mode:
-      results?.length
-        ? "search"
-        : "cluster",
-    searchResults: results,
-  });
-});
 
 // --- Initial Data Fetch on Show ---
 document.addEventListener("DOMContentLoaded", () => {
@@ -586,3 +589,65 @@ function removeUmapThumbnail() {
     umapThumbnailDiv = null;
   }
 }
+
+export function setUmapColorMode(mode) {
+  umapColorMode = mode;
+  colorizeUmap({
+    mode: mode,
+    searchResults: mode === "search" ? state.searchResults : [],
+  });
+  // Update radio buttons
+  console.log("Setting UMAP color mode to:", mode);
+  document.getElementById("umapColorClusters").checked = mode === "cluster";
+  document.getElementById("umapColorSearch").checked = mode === "search";
+}
+
+// Event listeners for radio buttons
+document.getElementById("umapColorClusters").addEventListener("change", (e) => {
+  if (e.target.checked) setUmapColorMode("cluster");
+});
+document.getElementById("umapColorSearch").addEventListener("change", (e) => {
+  if (e.target.checked) setUmapColorMode("search");
+});
+
+// Ensure color mode is respected after search or cluster selection
+window.addEventListener("searchResultsChanged", function (e) {
+  if (e.detail.results.length > 0) {
+    setUmapColorMode("search");
+  } else {
+    setUmapColorMode("cluster");
+  }
+  // If "Search" mode is selected, update colorization
+  if (umapColorMode === "search") {
+    colorizeUmap({
+      mode: "search",
+      searchResults: e.detail.results || [],
+    });
+  } else {
+    colorizeUmap({
+      mode: "cluster",
+      searchResults: [],
+    });
+  }
+  updateUmapColorModeAvailability(e.detail.results);
+});
+
+function updateUmapColorModeAvailability(searchResults = []) {
+  console.log("Updating UMAP color mode availability, results:", state.searchResults);
+  const searchRadio = document.getElementById("umapColorSearch");
+  if (searchResults.length > 0) {
+    searchRadio.disabled = false;
+    searchRadio.parentElement.style.opacity = "1";
+  } else {
+    searchRadio.disabled = true;
+    searchRadio.parentElement.style.opacity = "0.5";
+    // If "Search" was selected, switch to "Clusters"
+    if (searchRadio.checked) {
+      document.getElementById("umapColorClusters").checked = true;
+      setUmapColorMode("cluster");
+    }
+  }
+}
+
+// Also call once on page load
+document.addEventListener("DOMContentLoaded", updateUmapColorModeAvailability);

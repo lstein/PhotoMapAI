@@ -14,28 +14,16 @@ export async function fetchNextImage(lastImage = null, backward = false) {
   const formData = new URLSearchParams();
 
   try {
-
     // If in search mode, then we are browsing the search results
     if (state.searchResults?.length > 0) {
-
       let indexToRetrieve = 0;
 
-      // Convoluted logic here. If the browsing mode is set to random and there is no score
-      // to order the search results, then we browse randomly. This is most useful for the
-      // clustering results, which have no intrinsic ordering.
-      if (state.mode === "random" && !state.searchResults[indexToRetrieve]?.score) {
-        console.log("Browsing search results randomly");
-        indexToRetrieve = Math.floor(
-          Math.random() * state.searchResults.length
-        );
-      } else {
-        indexToRetrieve = backward
-          ? --state.searchOrigin
-          : state.searchOrigin + state.swiper.slides?.length;
-        indexToRetrieve =
-          (indexToRetrieve + state.searchResults.length) %
-          state.searchResults.length; // wrap
-      }
+      indexToRetrieve = backward
+        ? --state.searchOrigin
+        : state.searchOrigin + state.swiper.slides?.length;
+      indexToRetrieve =
+        (indexToRetrieve + state.searchResults.length) %
+        state.searchResults.length; // wrap
       const fileToRetrieve = state.searchResults[indexToRetrieve]?.filename;
 
       currentScore = state.searchResults[indexToRetrieve]?.score || 0;
