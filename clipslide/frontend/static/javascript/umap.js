@@ -326,15 +326,23 @@ export async function fetchUmapData() {
         const clickedCluster = clickedPoint.cluster;
         const clusterIndex = clusters.indexOf(clickedCluster);
         const clusterColor = colors[clusterIndex % colors.length];
-        const clusterFilenames = points
+        let clusterFilenames = points
           .filter((p) => p.cluster === clickedCluster)
           .map((p) => p.filename);
 
+        // Remove clickedFilename from the list
+        clusterFilenames = clusterFilenames.filter((fn) => fn !== clickedFilename);
+
+        // Shuffle the remainder if in random mode
+        if (state.mode === "random") {
+          for (let i = clusterFilenames.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [clusterFilenames[i], clusterFilenames[j]] = [clusterFilenames[j], clusterFilenames[i]];
+          }
+        }
+
         // Promote the clicked filename to the first position
-        const sortedClusterFilenames = [
-          clickedFilename,
-          ...clusterFilenames.filter((fn) => fn !== clickedFilename),
-        ];
+        const sortedClusterFilenames = [clickedFilename, ...clusterFilenames];
 
         const clusterMembers = sortedClusterFilenames.map((filename) => ({
           filename: filename,
