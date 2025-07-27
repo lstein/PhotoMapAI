@@ -7,7 +7,7 @@ import { getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {
   big: { width: 800, height: 560 },
-  medium: { width: 400, height: 280 },
+  medium: { width: 440, height: 280 },
 };
 
 let points = [];
@@ -246,7 +246,7 @@ export async function fetchUmapData() {
         },
         margin: {
           t: 30,
-          r: 30,
+          r: 0,
           b: 30,
           l: 30,
           pad: 0,
