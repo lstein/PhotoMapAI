@@ -414,7 +414,7 @@ export class AlbumManager {
       if (response.ok) {
         await this.handleSuccessfulAlbumAdd(formData.key);
       } else {
-        alert("Failed to add album");
+        alert(`Failed to add album: ${response.statusText}`);
       }
     } catch (error) {
       console.error("Failed to add album:", error);

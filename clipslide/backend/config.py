@@ -372,7 +372,7 @@ class ConfigManager:
 
 # Convenience functions for creating albums
 def create_album(
-    key: str, name: str, image_paths: List[str], index: str, description: str = ""
+    key: str, name: str, image_paths: List[str], index: str, umap_eps: float, description: str = ""
 ) -> Album:
     """Create a new Album instance with validation.
 
@@ -381,6 +381,7 @@ def create_album(
         name: Display name for the album
         image_paths: List of paths containing images
         index: Path to the embeddings index file
+        umap_eps: UMAP epsilon parameter
         description: Album description
 
     Returns:
@@ -391,5 +392,6 @@ def create_album(
         name=name,
         image_paths=image_paths,
         index=index,
+        umap_eps=umap_eps,
         description=description,
     )

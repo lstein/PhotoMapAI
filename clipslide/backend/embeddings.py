@@ -211,7 +211,7 @@ class Embeddings(BaseModel):
         self,
         image_paths: list[Path],
         album_key: str,
-        yield_interval: int = 100
+        yield_interval: int = 10
     ) -> IndexResult:
         """
         Async version of _process_images_batch with progress tracking.
@@ -356,6 +356,7 @@ class Embeddings(BaseModel):
         total_images = len(image_paths)
         progress_callback = tqdm_progress_callback(total_images)
 
+        self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
         result = self._process_images_batch(image_paths, progress_callback=progress_callback)
 
         if create_index:
@@ -390,6 +391,7 @@ class Embeddings(BaseModel):
         progress_tracker.start_operation(album_key, total_images, "indexing")
 
         try:
+            self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
             result = await self._process_images_batch_async(image_paths, album_key)
             progress_tracker.update_progress(album_key, total_images, "Saving index file")
             if create_index:

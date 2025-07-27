@@ -191,7 +191,7 @@ async def add_album(album_data: dict) -> JSONResponse:
             umap_eps=album_data.get("umap_eps", 0.07),
             description=album_data.get("description", ""),
         )
-
+        logging.info(f"Adding album: {album.key} with paths {album.image_paths}")
         if config_manager.add_album(album):
             return JSONResponse(
                 content={
@@ -206,6 +206,7 @@ async def add_album(album_data: dict) -> JSONResponse:
             )
 
     except Exception as e:
+        logger.warning(f"Failed to add album: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to add album: {str(e)}")
 
 

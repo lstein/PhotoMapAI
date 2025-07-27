@@ -90,8 +90,6 @@ document.getElementById("showUmapBtn").onclick = async () => {
 };
 document.getElementById("umapCloseBtn").onclick = () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
-  const labelDiv = document.querySelector("#showUmapBtn + .button-label");
-  if (labelDiv) labelDiv.textContent = "Show Map";
 };
 
 let cachedAlbum = null;
@@ -253,6 +251,7 @@ export async function fetchUmapData() {
         scrollZoom: true, // <--- Enable scroll wheel zoom
       }
     ).then((gd) => {
+      setUmapColorMode("cluster");
       let hoverTimer = null;
 
       gd.on("plotly_hover", function (eventData) {
