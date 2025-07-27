@@ -282,6 +282,8 @@ export function enforceHighWaterMark(backward = false) {
   const slides = swiper.slides.length;
 
   if (slides > maxSlides) {
+    let slideShowRunning = swiper.autoplay.running;
+    pauseSlideshow(); // Pause the slideshow to prevent issues during removal
     if (backward) {
       // Remove from end
       swiper.removeSlide(swiper.slides.length - 1);
@@ -290,5 +292,6 @@ export function enforceHighWaterMark(backward = false) {
       swiper.removeSlide(0);
       state.searchOrigin += 1; // Adjust the searchOrigin so that it reflects the searchIndex of the first slide
     }
+    if (slideShowRunning) resumeSlideshow(); // Resume the slideshow after removal
   }
 }
