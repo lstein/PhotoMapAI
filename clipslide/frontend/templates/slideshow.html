@@ -520,7 +520,7 @@
     <!-- Album Management Overlay -->
     <div id="albumManagementOverlay" class="modal-overlay album-management">
       <div class="modal-content album-management-modal">
-        <!-- Header with Add Album Button -->
+        <!-- Header with Add Album Button (fixed) -->
         <div class="album-header">
           <h2>Album Management</h2>
           <div class="header-buttons">
@@ -537,7 +537,7 @@
           </div>
         </div>
 
-        <!-- Add New Album Section -->
+        <!-- Add New Album Section (fixed, if desired) -->
         <div id="addAlbumSection" class="add-album-section">
           <div class="section-header">
             <h3>Add New Album</h3>
@@ -591,11 +591,13 @@
           </div>
         </div>
 
-        <!-- Existing Albums Section -->
-        <div id="existingAlbumsSection">
-          <h3>Albums</h3>
-          <div id="albumsList">
-            <!-- Albums will be populated here -->
+        <!-- Scrollable Albums Section -->
+        <div id="albumsScrollContainer" style="max-height: 60vh; overflow-y: auto;">
+          <div id="existingAlbumsSection">
+            <h3>Albums</h3>
+            <div id="albumsList">
+              <!-- Albums will be populated here -->
+            </div>
           </div>
         </div>
       </div>
