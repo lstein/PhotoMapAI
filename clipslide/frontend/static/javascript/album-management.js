@@ -946,7 +946,6 @@ export async function checkAlbumIndex() {
   // Check if index contains any slides/images
   const indexResponse = await fetch(`index_metadata/${albumKey}`);
   const indexMetadata = await indexResponse.json();
-  console.log(`Index metadata for album ${albumKey}:`, indexMetadata);
   const totalImages = indexMetadata.filename_count ?? 0;
 
   if (totalImages === 0) {

@@ -325,6 +325,29 @@
 
     <!-- UMAP Floating Window -->
     <div id="umapFloatingWindow">
+      <!-- Titlebar -->
+      <div id="umapTitlebar" style="
+        cursor: move;
+        background: rgba(30,30,40,0.95);
+        color: #fff;
+        font-weight: bold;
+        padding: 8px 16px;
+        border-radius: 8px 8px 0 0;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      ">
+        <span>Semantic Map</span>
+        <button id="umapCloseBtn" style="
+          background: none;
+          border: none;
+          color: #fff;
+          font-size: 1.5em;
+          cursor: pointer;
+          margin-left: 8px;
+        " title="Close">&times;</button>
+      </div>
       <!-- Spinner (always visible during loading) -->
       <div
         id="umapSpinner"
@@ -376,26 +399,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Close Button -->
-        <button
-          id="umapCloseBtn"
-          style="
-            position: absolute;
-            top: 20px;
-            right: 8px;
-            background: #eee;
-            border: none;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
-            font-size: 1.5em;
-            cursor: pointer;
-            z-index: 10000;
-          "
-        >
-          &times;
-        </button>
       </div>
     </div>
 

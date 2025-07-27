@@ -209,12 +209,6 @@ export async function fetchUmapData() {
       "umapPlot",
       [allPointsTrace, currentImageTrace],
       {
-        title: {
-          text: "Semantic Map",
-          font: { color: "#eee" },
-          x: 0,
-          xanchor: "left",
-        },
         showlegend: false,
         dragmode: "pan",
         height: PLOT_HEIGHT,
@@ -476,10 +470,6 @@ export async function ensureCurrentMarkerInView(padFraction = 0.1) {
   }
 }
 
-// --- Initial Data Fetch on Show ---
-document.addEventListener("DOMContentLoaded", () => {
-  // Optionally, fetch data on load or when needed
-});
 
 window.addEventListener("albumChanged", async () => {
   // Fetch the album's default EPS value and update the spinner
@@ -656,5 +646,61 @@ function updateUmapColorModeAvailability(searchResults = []) {
   }
 }
 
-// Also call once on page load
-document.addEventListener("DOMContentLoaded", updateUmapColorModeAvailability);
+// --- Draggable Window ---
+function makeDraggable(dragHandleId, windowId) {
+  const dragHandle = document.getElementById(dragHandleId);
+  const win = document.getElementById(windowId);
+  let offsetX = 0, offsetY = 0, dragging = false;
+
+  dragHandle.addEventListener("mousedown", startDrag);
+  dragHandle.addEventListener("touchstart", startDrag, { passive: false });
+
+  function startDrag(e) {
+    dragging = true;
+    const rect = win.getBoundingClientRect();
+    if (e.type === "touchstart") {
+      offsetX = e.touches[0].clientX - rect.left;
+      offsetY = e.touches[0].clientY - rect.top;
+      document.addEventListener("touchmove", onDrag, { passive: false });
+      document.addEventListener("touchend", stopDrag);
+    } else {
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+      document.addEventListener("mousemove", onDrag);
+      document.addEventListener("mouseup", stopDrag);
+    }
+    e.preventDefault();
+  }
+
+  function onDrag(e) {
+    if (!dragging) return;
+    let clientX, clientY;
+    if (e.type === "touchmove") {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    win.style.left = `${clientX - offsetX}px`;
+    win.style.top = `${clientY - offsetY}px`;
+    win.style.right = "auto"; // Prevent CSS conflicts
+    win.style.bottom = "auto";
+    win.style.position = "fixed";
+    e.preventDefault();
+  }
+
+  function stopDrag() {
+    dragging = false;
+    document.removeEventListener("mousemove", onDrag);
+    document.removeEventListener("mouseup", stopDrag);
+    document.removeEventListener("touchmove", onDrag);
+    document.removeEventListener("touchend", stopDrag);
+  }
+}
+
+// Initialize draggable UMAP window after DOM is ready
+document.addEventListener("DOMContentLoaded", () => {
+  updateUmapColorModeAvailability();
+  makeDraggable("umapTitlebar", "umapFloatingWindow");
+});
