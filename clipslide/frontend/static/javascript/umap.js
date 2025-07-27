@@ -251,6 +251,9 @@ export async function fetchUmapData() {
         scrollZoom: true, // <--- Enable scroll wheel zoom
       }
     ).then((gd) => {
+      document.getElementById("umapContent").style.display = "block";
+      hideUmapSpinner();
+
       setUmapColorMode("cluster");
       let hoverTimer = null;
 
