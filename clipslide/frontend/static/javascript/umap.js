@@ -34,6 +34,16 @@ let palette = [
 ];
 let mapExists = false;
 let umapColorMode = "cluster"; // Default mode
+let isShaded = false;
+let lastUnshadedSize = "medium"; // Track last unshaded size
+
+// Helper to get current window size
+function getCurrentWindowSize() {
+  const win = document.getElementById("umapFloatingWindow");
+  const width = win.style.width;
+  if (width === UMAP_SIZES.big.width + 60 + "px") return "big";
+  return "medium";
+}
 
 // --- Utility ---
 function getClusterColor(cluster) {
@@ -750,13 +760,47 @@ function setUmapWindowSize(sizeKey) {
   }
 }
 
-// Initialize draggable UMAP window after DOM is ready
+// Titlebar resizing/dragging code is here.
+// Initialize draggable UMAP window a fter DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
   updateUmapColorModeAvailability();
   makeDraggable("umapTitlebar", "umapFloatingWindow");
 });
 
-// Event listeners for resize buttons
-document.getElementById("umapResizeBig").onclick = () => setUmapWindowSize("big");
-document.getElementById("umapResizeMedium").onclick = () => setUmapWindowSize("medium");
-document.getElementById("umapResizeShaded").onclick = () => setUmapWindowSize("shaded");
+// Double-click titlebar to toggle shaded mode
+document.getElementById("umapTitlebar").ondblclick = () => {
+  const win = document.getElementById("umapFloatingWindow");
+  if (isShaded) {
+    setUmapWindowSize(lastUnshadedSize);
+    isShaded = false;
+  } else {
+    lastUnshadedSize = getCurrentWindowSize();
+    setUmapWindowSize("shaded");
+    isShaded = true;
+  }
+};
+
+// Shade icon toggles shaded/unshaded
+document.getElementById("umapResizeShaded").onclick = () => {
+  const win = document.getElementById("umapFloatingWindow");
+  if (isShaded) {
+    setUmapWindowSize(lastUnshadedSize);
+    isShaded = false;
+  } else {
+    lastUnshadedSize = getCurrentWindowSize();
+    setUmapWindowSize("shaded");
+    isShaded = true;
+  }
+};
+
+// Keep other resize buttons in sync with isShaded and update lastUnshadedSize
+document.getElementById("umapResizeBig").onclick = () => {
+  setUmapWindowSize("big");
+  lastUnshadedSize = "big";
+  isShaded = false;
+};
+document.getElementById("umapResizeMedium").onclick = () => {
+  setUmapWindowSize("medium");
+  lastUnshadedSize = "medium";
+  isShaded = false;
+};
