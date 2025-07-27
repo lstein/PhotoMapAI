@@ -872,4 +872,63 @@ export class AlbumManager {
   }
 }
 
+// Check for existence of an album index
+export async function checkAlbumIndex() {
+  const albumKey = state.album;
+  if (!albumKey) return;
+
+  // Fetch album info from backend
+  const response = await fetch("available_albums/");
+  const albums = await response.json();
+  const album = albums.find((a) => a.key === albumKey);
+
+  if (!album) return;
+
+  // Check if index file exists (ask backend or check album.index)
+  const indexExists = await fetch(`index_exists/${albumKey}`)
+    .then((r) => r.json())
+    .then((j) => j.exists);
+
+  if (!indexExists) {
+    alert(
+      "This album needs to be indexed before you can use it. Please build/update the index."
+    );
+    albumManager.show();
+    setTimeout(() => {
+      const cardElement = document.querySelector(
+        `.album-card[data-album-key="${albumKey}"]`
+      );
+      if (cardElement) {
+        albumManager.startIndexing(albumKey, cardElement);
+        albumManager.showProgressUI(cardElement);
+      }
+    }, 500);
+    return;
+  }
+
+  // If we get here, the index exists, but may not contain any slides.
+  // Check if index contains any slides/images
+  const indexResponse = await fetch(`index_metadata/${albumKey}`);
+  const indexMetadata = await indexResponse.json();
+  console.log(`Index metadata for album ${albumKey}:`, indexMetadata);
+  const totalImages = indexMetadata.filename_count ?? 0;
+
+  if (totalImages === 0) {
+    alert(
+      `The album named "${album.name}" contains no images. Please check that it contains at least one directory of images, then reindex if necessary.`
+    );
+    albumManager.show();
+    setTimeout(() => {
+      const cardElement = document.querySelector(
+        `.album-card[data-album-key="${albumKey}"]`
+      );
+      if (cardElement) {
+        albumManager.editAlbum(cardElement, album); // Open card for edit
+        cardElement.scrollIntoView({ behavior: "smooth", block: "center" }); // Autoscroll to card
+      }
+    }, 500);
+    return;
+  }
+}
+
 export const albumManager = new AlbumManager();

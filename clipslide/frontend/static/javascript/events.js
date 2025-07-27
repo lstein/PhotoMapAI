@@ -1,5 +1,6 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
+import { checkAlbumIndex } from "./album-management.js";
 import { deleteImage, getCurrentFilepath } from "./api.js";
 import {
   hidePauseOverlay,
@@ -320,6 +321,7 @@ function initializeEvents() {
   setupButtonEventListeners();
   setupGlobalEventListeners();
   setupAccessibility();
+  checkAlbumIndex(); // Check if the album index exists before proceeding
 }
 
 // Initialize event listeners after the DOM is fully loaded

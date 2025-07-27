@@ -373,10 +373,10 @@ class Embeddings(BaseModel):
     ) -> IndexResult:
         """Asynchronously index images using CLIP with progress tracking."""
 
-        progress_tracker.start_operation(album_key, 1, "scanning")
+        progress_tracker.start_operation(album_key, 0, "scanning")
 
         def traversal_callback(count, message):
-            progress_tracker.update_total_images(album_key, max(count, 1))
+            progress_tracker.update_total_images(album_key, max(count, 0))
             progress_tracker.update_progress(album_key, count, message)
 
         # Offload the blocking traversal to a thread
@@ -485,12 +485,12 @@ class Embeddings(BaseModel):
             existing_metadatas = data["metadata"]
             
             # Start scanning phase
-            progress_tracker.start_operation(album_key, 1, "scanning")
+            progress_tracker.start_operation(album_key, 0, "scanning")
             
             # Create progress callback for file traversal
             def traversal_callback(count, message):
                 # Update the total as we discover more files
-                progress_tracker.update_total_images(album_key, max(count, 1))
+                progress_tracker.update_total_images(album_key, max(count, 0))
                 progress_tracker.update_progress(album_key, count, message)
             
             # Identify new and missing images with progress feedback
