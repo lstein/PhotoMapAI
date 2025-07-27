@@ -299,7 +299,12 @@
     <div id="textSearchPanel">
       <div class="search-controls">
         <div class="search-input-container">
-          <input id="searchInput" type="text" placeholder="Search..." autocomplete="off"/>
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="Search..."
+            autocomplete="off"
+          />
           <button id="clearTextSearchBtn" title="Clear search">&#10005;</button>
         </div>
         <button id="doSearchBtn">Search</button>
@@ -328,31 +333,81 @@
       <!-- Titlebar -->
       <div id="umapTitlebar">
         <span>Semantic Map</span>
-        <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px">
           <!-- Resizing icons -->
+          <button id="umapResizeFullscreen" title="Fullscreen" class="icon-btn">
+            <svg width="24" height="24" viewBox="0 0 24 24">
+              <rect
+                x="2"
+                y="2"
+                width="20"
+                height="20"
+                rx="4"
+                fill="#fff"
+                opacity="0.8"
+              />
+              <polyline
+                points="4,4 20,4 20,20 4,20 4,4"
+                stroke="#888"
+                stroke-width="2"
+                fill="none"
+              />
+            </svg>
+          </button>
+
           <button id="umapResizeBig" title="Large" class="icon-btn">
             <svg width="28" height="28" viewBox="0 0 28 28">
-              <rect x="4" y="4" width="20" height="20" rx="4" fill="#fff" opacity="0.8"/>
+              <rect
+                x="4"
+                y="4"
+                width="20"
+                height="20"
+                rx="4"
+                fill="#fff"
+                opacity="0.8"
+              />
             </svg>
           </button>
           <button id="umapResizeMedium" title="Medium" class="icon-btn">
             <svg width="20" height="20" viewBox="0 0 20 20">
-              <rect x="3" y="3" width="14" height="14" rx="3" fill="#fff" opacity="0.8"/>
+              <rect
+                x="3"
+                y="3"
+                width="14"
+                height="14"
+                rx="3"
+                fill="#fff"
+                opacity="0.8"
+              />
             </svg>
           </button>
           <button id="umapResizeShaded" title="Shaded" class="icon-btn">
             <svg width="14" height="14" viewBox="0 0 14 14">
-              <rect x="2" y="2" width="10" height="6" rx="2" fill="#fff" opacity="0.8"/>
+              <rect
+                x="2"
+                y="2"
+                width="10"
+                height="6"
+                rx="2"
+                fill="#fff"
+                opacity="0.8"
+              />
             </svg>
           </button>
-          <button id="umapCloseBtn" style="
-            background: none;
-            border: none;
-            color: #fff;
-            font-size: 1.5em;
-            cursor: pointer;
-            margin-left: 8px;
-          " title="Close">&times;</button>
+          <button
+            id="umapCloseBtn"
+            style="
+              background: none;
+              border: none;
+              color: #fff;
+              font-size: 1.5em;
+              cursor: pointer;
+              margin-left: 8px;
+            "
+            title="Close"
+          >
+            &times;
+          </button>
         </div>
       </div>
       <!-- Spinner (always visible during loading) -->
@@ -371,14 +426,23 @@
       </div>
 
       <!-- All other content hidden until plot is ready -->
-      <div id="umapContent" style="display: none;">
+      <div id="umapContent" style="display: none">
         <!-- Plotly Plot -->
         <div id="umapPlot"></div>
 
         <!-- Controls Row: EPS spinner and Color Mode -->
-        <div style="display: flex; flex-direction: row; gap: 24px; justify-content: center; align-items: flex-start; margin-top: 12px;">
+        <div
+          style="
+            display: flex;
+            flex-direction: row;
+            gap: 24px;
+            justify-content: center;
+            align-items: flex-start;
+            margin-top: 12px;
+          "
+        >
           <!-- EPS Spinner Container -->
-          <div id="umapEpsContainer" style="display: none; padding: 8px;">
+          <div id="umapEpsContainer" style="display: none; padding: 8px">
             <label for="umapEpsSpinner">Cluster Strength</label>
             <input
               type="number"
@@ -392,15 +456,38 @@
           </div>
 
           <!-- Colorization Mode Controls (vertical column) -->
-          <div id="umapColorModeContainer" style="display: flex; flex-direction: column; margin-bottom: 12px;">
-            <label style="color:#eee; font-weight:bold; margin-bottom:6px;">Color by</label>
-            <div style="display:flex; flex-direction:row; gap:16px; justify-content:flex-start;">
+          <div
+            id="umapColorModeContainer"
+            style="display: flex; flex-direction: column; margin-bottom: 12px"
+          >
+            <label style="color: #eee; font-weight: bold; margin-bottom: 6px"
+              >Color by</label
+            >
+            <div
+              style="
+                display: flex;
+                flex-direction: row;
+                gap: 16px;
+                justify-content: flex-start;
+              "
+            >
               <label>
-                <input type="radio" name="umapColorMode" id="umapColorClusters" value="cluster" checked>
+                <input
+                  type="radio"
+                  name="umapColorMode"
+                  id="umapColorClusters"
+                  value="cluster"
+                  checked
+                />
                 Clusters
               </label>
               <label>
-                <input type="radio" name="umapColorMode" id="umapColorSearch" value="search">
+                <input
+                  type="radio"
+                  name="umapColorMode"
+                  id="umapColorSearch"
+                  value="search"
+                />
                 Search
               </label>
             </div>
@@ -602,7 +689,10 @@
         </div>
 
         <!-- Scrollable Albums Section -->
-        <div id="albumsScrollContainer" style="max-height: 60vh; overflow-y: auto;">
+        <div
+          id="albumsScrollContainer"
+          style="max-height: 60vh; overflow-y: auto"
+        >
           <div id="existingAlbumsSection">
             <h3>Albums</h3>
             <div id="albumsList">

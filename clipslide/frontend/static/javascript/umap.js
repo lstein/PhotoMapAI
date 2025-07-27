@@ -8,6 +8,7 @@ import { getPercentile, isColorLight } from "./utils.js";
 const UMAP_SIZES = {
   big: { width: 800, height: 560 },
   medium: { width: 440, height: 280 },
+  fullscreen: { width: window.innerWidth, height: window.innerHeight }
 };
 
 let points = [];
@@ -35,14 +36,23 @@ let palette = [
 let mapExists = false;
 let umapColorMode = "cluster"; // Default mode
 let isShaded = false;
-let lastUnshadedSize = "medium"; // Track last unshaded size
+let isFullscreen = false;
+let lastUnshadedSize = "medium"; // Track last non-fullscreen size
+let lastUnshadedPosition = { left: null, top: null }; // Track last position
 
 // Helper to get current window size
 function getCurrentWindowSize() {
   const win = document.getElementById("umapFloatingWindow");
-  const width = win.style.width;
-  if (width === UMAP_SIZES.big.width + 60 + "px") return "big";
+  const width = parseInt(win.style.width, 10);
+  if (width === UMAP_SIZES.big.width + 60) return "big";
   return "medium";
+}
+
+// Helper to save current position
+function saveCurrentPosition() {
+  const win = document.getElementById("umapFloatingWindow");
+  lastUnshadedPosition.left = win.style.left;
+  lastUnshadedPosition.top = win.style.top;
 }
 
 // --- Utility ---
@@ -235,6 +245,7 @@ export async function fetchUmapData() {
           linecolor: "#888",
           tickcolor: "#888",
           range: [xMin, xMax],
+          scaleanchor: "y", // <-- Add this line
         },
         yaxis: {
           gridcolor: "rgba(255,255,255,0.15)",
@@ -718,6 +729,27 @@ function makeDraggable(dragHandleId, windowId) {
   }
 }
 
+function setActiveResizeIcon(sizeKey) {
+  // Remove 'active' from all resize icons
+  document.getElementById("umapResizeBig").classList.remove("active");
+  document.getElementById("umapResizeMedium").classList.remove("active");
+  document.getElementById("umapResizeFullscreen").classList.remove("active");
+  document.getElementById("umapResizeShaded").classList.remove("active");
+
+  // Add 'active' to the current icon
+  if (sizeKey === "big") {
+    document.getElementById("umapResizeBig").classList.add("active");
+  } else if (sizeKey === "medium") {
+    document.getElementById("umapResizeMedium").classList.add("active");
+  } else if (sizeKey === "fullscreen") {
+    document.getElementById("umapResizeFullscreen").classList.add("active");
+  } else if (sizeKey === "shaded") {
+    document.getElementById("umapResizeShaded").classList.add("active");
+  }
+}
+
+// Call setActiveResizeIcon whenever you change the window size
+// For example, at the end of setUmapWindowSize:
 function setUmapWindowSize(sizeKey) {
   const win = document.getElementById("umapFloatingWindow");
   const plotDiv = document.getElementById("umapPlot");
@@ -726,15 +758,33 @@ function setUmapWindowSize(sizeKey) {
     if (contentDiv) contentDiv.style.display = "none";
     win.style.width = "";
     win.style.height = "";
-    win.style.minHeight = "0"; // <-- Set min-height to zero in shaded mode
+    win.style.minHeight = "0";
     plotDiv.style.width = "";
     plotDiv.style.height = "";
+  } else if (sizeKey === "fullscreen") {
+    if (contentDiv) contentDiv.style.display = "block";
+    const controlsHeight = 180;
+    win.style.left = "0px";
+    win.style.top = "0px";
+    win.style.width = window.innerWidth + "px";
+    win.style.height = (window.innerHeight - controlsHeight) + "px";
+    win.style.minHeight = "200px";
+    win.style.maxWidth = "100vw";
+    win.style.maxHeight = (window.innerHeight - controlsHeight) + "px";
+    plotDiv.style.width = (window.innerWidth - 32) + "px";
+    plotDiv.style.height = (window.innerHeight - controlsHeight - 128) + "px";
+
+    Plotly.relayout(plotDiv, {
+      width: window.innerWidth - 32,
+      height: window.innerHeight - controlsHeight - 128,
+      "xaxis.scaleanchor": "y" // <-- Add this line for equal axis scale
+    });
   } else {
     if (contentDiv) contentDiv.style.display = "block";
     const { width, height } = UMAP_SIZES[sizeKey];
     win.style.width = width + 60 + "px";
     win.style.height = height + 120 + "px";
-    win.style.minHeight = "200px"; // <-- Restore min-height for normal modes
+    win.style.minHeight = "200px";
     plotDiv.style.width = width + "px";
     plotDiv.style.height = height + "px";
     Plotly.relayout(plotDiv, { width, height });
@@ -758,6 +808,7 @@ function setUmapWindowSize(sizeKey) {
       }
     }, 0);
   }
+  setActiveResizeIcon(sizeKey);
 }
 
 // Titlebar resizing/dragging code is here.
@@ -793,14 +844,37 @@ document.getElementById("umapResizeShaded").onclick = () => {
   }
 };
 
-// Keep other resize buttons in sync with isShaded and update lastUnshadedSize
+// Resize buttons
 document.getElementById("umapResizeBig").onclick = () => {
   setUmapWindowSize("big");
   lastUnshadedSize = "big";
-  isShaded = false;
+  saveCurrentPosition();
+  isFullscreen = false;
 };
 document.getElementById("umapResizeMedium").onclick = () => {
   setUmapWindowSize("medium");
   lastUnshadedSize = "medium";
-  isShaded = false;
+  saveCurrentPosition();
+  isFullscreen = false;
+};
+document.getElementById("umapResizeFullscreen").onclick = () => {
+  const win = document.getElementById("umapFloatingWindow");
+  if (isFullscreen) {
+    // Restore previous position and size
+    setUmapWindowSize(lastUnshadedSize);
+    if (lastUnshadedPosition.left !== null && lastUnshadedPosition.top !== null) {
+      win.style.left = lastUnshadedPosition.left;
+      win.style.top = lastUnshadedPosition.top;
+    }
+    isFullscreen = false;
+  } else {
+    // Save current position and size before going fullscreen
+    lastUnshadedSize = getCurrentWindowSize();
+    lastUnshadedPosition.left = win.style.left;
+    lastUnshadedPosition.top = win.style.top;
+    setUmapWindowSize("fullscreen");
+    win.style.left = "0px";
+    win.style.top = "0px";
+    isFullscreen = true;
+  }
 };

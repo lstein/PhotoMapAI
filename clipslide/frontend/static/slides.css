@@ -1420,7 +1420,14 @@ body {
   max-width: 90vw;
   max-height: 90vh;
   overflow: hidden;
-  padding: 0;
+  padding: 4px;
+  /* left: 0 !important;
+  top: 0 !important;
+  right: auto !important;
+  bottom: auto !important; */
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  border-radius: 0 !important;
 }
 
 .icon-btn {
@@ -1435,6 +1442,13 @@ body {
 .icon-btn:hover,
 .icon-btn:focus {
   background: rgba(255, 255, 255, 0.12);
+}
+
+.icon-btn.active {
+  box-shadow: 0 0 8px 2px #4caf50, 0 0 16px 4px #2196f3;
+  background: rgba(76, 175, 80, 0.15); /* subtle green glow background */
+  border: 2px solid #4caf50;
+  z-index: 2;
 }
 
 .search-panel-title {
