@@ -5,8 +5,10 @@ import { getCurrentFilepath } from "./api.js";
 import { state } from "./state.js";
 import { getPercentile, isColorLight } from "./utils.js";
 
-const PLOT_HEIGHT = 280;
-const PLOT_WIDTH = 400;
+const UMAP_SIZES = {
+  big: { width: 800, height: 560 },
+  medium: { width: 400, height: 280 },
+};
 
 let points = [];
 let clusters = [];
@@ -211,8 +213,8 @@ export async function fetchUmapData() {
       {
         showlegend: false,
         dragmode: "pan",
-        height: PLOT_HEIGHT,
-        width: PLOT_WIDTH,
+        height: UMAP_SIZES.medium.height,
+        width: UMAP_SIZES.medium.width,
         plot_bgcolor: "rgba(0,0,0,0)", // transparent plot area
         paper_bgcolor: "rgba(0,0,0,0)", // transparent paper
         font: { color: "#eee" },
@@ -246,6 +248,7 @@ export async function fetchUmapData() {
       }
     ).then((gd) => {
       document.getElementById("umapContent").style.display = "block";
+      setUmapWindowSize("medium")
       hideUmapSpinner();
 
       setUmapColorMode("cluster");
@@ -327,13 +330,18 @@ export async function fetchUmapData() {
           .map((p) => p.filename);
 
         // Remove clickedFilename from the list
-        clusterFilenames = clusterFilenames.filter((fn) => fn !== clickedFilename);
+        clusterFilenames = clusterFilenames.filter(
+          (fn) => fn !== clickedFilename
+        );
 
         // Shuffle the remainder if in random mode
         if (state.mode === "random") {
           for (let i = clusterFilenames.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [clusterFilenames[i], clusterFilenames[j]] = [clusterFilenames[j], clusterFilenames[i]];
+            [clusterFilenames[i], clusterFilenames[j]] = [
+              clusterFilenames[j],
+              clusterFilenames[i],
+            ];
           }
         }
 
@@ -469,7 +477,6 @@ export async function ensureCurrentMarkerInView(padFraction = 0.1) {
     });
   }
 }
-
 
 window.addEventListener("albumChanged", async () => {
   // Fetch the album's default EPS value and update the spinner
@@ -650,7 +657,9 @@ function updateUmapColorModeAvailability(searchResults = []) {
 function makeDraggable(dragHandleId, windowId) {
   const dragHandle = document.getElementById(dragHandleId);
   const win = document.getElementById(windowId);
-  let offsetX = 0, offsetY = 0, dragging = false;
+  let offsetX = 0,
+    offsetY = 0,
+    dragging = false;
 
   dragHandle.addEventListener("mousedown", startDrag);
   dragHandle.addEventListener("touchstart", startDrag, { passive: false });
@@ -699,8 +708,55 @@ function makeDraggable(dragHandleId, windowId) {
   }
 }
 
+function setUmapWindowSize(sizeKey) {
+  const win = document.getElementById("umapFloatingWindow");
+  const plotDiv = document.getElementById("umapPlot");
+  const contentDiv = document.getElementById("umapContent");
+  if (sizeKey === "shaded") {
+    if (contentDiv) contentDiv.style.display = "none";
+    win.style.width = "";
+    win.style.height = "";
+    win.style.minHeight = "0"; // <-- Set min-height to zero in shaded mode
+    plotDiv.style.width = "";
+    plotDiv.style.height = "";
+  } else {
+    if (contentDiv) contentDiv.style.display = "block";
+    const { width, height } = UMAP_SIZES[sizeKey];
+    win.style.width = width + 60 + "px";
+    win.style.height = height + 120 + "px";
+    win.style.minHeight = "200px"; // <-- Restore min-height for normal modes
+    plotDiv.style.width = width + "px";
+    plotDiv.style.height = height + "px";
+    Plotly.relayout(plotDiv, { width, height });
+
+    setTimeout(() => {
+      const rect = win.getBoundingClientRect();
+      let left = rect.left;
+      let top = rect.top;
+      const rightEdge = left + rect.width;
+      const bottomEdge = top + rect.height;
+      const maxLeft = window.innerWidth - rect.width;
+      const maxTop = window.innerHeight - rect.height;
+
+      if (rightEdge > window.innerWidth) {
+        left = Math.max(0, maxLeft);
+        win.style.left = left + "px";
+      }
+      if (bottomEdge > window.innerHeight) {
+        top = Math.max(0, maxTop);
+        win.style.top = top + "px";
+      }
+    }, 0);
+  }
+}
+
 // Initialize draggable UMAP window after DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
   updateUmapColorModeAvailability();
   makeDraggable("umapTitlebar", "umapFloatingWindow");
 });
+
+// Event listeners for resize buttons
+document.getElementById("umapResizeBig").onclick = () => setUmapWindowSize("big");
+document.getElementById("umapResizeMedium").onclick = () => setUmapWindowSize("medium");
+document.getElementById("umapResizeShaded").onclick = () => setUmapWindowSize("shaded");

@@ -324,7 +324,19 @@
     </div>
 
     <!-- UMAP Floating Window -->
-    <div id="umapFloatingWindow">
+    <div id="umapFloatingWindow" style="
+      position: fixed;
+      top: 100px;
+      left: 100px;
+      width: 260px;
+      z-index: 3000;
+      background: rgba(30,30,40,0.98);
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      padding: 0;
+      margin: 0;
+      overflow: hidden;
+    ">
       <!-- Titlebar -->
       <div id="umapTitlebar" style="
         cursor: move;
@@ -332,21 +344,42 @@
         color: #fff;
         font-weight: bold;
         padding: 8px 16px;
-        border-radius: 8px 8px 0 0;
+        border-radius: 8px 8px 0 0; /* Only top corners rounded */
         user-select: none;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        {# width: 100%; #}
+        {# margin: 0;
+        box-sizing: border-box; #}
       ">
         <span>Semantic Map</span>
-        <button id="umapCloseBtn" style="
-          background: none;
-          border: none;
-          color: #fff;
-          font-size: 1.5em;
-          cursor: pointer;
-          margin-left: 8px;
-        " title="Close">&times;</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <!-- Resizing icons -->
+          <button id="umapResizeBig" title="Large" class="icon-btn">
+            <svg width="28" height="28" viewBox="0 0 28 28">
+              <rect x="4" y="4" width="20" height="20" rx="4" fill="#fff" opacity="0.8"/>
+            </svg>
+          </button>
+          <button id="umapResizeMedium" title="Medium" class="icon-btn">
+            <svg width="20" height="20" viewBox="0 0 20 20">
+              <rect x="3" y="3" width="14" height="14" rx="3" fill="#fff" opacity="0.8"/>
+            </svg>
+          </button>
+          <button id="umapResizeShaded" title="Shaded" class="icon-btn">
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <rect x="2" y="2" width="10" height="6" rx="2" fill="#fff" opacity="0.8"/>
+            </svg>
+          </button>
+          <button id="umapCloseBtn" style="
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5em;
+            cursor: pointer;
+            margin-left: 8px;
+          " title="Close">&times;</button>
+        </div>
       </div>
       <!-- Spinner (always visible during loading) -->
       <div
