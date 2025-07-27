@@ -359,6 +359,34 @@ export class AlbumManager {
 
     this.attachCardEventListeners(card, cardElement, album);
     this.albumsList.appendChild(card);
+
+    this.updateAlbumCardIndexStatus(cardElement, album);
+  }
+
+  async updateAlbumCardIndexStatus(cardElement, album) {
+    const status = cardElement.querySelector(".index-status");
+    const createBtn = cardElement.querySelector(".create-index-btn");
+
+    try {
+      const resp = await fetch(`index_metadata/${album.key}`);
+      if (resp.ok) {
+        const meta = await resp.json();
+        const modDate = new Date(meta.last_modified * 1000).toLocaleString(
+          undefined,
+          { dateStyle: "medium", timeStyle: "short" }
+        );
+        const fileCount = meta.filename_count;
+        status.textContent = `Index updated ${modDate} (${fileCount} images)`;
+        status.style.color = "green";
+        createBtn.textContent = "Update Index";
+      } else {
+        status.textContent = "No index present";
+        createBtn.textContent = "Create Index";
+      }
+    } catch (e) {
+      status.textContent = "No index present";
+      createBtn.textContent = "Create Index";
+    }
   }
 
   attachCardEventListeners(card, cardElement, album) {
@@ -643,7 +671,7 @@ export class AlbumManager {
           this.progressPollers.delete(albumKey);
 
           if (progress.status === "completed") {
-            await this.handleIndexingCompletion(albumKey);
+            await this.handleIndexingCompletion(albumKey, cardElement);
           }
 
           setTimeout(() => {
@@ -660,7 +688,7 @@ export class AlbumManager {
     this.progressPollers.set(albumKey, interval);
   }
 
-  async handleIndexingCompletion(albumKey) {
+  async handleIndexingCompletion(albumKey, cardElement = null) {
     await loadAvailableAlbums();
 
     if (albumKey === state.album) {
@@ -668,6 +696,14 @@ export class AlbumManager {
         `Refreshing slideshow for completed indexing of current album: ${albumKey}`
       );
       resetAllSlides();
+    }
+  
+    // After a delay set the status
+    if (cardElement) {
+      setTimeout(async () => {
+        const album = await this.getCurrentAlbum(albumKey);
+        this.updateAlbumCardIndexStatus(cardElement, album);
+      }, 5000);
     }
   }
 
@@ -857,9 +893,9 @@ export class AlbumManager {
     return fullPath.split("/").pop();
   }
 
-  async getCurrentAlbum() {
+  async getCurrentAlbum(albumKey = null) {
     // Get the current album key from state
-    const albumKey = state.album;
+    albumKey = albumKey || state.album;
     if (!albumKey) return null;
 
     // Fetch albums from the backend
