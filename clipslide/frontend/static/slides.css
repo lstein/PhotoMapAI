@@ -407,10 +407,10 @@ body {
   border-radius: 12px;
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
   padding: 1.2em 1.5em;
-  z-index: 2000;
-  width: 33vw;
+  z-index: 4000;
+  /* width: 33vw; */
   min-width: 300px;
-  max-width: 500px;
+  /* max-width: 75vw; */
   transition: opacity 0.2s;
 }
 
@@ -436,6 +436,7 @@ body {
   border: 1px solid #888;
   background: #222;
   color: #fff;
+  width: 350px;
 }
 
 #clearTextSearchBtn {
