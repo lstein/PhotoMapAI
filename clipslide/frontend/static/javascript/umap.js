@@ -686,6 +686,10 @@ function makeDraggable(dragHandleId, windowId) {
   dragHandle.addEventListener("touchstart", startDrag, { passive: false });
 
   function startDrag(e) {
+    // Prevent drag if touching a button in the titlebar
+    if (e.target.closest('.icon-btn') || e.target.id === "umapCloseBtn") {
+      return; // Don't start drag
+    }
     dragging = true;
     const rect = win.getBoundingClientRect();
     if (e.type === "touchstart") {
