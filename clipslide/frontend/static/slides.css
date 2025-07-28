@@ -1532,3 +1532,11 @@ body {
   align-items: center;
   gap: 2px;
 }
+
+/* Show and hide labels in the control panels */
+.hide-panel-text .control-panel-title,
+.hide-panel-text .button-label,
+.hide-panel-text .search-panel-title,
+.hide-panel-text .search-icon-container .button-label {
+  display: none !important;
+}

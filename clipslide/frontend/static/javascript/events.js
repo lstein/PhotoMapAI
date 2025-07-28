@@ -317,11 +317,27 @@ function setupAccessibility() {
       this.blur(); // Remove focus if somehow focused
     });
   });
+
+  // Turn off labels if a user preference.
+  showHidePanelText(!state.showControlPanelText);
 }
 
 function initializeTitle() {
   if (elements.slideshow_title && state.album) {
     elements.slideshow_title.textContent = "Slideshow - " + state.album;
+  }
+}
+
+export function showHidePanelText(hide) {
+  const className = "hide-panel-text";
+  if (hide) {
+    elements.bottomLeftBtnGroup.classList.add(className);
+    elements.searchPanel.classList.add(className);
+    state.showControlPanelText = false;
+  } else {
+    elements.bottomLeftBtnGroup.classList.remove(className);
+    elements.searchPanel.classList.remove(className);
+    state.showControlPanelText = true;
   }
 }
 

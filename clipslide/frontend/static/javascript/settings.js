@@ -33,6 +33,7 @@ function cacheElements() {
     slowerBtn: document.getElementById("slowerBtn"),
     fasterBtn: document.getElementById("fasterBtn"),
     locationiqApiKeyInput: document.getElementById("locationiqApiKeyInput"),
+    showControlPanelTextCheckbox: document.getElementById("showControlPanelTextCheckbox"),
   };
 }
 
@@ -155,6 +156,7 @@ async function populateModalFields() {
   elements.albumSelect.value = state.album;
   elements.modeRandom.checked = state.mode === "random";
   elements.modeSequential.checked = state.mode === "sequential";
+  elements.showControlPanelTextCheckbox.checked = state.showControlPanelText;
 
   await loadLocationIQApiKey();
 }
@@ -210,6 +212,16 @@ function setupModalControls() {
     if (e.target === elements.settingsOverlay) {
       closeSettingsModal();
     }
+  });
+
+  elements.showControlPanelTextCheckbox.addEventListener("change", function () {
+    // Call showHidePanelText from events.js
+    import("./events.js").then(({ showHidePanelText }) => {
+      showHidePanelText(!this.checked);
+    });
+    // Optionally, persist to localStorage
+    state.showControlPanelText = this.checked;
+    localStorage.setItem("showControlPanelText", this.checked);
   });
 }
 

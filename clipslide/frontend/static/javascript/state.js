@@ -5,6 +5,7 @@ export const state = {
   swiper: null, // Will be initialized in swiper.js
   currentTextToCopy: "", // Text to be copied to clipboard
   currentDelay: 5, // Delay in seconds for slide transitions
+  showControlPanelText: true, // Whether to show text in control panels
   mode: "random", // next slide selection when no search is active ("random", "sequential", "search")
   embeddingsFile: null, // Path to the current embeddings file
   highWaterMark: 20, // Maximum number of slides to load at once
@@ -50,8 +51,12 @@ export function restoreFromLocalStorage() {
   const storedMode = localStorage.getItem("mode");
   if (storedMode) state.mode = storedMode;
 
+  const storedShowControlPanelText = localStorage.getItem("showControlPanelText");
+  if (storedShowControlPanelText !== null) {
+    state.showControlPanelText = storedShowControlPanelText === "true";
+  }
+
   const storedAlbum = localStorage.getItem("album");
-  // ✅ ONLY RESTORE ALBUM IF IT'S NOT NULL/EMPTY
   if (storedAlbum && storedAlbum !== "null") {
     setAlbum(storedAlbum);
   } else {
@@ -65,6 +70,7 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("currentDelay", state.currentDelay);
   localStorage.setItem("mode", state.mode);
   localStorage.setItem("album", state.album);
+  localStorage.setItem("showControlPanelText", state.showControlPanelText || "");
 }
 
 export function setAlbum(newAlbum) {
