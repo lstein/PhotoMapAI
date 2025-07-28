@@ -112,31 +112,13 @@ body {
 }
 
 #controlPanel {
-  position: fixed;
   left: 20px;
   bottom: 20px;
-  z-index: 4000;
-  background: rgba(30, 30, 30, 0.35);
-  border-radius: 0.7em;
-  padding: 0.4em 0.8em;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
 #searchPanel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   right: 20px;
   bottom: 20px;
-  position: fixed;
-  z-index: 4000;
-  background: rgba(30, 30, 30, 0.35);
-  border-radius: 0.7em;
-  padding: 0.4em 0.8em;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 #controlPanel button,
@@ -269,7 +251,7 @@ body {
 }
 
 /* ===== FILE INFO BANNER ===== */
-#filenameBanner {
+.filename-banner {
   position: relative;
   width: 100%;
   /* max-width: 600px; Limit width so it doesn't cover too much of the image */
@@ -638,34 +620,6 @@ body {
   margin-top: 1em;
 }
 
-.setting-row label {
-  min-width: 180px; /* Fixed width for all labels */
-  font-size: 16px;
-  color: #fff;
-  align-self: flex-start;
-  margin: 0;
-  padding: 0;
-}
-
-.setting-input-container {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  flex: 1;
-}
-
-.setting-input-container input {
-  margin-left: 0 !important;
-  padding-left: 0 !important;
-}
-
-.setting-row {
-  margin-top: 1em;
-  display: flex;
-  align-items: flex-start; /* Align tops */
-  gap: 1em 1em;
-}
-
 .setting-row label,
 #delayLabel,
 #modeLabel {
@@ -674,6 +628,13 @@ body {
   align-self: flex-start; /* Ensure label aligns to top */
   text-align: right; /* Right align label text */
   /* margin-top: 0.2em;      Optional: fine-tune vertical alignment */
+}
+
+.setting-input-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
 }
 
 #highWaterMarkInput {
@@ -737,6 +698,19 @@ body {
   gap: 1em;
   align-items: center;
 }
+/* 
+.album-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  margin: 0;
+}
+
+.album-text {
+  color: #fff;
+  font-size: 1.1em;
+  margin: 0;
+} */
 
 /* ===== ADD ALBUM SECTION ===== */
 .add-album-section {
@@ -1401,6 +1375,11 @@ body {
   cursor: move;
 }
 
+/* Swiper wrapper */
+.swiper-wrapper {
+  display: flex;
+}
+
 /* Upload link positioning */
 .upload-link-container {
   position: absolute;
@@ -1461,7 +1440,6 @@ body {
 #umapFloatingWindow {
   position: fixed;
   z-index: 2000; /* or higher than main content, but lower than spinner */
-  position: fixed;
   display: none;
   top: 8px;
   right: 8px;
@@ -1474,14 +1452,8 @@ body {
   min-height: 200px;
   width: auto;
   height: auto;
-  max-width: 90vw;
-  max-height: 90vh;
   overflow: hidden;
   padding: 4px;
-  /* left: 0 !important;
-  top: 0 !important;
-  right: auto !important;
-  bottom: auto !important; */
   max-width: 100vw !important;
   max-height: 100vh !important;
   border-radius: 0 !important;
