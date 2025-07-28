@@ -632,21 +632,59 @@ body {
 }
 
 .setting-row {
-  margin-top: 1em;
   display: flex;
-  align-items: flex-start; /* Align tops */
-  gap: 1.0em 1.0em;
+  align-items: flex-start;
+  gap: 1em;
+  margin-top: 1em;
 }
 
 .setting-row label {
+  min-width: 180px; /* Fixed width for all labels */
   font-size: 16px;
   color: #fff;
+  align-self: flex-start;
+  margin: 0;
+  padding: 0;
+}
+
+.setting-input-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.setting-input-container input {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+.setting-row {
+  margin-top: 1em;
+  display: flex;
+  align-items: flex-start; /* Align tops */
+  gap: 1em 1em;
+}
+
+.setting-row label,
+#delayLabel,
+#modeLabel {
+  font-size: 16px;
+  color: #faea0e;
   align-self: flex-start; /* Ensure label aligns to top */
+  text-align: right; /* Right align label text */
   /* margin-top: 0.2em;      Optional: fine-tune vertical alignment */
 }
 
 #highWaterMarkInput {
   width: 4em;
+  border-radius: 4px;
+  border: 1px solid #888;
+  padding: 0.2em;
+}
+
+#locationiqApiKeyInput {
+  width: 100%;
   border-radius: 4px;
   border: 1px solid #888;
   padding: 0.2em;
@@ -1465,7 +1503,7 @@ body {
 
 .icon-btn.active {
   box-shadow: 0 0 8px 2px #4caf50, 0 0 16px 4px #2196f3;
-  background: rgba(76, 175, 80, 0.10); /* subtle green glow background */
+  background: rgba(76, 175, 80, 0.1); /* subtle green glow background */
   border: 2px solid #4caf50;
   z-index: 2;
 }
