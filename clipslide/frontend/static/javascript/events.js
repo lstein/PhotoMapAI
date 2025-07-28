@@ -135,7 +135,7 @@ async function handleDeleteCurrentFile() {
   try {
     showSpinner();
     await deleteImage(currentFilepath);
-    await handleSuccessfulDelete();
+    await handleSuccessfulDelete(currentFilepath);
     hideSpinner();
     console.log("Image deleted successfully");
   } catch (error) {
@@ -151,19 +151,30 @@ function confirmDelete(filepath) {
   );
 }
 
-async function handleSuccessfulDelete() {
-  // remove from search results if applicable
+async function handleSuccessfulDelete(currentFilepath) {
+  // remove from search results
   if (state.searchResults?.length > 0) {
-    state.searchResults = state.searchResults.filter(
-      (slide) => slide.filepath !== getCurrentFilepath()
+    const index = state.searchResults.findIndex(
+      (slide) => slide.filepath === currentFilepath
     );
-    state.searchOrigin = 0; // Reset search origin
+    if (index !== -1) {
+      state.searchResults.splice(index, 1);
+      if (state.searchOrigin >= index) {
+        state.searchOrigin--; // Adjust search origin if necessary
+      }
+    }
   }
-  console.log("current file path:", getCurrentFilepath());
-  console.log("swiper slide:", state.swiper.slides[state.swiper.activeIndex]);
+
   // Remove the current slide from the swiper
   if (state.swiper?.slides?.length > 0) {
-    const currentIndex = state.swiper.activeIndex;
+    // find index of the currentFilePath
+    const currentIndex = state.swiper.slides.findIndex(
+      (slide) => slide.dataset.filepath === currentFilepath
+    );
+    if (currentIndex === -1) {
+      console.warn("Current file not found in swiper slides:", currentFilepath);
+      return;
+    }
     state.swiper.removeSlide(currentIndex);
 
     // If no slides left, add a new one

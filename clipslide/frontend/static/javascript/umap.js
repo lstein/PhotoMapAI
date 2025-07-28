@@ -849,22 +849,30 @@ document.getElementById("umapResizeShaded").onclick = () => {
 };
 
 // Resize buttons
-document.getElementById("umapResizeBig").onclick = () => {
+function addButtonHandlers(id, handler) {
+  const btn = document.getElementById(id);
+  btn.onclick = handler;
+  btn.ontouchend = function(e) {
+    e.preventDefault();
+    handler(e);
+  };
+}
+
+addButtonHandlers("umapResizeBig", () => {
   setUmapWindowSize("big");
   lastUnshadedSize = "big";
   saveCurrentPosition();
   isFullscreen = false;
-};
-document.getElementById("umapResizeMedium").onclick = () => {
+});
+addButtonHandlers("umapResizeMedium", () => {
   setUmapWindowSize("medium");
   lastUnshadedSize = "medium";
   saveCurrentPosition();
   isFullscreen = false;
-};
-document.getElementById("umapResizeFullscreen").onclick = () => {
+});
+addButtonHandlers("umapResizeFullscreen", () => {
   const win = document.getElementById("umapFloatingWindow");
   if (isFullscreen) {
-    // Restore previous position and size
     setUmapWindowSize(lastUnshadedSize);
     if (lastUnshadedPosition.left !== null && lastUnshadedPosition.top !== null) {
       win.style.left = lastUnshadedPosition.left;
@@ -872,7 +880,6 @@ document.getElementById("umapResizeFullscreen").onclick = () => {
     }
     isFullscreen = false;
   } else {
-    // Save current position and size before going fullscreen
     lastUnshadedSize = getCurrentWindowSize();
     lastUnshadedPosition.left = win.style.left;
     lastUnshadedPosition.top = win.style.top;
@@ -881,4 +888,7 @@ document.getElementById("umapResizeFullscreen").onclick = () => {
     win.style.top = "0px";
     isFullscreen = true;
   }
-};
+});
+addButtonHandlers("umapCloseBtn", () => {
+  document.getElementById("umapFloatingWindow").style.display = "none";
+});

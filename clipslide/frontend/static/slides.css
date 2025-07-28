@@ -1446,7 +1446,7 @@ body {
 
 .icon-btn.active {
   box-shadow: 0 0 8px 2px #4caf50, 0 0 16px 4px #2196f3;
-  background: rgba(76, 175, 80, 0.15); /* subtle green glow background */
+  background: rgba(76, 175, 80, 0.10); /* subtle green glow background */
   border: 2px solid #4caf50;
   z-index: 2;
 }
@@ -1481,10 +1481,11 @@ body {
   background: rgba(30, 30, 40, 0.95);
   color: #fff;
   font-weight: bold;
-  padding: 8px 8px;
+  padding: 4px 8px;
   border-radius: 8px 8px 0 0; /* Only top corners rounded */
   user-select: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  font-size: 1em;
 }
