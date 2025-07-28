@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 from platformdirs import user_config_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
-
+from functools import lru_cache
 
 class Album(BaseModel):
     """Represents a photo album configuration."""
@@ -395,3 +395,11 @@ def create_album(
         umap_eps=umap_eps,
         description=description,
     )
+
+
+@lru_cache(maxsize=1)
+def get_config_manager() -> ConfigManager:
+    """Get a singleton instance of ConfigManager."""
+    return ConfigManager()
+
+

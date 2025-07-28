@@ -1,0 +1,258 @@
+
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from pathlib import Path
+from typing import List, Dict, Any
+import logging
+
+from fastapi import (
+    APIRouter,
+    HTTPException,
+)
+from ..embeddings import Embeddings
+from ..config import get_config_manager, create_album
+
+class UmapEpsSetRequest(BaseModel):
+    album: str
+    eps: float
+
+class UmapEpsGetRequest(BaseModel):
+    album: str
+
+class EmbeddingsIndexMetadata(BaseModel):
+    filename_count: int
+    embeddings_path: str
+    last_modified: float
+
+
+# Initialize logging
+logger = logging.getLogger(__name__)
+
+album_router = APIRouter()
+config_manager = get_config_manager()
+
+# Album Management Routes
+@album_router.get("/available_albums/", tags=["Albums"])
+async def get_available_albums() -> List[Dict[str, Any]]:
+    """Get list of available albums."""
+    try:
+        albums = config_manager.get_albums()
+
+        if not albums:
+            return []
+
+        return [
+            {
+                "key": key,
+                "name": album.name,
+                "description": album.description,
+                "embeddings_file": album.index,
+                "umap_eps": album.umap_eps,
+                "image_paths": album.image_paths,
+            }
+            for key, album in albums.items()
+        ]
+    except Exception as e:
+        logger.error(f"Failed to get albums: {e}")
+        return []
+
+
+@album_router.post("/add_album/", tags=["Albums"])
+async def add_album(album_data: dict) -> JSONResponse:
+    """Add a new album to the configuration."""
+    try:
+        album = create_album(
+            key=album_data["key"],
+            name=album_data["name"],
+            image_paths=album_data["image_paths"],
+            index=album_data["index"],
+            umap_eps=album_data.get("umap_eps", 0.07),
+            description=album_data.get("description", ""),
+        )
+        logging.info(f"Adding album: {album.key} with paths {album.image_paths}")
+        if config_manager.add_album(album):
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": f"Album '{album.key}' added successfully",
+                },
+                status_code=201,
+            )
+        else:
+            raise HTTPException(
+                status_code=409, detail=f"Album '{album.key}' already exists"
+            )
+
+    except Exception as e:
+        logger.warning(f"Failed to add album: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add album: {str(e)}")
+
+
+@album_router.post("/update_album/", tags=["Albums"])
+async def update_album(album_data: dict) -> JSONResponse:
+    """Update an existing album in the configuration."""
+    try:
+        album = create_album(
+            key=album_data["key"],
+            name=album_data["name"],
+            image_paths=album_data["image_paths"],
+            index=album_data["index"],
+            umap_eps=album_data.get("umap_eps", 0.07),
+            description=album_data.get("description", ""),
+        )
+
+        if config_manager.update_album(album):
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": f"Album '{album.key}' updated successfully",
+                },
+                status_code=200,
+            )
+        else:
+            raise HTTPException(
+                status_code=404, detail=f"Album '{album.key}' not found"
+            )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update album: {str(e)}")
+
+
+@album_router.delete("/delete_album/{album_key}", tags=["Albums"])
+async def delete_album(album_key: str) -> JSONResponse:
+    """Delete an album from the configuration."""
+    try:
+        if config_manager.delete_album(album_key):
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": f"Album '{album_key}' deleted successfully",
+                },
+                status_code=200,
+            )
+        else:
+            raise HTTPException(
+                status_code=404, detail=f"Album '{album_key}' not found"
+            )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete album: {str(e)}")
+
+# Return true if the index exists for the specified album
+@album_router.get("/index_exists/{album_key}", tags=["Albums"])
+async def index_exists(album_key: str) -> dict:
+    """Check if the index exists for the specified album."""
+    album_config = config_manager.get_album(album_key)
+    if not album_config:
+        return {"exists": False}
+    index_path = Path(album_config.index)
+    return {"exists": index_path.exists()}
+
+# Return Embeddings index metadata for the specified album
+@album_router.get("/index_metadata/{album_key}", response_model=EmbeddingsIndexMetadata, tags=["Albums"])
+async def index_metadata(album_key: str) -> EmbeddingsIndexMetadata:
+    """Get metadata about the embeddings index for the specified album."""
+    album_config = config_manager.get_album(album_key)
+    if not album_config:
+        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
+
+    index_path = Path(album_config.index)
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="Index file does not exist")
+
+    # Get file metadata
+    last_modified = index_path.stat().st_mtime
+    filename_count = len(Embeddings.open_cached_embeddings(index_path)["filenames"])
+
+    return EmbeddingsIndexMetadata(
+        filename_count=filename_count,
+        embeddings_path=str(index_path),
+        last_modified=last_modified,
+    )
+
+
+# The LocationIQ API key for showing GPS locations
+@album_router.get("/locationiq_key/", tags=["Albums"])
+async def get_locationiq_key():
+    """Get the current LocationIQ API key (masked for security)."""
+    api_key = config_manager.get_locationiq_api_key()
+    if api_key:
+        # Return masked version for security
+        return {
+            "has_key": True,
+            "key": (
+                "●" * (len(api_key) - 4) + api_key[-4:]
+                if len(api_key) > 4
+                else "●" * len(api_key)
+            ),
+        }
+    return {"has_key": False, "key": ""}
+
+
+@album_router.post("/locationiq_key/", tags=["Albums"])
+async def set_locationiq_key(request: dict):
+    """Set the LocationIQ API key."""
+    api_key = request.get("api_key")
+    try:
+        config_manager.set_locationiq_api_key(api_key)
+        # Force reload to ensure other parts of app see the change
+        config_manager.reload_config()
+        return {"success": True, "message": "API key updated successfully"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@album_router.post("/set_umap_eps/", tags=["Albums"])
+async def set_umap_eps(request: UmapEpsSetRequest):
+    album_config = config_manager.get_album(request.album)
+    if not album_config:
+        raise HTTPException(status_code=404, detail="Album not found")
+    album_config.umap_eps = request.eps
+    config_manager.update_album(album_config)
+    return {"success": True, "eps": request.eps}
+
+@album_router.post("/get_umap_eps/", tags=["Albums"])
+async def get_umap_eps(request: UmapEpsGetRequest):
+    album_config = config_manager.get_album(request.album)
+    if not album_config:
+        raise HTTPException(status_code=404, detail="Album not found")
+    return {"success": True, "eps": album_config.umap_eps}
+
+# Various utility functions - might want to move them into their own module later
+def validate_album_exists(album_key: str):
+    """Validate that an album exists, raise HTTPException if not.
+    Args:
+        album_key: Album key to validate
+    Returns:
+        Album object if exists
+    Raises:
+        HTTPException: If album does not exist
+    """
+    album_config = config_manager.get_album(album_key)
+    if not album_config:
+        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
+    return album_config
+
+def get_embeddings_for_album(album_key: str) -> Embeddings:
+    """Get embeddings instance for a given album."""
+    album_config = validate_album_exists(album_key)
+    return Embeddings(embeddings_path=Path(album_config.index))
+
+def validate_image_access(album_config, image_path: Path) -> bool:
+    """Validate that an image path is within allowed album directories.
+    Args:
+        album_config: Album configuration object
+        image_path: Path to the image file
+    Returns:
+        True if access is allowed, False otherwise"""
+    try:
+        resolved_path = image_path.resolve()
+        for allowed_path in album_config.image_paths:
+            album_root = Path(allowed_path).resolve()
+            if str(resolved_path).startswith(str(album_root)):
+                return True
+        return False
+    except Exception:
+        return False
+
+
