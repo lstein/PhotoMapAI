@@ -795,7 +795,7 @@ body {
 
 .album-details {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1.5fr 1fr auto; /* album-text, indexing-section, action-buttons */
   gap: 1em;
   align-items: start;
 }
@@ -864,6 +864,21 @@ body {
   gap: 0.5em;
   margin-top: 1em;
   justify-content: flex-end;
+}
+
+.action-buttons.vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  justify-content: flex-start;
+  align-items: flex-end; /* Align buttons to the right, not stretched */
+  margin-top: 0;
+}
+
+.action-buttons.vertical button {
+  width: auto;      /* Remove width: 100% */
+  min-width: 80px;  /* Optional: keep buttons a reasonable size */
+  align-self: flex-end; /* Align each button to the right */
 }
 
 .edit-form {
