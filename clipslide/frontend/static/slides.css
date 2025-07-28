@@ -112,7 +112,17 @@ body {
 }
 
 #bottomLeftBtnGroup {
+  position: fixed;
   left: 20px;
+  bottom: 20px;
+  z-index: 4000;
+  background: rgba(30, 30, 30, 0.35);
+  border-radius: 0.7em;
+  padding: 0.4em 0.8em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 #searchPanel {
@@ -534,6 +544,13 @@ body {
   margin-bottom: 1em;
   font-size: 1.5em !important;
   text-align: center;
+}
+
+#slideshowIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
 }
 
 .settings-main {
@@ -1488,4 +1505,30 @@ body {
   align-items: center;
   justify-content: space-between;
   font-size: 1em;
+}
+
+.control-panel-title {
+  color: #fff;
+  font-size: 1em;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 0px;
+  letter-spacing: 0.5px;
+  width: 100%;
+}
+
+.control-icons-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1em;
+  width: 100%;
+}
+
+.control-icon-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
