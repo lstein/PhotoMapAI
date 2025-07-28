@@ -4,6 +4,7 @@ import numpy as np
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sklearn.cluster import DBSCAN
+
 from ..constants import DEFAULT_ALBUM
 from ..config import get_config_manager
 from .album import get_embeddings_for_album

@@ -1,10 +1,8 @@
 # slideshow_server.py
 import logging
 import numpy as np
-from .constants import DEFAULT_ALBUM, DEFAULT_DELAY, DEFAULT_MODE, DEFAULT_TOP_K, get_package_resource_path
-
+from pathlib import Path
 from fastapi import (
-    APIRouter,
     FastAPI,
     Request,
 )
@@ -12,6 +10,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from .constants import DEFAULT_ALBUM, DEFAULT_DELAY, DEFAULT_MODE, get_package_resource_path
 from .config import get_config_manager
 from .routers.umap import umap_router
 from .routers.album import album_router
@@ -82,12 +81,15 @@ def main():
     """Main entry point for the slideshow server."""
     import uvicorn
 
+    repo_root = Path(get_package_resource_path("clipslide"),'../..').resolve()
+    print(f"Starting Clipslide server with backend root: {repo_root}")
+
     uvicorn.run(
         "clipslide.backend.clipslide_server:app",
         host="0.0.0.0",
         port=8050,
         reload=True,
-        reload_dirs=["./clipslide", "./clipslide/frontend", "./clipslide/backend"],
+        reload_dirs=[repo_root],
     )
 
 

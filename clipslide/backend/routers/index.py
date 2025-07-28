@@ -4,7 +4,6 @@ This module contains the index-related API endpoints for the Clipslide backend.
 It allows creating, deleting, and checking the existence of embeddings indices for albums.
 '''
 import logging
-
 from PIL import Image, ImageOps
 from fastapi import (
     APIRouter,
@@ -12,7 +11,7 @@ from fastapi import (
     Form,
     HTTPException,
 )
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pathlib import Path
 from typing import Optional
