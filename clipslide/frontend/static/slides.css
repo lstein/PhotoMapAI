@@ -97,7 +97,7 @@ body {
 }
 
 /* ===== BUTTON GROUPS ===== */
-#bottomLeftBtnGroup,
+#controlPanel,
 #searchPanel {
   position: fixed;
   bottom: 20px;
@@ -111,7 +111,7 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-#bottomLeftBtnGroup {
+#controlPanel {
   position: fixed;
   left: 20px;
   bottom: 20px;
@@ -139,7 +139,7 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-#bottomLeftBtnGroup button,
+#controlPanel button,
 #searchPanel button {
   background: none;
   border: none;
@@ -157,7 +157,7 @@ body {
   pointer-events: auto;
 }
 
-#bottomLeftBtnGroup button:hover,
+#controlPanel button:hover,
 #searchPanel button:hover {
   opacity: 1;
 }
@@ -634,13 +634,15 @@ body {
 .setting-row {
   margin-top: 1em;
   display: flex;
-  align-items: center;
-  gap: 0.5em;
+  align-items: flex-start; /* Align tops */
+  gap: 1.0em 1.0em;
 }
 
 .setting-row label {
   font-size: 16px;
   color: #fff;
+  align-self: flex-start; /* Ensure label aligns to top */
+  /* margin-top: 0.2em;      Optional: fine-tune vertical alignment */
 }
 
 #highWaterMarkInput {
@@ -1224,7 +1226,7 @@ body {
 .banner-drawer-container {
   position: fixed;
   left: 0;
-  bottom: 82px; /* Changed from 20px - aligns bottom of drawer with top of bottomLeftBtnGroup */
+  bottom: 82px; /* Changed from 20px - aligns bottom of drawer with top of controlPanel */
   transform: translateX(-100%); /* Start hidden to the left */
   width: auto;
   max-width: 60vw; /* Limit width so it doesn't cover too much */

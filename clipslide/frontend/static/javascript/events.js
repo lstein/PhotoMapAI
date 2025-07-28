@@ -48,7 +48,7 @@ function cacheElements() {
     startStopBtn: document.getElementById("startStopSlideshowBtn"),
     closeOverlayBtn: document.getElementById("closeOverlayBtn"),
     deleteCurrentFileBtn: document.getElementById("deleteCurrentFileBtn"),
-    bottomLeftBtnGroup: document.getElementById("bottomLeftBtnGroup"),
+    controlPanel: document.getElementById("controlPanel"),
     searchPanel: document.getElementById("searchPanel"),
     pauseOverlay: document.getElementById("pauseOverlay"),
     bannerDrawerContainer: document.getElementById("bannerDrawerContainer"),
@@ -70,7 +70,7 @@ function handleFullscreenChange() {
   const isFullscreen = !!document.fullscreenElement;
 
   // Toggle visibility of UI panels
-  [elements.bottomLeftBtnGroup, elements.searchPanel].forEach((panel) => {
+  [elements.controlPanel, elements.searchPanel].forEach((panel) => {
     if (panel) {
       panel.classList.toggle("hidden-fullscreen", isFullscreen);
     }
@@ -331,11 +331,11 @@ function initializeTitle() {
 export function showHidePanelText(hide) {
   const className = "hide-panel-text";
   if (hide) {
-    elements.bottomLeftBtnGroup.classList.add(className);
+    elements.controlPanel.classList.add(className);
     elements.searchPanel.classList.add(className);
     state.showControlPanelText = false;
   } else {
-    elements.bottomLeftBtnGroup.classList.remove(className);
+    elements.controlPanel.classList.remove(className);
     elements.searchPanel.classList.remove(className);
     state.showControlPanelText = true;
   }
