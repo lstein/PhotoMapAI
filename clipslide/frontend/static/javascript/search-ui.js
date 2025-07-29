@@ -72,9 +72,15 @@ document.addEventListener("DOMContentLoaded", async function () {
     const imageFile = state.currentSearchImageFile || null; // You need to set this when an image is uploaded or selected
 
     // Get weights from sliders
-    const posWeight = posPromptWeightSlider.getValue ? posPromptWeightSlider.getValue() : posPromptWeight;
-    const negWeight = negPromptWeightSlider.getValue ? negPromptWeightSlider.getValue() : negPromptWeight;
-    const imgWeight = imgPromptWeightSlider.getValue ? imgPromptWeightSlider.getValue() : imgPromptWeight;
+    const posWeight = posPromptWeightSlider.getValue
+      ? posPromptWeightSlider.getValue()
+      : posPromptWeight;
+    const negWeight = negPromptWeightSlider.getValue
+      ? negPromptWeightSlider.getValue()
+      : negPromptWeight;
+    const imgWeight = imgPromptWeightSlider.getValue
+      ? imgPromptWeightSlider.getValue()
+      : imgPromptWeight;
 
     if (!positiveQuery && !negativeQuery && !imageFile) return;
 
@@ -125,6 +131,8 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Image Search
   const imageSearchBtn = document.getElementById("imageSearchBtn");
   imageSearchBtn.addEventListener("click", async function () {
+    searchInput.value = "";
+    negativeSearchInput.value = "";
     const slide = state.swiper.slides[state.swiper.activeIndex];
     if (!slide) return;
     const imgUrl = slide.querySelector("img")?.src;
@@ -219,6 +227,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
+    setSearchImage(null, null); // Clear the search image and thumbnail
     exitSearchMode();
   });
 
@@ -465,11 +474,42 @@ function renderSearchImageThumbArea() {
   const area = document.getElementById("searchImageThumbArea");
   area.innerHTML = "";
   if (currentSearchImageUrl) {
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "relative";
+    wrapper.style.display = "inline-block";
+
     const img = document.createElement("img");
     img.src = currentSearchImageUrl;
     img.className = "search-thumb-img";
     img.alt = "Search image";
-    area.appendChild(img);
+    wrapper.appendChild(img);
+
+    // Add the X button
+    const clearBtn = document.createElement("button");
+    clearBtn.innerHTML = "&times;";
+    clearBtn.title = "Clear search image";
+    clearBtn.className = "search-thumb-clear-btn";
+    clearBtn.style.position = "absolute";
+    clearBtn.style.top = "2px";
+    clearBtn.style.right = "2px";
+    clearBtn.style.background = "rgba(0,0,0,0.7)";
+    clearBtn.style.color = "#fff";
+    clearBtn.style.border = "none";
+    clearBtn.style.borderRadius = "50%";
+    clearBtn.style.width = "22px";
+    clearBtn.style.height = "22px";
+    clearBtn.style.cursor = "pointer";
+    clearBtn.style.fontSize = "1.2em";
+    clearBtn.style.display = "flex";
+    clearBtn.style.alignItems = "center";
+    clearBtn.style.justifyContent = "center";
+    clearBtn.style.padding = "0";
+    clearBtn.addEventListener("click", () => {
+      setSearchImage(null, null);
+    });
+    wrapper.appendChild(clearBtn);
+
+    area.appendChild(wrapper);
   } else {
     const placeholder = document.createElement("div");
     placeholder.className = "search-thumb-placeholder";
