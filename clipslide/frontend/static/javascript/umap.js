@@ -1,7 +1,7 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
-import { albumManager } from "./album-management.js";
-import { getCurrentFilepath } from "./api.js";
+import { albumManager } from "./album.js";
+import { getCurrentFilepath } from "./search.js";
 import { state } from "./state.js";
 import { getPercentile, isColorLight } from "./utils.js";
 

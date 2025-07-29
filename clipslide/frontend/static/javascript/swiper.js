@@ -1,9 +1,9 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
-import { fetchNextImage } from "./api.js";
 import { clusterDisplay } from "./cluster-display.js";
-import { updateOverlay } from "./overlay.js";
+import { updateMetadataOverlay } from "./overlay.js";
 import { scoreDisplay } from "./score-display.js";
+import { fetchNextImage } from "./search.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
 
@@ -111,7 +111,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // Initial icon state and overlay
   updateSlideshowIcon();
-  updateOverlay();
+  updateMetadataOverlay();
 });
 
 export function pauseSlideshow() {
@@ -202,7 +202,7 @@ export async function addNewSlide(backward = false) {
 
 // Add function to handle slide changes
 export function handleSlideChange() {
-  updateOverlay();
+  updateMetadataOverlay();
 
   const activeSlide = state.swiper.slides[state.swiper.activeIndex];
   if (
@@ -250,7 +250,7 @@ export async function resetAllSlides(keep_current_slide = false) {
     await addNewSlide(false);
   }
   await addNewSlide(false); // Add another slide to ensure navigation works
-  updateOverlay();
+  updateMetadataOverlay();
   if (slideShowRunning) {
     resumeSlideshow();
   }

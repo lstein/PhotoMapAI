@@ -1,6 +1,6 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
-import { exitSearchMode } from "./search.js";
+import { exitSearchMode } from "./search-ui.js";
 import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
 import { addNewSlide, removeSlidesAfterCurrent } from "./swiper.js";
 
@@ -94,9 +94,7 @@ function switchAlbum(newAlbum, selectedOption) {
   // Clear search results when switching albums
   saveSettingsToLocalStorage();
   updatePageTitle(newAlbum);
-  console.log("data dirty:", state.dataChanged);
   exitSearchMode();
-  // resetAllSlides();
 }
 
 // Update the page title based on the current album

@@ -4,31 +4,31 @@
 import { state } from "./state.js";
 
 // Show the banner by moving container up
-export function showPauseOverlay() {
+export function showMetadataOverlay() {
   const container = document.getElementById("bannerDrawerContainer");
   container.classList.add("visible");
 }
 
 // Hide the banner by moving container down
-export function hidePauseOverlay() {
+export function hideMetadataOverlay() {
   const container = document.getElementById("bannerDrawerContainer");
   container.classList.remove("visible");
 }
 
 // Toggle the banner container
-export function togglePauseOverlay() {
+export function toggleMetadataOverlay() {
   const container = document.getElementById("bannerDrawerContainer");
   const isVisible = container.classList.contains("visible");
 
   if (isVisible) {
-    hidePauseOverlay();
+    hideMetadataOverlay();
   } else {
-    showPauseOverlay();
+    showMetadataOverlay();
   }
 }
 
 // Update banner with current slide's metadata
-export function updateOverlay() {
+export function updateMetadataOverlay() {
   const slide = state.swiper.slides[state.swiper.activeIndex];
   if (!slide) return;
   document.getElementById("descriptionText").innerHTML =

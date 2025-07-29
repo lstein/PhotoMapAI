@@ -1,5 +1,5 @@
 // album-management.js
-import { exitSearchMode } from "./search.js";
+import { exitSearchMode } from "./search-ui.js";
 
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
 import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
@@ -381,10 +381,12 @@ export class AlbumManager {
         createBtn.textContent = "Update Index";
       } else {
         status.textContent = "No index present";
+        status.style.color = "red";
         createBtn.textContent = "Create Index";
       }
     } catch (e) {
       status.textContent = "No index present";
+      status.style.color = "red";
       createBtn.textContent = "Create Index";
     }
   }
@@ -473,7 +475,7 @@ export class AlbumManager {
 
       setTimeout(async () => {
         await this.startIndexing(albumKey, albumCard);
-        this.showProgressUI(albumCard); // <-- Scroll into view after starting indexing
+        this.showProgressUI(albumCard); // Scroll into view
       }, AlbumManager.AUTO_INDEX_DELAY);
     }
   }
@@ -697,7 +699,7 @@ export class AlbumManager {
       );
       resetAllSlides();
     }
-  
+
     // After a delay set the status
     if (cardElement) {
       setTimeout(async () => {
@@ -966,4 +968,5 @@ export async function checkAlbumIndex() {
   }
 }
 
+// singleton exported to other js modules
 export const albumManager = new AlbumManager();

@@ -1,7 +1,5 @@
 // progress-bar.js
-// This is just a framework. Doesn't do anything yet.
-// It will be used to show the progress of indexing operations in the UI.
-import { state } from "./state.js";
+// Support for the progress bar that displays indexing progress.
 
 export async function startIndexUpdate(albumKey) {
   // Start the operation

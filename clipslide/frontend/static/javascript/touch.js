@@ -1,7 +1,7 @@
 // touch.js
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
-import { togglePauseOverlay } from "./overlay.js";
+import { toggleMetadataOverlay } from "./overlay.js";
 import { pauseSlideshow } from "./swiper.js";
 
 // Touch events
@@ -88,7 +88,7 @@ function handleTouchEnd(e) {
   }
 
   if (isTap) {
-    togglePauseOverlay(); // Toggle overlay on tap
+    toggleMetadataOverlay(); // Toggle overlay on tap
   } else {
     // Detect horizontal swipe (left/right) for pausing slideshow
     if (

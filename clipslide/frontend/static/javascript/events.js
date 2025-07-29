@@ -1,13 +1,13 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
-import { checkAlbumIndex } from "./album-management.js";
-import { deleteImage, getCurrentFilepath } from "./api.js";
+import { checkAlbumIndex } from "./album.js";
 import {
-  hidePauseOverlay,
-  showPauseOverlay,
-  togglePauseOverlay,
-  updateOverlay,
+  hideMetadataOverlay,
+  showMetadataOverlay,
+  toggleMetadataOverlay,
+  updateMetadataOverlay,
 } from "./overlay.js";
+import { deleteImage, getCurrentFilepath } from "./search.js";
 import { state } from "./state.js";
 import {
   addNewSlide,
@@ -29,10 +29,10 @@ const FULLSCREEN_INDICATOR_CONFIG = {
 const KEYBOARD_SHORTCUTS = {
   // ArrowRight: () => navigateSlide('next'),
   // ArrowLeft: () => navigateSlide('prev'),
-  ArrowUp: () => showPauseOverlay(),
-  ArrowDown: () => hidePauseOverlay(),
-  i: () => togglePauseOverlay(),
-  Escape: () => hidePauseOverlay(),
+  ArrowUp: () => showMetadataOverlay(),
+  ArrowDown: () => hideMetadataOverlay(),
+  i: () => toggleMetadataOverlay(),
+  Escape: () => hideMetadataOverlay(),
   f: () => toggleFullscreen(),
   " ": (e) => handleSpacebarToggle(e),
 };
@@ -50,7 +50,7 @@ function cacheElements() {
     deleteCurrentFileBtn: document.getElementById("deleteCurrentFileBtn"),
     controlPanel: document.getElementById("controlPanel"),
     searchPanel: document.getElementById("searchPanel"),
-    pauseOverlay: document.getElementById("pauseOverlay"),
+    metadataOverlay: document.getElementById("metadataOverlay"),
     bannerDrawerContainer: document.getElementById("bannerDrawerContainer"),
     overlayDrawer: document.getElementById("overlayDrawer"),
   };
@@ -182,7 +182,7 @@ async function handleSuccessfulDelete(currentFilepath) {
       await addNewSlide();
     }
 
-    updateOverlay();
+    updateMetadataOverlay();
   }
 }
 
@@ -275,7 +275,7 @@ function setupButtonEventListeners() {
 
   // Close overlay button
   if (elements.closeOverlayBtn) {
-    elements.closeOverlayBtn.onclick = hidePauseOverlay;
+    elements.closeOverlayBtn.onclick = hideMetadataOverlay;
   }
 
   // Delete current file button
@@ -290,7 +290,7 @@ function setupButtonEventListeners() {
   if (elements.overlayDrawer) {
     elements.overlayDrawer.addEventListener("click", function (e) {
       e.stopPropagation();
-      togglePauseOverlay();
+      toggleMetadataOverlay();
     });
   }
 }
