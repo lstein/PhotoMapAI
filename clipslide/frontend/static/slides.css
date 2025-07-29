@@ -1617,3 +1617,39 @@ body {
   display: none !important;
 }
 
+/* Weight Slider Widget */
+.weight-slider {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+  user-select: none;
+}
+
+.weight-slider-bar {
+  width: 120px;
+  height: 10px;
+  background: #333;
+  border-radius: 5px;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.weight-slider-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #faea0e 60%, #fff700 100%);
+  border-radius: 5px 0 0 5px;
+  transition: width 0.15s;
+}
+
+.weight-slider-value {
+  min-width: 2.5em;
+  text-align: right;
+  color: #faea0e;
+  font-size: 0.95em;
+  margin-left: 0.5em;
+  font-family: monospace;
+}

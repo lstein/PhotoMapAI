@@ -7,6 +7,9 @@ import { searchImage, searchText } from "./search.js";
 import { state } from "./state.js";
 import { pauseSlideshow, resetAllSlides, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
+import { WeightSlider } from "./weight-slider.js";
+
+let posPromptWeight = 0.5; // Default weight for positive prompts
 
 document.addEventListener("DOMContentLoaded", async function () {
   const textSearchPanel = document.getElementById("textSearchPanel");
@@ -146,13 +149,30 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-    negativeSearchInput.addEventListener("keydown", function (e) {
+  negativeSearchInput.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
       e.preventDefault();
       doSearchBtn.click();
     }
   });
 
+  const posPromptWeightSlider = new WeightSlider(
+    document.getElementById("posPromptWeightSlider"),
+    0.5,
+    (val) => {
+      posPromptWeight = val;
+      console.log("Positive prompt weight set to:", val);
+    }
+  );
+
+  const negPromptWeightSlider = new WeightSlider(
+    document.getElementById("negPromptWeightSlider"),
+    0.25,
+    (val) => {
+      negPromptWeight = val;
+      console.log("Negative prompt weight set to:", val);
+    }
+  );
 
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
@@ -164,9 +184,11 @@ document.addEventListener("DOMContentLoaded", async function () {
     searchInput.value = "";
   });
 
-  const clearNegativeTextSearchBtn = document.getElementById("clearNegativeTextSearchBtn");
+  const clearNegativeTextSearchBtn = document.getElementById(
+    "clearNegativeTextSearchBtn"
+  );
   clearNegativeTextSearchBtn.addEventListener("click", () => {
-      negativeSearchInput.value = "";
+    negativeSearchInput.value = "";
   });
 
   textSearchPanel.addEventListener("dragover", function (e) {
