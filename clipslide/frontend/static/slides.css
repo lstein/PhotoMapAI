@@ -102,7 +102,8 @@ body {
   position: fixed;
   bottom: 20px;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
+  align-items: center;
   gap: 0.5em;
   z-index: 4000;
   background: rgba(30, 30, 30, 0.35);
@@ -142,6 +143,29 @@ body {
 #controlPanel button:hover,
 #searchPanel button:hover {
   opacity: 1;
+}
+
+.control-panel-title,
+.search-panel-title {
+  color: #fff;
+  font-size: 1em;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 0.2em; /* Add a little space below the label */
+  letter-spacing: 0.5px;
+  width: 100%;
+  display: block;
+}
+
+.control-icons-row,
+.search-icons-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1em;
+  width: 100%;
+  /* Remove any margin-top if present */
 }
 
 /* ===== SWIPER BUTTON GROUPS ===== */
@@ -1544,16 +1568,6 @@ body {
   z-index: 2;
 }
 
-.search-panel-title {
-  color: #fff;
-  font-size: 1em;
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 0px;
-  letter-spacing: 0.5px;
-  width: 100%;
-}
-
 .search-icons-row {
   display: flex;
   flex-direction: row;
@@ -1581,16 +1595,6 @@ body {
   align-items: center;
   justify-content: space-between;
   font-size: 1em;
-}
-
-.control-panel-title {
-  color: #fff;
-  font-size: 1em;
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 0px;
-  letter-spacing: 0.5px;
-  width: 100%;
 }
 
 .control-icons-row {
