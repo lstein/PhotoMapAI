@@ -102,9 +102,10 @@ export async function searchImage(file) {
 }
 
 // Perform a text search and return a list of {filename, score} objects.
-export async function searchText(query) {
+export async function searchText(positive_query, negative_query = "") {
   const formData = new FormData();
-  formData.append("text_query", query);
+  formData.append("positive_query", positive_query);
+  formData.append("negative_query", negative_query);
   formData.append("top_k", 100);
   formData.append("album", state.album);
 
@@ -148,3 +149,12 @@ export async function deleteImage(filepath) {
 export function getCurrentFilepath() {
   return document.getElementById("filepathText")?.textContent?.trim();
 }
+
+// Wire up the clearNegativeTextSearchBtn
+document.getElementById("clearNegativeTextSearchBtn")?.addEventListener("click", () => {
+  const negativeInput = document.getElementById("negativeSearchInput");
+  if (negativeInput) {
+    negativeInput.value = "";
+    negativeInput.focus();
+  }
+});

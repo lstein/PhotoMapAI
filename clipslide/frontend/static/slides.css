@@ -3,7 +3,7 @@ html,
 body {
   font-family: "Segoe UI", "Arial", "Helvetica Neue", Helvetica, Arial,
     sans-serif;
-  touch-action: pan-x pan-y pinch-zoom; /* Changed from 'none' to allow pinch-zoom */
+  touch-action: pan-x pan-y pinch-zoom;
   overflow: hidden;
   margin: 0;
   padding: 0;
@@ -254,15 +254,14 @@ body {
 .filename-banner {
   position: relative;
   width: 100%;
-  /* max-width: 600px; Limit width so it doesn't cover too much of the image */
   background: rgba(0, 0, 0, 0.5);
   color: #fff;
   padding: 1em 2em;
   box-sizing: border-box;
-  text-align: left; /* Left align text since it's on the left side */
-  border-radius: 8px 0 0 8px; /* Only left corners rounded now */
+  text-align: left;
+  border-radius: 8px 0 0 8px; /
   margin: 0;
-  order: 1; /* Put banner first (on left) */
+  order: 1; 
   pointer-events: auto;
 }
 
@@ -270,7 +269,7 @@ body {
 .filenameDescContainer {
   display: flex;
   flex-direction: column;
-  align-items: flex-start; /* Left align instead of center */
+  align-items: flex-start; 
   justify-content: center;
   margin-bottom: 0;
 }
@@ -279,7 +278,7 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: flex-start; /* Left align instead of center */
+  justify-content: flex-start; 
   gap: 0.5em;
   white-space: nowrap;
 }
@@ -316,10 +315,9 @@ body {
 
 #delayLabel,
 #modeLabel {
-  /* font-size: 0.4em !important; */
   color: #fff;
   white-space: nowrap;
-  margin-bottom: 0.5em; /* Add consistent spacing below the label */
+  margin-bottom: 0.5em; 
 }
 
 /* ===== FIXED SCORE DISPLAY ===== */
@@ -420,6 +418,18 @@ body {
   width: 100%;
 }
 
+.search-input-container label {
+  color: #fff;
+  font-size: 1em;
+  margin-right: 0.5em;
+  white-space: nowrap;
+}
+
+.search-input-container input[type="text"] {
+  margin-right: 1em;
+  min-width: 120px;
+}
+
 #searchInput {
   flex: 1;
   font-size: 1.1em;
@@ -431,9 +441,10 @@ body {
   width: 350px;
 }
 
-#clearTextSearchBtn {
+#clearTextSearchBtn,
+#clearNegativeTextSearchBtn {
   position: absolute;
-  right: 0.2em;
+  right: 1.1em;
   top: 50%;
   transform: translateY(-50%);
   background: #333;
@@ -458,6 +469,47 @@ body {
   color: #fff;
   font-size: 1em;
   cursor: pointer;
+}
+
+/* Text search inputs */
+.vertical-search-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  width: 100%;
+}
+
+.search-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5em;
+  width: 100%;
+}
+
+.search-label {
+  min-width: 80px;
+  text-align: right;
+  color: #fff;
+  font-size: 1em;
+  margin-right: 0.5em;
+}
+
+.search-field-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.search-field-wrapper input[type="text"] {
+  width: 100%;
+  font-size: 1.1em;
+  padding: 0.4em 2.2em 0.4em 0.7em;
+  border-radius: 6px;
+  border: 1px solid #888;
+  background: #222;
+  color: #fff;
 }
 
 /* ===== MODAL BASE STYLES ===== */
@@ -538,7 +590,7 @@ body {
 .settings-main {
   display: flex;
   flex-direction: row;
-  align-items: flex-start; /* Changed from 'center' to 'flex-start' */
+  align-items: flex-start; 
   justify-content: center;
 }
 
@@ -550,7 +602,6 @@ body {
   margin-right: 2em;
 }
 
-/* New horizontal layout for the controls */
 .delay-control-buttons {
   display: flex;
   flex-direction: row;
@@ -582,11 +633,11 @@ body {
   flex-direction: column;
   align-items: center;
   color: #fff;
-  justify-content: flex-start; /* Add this line */
+  justify-content: flex-start; 
 }
 
 #modeControls > span {
-  margin-bottom: 0.5em; /* Add consistent spacing below the label */
+  margin-bottom: 0.5em; 
 }
 
 #modeRadioGroup {
@@ -625,9 +676,8 @@ body {
 #modeLabel {
   font-size: 16px;
   color: #faea0e;
-  align-self: flex-start; /* Ensure label aligns to top */
-  text-align: right; /* Right align label text */
-  /* margin-top: 0.2em;      Optional: fine-tune vertical alignment */
+  align-self: flex-start; 
+  text-align: right;
 }
 
 .setting-input-container {
@@ -871,14 +921,14 @@ body {
   flex-direction: column;
   gap: 0.5em;
   justify-content: flex-start;
-  align-items: flex-end; /* Align buttons to the right, not stretched */
+  align-items: flex-end; 
   margin-top: 0;
 }
 
 .action-buttons.vertical button {
-  width: auto;      /* Remove width: 100% */
-  min-width: 80px;  /* Optional: keep buttons a reasonable size */
-  align-self: flex-end; /* Align each button to the right */
+  width: auto;      
+  min-width: 80px;  
+  align-self: flex-end; 
 }
 
 .edit-form {
@@ -1253,15 +1303,15 @@ body {
 .banner-drawer-container {
   position: fixed;
   left: 0;
-  bottom: 82px; /* Changed from 20px - aligns bottom of drawer with top of controlPanel */
-  transform: translateX(-100%); /* Start hidden to the left */
+  bottom: 82px; 
+  transform: translateX(-100%); 
   width: auto;
-  max-width: 60vw; /* Limit width so it doesn't cover too much */
+  max-width: 60vw;
   z-index: 4000;
   transition: transform 0.4s ease;
   pointer-events: auto;
   display: flex;
-  flex-direction: row; /* Row layout - banner on left, drawer on right */
+  flex-direction: row; 
 }
 
 /* When container is visible, slide it out to the right */
@@ -1286,11 +1336,11 @@ body {
 /* ===== OVERLAY DRAWER ===== */
 .overlay-drawer {
   position: relative;
-  width: 20px; /* Narrower since it's vertical */
-  height: 100px; /* Taller since it's vertical */
+  width: 20px; 
+  height: 100px; 
   cursor: pointer;
   transition: all 0.3s ease;
-  order: 2; /* Put drawer second (on right) */
+  order: 2;
   display: flex;
   align-items: center;
 }
@@ -1298,7 +1348,7 @@ body {
 .drawer-handle {
   width: 100%;
   height: 100%;
-  /* File folder tab shape - now narrower at right since it's on the right */
+  /* File folder tab shape -  narrower at right since it's on the right */
   background: rgba(0, 0, 0, 0.5);
   clip-path: polygon(
     0% 0%,
@@ -1310,8 +1360,8 @@ body {
   align-items: center;
   justify-content: center;
   color: #fff;
-  border-radius: 8px 0 0 8px; /* Left corners rounded now */
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3); /* Shadow goes left now */
+  border-radius: 8px 0 0 8px;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3); 
   transition: all 0.3s ease;
 }
 
@@ -1363,8 +1413,7 @@ body {
   fill: currentColor;
 }
 
-/* Add this to your slides.css */
-
+/* Add to slides.css */
 /* Zoom container for mobile devices */
 .swiper-zoom-container {
   width: 100%;
@@ -1526,7 +1575,7 @@ body {
   color: #fff;
   font-weight: bold;
   padding: 4px 8px;
-  border-radius: 8px 8px 0 0; /* Only top corners rounded */
+  border-radius: 8px 8px 0 0; 
   user-select: none;
   display: flex;
   align-items: center;
@@ -1567,3 +1616,4 @@ body {
 .hide-panel-text .search-icon-container .button-label {
   display: none !important;
 }
+

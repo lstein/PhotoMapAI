@@ -311,14 +311,31 @@
 
     <div id="textSearchPanel">
       <div class="search-controls">
-        <div class="search-input-container">
-          <input
-            id="searchInput"
-            type="text"
-            placeholder="Search..."
-            autocomplete="off"
-          />
-          <button id="clearTextSearchBtn" title="Clear search">&#10005;</button>
+        <div class="search-input-container vertical-search-inputs">
+          <div class="search-row">
+            <label for="searchInput" class="search-label">Search:</label>
+            <div class="search-field-wrapper">
+              <input
+                id="searchInput"
+                type="text"
+                placeholder="Enter search terms..."
+                autocomplete="off"
+              />
+              <button id="clearTextSearchBtn" title="Clear search">&#10005;</button>
+            </div>
+          </div>
+          <div class="search-row">
+            <label for="negativeSearchInput" class="search-label">Exclude:</label>
+            <div class="search-field-wrapper">
+              <input
+                id="negativeSearchInput"
+                type="text"
+                placeholder="Exclude terms..."
+                autocomplete="off"
+              />
+              <button id="clearNegativeTextSearchBtn" title="Clear exclude">&#10005;</button>
+            </div>
+          </div>
         </div>
         <button id="doSearchBtn">Search</button>
       </div>

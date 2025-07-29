@@ -5,11 +5,7 @@ import { clusterDisplay } from "./cluster-display.js";
 import { scoreDisplay } from "./score-display.js";
 import { searchImage, searchText } from "./search.js";
 import { state } from "./state.js";
-import {
-  pauseSlideshow,
-  resetAllSlides,
-  resumeSlideshow
-} from "./swiper.js";
+import { pauseSlideshow, resetAllSlides, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -60,17 +56,21 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   const doSearchBtn = document.getElementById("doSearchBtn");
   const searchInput = document.getElementById("searchInput");
+  const negativeSearchInput = document.getElementById("negativeSearchInput");
+
   doSearchBtn.addEventListener("click", searchWithText);
 
   async function searchWithText() {
-    const query = searchInput.value.trim();
-    if (!query) return;
+    const positiveQuery = searchInput.value.trim();
+    const negativeQuery = negativeSearchInput.value.trim();
+    if (!positiveQuery && !negativeQuery) return;
     const slideShowRunning = state.swiper?.autoplay?.running;
     pauseSlideshow();
 
     try {
       showSpinner();
-      let results = await searchText(query);
+      // Pass both queries to the backend
+      let results = await searchText(positiveQuery, negativeQuery);
       results = results.filter((item) => item.score >= 0.2);
       window.dispatchEvent(
         new CustomEvent("searchResultsChanged", {
@@ -146,6 +146,14 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
+    negativeSearchInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      doSearchBtn.click();
+    }
+  });
+
+
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
     exitSearchMode();
@@ -154,6 +162,11 @@ document.addEventListener("DOMContentLoaded", async function () {
   const clearTextSearchBtn = document.getElementById("clearTextSearchBtn");
   clearTextSearchBtn.addEventListener("click", function () {
     searchInput.value = "";
+  });
+
+  const clearNegativeTextSearchBtn = document.getElementById("clearNegativeTextSearchBtn");
+  clearNegativeTextSearchBtn.addEventListener("click", () => {
+      negativeSearchInput.value = "";
   });
 
   textSearchPanel.addEventListener("dragover", function (e) {

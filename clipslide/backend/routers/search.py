@@ -69,15 +69,15 @@ async def search_with_image(
 
 @search_router.post("/search_with_text/", response_model=SearchResultsResponse, tags=["Search"])
 async def search_with_text(
-    text_query: str = Form(...),
+    positive_query: str = Form(...),
+    negative_query: str = Form(""),
     album: str = Form(DEFAULT_ALBUM),
     top_k: int = Form(DEFAULT_TOP_K),
 ) -> SearchResultsResponse:
     """Search for images semantically matching the query."""
     embeddings = get_embeddings_for_album(album)
-    results, scores = embeddings.search_images_by_text(text_query, top_k=top_k)
+    results, scores = embeddings.search_images_by_text(positive_query, negative_query, top_k=top_k)
     return create_search_results(results, scores, album)
-
 
 # Image Retrieval Routes
 @search_router.post("/retrieve_image/", response_model=SlideSummary, tags=["Search"])

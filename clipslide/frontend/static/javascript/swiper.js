@@ -157,7 +157,7 @@ export async function addNewSlide(backward = false) {
   const slide = document.createElement("div");
   slide.className = "swiper-slide";
 
-  // Use feature detection instead of user agent
+  // Use feature detection
   if (hasTouchCapability) {
     // Touch-capable device - with zoom container
     slide.innerHTML = `

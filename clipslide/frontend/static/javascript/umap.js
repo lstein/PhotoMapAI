@@ -321,11 +321,6 @@ export async function fetchUmapData() {
           })
         );
         setUmapColorMode("search");
-        // Colorize UMAP based on search results
-        // colorizeUmap({
-        //   mode: "search",
-        //   searchResults: selectedResults,
-        // });
       });
 
       // Show the EPS spinner container now that the plot is ready
@@ -380,10 +375,6 @@ export async function fetchUmapData() {
           })
         );
         setUmapColorMode("search");
-        // colorizeUmap({
-        //   mode: "search",
-        //   searchResults: clusterMembers,
-        // });
       });
 
     window.umapPoints = points;

@@ -10,6 +10,7 @@ for image embeddings and similarity calculations.
 import os
 import clip
 import functools
+from fastapi import logger
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -30,6 +31,8 @@ from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
 from .metadata_extraction import MetadataExtractor
 from .progress import progress_tracker
+
+logger = logging.getLogger(__name__)
 
 class IndexResult(BaseModel):
     """
@@ -568,7 +571,7 @@ class Embeddings(BaseModel):
         umap_embeddings = umap_model.fit_transform(embeddings)
         cache_file = self.embeddings_path.parent / "umap.npz"
         np.savez(cache_file, umap=umap_embeddings)
-        logging.info(f"UMAP embeddings shape: {umap_embeddings.shape}")
+        logger.info(f"UMAP embeddings shape: {umap_embeddings.shape}")
         return umap_embeddings
     
     @property
@@ -582,7 +585,7 @@ class Embeddings(BaseModel):
         cache_file = self.embeddings_path.parent / "umap.npz"
         if not cache_file.exists() or cache_file.stat().st_mtime < self.embeddings_path.stat().st_mtime:  # If UMAP index does not exist or is outdated, create it
             embeddings = self.open_cached_embeddings(self.embeddings_path)['embeddings']
-            logging.info(f"Creating UMAP index for {embeddings.shape[0]} embeddings")
+            logger.info(f"Creating UMAP index for {embeddings.shape[0]} embeddings")
             return self.create_umap_index(embeddings)
         data = np.load(cache_file, allow_pickle=True)
         return data["umap"]
@@ -649,54 +652,51 @@ class Embeddings(BaseModel):
 
     def search_images_by_text(
         self,
-        text_query: str,
+        positive_query: str,
+        negative_query: str = "",
         top_k: int = 5,
         minimum_score: float = 0.2,
     ):
         """
-        Search for similar images using a natural language text query.
-
+        Search for similar images using a positive and negative text query.
         Args:
-            text_query (str): The text query to search for.
-            top_k (int): Number of top similar images to return.
-            minimum_score (float): Minimum similarity score to consider.
-
+            positive_query (str): Desired content.
+            negative_query (str): Undesired content.
+            top_k (int): Number of top results.
+            minimum_score (float): Minimum similarity score.
         Returns:
             tuple: (filenames, similarities)
         """
-        # Load the saved embeddings and filenames
-        # data = np.load(self.embeddings_path, allow_pickle=True)
+        logger.info(f"Searching for images with positive query: '{positive_query}' and negative query: '{negative_query}'")
         data = self.open_cached_embeddings(self.embeddings_path)
-        embeddings = data["embeddings"]  # shape: (N, 512)
-        filenames = data["filenames"]  # shape: (N,)
+        embeddings = data["embeddings"]
+        filenames = data["filenames"]
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model, preprocess = clip.load("ViT-B/32", device=device)
 
-        # Encode the text query
+        # Encode both queries
         with torch.no_grad():
-            text_tokens = clip.tokenize([text_query]).to(device)
-            text_embedding = model.encode_text(text_tokens).squeeze(0)  # shape: (512,)
+            if len(negative_query) > 0:
+                tokens = clip.tokenize([positive_query, negative_query]).to(device)
+                pos_emb, neg_emb = model.encode_text(tokens)
+                # Combine: positive minus negative
+                query_emb = pos_emb - 0.5 * neg_emb
+            else:
+                tokens = clip.tokenize([positive_query]).to(device)
+                query_emb = model.encode_text(tokens).squeeze(0)  # shape: (512,)
 
-        # Before normalization, convert to torch tensor
+        # Normalize
         embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=device)
-
-        # Normalize the embeddings
         norm_embeddings = F.normalize(embeddings_tensor, dim=-1).to(torch.float32)
-        text_embedding_norm = F.normalize(text_embedding, dim=-1).to(torch.float32)
+        query_emb_norm = F.normalize(query_emb, dim=-1).to(torch.float32)
 
-        # Compute cosine similarity
-        similarities = (
-            (norm_embeddings @ text_embedding_norm).cpu().numpy()
-        )  # shape: (N,)
-
-        # Get top K most similar images
+        # Similarity
+        similarities = (norm_embeddings @ query_emb_norm).cpu().numpy()
         top_indices = similarities.argsort()[-top_k:][::-1]
-        if minimum_score is not None:
-            # Filter results based on the minimum score
-            top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
-            if len(top_indices) == 0:
-                return [], []
+        top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
+        if not top_indices:
+            return [], []
 
         return filenames[top_indices], similarities[top_indices]
 
