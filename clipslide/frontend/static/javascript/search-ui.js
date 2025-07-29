@@ -3,13 +3,16 @@
 // Swiper initialization
 import { clusterDisplay } from "./cluster-display.js";
 import { scoreDisplay } from "./score-display.js";
-import { searchImage, searchText } from "./search.js";
+import { searchImage } from "./search.js";
 import { state } from "./state.js";
 import { pauseSlideshow, resetAllSlides, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 import { WeightSlider } from "./weight-slider.js";
 
 let posPromptWeight = 0.5; // Default weight for positive prompts
+let negPromptWeight = 0.25; // Default weight for negative prompts
+let imgPromptWeight = 0.5; // Default weight for image prompts
+let currentSearchImageUrl = null; // Track the current image URL
 
 document.addEventListener("DOMContentLoaded", async function () {
   const textSearchPanel = document.getElementById("textSearchPanel");
@@ -61,23 +64,47 @@ document.addEventListener("DOMContentLoaded", async function () {
   const searchInput = document.getElementById("searchInput");
   const negativeSearchInput = document.getElementById("negativeSearchInput");
 
-  doSearchBtn.addEventListener("click", searchWithText);
+  doSearchBtn.addEventListener("click", searchWithTextAndImage);
 
-  async function searchWithText() {
+  async function searchWithTextAndImage() {
     const positiveQuery = searchInput.value.trim();
     const negativeQuery = negativeSearchInput.value.trim();
-    if (!positiveQuery && !negativeQuery) return;
+    const imageFile = state.currentSearchImageFile || null; // You need to set this when an image is uploaded or selected
+
+    // Get weights from sliders
+    const posWeight = posPromptWeightSlider.getValue ? posPromptWeightSlider.getValue() : posPromptWeight;
+    const negWeight = negPromptWeightSlider.getValue ? negPromptWeightSlider.getValue() : negPromptWeight;
+    const imgWeight = imgPromptWeightSlider.getValue ? imgPromptWeightSlider.getValue() : imgPromptWeight;
+
+    if (!positiveQuery && !negativeQuery && !imageFile) return;
+
     const slideShowRunning = state.swiper?.autoplay?.running;
     pauseSlideshow();
 
     try {
       showSpinner();
-      // Pass both queries to the backend
-      let results = await searchText(positiveQuery, negativeQuery);
+
+      const formData = new FormData();
+      if (imageFile) formData.append("file", imageFile);
+      formData.append("positive_query", positiveQuery);
+      formData.append("negative_query", negativeQuery);
+      formData.append("image_weight", imgWeight);
+      formData.append("positive_weight", posWeight);
+      formData.append("negative_weight", negWeight);
+      formData.append("top_k", 100);
+      formData.append("album", state.album);
+
+      const response = await fetch("search_with_text_and_image/", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await response.json();
+      let results = result.results || [];
       results = results.filter((item) => item.score >= 0.2);
+
       window.dispatchEvent(
         new CustomEvent("searchResultsChanged", {
-          detail: { results: results, searchType: "text" },
+          detail: { results: results, searchType: "text_and_image" },
         })
       );
 
@@ -111,6 +138,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       const imgResponse = await fetch(imgUrl);
       const blob = await imgResponse.blob();
       const file = new File([blob], filename, { type: blob.type });
+      // Set the search image for the panel
+      setSearchImage(imgUrl, file);
       let querySlide = createQuerySlide(imgUrl, `Search slide ${filename}`);
       await searchWithImage(file, querySlide);
       hideSpinner();
@@ -134,6 +163,11 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (file && file.type.startsWith("image/")) {
       showSpinner();
       try {
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          setSearchImage(event.target.result, file);
+        };
+        reader.readAsDataURL(file);
         let slide = await insertUploadedImageFile(file);
         await searchWithImage(file, slide);
       } finally {
@@ -174,6 +208,15 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   );
 
+  const imgPromptWeightSlider = new WeightSlider(
+    document.getElementById("imgPromptWeightSlider"),
+    0.5,
+    (val) => {
+      imgPromptWeight = val;
+      console.log("Image prompt weight set to:", val);
+    }
+  );
+
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
     exitSearchMode();
@@ -210,6 +253,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     showSpinner();
     try {
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        setSearchImage(event.target.result, file);
+      };
+      reader.readAsDataURL(file);
       let slide = await insertUploadedImageFile(file);
       await searchWithImage(file, slide);
       textSearchPanel.style.opacity = 0;
@@ -243,6 +291,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     showSpinner();
     try {
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        setSearchImage(event.target.result, file);
+      };
+      reader.readAsDataURL(file);
       let slide = await insertUploadedImageFile(file);
       await searchWithImage(file, slide);
     } catch (err) {
@@ -264,6 +317,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     updateSearchCheckmarks(searchType);
     updateScoreDisplay(searchType);
   });
+
+  renderSearchImageThumbArea();
 });
 
 function updateScoreDisplay(searchType) {
@@ -366,13 +421,13 @@ window.addEventListener("paste", async function (e) {
         try {
           const reader = new FileReader();
           reader.onload = async function (event) {
-            const url = event.target.result;
+            setSearchImage(event.target.result, file);
             const slide = document.createElement("div");
             slide.className = "swiper-slide";
             slide.innerHTML = `
                             <div style="position:relative; width:100%; height:100%;">
                                 <span class="query-image-label">Query Image</span>
-                                <img src="${url}" alt="" draggable="true" class="slide-image">
+                                <img src="${event.target.result}" alt="" draggable="true" class="slide-image">
                             </div>
                         `;
             slide.dataset.filename = file.name || "";
@@ -405,3 +460,45 @@ export function exitSearchMode() {
     })
   );
 }
+
+function renderSearchImageThumbArea() {
+  const area = document.getElementById("searchImageThumbArea");
+  area.innerHTML = "";
+  if (currentSearchImageUrl) {
+    const img = document.createElement("img");
+    img.src = currentSearchImageUrl;
+    img.className = "search-thumb-img";
+    img.alt = "Search image";
+    area.appendChild(img);
+  } else {
+    const placeholder = document.createElement("div");
+    placeholder.className = "search-thumb-placeholder";
+    placeholder.title = "Upload or drag an image";
+    placeholder.innerHTML = `
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="4" />
+        <path d="M12 8v8M8 12h8" />
+      </svg>
+    `;
+    placeholder.addEventListener("click", () => {
+      document.getElementById("uploadImageInput").click();
+    });
+    area.appendChild(placeholder);
+  }
+}
+
+// Call this after a search image is set or cleared:
+function setSearchImage(url, file = null) {
+  currentSearchImageUrl = url;
+  state.currentSearchImageFile = file;
+  renderSearchImageThumbArea();
+}
+
+// Example: after uploading or drag-and-drop
+// setSearchImage(url); // url is a data URL or blob URL
+
+// Example: to clear
+// setSearchImage(null);
+
+// Initial render
+document.addEventListener("DOMContentLoaded", renderSearchImageThumbArea);
