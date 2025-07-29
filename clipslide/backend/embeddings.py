@@ -700,6 +700,93 @@ class Embeddings(BaseModel):
 
         return filenames[top_indices], similarities[top_indices]
 
+    def search_images_by_text_and_image(
+        self,
+        query_image_path: Optional[Path],
+        positive_query: Optional[str],
+        negative_query: Optional[str] = None,
+        image_weight: float = 0.5,
+        positive_weight: float = 0.5,
+        negative_weight: float = 0.5,
+        top_k: int = 5,
+        minimum_score: float = 0.2,
+    ):
+        """
+        Search for images similar to a query image and a positive/negative text prompt, with separate weights.
+        Any of the queries can be None; if so, their corresponding weight is set to zero and they are not used.
+        Args:
+            query_image_path (Path or None): Path to the query image.
+            positive_query (str or None): Positive text prompt.
+            negative_query (str or None): Negative text prompt.
+            image_weight (float): Weight for image embedding.
+            positive_weight (float): Weight for positive text embedding.
+            negative_weight (float): Weight for negative text embedding (should be positive; will be subtracted).
+            top_k (int): Number of top results.
+            minimum_score (float): Minimum similarity score.
+        Returns:
+            tuple: (filenames, similarities)
+        """
+        data = self.open_cached_embeddings(self.embeddings_path)
+        embeddings = data["embeddings"]
+        filenames = data["filenames"]
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model, preprocess = clip.load("ViT-B/32", device=device)
+
+        # Handle None queries: set weight to zero and skip embedding
+        if query_image_path is None:
+            image_weight = 0.0
+            image_embedding = None
+        else:
+            pil_image = Image.open(query_image_path).convert("RGB")
+            pil_image = ImageOps.exif_transpose(pil_image)
+            image_tensor = preprocess(pil_image).unsqueeze(0).to(device)
+            with torch.no_grad():
+                image_embedding = model.encode_image(image_tensor).squeeze(0)
+
+        if not positive_query:
+            positive_weight = 0.0
+            pos_emb = None
+        else:
+            tokens = clip.tokenize([positive_query]).to(device)
+            with torch.no_grad():
+                pos_emb = model.encode_text(tokens).squeeze(0)
+
+        if not negative_query:
+            negative_weight = 0.0
+            neg_emb = None
+        else:
+            tokens = clip.tokenize([negative_query]).to(device)
+            with torch.no_grad():
+                neg_emb = model.encode_text(tokens).squeeze(0)
+
+        # If all weights are zero, return empty result
+        if image_weight == 0.0 and positive_weight == 0.0 and negative_weight == 0.0:
+            return [], []
+
+        # Weighted combination: image + positive - negative
+        combined_embedding = 0
+        if image_weight > 0.0 and image_embedding is not None:
+            combined_embedding += image_weight * image_embedding
+        if positive_weight > 0.0 and pos_emb is not None:
+            combined_embedding += positive_weight * pos_emb
+        if negative_weight > 0.0 and neg_emb is not None:
+            combined_embedding -= negative_weight * neg_emb
+
+        # Normalize
+        embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=device)
+        norm_embeddings = F.normalize(embeddings_tensor, dim=-1).to(torch.float32)
+        combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(torch.float32)
+
+        # Similarity
+        similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
+        top_indices = similarities.argsort()[-top_k:][::-1]
+        top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
+        if not top_indices:
+            return [], []
+
+        return filenames[top_indices], similarities[top_indices]
+
     def find_duplicate_clusters(self, similarity_threshold=0.995):
         """
         Find clusters of similar images based on cosine similarity.
