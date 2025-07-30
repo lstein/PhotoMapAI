@@ -430,8 +430,8 @@ body {
 
 .search-controls {
   display: flex;
-  flex-direction: row;
-  align-items: center;
+  flex-direction: column;   /* <-- stack children vertically */
+  align-items: stretch;     /* <-- make children fill width */
   gap: 0.5em;
   position: relative;
 }
@@ -486,13 +486,15 @@ body {
 }
 
 #doSearchBtn {
-  padding: 0.4em 1em;
+  margin-left: 1em;
+  padding: 0.4em 1.2em;
   border-radius: 6px;
   border: none;
   background: #444;
   color: #fff;
   font-size: 1em;
   cursor: pointer;
+  align-self: flex-end;
 }
 
 /* Text search inputs */
@@ -534,6 +536,13 @@ body {
   border: 1px solid #888;
   background: #222;
   color: #fff;
+}
+
+/* Bold yellow for the Search label */
+.search-label[for="searchInput"],
+.search-label[for="negativeSearchInput"] {
+  color: #faea0e;
+  font-weight: bold;
 }
 
 /* ===== MODAL BASE STYLES ===== */
@@ -1621,3 +1630,164 @@ body {
   display: none !important;
 }
 
+/* Weight Slider Widget */
+.weight-slider {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+  user-select: none;
+}
+
+.weight-slider-bar {
+  width: 120px;
+  height: 10px;
+  background: #333;
+  border-radius: 5px;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.weight-slider-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #faea0e 60%, #fff700 100%);
+  border-radius: 5px 0 0 5px;
+  transition: width 0.15s;
+}
+
+.weight-slider-value {
+  min-width: 2.5em;
+  text-align: right;
+  color: #faea0e;
+  font-size: 0.95em;
+  margin-left: 0.5em;
+  font-family: monospace;
+}
+
+.search-bottom-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1em;
+  width: 100%;
+  gap: 1em;
+}
+
+.search-upload-hint {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+}
+
+.search-input-container.vertical-search-inputs {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5em;
+  width: 100%;
+}
+
+.search-image-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 110px;
+  max-width: 140px;
+  flex-shrink: 0;
+  margin-right: 0.5em;
+}
+
+/* Make the thumbnail area larger and keep it centered */
+.search-image-column {
+  min-width: 140px;
+  max-width: 180px;
+}
+
+.search-image-label {
+  color: #faea0e;
+  font-weight: bold;
+  font-size: 1.08em;
+  margin-bottom: 0.4em;
+  text-align: center;
+  width: 100%;
+  letter-spacing: 0.5px;
+}
+
+#searchImageThumbArea {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 0.7em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-thumb-img {
+  max-width: 110px;
+  max-height: 110px;
+  border-radius: 8px;
+  object-fit: contain;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  background: #222;
+}
+
+.search-thumb-placeholder {
+  width: 110px;
+  height: 110px;
+  border: 2px dashed #aaa;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #aaa;
+  background: #181818;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  font-size: 2.2em;
+}
+
+/* Center the image weight slider perfectly under the thumbnail */
+.search-image-column .search-row {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+.search-image-column .search-field-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: auto !important;
+  min-width: 0 !important;
+  flex: 0 0 auto !important;
+  padding: 0;
+}
+
+/* This ensures the slider itself is centered */
+#imgPromptWeightSlider {
+  transform: translateX(-25%);
+  margin-left: 0 auto;
+  display: flex;
+  justify-content: center;
+}
+
+/* Indent the positive and negative weight sliders under their respective input fields */
+#posPromptWeightSlider,
+#negPromptWeightSlider {
+  /* Optional: ensure the slider itself doesn't stretch full width */
+  width: max-content;
+}
+
+.search-fields-column .search-row.weight-row {
+  margin-left: 2.2em; /* Adjust as needed for your layout */
+}
+
+.negative-row {
+  padding-top: 3.5em; /* Adjust value as needed */
+}

@@ -3,10 +3,16 @@
 // Swiper initialization
 import { clusterDisplay } from "./cluster-display.js";
 import { scoreDisplay } from "./score-display.js";
-import { searchImage, searchText } from "./search.js";
+import { searchImage, searchTextAndImage } from "./search.js";
 import { state } from "./state.js";
 import { pauseSlideshow, resetAllSlides, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
+import { WeightSlider } from "./weight-slider.js";
+
+let posPromptWeight = 0.5; // Default weight for positive prompts
+let negPromptWeight = 0.25; // Default weight for negative prompts
+let imgPromptWeight = 0.5; // Default weight for image prompts
+let currentSearchImageUrl = null; // Track the current image URL
 
 document.addEventListener("DOMContentLoaded", async function () {
   const textSearchPanel = document.getElementById("textSearchPanel");
@@ -22,10 +28,16 @@ document.addEventListener("DOMContentLoaded", async function () {
       setTimeout(() => {
         textSearchPanel.style.display = "block";
         textSearchPanel.style.opacity = 1;
+        // Hide the noResultsMsg when opening
+        const noResultsMsg = document.getElementById("noResultsMsg");
+        if (noResultsMsg) noResultsMsg.style.display = "none";
       }, 20);
     } else {
       textSearchPanel.style.display = "none";
       textSearchPanel.style.opacity = 0;
+      // Hide the noResultsMsg when closing
+      const noResultsMsg = document.getElementById("noResultsMsg");
+      if (noResultsMsg) noResultsMsg.style.display = "none";
     }
   });
 
@@ -58,30 +70,60 @@ document.addEventListener("DOMContentLoaded", async function () {
   const searchInput = document.getElementById("searchInput");
   const negativeSearchInput = document.getElementById("negativeSearchInput");
 
-  doSearchBtn.addEventListener("click", searchWithText);
+  doSearchBtn.addEventListener("click", searchWithTextAndImage);
 
-  async function searchWithText() {
+  async function searchWithTextAndImage() {
     const positiveQuery = searchInput.value.trim();
     const negativeQuery = negativeSearchInput.value.trim();
-    if (!positiveQuery && !negativeQuery) return;
+    const imageFile = state.currentSearchImageFile || null; // You need to set this when an image is uploaded or selected
+
+    // Get weights from sliders
+    const posWeight = posPromptWeightSlider.getValue
+      ? posPromptWeightSlider.getValue()
+      : posPromptWeight;
+    const negWeight = negPromptWeightSlider.getValue
+      ? negPromptWeightSlider.getValue()
+      : negPromptWeight;
+    const imgWeight = imgPromptWeightSlider.getValue
+      ? imgPromptWeightSlider.getValue()
+      : imgPromptWeight;
+
+    if (!positiveQuery && !negativeQuery && !imageFile) return;
+
     const slideShowRunning = state.swiper?.autoplay?.running;
     pauseSlideshow();
 
     try {
       showSpinner();
-      // Pass both queries to the backend
-      let results = await searchText(positiveQuery, negativeQuery);
-      results = results.filter((item) => item.score >= 0.2);
+
+      let new_results = await searchTextAndImage({
+        file: imageFile,
+        positive_query: positiveQuery,
+        negative_query: negativeQuery,
+        image_weight: imgWeight,
+        positive_weight: posWeight,
+        negative_weight: negWeight,
+        album: state.album,
+        top_k: 100,
+      });
+      new_results = new_results.filter((item) => item.score >= 0.1);
+
+      // TO DO: This should happen in the searchResultsChanged event handler,
+      // but it isn't firing correctly.
+      if (new_results.length > 0) scoreDisplay.show(new_results[0].score);
+
       window.dispatchEvent(
         new CustomEvent("searchResultsChanged", {
-          detail: { results: results, searchType: "text" },
+          detail: { results: new_results, searchType: "text_and_image" },
         })
       );
-
-      setTimeout(() => {
-        textSearchPanel.style.opacity = 0;
-        textSearchPanel.style.display = "none";
-      }, 200);
+      if (new_results.length > 0) {
+        setTimeout(() => {
+          textSearchPanel.style.opacity = 0;
+          textSearchPanel.style.display = "none";
+        }, 200);
+      }
+      // If no results, keep the panel open so the message is visible
     } catch (err) {
       scoreDisplay.hide();
       hideSpinner();
@@ -95,6 +137,8 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Image Search
   const imageSearchBtn = document.getElementById("imageSearchBtn");
   imageSearchBtn.addEventListener("click", async function () {
+    searchInput.value = "";
+    negativeSearchInput.value = "";
     const slide = state.swiper.slides[state.swiper.activeIndex];
     if (!slide) return;
     const imgUrl = slide.querySelector("img")?.src;
@@ -108,6 +152,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       const imgResponse = await fetch(imgUrl);
       const blob = await imgResponse.blob();
       const file = new File([blob], filename, { type: blob.type });
+      // Set the search image for the panel
+      setSearchImage(imgUrl, file);
       let querySlide = createQuerySlide(imgUrl, `Search slide ${filename}`);
       await searchWithImage(file, querySlide);
       hideSpinner();
@@ -115,6 +161,16 @@ document.addEventListener("DOMContentLoaded", async function () {
     } catch (err) {
       hideSpinner();
       console.error("Image similarity search failed:", err);
+    }
+  });
+
+  // This removes the results not found message when the panel is closed.
+  // PROBABLY NOT NECESSARY
+  textSearchPanel.addEventListener("transitionend", function (e) {
+    if (textSearchPanel.style.opacity === "0") {
+      textSearchPanel.style.display = "none";
+      const noResultsMsg = document.getElementById("noResultsMsg");
+      if (noResultsMsg) noResultsMsg.style.display = "none";
     }
   });
 
@@ -126,13 +182,18 @@ document.addEventListener("DOMContentLoaded", async function () {
     uploadImageInput.click();
   });
 
+  // Upload via input (do NOT auto-search, just set image)
   uploadImageInput.addEventListener("change", async function (e) {
     const file = e.target.files[0];
     if (file && file.type.startsWith("image/")) {
       showSpinner();
       try {
-        let slide = await insertUploadedImageFile(file);
-        await searchWithImage(file, slide);
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          setSearchImage(event.target.result, file);
+        };
+        reader.readAsDataURL(file);
+        // Do NOT call insertUploadedImageFile or searchWithImage here
       } finally {
         hideSpinner();
       }
@@ -146,13 +207,36 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-    negativeSearchInput.addEventListener("keydown", function (e) {
+  negativeSearchInput.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
       e.preventDefault();
       doSearchBtn.click();
     }
   });
 
+  const posPromptWeightSlider = new WeightSlider(
+    document.getElementById("posPromptWeightSlider"),
+    0.5,
+    (val) => {
+      posPromptWeight = val;
+    }
+  );
+
+  const negPromptWeightSlider = new WeightSlider(
+    document.getElementById("negPromptWeightSlider"),
+    0.25,
+    (val) => {
+      negPromptWeight = val;
+    }
+  );
+
+  const imgPromptWeightSlider = new WeightSlider(
+    document.getElementById("imgPromptWeightSlider"),
+    0.5,
+    (val) => {
+      imgPromptWeight = val;
+    }
+  );
 
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
@@ -164,9 +248,11 @@ document.addEventListener("DOMContentLoaded", async function () {
     searchInput.value = "";
   });
 
-  const clearNegativeTextSearchBtn = document.getElementById("clearNegativeTextSearchBtn");
+  const clearNegativeTextSearchBtn = document.getElementById(
+    "clearNegativeTextSearchBtn"
+  );
   clearNegativeTextSearchBtn.addEventListener("click", () => {
-      negativeSearchInput.value = "";
+    negativeSearchInput.value = "";
   });
 
   textSearchPanel.addEventListener("dragover", function (e) {
@@ -179,6 +265,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     textSearchPanel.classList.remove("dragover");
   });
 
+  // Drag-and-drop onto the search panel (do NOT auto-search, just set image)
   textSearchPanel.addEventListener("drop", async function (e) {
     e.preventDefault();
     const files = e.dataTransfer.files;
@@ -188,8 +275,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     showSpinner();
     try {
-      let slide = await insertUploadedImageFile(file);
-      await searchWithImage(file, slide);
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        setSearchImage(event.target.result, file);
+      };
+      reader.readAsDataURL(file);
+      // Do NOT call insertUploadedImageFile or searchWithImage here
       textSearchPanel.style.opacity = 0;
       setTimeout(() => {
         textSearchPanel.style.display = "none";
@@ -221,6 +312,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     showSpinner();
     try {
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        setSearchImage(event.target.result, file);
+      };
+      reader.readAsDataURL(file);
       let slide = await insertUploadedImageFile(file);
       await searchWithImage(file, slide);
     } catch (err) {
@@ -234,6 +330,28 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // Called whenever the search results are updated
   window.addEventListener("searchResultsChanged", async function (e) {
+    // Only show the no results message if this is a real search, not a clear/reset
+    let noResultsMsg = document.getElementById("noResultsMsg");
+    if (!noResultsMsg) {
+      noResultsMsg = document.createElement("div");
+      noResultsMsg.id = "noResultsMsg";
+      noResultsMsg.style.cssText =
+        "color:#faea0e; font-weight:bold; text-align:center; margin-top:0.5em; margin-bottom:1em; font-size:1.2em;";
+      const panel = document.getElementById("textSearchPanel");
+      panel.insertBefore(noResultsMsg, panel.firstChild);
+    }
+
+    if (
+      e.detail.results.length === 0 &&
+      e.detail.searchType !== "clear"
+    ) {
+      noResultsMsg.textContent = "No images match your search.";
+      noResultsMsg.style.display = "block";
+      return;
+    } else {
+      noResultsMsg.style.display = "none";
+    }
+
     const searchType = e.detail.searchType || "image";
     state.searchResults = e.detail.results || [];
     state.searchOrigin = 0;
@@ -242,6 +360,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     updateSearchCheckmarks(searchType);
     updateScoreDisplay(searchType);
   });
+
+  renderSearchImageThumbArea();
 });
 
 function updateScoreDisplay(searchType) {
@@ -344,13 +464,13 @@ window.addEventListener("paste", async function (e) {
         try {
           const reader = new FileReader();
           reader.onload = async function (event) {
-            const url = event.target.result;
+            setSearchImage(event.target.result, file);
             const slide = document.createElement("div");
             slide.className = "swiper-slide";
             slide.innerHTML = `
                             <div style="position:relative; width:100%; height:100%;">
                                 <span class="query-image-label">Query Image</span>
-                                <img src="${url}" alt="" draggable="true" class="slide-image">
+                                <img src="${event.target.result}" alt="" draggable="true" class="slide-image">
                             </div>
                         `;
             slide.dataset.filename = file.name || "";
@@ -377,9 +497,85 @@ export function exitSearchMode() {
   clusterDisplay.hide();
   const searchInput = document.getElementById("searchInput");
   if (searchInput) searchInput.value = "";
+  const negativeSearchInput = document.getElementById("negativeSearchInput");
+  if (negativeSearchInput) negativeSearchInput.value = "";
+  setSearchImage(null, null); // Clear the search image and thumbnail
   window.dispatchEvent(
     new CustomEvent("searchResultsChanged", {
-      detail: { results: [], searchType: null },
+      detail: { results: [], searchType: "clear" },
     })
   );
 }
+
+function renderSearchImageThumbArea() {
+  const area = document.getElementById("searchImageThumbArea");
+  area.innerHTML = "";
+  if (currentSearchImageUrl) {
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "relative";
+    wrapper.style.display = "inline-block";
+
+    const img = document.createElement("img");
+    img.src = currentSearchImageUrl;
+    img.className = "search-thumb-img";
+    img.alt = "Search image";
+    wrapper.appendChild(img);
+
+    // Add the X button
+    const clearBtn = document.createElement("button");
+    clearBtn.innerHTML = "&times;";
+    clearBtn.title = "Clear search image";
+    clearBtn.className = "search-thumb-clear-btn";
+    clearBtn.style.position = "absolute";
+    clearBtn.style.top = "2px";
+    clearBtn.style.right = "2px";
+    clearBtn.style.background = "rgba(0,0,0,0.7)";
+    clearBtn.style.color = "#fff";
+    clearBtn.style.border = "none";
+    clearBtn.style.borderRadius = "50%";
+    clearBtn.style.width = "22px";
+    clearBtn.style.height = "22px";
+    clearBtn.style.cursor = "pointer";
+    clearBtn.style.fontSize = "1.2em";
+    clearBtn.style.display = "flex";
+    clearBtn.style.alignItems = "center";
+    clearBtn.style.justifyContent = "center";
+    clearBtn.style.padding = "0";
+    clearBtn.addEventListener("click", () => {
+      setSearchImage(null, null);
+    });
+    wrapper.appendChild(clearBtn);
+
+    area.appendChild(wrapper);
+  } else {
+    const placeholder = document.createElement("div");
+    placeholder.className = "search-thumb-placeholder";
+    placeholder.title = "Upload or drag an image";
+    placeholder.innerHTML = `
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="4" />
+        <path d="M12 8v8M8 12h8" />
+      </svg>
+    `;
+    placeholder.addEventListener("click", () => {
+      document.getElementById("uploadImageInput").click();
+    });
+    area.appendChild(placeholder);
+  }
+}
+
+// Call this after a search image is set or cleared:
+function setSearchImage(url, file = null) {
+  currentSearchImageUrl = url;
+  state.currentSearchImageFile = file;
+  renderSearchImageThumbArea();
+}
+
+// Example: after uploading or drag-and-drop
+// setSearchImage(url); // url is a data URL or blob URL
+
+// Example: to clear
+// setSearchImage(null);
+
+// Initial render
+document.addEventListener("DOMContentLoaded", renderSearchImageThumbArea);

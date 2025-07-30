@@ -79,6 +79,48 @@ async def search_with_text(
     results, scores = embeddings.search_images_by_text(positive_query, negative_query, top_k=top_k)
     return create_search_results(results, scores, album)
 
+
+@search_router.post("/search_with_text_and_image/", response_model=SearchResultsResponse, tags=["Search"])
+async def search_with_text_and_image(
+    file: UploadFile = File(None),
+    positive_query: str = Form(None),
+    negative_query: str = Form(None),
+    image_weight: float = Form(0.5),
+    positive_weight: float = Form(0.5),
+    negative_weight: float = Form(0.5),
+    album: str = Form(DEFAULT_ALBUM),
+    top_k: int = Form(DEFAULT_TOP_K),
+) -> SearchResultsResponse:
+    """
+    Search for images using a combination of image, positive text, and negative text queries with separate weights.
+    """
+    temp_path = None
+    try:
+        # Save uploaded file temporarily if provided
+        if file is not None:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                shutil.copyfileobj(file.file, tmp)
+                temp_path = Path(tmp.name)
+            query_image_path = temp_path
+        else:
+            query_image_path = None
+
+        embeddings = get_embeddings_for_album(album)
+        results, scores = embeddings.search_images_by_text_and_image(
+            query_image_path=query_image_path,
+            positive_query=positive_query,
+            negative_query=negative_query,
+            image_weight=image_weight,
+            positive_weight=positive_weight,
+            negative_weight=negative_weight,
+            top_k=top_k,
+        )
+        return create_search_results(results, scores, album)
+    finally:
+        # Clean up temp file
+        if temp_path and temp_path.exists():
+            temp_path.unlink(missing_ok=True)
+
 # Image Retrieval Routes
 @search_router.post("/retrieve_image/", response_model=SlideSummary, tags=["Search"])
 async def retrieve_image(
