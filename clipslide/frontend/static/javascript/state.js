@@ -54,6 +54,8 @@ export function restoreFromLocalStorage() {
   const storedShowControlPanelText = localStorage.getItem("showControlPanelText");
   if (storedShowControlPanelText !== null) {
     state.showControlPanelText = storedShowControlPanelText === "true";
+  } else {
+    state.showControlPanelText = window.innerWidth >= 600; // Default to true on larger screens;
   }
 
   const storedAlbum = localStorage.getItem("album");

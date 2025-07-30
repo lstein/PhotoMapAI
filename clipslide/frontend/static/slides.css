@@ -1800,3 +1800,15 @@ body {
 .negative-row {
   padding-top: 3.5em; /* Adjust value as needed */
 }
+
+@media (max-width: 600px) {
+  .control-icons-row,
+  .search-icons-row {
+    gap: 0.3em;
+  }
+  #controlPanel,
+  #searchPanel {
+    padding-left: 0.2em;
+    padding-right: 0.2em;
+  }
+}
