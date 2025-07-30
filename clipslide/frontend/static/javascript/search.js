@@ -82,44 +82,12 @@ export async function fetchNextImage(lastImage = null, backward = false) {
 }
 
 // Perform an image search and return a list of {filename, score} objects.
-export async function searchImage(file) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("top_k", 100);
-  formData.append("album", state.album);
-
-  try {
-    const response = await fetch("search_with_image/", {
-      method: "POST",
-      body: formData,
-    });
-    const result = await response.json();
-    return result.results;
-  } catch (err) {
-    console.error("Image search request failed:", err);
-    return [];
-  }
+export async function searchImage(image_file) {
+  return await searchTextAndImage({file: image_file});
 }
 
-// Perform a text search and return a list of {filename, score} objects.
-export async function searchText(positive_query, negative_query = "") {
-  const formData = new FormData();
-  formData.append("positive_query", positive_query);
-  formData.append("negative_query", negative_query);
-  formData.append("top_k", 100);
-  formData.append("album", state.album);
-
-  try {
-    const response = await fetch("search_with_text/", {
-      method: "POST",
-      body: formData,
-    });
-    const result = await response.json();
-    return result.results;
-  } catch (err) {
-    console.error("Text search request failed:", err);
-    return [];
-  }
+export async function searchText(query) {
+  return await searchTextAndImage({positive_query: query});
 }
 
 // Combined search using both text and image inputs
@@ -130,7 +98,6 @@ export async function searchTextAndImage({
   image_weight = 0.5,
   positive_weight = 0.5,
   negative_weight = 0.5,
-  album,
   top_k = 100,
 }) {
   const formData = new FormData();
@@ -141,7 +108,7 @@ export async function searchTextAndImage({
   formData.append("positive_weight", positive_weight);
   formData.append("negative_weight", negative_weight);
   formData.append("top_k", top_k);
-  formData.append("album", album);
+  formData.append("album", state.album);
 
   try {
     const response = await fetch("search_with_text_and_image/", {
@@ -183,4 +150,3 @@ export async function deleteImage(filepath) {
 export function getCurrentFilepath() {
   return document.getElementById("filepathText")?.textContent?.trim();
 }
-

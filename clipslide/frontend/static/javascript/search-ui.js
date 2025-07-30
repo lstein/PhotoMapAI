@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // TO DO: This should happen in the searchResultsChanged event handler,
       // but it isn't firing correctly.
-      if (new_results.length > 0) scoreDisplay.show(new_results[0].score);
+      if (new_results.length > 0) scoreDisplay.show(new_results[0].score, 1, new_results.length);
 
       window.dispatchEvent(
         new CustomEvent("searchResultsChanged", {
@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       // Set the search image for the panel
       setSearchImage(imgUrl, file);
       let querySlide = createQuerySlide(imgUrl, `Search slide ${filename}`);
-      await searchWithImage(file, querySlide);
+      await searchWithTextAndImage(file, querySlide);
       hideSpinner();
       if (slideShowRunning) resumeSlideshow();
     } catch (err) {
@@ -368,14 +368,16 @@ function updateScoreDisplay(searchType) {
   if (searchType === "cluster" && state.searchResults.length > 0) {
     clusterDisplay.show(
       state.searchResults[0].cluster,
-      state.searchResults[0].color || "#000000"
+      state.searchResults[0].color || "#000000",
+      1,
+      state.searchResults.length
     );
   } else if (
     ["image", "text"].includes(searchType) &&
     state.searchResults.length > 0
   ) {
     const score = state.searchResults[0].score || 0;
-    scoreDisplay.show(score);
+    scoreDisplay.show(score, 1, state.searchResults.length);
   }
 }
 

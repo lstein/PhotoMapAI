@@ -7,9 +7,13 @@ export class ScoreDisplay {
     this.isVisible = false;
   }
 
-  show(score) {
+  show(score, index = null, total = null) {
     if (score !== undefined && score !== null) {
-      this.scoreText.textContent = `score=${score.toFixed(3)}`;
+      let text = `score=${score.toFixed(3)}`;
+      if (index !== null && total !== null) {
+        text += ` (${index}/${total})`;
+      }
+      this.scoreText.textContent = text;
       this.scoreElement.style.display = 'block';
       this.scoreElement.classList.add('visible');
       this.scoreElement.classList.remove('hidden');

@@ -41,45 +41,6 @@ class SearchResultsResponse(BaseModel):
 
 
 # Search Routes
-@search_router.post("/search_with_image/", response_model=SearchResultsResponse, tags=["Search"])
-async def search_with_image(
-    file: UploadFile = File(...),
-    album: str = Form(DEFAULT_ALBUM),
-    top_k: int = Form(DEFAULT_TOP_K),
-) -> SearchResultsResponse:
-    """Search for similar images using a query image."""
-    temp_path = None
-    try:
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-            shutil.copyfileobj(file.file, tmp)
-            temp_path = Path(tmp.name)
-
-        # Perform search
-        embeddings = get_embeddings_for_album(album)
-        results, scores = embeddings.search_images_by_similarity(temp_path, top_k=top_k)
-
-        return create_search_results(results, scores, album)
-
-    finally:
-        # Clean up temp file
-        if temp_path and temp_path.exists():
-            temp_path.unlink(missing_ok=True)
-
-
-@search_router.post("/search_with_text/", response_model=SearchResultsResponse, tags=["Search"])
-async def search_with_text(
-    positive_query: str = Form(...),
-    negative_query: str = Form(""),
-    album: str = Form(DEFAULT_ALBUM),
-    top_k: int = Form(DEFAULT_TOP_K),
-) -> SearchResultsResponse:
-    """Search for images semantically matching the query."""
-    embeddings = get_embeddings_for_album(album)
-    results, scores = embeddings.search_images_by_text(positive_query, negative_query, top_k=top_k)
-    return create_search_results(results, scores, album)
-
-
 @search_router.post("/search_with_text_and_image/", response_model=SearchResultsResponse, tags=["Search"])
 async def search_with_text_and_image(
     file: UploadFile = File(None),

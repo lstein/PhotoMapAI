@@ -9,9 +9,13 @@ export class ClusterDisplay {
     this.isVisible = false;
   }
 
-  show(cluster, color) {
+  show(cluster, color, index = null, total = null) {
     if (cluster !== undefined && cluster !== null) {
-      this.scoreText.textContent = `cluster ${cluster}`;
+      let text = `cluster ${cluster}`;
+      if (index !== null && total !== null) {
+        text += ` (${index}/${total})`;
+      }
+      this.scoreText.textContent = text;
       this.scoreElement.style.display = 'block';
       this.scoreElement.classList.add('visible');
       this.scoreElement.classList.remove('hidden');

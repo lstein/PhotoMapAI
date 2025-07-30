@@ -104,7 +104,8 @@ def do_search():
     args = parser.parse_args()
     embeddings = Embeddings(embeddings_path=args.embeddings)
 
-    results, scores = embeddings.search_images_by_similarity(args.search, top_k=args.top_k)
+    results, scores = embeddings.search_images_by_text_and_image(query_image_path=args.search, 
+                                                                 top_k=args.top_k)
     print("Top similar images:")
     for filename, score in zip(results, scores):
         print(f"{filename}: {score:.4f}")
@@ -130,7 +131,8 @@ def do_text_search():
     args = parser.parse_args()
     embeddings = Embeddings(embeddings_path=args.embeddings)
 
-    results, scores = embeddings.search_images_by_text(args.query, top_k=args.top_k)
+    results, scores = embeddings.search_images_by_text_and_image(positive_query=args.query, 
+                                                                 top_k=args.top_k)
     print("Top similar images for query:")
     for filename, score in zip(results, scores):
         print(f"{filename}: {score:.4f}")

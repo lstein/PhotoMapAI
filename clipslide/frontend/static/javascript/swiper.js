@@ -1,5 +1,6 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
+import { albumManager } from "./album.js";
 import { clusterDisplay } from "./cluster-display.js";
 import { updateMetadataOverlay } from "./overlay.js";
 import { scoreDisplay } from "./score-display.js";
@@ -201,26 +202,40 @@ export async function addNewSlide(backward = false) {
 }
 
 // Add function to handle slide changes
-export function handleSlideChange() {
+export async function handleSlideChange() {
   updateMetadataOverlay();
+  let index = 0;
 
   const activeSlide = state.swiper.slides[state.swiper.activeIndex];
-  if (
-    activeSlide &&
-    activeSlide.dataset.score &&
-    state.searchResults.length > 0
-  ) {
+  if (state.searchResults.length > 0) {
+    // Find the index of the current slide in searchResults
+    const filename = activeSlide.dataset?.filepath;
+    if (filename) {
+      const relpath = albumManager.relativePath(
+        filename,
+        await albumManager.getCurrentAlbum()
+      );
+      index = state.searchResults.findIndex(
+        (item) => item.filename === relpath
+      );
+    }
+  }
+
+  if (activeSlide?.dataset?.score && state.searchResults.length > 0) {
     // Show score if we're in search mode and slide has a score
     const score = parseFloat(activeSlide.dataset.score);
-    scoreDisplay.show(score);
+    // index is 0-based, so add 1 for display
+    scoreDisplay.show(score, index + 1, state.searchResults.length);
   } else if (activeSlide && activeSlide?.dataset?.cluster) {
-    clusterDisplay.show(activeSlide.dataset.cluster, activeSlide.dataset.color);
+    clusterDisplay.show(
+      activeSlide.dataset.cluster,
+      activeSlide.dataset.color,
+      index + 1,
+      state.searchResults.length
+    );
   } else {
-    // Hide score if not in search mode or no score
     scoreDisplay.hide();
   }
-  // Delay moving the umap marker until the slide transition is complete.
-  // Otherwise, on the iPad, there is an obvious hesitation.
   setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
 }
 
