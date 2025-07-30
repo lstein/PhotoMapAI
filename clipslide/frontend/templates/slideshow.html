@@ -7,12 +7,21 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=10, user-scalable=yes"
     />
-    <link rel="icon" type="image/x-icon" href="static/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="static/icons/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png" />
     <link
-      rel="apple-touch-icon"
-      sizes="180x180"
-      href="static/apple-touch-icon.png"
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="static/icons/favicon-32x32.png"
     />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="static/icons/favicon-16x16.png"
+    />
+    <link rel="manifest" href="static/icons/site.webmanifest" />
     <link rel="stylesheet" type="text/css" href="static/slides.css" />
     <link
       rel="stylesheet"
@@ -318,7 +327,12 @@
               <!-- JS will insert thumbnail or upload box here -->
             </div>
             <div class="search-row">
-              <label for="imgPromptWeightSlider" class="search-label" style="visibility:hidden;">Image Weight:</label>
+              <label
+                for="imgPromptWeightSlider"
+                class="search-label"
+                style="visibility: hidden"
+                >Image Weight:</label
+              >
               <div class="search-field-wrapper">
                 <div id="imgPromptWeightSlider"></div>
               </div>
@@ -334,17 +348,23 @@
                   placeholder="Enter search terms..."
                   autocomplete="off"
                 />
-                <button id="clearTextSearchBtn" title="Clear search">&#10005;</button>
+                <button id="clearTextSearchBtn" title="Clear search">
+                  &#10005;
+                </button>
               </div>
             </div>
             <div class="search-row weight-row">
-              <label for="posPromptWeightSlider" class="search-label">Weight:</label>
+              <label for="posPromptWeightSlider" class="search-label"
+                >Weight:</label
+              >
               <div class="search-field-wrapper">
                 <div id="posPromptWeightSlider"></div>
               </div>
             </div>
             <div class="search-row negative-row">
-              <label for="negativeSearchInput" class="search-label">Text to Avoid:</label>
+              <label for="negativeSearchInput" class="search-label"
+                >Text to Avoid:</label
+              >
               <div class="search-field-wrapper">
                 <input
                   id="negativeSearchInput"
@@ -352,11 +372,15 @@
                   placeholder="Exclude terms..."
                   autocomplete="off"
                 />
-                <button id="clearNegativeTextSearchBtn" title="Clear exclude">&#10005;</button>
+                <button id="clearNegativeTextSearchBtn" title="Clear exclude">
+                  &#10005;
+                </button>
               </div>
             </div>
             <div class="search-row weight-row">
-              <label for="negPromptWeightSlider" class="search-label">Weight:</label>
+              <label for="negPromptWeightSlider" class="search-label"
+                >Weight:</label
+              >
               <div class="search-field-wrapper">
                 <div id="negPromptWeightSlider"></div>
               </div>
