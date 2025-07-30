@@ -8,6 +8,7 @@ import { getPercentile, isColorLight } from "./utils.js";
 const UMAP_SIZES = {
   big: { width: 800, height: 560 },
   medium: { width: 440, height: 280 },
+  small: { width: 340, height: 180 }, 
   fullscreen: { width: window.innerWidth, height: window.innerHeight }
 };
 
@@ -728,6 +729,7 @@ function setActiveResizeIcon(sizeKey) {
   // Remove 'active' from all resize icons
   document.getElementById("umapResizeBig").classList.remove("active");
   document.getElementById("umapResizeMedium").classList.remove("active");
+  document.getElementById("umapResizeSmall").classList.remove("active"); 
   document.getElementById("umapResizeFullscreen").classList.remove("active");
   document.getElementById("umapResizeShaded").classList.remove("active");
 
@@ -736,6 +738,8 @@ function setActiveResizeIcon(sizeKey) {
     document.getElementById("umapResizeBig").classList.add("active");
   } else if (sizeKey === "medium") {
     document.getElementById("umapResizeMedium").classList.add("active");
+  } else if (sizeKey === "small") {
+    document.getElementById("umapResizeSmall").classList.add("active");
   } else if (sizeKey === "fullscreen") {
     document.getElementById("umapResizeFullscreen").classList.add("active");
   } else if (sizeKey === "shaded") {
@@ -858,6 +862,12 @@ addButtonHandlers("umapResizeBig", () => {
 addButtonHandlers("umapResizeMedium", () => {
   setUmapWindowSize("medium");
   lastUnshadedSize = "medium";
+  saveCurrentPosition();
+  isFullscreen = false;
+});
+addButtonHandlers("umapResizeSmall", () => {
+  setUmapWindowSize("small");
+  lastUnshadedSize = "small";
   saveCurrentPosition();
   isFullscreen = false;
 });

@@ -127,8 +127,10 @@ body {
   background: none;
   border: none;
   border-radius: 50%;
-  /* width: 48px;
-  height: 48px; */
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   color: #fff;
   display: flex;
   align-items: center;
@@ -138,6 +140,13 @@ body {
   opacity: 0.6;
   transition: opacity 0.2s;
   pointer-events: auto;
+}
+
+#controlPanel svg,
+#searchPanel svg {
+  width: 32px;
+  height: 32px;
+  display: block;
 }
 
 #controlPanel button:hover,
