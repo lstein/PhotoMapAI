@@ -514,6 +514,13 @@ body {
   color: #fff;
 }
 
+/* Bold yellow for the Search label */
+.search-label[for="searchInput"],
+.search-label[for="negativeSearchInput"] {
+  color: #faea0e;
+  font-weight: bold;
+}
+
 /* ===== MODAL BASE STYLES ===== */
 .modal-overlay {
   position: fixed;
@@ -1695,6 +1702,16 @@ body {
   max-width: 180px;
 }
 
+.search-image-label {
+  color: #faea0e;
+  font-weight: bold;
+  font-size: 1.08em;
+  margin-bottom: 0.4em;
+  text-align: center;
+  width: 100%;
+  letter-spacing: 0.5px;
+}
+
 #searchImageThumbArea {
   width: 120px;
   height: 120px;
@@ -1768,5 +1785,5 @@ body {
 }
 
 .negative-row {
-  padding-top: 0.7em; /* Adjust value as needed */
+  padding-top: 3.5em; /* Adjust value as needed */
 }

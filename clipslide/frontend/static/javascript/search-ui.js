@@ -3,7 +3,7 @@
 // Swiper initialization
 import { clusterDisplay } from "./cluster-display.js";
 import { scoreDisplay } from "./score-display.js";
-import { searchImage } from "./search.js";
+import { searchImage, searchTextAndImage } from "./search.js";
 import { state } from "./state.js";
 import { pauseSlideshow, resetAllSlides, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
@@ -28,10 +28,16 @@ document.addEventListener("DOMContentLoaded", async function () {
       setTimeout(() => {
         textSearchPanel.style.display = "block";
         textSearchPanel.style.opacity = 1;
+        // Hide the noResultsMsg when opening
+        const noResultsMsg = document.getElementById("noResultsMsg");
+        if (noResultsMsg) noResultsMsg.style.display = "none";
       }, 20);
     } else {
       textSearchPanel.style.display = "none";
       textSearchPanel.style.opacity = 0;
+      // Hide the noResultsMsg when closing
+      const noResultsMsg = document.getElementById("noResultsMsg");
+      if (noResultsMsg) noResultsMsg.style.display = "none";
     }
   });
 
@@ -90,34 +96,34 @@ document.addEventListener("DOMContentLoaded", async function () {
     try {
       showSpinner();
 
-      const formData = new FormData();
-      if (imageFile) formData.append("file", imageFile);
-      formData.append("positive_query", positiveQuery);
-      formData.append("negative_query", negativeQuery);
-      formData.append("image_weight", imgWeight);
-      formData.append("positive_weight", posWeight);
-      formData.append("negative_weight", negWeight);
-      formData.append("top_k", 100);
-      formData.append("album", state.album);
-
-      const response = await fetch("search_with_text_and_image/", {
-        method: "POST",
-        body: formData,
+      let new_results = await searchTextAndImage({
+        file: imageFile,
+        positive_query: positiveQuery,
+        negative_query: negativeQuery,
+        image_weight: imgWeight,
+        positive_weight: posWeight,
+        negative_weight: negWeight,
+        album: state.album,
+        top_k: 100,
       });
-      const result = await response.json();
-      let results = result.results || [];
-      results = results.filter((item) => item.score >= 0.2);
+      new_results = new_results.filter((item) => item.score >= 0.1);
+
+      // TO DO: This should happen in the searchResultsChanged event handler,
+      // but it isn't firing correctly.
+      if (new_results.length > 0) scoreDisplay.show(new_results[0].score);
 
       window.dispatchEvent(
         new CustomEvent("searchResultsChanged", {
-          detail: { results: results, searchType: "text_and_image" },
+          detail: { results: new_results, searchType: "text_and_image" },
         })
       );
-
-      setTimeout(() => {
-        textSearchPanel.style.opacity = 0;
-        textSearchPanel.style.display = "none";
-      }, 200);
+      if (new_results.length > 0) {
+        setTimeout(() => {
+          textSearchPanel.style.opacity = 0;
+          textSearchPanel.style.display = "none";
+        }, 200);
+      }
+      // If no results, keep the panel open so the message is visible
     } catch (err) {
       scoreDisplay.hide();
       hideSpinner();
@@ -158,6 +164,16 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
+  // This removes the results not found message when the panel is closed.
+  // PROBABLY NOT NECESSARY
+  textSearchPanel.addEventListener("transitionend", function (e) {
+    if (textSearchPanel.style.opacity === "0") {
+      textSearchPanel.style.display = "none";
+      const noResultsMsg = document.getElementById("noResultsMsg");
+      if (noResultsMsg) noResultsMsg.style.display = "none";
+    }
+  });
+
   const uploadImageLink = document.getElementById("uploadImageLink");
   const uploadImageInput = document.getElementById("uploadImageInput");
 
@@ -166,6 +182,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     uploadImageInput.click();
   });
 
+  // Upload via input (do NOT auto-search, just set image)
   uploadImageInput.addEventListener("change", async function (e) {
     const file = e.target.files[0];
     if (file && file.type.startsWith("image/")) {
@@ -176,8 +193,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           setSearchImage(event.target.result, file);
         };
         reader.readAsDataURL(file);
-        let slide = await insertUploadedImageFile(file);
-        await searchWithImage(file, slide);
+        // Do NOT call insertUploadedImageFile or searchWithImage here
       } finally {
         hideSpinner();
       }
@@ -203,7 +219,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     0.5,
     (val) => {
       posPromptWeight = val;
-      console.log("Positive prompt weight set to:", val);
     }
   );
 
@@ -212,7 +227,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     0.25,
     (val) => {
       negPromptWeight = val;
-      console.log("Negative prompt weight set to:", val);
     }
   );
 
@@ -221,13 +235,11 @@ document.addEventListener("DOMContentLoaded", async function () {
     0.5,
     (val) => {
       imgPromptWeight = val;
-      console.log("Image prompt weight set to:", val);
     }
   );
 
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
-    setSearchImage(null, null); // Clear the search image and thumbnail
     exitSearchMode();
   });
 
@@ -253,6 +265,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     textSearchPanel.classList.remove("dragover");
   });
 
+  // Drag-and-drop onto the search panel (do NOT auto-search, just set image)
   textSearchPanel.addEventListener("drop", async function (e) {
     e.preventDefault();
     const files = e.dataTransfer.files;
@@ -267,8 +280,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         setSearchImage(event.target.result, file);
       };
       reader.readAsDataURL(file);
-      let slide = await insertUploadedImageFile(file);
-      await searchWithImage(file, slide);
+      // Do NOT call insertUploadedImageFile or searchWithImage here
       textSearchPanel.style.opacity = 0;
       setTimeout(() => {
         textSearchPanel.style.display = "none";
@@ -318,6 +330,28 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   // Called whenever the search results are updated
   window.addEventListener("searchResultsChanged", async function (e) {
+    // Only show the no results message if this is a real search, not a clear/reset
+    let noResultsMsg = document.getElementById("noResultsMsg");
+    if (!noResultsMsg) {
+      noResultsMsg = document.createElement("div");
+      noResultsMsg.id = "noResultsMsg";
+      noResultsMsg.style.cssText =
+        "color:#faea0e; font-weight:bold; text-align:center; margin-top:0.5em; margin-bottom:1em; font-size:1.2em;";
+      const panel = document.getElementById("textSearchPanel");
+      panel.insertBefore(noResultsMsg, panel.firstChild);
+    }
+
+    if (
+      e.detail.results.length === 0 &&
+      e.detail.searchType !== "clear"
+    ) {
+      noResultsMsg.textContent = "No images match your search.";
+      noResultsMsg.style.display = "block";
+      return;
+    } else {
+      noResultsMsg.style.display = "none";
+    }
+
     const searchType = e.detail.searchType || "image";
     state.searchResults = e.detail.results || [];
     state.searchOrigin = 0;
@@ -463,9 +497,12 @@ export function exitSearchMode() {
   clusterDisplay.hide();
   const searchInput = document.getElementById("searchInput");
   if (searchInput) searchInput.value = "";
+  const negativeSearchInput = document.getElementById("negativeSearchInput");
+  if (negativeSearchInput) negativeSearchInput.value = "";
+  setSearchImage(null, null); // Clear the search image and thumbnail
   window.dispatchEvent(
     new CustomEvent("searchResultsChanged", {
-      detail: { results: [], searchType: null },
+      detail: { results: [], searchType: "clear" },
     })
   );
 }

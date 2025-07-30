@@ -122,6 +122,40 @@ export async function searchText(positive_query, negative_query = "") {
   }
 }
 
+// Combined search using both text and image inputs
+export async function searchTextAndImage({
+  file = null,
+  positive_query = "",
+  negative_query = "",
+  image_weight = 0.5,
+  positive_weight = 0.5,
+  negative_weight = 0.5,
+  album,
+  top_k = 100,
+}) {
+  const formData = new FormData();
+  if (file) formData.append("file", file);
+  formData.append("positive_query", positive_query);
+  formData.append("negative_query", negative_query);
+  formData.append("image_weight", image_weight);
+  formData.append("positive_weight", positive_weight);
+  formData.append("negative_weight", negative_weight);
+  formData.append("top_k", top_k);
+  formData.append("album", album);
+
+  try {
+    const response = await fetch("search_with_text_and_image/", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await response.json();
+    return result.results || [];
+  } catch (err) {
+    console.error("search_with_text_and_image request failed:", err);
+    return [];
+  }
+}
+
 export async function deleteImage(filepath) {
   try {
     // Use DELETE method with filepath as query parameter
@@ -150,11 +184,3 @@ export function getCurrentFilepath() {
   return document.getElementById("filepathText")?.textContent?.trim();
 }
 
-// Wire up the clearNegativeTextSearchBtn
-document.getElementById("clearNegativeTextSearchBtn")?.addEventListener("click", () => {
-  const negativeInput = document.getElementById("negativeSearchInput");
-  if (negativeInput) {
-    negativeInput.value = "";
-    negativeInput.focus();
-  }
-});
