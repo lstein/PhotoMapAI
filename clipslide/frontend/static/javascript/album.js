@@ -429,9 +429,10 @@ export class AlbumManager {
     const newAlbum = {
       key: formData.key,
       name: formData.name,
-      description: formData.description,
       image_paths: paths,
       index: `${paths[0]}/clipslide_index/embeddings.npz`,
+      umap_eps: 0.1,
+      description: formData.description,
     };
 
     try {

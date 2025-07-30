@@ -1,5 +1,6 @@
 # slideshow_server.py
 import logging
+import os
 import numpy as np
 from pathlib import Path
 from fastapi import (
@@ -50,9 +51,9 @@ async def get_root(
 
     if not albums:
         return templates.TemplateResponse(
+            request,
             "slideshow.html",
             {
-                "request": request,
                 "album": None,
                 "delay": delay,
                 "mode": mode,
@@ -65,9 +66,9 @@ async def get_root(
         album = list(albums.keys())[0]
 
     return templates.TemplateResponse(
+        request,
         "slideshow.html",
         {
-            "request": request,
             "album": album,
             "delay": delay,
             "mode": mode,

@@ -209,7 +209,7 @@ export async function handleSlideChange() {
   const activeSlide = state.swiper.slides[state.swiper.activeIndex];
   if (state.searchResults.length > 0) {
     // Find the index of the current slide in searchResults
-    const filename = activeSlide.dataset?.filepath;
+    const filename = activeSlide?.dataset?.filepath;
     if (filename) {
       const relpath = albumManager.relativePath(
         filename,

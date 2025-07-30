@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -11,7 +10,7 @@ from fastapi import (
     HTTPException,
 )
 from ..embeddings import Embeddings
-from ..config import get_config_manager, create_album
+from ..config import get_config_manager, create_album, Album
 
 class UmapEpsSetRequest(BaseModel):
     album: str
@@ -47,7 +46,7 @@ async def get_available_albums() -> List[Dict[str, Any]]:
                 "key": key,
                 "name": album.name,
                 "description": album.description,
-                "embeddings_file": album.index,
+                "index": album.index,
                 "umap_eps": album.umap_eps,
                 "image_paths": album.image_paths,
             }
@@ -58,18 +57,11 @@ async def get_available_albums() -> List[Dict[str, Any]]:
         return []
 
 
+# TO DO: Replace album_data dict with a proper Pydantic model
 @album_router.post("/add_album/", tags=["Albums"])
-async def add_album(album_data: dict) -> JSONResponse:
+async def add_album(album: Album) -> JSONResponse:
     """Add a new album to the configuration."""
     try:
-        album = create_album(
-            key=album_data["key"],
-            name=album_data["name"],
-            image_paths=album_data["image_paths"],
-            index=album_data["index"],
-            umap_eps=album_data.get("umap_eps", 0.07),
-            description=album_data.get("description", ""),
-        )
         logging.info(f"Adding album: {album.key} with paths {album.image_paths}")
         if config_manager.add_album(album):
             return JSONResponse(

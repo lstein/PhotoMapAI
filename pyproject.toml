@@ -31,6 +31,14 @@ dependencies = [
     "uvicorn",
 ]
 
+[project.optional-dependencies]
+testing = [
+    "pytest",
+    "pytest-cov",
+    "httpx",
+    "asynctest",
+    "pytest-asyncio",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]  # Look in the current directory (repo root)
