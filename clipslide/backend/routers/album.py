@@ -1,23 +1,23 @@
-from fastapi import APIRouter
+import logging
+from pathlib import Path
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from pathlib import Path
-from typing import List, Dict, Any
-import logging
 
-from fastapi import (
-    APIRouter,
-    HTTPException,
-)
+from ..config import Album, create_album, get_config_manager
 from ..embeddings import Embeddings
-from ..config import get_config_manager, create_album, Album
+
 
 class UmapEpsSetRequest(BaseModel):
     album: str
     eps: float
 
+
 class UmapEpsGetRequest(BaseModel):
     album: str
+
 
 class EmbeddingsIndexMetadata(BaseModel):
     filename_count: int
@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 album_router = APIRouter()
 config_manager = get_config_manager()
+
 
 # Album Management Routes
 @album_router.get("/available_albums/", tags=["Albums"])
@@ -55,6 +56,15 @@ async def get_available_albums() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Failed to get albums: {e}")
         return []
+
+
+@album_router.get("/album/{album_key}", tags=["Albums"])
+async def get_album(album_key: str) -> Album:
+    """Get details of a specific album."""
+    album = config_manager.get_album(album_key)
+    if not album:
+        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
+    return album
 
 
 # TO DO: Replace album_data dict with a proper Pydantic model
@@ -131,6 +141,7 @@ async def delete_album(album_key: str) -> JSONResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete album: {str(e)}")
 
+
 # Return true if the index exists for the specified album
 @album_router.get("/index_exists/{album_key}", tags=["Albums"])
 async def index_exists(album_key: str) -> dict:
@@ -141,8 +152,13 @@ async def index_exists(album_key: str) -> dict:
     index_path = Path(album_config.index)
     return {"exists": index_path.exists()}
 
+
 # Return Embeddings index metadata for the specified album
-@album_router.get("/index_metadata/{album_key}", response_model=EmbeddingsIndexMetadata, tags=["Albums"])
+@album_router.get(
+    "/index_metadata/{album_key}",
+    response_model=EmbeddingsIndexMetadata,
+    tags=["Albums"],
+)
 async def index_metadata(album_key: str) -> EmbeddingsIndexMetadata:
     """Get metadata about the embeddings index for the specified album."""
     album_config = config_manager.get_album(album_key)
@@ -194,6 +210,7 @@ async def set_locationiq_key(request: dict):
     except Exception as e:
         return {"success": False, "message": str(e)}
 
+
 @album_router.post("/set_umap_eps/", tags=["Albums"])
 async def set_umap_eps(request: UmapEpsSetRequest):
     album_config = config_manager.get_album(request.album)
@@ -203,12 +220,14 @@ async def set_umap_eps(request: UmapEpsSetRequest):
     config_manager.update_album(album_config)
     return {"success": True, "eps": request.eps}
 
+
 @album_router.post("/get_umap_eps/", tags=["Albums"])
 async def get_umap_eps(request: UmapEpsGetRequest):
     album_config = config_manager.get_album(request.album)
     if not album_config:
         raise HTTPException(status_code=404, detail="Album not found")
     return {"success": True, "eps": album_config.umap_eps}
+
 
 # Various utility functions - might want to move them into their own module later
 def validate_album_exists(album_key: str):
@@ -225,10 +244,12 @@ def validate_album_exists(album_key: str):
         raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
     return album_config
 
+
 def get_embeddings_for_album(album_key: str) -> Embeddings:
     """Get embeddings instance for a given album."""
     album_config = validate_album_exists(album_key)
     return Embeddings(embeddings_path=Path(album_config.index))
+
 
 def validate_image_access(album_config, image_path: Path) -> bool:
     """Validate that an image path is within allowed album directories.
@@ -246,5 +267,3 @@ def validate_image_access(album_config, image_path: Path) -> bool:
         return False
     except Exception:
         return False
-
-

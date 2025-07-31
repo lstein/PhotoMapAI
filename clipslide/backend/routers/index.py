@@ -1,30 +1,29 @@
-'''
+"""
 clipslide.backend.routers.index
 This module contains the index-related API endpoints for the Clipslide backend.
 It allows creating, deleting, and checking the existence of embeddings indices for albums.
-'''
+"""
+
 import logging
-from PIL import Image, ImageOps
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Form,
-    HTTPException,
-)
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from pathlib import Path
 from typing import Optional
 
-from .album import validate_album_exists, validate_image_access
-from ..constants import DEFAULT_ALBUM
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException
+from fastapi.responses import JSONResponse
+from PIL import Image, ImageOps
+from pydantic import BaseModel
+
 from ..config import get_config_manager
+from ..constants import DEFAULT_ALBUM
 from ..embeddings import Embeddings
 from ..progress import progress_tracker
+from .album import validate_album_exists, validate_image_access
+
 index_router = APIRouter()
 
 logger = logging.getLogger(__name__)
 config_manager = get_config_manager()
+
 
 class ProgressResponse(BaseModel):
     album_key: str
@@ -37,13 +36,21 @@ class ProgressResponse(BaseModel):
     estimated_time_remaining: Optional[float]
     error_message: Optional[str] = None
 
+
+class UpdateIndexRequest(BaseModel):
+    album_key: str
+
+
 # Index Management Routes
-@index_router.post("/update_index_async/", response_model=dict, tags=["Index"])
+@index_router.post(
+    "/update_index_async/", response_model=dict, status_code=202, tags=["Index"]
+)
 async def update_index_async(
     background_tasks: BackgroundTasks,
-    album_key: str = Form(...),
+    req: UpdateIndexRequest,
 ) -> dict:
     """Start an asynchronous index update for the specified album."""
+    album_key = req.album_key
     try:
         if progress_tracker.is_running(album_key):
             raise HTTPException(
@@ -60,6 +67,7 @@ async def update_index_async(
             "success": True,
             "message": f"Index update for album '{album_key}' started in background",
             "album_key": album_key,
+            "task_id": album_key,  # This is the convention.
         }
 
     except HTTPException:
@@ -70,7 +78,9 @@ async def update_index_async(
         )
 
 
-@index_router.get("/index_progress/{album_key}", response_model=ProgressResponse, tags=["Index"])
+@index_router.get(
+    "/index_progress/{album_key}", response_model=ProgressResponse, tags=["Index"]
+)
 async def get_index_progress(album_key: str) -> ProgressResponse:
     """Get the current progress of an index update operation."""
     try:
@@ -98,7 +108,11 @@ async def get_index_progress(album_key: str) -> ProgressResponse:
             current_step=progress.current_step,
             images_processed=images_processed,
             total_images=total_images,
-            progress_percentage=progress.progress_percentage if hasattr(progress, "progress_percentage") else 0.0,
+            progress_percentage=(
+                progress.progress_percentage
+                if hasattr(progress, "progress_percentage")
+                else 0.0
+            ),
             elapsed_time=progress.elapsed_time,
             estimated_time_remaining=progress.estimated_time_remaining,
             error_message=progress.error_message,
@@ -134,6 +148,7 @@ async def cancel_index_operation(album_key: str) -> dict:
             status_code=500, detail=f"Failed to cancel operation: {str(e)}"
         )
 
+
 @index_router.delete("/delete_image/", tags=["Index"])
 async def delete_image(
     file_to_delete: str, album: str = Form(DEFAULT_ALBUM)
@@ -168,6 +183,7 @@ async def delete_image(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
 
 # Background Tasks
 async def _update_index_background_async(album_key: str, album_config):

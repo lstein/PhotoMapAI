@@ -7,40 +7,43 @@ and to search for similar images using a query image. It uses the CLIP model fro
 for image embeddings and similarity calculations.
 """
 
-import os
-import clip
+import asyncio
 import functools
-from fastapi import logger
+import logging
+import os
+import warnings
+from pathlib import Path
+from typing import Callable, ClassVar, Dict, Generator, Optional, Set
+
+import clip
+import networkx as nx
 import numpy as np
 import torch
 import torch.nn.functional as F
+from fastapi import logger
 from PIL import Image, ImageOps
-from tqdm import tqdm
-from sklearn.neighbors import NearestNeighbors
-from sklearn.cluster import DBSCAN
-from umap import UMAP
-import networkx as nx
-import asyncio
-import logging
-
-from typing import Optional, Set, Dict, Callable, Generator
-from pathlib import Path
 from pydantic import BaseModel
+from sklearn.cluster import DBSCAN
+from sklearn.neighbors import NearestNeighbors
+from tqdm import tqdm
+from umap import UMAP
 
+from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
-from .metadata_extraction import MetadataExtractor
 from .progress import progress_tracker
 
 logger = logging.getLogger(__name__)
+
 
 class IndexResult(BaseModel):
     """
     Result of an indexing operation.
     Contains the embeddings, filenames, modification times, metadata, and any bad files encountered.
     """
+
     model_config = {"arbitrary_types_allowed": True}
-    
+
     embeddings: np.ndarray
     umap_embeddings: Optional[np.ndarray] = None  # UMAP embeddings, if created
     filenames: np.ndarray
@@ -55,19 +58,20 @@ class Embeddings(BaseModel):
     This class provides methods to index images, update embeddings, and search for similar images.
     """
 
+    minimum_image_size: ClassVar[int] = 100 * 1024  # Minimum image size in bytes (100K)
+
     embeddings_path: Path = Path("clip_image_embeddings.npz")
-    minimum_image_size: int = 100 * 1024  # Minimum image size in bytes (100K)
 
     def get_image_files_from_directory(
         self,
         directory: Path,
         exts: Set[str] = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
         progress_callback: Optional[Callable] = None,
-        update_interval: int = 100
+        update_interval: int = 100,
     ) -> list[Path]:
         """
         Recursively collect all image files from a directory.
-        
+
         Args:
             directory: Directory to scan
             exts: File extensions to include
@@ -76,11 +80,11 @@ class Embeddings(BaseModel):
         """
         image_files = []
         files_checked = 0
-        
+
         for root, _, files in os.walk(directory):
             for file in [Path(x) for x in files]:
                 files_checked += 1
-                
+
                 # Check if the file has a valid image extension
                 # and that it's length is > minimum_image_size (i.e. not a thumbnail)
                 if (
@@ -88,22 +92,28 @@ class Embeddings(BaseModel):
                     and os.path.getsize(Path(root, file)) > self.minimum_image_size
                 ):
                     image_files.append(Path(root, file).resolve())
-                
+
                 # Provide progress updates at regular intervals
                 if progress_callback and files_checked % update_interval == 0:
-                    progress_callback(len(image_files), f"Traversing image files... {len(image_files)} found")
-        
+                    progress_callback(
+                        len(image_files),
+                        f"Traversing image files... {len(image_files)} found",
+                    )
+
         # Final update with total count
         if progress_callback:
-            progress_callback(len(image_files), f"File traversal complete - {len(image_files)} images found")
-            
+            progress_callback(
+                len(image_files),
+                f"File traversal complete - {len(image_files)} images found",
+            )
+
         return image_files
 
     def get_image_files(
         self,
         image_paths_or_dir: list[Path] | Path,
         exts: Set[str] = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
     ) -> list[Path]:
         """
         Get a list of image file paths from a directory or a list of image paths.
@@ -117,12 +127,16 @@ class Embeddings(BaseModel):
         """
         if isinstance(image_paths_or_dir, Path):
             # If it's a single Path object, treat it as a directory
-            images = self.get_image_files_from_directory(image_paths_or_dir, exts, progress_callback)
+            images = self.get_image_files_from_directory(
+                image_paths_or_dir, exts, progress_callback
+            )
         elif isinstance(image_paths_or_dir, list):
             images = []
             for p in image_paths_or_dir:
                 if p.is_dir():
-                    images.extend(self.get_image_files_from_directory(p, exts, progress_callback))
+                    images.extend(
+                        self.get_image_files_from_directory(p, exts, progress_callback)
+                    )
                 elif p.suffix.lower() in exts:
                     images.append(p)
         else:
@@ -130,15 +144,11 @@ class Embeddings(BaseModel):
         return images
 
     def _process_single_image(
-        self, 
-        image_path: Path, 
-        model, 
-        preprocess, 
-        device: str
+        self, image_path: Path, model, preprocess, device: str
     ) -> tuple[Optional[np.ndarray], Optional[float], Optional[dict]]:
         """
         Process a single image and return its embedding, modification time, and metadata.
-        
+
         Returns:
             tuple: (embedding, modification_time, metadata) or (None, None, None) if failed
         """
@@ -154,20 +164,18 @@ class Embeddings(BaseModel):
             image = preprocess(pil_image).unsqueeze(0).to(device)
             with torch.no_grad():
                 embedding = model.encode_image(image).cpu().numpy().flatten()
-            
+
             return embedding, modification_time, metadata
         except Exception as e:
             print(f"Error processing {image_path}: {e}")
             return None, None, None
 
     def _process_images_batch(
-        self,
-        image_paths: list[Path],
-        progress_callback: Optional[Callable] = None
+        self, image_paths: list[Path], progress_callback: Optional[Callable] = None
     ) -> IndexResult:
         """
         Process a batch of images and return IndexResult.
-        
+
         Args:
             image_paths: List of image paths to process
             progress_callback: Optional callback function(index, total, message) for progress updates
@@ -182,15 +190,15 @@ class Embeddings(BaseModel):
         bad_files = []
 
         total_images = len(image_paths)
-        
+
         for i, image_path in enumerate(image_paths):
             if progress_callback:
                 progress_callback(i, total_images, f"Processing {image_path.name}")
-            
+
             embedding, mod_time, metadata = self._process_single_image(
                 image_path, model, preprocess, device
             )
-            
+
             if embedding is not None:
                 embeddings.append(embedding)
                 filenames.append(image_path.resolve().as_posix())
@@ -199,7 +207,9 @@ class Embeddings(BaseModel):
             else:
                 bad_files.append(image_path)
 
-        umap_embeddings = self.create_umap_index(np.array(embeddings) if embeddings else np.empty((0, 512)))
+        umap_embeddings = self.create_umap_index(
+            np.array(embeddings) if embeddings else np.empty((0, 512))
+        )
 
         return IndexResult(
             embeddings=np.array(embeddings) if embeddings else np.empty((0, 512)),
@@ -207,14 +217,11 @@ class Embeddings(BaseModel):
             modification_times=np.array(modification_times),
             metadata=np.array(metadatas, dtype=object),
             umap_embeddings=umap_embeddings,
-            bad_files=bad_files
+            bad_files=bad_files,
         )
 
     async def _process_images_batch_async(
-        self,
-        image_paths: list[Path],
-        album_key: str,
-        yield_interval: int = 10
+        self, image_paths: list[Path], album_key: str, yield_interval: int = 10
     ) -> IndexResult:
         """
         Async version of _process_images_batch with progress tracking.
@@ -229,17 +236,17 @@ class Embeddings(BaseModel):
         bad_files = []
 
         total_images = len(image_paths)
-        
+
         for i, image_path in enumerate(image_paths):
             # Update progress
             progress_tracker.update_progress(
                 album_key, i, f"Processing {image_path.name}"
             )
-            
+
             embedding, mod_time, metadata = self._process_single_image(
                 image_path, model, preprocess, device
             )
-            
+
             if embedding is not None:
                 embeddings.append(embedding)
                 filenames.append(image_path.resolve().as_posix())
@@ -257,7 +264,7 @@ class Embeddings(BaseModel):
             filenames=np.array(filenames),
             modification_times=np.array(modification_times),
             metadata=np.array(metadatas, dtype=object),
-            bad_files=bad_files
+            bad_files=bad_files,
         )
 
     def _save_embeddings(self, index_result: IndexResult) -> None:
@@ -271,7 +278,7 @@ class Embeddings(BaseModel):
             modification_times=index_result.modification_times,
             metadata=index_result.metadata,
         )
-        
+
         # Clear cache after saving
         self.open_cached_embeddings.cache_clear()
 
@@ -279,15 +286,19 @@ class Embeddings(BaseModel):
         self,
         image_paths_or_dir: list[Path] | Path,
         existing_filenames: np.ndarray,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable] = None,
     ) -> tuple[set[Path], set[Path]]:
         """Determine which images are new and which are missing."""
-        image_path_set = set(self.get_image_files(image_paths_or_dir, progress_callback=progress_callback))
+        image_path_set = set(
+            self.get_image_files(
+                image_paths_or_dir, progress_callback=progress_callback
+            )
+        )
         existing_filenames_set = set(Path(p) for p in existing_filenames)
-        
+
         new_image_paths = image_path_set - existing_filenames_set
         missing_image_paths = existing_filenames_set - image_path_set
-        
+
         return new_image_paths, missing_image_paths
 
     def _filter_missing_images(
@@ -296,7 +307,7 @@ class Embeddings(BaseModel):
         existing_embeddings: np.ndarray,
         existing_filenames: np.ndarray,
         existing_modtimes: np.ndarray,
-        existing_metadatas: np.ndarray
+        existing_metadatas: np.ndarray,
     ) -> IndexResult:
         """Remove missing images from existing arrays."""
         if not missing_image_paths:
@@ -305,47 +316,53 @@ class Embeddings(BaseModel):
                 filenames=existing_filenames,
                 modification_times=existing_modtimes,
                 metadata=existing_metadatas,
-                bad_files=[]
+                bad_files=[],
             )
-        
-        print(f"Removing {len(missing_image_paths)} missing images from existing embeddings.")
-        
+
+        print(
+            f"Removing {len(missing_image_paths)} missing images from existing embeddings."
+        )
+
         # Convert missing paths to strings for comparison
         missing_image_strings = {str(path) for path in missing_image_paths}
-        
+
         # Create mask for images that still exist (NOT in missing set)
-        mask = np.array([fname not in missing_image_strings for fname in existing_filenames])
-        
+        mask = np.array(
+            [fname not in missing_image_strings for fname in existing_filenames]
+        )
+
         # Debug output
         removed_count = len(existing_filenames) - np.sum(mask)
         print(f"Actually removing {removed_count} images from index")
-        
+
         return IndexResult(
             embeddings=existing_embeddings[mask],
             filenames=existing_filenames[mask],
             modification_times=existing_modtimes[mask],
             metadata=existing_metadatas[mask],
-            bad_files=[]
+            bad_files=[],
         )
 
     def _combine_index_results(
-        self,
-        existing_result: IndexResult,
-        new_result: IndexResult
+        self, existing_result: IndexResult, new_result: IndexResult
     ) -> IndexResult:
         """Combine existing and new IndexResults."""
         # Handle empty existing embeddings
         if existing_result.embeddings.size == 0:
-            existing_embeddings = np.empty((0, new_result.embeddings.shape[1]), dtype=new_result.embeddings.dtype)
+            existing_embeddings = np.empty(
+                (0, new_result.embeddings.shape[1]), dtype=new_result.embeddings.dtype
+            )
         else:
             existing_embeddings = existing_result.embeddings
-        
+
         return IndexResult(
             embeddings=np.vstack((existing_embeddings, new_result.embeddings)),
             filenames=np.concatenate((existing_result.filenames, new_result.filenames)),
-            modification_times=np.concatenate((existing_result.modification_times, new_result.modification_times)),
+            modification_times=np.concatenate(
+                (existing_result.modification_times, new_result.modification_times)
+            ),
             metadata=np.concatenate((existing_result.metadata, new_result.metadata)),
-            bad_files=existing_result.bad_files + new_result.bad_files
+            bad_files=existing_result.bad_files + new_result.bad_files,
         )
 
     def create_index(
@@ -360,11 +377,15 @@ class Embeddings(BaseModel):
         progress_callback = tqdm_progress_callback(total_images)
 
         self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
-        result = self._process_images_batch(image_paths, progress_callback=progress_callback)
+        result = self._process_images_batch(
+            image_paths, progress_callback=progress_callback
+        )
 
         if create_index:
             self._save_embeddings(result)
-            print(f"Indexed {len(result.embeddings)} images and saved to {self.embeddings_path}")
+            print(
+                f"Indexed {len(result.embeddings)} images and saved to {self.embeddings_path}"
+            )
 
         return result
 
@@ -396,18 +417,24 @@ class Embeddings(BaseModel):
         try:
             self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
             result = await self._process_images_batch_async(image_paths, album_key)
-            progress_tracker.update_progress(album_key, total_images, "Saving index file")
+            progress_tracker.update_progress(
+                album_key, total_images, "Saving index file"
+            )
             if create_index:
                 self._save_embeddings(result)
         except Exception as e:
             progress_tracker.set_error(album_key, str(e))
             raise
-        
+
         progress_tracker.start_operation(album_key, total_images, "umapping")
         try:
-            umap_embeddings = await asyncio.to_thread(self.create_umap_index, result.embeddings)
+            umap_embeddings = await asyncio.to_thread(
+                self.create_umap_index, result.embeddings
+            )
             result.umap_embeddings = umap_embeddings
-            progress_tracker.complete_operation(album_key, "Indexing completed successfully")
+            progress_tracker.complete_operation(
+                album_key, "Indexing completed successfully"
+            )
             return result
         except Exception as e:
             progress_tracker.set_error(album_key, str(e))
@@ -415,8 +442,10 @@ class Embeddings(BaseModel):
 
     def update_index(self, image_paths_or_dir: list[Path] | Path) -> IndexResult:
         """Update existing embeddings with new images."""
-        assert self.embeddings_path.exists(), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
-        
+        assert (
+            self.embeddings_path.exists()
+        ), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
+
         try:
             # Load existing data
             data = np.load(self.embeddings_path, allow_pickle=True)
@@ -428,12 +457,17 @@ class Embeddings(BaseModel):
             # Identify new and missing images
             print(f"Scanning for new images in {image_paths_or_dir}...")
             new_image_paths, missing_image_paths = self._get_new_and_missing_images(
-                image_paths_or_dir, existing_filenames,
+                image_paths_or_dir,
+                existing_filenames,
             )
 
             # Filter out missing images
             filtered_existing = self._filter_missing_images(
-                missing_image_paths, existing_embeddings, existing_filenames, existing_modtimes, existing_metadatas
+                missing_image_paths,
+                existing_embeddings,
+                existing_filenames,
+                existing_modtimes,
+                existing_metadatas,
             )
 
             # If no new images, save filtered data and return
@@ -447,7 +481,9 @@ class Embeddings(BaseModel):
             progress_callback = tqdm_progress_callback(total_images)
 
             # Process new images
-            new_result = self._process_images_batch(list(new_image_paths), progress_callback=progress_callback)
+            new_result = self._process_images_batch(
+                list(new_image_paths), progress_callback=progress_callback
+            )
 
             # If no new embeddings were created, return existing data
             if new_result.embeddings.shape[0] == 0:
@@ -458,27 +494,29 @@ class Embeddings(BaseModel):
                     modification_times=filtered_existing.modification_times,
                     metadata=filtered_existing.metadata,
                     umap_embeddings=self.umap_embeddings,
-                    bad_files=new_result.bad_files
+                    bad_files=new_result.bad_files,
                 )
 
             # Combine and save
             combined_result = self._combine_index_results(filtered_existing, new_result)
-            combined_result.umap_embeddings = self.create_umap_index(combined_result.embeddings)
+            combined_result.umap_embeddings = self.create_umap_index(
+                combined_result.embeddings
+            )
             self._save_embeddings(combined_result)
 
             return combined_result
-            
+
         except Exception as e:
             raise
 
     async def update_index_async(
-        self, 
-        image_paths_or_dir: list[Path] | Path,
-        album_key: str
+        self, image_paths_or_dir: list[Path] | Path, album_key: str
     ) -> IndexResult:
         """Asynchronously update existing embeddings with new images."""
-        assert self.embeddings_path.exists(), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
-        
+        assert (
+            self.embeddings_path.exists()
+        ), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
+
         try:
             # Load existing data
             data = np.load(self.embeddings_path, allow_pickle=True)
@@ -486,70 +524,85 @@ class Embeddings(BaseModel):
             existing_filenames = data["filenames"]
             existing_modtimes = data["modification_times"]
             existing_metadatas = data["metadata"]
-            
+
             # Start scanning phase
             progress_tracker.start_operation(album_key, 0, "scanning")
-            
+
             # Create progress callback for file traversal
             def traversal_callback(count, message):
                 # Update the total as we discover more files
                 progress_tracker.update_total_images(album_key, max(count, 0))
                 progress_tracker.update_progress(album_key, count, message)
-            
+
             # Identify new and missing images with progress feedback
             new_image_paths, missing_image_paths = await asyncio.to_thread(
                 self._get_new_and_missing_images,
-                image_paths_or_dir, 
-                existing_filenames, 
-                progress_callback=traversal_callback
+                image_paths_or_dir,
+                existing_filenames,
+                progress_callback=traversal_callback,
             )
 
             # Filter out missing images
             filtered_existing = self._filter_missing_images(
-                missing_image_paths, existing_embeddings, existing_filenames, existing_modtimes, existing_metadatas
+                missing_image_paths,
+                existing_embeddings,
+                existing_filenames,
+                existing_modtimes,
+                existing_metadatas,
             )
-            
+
             # If no new images, return early
             if not new_image_paths:
                 self._save_embeddings(filtered_existing)
                 progress_tracker.complete_operation(album_key, "No new images found")
                 return filtered_existing
-            
+
             # Update progress tracker with actual count
             total_new_images = len(new_image_paths)
             progress_tracker.start_operation(album_key, total_new_images, "indexing")
-            
+
             # Process new images
-            new_result = await self._process_images_batch_async(list(new_image_paths), album_key)
-            
+            new_result = await self._process_images_batch_async(
+                list(new_image_paths), album_key
+            )
+
             # If no new embeddings were created, return existing data
             if new_result.embeddings.shape[0] == 0:
-                progress_tracker.complete_operation(album_key, "No new images needed to be indexed")
+                progress_tracker.complete_operation(
+                    album_key, "No new images needed to be indexed"
+                )
                 return IndexResult(
                     embeddings=filtered_existing.embeddings,
                     filenames=filtered_existing.filenames,
                     modification_times=filtered_existing.modification_times,
                     metadata=filtered_existing.metadata,
                     umap_embeddings=self.umap_embeddings,
-                    bad_files=new_result.bad_files
+                    bad_files=new_result.bad_files,
                 )
-            
+
             # Rebuild the umap index
             progress_tracker.start_operation(album_key, total_new_images, "umapping")
-            new_result.umap_embeddings = await asyncio.to_thread(self.create_umap_index, new_result.embeddings)
+            new_result.umap_embeddings = await asyncio.to_thread(
+                self.create_umap_index, new_result.embeddings
+            )
 
             # Final progress update
-            progress_tracker.update_progress(album_key, total_new_images, "Saving updated index")
-            
+            progress_tracker.update_progress(
+                album_key, total_new_images, "Saving updated index"
+            )
+
             # Combine and save
             combined_result = self._combine_index_results(filtered_existing, new_result)
             self._save_embeddings(combined_result)
-            
+
             # Mark as completed
-            progress_tracker.complete_operation(album_key, f"Successfully indexed {len(new_result.embeddings)} new images")
-            
+            progress_tracker.complete_operation(
+                album_key,
+                f"Successfully indexed {len(new_result.embeddings)} new images",
+            )
+
             return combined_result
-            
+
         except Exception as e:
             progress_tracker.set_error(album_key, str(e))
             raise
@@ -557,7 +610,7 @@ class Embeddings(BaseModel):
     def create_umap_index(self, embeddings: np.ndarray) -> np.ndarray:
         """
         Create a UMAP index for the embeddings.
-        
+
         Args:
             embeddings (np.ndarray): The image embeddings to create UMAP index for.
         Returns:
@@ -566,30 +619,42 @@ class Embeddings(BaseModel):
         if embeddings.size == 0:
             print("No embeddings provided for UMAP index creation.")
             return np.empty((0, 2))
-        # umap_model = UMAP(n_neighbors=15, n_components=2, min_dist=0.05, metric="cosine")
-        umap_model = UMAP(n_components=2, min_dist=0.05, metric="cosine")
-        umap_embeddings = umap_model.fit_transform(embeddings)
+
+        # hide warnings from UMAP about TBB version
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            # TO DO: Allow these constants to be configurable.
+            n_neighbors = min(15, len(embeddings) - 1) if len(embeddings) > 1 else 1
+            umap_model = UMAP(
+                n_neighbors=n_neighbors, n_components=2, min_dist=0.05, metric="cosine"
+            )
+            umap_embeddings = umap_model.fit_transform(embeddings)
+
         cache_file = self.embeddings_path.parent / "umap.npz"
         np.savez(cache_file, umap=umap_embeddings)
         logger.info(f"UMAP embeddings shape: {umap_embeddings.shape}")
         return umap_embeddings
-    
+
     @property
     def umap_embeddings(self) -> np.ndarray:
         """
         Load UMAP embeddings from disk.
-        
+
         Returns:
             np.ndarray: The UMAP embeddings.
         """
         cache_file = self.embeddings_path.parent / "umap.npz"
-        if not cache_file.exists() or cache_file.stat().st_mtime < self.embeddings_path.stat().st_mtime:  # If UMAP index does not exist or is outdated, create it
-            embeddings = self.open_cached_embeddings(self.embeddings_path)['embeddings']
+        if (
+            not cache_file.exists()
+            or cache_file.stat().st_mtime < self.embeddings_path.stat().st_mtime
+        ):  # If UMAP index does not exist or is outdated, create it
+            embeddings = self.open_cached_embeddings(self.embeddings_path)["embeddings"]
             logger.info(f"Creating UMAP index for {embeddings.shape[0]} embeddings")
             return self.create_umap_index(embeddings)
         data = np.load(cache_file, allow_pickle=True)
         return data["umap"]
 
+    # Main search entry point.
     def search_images_by_text_and_image(
         self,
         query_image_path: Optional[Path] = None,
@@ -666,7 +731,9 @@ class Embeddings(BaseModel):
         # Normalize
         embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=device)
         norm_embeddings = F.normalize(embeddings_tensor, dim=-1).to(torch.float32)
-        combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(torch.float32)
+        combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(
+            torch.float32
+        )
 
         # Similarity
         similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
@@ -722,6 +789,7 @@ class Embeddings(BaseModel):
         """
         Open embeddings with pre-computed lookup structures.
         """
+        embeddings_path = Path(embeddings_path)
         if not embeddings_path.exists():
             raise FileNotFoundError(
                 f"Embeddings file {embeddings_path} does not exist."
@@ -748,10 +816,10 @@ class Embeddings(BaseModel):
         }
 
     def retrieve_image(
-        self, 
+        self,
         current_image: Optional[Path] = None,
         offset: int = 0,
-        random: bool = False
+        random: bool = False,
     ) -> SlideSummary:
         """
         Retrieve the next image in the sequence or a random image if requested.
@@ -775,7 +843,9 @@ class Embeddings(BaseModel):
         filename_map = data["filename_map"]
 
         if not current_image:
-            return format_metadata(Path(sorted_filenames[offset]), sorted_metadata[offset])
+            return format_metadata(
+                Path(sorted_filenames[offset]), sorted_metadata[offset]
+            )
 
         current_filename = current_image.as_posix()
         if current_filename not in filename_map:
@@ -855,6 +925,7 @@ class Embeddings(BaseModel):
     def extract_image_metadata(pil_image: Image.Image) -> dict:
         """Extract metadata from an image using the dedicated extractor."""
         return MetadataExtractor.extract_image_metadata(pil_image)
+
 
 def tqdm_progress_callback(total_images):
     """Returns a callback function for tqdm progress reporting."""

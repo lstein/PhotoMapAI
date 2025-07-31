@@ -601,8 +601,8 @@ export class AlbumManager {
     try {
       const response = await fetch("update_index_async/", {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `album_key=${encodeURIComponent(albumKey)}`,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ album_key: albumKey }),
       });
 
       if (response.ok) {
