@@ -343,11 +343,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       noResultsMsg.style.display = "none";
     }
 
-    // const searchType = e.detail.searchType || "image";
-    // state.searchResults = e.detail.results || [];
-    // state.searchOrigin = 0;
-    // let keep_current_slide = state.searchResults.length == 0;
-    // await resetAllSlides(keep_current_slide);
     updateSearchCheckmarks(e.detail.searchType);
     updateScoreDisplay(e.detail.searchType);
   });
@@ -355,20 +350,20 @@ document.addEventListener("DOMContentLoaded", async function () {
   renderSearchImageThumbArea();
 });
 
-  // Function to set the search results and issue the searchResultsChanged event
-  function setSearchResults(results, searchType) {
-    state.searchResults = results;
-    state.searchType = searchType;
-    state.searchOrigin = 0; // This keeps track of the results index of the first slide on swiper's slide array
-    window.dispatchEvent(
-      new CustomEvent("searchResultsChanged", {
-        detail: {
-          results: results,
-          searchType: searchType,
-        },
-      })
-    );
-  }
+// Function to set the search results and issue the searchResultsChanged event
+function setSearchResults(results, searchType) {
+  state.searchResults = results;
+  state.searchType = searchType;
+  state.searchOrigin = 0; // This keeps track of the results index of the first slide on swiper's slide array
+  window.dispatchEvent(
+    new CustomEvent("searchResultsChanged", {
+      detail: {
+        results: results,
+        searchType: searchType,
+      },
+    })
+  );
+}
 
 // Function to update the score displayed on top of search result slides
 function updateScoreDisplay(searchType) {
@@ -437,25 +432,19 @@ function updateSearchCheckmarks(searchType = null) {
     cluster: document.getElementById("showUmapBtn"),
     image: document.getElementById("imageSearchIcon"),
     text: document.getElementById("textSearchIcon"),
+    text_and_image: document.getElementById("textSearchIcon"),
   };
   const clearSearchBtn = document.getElementById("clearSearchBtn");
+  const element_to_highlight = searchTypeToIconMap[searchType] || null;
 
-  // Map text_and_image to image (or both image and text if desired)
-  let effectiveType = searchType;
-  if (searchType === "text_and_image") {
-    effectiveType = "text";
+  for (const iconElement of Object.values(searchTypeToIconMap)) {
+    setCheckmarkOnIcon(iconElement, false);
   }
-
-  if (effectiveType && state.searchResults?.length > 0) {
+  if (element_to_highlight) {
+    setCheckmarkOnIcon(element_to_highlight, true);
     clearSearchBtn.style.display = "block";
-    for (const [type, iconElement] of Object.entries(searchTypeToIconMap)) {
-      setCheckmarkOnIcon(iconElement, type === effectiveType);
-    }
   } else {
     clearSearchBtn.style.display = "none";
-    for (const iconElement of Object.values(searchTypeToIconMap)) {
-      setCheckmarkOnIcon(iconElement, false);
-    }
   }
 }
 
@@ -500,7 +489,7 @@ window.addEventListener("paste", async function (e) {
   }
 });
 
-export function exitSearchMode() {
+export function exitSearchMode(searchType = "clear") {
   scoreDisplay.hide();
   clusterDisplay.hide();
   const searchInput = document.getElementById("searchInput");
@@ -508,7 +497,8 @@ export function exitSearchMode() {
   const negativeSearchInput = document.getElementById("negativeSearchInput");
   if (negativeSearchInput) negativeSearchInput.value = "";
   setSearchImage(null, null); // Clear the search image and thumbnail
-  setSearchResults([], "clear");
+  updateSearchCheckmarks(searchType);
+  setSearchResults([], searchType);
 }
 
 function renderSearchImageThumbArea() {

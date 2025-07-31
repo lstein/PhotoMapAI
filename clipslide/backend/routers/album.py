@@ -58,7 +58,7 @@ async def get_available_albums() -> List[Dict[str, Any]]:
         return []
 
 
-@album_router.get("/album/{album_key}", tags=["Albums"])
+@album_router.get("/album/{album_key}/", tags=["Albums"])
 async def get_album(album_key: str) -> Album:
     """Get details of a specific album."""
     album = config_manager.get_album(album_key)

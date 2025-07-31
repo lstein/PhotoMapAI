@@ -249,6 +249,7 @@ export function removeSlidesAfterCurrent() {
   setTimeout(() => enforceHighWaterMark(), 500);
 }
 
+// Reset all the slides and reload the swiper, optionally keeping the current slide.
 export async function resetAllSlides(keep_current_slide = false) {
   if (!state.swiper?.slides?.length) return; // Nothing to reset
   const slideShowRunning = state.swiper?.autoplay?.running;
@@ -257,7 +258,6 @@ export async function resetAllSlides(keep_current_slide = false) {
     // Keep the current slide and remove others
     const currentSlide = state.swiper.slides[state.swiper.activeIndex];
     state.swiper.removeAllSlides();
-
     state.swiper.appendSlide(currentSlide);
   } else {
     // Remove all slides
@@ -313,15 +313,15 @@ export function enforceHighWaterMark(backward = false) {
 
 // Reset slide show when the album changes
 window.addEventListener("albumChanged", () => {
-  console.log("Album changed, resetting slides...");
   resetAllSlides();
 });
 
 // Reset slide show when the search results change.
 // When clearing search results, we want to keep the current
 // slide to avoid displaying something unexpected.
-window.addEventListener("searchResultsChanged", () => {
-  const keep_current_slide = state.searchResults.length == 0;
+window.addEventListener("searchResultsChanged", (event) => {
+  const searchType  = event.detail?.searchType;
+  if (searchType === "switchAlbum") return;
+  const keep_current_slide = searchType === "clear";
   resetAllSlides(keep_current_slide);
 });
-

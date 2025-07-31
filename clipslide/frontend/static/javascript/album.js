@@ -2,7 +2,7 @@
 import { exitSearchMode } from "./search-ui.js";
 
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
-import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
+import { setAlbum, state } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
 
 export class AlbumManager {
@@ -101,6 +101,11 @@ export class AlbumManager {
     return await response.json();
   }
 
+  async getAlbum(albumKey) {
+    const response = await fetch(`album/${albumKey}/`);
+    return await response.json();
+  }
+
   async refreshAlbumsAndDropdown() {
     await this.loadAlbums();
     await loadAvailableAlbums();
@@ -109,8 +114,6 @@ export class AlbumManager {
   async updateCurrentAlbum(album) {
     // Update state and localStorage
     setAlbum(album.key);
-    state.embeddingsFile = album.embeddings_file;
-    saveSettingsToLocalStorage();
 
     // Update settings dropdown
     await loadAvailableAlbums();
@@ -121,7 +124,7 @@ export class AlbumManager {
     }
 
     // Refresh slideshow
-    resetAllSlides();
+    // resetAllSlides();
   }
 
   getNewAlbumFormData() {

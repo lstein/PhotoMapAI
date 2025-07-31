@@ -33,7 +33,9 @@ function cacheElements() {
     slowerBtn: document.getElementById("slowerBtn"),
     fasterBtn: document.getElementById("fasterBtn"),
     locationiqApiKeyInput: document.getElementById("locationiqApiKeyInput"),
-    showControlPanelTextCheckbox: document.getElementById("showControlPanelTextCheckbox"),
+    showControlPanelTextCheckbox: document.getElementById(
+      "showControlPanelTextCheckbox"
+    ),
   };
 }
 
@@ -86,14 +88,10 @@ function triggerSetupMode() {
 
 // Album switching logic
 function switchAlbum(newAlbum, selectedOption) {
+  exitSearchMode("switchAlbum");
   setAlbum(newAlbum);
-  state.embeddingsFile = selectedOption.dataset.embeddingsFile;
-  state.umapEps = parseFloat(selectedOption.dataset.umapEps) || 0.07;
-
-  // Clear search results when switching albums
-  saveSettingsToLocalStorage();
   updatePageTitle(newAlbum);
-  exitSearchMode();
+  state.umapEps = parseFloat(selectedOption.dataset.umapEps) || 0.07;
 }
 
 // Update the page title based on the current album

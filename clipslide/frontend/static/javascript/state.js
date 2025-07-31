@@ -1,6 +1,6 @@
 // state.js
 // This file manages the state of the application, including slide management and metadata handling.
-import { AlbumManager } from "./album.js";
+import { albumManager } from "./album.js";
 
 export const state = {
   swiper: null, // Will be initialized in swiper.js
@@ -8,7 +8,6 @@ export const state = {
   currentDelay: 5, // Delay in seconds for slide transitions
   showControlPanelText: true, // Whether to show text in control panels
   mode: "random", // next slide selection when no search is active ("random", "sequential", "search")
-  embeddingsFile: null, // Path to the current embeddings file
   highWaterMark: 20, // Maximum number of slides to load at once
   searchOrigin: 0, // When in search mode, this is the index of the first slide in swiper
   searchResults: [], // List of file paths matching the current search query
@@ -64,7 +63,7 @@ export async function restoreFromLocalStorage() {
     setAlbum(storedAlbum);
   } else {
     // call out to the server to get the current album
-    const album_list = await AlbumManager.fetchAvailableAlbums();
+    const album_list = await albumManager.fetchAvailableAlbums();
     if (album_list.length > 0)
       setAlbum(album_list[0].key);
     else
@@ -81,10 +80,11 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("showControlPanelText", state.showControlPanelText || "");
 }
 
-export function setAlbum(newAlbum) {
-  if (state.album !== newAlbum) {
-    state.album = newAlbum;
+export async function setAlbum(newAlbumKey) {
+  if (state.album !== newAlbumKey) {
+    state.album = newAlbumKey;
     state.dataChanged = true;
-    window.dispatchEvent(new CustomEvent("albumChanged", { detail: { album: newAlbum } }));
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(new CustomEvent("albumChanged", { detail: { album: newAlbumKey } }));
   }
 }
