@@ -81,6 +81,21 @@ export async function fetchNextImage(lastImage = null, backward = false) {
   }
 }
 
+// Function to set the search results and issue the searchResultsChanged event
+export function setSearchResults(results, searchType) {
+  state.searchResults = results;
+  state.searchType = searchType;
+  state.searchOrigin = 0; // This keeps track of the results index of the first slide on swiper's slide array
+  window.dispatchEvent(
+    new CustomEvent("searchResultsChanged", {
+      detail: {
+        results: results,
+        searchType: searchType,
+      },
+    })
+  );
+}
+
 // Perform an image search and return a list of {filename, score} objects.
 export async function searchImage(image_file) {
   return await searchTextAndImage({file: image_file});

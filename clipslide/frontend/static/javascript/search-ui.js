@@ -3,7 +3,7 @@
 // Swiper initialization
 import { clusterDisplay } from "./cluster-display.js";
 import { scoreDisplay } from "./score-display.js";
-import { searchImage, searchTextAndImage } from "./search.js";
+import { searchImage, searchTextAndImage, setSearchResults } from "./search.js";
 import { state } from "./state.js";
 import { pauseSlideshow, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
@@ -350,20 +350,6 @@ document.addEventListener("DOMContentLoaded", async function () {
   renderSearchImageThumbArea();
 });
 
-// Function to set the search results and issue the searchResultsChanged event
-function setSearchResults(results, searchType) {
-  state.searchResults = results;
-  state.searchType = searchType;
-  state.searchOrigin = 0; // This keeps track of the results index of the first slide on swiper's slide array
-  window.dispatchEvent(
-    new CustomEvent("searchResultsChanged", {
-      detail: {
-        results: results,
-        searchType: searchType,
-      },
-    })
-  );
-}
 
 // Function to update the score displayed on top of search result slides
 function updateScoreDisplay(searchType) {

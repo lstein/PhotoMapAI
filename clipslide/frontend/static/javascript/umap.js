@@ -1,15 +1,15 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album.js";
-import { getCurrentFilepath } from "./search.js";
+import { getCurrentFilepath, setSearchResults } from "./search.js";
 import { state } from "./state.js";
 import { getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {
   big: { width: 800, height: 560 },
   medium: { width: 440, height: 280 },
-  small: { width: 340, height: 180 }, 
-  fullscreen: { width: window.innerWidth, height: window.innerHeight }
+  small: { width: 340, height: 180 },
+  fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
 
 let points = [];
@@ -270,7 +270,7 @@ export async function fetchUmapData() {
       }
     ).then((gd) => {
       document.getElementById("umapContent").style.display = "block";
-      setUmapWindowSize("medium")
+      setUmapWindowSize("medium");
       hideUmapSpinner();
 
       setUmapColorMode("cluster");
@@ -370,11 +370,12 @@ export async function fetchUmapData() {
           cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
           color: clusterColor,
         }));
-        window.dispatchEvent(
-          new CustomEvent("searchResultsChanged", {
-            detail: { results: clusterMembers, searchType: "cluster" },
-          })
-        );
+        setSearchResults(clusterMembers, "cluster");
+        // window.dispatchEvent(
+        //   new CustomEvent("searchResultsChanged", {
+        //     detail: { results: clusterMembers, searchType: "cluster" },
+        //   })
+        // );
         setUmapColorMode("search");
       });
 
@@ -411,7 +412,7 @@ export function colorizeUmap({ mode = "cluster", searchResults = [] } = {}) {
     markerAlphas = points.map((p) => (searchSet.has(p.filename) ? 1.0 : 0.08));
   } else {
     markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.01 : 0.5));
+    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.1 : 0.5));
   }
   Plotly.restyle(
     "umapPlot",
@@ -520,7 +521,7 @@ function createUmapThumbnail({ x, y, filename, cluster }) {
   // Find cluster color and label
   const clusterIdx = clusters.indexOf(cluster);
   const clusterColor = getClusterColor(cluster);
-  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster}`; // <-- Add this line
+  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster}`;
   const textIsDark = isColorLight(clusterColor) ? "#222" : "#fff";
   const textShadow = isColorLight(clusterColor)
     ? "0 1px 2px #fff, 0 0px 8px #fff"
@@ -679,7 +680,7 @@ function makeDraggable(dragHandleId, windowId) {
 
   function startDrag(e) {
     // Prevent drag if touching a button in the titlebar
-    if (e.target.closest('.icon-btn') || e.target.id === "umapCloseBtn") {
+    if (e.target.closest(".icon-btn") || e.target.id === "umapCloseBtn") {
       return; // Don't start drag
     }
     dragging = true;
@@ -729,7 +730,7 @@ function setActiveResizeIcon(sizeKey) {
   // Remove 'active' from all resize icons
   document.getElementById("umapResizeBig").classList.remove("active");
   document.getElementById("umapResizeMedium").classList.remove("active");
-  document.getElementById("umapResizeSmall").classList.remove("active"); 
+  document.getElementById("umapResizeSmall").classList.remove("active");
   document.getElementById("umapResizeFullscreen").classList.remove("active");
   document.getElementById("umapResizeShaded").classList.remove("active");
 
@@ -766,17 +767,17 @@ function setUmapWindowSize(sizeKey) {
     win.style.left = "0px";
     win.style.top = "0px";
     win.style.width = window.innerWidth + "px";
-    win.style.height = (window.innerHeight - controlsHeight) + "px";
+    win.style.height = window.innerHeight - controlsHeight + "px";
     win.style.minHeight = "200px";
     win.style.maxWidth = "100vw";
-    win.style.maxHeight = (window.innerHeight - controlsHeight) + "px";
-    plotDiv.style.width = (window.innerWidth - 32) + "px";
-    plotDiv.style.height = (window.innerHeight - controlsHeight - 128) + "px";
+    win.style.maxHeight = window.innerHeight - controlsHeight + "px";
+    plotDiv.style.width = window.innerWidth - 32 + "px";
+    plotDiv.style.height = window.innerHeight - controlsHeight - 128 + "px";
 
     Plotly.relayout(plotDiv, {
       width: window.innerWidth - 32,
       height: window.innerHeight - controlsHeight - 128,
-      "xaxis.scaleanchor": "y" // <-- Add this line for equal axis scale
+      "xaxis.scaleanchor": "y", // <-- Add this line for equal axis scale
     });
   } else {
     if (contentDiv) contentDiv.style.display = "block";
@@ -847,7 +848,7 @@ document.getElementById("umapResizeShaded").onclick = () => {
 function addButtonHandlers(id, handler) {
   const btn = document.getElementById(id);
   btn.onclick = handler;
-  btn.ontouchend = function(e) {
+  btn.ontouchend = function (e) {
     e.preventDefault();
     handler(e);
   };
@@ -875,7 +876,10 @@ addButtonHandlers("umapResizeFullscreen", () => {
   const win = document.getElementById("umapFloatingWindow");
   if (isFullscreen) {
     setUmapWindowSize(lastUnshadedSize);
-    if (lastUnshadedPosition.left !== null && lastUnshadedPosition.top !== null) {
+    if (
+      lastUnshadedPosition.left !== null &&
+      lastUnshadedPosition.top !== null
+    ) {
       win.style.left = lastUnshadedPosition.left;
       win.style.top = lastUnshadedPosition.top;
     }
