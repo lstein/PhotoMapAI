@@ -70,9 +70,11 @@ document.addEventListener("DOMContentLoaded", async function () {
   const searchInput = document.getElementById("searchInput");
   const negativeSearchInput = document.getElementById("negativeSearchInput");
 
-  doSearchBtn.addEventListener("click", searchWithTextAndImage);
+  doSearchBtn.addEventListener("click", function () {
+    searchWithTextAndImage("text");
+  });
 
-  async function searchWithTextAndImage() {
+  async function searchWithTextAndImage(searchType="text_and_image") {
     const positiveQuery = searchInput.value.trim();
     const negativeQuery = negativeSearchInput.value.trim();
     const imageFile = state.currentSearchImageFile || null; // You need to set this when an image is uploaded or selected
@@ -114,7 +116,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       window.dispatchEvent(
         new CustomEvent("searchResultsChanged", {
-          detail: { results: new_results, searchType: "text_and_image" },
+          detail: { results: new_results, searchType: searchType},
         })
       );
       if (new_results.length > 0) {
@@ -155,7 +157,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       // Set the search image for the panel
       setSearchImage(imgUrl, file);
       let querySlide = createQuerySlide(imgUrl, `Search slide ${filename}`);
-      await searchWithTextAndImage(file, querySlide);
+      await searchWithTextAndImage("image");
       hideSpinner();
       if (slideShowRunning) resumeSlideshow();
     } catch (err) {
@@ -440,10 +442,17 @@ function updateSearchCheckmarks(searchType = null) {
     text: document.getElementById("textSearchIcon"),
   };
   const clearSearchBtn = document.getElementById("clearSearchBtn");
-  if (searchType && state.searchResults?.length > 0) {
+
+  // Map text_and_image to image (or both image and text if desired)
+  let effectiveType = searchType;
+  if (searchType === "text_and_image") {
+    effectiveType = "text"; 
+  }
+
+  if (effectiveType && state.searchResults?.length > 0) {
     clearSearchBtn.style.display = "block";
     for (const [type, iconElement] of Object.entries(searchTypeToIconMap)) {
-      setCheckmarkOnIcon(iconElement, type === searchType);
+      setCheckmarkOnIcon(iconElement, type === effectiveType);
     }
   } else {
     clearSearchBtn.style.display = "none";
