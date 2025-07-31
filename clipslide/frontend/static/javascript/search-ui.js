@@ -5,7 +5,7 @@ import { clusterDisplay } from "./cluster-display.js";
 import { scoreDisplay } from "./score-display.js";
 import { searchImage, searchTextAndImage } from "./search.js";
 import { state } from "./state.js";
-import { pauseSlideshow, resetAllSlides, resumeSlideshow } from "./swiper.js";
+import { pauseSlideshow, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 import { WeightSlider } from "./weight-slider.js";
 
@@ -74,7 +74,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     searchWithTextAndImage("text");
   });
 
-  async function searchWithTextAndImage(searchType="text_and_image") {
+  async function searchWithTextAndImage(searchType = "text_and_image") {
     const positiveQuery = searchInput.value.trim();
     const negativeQuery = negativeSearchInput.value.trim();
     const imageFile = state.currentSearchImageFile || null; // You need to set this when an image is uploaded or selected
@@ -110,15 +110,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       });
       new_results = new_results.filter((item) => item.score >= 0.1);
 
-      // TO DO: This should happen in the searchResultsChanged event handler,
-      // but it isn't firing correctly.
-      if (new_results.length > 0) scoreDisplay.show(new_results[0].score, 1, new_results.length);
-
-      window.dispatchEvent(
-        new CustomEvent("searchResultsChanged", {
-          detail: { results: new_results, searchType: searchType},
-        })
-      );
+      setSearchResults(new_results, searchType);
       if (new_results.length > 0) {
         setTimeout(() => {
           textSearchPanel.style.opacity = 0;
@@ -343,10 +335,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       panel.insertBefore(noResultsMsg, panel.firstChild);
     }
 
-    if (
-      e.detail.results.length === 0 &&
-      e.detail.searchType !== "clear"
-    ) {
+    if (e.detail.results.length === 0 && e.detail.searchType !== "clear") {
       noResultsMsg.textContent = "No images match your search.";
       noResultsMsg.style.display = "block";
       return;
@@ -354,18 +343,34 @@ document.addEventListener("DOMContentLoaded", async function () {
       noResultsMsg.style.display = "none";
     }
 
-    const searchType = e.detail.searchType || "image";
-    state.searchResults = e.detail.results || [];
-    state.searchOrigin = 0;
-    let keep_current_slide = state.searchResults.length == 0;
-    await resetAllSlides(keep_current_slide);
-    updateSearchCheckmarks(searchType);
-    updateScoreDisplay(searchType);
+    // const searchType = e.detail.searchType || "image";
+    // state.searchResults = e.detail.results || [];
+    // state.searchOrigin = 0;
+    // let keep_current_slide = state.searchResults.length == 0;
+    // await resetAllSlides(keep_current_slide);
+    updateSearchCheckmarks(e.detail.searchType);
+    updateScoreDisplay(e.detail.searchType);
   });
 
   renderSearchImageThumbArea();
 });
 
+  // Function to set the search results and issue the searchResultsChanged event
+  function setSearchResults(results, searchType) {
+    state.searchResults = results;
+    state.searchType = searchType;
+    state.searchOrigin = 0; // This keeps track of the results index of the first slide on swiper's slide array
+    window.dispatchEvent(
+      new CustomEvent("searchResultsChanged", {
+        detail: {
+          results: results,
+          searchType: searchType,
+        },
+      })
+    );
+  }
+
+// Function to update the score displayed on top of search result slides
 function updateScoreDisplay(searchType) {
   if (searchType === "cluster" && state.searchResults.length > 0) {
     clusterDisplay.show(
@@ -388,15 +393,7 @@ export async function searchWithImage(file, first_slide) {
     showSpinner();
     let results = await searchImage(file);
     results = results.filter((item) => item.score >= 0.6);
-    window.dispatchEvent(
-      new CustomEvent("searchResultsChanged", {
-        detail: {
-          results: results,
-          searchType: "image",
-          search_slide: first_slide, // not currently used, but could be useful for displaying the search image
-        },
-      })
-    );
+    setSearchResults(results, "image");
   } catch (err) {
     console.error("Image search request failed:", err);
     return [];
@@ -446,7 +443,7 @@ function updateSearchCheckmarks(searchType = null) {
   // Map text_and_image to image (or both image and text if desired)
   let effectiveType = searchType;
   if (searchType === "text_and_image") {
-    effectiveType = "text"; 
+    effectiveType = "text";
   }
 
   if (effectiveType && state.searchResults?.length > 0) {
@@ -511,11 +508,7 @@ export function exitSearchMode() {
   const negativeSearchInput = document.getElementById("negativeSearchInput");
   if (negativeSearchInput) negativeSearchInput.value = "";
   setSearchImage(null, null); // Clear the search image and thumbnail
-  window.dispatchEvent(
-    new CustomEvent("searchResultsChanged", {
-      detail: { results: [], searchType: "clear" },
-    })
-  );
+  setSearchResults([], "clear");
 }
 
 function renderSearchImageThumbArea() {

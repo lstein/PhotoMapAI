@@ -317,9 +317,11 @@ window.addEventListener("albumChanged", () => {
   resetAllSlides();
 });
 
-// Reset slide show when the search results change
-// window.addEventListener("searchResultsChanged", () => {
-//   console.log("Search results changed, resetting slides...");
-//   resetAllSlides();
-// });
+// Reset slide show when the search results change.
+// When clearing search results, we want to keep the current
+// slide to avoid displaying something unexpected.
+window.addEventListener("searchResultsChanged", () => {
+  const keep_current_slide = state.searchResults.length == 0;
+  resetAllSlides(keep_current_slide);
+});
 
