@@ -779,39 +779,39 @@
     <!-- Album Card Template -->
     <template id="albumCardTemplate">
       <div class="album-card">
-        <div class="album-details">
-          <div class="album-text">
-            <h4 class="album-name"></h4>
-            <div class="album-key"></div>
-            <div class="album-description"></div>
-            <div class="album-paths"></div>
-          </div>
-          <div class="indexing-section">
-            <!-- Index Status and Button -->
-            <div class="index-controls">
-              <div class="index-status">Ready to index</div>
-              <button class="create-index-btn btn-index">Update Index</button>
-              <button class="cancel-index-btn btn-cancel">Cancel</button>
+        <div class="album-info">
+          <div class="album-details">
+            <div class="album-text">
+              <h4 class="album-name"></h4>
+              <div class="album-key"></div>
+              <div class="album-description"></div>
+              <div class="album-paths"></div>
             </div>
-
-            <!-- Progress Container -->
-            <div class="progress-container">
-              <div class="progress-bar-wrapper">
-                <div class="progress-bar-track">
-                  <div class="progress-bar"></div>
-                  <div class="progress-bar-shimmer"></div>
-                </div>
-                <div class="progress-text">0%</div>
+            <div class="indexing-section">
+              <!-- Index Status and Button -->
+              <div class="index-controls">
+                <div class="index-status">Ready to index</div>
+                <button class="create-index-btn btn-index">Update Index</button>
+                <button class="cancel-index-btn btn-cancel">Cancel</button>
               </div>
-              <div class="estimated-time"></div>
+              <!-- Progress Container -->
+              <div class="progress-container">
+                <div class="progress-bar-wrapper">
+                  <div class="progress-bar-track">
+                    <div class="progress-bar"></div>
+                    <div class="progress-bar-shimmer"></div>
+                  </div>
+                  <div class="progress-text">0%</div>
+                </div>
+                <div class="estimated-time"></div>
+              </div>
             </div>
-          </div>
-          <div class="action-buttons vertical">
-            <button class="edit-album-btn btn-edit">Edit</button>
-            <button class="delete-album-btn btn-delete">Delete</button>
+            <div class="action-buttons vertical">
+              <button class="edit-album-btn btn-edit">Edit</button>
+              <button class="delete-album-btn btn-delete">Delete</button>
+            </div>
           </div>
         </div>
-
         <!-- Edit Form -->
         <div class="edit-form">
           <h5>Edit Album</h5>
@@ -825,12 +825,10 @@
               <input class="edit-album-description" type="text" />
             </div>
           </div>
-
           <div class="form-group">
             <label>Image Paths (one per line)</label>
             <textarea class="edit-album-paths" rows="3"></textarea>
           </div>
-
           <div class="form-buttons">
             <button class="save-album-btn btn-primary">Save Changes</button>
             <button class="cancel-edit-btn btn-secondary">Cancel</button>

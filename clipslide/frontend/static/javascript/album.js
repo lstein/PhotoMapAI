@@ -575,7 +575,7 @@ export class AlbumManager {
         .value.split("\n")
         .map((path) => path.trim())
         .filter((path) => path.length > 0),
-      index: album.embeddings_file,
+      index: album.index,
     };
 
     try {
