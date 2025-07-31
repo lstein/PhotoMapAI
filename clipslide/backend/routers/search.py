@@ -16,7 +16,8 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from io import BytesIO
 from pydantic import BaseModel
 from pathlib import Path
 
@@ -140,7 +141,7 @@ async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileRespons
 
 # File Management Routes
 @search_router.get("/images/{album}/{path:path}", tags=["Search"])
-async def serve_image(album: str, path: str) -> FileResponse:
+async def serve_image(album: str, path: str) -> StreamingResponse:
     """Serve images from different albums dynamically."""
     image_path = config_manager.find_image_in_album(album, path)
     if not image_path:
@@ -154,8 +155,10 @@ async def serve_image(album: str, path: str) -> FileResponse:
     if not image_path.exists() or not image_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    return FileResponse(image_path)
+    return serve_image_with_exif_rotation(image_path)
 
+
+# Utility Functions
 def create_search_results(
     results: List[str], scores: List[float], album: str
 ) -> SearchResultsResponse:
@@ -178,3 +181,16 @@ def create_slide_url(slide_metadata: SlideSummary, album: str) -> None:
         str(slide_metadata.filepath), album
     )
     slide_metadata.url = f"/images/{album}/{relative_path}"
+
+def serve_image_with_exif_rotation(image_path: Path) -> StreamingResponse:
+    try:
+        with Image.open(image_path) as im:
+            im = ImageOps.exif_transpose(im)
+            buf = BytesIO()
+            format = im.format or "JPEG"
+            im.save(buf, format=format)
+            buf.seek(0)
+            return StreamingResponse(buf, media_type=f"image/{format.lower()}")
+    except Exception as e:
+        print(f"Error processing image {image_path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Image processing error: {e}")

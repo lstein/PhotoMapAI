@@ -1,5 +1,6 @@
 // state.js
 // This file manages the state of the application, including slide management and metadata handling.
+import { AlbumManager } from "./album.js";
 
 export const state = {
   swiper: null, // Will be initialized in swiper.js
@@ -39,7 +40,7 @@ export function initializeFromServer() {
 }
 
 // Restore state from local storage
-export function restoreFromLocalStorage() {
+export async function restoreFromLocalStorage() {
   const storedHighWaterMark = localStorage.getItem("highWaterMark");
   if (storedHighWaterMark !== null)
     state.highWaterMark = parseInt(storedHighWaterMark, 10);
@@ -62,7 +63,12 @@ export function restoreFromLocalStorage() {
   if (storedAlbum && storedAlbum !== "null") {
     setAlbum(storedAlbum);
   } else {
-    setAlbum(null);
+    // call out to the server to get the current album
+    const album_list = await AlbumManager.fetchAvailableAlbums();
+    if (album_list.length > 0)
+      setAlbum(album_list[0].key);
+    else
+      setAlbum(null); // Default to null album if no albums found
   }
 }
 
