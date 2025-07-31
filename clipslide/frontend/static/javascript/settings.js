@@ -306,3 +306,4 @@ async function initializeSettings() {
 
 // Initialize settings from the server and local storage
 document.addEventListener("DOMContentLoaded", initializeSettings);
+document.addEventListener("settingsUpdated",initializeSettings);

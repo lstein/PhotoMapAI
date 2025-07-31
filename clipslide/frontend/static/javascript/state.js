@@ -24,8 +24,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 // Initialize the state from the initial URL.
 export function initializeFromServer() {
   if (window.slideshowConfig) {
-    state.currentDelay = window.slideshowConfig.currentDelay;
-    state.mode = window.slideshowConfig.mode;
+    setDelay(window.slideshowConfig.currentDelay || 5);
+    setMode(window.slideshowConfig.mode || "random");
     
     if (window.slideshowConfig.album) {
       setAlbum(window.slideshowConfig.album);
@@ -86,5 +86,21 @@ export async function setAlbum(newAlbumKey) {
     state.dataChanged = true;
     saveSettingsToLocalStorage();
     window.dispatchEvent(new CustomEvent("albumChanged", { detail: { album: newAlbumKey } }));
+  }
+}
+
+export function setMode(newMode) {
+  if (state.mode !== newMode) {
+    state.mode = newMode;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { mode: newMode } }));
+  }
+}
+
+export function setDelay(newDelay) {
+  if (state.currentDelay !== newDelay) {
+    state.currentDelay = newDelay;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { delay: newDelay } }));
   }
 }

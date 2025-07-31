@@ -108,7 +108,6 @@ document.addEventListener("DOMContentLoaded", async function () {
   // Call twice to initialize the carousel and start slideshow if requested
   await addNewSlide(false);
   await addNewSlide(false);
-  // state.swiper.slideTo(0);
 
   // Initial icon state and overlay
   updateSlideshowIcon();
@@ -183,10 +182,8 @@ export async function addNewSlide(backward = false) {
 
   if (backward) {
     state.swiper.prependSlide(slide);
-    // Optionally: state.swiper.slideTo(0);
   } else {
     state.swiper.appendSlide(slide);
-    // Optionally: state.swiper.slideTo(state.swiper.slides.length - 1);
   }
 
   // Delay high water mark enforcement to allow transition to finish
