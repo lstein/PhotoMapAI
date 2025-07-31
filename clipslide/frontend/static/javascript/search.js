@@ -98,16 +98,16 @@ export function setSearchResults(results, searchType) {
 
 // Perform an image search and return a list of {filename, score} objects.
 export async function searchImage(image_file) {
-  return await searchTextAndImage({file: image_file});
+  return await searchTextAndImage({ image_file: image_file });
 }
 
 export async function searchText(query) {
-  return await searchTextAndImage({positive_query: query});
+  return await searchTextAndImage({ positive_query: query });
 }
 
 // Combined search using both text and image inputs
 export async function searchTextAndImage({
-  file = null,
+  image_file = null,
   positive_query = "",
   negative_query = "",
   image_weight = 0.5,
@@ -115,20 +115,32 @@ export async function searchTextAndImage({
   negative_weight = 0.5,
   top_k = 100,
 }) {
-  const formData = new FormData();
-  if (file) formData.append("file", file);
-  formData.append("positive_query", positive_query);
-  formData.append("negative_query", negative_query);
-  formData.append("image_weight", image_weight);
-  formData.append("positive_weight", positive_weight);
-  formData.append("negative_weight", negative_weight);
-  formData.append("top_k", top_k);
-  formData.append("album", state.album);
+  let image_data = null;
+  if (image_file) {
+    image_data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result); // base64 string
+      reader.onerror = reject;
+      reader.readAsDataURL(image_file);
+    });
+  }
+
+  const payload = {
+    positive_query,
+    negative_query,
+    image_data,
+    image_weight,
+    positive_weight,
+    negative_weight,
+    top_k,
+    album: state.album,
+  };
 
   try {
     const response = await fetch("search_with_text_and_image/", {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
     const result = await response.json();
     return result.results || [];

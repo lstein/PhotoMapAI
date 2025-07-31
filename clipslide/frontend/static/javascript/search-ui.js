@@ -99,7 +99,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       showSpinner();
 
       let new_results = await searchTextAndImage({
-        file: imageFile,
+        image_file: imageFile,
         positive_query: positiveQuery,
         negative_query: negativeQuery,
         image_weight: imgWeight,

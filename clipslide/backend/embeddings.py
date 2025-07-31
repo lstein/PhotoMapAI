@@ -372,7 +372,6 @@ class Embeddings(BaseModel):
         create_index: bool = True,
     ) -> IndexResult:
         """Index images using CLIP and save their embeddings."""
-        print(f"Traversing images in {image_paths_or_dir}...")
         image_paths = self.get_image_files(image_paths_or_dir)
         total_images = len(image_paths)
         progress_callback = tqdm_progress_callback(total_images)

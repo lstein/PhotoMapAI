@@ -45,9 +45,7 @@ def new_album(client, tmp_path) -> dict:
     response = client.post("/add_album/", json=album_data)
     assert response.status_code == 201
 
-    # debugging
-    response = client.get("/available_albums")
-    assert response.status_code == 200
-    albums = response.json()
     # Return the album data (or fetch from API if you want the server's version)
-    return album_data
+    yield album_data
+    # teardown
+    client.delete(f"/delete_album/{album_data['key']}")

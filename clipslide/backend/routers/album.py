@@ -148,7 +148,7 @@ async def index_exists(album_key: str) -> dict:
     """Check if the index exists for the specified album."""
     album_config = config_manager.get_album(album_key)
     if not album_config:
-        return {"exists": False}
+        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
     index_path = Path(album_config.index)
     return {"exists": index_path.exists()}
 

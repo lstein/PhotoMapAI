@@ -5,11 +5,12 @@ It allows searching images by similarity or text, retrieving image metadata,
 and serving images and thumbnails.
 """
 
+import base64
 import shutil
 import tempfile
 from io import BytesIO
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -40,48 +41,51 @@ class SearchResultsResponse(BaseModel):
 
 
 # Search Routes
+class SearchWithTextAndImageRequest(BaseModel):
+    positive_query: str = ""
+    negative_query: str = ""
+    image_data: Optional[str] = None  # base64-encoded image string, or null
+    image_weight: float = 0.5
+    positive_weight: float = 0.5
+    negative_weight: float = 0.5
+    album: str = DEFAULT_ALBUM
+    top_k: int = DEFAULT_TOP_K
+
+
 @search_router.post(
     "/search_with_text_and_image/",
     response_model=SearchResultsResponse,
     tags=["Search"],
 )
 async def search_with_text_and_image(
-    file: UploadFile = File(None),
-    positive_query: str = Form(None),
-    negative_query: str = Form(None),
-    image_weight: float = Form(0.5),
-    positive_weight: float = Form(0.5),
-    negative_weight: float = Form(0.5),
-    album: str = Form(DEFAULT_ALBUM),
-    top_k: int = Form(DEFAULT_TOP_K),
+    req: SearchWithTextAndImageRequest,
 ) -> SearchResultsResponse:
     """
-    Search for images using a combination of image, positive text, and negative text queries with separate weights.
+    Search for images using a combination of image (as base64), positive text, and negative text queries with separate weights.
     """
+    query_image_path = None
     temp_path = None
     try:
-        # Save uploaded file temporarily if provided
-        if file is not None:
+        # If image_data is provided, decode and save to temp file
+        if req.image_data:
+            image_bytes = base64.b64decode(req.image_data.split(",")[-1])
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                shutil.copyfileobj(file.file, tmp)
+                tmp.write(image_bytes)
                 temp_path = Path(tmp.name)
             query_image_path = temp_path
-        else:
-            query_image_path = None
 
-        embeddings = get_embeddings_for_album(album)
+        embeddings = get_embeddings_for_album(req.album)
         results, scores = embeddings.search_images_by_text_and_image(
             query_image_path=query_image_path,
-            positive_query=positive_query,
-            negative_query=negative_query,
-            image_weight=image_weight,
-            positive_weight=positive_weight,
-            negative_weight=negative_weight,
-            top_k=top_k,
+            positive_query=req.positive_query,
+            negative_query=req.negative_query,
+            image_weight=req.image_weight,
+            positive_weight=req.positive_weight,
+            negative_weight=req.negative_weight,
+            top_k=req.top_k,
         )
-        return create_search_results(results, scores, album)
+        return create_search_results(results, scores, req.album)
     finally:
-        # Clean up temp file
         if temp_path and temp_path.exists():
             temp_path.unlink(missing_ok=True)
 
