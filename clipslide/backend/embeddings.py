@@ -153,8 +153,9 @@ class Embeddings(BaseModel):
             tuple: (embedding, modification_time, metadata) or (None, None, None) if failed
         """
         try:
-            pil_image = Image.open(image_path).convert("RGB")
+            pil_image = Image.open(image_path)
             pil_image = ImageOps.exif_transpose(pil_image)
+            pil_image = pil_image.convert("RGB")
 
             # Get file metadata
             modification_time = image_path.stat().st_mtime
@@ -693,8 +694,9 @@ class Embeddings(BaseModel):
             image_weight = 0.0
             image_embedding = None
         else:
-            pil_image = Image.open(query_image_path).convert("RGB")
+            pil_image = Image.open(query_image_path)
             pil_image = ImageOps.exif_transpose(pil_image)
+            pil_image = pil_image.convert("RGB")
             image_tensor = preprocess(pil_image).unsqueeze(0).to(device)
             with torch.no_grad():
                 image_embedding = model.encode_image(image_tensor).squeeze(0)

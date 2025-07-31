@@ -1,35 +1,33 @@
-'''
+"""
 clipslide.backend.routers.search
 This module contains the search-related API endpoints for the Clipslide backend.
 It allows searching images by similarity or text, retrieving image metadata,
 and serving images and thumbnails.
-'''
+"""
 
-import tempfile
 import shutil
-
-from PIL import Image, ImageOps
-from fastapi import (
-    APIRouter,
-    File,
-    Form,
-    HTTPException,
-    UploadFile,
-)
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+import tempfile
 from io import BytesIO
-from pydantic import BaseModel
 from pathlib import Path
-
 from typing import List
 
-from ..constants import DEFAULT_ALBUM, DEFAULT_TOP_K
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from PIL import Image, ImageOps
+from pydantic import BaseModel
+
 from ..config import get_config_manager
+from ..constants import DEFAULT_ALBUM, DEFAULT_TOP_K
 from ..metadata_modules import SlideSummary
-from .album import validate_album_exists, get_embeddings_for_album, validate_image_access
+from .album import (
+    get_embeddings_for_album,
+    validate_album_exists,
+    validate_image_access,
+)
 
 config_manager = get_config_manager()
 search_router = APIRouter()
+
 
 # Response Models
 class SearchResult(BaseModel):
@@ -42,7 +40,11 @@ class SearchResultsResponse(BaseModel):
 
 
 # Search Routes
-@search_router.post("/search_with_text_and_image/", response_model=SearchResultsResponse, tags=["Search"])
+@search_router.post(
+    "/search_with_text_and_image/",
+    response_model=SearchResultsResponse,
+    tags=["Search"],
+)
 async def search_with_text_and_image(
     file: UploadFile = File(None),
     positive_query: str = Form(None),
@@ -83,6 +85,7 @@ async def search_with_text_and_image(
         if temp_path and temp_path.exists():
             temp_path.unlink(missing_ok=True)
 
+
 # Image Retrieval Routes
 @search_router.post("/retrieve_image/", response_model=SlideSummary, tags=["Search"])
 async def retrieve_image(
@@ -95,16 +98,15 @@ async def retrieve_image(
     if current_image is not None:
         image_path = config_manager.find_image_in_album(album, current_image)
         if not image_path:
-          raise HTTPException(status_code=404, detail="Image not found")
+            raise HTTPException(status_code=404, detail="Image not found")
     else:
         image_path = None
 
     embeddings = get_embeddings_for_album(album)
-    slide_metadata = embeddings.retrieve_image(image_path, 
-                                               offset=offset, 
-                                               random=random)
+    slide_metadata = embeddings.retrieve_image(image_path, offset=offset, random=random)
     create_slide_url(slide_metadata, album)
     return slide_metadata
+
 
 @search_router.get("/thumbnails/{album}/{path:path}", tags=["Search"])
 async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileResponse:
@@ -125,10 +127,15 @@ async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileRespons
     # Use a safe filename for the thumbnail
     relative_path = config_manager.get_relative_path(str(image_path), album)
     safe_rel_path = relative_path.replace("/", "_").replace("\\", "_")
-    thumb_path = thumb_dir / f"{Path(safe_rel_path).stem}_{size}{Path(safe_rel_path).suffix}"
+    thumb_path = (
+        thumb_dir / f"{Path(safe_rel_path).stem}_{size}{Path(safe_rel_path).suffix}"
+    )
 
     # Generate thumbnail if not cached
-    if not thumb_path.exists() or thumb_path.stat().st_mtime < image_path.stat().st_mtime:
+    if (
+        not thumb_path.exists()
+        or thumb_path.stat().st_mtime < image_path.stat().st_mtime
+    ):
         try:
             with Image.open(image_path) as im:
                 im = ImageOps.exif_transpose(im)  # Correct orientation using EXIF
@@ -138,6 +145,7 @@ async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileRespons
             raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}")
 
     return FileResponse(thumb_path)
+
 
 # File Management Routes
 @search_router.get("/images/{album}/{path:path}", tags=["Search"])
@@ -182,12 +190,13 @@ def create_slide_url(slide_metadata: SlideSummary, album: str) -> None:
     )
     slide_metadata.url = f"/images/{album}/{relative_path}"
 
+
 def serve_image_with_exif_rotation(image_path: Path) -> StreamingResponse:
     try:
         with Image.open(image_path) as im:
             im = ImageOps.exif_transpose(im)
             buf = BytesIO()
-            format = im.format or "JPEG"
+            format = im.format or "PNG"
             im.save(buf, format=format)
             buf.seek(0)
             return StreamingResponse(buf, media_type=f"image/{format.lower()}")
