@@ -89,7 +89,6 @@ function switchAlbum(newAlbum, selectedOption) {
   setAlbum(newAlbum);
   state.embeddingsFile = selectedOption.dataset.embeddingsFile;
   state.umapEps = parseFloat(selectedOption.dataset.umapEps) || 0.07;
-  state.dataChanged = true; // Force reload of UMAP data -- this should probably be an event!
 
   // Clear search results when switching albums
   saveSettingsToLocalStorage();

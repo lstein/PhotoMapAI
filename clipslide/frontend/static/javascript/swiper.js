@@ -310,3 +310,16 @@ export function enforceHighWaterMark(backward = false) {
     if (slideShowRunning) resumeSlideshow(); // Resume the slideshow after removal
   }
 }
+
+// Reset slide show when the album changes
+window.addEventListener("albumChanged", () => {
+  console.log("Album changed, resetting slides...");
+  resetAllSlides();
+});
+
+// Reset slide show when the search results change
+// window.addEventListener("searchResultsChanged", () => {
+//   console.log("Search results changed, resetting slides...");
+//   resetAllSlides();
+// });
+
