@@ -657,7 +657,7 @@ class Embeddings(BaseModel):
     # Main search entry point.
     def search_images_by_text_and_image(
         self,
-        query_image_path: Optional[Path] = None,
+        query_image_data: Optional[Image.Image] = None,
         positive_query: Optional[str] = "",
         negative_query: Optional[str] = None,
         image_weight: float = 0.5,
@@ -670,7 +670,7 @@ class Embeddings(BaseModel):
         Search for images similar to a query image and a positive/negative text prompt, with separate weights.
         Any of the queries can be None; if so, their corresponding weight is set to zero and they are not used.
         Args:
-            query_image_path (Path or None): Path to the query image.
+            query_image_data (Image or None): PIL Image data for the query image.
             positive_query (str or None): Positive text prompt.
             negative_query (str or None): Negative text prompt.
             image_weight (float): Weight for image embedding.
@@ -689,12 +689,11 @@ class Embeddings(BaseModel):
         model, preprocess = clip.load("ViT-B/32", device=device)
 
         # Handle None queries: set weight to zero and skip embedding
-        if query_image_path is None:
+        if query_image_data is None:
             image_weight = 0.0
             image_embedding = None
         else:
-            pil_image = Image.open(query_image_path)
-            pil_image = ImageOps.exif_transpose(pil_image)
+            pil_image = ImageOps.exif_transpose(query_image_data)
             pil_image = pil_image.convert("RGB")
             image_tensor = preprocess(pil_image).unsqueeze(0).to(device)
             with torch.no_grad():

@@ -69,14 +69,12 @@ async def search_with_text_and_image(
         # If image_data is provided, decode and save to temp file
         if req.image_data:
             image_bytes = base64.b64decode(req.image_data.split(",")[-1])
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                tmp.write(image_bytes)
-                temp_path = Path(tmp.name)
-            query_image_path = temp_path
+            query_image_data = Image.open(BytesIO(image_bytes))
 
         embeddings = get_embeddings_for_album(req.album)
+        print("embeddings:", embeddings)
         results, scores = embeddings.search_images_by_text_and_image(
-            query_image_path=query_image_path,
+            query_image_data=query_image_data,
             positive_query=req.positive_query,
             negative_query=req.negative_query,
             image_weight=req.image_weight,
@@ -167,6 +165,7 @@ async def serve_image(album: str, path: str) -> StreamingResponse:
     if not image_path.exists() or not image_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
+    # I'm not sure this is doing anything useful
     return serve_image_with_exif_rotation(image_path)
 
 

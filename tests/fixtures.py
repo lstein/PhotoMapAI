@@ -4,6 +4,7 @@ Fixtures for pytest
 
 import os
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -49,3 +50,21 @@ def new_album(client, tmp_path) -> dict:
     yield album_data
     # teardown
     client.delete(f"/delete_album/{album_data['key']}")
+
+
+def poll_during_indexing(client, album_key, timeout=60):
+    """Poll the index progress until it completes or times out."""
+    start_time = time.time()
+    while True:
+        response = client.get(f"/index_progress/{album_key}")
+        assert response.status_code == 200
+        progress = response.json()
+        if progress["status"] == "completed":
+            break
+        if progress["status"] == "error":
+            raise Exception(
+                f"Indexing failed: {progress.get('error_message', 'Unknown error')}"
+            )
+        if time.time() - start_time > timeout:
+            raise TimeoutError("Indexing did not complete within the timeout period.")
+        time.sleep(1)  # Wait before polling again
