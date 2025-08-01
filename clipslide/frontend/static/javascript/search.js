@@ -141,30 +141,6 @@ export async function searchTextAndImage({
   }
 }
 
-export async function deleteImage(filepath) {
-  try {
-    // Use DELETE method with filepath as query parameter
-    const response = await fetch(
-      `delete_image/?file_to_delete=${encodeURIComponent(
-        filepath
-      )}&album=${encodeURIComponent(state.album)}`,
-      {
-        method: "DELETE",
-      }
-    );
-
-    // check status
-    if (!response.ok) {
-      throw new Error(`Failed to delete image: ${response.statusText}`);
-    }
-    const data = await response.json();
-    return data;
-  } catch (e) {
-    console.warn("Failed to delete image.");
-    throw e;
-  }
-}
-
 export function getCurrentFilepath() {
   return document.getElementById("filepathText")?.textContent?.trim();
 }

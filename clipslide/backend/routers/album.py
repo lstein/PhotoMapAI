@@ -19,12 +19,6 @@ class UmapEpsGetRequest(BaseModel):
     album: str
 
 
-class EmbeddingsIndexMetadata(BaseModel):
-    filename_count: int
-    embeddings_path: str
-    last_modified: float
-
-
 # Initialize logging
 logger = logging.getLogger(__name__)
 
@@ -140,44 +134,6 @@ async def delete_album(album_key: str) -> JSONResponse:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete album: {str(e)}")
-
-
-# Return true if the index exists for the specified album
-@album_router.get("/index_exists/{album_key}", tags=["Albums"])
-async def index_exists(album_key: str) -> dict:
-    """Check if the index exists for the specified album."""
-    album_config = config_manager.get_album(album_key)
-    if not album_config:
-        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
-    index_path = Path(album_config.index)
-    return {"exists": index_path.exists()}
-
-
-# Return Embeddings index metadata for the specified album
-@album_router.get(
-    "/index_metadata/{album_key}",
-    response_model=EmbeddingsIndexMetadata,
-    tags=["Albums"],
-)
-async def index_metadata(album_key: str) -> EmbeddingsIndexMetadata:
-    """Get metadata about the embeddings index for the specified album."""
-    album_config = config_manager.get_album(album_key)
-    if not album_config:
-        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
-
-    index_path = Path(album_config.index)
-    if not index_path.exists():
-        raise HTTPException(status_code=404, detail="Index file does not exist")
-
-    # Get file metadata
-    last_modified = index_path.stat().st_mtime
-    filename_count = len(Embeddings.open_cached_embeddings(index_path)["filenames"])
-
-    return EmbeddingsIndexMetadata(
-        filename_count=filename_count,
-        embeddings_path=str(index_path),
-        last_modified=last_modified,
-    )
 
 
 # The LocationIQ API key for showing GPS locations

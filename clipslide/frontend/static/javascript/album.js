@@ -1,6 +1,7 @@
 // album-management.js
 import { exitSearchMode } from "./search-ui.js";
 
+import { getIndexMetadata, updateIndex } from "./index.js";
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
 import { setAlbum, state } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
@@ -371,14 +372,13 @@ export class AlbumManager {
     const createBtn = cardElement.querySelector(".create-index-btn");
 
     try {
-      const resp = await fetch(`index_metadata/${album.key}`);
-      if (resp.ok) {
-        const meta = await resp.json();
-        const modDate = new Date(meta.last_modified * 1000).toLocaleString(
+      const metadata = await getIndexMetadata(album.key);
+      if (metadata) {
+        const modDate = new Date(metadata.last_modified * 1000).toLocaleString(
           undefined,
           { dateStyle: "medium", timeStyle: "short" }
         );
-        const fileCount = meta.filename_count;
+        const fileCount = metadata.filename_count;
         status.textContent = `Index updated ${modDate} (${fileCount} images)`;
         status.style.color = "green";
         createBtn.textContent = "Update Index";
@@ -496,6 +496,7 @@ export class AlbumManager {
     try {
       const response = await fetch(`delete_album/${albumKey}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
       });
 
       if (response.ok) {
@@ -601,24 +602,10 @@ export class AlbumManager {
 
   // Indexing functionality
   async startIndexing(albumKey, cardElement) {
-    try {
-      const response = await fetch("update_index_async/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ album_key: albumKey }),
-      });
-
-      if (response.ok) {
-        const progress = await response.json();
-        this.showProgressUIWithoutScroll(cardElement, progress);
-        this.startProgressPolling(albumKey, cardElement);
-      } else {
-        alert("Failed to start indexing");
-      }
-    } catch (error) {
-      console.error("Failed to start indexing:", error);
-      alert("Failed to start indexing");
-    }
+    const progress = await updateIndex(albumKey);
+    if (!progress) return;
+    this.showProgressUIWithoutScroll(cardElement, progress);
+    this.startProgressPolling(albumKey, cardElement);
   }
 
   showProgressUI(cardElement) {
@@ -950,8 +937,7 @@ export async function checkAlbumIndex() {
 
   // If we get here, the index exists, but may not contain any slides.
   // Check if index contains any slides/images
-  const indexResponse = await fetch(`index_metadata/${albumKey}`);
-  const indexMetadata = await indexResponse.json();
+  const indexMetadata = await getIndexMetadata(albumKey);
   const totalImages = indexMetadata.filename_count ?? 0;
 
   if (totalImages === 0) {

@@ -3,7 +3,9 @@ from base64 import b64encode
 from pathlib import Path
 
 import pytest
-from fixtures import client, new_album, poll_during_indexing
+from fixtures import client, count_test_images, new_album, poll_during_indexing
+
+TEST_IMAGE_COUNT = count_test_images()
 
 
 def test_index_update(client, new_album, monkeypatch):
@@ -36,6 +38,7 @@ def test_index_update(client, new_album, monkeypatch):
     assert embeddings_path is not None
     embeddings = Embeddings.open_cached_embeddings(embeddings_path)
     assert embeddings is not None
+    assert len(embeddings["filenames"]) == TEST_IMAGE_COUNT
 
     # Ask the API for the index metadata and ensure it matches the number of index files
     response = client.get(f"/index_metadata/{new_album['key']}")

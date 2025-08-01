@@ -93,3 +93,9 @@ def fetch_filename(client, album_key, offset) -> str:
     response = client.get(f"/retrieve_image/{album_key}?offset={offset}")
     assert response.status_code == 200
     return response.json().get("filename", "")
+
+
+def count_test_images():
+    """Count the number of test images in the fixtures directory."""
+    src_images = Path(__file__).parent / "test_images"
+    return len([img for img in src_images.iterdir() if img.is_file()])

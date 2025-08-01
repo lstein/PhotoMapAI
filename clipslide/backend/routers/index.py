@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Form, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from PIL import Image, ImageOps
 from pydantic import BaseModel
@@ -39,6 +39,12 @@ class ProgressResponse(BaseModel):
 
 class UpdateIndexRequest(BaseModel):
     album_key: str
+
+
+class EmbeddingsIndexMetadata(BaseModel):
+    filename_count: int
+    embeddings_path: str
+    last_modified: float
 
 
 # Index Management Routes
@@ -149,9 +155,48 @@ async def cancel_index_operation(album_key: str) -> dict:
         )
 
 
-@index_router.delete("/delete_image/", tags=["Index"])
+# Return true if the index exists for the specified album
+@index_router.get("/index_exists/{album_key}", tags=["Index"])
+async def index_exists(album_key: str) -> dict:
+    """Check if the index exists for the specified album."""
+    album_config = config_manager.get_album(album_key)
+    if not album_config:
+        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
+    index_path = Path(album_config.index)
+    return {"exists": index_path.exists()}
+
+
+# Return Embeddings index metadata for the specified album
+@index_router.get(
+    "/index_metadata/{album_key}",
+    response_model=EmbeddingsIndexMetadata,
+    tags=["Albums"],
+)
+async def index_metadata(album_key: str) -> EmbeddingsIndexMetadata:
+    """Get metadata about the embeddings index for the specified album."""
+    album_config = config_manager.get_album(album_key)
+    if not album_config:
+        raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
+
+    index_path = Path(album_config.index)
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="Index file does not exist")
+
+    # Get file metadata
+    last_modified = index_path.stat().st_mtime
+    filename_count = len(Embeddings.open_cached_embeddings(index_path)["filenames"])
+
+    return EmbeddingsIndexMetadata(
+        filename_count=filename_count,
+        embeddings_path=str(index_path),
+        last_modified=last_modified,
+    )
+
+
+@index_router.delete("/delete_image/{album}", tags=["Index"])
 async def delete_image(
-    file_to_delete: str, album: str = Form(DEFAULT_ALBUM)
+    album: str,
+    file_to_delete: str = Query(...),
 ) -> JSONResponse:
     """Delete an image file."""
     try:

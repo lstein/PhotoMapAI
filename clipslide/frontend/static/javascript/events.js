@@ -1,13 +1,14 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
 import { checkAlbumIndex } from "./album.js";
+import { deleteImage } from "./index.js";
 import {
   hideMetadataOverlay,
   showMetadataOverlay,
   toggleMetadataOverlay,
   updateMetadataOverlay,
 } from "./overlay.js";
-import { deleteImage, getCurrentFilepath } from "./search.js";
+import { getCurrentFilepath } from "./search.js";
 import { state } from "./state.js";
 import {
   addNewSlide,
@@ -134,7 +135,7 @@ async function handleDeleteCurrentFile() {
 
   try {
     showSpinner();
-    await deleteImage(currentFilepath);
+    await deleteImage(currentFilepath, state.album);
     await handleSuccessfulDelete(currentFilepath);
     hideSpinner();
     console.log("Image deleted successfully");
