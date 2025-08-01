@@ -13,15 +13,15 @@ umap_router = APIRouter()
 config_manager = get_config_manager()
 
 
-@umap_router.get("/umap_data/{album}", tags=["UMAP"])
+@umap_router.get("/umap_data/{album_key}", tags=["UMAP"])
 async def get_umap_data(
-    album: str,
+    album_key: str,
     cluster_eps: float = 0.07,
     cluster_min_samples: int = 10,
 ) -> JSONResponse:
     # Instantiate your Embeddings object (adjust path as needed)
-    embeddings = get_embeddings_for_album(album)
-    album_config = config_manager.get_album(album)
+    embeddings = get_embeddings_for_album(album_key)
+    album_config = config_manager.get_album(album_key)
     cluster_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
 
     # Load cached UMAP embeddings (will compute/cache if missing)

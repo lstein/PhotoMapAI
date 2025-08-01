@@ -124,11 +124,10 @@ export async function searchTextAndImage({
     positive_weight,
     negative_weight,
     top_k,
-    album: state.album,
   };
 
   try {
-    const response = await fetch("search_with_text_and_image/", {
+    const response = await fetch(`search_with_text_and_image/${encodeURIComponent(state.album)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

@@ -6,8 +6,6 @@ and serving images and thumbnails.
 """
 
 import base64
-import shutil
-import tempfile
 from io import BytesIO
 from pathlib import Path
 from typing import List, Optional
@@ -18,7 +16,7 @@ from PIL import Image, ImageOps
 from pydantic import BaseModel
 
 from ..config import get_config_manager
-from ..constants import DEFAULT_ALBUM, DEFAULT_TOP_K
+from ..constants import DEFAULT_TOP_K
 from ..metadata_modules import SlideSummary
 from .album import (
     get_embeddings_for_album,
@@ -48,16 +46,16 @@ class SearchWithTextAndImageRequest(BaseModel):
     image_weight: float = 0.5
     positive_weight: float = 0.5
     negative_weight: float = 0.5
-    album: str = DEFAULT_ALBUM
     top_k: int = DEFAULT_TOP_K
 
 
 @search_router.post(
-    "/search_with_text_and_image/",
+    "/search_with_text_and_image/{album_key}",
     response_model=SearchResultsResponse,
     tags=["Search"],
 )
 async def search_with_text_and_image(
+    album_key: str,
     req: SearchWithTextAndImageRequest,
 ) -> SearchResultsResponse:
     """
@@ -71,7 +69,7 @@ async def search_with_text_and_image(
             image_bytes = base64.b64decode(req.image_data.split(",")[-1])
             query_image_data = Image.open(BytesIO(image_bytes))
 
-        embeddings = get_embeddings_for_album(req.album)
+        embeddings = get_embeddings_for_album(album_key)
         results, scores = embeddings.search_images_by_text_and_image(
             query_image_data=query_image_data,
             positive_query=req.positive_query,
@@ -81,7 +79,7 @@ async def search_with_text_and_image(
             negative_weight=req.negative_weight,
             top_k=req.top_k,
         )
-        return create_search_results(results, scores, req.album)
+        return create_search_results(results, scores, album_key)
     finally:
         if temp_path and temp_path.exists():
             temp_path.unlink(missing_ok=True)
@@ -89,38 +87,38 @@ async def search_with_text_and_image(
 
 # Image Retrieval Routes
 @search_router.get(
-    "/retrieve_image/{album}",
+    "/retrieve_image/{album_key}",
     response_model=SlideSummary,
     tags=["Search"],
 )
 async def retrieve_image(
-    album: str,
+    album_key: str,
     current_image: Optional[str] = Query(None),
     offset: int = Query(0),
     random: bool = Query(False),
 ) -> SlideSummary:
     """Retrieve metadata for a specific image."""
     if current_image is not None:
-        image_path = config_manager.find_image_in_album(album, current_image)
+        image_path = config_manager.find_image_in_album(album_key, current_image)
         if not image_path:
             raise HTTPException(status_code=404, detail="Image not found")
     else:
         image_path = None
 
-    embeddings = get_embeddings_for_album(album)
+    embeddings = get_embeddings_for_album(album_key)
     slide_metadata = embeddings.retrieve_image(image_path, offset=offset, random=random)
-    create_slide_url(slide_metadata, album)
+    create_slide_url(slide_metadata, album_key)
     return slide_metadata
 
 
-@search_router.get("/thumbnails/{album}/{path:path}", tags=["Search"])
-async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileResponse:
+@search_router.get("/thumbnails/{album_key}/{path:path}", tags=["Search"])
+async def serve_thumbnail(album_key: str, path: str, size: int = 256) -> FileResponse:
     """Serve a reduced-size thumbnail for an image."""
-    image_path = config_manager.find_image_in_album(album, path)
+    image_path = config_manager.find_image_in_album(album_key, path)
     if not image_path:
         raise HTTPException(status_code=404, detail="Image not found")
 
-    album_config = validate_album_exists(album)
+    album_config = validate_album_exists(album_key)
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -130,7 +128,7 @@ async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileRespons
     thumb_dir.mkdir(exist_ok=True)
 
     # Use a safe filename for the thumbnail
-    relative_path = config_manager.get_relative_path(str(image_path), album)
+    relative_path = config_manager.get_relative_path(str(image_path), album_key)
     safe_rel_path = relative_path.replace("/", "_").replace("\\", "_")
     thumb_path = (
         thumb_dir / f"{Path(safe_rel_path).stem}_{size}{Path(safe_rel_path).suffix}"
@@ -153,14 +151,14 @@ async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileRespons
 
 
 # File Management Routes
-@search_router.get("/images/{album}/{path:path}", tags=["Search"])
-async def serve_image(album: str, path: str) -> FileResponse:
+@search_router.get("/images/{album_key}/{path:path}", tags=["Search"])
+async def serve_image(album_key: str, path: str) -> FileResponse:
     """Serve images from different albums dynamically."""
-    image_path = config_manager.find_image_in_album(album, path)
+    image_path = config_manager.find_image_in_album(album_key, path)
     if not image_path:
         raise HTTPException(status_code=404, detail="Image not found")
 
-    album_config = validate_album_exists(album)
+    album_config = validate_album_exists(album_key)
 
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
@@ -175,13 +173,13 @@ async def serve_image(album: str, path: str) -> FileResponse:
 
 # Utility Functions
 def create_search_results(
-    results: List[str], scores: List[float], album: str
+    results: List[str], scores: List[float], album_key: str
 ) -> SearchResultsResponse:
     """Create a standardized search results response."""
     return SearchResultsResponse(
         results=[
             SearchResult(
-                filename=config_manager.get_relative_path(filename, album)
+                filename=config_manager.get_relative_path(filename, album_key)
                 or Path(filename).name,
                 score=float(score),
             )
@@ -190,12 +188,12 @@ def create_search_results(
     )
 
 
-def create_slide_url(slide_metadata: SlideSummary, album: str) -> None:
+def create_slide_url(slide_metadata: SlideSummary, album_key: str) -> None:
     """Add URL to slide metadata."""
     relative_path = config_manager.get_relative_path(
-        str(slide_metadata.filepath), album
+        str(slide_metadata.filepath), album_key
     )
-    slide_metadata.url = f"/images/{album}/{relative_path}"
+    slide_metadata.url = f"/images/{album_key}/{relative_path}"
 
 
 # This is not currently used. It can be applied to the end of the image serving
