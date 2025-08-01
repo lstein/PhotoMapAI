@@ -5,16 +5,17 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sklearn.cluster import DBSCAN
 
-from ..constants import DEFAULT_ALBUM
 from ..config import get_config_manager
+from ..constants import DEFAULT_ALBUM
 from .album import get_embeddings_for_album
 
 umap_router = APIRouter()
 config_manager = get_config_manager()
 
-@umap_router.get("/umap_data/", tags=["UMAP"])
+
+@umap_router.get("/umap_data/{album}", tags=["UMAP"])
 async def get_umap_data(
-    album: str = DEFAULT_ALBUM,
+    album: str,
     cluster_eps: float = 0.07,
     cluster_min_samples: int = 10,
 ) -> JSONResponse:
@@ -29,9 +30,11 @@ async def get_umap_data(
         "filenames"
     ]
 
-    # Cluster with DBSCAN 
+    # Cluster with DBSCAN
     if umap_embeddings.shape[0] > 0:
-        clustering = DBSCAN(eps=cluster_eps, min_samples=cluster_min_samples).fit(umap_embeddings)
+        clustering = DBSCAN(eps=cluster_eps, min_samples=cluster_min_samples).fit(
+            umap_embeddings
+        )
         labels = clustering.labels_
     else:
         labels = np.array([])

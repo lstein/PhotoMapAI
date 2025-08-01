@@ -63,7 +63,7 @@ async def search_with_text_and_image(
     """
     Search for images using a combination of image (as base64), positive text, and negative text queries with separate weights.
     """
-    query_image_path = None
+    query_image_data = None
     temp_path = None
     try:
         # If image_data is provided, decode and save to temp file
@@ -72,7 +72,6 @@ async def search_with_text_and_image(
             query_image_data = Image.open(BytesIO(image_bytes))
 
         embeddings = get_embeddings_for_album(req.album)
-        print("embeddings:", embeddings)
         results, scores = embeddings.search_images_by_text_and_image(
             query_image_data=query_image_data,
             positive_query=req.positive_query,

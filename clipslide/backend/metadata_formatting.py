@@ -15,7 +15,7 @@ from .metadata_modules import SlideSummary, format_exif_metadata, format_invoke_
 config_manager = ConfigManager()
 
 
-def format_metadata(filepath: Path, metadata: dict) -> SlideSummary:
+def format_metadata(filepath: Path, metadata: dict, index: int) -> SlideSummary:
     """
     Format metadata dictionary into an HTML string.
 
@@ -26,7 +26,9 @@ def format_metadata(filepath: Path, metadata: dict) -> SlideSummary:
     Returns:
         SlideMetadata: structured representation of the metadata.
     """
-    result = SlideSummary(filename=filepath.name, filepath=filepath.as_posix())
+    result = SlideSummary(
+        filename=filepath.name, filepath=filepath.as_posix(), index=index
+    )
     if not metadata:
         result.description = "<i>No metadata available.</i>"
         return result

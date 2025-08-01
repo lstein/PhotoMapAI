@@ -136,7 +136,7 @@ export async function fetchUmapData() {
     const eps =
       parseFloat(document.getElementById("umapEpsSpinner").value) || 0.07;
     const response = await fetch(
-      `umap_data/?album=${encodeURIComponent(state.album)}&cluster_eps=${eps}`
+      `umap_data/${encodeURIComponent(state.album)}?cluster_eps=${eps}`
     );
     points = await response.json();
 

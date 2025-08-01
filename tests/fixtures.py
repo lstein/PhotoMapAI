@@ -68,3 +68,28 @@ def poll_during_indexing(client, album_key, timeout=60):
         if time.time() - start_time > timeout:
             raise TimeoutError("Indexing did not complete within the timeout period.")
         time.sleep(1)  # Wait before polling again
+
+
+def build_index(client, new_album, monkeypatch):
+    """Helper function to build the index for the album."""
+    from clipslide.backend.embeddings import Embeddings
+
+    monkeypatch.setattr(
+        Embeddings, "minimum_image_size", 10 * 1024
+    )  # Set minimum image size to 10K for testing
+
+    response = client.post(f"/update_index_async", json={"album_key": new_album["key"]})
+    assert response.status_code == 202
+    task_id = response.json().get("task_id")
+    assert task_id is not None
+    try:
+        poll_during_indexing(client, new_album["key"])
+    except TimeoutError as e:
+        pytest.fail(f"Indexing did not complete: {str(e)}")
+
+
+def fetch_filename(client, album_key, offset) -> str:
+    """Helper function to fetch the filename from the album."""
+    response = client.get(f"/retrieve_image/{album_key}?offset={offset}")
+    assert response.status_code == 200
+    return response.json().get("filename", "")
