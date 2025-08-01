@@ -11,9 +11,11 @@ export async function fetchNextImage(lastImage = null, backward = false) {
   let currentColor;
 
   let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
-  const formData = new URLSearchParams();
 
   try {
+    let url;
+    const params = new URLSearchParams();
+
     // If in search mode, then we are browsing the search results
     if (state.searchResults?.length > 0) {
       let indexToRetrieve = 0;
@@ -29,38 +31,27 @@ export async function fetchNextImage(lastImage = null, backward = false) {
       currentScore = state.searchResults[indexToRetrieve]?.score || 0;
       currentCluster = state.searchResults[indexToRetrieve]?.cluster || null;
       currentColor = state.searchResults[indexToRetrieve]?.color || "#000000";
-      formData.append("current_image", fileToRetrieve);
-      formData.append("offset", 0); // No offset for search results
-      formData.append("album", state.album);
 
-      response = await fetch("retrieve_image/", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formData.toString(),
-      });
+      params.append("current_image", fileToRetrieve);
+      params.append("offset", 0); // No offset for search results
+      params.append("random", "false");
     } else {
-      formData.append("album", state.album);
-      if (state.mode === "random") {
-        formData.append("random", "true");
-      } else if (state.mode === "sequential") {
-        if (lastImage) {
-          const currentFilepath = lastImage.dataset?.filepath;
-          formData.append("current_image", currentFilepath);
-          formData.append("offset", backward ? -1 : 1);
-        }
-        formData.append("random", "false");
+      params.append("random", state.mode === "random" ? "true" : "false");
+      if (state.mode === "sequential" && lastImage) {
+        const currentFilepath = lastImage.dataset?.filepath;
+        params.append("current_image", currentFilepath);
+        params.append("offset", backward ? -1 : 1);
       } else {
-        throw new Error(
-          "Invalid mode specified. Use 'random' or 'sequential'."
-        );
+        params.append("offset", 0);
       }
-
-      response = await fetch("retrieve_image/", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formData.toString(),
-      });
     }
+
+    // Always include album in the path
+    url = `retrieve_image/${encodeURIComponent(state.album)}?${params.toString()}`;
+
+    response = await fetch(url, {
+      method: "GET",
+    });
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

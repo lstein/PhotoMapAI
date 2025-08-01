@@ -12,8 +12,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse, StreamingResponse
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 
@@ -89,12 +89,16 @@ async def search_with_text_and_image(
 
 
 # Image Retrieval Routes
-@search_router.post("/retrieve_image/", response_model=SlideSummary, tags=["Search"])
+@search_router.get(
+    "/retrieve_image/{album}",
+    response_model=SlideSummary,
+    tags=["Search"],
+)
 async def retrieve_image(
-    current_image: str = Form(None),
-    offset: int = Form(0),
-    album: str = Form(DEFAULT_ALBUM),
-    random: bool = Form(False),
+    album: str,
+    current_image: Optional[str] = Query(None),
+    offset: int = Query(0),
+    random: bool = Query(False),
 ) -> SlideSummary:
     """Retrieve metadata for a specific image."""
     if current_image is not None:
@@ -195,6 +199,9 @@ def create_slide_url(slide_metadata: SlideSummary, album: str) -> None:
     slide_metadata.url = f"/images/{album}/{relative_path}"
 
 
+# This is not currently used. It can be applied to the end of the image serving
+# function to return a StreamingResponse with EXIF rotation applied.
+# In practice, I'm seeing pauses during image serving when using this.
 def serve_image_with_exif_rotation(image_path: Path) -> StreamingResponse:
     try:
         with Image.open(image_path) as im:
