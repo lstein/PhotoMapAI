@@ -151,7 +151,7 @@ async def serve_thumbnail(album: str, path: str, size: int = 256) -> FileRespons
 
 # File Management Routes
 @search_router.get("/images/{album}/{path:path}", tags=["Search"])
-async def serve_image(album: str, path: str) -> StreamingResponse:
+async def serve_image(album: str, path: str) -> FileResponse:
     """Serve images from different albums dynamically."""
     image_path = config_manager.find_image_in_album(album, path)
     if not image_path:
@@ -166,7 +166,8 @@ async def serve_image(album: str, path: str) -> StreamingResponse:
         raise HTTPException(status_code=404, detail="File not found")
 
     # I'm not sure this is doing anything useful
-    return serve_image_with_exif_rotation(image_path)
+    # return serve_image_with_exif_rotation(image_path)
+    return FileResponse(image_path)
 
 
 # Utility Functions
