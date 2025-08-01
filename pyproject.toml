@@ -27,7 +27,7 @@ dependencies = [
     "scikit-learn",
     "torch",
     "tqdm",
-    "umap",
+    "umap-learn",
     "uvicorn",
 ]
 
