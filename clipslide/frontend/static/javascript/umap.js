@@ -96,6 +96,7 @@ document.getElementById("showUmapBtn").onclick = async () => {
     umapWindow.style.display = "none";
   } else {
     umapWindow.style.display = "block";
+    ensureUmapWindowInView();
     const result = await fetch("get_umap_eps/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -492,6 +493,31 @@ export async function ensureCurrentMarkerInView(padFraction = 0.1) {
   }
 }
 
+function ensureUmapWindowInView() {
+  const win = document.getElementById("umapFloatingWindow");
+  const rect = win.getBoundingClientRect();
+  let left = rect.left;
+  let top = rect.top;
+
+  // Ensure left/top are not negative
+  if (left < 0) {
+    win.style.left = "0px";
+  }
+  if (top < 0) {
+    win.style.top = "0px";
+  }
+
+  // Optionally, ensure right/bottom are not off-screen
+  const maxLeft = window.innerWidth - rect.width;
+  const maxTop = window.innerHeight - rect.height;
+  if (left > maxLeft) {
+    win.style.left = Math.max(0, maxLeft) + "px";
+  }
+  if (top > maxTop) {
+    win.style.top = Math.max(0, maxTop) + "px";
+  }
+}
+
 window.addEventListener("albumChanged", async () => {
   // Fetch the album's default EPS value and update the spinner
   const result = await fetch("get_umap_eps/", {
@@ -809,6 +835,7 @@ function setUmapWindowSize(sizeKey) {
     }, 0);
   }
   setActiveResizeIcon(sizeKey);
+  ensureUmapWindowInView();
 }
 
 // Titlebar resizing/dragging code is here.
