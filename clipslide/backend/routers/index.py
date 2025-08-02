@@ -237,13 +237,14 @@ async def _update_index_background_async(album_key: str, album_config):
         image_paths = [Path(path) for path in album_config.image_paths]
         index_path = Path(album_config.index)
 
+        # Let the indexer handle this.
         # Validate paths exist
-        existing_paths = [path for path in image_paths if path.exists()]
-        if not existing_paths:
-            progress_tracker.set_error(
-                album_key, f"None of the image paths exist: {album_config.image_paths}"
-            )
-            return
+        # existing_paths = [path for path in image_paths if path.exists()]
+        # if not existing_paths:
+        #     progress_tracker.set_error(
+        #         album_key, f"None of the image paths exist: {album_config.image_paths}"
+        #     )
+        #     return
 
         embeddings = Embeddings(embeddings_path=index_path)
 

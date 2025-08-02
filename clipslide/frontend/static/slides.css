@@ -940,15 +940,19 @@ body {
 }
 
 .index-status.indexing {
-  color: #ff9800;
+  color: #ff9800 !important;
 }
 
 .index-status.completed {
-  color: #4caf50;
+  color: green !important;
 }
 
 .index-status.error {
-  color: #f44336;
+  color: #b00020 !important;
+}
+
+.index-status.umapping {
+  color: #2196f3 !important;
 }
 
 .action-buttons {
@@ -1834,4 +1838,14 @@ body {
 .input-error {
   border: 2px solid #ff3333 !important;
   background: #fff0f0;
+}
+
+/* Error message for album management */
+.album-error-message {
+  color: #b00020;
+  background: #fff0f0;
+  border: 1px solid #ff3333;
+  border-radius: 4px;
+  padding: 0.5em;
+  margin-top: 0.5em;
 }

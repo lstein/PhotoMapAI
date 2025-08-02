@@ -45,10 +45,6 @@ export class AlbumManager {
     this.isSetupMode = false;
 
     this.initializeEventListeners();
-
-    window.addEventListener("noAlbumsFound", () => {
-      this.enterSetupMode();
-    });
   }
 
   initializeEventListeners() {
@@ -93,6 +89,43 @@ export class AlbumManager {
       if (e.target === this.overlay) {
         this.hide();
       }
+    });
+
+    // Edge cases
+    // - no albums configured
+    window.addEventListener("noAlbumsFound", () => {
+      this.enterSetupMode();
+    });
+
+    // no image files in selected album
+    window.addEventListener("albumIndexingNoImages", async (e) => {
+      const { albumKey } = e.detail;
+      await albumManager.show();
+      setTimeout(async () => {
+        const cardElement = document.querySelector(
+          `.album-card[data-album-key="${albumKey}"]`
+        );
+        if (cardElement) {
+          // Fetch the album object
+          const album = await albumManager.getAlbum(albumKey);
+          albumManager.editAlbum(cardElement, album);
+
+          // Show a user-friendly error message in the card
+          let errorDiv = cardElement.querySelector(".album-error-message");
+          if (!errorDiv) {
+            errorDiv = document.createElement("div");
+            errorDiv.className = "album-error-message";
+            cardElement.appendChild(errorDiv);
+          }
+          errorDiv.textContent =
+            "No image files were found in the provided paths. Please check your album paths and try again.";
+          errorDiv.style.color = "#b00020";
+          errorDiv.style.marginTop = "0.5em";
+          errorDiv.style.fontWeight = "bold";
+
+          cardElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 500);
     });
   }
 
@@ -290,7 +323,9 @@ export class AlbumManager {
     this.enableClosing();
     this.removeSetupMessage();
     // Remove any existing completion message
-    const existingCompletion = this.overlay.querySelector(".completion-message");
+    const existingCompletion = this.overlay.querySelector(
+      ".completion-message"
+    );
     if (existingCompletion && existingCompletion.parentNode) {
       existingCompletion.remove();
     }
@@ -435,10 +470,12 @@ export class AlbumManager {
 
     // Check for duplicate album key
     const albums = await this.fetchAvailableAlbums();
-    const duplicate = albums.some(album => album.key === formData.key);
+    const duplicate = albums.some((album) => album.key === formData.key);
     if (duplicate) {
       this.elements.newAlbumKey.classList.add("input-error");
-      alert(`An album with the key "${formData.key}" already exists. Please choose a different key.`);
+      alert(
+        `An album with the key "${formData.key}" already exists. Please choose a different key.`
+      );
       return;
     }
 
@@ -757,27 +794,45 @@ export class AlbumManager {
   }
 
   updateProgressStatus(status, progress, estimatedTime) {
+    console.log(`Updating progress status for ${progress.album_key}: ${progress.status}`);
     if (progress.status === "completed") {
       status.className = AlbumManager.STATUS_CLASSES.COMPLETED;
       status.textContent = "Indexing completed successfully";
+      status.style.color = "green";
       estimatedTime.textContent = "";
     } else if (progress.status === "error") {
       status.className = AlbumManager.STATUS_CLASSES.ERROR;
       status.textContent = `Error: ${progress.error_message}`;
+      status.style.color = "#b00020"; // Explicit red
       estimatedTime.textContent = "";
+      // Detect the specific error of empty or invalid image directory and dispatch a custom event
+      if (
+        progress.error_message &&
+        progress.error_message.includes("No image files found")
+      ) {
+        window.dispatchEvent(
+          new CustomEvent("albumIndexingNoImages", {
+            detail: { albumKey: progress.album_key },
+          })
+        );
+      }
     } else if (progress.status === "scanning") {
       status.className = AlbumManager.STATUS_CLASSES.INDEXING;
       status.textContent = progress.current_step || "Scanning for images...";
+      status.style.color = "#ff9800"; // Orange for scanning
       estimatedTime.textContent = "";
     } else if (progress.status === "umapping") {
       status.className = AlbumManager.STATUS_CLASSES.UMAPPING;
       status.textContent = progress.current_step || "Generating image umap...";
+      status.style.color = "#2196f3"; // Blue for umapping
       estimatedTime.textContent = "";
     } else {
       // Defensive: fallback to 0 if undefined
       const processed = progress.images_processed ?? 0;
       const total = progress.total_images ?? 0;
       status.textContent = `${progress.current_step} (${processed}/${total})`;
+      status.className = AlbumManager.STATUS_CLASSES.DEFAULT;
+      status.style.color = ""; // Use default color
     }
   }
 

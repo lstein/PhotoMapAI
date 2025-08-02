@@ -394,7 +394,7 @@ class Embeddings(BaseModel):
         image_paths_or_dir: list[Path] | Path,
         album_key: str,
         create_index: bool = True,
-    ) -> IndexResult:
+    ) -> Optional[IndexResult]:
         """Asynchronously index images using CLIP with progress tracking."""
 
         progress_tracker.start_operation(album_key, 0, "scanning")
@@ -411,6 +411,12 @@ class Embeddings(BaseModel):
             traversal_callback,
         )
         total_images = len(image_paths)
+        logger.info(
+            f"Found {total_images} image files in {image_paths_or_dir}"
+        )
+        if (total_images == 0):
+            progress_tracker.set_error(album_key, "No image files found in album directory(ies)")
+            return
 
         progress_tracker.start_operation(album_key, total_images, "indexing")
 
@@ -511,7 +517,7 @@ class Embeddings(BaseModel):
 
     async def update_index_async(
         self, image_paths_or_dir: list[Path] | Path, album_key: str
-    ) -> IndexResult:
+    ) -> Optional[IndexResult]:
         """Asynchronously update existing embeddings with new images."""
         assert (
             self.embeddings_path.exists()
@@ -551,11 +557,17 @@ class Embeddings(BaseModel):
                 existing_metadatas,
             )
 
+            if (len(filtered_existing.filenames) == 0 and len(new_image_paths) == 0):
+                progress_tracker.set_error(
+                    album_key, "No images found in album directory(ies)"
+                )
+                return
+
             # If no new images, return early
             if not new_image_paths:
                 self._save_embeddings(filtered_existing)
                 progress_tracker.complete_operation(album_key, "No new images found")
-                return filtered_existing
+                return
 
             # Update progress tracker with actual count
             total_new_images = len(new_image_paths)
