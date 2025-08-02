@@ -794,7 +794,6 @@ export class AlbumManager {
   }
 
   updateProgressStatus(status, progress, estimatedTime) {
-    console.log(`Updating progress status for ${progress.album_key}: ${progress.status}`);
     if (progress.status === "completed") {
       status.className = AlbumManager.STATUS_CLASSES.COMPLETED;
       status.textContent = "Indexing completed successfully";
