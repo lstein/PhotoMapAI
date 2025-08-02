@@ -14,7 +14,7 @@ export const state = {
   album: null, // Default album to use
   availableAlbums: [], // List of available albums
   dataChanged: true, // Flag to indicate if umap data has changed
-}
+};
 
 document.addEventListener("DOMContentLoaded", async function () {
   initializeFromServer();
@@ -26,7 +26,7 @@ export function initializeFromServer() {
   if (window.slideshowConfig) {
     setDelay(window.slideshowConfig.currentDelay || 5);
     setMode(window.slideshowConfig.mode || "random");
-    
+
     if (window.slideshowConfig.album) {
       setAlbum(window.slideshowConfig.album);
     }
@@ -46,7 +46,9 @@ export async function restoreFromLocalStorage() {
   const storedMode = localStorage.getItem("mode");
   if (storedMode) state.mode = storedMode;
 
-  const storedShowControlPanelText = localStorage.getItem("showControlPanelText");
+  const storedShowControlPanelText = localStorage.getItem(
+    "showControlPanelText"
+  );
   if (storedShowControlPanelText !== null) {
     state.showControlPanelText = storedShowControlPanelText === "true";
   } else {
@@ -54,16 +56,14 @@ export async function restoreFromLocalStorage() {
   }
 
   const storedAlbum = localStorage.getItem("album");
-  if (storedAlbum && storedAlbum !== "null") {
-    setAlbum(storedAlbum);
-  } else {
-    // call out to the server to get the current album
-    const album_list = await albumManager.fetchAvailableAlbums();
-    if (album_list.length > 0)
-      setAlbum(album_list[0].key);
-    else
-      setAlbum(null); // Default to null album if no albums found
+  const albumList = await albumManager.fetchAvailableAlbums();
+  if (!albumList || albumList.length === 0)  return; // No albums available, do not set album
+  if (storedAlbum) {
+    // check that this is a valid album
+    const validAlbum = albumList.find((album) => album.key === storedAlbum);
+    if (!validAlbum) storedAlbum = null;
   }
+  setAlbum(storedAlbum || albumList[0].key);
 }
 
 // Save state to local storage
@@ -72,17 +72,23 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("currentDelay", state.currentDelay);
   localStorage.setItem("mode", state.mode);
   localStorage.setItem("album", state.album);
-  localStorage.setItem("showControlPanelText", state.showControlPanelText || "");
+  localStorage.setItem(
+    "showControlPanelText",
+    state.showControlPanelText || ""
+  );
 }
 
 export async function setAlbum(newAlbumKey) {
-  console.trace(`Setting album to: ${newAlbumKey}, current album: ${state.album}`);
   if (state.album !== newAlbumKey) {
+    //const firstTime = state.album === null; // Indicates if this is the first time setting the album
+    const firstTime = false;
     state.album = newAlbumKey;
     state.dataChanged = true;
-    console.log(`Album set to: ${newAlbumKey}`);
     saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("albumChanged", { detail: { album: newAlbumKey } }));
+    if (!firstTime)
+      window.dispatchEvent(
+        new CustomEvent("albumChanged", { detail: { album: newAlbumKey } })
+      );
   }
 }
 
@@ -90,7 +96,9 @@ export function setMode(newMode) {
   if (state.mode !== newMode) {
     state.mode = newMode;
     saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { mode: newMode } }));
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { mode: newMode } })
+    );
   }
 }
 
@@ -98,6 +106,8 @@ export function setDelay(newDelay) {
   if (state.currentDelay !== newDelay) {
     state.currentDelay = newDelay;
     saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { delay: newDelay } }));
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { delay: newDelay } })
+    );
   }
 }

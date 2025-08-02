@@ -1829,3 +1829,9 @@ body {
     padding-right: 0.2em;
   }
 }
+
+/* Highlight invalid input fields */
+.input-error {
+  border: 2px solid #ff3333 !important;
+  background: #fff0f0;
+}

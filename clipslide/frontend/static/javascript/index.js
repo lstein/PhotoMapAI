@@ -49,6 +49,11 @@ export async function getIndexMetadata(albumKey) {
       headers: { "Content-Type": "application/json" },
     });
 
+    if (response.status === 404) {
+      console.warn("Index metadata not found for album:", albumKey);
+      return null;
+    }
+
     if (!response.ok) {
       throw new Error(`Failed to fetch index metadata: ${response.statusText}`);
     }

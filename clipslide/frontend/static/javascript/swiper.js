@@ -248,8 +248,7 @@ export function removeSlidesAfterCurrent() {
 
 // Reset all the slides and reload the swiper, optionally keeping the current slide.
 export async function resetAllSlides(keep_current_slide = false) {
-  console.log("Resetting all slides, keeping current slide:", keep_current_slide);
-  // if (!state.swiper?.slides?.length) return; // Nothing to reset
+  if (!state.swiper) return;  // happens on first load.
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow(); // Pause the slideshow if it's running
   if (keep_current_slide && !state.dataChanged) {
@@ -311,7 +310,6 @@ export function enforceHighWaterMark(backward = false) {
 
 // Reset slide show when the album changes
 window.addEventListener("albumChanged", () => {
-  console.log("Album changed event, resetting slides...");
   resetAllSlides();
 });
 

@@ -198,11 +198,7 @@ export class AlbumManager {
 
   // Setup mode management
   async enterSetupMode() {
-    console.log(
-      "Entering setup mode - no albums found. Album state=",
-      state.album
-    );
-    console.trace("enterSetupMode() called from:");
+    console.log("Entering setup mode - no albums found.");
     this.isSetupMode = true;
 
     await this.show();
@@ -254,6 +250,7 @@ export class AlbumManager {
 
   createCompletionMessage() {
     const completionMessage = document.createElement("div");
+    completionMessage.className = "completion-message";
     completionMessage.style.cssText = `
       background: #4caf50;
       color: white;
@@ -289,11 +286,13 @@ export class AlbumManager {
   }
 
   async completeSetupMode() {
+    console.log("Exiting setup mode - indexing completed.");
     this.enableClosing();
     this.removeSetupMessage();
-    const completionMessage = this.showCompletionMessage();
-    if (completionMessage && completionMessage.parentNode) {
-      completionMessage.remove();
+    // Remove any existing completion message
+    const existingCompletion = this.overlay.querySelector(".completion-message");
+    if (existingCompletion && existingCompletion.parentNode) {
+      existingCompletion.remove();
     }
   }
 
@@ -411,8 +410,35 @@ export class AlbumManager {
   async addAlbum() {
     const formData = this.getNewAlbumFormData();
 
-    if (!formData.key || !formData.name || !formData.pathsText) {
+    // Map field names to their corresponding elements
+    const requiredFields = [
+      { value: formData.key, element: this.elements.newAlbumKey },
+      { value: formData.name, element: this.elements.newAlbumName },
+      { value: formData.pathsText, element: this.elements.newAlbumPaths },
+    ];
+
+    let hasError = false;
+
+    // Remove previous error highlights and check for missing fields
+    requiredFields.forEach(({ value, element }) => {
+      element.classList.remove("input-error");
+      if (!value) {
+        element.classList.add("input-error");
+        hasError = true;
+      }
+    });
+
+    if (hasError) {
       alert("Please fill in all required fields");
+      return;
+    }
+
+    // Check for duplicate album key
+    const albums = await this.fetchAvailableAlbums();
+    const duplicate = albums.some(album => album.key === formData.key);
+    if (duplicate) {
+      this.elements.newAlbumKey.classList.add("input-error");
+      alert(`An album with the key "${formData.key}" already exists. Please choose a different key.`);
       return;
     }
 
@@ -691,7 +717,6 @@ export class AlbumManager {
       }, 5000);
     }
 
-    console.log("Indexing completed, in setup mode:", this.isSetupMode);
     // If in setup mode, set the album and exit setup mode
     if (this.isSetupMode) {
       await setAlbum(albumKey); // This will trigger the slideshow to start
