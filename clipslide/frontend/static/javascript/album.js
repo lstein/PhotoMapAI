@@ -11,7 +11,7 @@ export class AlbumManager {
   static POLL_INTERVAL = 1000;
   static PROGRESS_HIDE_DELAY = 3000;
   static AUTO_INDEX_DELAY = 500;
-  static SETUP_EXIT_DELAY = 5000;
+  static SETUP_EXIT_DELAY = 10000;
   static FORM_ANIMATION_DELAY = 300;
   static SCROLL_DELAY = 100;
 
@@ -198,12 +198,16 @@ export class AlbumManager {
 
   // Setup mode management
   async enterSetupMode() {
-    console.log("Entering setup mode - no albums found");
+    console.log(
+      "Entering setup mode - no albums found. Album state=",
+      state.album
+    );
+    console.trace("enterSetupMode() called from:");
     this.isSetupMode = true;
 
     await this.show();
-    this.showAddAlbumForm();
     this.showSetupMessage();
+    this.showAddAlbumForm();
     this.disableClosing();
   }
 
@@ -232,9 +236,9 @@ export class AlbumManager {
       text-align: center;
     `;
     setupMessage.innerHTML = `
-      <h3 style="margin: 0 0 0.5em 0;">Welcome to SlideShow!</h3>
+      <h3 style="margin: 0 0 0.5em 0;">Welcome to ClipSlide!</h3>
       <p style="margin: 0;">
-        To get started, please add your first album below. 
+        To get started, please add your first image album below. 
         You'll need to specify the name and directory paths containing your images.
       </p>
     `;
@@ -259,10 +263,10 @@ export class AlbumManager {
       text-align: center;
     `;
     completionMessage.innerHTML = `
-      <h4 style="margin: 0 0 0.5em 0;">✅ Setup Complete!</h4>
+      <h4 style="margin: 0 0 0.5em 0;">Setup In Progress!</h4>
       <p style="margin: 0;">
-        Your album "${state.album}" is being indexed and is now active. 
-        Once indexing completes, you can close this manager and start using the slideshow.
+        Your album "${state.album}" is being indexed. 
+        Once indexing completes, this window will close and the slideshow will start.
       </p>
     `;
     return completionMessage;
@@ -279,30 +283,18 @@ export class AlbumManager {
     return completionMessage;
   }
 
-  scheduleSetupModeExit(completionMessage) {
-    setTimeout(() => {
-      this.isSetupMode = false;
-      this.enableClosing();
-      if (completionMessage && completionMessage.parentNode) {
-        completionMessage.remove();
-      }
-    }, AlbumManager.SETUP_EXIT_DELAY);
+  async setupModeIndexingInProgress() {
+    this.removeSetupMessage();
+    this.showCompletionMessage();
   }
 
   async completeSetupMode() {
+    this.enableClosing();
     this.removeSetupMessage();
-
-    try {
-      const albums = await this.fetchAvailableAlbums();
-      if (albums.length > 0) {
-        await this.updateCurrentAlbum(albums[0]);
-      }
-    } catch (error) {
-      console.error("Failed to set up new album:", error);
-    }
-
     const completionMessage = this.showCompletionMessage();
-    this.scheduleSetupModeExit(completionMessage);
+    if (completionMessage && completionMessage.parentNode) {
+      completionMessage.remove();
+    }
   }
 
   // Closing control
@@ -461,7 +453,7 @@ export class AlbumManager {
     await this.loadAlbums();
 
     if (this.isSetupMode) {
-      await this.completeSetupMode();
+      await this.setupModeIndexingInProgress();
     }
 
     await this.startAutoIndexing(albumKey);
@@ -697,6 +689,20 @@ export class AlbumManager {
         const album = await this.getCurrentAlbum(albumKey);
         this.updateAlbumCardIndexStatus(cardElement, album);
       }, 5000);
+    }
+
+    console.log("Indexing completed, in setup mode:", this.isSetupMode);
+    // If in setup mode, set the album and exit setup mode
+    if (this.isSetupMode) {
+      await setAlbum(albumKey); // This will trigger the slideshow to start
+      this.isSetupMode = false;
+      this.enableClosing();
+      this.removeSetupMessage();
+      // Now close the album manager window after a short delay
+      setTimeout(() => {
+        this.completeSetupMode();
+        this.hide();
+      }, AlbumManager.AUTO_INDEX_DELAY);
     }
   }
 

@@ -9,6 +9,7 @@ export async function fetchNextImage(lastImage = null, backward = false) {
   let currentScore;
   let currentCluster;
   let currentColor;
+  if (!state.album) return null; // No album set, cannot fetch image
 
   let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
 

@@ -48,21 +48,9 @@ async def get_root(
 ):
     """Serve the main slideshow page."""
     albums = config_manager.get_albums()
-
     if not albums:
-        return templates.TemplateResponse(
-            request,
-            "slideshow.html",
-            {
-                "album": None,
-                "delay": delay,
-                "mode": mode,
-                "setup_mode": True,
-            },
-        )
-
-    # Validate album or use first available
-    if album not in albums:
+        album  = None
+    elif album not in albums:
         album = list(albums.keys())[0]
 
     return templates.TemplateResponse(
@@ -71,8 +59,7 @@ async def get_root(
         {
             "album": album,
             "delay": delay,
-            "mode": mode,
-            "setup_mode": False,
+            "mode": mode
         },
     )
 

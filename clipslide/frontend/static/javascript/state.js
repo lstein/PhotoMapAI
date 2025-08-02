@@ -11,7 +11,7 @@ export const state = {
   highWaterMark: 20, // Maximum number of slides to load at once
   searchOrigin: 0, // When in search mode, this is the index of the first slide in swiper
   searchResults: [], // List of file paths matching the current search query
-  album: "family", // Default album to use
+  album: null, // Default album to use
   availableAlbums: [], // List of available albums
   dataChanged: true, // Flag to indicate if umap data has changed
 }
@@ -29,11 +29,6 @@ export function initializeFromServer() {
     
     if (window.slideshowConfig.album) {
       setAlbum(window.slideshowConfig.album);
-    } else {
-      setAlbum(null);
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('noAlbumsFound'));
-      }, 100);
     }
   }
 }
@@ -81,9 +76,11 @@ export function saveSettingsToLocalStorage() {
 }
 
 export async function setAlbum(newAlbumKey) {
+  console.trace(`Setting album to: ${newAlbumKey}, current album: ${state.album}`);
   if (state.album !== newAlbumKey) {
     state.album = newAlbumKey;
     state.dataChanged = true;
+    console.log(`Album set to: ${newAlbumKey}`);
     saveSettingsToLocalStorage();
     window.dispatchEvent(new CustomEvent("albumChanged", { detail: { album: newAlbumKey } }));
   }
