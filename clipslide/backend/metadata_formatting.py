@@ -5,14 +5,16 @@ Format metadata for images, including EXIF data and other attributes.
 Returns an HTML representation of the metadata.
 """
 
+import logging
 from pathlib import Path
 
 from pydantic import BaseModel
 
-from .config import ConfigManager
+from .config import get_config_manager
 from .metadata_modules import SlideSummary, format_exif_metadata, format_invoke_metadata
 
-config_manager = ConfigManager()
+config_manager = get_config_manager()
+logger = logging.getLogger(__name__)
 
 
 def format_metadata(filepath: Path, metadata: dict, index: int) -> SlideSummary:

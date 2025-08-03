@@ -7,6 +7,7 @@ It uses a YAML file to store album details and provides methods to manipulate al
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from venv import logger
 
 import yaml
 from platformdirs import user_config_dir
@@ -159,7 +160,7 @@ class ConfigManager:
                 self._config = Config(
                     config_version="1.0.0",
                     albums={},
-                    locationiq_api_key=None,  # Add this
+                    locationiq_api_key=None,
                 )
             else:
                 try:
@@ -170,6 +171,8 @@ class ConfigManager:
                     albums = {}
                     for key, album_data in config_data.get("albums", {}).items():
                         albums[key] = Album.from_dict(key, album_data)
+
+                    logger.info("locationiq_api_key: %s", config_data.get("locationiq_api_key"))
 
                     self._config = Config(
                         config_version=config_data.get("config_version", "1.0.0"),
