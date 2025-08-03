@@ -30,10 +30,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       disableOnInteraction: false,
       enabled: false,
     },
-    scrollbar: {
-      el: ".swiper-scrollbar",
-      draggable: true,
-      hide: false,
+    pagination: {
+      el: ".swiper-pagination",
+      clickable: true,
+      dynamicBullets: true,
     },
     loop: false,
     allowTouchMove: true,

@@ -79,7 +79,7 @@ body {
 .swiper-button-prev::after {
   color: #fff !important;
   font-weight: bold;
-  font-size: 2.7em;
+  font-size: 1.5em;
   text-shadow: 0 0 4px #000;
   -webkit-text-stroke: 1.5px #fff;
   stroke: 1.5px #fff;
@@ -100,7 +100,7 @@ body {
 #controlPanel,
 #searchPanel {
   position: fixed;
-  bottom: 20px;
+  bottom: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -114,12 +114,10 @@ body {
 
 #controlPanel {
   left: 20px;
-  bottom: 20px;
 }
 
 #searchPanel {
   right: 20px;
-  bottom: 20px;
 }
 
 #controlPanel button,
@@ -462,7 +460,6 @@ body {
   margin-right: 1em;
   min-width: 120px;
 }
-
 
 #searchInput,
 #negativeSearchInput {
@@ -1414,7 +1411,7 @@ body {
   width: 100%;
   height: 100%;
   /* File folder tab shape -  narrower at right since it's on the right */
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(240, 209, 209, 0.5);
   clip-path: polygon(
     0% 0%,
     80% 20%,
@@ -1424,7 +1421,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: white;
   border-radius: 8px 0 0 8px;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
@@ -1441,12 +1438,13 @@ body {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  /* padding: 4px; */
+  color: #faea0e; /* Yellow color for SVG stroke */
+  fill: #faea0e; /* Yellow color for SVG fill */
 }
 
 /* When container is visible, flip arrow to left */
 .banner-drawer-container.visible .drawer-arrow {
-  transform: rotate(-90deg); /* Point left when banner is visible */
+  transform: rotate(-90deg) translateY(-5px); /* Point left when banner is visible */
 }
 
 /* ===== COPY TEXT BUTTON ===== */
@@ -1866,9 +1864,30 @@ body {
   margin-top: 0.2em;
 }
 
-.weight-label {
-  color: #fff;
-  font-size: 1em;
-  margin-right: 0.5em;
-  white-space: nowrap;
+/* Make Swiper pagination bullets larger, with a white border and subtle shadow */
+.swiper-pagination-bullet {
+  width: 16px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.75); /* Brighter background */
+  border: 2px solid #fff;
+  box-shadow: 0 0 4px 2px rgba(0, 0, 0, 0.4);
+  opacity: 1;
+  margin: 0 6px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.swiper-pagination-bullet-active {
+  background: rgba(250, 73, 19, 0.75);
+  border-color: #fff;
+  box-shadow: 0 0 8px 3px #fa4913cc, 0 0 4px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Optional: Make the pagination row stand out with a background and rounded corners */
+.swiper-pagination {
+  position: relative;
+  padding: 6px 18px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.18);
+  bottom: 50px !important;
 }

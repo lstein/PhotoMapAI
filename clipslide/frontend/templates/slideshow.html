@@ -26,11 +26,12 @@
       href="static/icons/favicon-16x16.png"
     />
     <link rel="manifest" href="static/icons/site.webmanifest" />
-    <link rel="stylesheet" type="text/css" href="static/slides.css" />
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
     />
+    <link rel="stylesheet" type="text/css" href="static/slides.css" />
+
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script
       src="https://cdn.plot.ly/plotly-3.0.1.min.js"
@@ -58,7 +59,7 @@
       <div class="swiper-wrapper" id="carousel-wrapper">
         <!-- Slides will be added dynamically -->
       </div>
-      <div class="swiper-scrollbar"></div>
+      <div class="swiper-pagination"></div>
     </div>
 
     <!-- Combined Banner and Drawer Container -->
@@ -704,7 +705,10 @@
 
     <!-- Album Management Overlay -->
     <div id="albumManagementOverlay" class="modal-overlay album-management">
-      <div class="modal-content album-management-modal" id="albumManagementContent">
+      <div
+        class="modal-content album-management-modal"
+        id="albumManagementContent"
+      >
         <!-- Header with Add Album Button (fixed) -->
         <div class="album-header">
           <h2>Album Management</h2>
