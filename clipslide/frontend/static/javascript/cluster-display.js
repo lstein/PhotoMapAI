@@ -4,8 +4,8 @@ import { isColorLight } from "./utils.js";
 
 export class ClusterDisplay {
   constructor() {
-    this.scoreElement = document.getElementById('fixedScoreDisplay');
-    this.scoreText = document.getElementById('scoreText');
+    this.scoreElement = document.getElementById("fixedScoreDisplay");
+    this.scoreText = document.getElementById("scoreText");
     this.isVisible = false;
   }
 
@@ -16,17 +16,16 @@ export class ClusterDisplay {
         text += ` (${index}/${total})`;
       }
       this.scoreText.textContent = text;
-      this.scoreElement.style.display = 'block';
-      this.scoreElement.classList.add('visible');
-      this.scoreElement.classList.remove('hidden');
+      this.scoreElement.style.display = "block";
+      this.scoreElement.classList.add("visible");
+      this.scoreElement.classList.remove("hidden");
       this.isVisible = true;
 
       if (color) {
         this.scoreElement.style.backgroundColor = color;
         if (isColorLight(color)) {
           this.scoreElement.style.color = "#000"; // Dark text for light background
-        }
-        else {
+        } else {
           this.scoreElement.style.color = "#fff"; // Light text for dark background
         }
       }
@@ -34,14 +33,15 @@ export class ClusterDisplay {
   }
 
   hide() {
-    this.scoreElement.classList.add('hidden');
-    this.scoreElement.classList.remove('visible');
+    console.trace("ClusterDisplay.hide");
+    this.scoreElement.classList.add("hidden");
+    this.scoreElement.classList.remove("visible");
     this.isVisible = false;
-    
+
     // Hide after transition
     setTimeout(() => {
       if (!this.isVisible) {
-        this.scoreElement.style.display = 'none';
+        this.scoreElement.style.display = "none";
       }
     }, 300);
   }

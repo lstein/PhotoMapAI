@@ -24,6 +24,7 @@ export class ScoreDisplay {
   }
 
   hide() {
+    console.trace("ScoreDisplay.hide");
     this.scoreElement.classList.add('hidden');
     this.scoreElement.classList.remove('visible');
     this.isVisible = false;

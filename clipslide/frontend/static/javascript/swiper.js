@@ -230,8 +230,6 @@ export async function handleSlideChange() {
       index + 1,
       state.searchResults.length
     );
-  } else {
-    scoreDisplay.hide();
   }
   setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
 }
