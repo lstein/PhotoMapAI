@@ -293,7 +293,7 @@ body {
   box-sizing: border-box;
   text-align: left;
   border-radius: 8px 0 0 8px;
-  /margin: 0;
+  margin: 0;
   order: 1;
   pointer-events: auto;
 }
@@ -463,7 +463,9 @@ body {
   min-width: 120px;
 }
 
-#searchInput {
+
+#searchInput,
+#negativeSearchInput {
   flex: 1;
   font-size: 1.1em;
   padding: 0.4em 2.2em 0.4em 0.7em;
@@ -472,14 +474,18 @@ body {
   background: #222;
   color: #fff;
   width: 350px;
+  min-width: 200px;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: block;
 }
 
 #clearTextSearchBtn,
 #clearNegativeTextSearchBtn {
   position: absolute;
-  right: 1.1em;
+  right: 0.5em;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translate(-10px, -100%);
   background: #333;
   border: none;
   border-radius: 6px;
@@ -606,7 +612,7 @@ body {
 .settings-modal {
   position: fixed;
   min-width: 320px;
-  z-index: 11000; // higher than the umap window
+  z-index: 11000; /* higher than the umap window */
 }
 
 .settings-header {
@@ -1814,38 +1820,55 @@ body {
   width: max-content;
 }
 
-.search-fields-column .search-row.weight-row {
-  margin-left: 2.2em; /* Adjust as needed for your layout */
+.search-fields-column {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 0.5em 1em;
+  align-items: start;
+  width: 100%;
 }
 
-.negative-row {
-  padding-top: 3.5em; /* Adjust value as needed */
+/* Each label/input pair is a row in the grid */
+.search-label {
+  grid-column: 1;
+  text-align: right;
+  align-self: start;
+  margin-top: 0.2em;
+  width: 140px;
+  box-sizing: border-box;
 }
 
-@media (max-width: 600px) {
-  .control-icons-row,
-  .search-icons-row {
-    gap: 0.3em;
-  }
-  #controlPanel,
-  #searchPanel {
-    padding-left: 0.2em;
-    padding-right: 0.2em;
-  }
+.search-field-wrapper {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  width: 100%;
+  position: relative;
 }
 
-/* Highlight invalid input fields */
-.input-error {
-  border: 2px solid #ff3333 !important;
-  background: #fff0f0;
+.search-field-wrapper input[type="text"] {
+  width: 100%;
+  font-size: 1.1em;
+  padding: 0.4em 2.2em 0.4em 0.7em;
+  border-radius: 6px;
+  border: 1px solid #888;
+  background: #222;
+  color: #fff;
+  box-sizing: border-box;
 }
 
-/* Error message for album management */
-.album-error-message {
-  color: #b00020;
-  background: #fff0f0;
-  border: 1px solid #ff3333;
-  border-radius: 4px;
-  padding: 0.5em;
-  margin-top: 0.5em;
+/* Weight row styling */
+.weight-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.2em;
+}
+
+.weight-label {
+  color: #fff;
+  font-size: 1em;
+  margin-right: 0.5em;
+  white-space: nowrap;
 }
