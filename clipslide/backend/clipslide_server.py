@@ -48,11 +48,14 @@ async def get_root(
     mode: str = None,
 ):
     """Serve the main slideshow page."""
-    albums = config_manager.get_albums()
-    if not albums:
-        album  = None
-    elif album not in albums:
-        album = list(albums.keys())[0]
+    # Set the album to be the first available one if the album is
+    # specified, but does not correspond to an existing album.
+    if album is not None:
+        albums = config_manager.get_albums()
+        if (albums and album in albums):
+            pass
+        elif (albums):
+            album = list(albums.keys())[0]
 
     return templates.TemplateResponse(
         request,

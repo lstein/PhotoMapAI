@@ -17,26 +17,26 @@ export const state = {
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
-  restoreFromLocalStorage();
+  await restoreFromLocalStorage();
   initializeFromServer();
+  setAlbum(state.album, true);  // This raises the event that kicks off slide retrieval
 });
 
 // Initialize the state from the initial URL.
 export function initializeFromServer() {
+  console.log("Initializing state from server configuration...", window.slideshowConfig);
   if (window.slideshowConfig?.currentDelay > 0) {
     setDelay(window.slideshowConfig.currentDelay);
   }
-  // if (window.slideshowConfig?.showControlPanelText !== null) {
-  //   setShowControlPanelText(window.slideshowConfig.showControlPanelText);
-  // }
+
   if (window.slideshowConfig?.mode !== null) {
     setMode(window.slideshowConfig.mode);
   }
 
   if (window.slideshowConfig?.highWaterMark !== null) {
     setHighWaterMark(window.slideshowConfig.highWaterMark);
-  } 
-  
+  }
+
   if (window.slideshowConfig?.album !== null) {
     setAlbum(window.slideshowConfig.album);
   }
@@ -44,6 +44,7 @@ export function initializeFromServer() {
 
 // Restore state from local storage
 export async function restoreFromLocalStorage() {
+  console.log("Restoring state from local storage...");
   const storedHighWaterMark = localStorage.getItem("highWaterMark");
   if (storedHighWaterMark !== null)
     state.highWaterMark = parseInt(storedHighWaterMark, 10);
@@ -58,14 +59,13 @@ export async function restoreFromLocalStorage() {
   const storedShowControlPanelText = localStorage.getItem(
     "showControlPanelText"
   );
-  console.log("Stored showControlPanelText:", storedShowControlPanelText);
   if (storedShowControlPanelText !== null) {
     state.showControlPanelText = storedShowControlPanelText === "true";
   } else {
     state.showControlPanelText = window.innerWidth >= 600; // Default to true on larger screens;
   }
 
-  const storedAlbum = localStorage.getItem("album");
+  let storedAlbum = localStorage.getItem("album");
   const albumList = await albumManager.fetchAvailableAlbums();
   if (!albumList || albumList.length === 0) return; // No albums available, do not set album
   if (storedAlbum) {
@@ -73,13 +73,13 @@ export async function restoreFromLocalStorage() {
     const validAlbum = albumList.find((album) => album.key === storedAlbum);
     if (!validAlbum) storedAlbum = null;
   }
-  setAlbum(storedAlbum || albumList[0].key);
-  console.log("State restored from local storage:", state);
+  console.log("directly storing into state.album:", storedAlbum || albumList[0].key);
+  state.album = storedAlbum || albumList[0].key;
 }
 
 // Save state to local storage
 export function saveSettingsToLocalStorage() {
-  console.trace("Saving state to local storage:", state);
+  console.log("Saving state to local storage:", state);
   localStorage.setItem("highWaterMark", state.highWaterMark);
   localStorage.setItem("currentDelay", state.currentDelay);
   localStorage.setItem("mode", state.mode);
@@ -90,17 +90,15 @@ export function saveSettingsToLocalStorage() {
   );
 }
 
-export async function setAlbum(newAlbumKey) {
-  if (state.album !== newAlbumKey) {
-    //const firstTime = state.album === null; // Indicates if this is the first time setting the album
-    const firstTime = false;
+export async function setAlbum(newAlbumKey, force = false) {
+  if (force || state.album !== newAlbumKey) {
+    console.trace("Setting new album:", newAlbumKey);
     state.album = newAlbumKey;
     state.dataChanged = true;
     saveSettingsToLocalStorage();
-    if (!firstTime)
-      window.dispatchEvent(
-        new CustomEvent("albumChanged", { detail: { album: newAlbumKey } })
-      );
+    window.dispatchEvent(
+      new CustomEvent("albumChanged", { detail: { album: newAlbumKey } })
+    );
   }
 }
 
@@ -119,7 +117,9 @@ export function setShowControlPanelText(showText) {
     state.showControlPanelText = showText;
     saveSettingsToLocalStorage();
     window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { showControlPanelText: showText } })
+      new CustomEvent("settingsUpdated", {
+        detail: { showControlPanelText: showText },
+      })
     );
   }
 }
@@ -129,7 +129,9 @@ export function setHighWaterMark(newHighWaterMark) {
     state.highWaterMark = newHighWaterMark;
     localStorage.setItem("highWaterMark", newHighWaterMark);
     window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { highWaterMark: newHighWaterMark } })
+      new CustomEvent("settingsUpdated", {
+        detail: { highWaterMark: newHighWaterMark },
+      })
     );
   }
 }

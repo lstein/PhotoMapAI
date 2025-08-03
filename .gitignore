@@ -95,3 +95,6 @@ venv.bak/
 test_embeddings.npz.old
 test_scripts/test_metadata.py
 test_scripts/test_pick_from_image.py
+
+# Directories used for testing
+icloudpd
