@@ -352,16 +352,17 @@ export async function fetchUmapData() {
           (fn) => fn !== clickedFilename
         );
 
-        // Shuffle the remainder if in random mode
-        if (state.mode === "random") {
-          for (let i = clusterFilenames.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [clusterFilenames[i], clusterFilenames[j]] = [
-              clusterFilenames[j],
-              clusterFilenames[i],
-            ];
-          }
-        }
+        // --- Sort by ascending distance from clicked point ---
+        const clickedCoords = [clickedPoint.x, clickedPoint.y];
+        // Build a lookup map once
+        const filenameToPoint = Object.fromEntries(points.map((p) => [p.filename, p]));
+        clusterFilenames.sort((a, b) => {
+          const pa = filenameToPoint[a];
+          const pb = filenameToPoint[b];
+          const da = pa ? Math.hypot(pa.x - clickedCoords[0], pa.y - clickedCoords[1]) : Infinity;
+          const db = pb ? Math.hypot(pb.x - clickedCoords[0], pb.y - clickedCoords[1]) : Infinity;
+          return da - db;
+        });
 
         // Promote the clicked filename to the first position
         const sortedClusterFilenames = [clickedFilename, ...clusterFilenames];
@@ -372,11 +373,6 @@ export async function fetchUmapData() {
           color: clusterColor,
         }));
         setSearchResults(clusterMembers, "cluster");
-        // window.dispatchEvent(
-        //   new CustomEvent("searchResultsChanged", {
-        //     detail: { results: clusterMembers, searchType: "cluster" },
-        //   })
-        // );
         setUmapColorMode("search");
       });
 
