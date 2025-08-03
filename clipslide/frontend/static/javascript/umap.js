@@ -402,11 +402,10 @@ export function colorizeUmap({ mode = "cluster", searchResults = [] } = {}) {
     const searchSet = new Set(
       searchResults.map((r) => (typeof r === "string" ? r : r.filename))
     );
-    // markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerColors = points.map(
-      (p) => (searchSet.has(p.filename) ? "#fa4913ff" : "#cccccc") // Highlight search results)
+    markerColors = points.map((p) => getClusterColor(p.cluster));
+    markerAlphas = points.map((p) =>
+      searchSet.has(p.filename) ? 1.0 : 0.1
     );
-    markerAlphas = points.map((p) => (searchSet.has(p.filename) ? 1.0 : 0.08));
   } else {
     markerColors = points.map((p) => getClusterColor(p.cluster));
     markerAlphas = points.map((p) => (p.cluster === -1 ? 0.1 : 0.5));
