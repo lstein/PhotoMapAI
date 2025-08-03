@@ -17,19 +17,28 @@ export const state = {
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
-  initializeFromServer();
   restoreFromLocalStorage();
+  initializeFromServer();
 });
 
 // Initialize the state from the initial URL.
 export function initializeFromServer() {
-  if (window.slideshowConfig) {
-    setDelay(window.slideshowConfig.currentDelay || 5);
-    setMode(window.slideshowConfig.mode || "random");
-
-    if (window.slideshowConfig.album) {
-      setAlbum(window.slideshowConfig.album);
-    }
+  if (window.slideshowConfig?.currentDelay > 0) {
+    setDelay(window.slideshowConfig.currentDelay);
+  }
+  if (window.slideshowConfig?.showControlPanelText !== null) {
+    setShowControlPanelText(window.slideshowConfig.showControlPanelText);
+  }
+  if (window.slideshowConfig?.mode !== null) {
+    console.log("Setting mode from server config:", window.slideshowConfig.mode);
+    setMode(window.slideshowConfig.mode);
+  }
+  if (window.slideshowConfig?.highWaterMark !== null) {
+    setHighWaterMark(window.slideshowConfig.highWaterMark);
+  } 
+  
+  if (window.slideshowConfig?.album !== null) {
+    setAlbum(window.slideshowConfig.album);
   }
 }
 
@@ -49,6 +58,7 @@ export async function restoreFromLocalStorage() {
   const storedShowControlPanelText = localStorage.getItem(
     "showControlPanelText"
   );
+  console.log("Stored showControlPanelText:", storedShowControlPanelText);
   if (storedShowControlPanelText !== null) {
     state.showControlPanelText = storedShowControlPanelText === "true";
   } else {
@@ -57,17 +67,19 @@ export async function restoreFromLocalStorage() {
 
   const storedAlbum = localStorage.getItem("album");
   const albumList = await albumManager.fetchAvailableAlbums();
-  if (!albumList || albumList.length === 0)  return; // No albums available, do not set album
+  if (!albumList || albumList.length === 0) return; // No albums available, do not set album
   if (storedAlbum) {
     // check that this is a valid album
     const validAlbum = albumList.find((album) => album.key === storedAlbum);
     if (!validAlbum) storedAlbum = null;
   }
   setAlbum(storedAlbum || albumList[0].key);
+  console.log("State restored from local storage:", state);
 }
 
 // Save state to local storage
 export function saveSettingsToLocalStorage() {
+  console.trace("Saving state to local storage:", state);
   localStorage.setItem("highWaterMark", state.highWaterMark);
   localStorage.setItem("currentDelay", state.currentDelay);
   localStorage.setItem("mode", state.mode);
@@ -98,6 +110,26 @@ export function setMode(newMode) {
     saveSettingsToLocalStorage();
     window.dispatchEvent(
       new CustomEvent("settingsUpdated", { detail: { mode: newMode } })
+    );
+  }
+}
+
+export function setShowControlPanelText(showText) {
+  if (state.showControlPanelText !== showText) {
+    state.showControlPanelText = showText;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { showControlPanelText: showText } })
+    );
+  }
+}
+
+export function setHighWaterMark(newHighWaterMark) {
+  if (state.highWaterMark !== newHighWaterMark) {
+    state.highWaterMark = newHighWaterMark;
+    localStorage.setItem("highWaterMark", newHighWaterMark);
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { highWaterMark: newHighWaterMark } })
     );
   }
 }

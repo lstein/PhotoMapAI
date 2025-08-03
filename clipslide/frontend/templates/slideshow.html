@@ -39,8 +39,9 @@
     <script>
       // Pass server data to JavaScript
       window.slideshowConfig = {
-          currentDelay: {{ delay }},
-          mode: "{{ mode }}",
+          currentDelay: {% if delay %} {{ delay }} {% else %} null {% endif %},
+          mode: {% if mode %} "{{ mode }}" {% else %} null {% endif %},
+          highWaterMark: {% if highWaterMark %} {{ highWaterMark }} {% else %} null {% endif %},
           album: {% if album %}"{{ album }}"{% else %}null{% endif %}
       };
     </script>

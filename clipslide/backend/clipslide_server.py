@@ -42,9 +42,10 @@ templates = Jinja2Templates(directory=templates_path)
 @app.get("/", response_class=HTMLResponse, tags=["Main"])
 async def get_root(
     request: Request,
-    album: str = DEFAULT_ALBUM,
-    delay: int = DEFAULT_DELAY,
-    mode: str = DEFAULT_MODE,
+    album: str = None,
+    delay: int = 0,
+    high_water_mark: int = None,
+    mode: str = None,
 ):
     """Serve the main slideshow page."""
     albums = config_manager.get_albums()
@@ -59,7 +60,8 @@ async def get_root(
         {
             "album": album,
             "delay": delay,
-            "mode": mode
+            "mode": mode,
+            "highWaterMark": high_water_mark
         },
     )
 
