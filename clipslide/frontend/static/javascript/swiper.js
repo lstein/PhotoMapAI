@@ -142,6 +142,8 @@ export function updateSlideshowIcon() {
 
 // Add a new slide to Swiper with image and metadata
 export async function addNewSlide(backward = false) {
+  if (!state.album) return; // No album set, cannot add slide
+  console.trace("Adding a new slide for album:", state.album);
   // new syntax for fetchNextImage -- provide the last image as context
   const lastImage = backward
     ? state.swiper.slides[0]

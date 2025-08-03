@@ -3,7 +3,7 @@
 import { state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
-// Call the server to fetch the next image based on the current mode (random or sequential).
+// Call the server to fetch the next image based on the current mode (random or chronological).
 export async function fetchNextImage(lastImage = null, backward = false) {
   let response;
   let currentScore;
@@ -38,7 +38,7 @@ export async function fetchNextImage(lastImage = null, backward = false) {
       params.append("random", "false");
     } else {
       params.append("random", state.mode === "random" ? "true" : "false");
-      if (state.mode === "sequential" && lastImage) {
+      if (state.mode === "chronological" && lastImage) {
         const currentFilepath = lastImage.dataset?.filepath;
         params.append("current_image", currentFilepath);
         params.append("offset", backward ? -1 : 1);

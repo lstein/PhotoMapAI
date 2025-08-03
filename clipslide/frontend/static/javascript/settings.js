@@ -27,7 +27,7 @@ function cacheElements() {
     highWaterMarkInput: document.getElementById("highWaterMarkInput"),
     delayValueSpan: document.getElementById("delayValue"),
     modeRandom: document.getElementById("modeRandom"),
-    modeSequential: document.getElementById("modeSequential"),
+    modeChronological: document.getElementById("modeChronological"),
     albumSelect: document.getElementById("albumSelect"),
     titleElement: document.getElementById("slideshow_title"),
     slowerBtn: document.getElementById("slowerBtn"),
@@ -150,7 +150,7 @@ async function populateModalFields() {
   elements.delayValueSpan.textContent = state.currentDelay;
   elements.albumSelect.value = state.album;
   elements.modeRandom.checked = state.mode === "random";
-  elements.modeSequential.checked = state.mode === "sequential";
+  elements.modeChronological.checked = state.mode === "chronological";
   elements.showControlPanelTextCheckbox.checked = state.showControlPanelText;
 
   await loadLocationIQApiKey();
@@ -180,7 +180,7 @@ function setupDelayControls() {
 function setupModeControls() {
   // Set initial radio button state based on current mode
   elements.modeRandom.checked = state.mode === "random";
-  elements.modeSequential.checked = state.mode === "sequential";
+  elements.modeChronological.checked = state.mode === "chronological";
 
   // Listen for changes to the radio buttons
   document.querySelectorAll('input[name="mode"]').forEach((radio) => {
