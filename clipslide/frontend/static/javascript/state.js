@@ -24,7 +24,6 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 // Initialize the state from the initial URL.
 export function initializeFromServer() {
-  console.log("Initializing state from server configuration...", window.slideshowConfig);
   if (window.slideshowConfig?.currentDelay > 0) {
     setDelay(window.slideshowConfig.currentDelay);
   }
@@ -44,7 +43,6 @@ export function initializeFromServer() {
 
 // Restore state from local storage
 export async function restoreFromLocalStorage() {
-  console.log("Restoring state from local storage...");
   const storedHighWaterMark = localStorage.getItem("highWaterMark");
   if (storedHighWaterMark !== null)
     state.highWaterMark = parseInt(storedHighWaterMark, 10);
@@ -73,13 +71,11 @@ export async function restoreFromLocalStorage() {
     const validAlbum = albumList.find((album) => album.key === storedAlbum);
     if (!validAlbum) storedAlbum = null;
   }
-  console.log("directly storing into state.album:", storedAlbum || albumList[0].key);
   state.album = storedAlbum || albumList[0].key;
 }
 
 // Save state to local storage
 export function saveSettingsToLocalStorage() {
-  console.log("Saving state to local storage:", state);
   localStorage.setItem("highWaterMark", state.highWaterMark);
   localStorage.setItem("currentDelay", state.currentDelay);
   localStorage.setItem("mode", state.mode);
@@ -92,7 +88,6 @@ export function saveSettingsToLocalStorage() {
 
 export async function setAlbum(newAlbumKey, force = false) {
   if (force || state.album !== newAlbumKey) {
-    console.trace("Setting new album:", newAlbumKey);
     state.album = newAlbumKey;
     state.dataChanged = true;
     saveSettingsToLocalStorage();
