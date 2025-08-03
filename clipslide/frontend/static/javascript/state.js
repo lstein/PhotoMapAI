@@ -7,7 +7,7 @@ export const state = {
   currentTextToCopy: "", // Text to be copied to clipboard
   currentDelay: 5, // Delay in seconds for slide transitions
   showControlPanelText: true, // Whether to show text in control panels
-  mode: "random", // next slide selection when no search is active ("random", "sequential", "search")
+  mode: "random", // next slide selection when no search is active ("random", "chronological", "search")
   highWaterMark: 20, // Maximum number of slides to load at once
   searchOrigin: 0, // When in search mode, this is the index of the first slide in swiper
   searchResults: [], // List of file paths matching the current search query
@@ -26,13 +26,13 @@ export function initializeFromServer() {
   if (window.slideshowConfig?.currentDelay > 0) {
     setDelay(window.slideshowConfig.currentDelay);
   }
-  if (window.slideshowConfig?.showControlPanelText !== null) {
-    setShowControlPanelText(window.slideshowConfig.showControlPanelText);
-  }
+  // if (window.slideshowConfig?.showControlPanelText !== null) {
+  //   setShowControlPanelText(window.slideshowConfig.showControlPanelText);
+  // }
   if (window.slideshowConfig?.mode !== null) {
-    console.log("Setting mode from server config:", window.slideshowConfig.mode);
     setMode(window.slideshowConfig.mode);
   }
+
   if (window.slideshowConfig?.highWaterMark !== null) {
     setHighWaterMark(window.slideshowConfig.highWaterMark);
   } 
