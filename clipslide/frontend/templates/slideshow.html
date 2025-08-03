@@ -548,36 +548,14 @@
             id="umapColorModeContainer"
             style="display: flex; flex-direction: column; margin-bottom: 12px"
           >
-            <label for="umapColorMode">Color by</label>
-            <div
-              id="umapColorMode"
-              style="
-                display: flex;
-                flex-direction: row;
-                gap: 16px;
-                justify-content: flex-start;
-              "
-            >
-              <label>
-                <input
-                  type="radio"
-                  name="umapColorMode"
-                  id="umapColorClusters"
-                  value="cluster"
-                  checked
-                />
-                Cluster
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="umapColorMode"
-                  id="umapColorSearch"
-                  value="search"
-                />
-                Search
-              </label>
-            </div>
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input
+                type="checkbox"
+                id="umapHighlightSelection"
+                style="margin-right: 6px;"
+              />
+              Highlight selection
+            </label>
           </div>
         </div>
       </div>
