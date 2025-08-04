@@ -1,9 +1,7 @@
 // search.js
 // This file handles the search functionality for the Clipslide application.
 // Swiper initialization
-import { clusterDisplay } from "./cluster-display.js";
-import { scoreDisplay } from "./score-display.js";
-import { searchImage, searchTextAndImage, setSearchResults } from "./search.js";
+import { calculate_search_score_cutoff, searchImage, searchTextAndImage, setSearchResults } from "./search.js";
 import { state } from "./state.js";
 import { pauseSlideshow, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
@@ -108,7 +106,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         album: state.album,
         top_k: 100,
       });
-      new_results = new_results.filter((item) => item.score >= 0.1);
+
+      // calculate score cutoffs based on weights
+      const cutoff = calculate_search_score_cutoff(imageFile, imgWeight, positiveQuery, posWeight, negativeQuery, negWeight);
+      new_results = new_results.filter((item) => item.score >= cutoff);
 
       setSearchResults(new_results, searchType);
       if (new_results.length > 0) {
@@ -119,7 +120,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
       // If no results, keep the panel open so the message is visible
     } catch (err) {
-      scoreDisplay.hide();
+      // scoreDisplay.hide();
       hideSpinner();
       console.error("Search request failed:", err);
     } finally {
@@ -344,30 +345,10 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     updateSearchCheckmarks(e.detail.searchType);
-    updateScoreDisplay(e.detail.searchType);
   });
 
   renderSearchImageThumbArea();
 });
-
-
-// Function to update the score displayed on top of search result slides
-function updateScoreDisplay(searchType) {
-  if (searchType === "cluster" && state.searchResults.length > 0) {
-    clusterDisplay.show(
-      state.searchResults[0].cluster,
-      state.searchResults[0].color || "#000000",
-      1,
-      state.searchResults.length
-    );
-  } else if (
-    ["image", "text"].includes(searchType) &&
-    state.searchResults.length > 0
-  ) {
-    const score = state.searchResults[0].score || 0;
-    scoreDisplay.show(score, 1, state.searchResults.length);
-  }
-}
 
 export async function searchWithImage(file, first_slide) {
   try {
@@ -476,8 +457,7 @@ window.addEventListener("paste", async function (e) {
 });
 
 export function exitSearchMode(searchType = "clear") {
-  scoreDisplay.hide();
-  clusterDisplay.hide();
+  // scoreDisplay.hide();
   const searchInput = document.getElementById("searchInput");
   if (searchInput) searchInput.value = "";
   const negativeSearchInput = document.getElementById("negativeSearchInput");
@@ -550,12 +530,6 @@ function setSearchImage(url, file = null) {
   state.currentSearchImageFile = file;
   renderSearchImageThumbArea();
 }
-
-// Example: after uploading or drag-and-drop
-// setSearchImage(url); // url is a data URL or blob URL
-
-// Example: to clear
-// setSearchImage(null);
 
 // Initial render
 document.addEventListener("DOMContentLoaded", renderSearchImageThumbArea);

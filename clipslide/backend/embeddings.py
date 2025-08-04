@@ -847,7 +847,7 @@ class Embeddings(BaseModel):
             filenames = data["filenames"]
             metadata = data["metadata"]
             idx = np.random.randint(len(filenames))
-            return format_metadata(Path(filenames[idx]), metadata[idx], idx)
+            return format_metadata(Path(filenames[idx]), metadata[idx], idx, len(filenames))
 
         # Sequential mode with O(1) lookup
         sorted_filenames = data["sorted_filenames"]
@@ -856,7 +856,7 @@ class Embeddings(BaseModel):
 
         if not current_image:
             return format_metadata(
-                Path(sorted_filenames[offset]), sorted_metadata[offset], offset
+                Path(sorted_filenames[offset]), sorted_metadata[offset], offset, len(sorted_filenames)
             )
 
         current_filename = current_image.as_posix()
@@ -867,7 +867,7 @@ class Embeddings(BaseModel):
         next_idx = (current_idx + offset) % len(sorted_filenames)
 
         return format_metadata(
-            Path(sorted_filenames[next_idx]), sorted_metadata[next_idx], next_idx
+            Path(sorted_filenames[next_idx]), sorted_metadata[next_idx], next_idx, len(sorted_filenames)
         )
 
     def remove_image_from_embeddings(self, image_path: Path):

@@ -3,6 +3,9 @@
 import { state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
+const IMAGE_SCORE_CUTOFF = 0.75; // Default image score cutoff
+const TEXT_SCORE_CUTOFF = 0.25; // Default text score cutoff
+
 // Call the server to fetch the next image based on the current mode (random or chronological).
 export async function fetchNextImage(lastImage = null, backward = false) {
   let response;
@@ -48,7 +51,9 @@ export async function fetchNextImage(lastImage = null, backward = false) {
     }
 
     // Always include album in the path
-    url = `retrieve_image/${encodeURIComponent(state.album)}?${params.toString()}`;
+    url = `retrieve_image/${encodeURIComponent(
+      state.album
+    )}?${params.toString()}`;
 
     response = await fetch(url, {
       method: "GET",
@@ -128,11 +133,14 @@ export async function searchTextAndImage({
   };
 
   try {
-    const response = await fetch(`search_with_text_and_image/${encodeURIComponent(state.album)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      `search_with_text_and_image/${encodeURIComponent(state.album)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
     const result = await response.json();
     return result.results || [];
   } catch (err) {
@@ -143,4 +151,31 @@ export async function searchTextAndImage({
 
 export function getCurrentFilepath() {
   return document.getElementById("filepathText")?.textContent?.trim();
+}
+
+// Guesstimate the best search score cutoff from the weights applied.
+export function calculate_search_score_cutoff(
+  imageFile,
+  imgWeight,
+  positiveQuery,
+  posWeight,
+  negativeQuery,
+  negWeight
+) {
+  let numerator = 0;
+  let denominator = 0;
+  if (imageFile !== null) {
+    numerator += imgWeight * IMAGE_SCORE_CUTOFF; // Image score cutoff
+    denominator += imgWeight;
+  }
+  if (positiveQuery !== "") {
+    numerator += posWeight * TEXT_SCORE_CUTOFF; // Positive
+    denominator += posWeight;
+  }
+  if (negativeQuery !== "") {
+    numerator += negWeight * TEXT_SCORE_CUTOFF; // Negative
+    denominator += negWeight;
+  }
+  const cutoff = numerator / denominator;
+  return cutoff;
 }

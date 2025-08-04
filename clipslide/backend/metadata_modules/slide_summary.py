@@ -17,3 +17,4 @@ class SlideSummary(BaseModel):
     url: str = ""
     textToCopy: str = ""
     index: int = 0
+    total: int = 0

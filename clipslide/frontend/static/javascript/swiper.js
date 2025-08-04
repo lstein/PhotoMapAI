@@ -1,9 +1,7 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
 import { albumManager } from "./album.js";
-import { clusterDisplay } from "./cluster-display.js";
 import { updateMetadataOverlay } from "./overlay.js";
-import { scoreDisplay } from "./score-display.js";
 import { fetchNextImage } from "./search.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
@@ -181,6 +179,8 @@ export async function addNewSlide(backward = false) {
   slide.dataset.filepath = path || "";
   slide.dataset.score = data.score || "";
   slide.dataset.cluster = data.cluster || "";
+  slide.dataset.index = data.index || 0;
+  slide.dataset.total = data.total || 0;
   slide.dataset.color = data.color || "#000000"; // Default color if not provided
 
   if (backward) {
@@ -221,19 +221,6 @@ export async function handleSlideChange() {
     }
   }
 
-  if (activeSlide?.dataset?.score && state.searchResults.length > 0) {
-    // Show score if we're in search mode and slide has a score
-    const score = parseFloat(activeSlide.dataset.score);
-    // index is 0-based, so add 1 for display
-    scoreDisplay.show(score, index + 1, state.searchResults.length);
-  } else if (activeSlide && activeSlide?.dataset?.cluster) {
-    clusterDisplay.show(
-      activeSlide.dataset.cluster,
-      activeSlide.dataset.color,
-      index + 1,
-      state.searchResults.length
-    );
-  }
   setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
 }
 

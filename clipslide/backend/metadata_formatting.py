@@ -17,7 +17,7 @@ config_manager = get_config_manager()
 logger = logging.getLogger(__name__)
 
 
-def format_metadata(filepath: Path, metadata: dict, index: int) -> SlideSummary:
+def format_metadata(filepath: Path, metadata: dict, index: int, total_slides: int) -> SlideSummary:
     """
     Format metadata dictionary into an HTML string.
 
@@ -29,7 +29,7 @@ def format_metadata(filepath: Path, metadata: dict, index: int) -> SlideSummary:
         SlideMetadata: structured representation of the metadata.
     """
     result = SlideSummary(
-        filename=filepath.name, filepath=filepath.as_posix(), index=index
+        filename=filepath.name, filepath=filepath.as_posix(), index=index, total=total_slides
     )
     if not metadata:
         result.description = "<i>No metadata available.</i>"
