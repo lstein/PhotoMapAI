@@ -181,7 +181,7 @@ body {
   position: fixed;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(30, 30, 30, 0.35);
+  background: rgba(30, 30, 30, 0.15);
   border-radius: 0.7em;
   padding: 0.8em 0.4em;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);

@@ -121,8 +121,11 @@ export function pauseSlideshow() {
 }
 
 export function resumeSlideshow() {
-  if (state.swiper && !state.swiper.autoplay.running) {
-    state.swiper.autoplay.start();
+  if (state.swiper) {
+    state.swiper.autoplay.stop();
+    setTimeout(() => {
+      state.swiper.autoplay.start();
+    }, 50); // 50ms delay workaround for tap bug
   }
 }
 

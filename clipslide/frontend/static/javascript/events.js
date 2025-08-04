@@ -179,10 +179,7 @@ async function handleSuccessfulDelete(currentFilepath) {
 }
 
 // Toggle visibility of the fullscreen indicator
-function showFullscreenIndicator(isPlaying) {
-  // Only show in fullscreen mode
-  if (!document.fullscreenElement) return;
-
+function showPlayPauseIndicator(isPlaying) {
   removeExistingIndicator();
   const indicator = createIndicator(isPlaying);
   showIndicatorWithAnimation(indicator);
@@ -262,7 +259,7 @@ function setupButtonEventListeners() {
 
   // Start/stop slideshow button
   if (elements.startStopBtn) {
-    elements.startStopBtn.addEventListener("click", toggleSlideshow);
+    elements.startStopBtn.addEventListener("click", toggleSlideshowWithIndicator);
   }
 
   // Close overlay button
@@ -338,10 +335,10 @@ export function toggleSlideshowWithIndicator() {
 
   if (isRunning) {
     pauseSlideshow();
-    showFullscreenIndicator(false); // Show pause indicator
+    showPlayPauseIndicator(false); // Show pause indicator
   } else {
     resumeSlideshow();
-    showFullscreenIndicator(true); // Show play indicator
+    showPlayPauseIndicator(true); // Show play indicator
   }
 }
 

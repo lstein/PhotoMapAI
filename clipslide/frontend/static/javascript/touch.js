@@ -3,8 +3,7 @@
 
 import { toggleSlideshowWithIndicator } from "./events.js"; // <-- Add this import
 import { toggleMetadataOverlay } from "./overlay.js";
-import { state } from "./state.js";
-import { pauseSlideshow, resumeSlideshow } from "./swiper.js";
+import { pauseSlideshow } from "./swiper.js";
 
 // Touch events
 let touchStartY = null;
@@ -97,18 +96,7 @@ function handleTouchEnd(e) {
     if (container.classList.contains("visible")) {
       toggleMetadataOverlay();
     } else {
-      // If in fullscreen, show indicator as well
-      if (document.fullscreenElement) {
-        toggleSlideshowWithIndicator();
-      } else {
-        // Otherwise, just toggle slideshow play/pause
-        const isRunning = state.swiper?.autoplay?.running;
-        if (isRunning) {
-          pauseSlideshow();
-        } else {
-          resumeSlideshow();
-        }
-      }
+      toggleSlideshowWithIndicator();
     }
   } else {
     // Detect horizontal swipe (left/right) for pausing slideshow
