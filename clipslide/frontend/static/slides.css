@@ -1422,7 +1422,6 @@ body {
   align-items: center;
   justify-content: center;
   color: white;
-  border-radius: 8px 0 0 8px;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
 }

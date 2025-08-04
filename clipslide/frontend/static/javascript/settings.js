@@ -1,5 +1,6 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
+import { albumManager } from "./album.js";
 import { exitSearchMode } from "./search-ui.js";
 import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
 import { addNewSlide, removeSlidesAfterCurrent } from "./swiper.js";
@@ -87,18 +88,18 @@ function triggerSetupMode() {
 }
 
 // Album switching logic
-function switchAlbum(newAlbum, selectedOption) {
+export async function switchAlbum(newAlbum) {
+  const album = await albumManager.getAlbum(newAlbum);
   exitSearchMode("switchAlbum");
-  setAlbum(newAlbum);
-  updatePageTitle(newAlbum);
-  state.umapEps = parseFloat(selectedOption.dataset.umapEps) || 0.07;
+  setAlbum(newAlbum, true);
+  updatePageTitle(album.name);
 }
 
 // Update the page title based on the current album
 // This function is called when the album is switched
 function updatePageTitle(albumName) {
   if (elements.titleElement) {
-    elements.titleElement.textContent = `Slideshow - ${albumName}`;
+    elements.titleElement.textContent = albumName;
   }
 }
 
@@ -224,8 +225,7 @@ function setupAlbumSelector() {
   elements.albumSelect.addEventListener("change", function () {
     const newAlbum = this.value;
     if (newAlbum !== state.album) {
-      const selectedOption = this.options[this.selectedIndex];
-      switchAlbum(newAlbum, selectedOption);
+      switchAlbum(newAlbum);
       closeSettingsModal();
     }
   });

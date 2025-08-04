@@ -1,6 +1,7 @@
 // state.js
 // This file manages the state of the application, including slide management and metadata handling.
 import { albumManager } from "./album.js";
+import { switchAlbum } from "./settings.js";
 
 export const state = {
   swiper: null, // Will be initialized in swiper.js
@@ -19,7 +20,7 @@ export const state = {
 document.addEventListener("DOMContentLoaded", async function () {
   await restoreFromLocalStorage();
   initializeFromServer();
-  setAlbum(state.album, true);  // This raises the event that kicks off slide retrieval
+  switchAlbum(state.album); // Initialize with the current album
 });
 
 // Initialize the state from the initial URL.

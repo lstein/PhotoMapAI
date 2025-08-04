@@ -135,7 +135,7 @@ export class AlbumManager {
     return await response.json();
   }
 
-  async getAlbum(albumKey) {
+ async getAlbum(albumKey) {
     const response = await fetch(`album/${albumKey}/`);
     return await response.json();
   }
