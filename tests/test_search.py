@@ -1,6 +1,7 @@
 import time
 from base64 import b64encode
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 from fixtures import client, count_test_images, new_album, poll_during_indexing
@@ -110,10 +111,9 @@ def test_image_search(client, new_album, monkeypatch):
         image_data = b64encode(image_file.read()).decode("utf-8")
 
     response = client.post(
-        "/search_with_text_and_image",
+        f"/search_with_text_and_image/{quote(new_album['key'])}",
         json={
             "image_data": image_data,
-            "album": new_album["key"],
         },
     )
     assert response.status_code == 200
@@ -155,13 +155,12 @@ def test_text_search(client, new_album, monkeypatch):
 
     # Now perform a search
     response = client.post(
-        "/search_with_text_and_image",
+        f"/search_with_text_and_image/{quote(new_album['key'])}",
         json={
             "positive_query": "flower",
             "negative_query": "building",
             "negative_weight": 0.1,
             "positive_weight": 0.9,
-            "album": new_album["key"],
         },
     )
     assert response.status_code == 200

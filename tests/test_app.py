@@ -14,5 +14,5 @@ def test_root_route(client):
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/html; charset=utf-8"
     assert response.template.name == "slideshow.html"
-    assert "<title id=\"slideshow_title\">Slideshow</title>" in response.text
+    assert "<title id=\"slideshow_title\">ClipSlide</title>" in response.text
 
