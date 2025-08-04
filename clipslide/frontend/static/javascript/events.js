@@ -101,16 +101,7 @@ function navigateSlide(direction) {
 function handleSpacebarToggle(e) {
   e.preventDefault();
   e.stopPropagation();
-
-  const isRunning = state.swiper?.autoplay?.running;
-
-  if (isRunning) {
-    pauseSlideshow();
-    showFullscreenIndicator(false); // Show pause indicator
-  } else {
-    resumeSlideshow();
-    showFullscreenIndicator(true); // Show play indicator
-  }
+  toggleSlideshowWithIndicator();
 }
 
 // Copy text to clipboard
@@ -339,6 +330,18 @@ export function showHidePanelText(hide) {
     elements.controlPanel.classList.remove(className);
     elements.searchPanel.classList.remove(className);
     state.showControlPanelText = true;
+  }
+}
+
+export function toggleSlideshowWithIndicator() {
+  const isRunning = state.swiper?.autoplay?.running;
+
+  if (isRunning) {
+    pauseSlideshow();
+    showFullscreenIndicator(false); // Show pause indicator
+  } else {
+    resumeSlideshow();
+    showFullscreenIndicator(true); // Show play indicator
   }
 }
 

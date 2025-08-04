@@ -1,8 +1,10 @@
 // touch.js
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
+import { toggleSlideshowWithIndicator } from "./events.js"; // <-- Add this import
 import { toggleMetadataOverlay } from "./overlay.js";
-import { pauseSlideshow } from "./swiper.js";
+import { state } from "./state.js";
+import { pauseSlideshow, resumeSlideshow } from "./swiper.js";
 
 // Touch events
 let touchStartY = null;
@@ -53,22 +55,24 @@ function handleTouchEnd(e) {
   // Check if text search panel is open
   const textSearchPanel = document.getElementById("textSearchPanel");
   const textSearchBtn = document.getElementById("textSearchBtn");
-  
+
   if (textSearchPanel && textSearchPanel.style.display === "block") {
     // If panel is open, check if tap was outside it
-    if (isTap && 
-        !textSearchPanel.contains(e.target) && 
-        !textSearchBtn.contains(e.target)) {
+    if (
+      isTap &&
+      !textSearchPanel.contains(e.target) &&
+      !textSearchBtn.contains(e.target)
+    ) {
       // Close the panel without triggering other events
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-      
+
       textSearchPanel.style.opacity = 0;
       setTimeout(() => {
         textSearchPanel.style.display = "none";
       }, 200);
-      
+
       // Reset touch tracking and return early
       touchStartY = null;
       touchStartX = null;
@@ -76,7 +80,7 @@ function handleTouchEnd(e) {
       verticalSwipeDetected = false;
       return;
     }
-    
+
     // If tap was inside the panel, don't trigger any other actions
     if (textSearchPanel.contains(e.target)) {
       touchStartY = null;
@@ -88,7 +92,24 @@ function handleTouchEnd(e) {
   }
 
   if (isTap) {
-    toggleMetadataOverlay(); // Toggle overlay on tap
+    const container = document.getElementById("bannerDrawerContainer");
+    // If overlay is open, close it
+    if (container.classList.contains("visible")) {
+      toggleMetadataOverlay();
+    } else {
+      // If in fullscreen, show indicator as well
+      if (document.fullscreenElement) {
+        toggleSlideshowWithIndicator();
+      } else {
+        // Otherwise, just toggle slideshow play/pause
+        const isRunning = state.swiper?.autoplay?.running;
+        if (isRunning) {
+          pauseSlideshow();
+        } else {
+          resumeSlideshow();
+        }
+      }
+    }
   } else {
     // Detect horizontal swipe (left/right) for pausing slideshow
     if (
