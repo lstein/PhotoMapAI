@@ -81,10 +81,12 @@ class Embeddings(BaseModel):
         image_files = []
         files_checked = 0
 
-        for root, _, files in os.walk(directory):
+        for root, dirs, files in os.walk(directory):
+            # Remove 'clipslide_index' from dirs so os.walk skips it and its subdirs
+            dirs[:] = [d for d in dirs if d != "clipslide_index"]
             for file in [Path(x) for x in files]:
                 files_checked += 1
-
+                
                 # Check if the file has a valid image extension
                 # and that it's length is > minimum_image_size (i.e. not a thumbnail)
                 if (
@@ -168,7 +170,7 @@ class Embeddings(BaseModel):
 
             return embedding, modification_time, metadata
         except Exception as e:
-            print(f"Error processing {image_path}: {e}")
+            logger.error(f"Error processing {image_path}: {e}")
             return None, None, None
 
     def _process_images_batch(
@@ -320,7 +322,7 @@ class Embeddings(BaseModel):
                 bad_files=[],
             )
 
-        print(
+        logger.warning(
             f"Removing {len(missing_image_paths)} missing images from existing embeddings."
         )
 
@@ -334,7 +336,6 @@ class Embeddings(BaseModel):
 
         # Debug output
         removed_count = len(existing_filenames) - np.sum(mask)
-        print(f"Actually removing {removed_count} images from index")
 
         return IndexResult(
             embeddings=existing_embeddings[mask],
@@ -383,7 +384,7 @@ class Embeddings(BaseModel):
 
         if create_index:
             self._save_embeddings(result)
-            print(
+            logger.info(
                 f"Indexed {len(result.embeddings)} images and saved to {self.embeddings_path}"
             )
 
@@ -461,7 +462,7 @@ class Embeddings(BaseModel):
             existing_metadatas = data["metadata"]
 
             # Identify new and missing images
-            print(f"Scanning for new images in {image_paths_or_dir}...")
+            logger.info(f"Scanning for new images in {image_paths_or_dir}...")
             new_image_paths, missing_image_paths = self._get_new_and_missing_images(
                 image_paths_or_dir,
                 existing_filenames,
@@ -479,7 +480,7 @@ class Embeddings(BaseModel):
             # If no new images, save filtered data and return
             if not new_image_paths:
                 self._save_embeddings(filtered_existing)
-                print("No new images found. The index is up to date.")
+                logger.info("No new images found. The index is up to date.")
                 return filtered_existing
 
             # Progress bar for new images
@@ -567,7 +568,8 @@ class Embeddings(BaseModel):
             if not new_image_paths:
                 self._save_embeddings(filtered_existing)
                 progress_tracker.complete_operation(album_key, "No new images found")
-                return
+                logger.info(f"No new images found. Removing {len(missing_image_paths)} missing images from index.")
+                return filtered_existing
 
             # Update progress tracker with actual count
             total_new_images = len(new_image_paths)
@@ -629,7 +631,7 @@ class Embeddings(BaseModel):
             np.ndarray: The UMAP embeddings.
         """
         if embeddings.size == 0:
-            print("No embeddings provided for UMAP index creation.")
+            logger.info("No embeddings provided for UMAP index creation.")
             return np.empty((0, 2))
 
         # hide warnings from UMAP about TBB version
@@ -875,7 +877,7 @@ class Embeddings(BaseModel):
         Remove an image from the embeddings file.
         Optimized version with O(1) lookup and cache invalidation.
         """
-        print(f"Removing {image_path} from embeddings.")
+        logger.warning(f"Removing {image_path} from embeddings.")
 
         # Use optimized version for O(1) lookup
         data = self.open_cached_embeddings(self.embeddings_path)

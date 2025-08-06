@@ -7,6 +7,7 @@ and serving images and thumbnails.
 
 import base64
 from io import BytesIO
+from logging import getLogger
 from pathlib import Path
 from typing import List, Optional
 
@@ -26,7 +27,7 @@ from .album import (
 
 config_manager = get_config_manager()
 search_router = APIRouter()
-
+logger = getLogger(__name__)
 
 # Response Models
 class SearchResult(BaseModel):
@@ -200,6 +201,7 @@ def create_slide_url(slide_metadata: SlideSummary, album_key: str) -> None:
 # function to return a StreamingResponse with EXIF rotation applied.
 # In practice, I'm seeing pauses during image serving when using this.
 def serve_image_with_exif_rotation(image_path: Path) -> StreamingResponse:
+    logger.info(f"Serving image with EXIF rotation: {image_path}")
     try:
         with Image.open(image_path) as im:
             im = ImageOps.exif_transpose(im)

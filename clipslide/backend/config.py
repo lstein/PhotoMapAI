@@ -7,12 +7,14 @@ It uses a YAML file to store album details and provides methods to manipulate al
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from venv import logger
 
 import yaml
+import logging
 from platformdirs import user_config_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 class Album(BaseModel):
     """Represents a photo album configuration."""
@@ -171,8 +173,6 @@ class ConfigManager:
                     albums = {}
                     for key, album_data in config_data.get("albums", {}).items():
                         albums[key] = Album.from_dict(key, album_data)
-
-                    logger.info("locationiq_api_key: %s", config_data.get("locationiq_api_key"))
 
                     self._config = Config(
                         config_version=config_data.get("config_version", "1.0.0"),
@@ -401,8 +401,8 @@ def create_album(
 
 
 @lru_cache(maxsize=1)
-def get_config_manager() -> ConfigManager:
+def get_config_manager(config_path: Optional[Path] = None) -> ConfigManager:
     """Get a singleton instance of ConfigManager."""
-    return ConfigManager()
+    return ConfigManager(config_path=config_path)
 
 

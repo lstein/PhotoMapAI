@@ -1855,7 +1855,6 @@ body {
   border: 1px solid #888;
   background: #222;
   color: #fff;
-  box-sizing: border-box;
 }
 
 /* Weight row styling */
@@ -1892,4 +1891,10 @@ body {
   background: rgba(0, 0, 0, 0.35);
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.18);
   bottom: 50px !important;
+}
+
+@media (max-width: 480px) {
+  .swiper-pagination {
+    display: none !important;
+  }
 }

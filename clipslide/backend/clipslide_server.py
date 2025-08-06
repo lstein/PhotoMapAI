@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .constants import DEFAULT_ALBUM, DEFAULT_DELAY, DEFAULT_MODE, get_package_resource_path
+from .constants import get_package_resource_path
 from .config import get_config_manager
 from .routers.umap import umap_router
 from .routers.album import album_router
@@ -21,11 +21,8 @@ from .routers.index import index_router
 # Initialize logging
 logger = logging.getLogger(__name__)
 
-# Initialize configuration manager
-config_manager = get_config_manager()
-
 # Initialize FastAPI app
-app = FastAPI(title="Slideshow")
+app = FastAPI(title="ClipSlide")
 
 # Include routers
 for router in [umap_router, search_router, index_router, album_router]:
@@ -48,8 +45,7 @@ async def get_root(
     mode: str = None,
 ):
     """Serve the main slideshow page."""
-    # Set the album to be the first available one if the album is
-    # specified, but does not correspond to an existing album.
+    config_manager = get_config_manager()
     if album is not None:
         albums = config_manager.get_albums()
         if (albums and album in albums):
@@ -73,18 +69,67 @@ async def get_root(
 def main():
     """Main entry point for the slideshow server."""
     import uvicorn
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run the Clipslide slideshow server.")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to the configuration file (default: ~/.config/clipslide/config.yaml, uses environment variable CLIPSLIDE_CONFIG)",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Network interface to run the server on (default: 127.0.0.1), uses environment variable CLIPSLIDE_HOST",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8050,
+        help="Port to run the server on (default: 8050), uses environment variable CLIPSLIDE_PORT",
+    )
+    parser.add_argument(
+        "--cert",
+        type=Path,
+        default=None,
+        help="Path to SSL certificate file (optional, for HTTPS)",
+    )
+    parser.add_argument(
+        "--key",
+        type=Path,
+        default=None,
+        help="Path to SSL key file (optional, for HTTPS)",
+    )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable auto-reload when source files change for development (default: False)",
+    )
+    args = parser.parse_args()
 
     repo_root = Path(get_package_resource_path("clipslide"),'../..').resolve()
-    print(f"Starting Clipslide server with backend root: {repo_root}")
+
+    port = args.port or int(os.environ.get("CLIPSLIDE_PORT", "8050"))
+    host = args.host or os.environ.get("CLIPSLIDE_HOST", "127.0.0.1")
+
+    if args.config:
+        os.environ["CLIPSLIDE_CONFIG"] = args.config.as_posix()
+
+    config = get_config_manager()
+    logger.info(f"Starting Clipslide server with backend root: {repo_root} and configuration file {config.config_path}")
 
     uvicorn.run(
         "clipslide.backend.clipslide_server:app",
-        host="0.0.0.0",
-        port=8050,
-        reload=True,
+        host=host,
+        port=port,
+        reload=args.reload,
         reload_dirs=[repo_root],
+        ssl_keyfile=str(args.key) if args.key else None,
+        ssl_certfile=str(args.cert) if args.cert else None,
+        log_level="info",
     )
-
 
 if __name__ == "__main__":
     main()
