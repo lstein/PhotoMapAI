@@ -273,7 +273,7 @@ export async function fetchUmapData() {
             index: index,
             cluster: cluster,
           });
-        }, 200); // 200ms delay (adjust as desired)
+        }, 150); // Adjust delay as desired
       });
 
       gd.on("plotly_unhover", function () {
@@ -565,6 +565,7 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   umapThumbnailDiv.style.flexDirection = "column";
   umapThumbnailDiv.style.alignItems = "center";
   umapThumbnailDiv.style.fontFamily = "inherit";
+  umapThumbnailDiv.style.visibility = "hidden"; // <-- Hide until loaded
 
   // Thumbnail image
   const img = document.createElement("img");
@@ -612,11 +613,22 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   const pad = 12;
   let left = x + pad;
   let top = y + pad;
-  const rect = umapThumbnailDiv.getBoundingClientRect();
-  if (left + rect.width > window.innerWidth - 10) left = x - rect.width - pad;
-  if (top + rect.height > window.innerHeight - 10) top = y - rect.height - pad;
-  umapThumbnailDiv.style.left = `${Math.max(0, left)}px`;
-  umapThumbnailDiv.style.top = `${Math.max(0, top)}px`;
+
+  // Wait for the image to load before showing the div
+  img.onload = () => {
+    const rect = umapThumbnailDiv.getBoundingClientRect();
+    if (left + rect.width > window.innerWidth - 10) left = x - rect.width - pad;
+    if (top + rect.height > window.innerHeight - 10) top = y - rect.height - pad;
+    umapThumbnailDiv.style.left = `${Math.max(0, left)}px`;
+    umapThumbnailDiv.style.top = `${Math.max(0, top)}px`;
+    umapThumbnailDiv.style.visibility = "visible"; // <-- Show after loaded
+  };
+
+  // Optionally, handle image load error
+  img.onerror = () => {
+    umapThumbnailDiv.style.visibility = "visible";
+    img.alt = "Thumbnail not available";
+  };
 }
 
 function removeUmapThumbnail() {
