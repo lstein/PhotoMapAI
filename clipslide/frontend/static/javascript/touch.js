@@ -1,7 +1,7 @@
 // touch.js
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
-import { toggleSlideshowWithIndicator } from "./events.js"; // <-- Add this import
+import { toggleSlideshowWithIndicator } from "./events.js";
 import { toggleMetadataOverlay } from "./overlay.js";
 import { pauseSlideshow } from "./swiper.js";
 
@@ -9,7 +9,6 @@ import { pauseSlideshow } from "./swiper.js";
 let touchStartY = null;
 let touchStartX = null;
 let touchStartTime = null;
-let verticalSwipeDetected = false;
 const swipeThreshold = 50; // Minimum distance in px for a swipe
 const tapThreshold = 10; // Maximum movement in px for a tap
 const tapTimeThreshold = 300; // Maximum time in ms for a tap
@@ -19,7 +18,6 @@ function handleTouchStart(e) {
     touchStartY = e.touches[0].clientY;
     touchStartX = e.touches[0].clientX;
     touchStartTime = Date.now();
-    verticalSwipeDetected = false; // Reset swipe detection
   }
 }
 
@@ -62,7 +60,6 @@ function handleTouchEnd(e) {
       !textSearchPanel.contains(e.target) &&
       !textSearchBtn.contains(e.target)
     ) {
-      // Close the panel without triggering other events
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
@@ -72,11 +69,9 @@ function handleTouchEnd(e) {
         textSearchPanel.style.display = "none";
       }, 200);
 
-      // Reset touch tracking and return early
       touchStartY = null;
       touchStartX = null;
       touchStartTime = null;
-      verticalSwipeDetected = false;
       return;
     }
 
@@ -85,22 +80,27 @@ function handleTouchEnd(e) {
       touchStartY = null;
       touchStartX = null;
       touchStartTime = null;
-      verticalSwipeDetected = false;
       return;
     }
   }
 
   if (isTap) {
     const container = document.getElementById("bannerDrawerContainer");
-    // If overlay is open, close it
     if (container.classList.contains("visible")) {
       toggleMetadataOverlay();
     } else {
       toggleSlideshowWithIndicator();
     }
   } else {
-    // Detect horizontal swipe (left/right) for pausing slideshow
+    // Detect vertical swipe (up or down) for overlay
     if (
+      Math.abs(deltaY) > Math.abs(deltaX) && // Mostly vertical
+      Math.abs(deltaY) > swipeThreshold      // Swipe distance threshold
+    ) {
+      toggleMetadataOverlay();
+    }
+    // Detect horizontal swipe (left/right) for pausing slideshow
+    else if (
       Math.abs(deltaX) > Math.abs(deltaY) &&
       Math.abs(deltaX) > swipeThreshold
     ) {
@@ -112,11 +112,9 @@ function handleTouchEnd(e) {
   touchStartY = null;
   touchStartX = null;
   touchStartTime = null;
-  verticalSwipeDetected = false;
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
-  // Attach touch event handlers to the swiper container
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.addEventListener("touchstart", handleTouchStart, {
     passive: false,
