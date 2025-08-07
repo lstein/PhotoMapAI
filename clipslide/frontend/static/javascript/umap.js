@@ -424,7 +424,6 @@ export async function updateCurrentImageMarker() {
   if (globalIndex === -1) return; // No current image
   const currentPoint = points.find((p) => p.index === globalIndex);
   if (!currentPoint) return;
-  console.log("Updating current image marker:", currentPoint, "Index:", globalIndex);
   Plotly.restyle(
     "umapPlot",
     {

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 
@@ -171,7 +171,7 @@ async def serve_image(album_key: str, path: str) -> FileResponse:
 
 @search_router.get(
     "/image_path/{album_key}/{index}",
-    response_model=str,
+    response_class=PlainTextResponse,
     tags=["Search"],
 )
 async def get_image_path(album_key: str, index: int) -> str:
@@ -181,7 +181,7 @@ async def get_image_path(album_key: str, index: int) -> str:
     embeddings = get_embeddings_for_album(album_key)
     try:
         image_path = embeddings.get_image_path(index)
-        return str(image_path)
+        return image_path.as_posix()
     except Exception as e:
         raise HTTPException(
             status_code=404, detail=f"Image not found for index {index}: {e}"

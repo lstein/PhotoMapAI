@@ -26,9 +26,9 @@ async def get_umap_data(
 
     # Load cached UMAP embeddings (will compute/cache if missing)
     umap_embeddings = embeddings.umap_embeddings
-    filenames = embeddings.open_cached_embeddings(embeddings.embeddings_path)[
-        "filenames"
-    ]
+    embeddings = embeddings.open_cached_embeddings(embeddings.embeddings_path)
+    filenames = embeddings["filenames"]
+    filename_map = embeddings["filename_map"]
 
     # Cluster with DBSCAN
     if umap_embeddings.shape[0] > 0:
@@ -44,7 +44,9 @@ async def get_umap_data(
         {
             "x": float(x),
             "y": float(y),
-            "index": int(idx),
+            "index": int(
+                filename_map[filenames[idx]]
+            ),  # map from unsorted to sorted indices
             "cluster": int(cluster),
         }
         for idx, (x, y, cluster) in enumerate(
