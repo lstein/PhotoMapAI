@@ -43,6 +43,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       enabled: true,
       onlyInViewport: true,
     },
+    mousewheel: {
+      enabled: true,
+      releaseonEdges: true,
+    },
     on: {
       slideNextTransitionStart: async function () {
         // Only add a new slide if we're at the end and moving forward
