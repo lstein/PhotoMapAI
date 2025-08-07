@@ -95,7 +95,7 @@ async def search_with_text_and_image(
 )
 async def retrieve_image(
     album_key: str,
-    index: int,
+    index: int = Query(..., ge=0),
 ) -> SlideSummary:
     """Retrieve metadata for a specific image."""
     embeddings = get_embeddings_for_album(album_key)

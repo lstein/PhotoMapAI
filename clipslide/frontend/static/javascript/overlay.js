@@ -1,7 +1,6 @@
 // overlay.js
 // This file manages the overlay functionality, including showing and hiding overlays during slide transitions.
 // TO DO: Change the name of the element from 'pauseOverlay' to 'overlay' to make it more generic.
-import { albumManager } from "./album.js";
 import { scoreDisplay } from "./score-display.js";
 import { state } from "./state.js";
 
@@ -49,16 +48,12 @@ async function updateCurrentImageScore(activeSlide) {
     return;
   }
 
-  if (state.searchResults.length === 0) {
-    const index = parseInt(activeSlide.dataset.index, 10);
-    const total = parseInt(activeSlide.dataset.total, 10);
-    scoreDisplay.showIndex(index, total);
-    return;
-  }
+  const globalIndex = parseInt(activeSlide.dataset.index, 10);
+  const globalTotal = parseInt(activeSlide.dataset.total, 10);
+  const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10);
 
-  const searchIndex = await searchIndexForSlide(activeSlide);
-  if (searchIndex === -1) {
-    console.warn("Slide not found in search results:", activeSlide.dataset.filepath);
+  if (state.searchResults.length === 0) {
+    scoreDisplay.showIndex(globalIndex, globalTotal);
     return;
   }
 
@@ -72,22 +67,9 @@ async function updateCurrentImageScore(activeSlide) {
     scoreDisplay.showCluster(
       activeSlide.dataset.cluster,
       activeSlide.dataset.color,
-      (await searchIndexForSlide(activeSlide)) + 1,
+      searchIndex + 1,
       state.searchResults.length
     );
     return;
   }
-}
-
-async function searchIndexForSlide(slide) {
-  let index = 0;
-  const filename = slide?.dataset?.filepath;
-  if (filename) {
-    const relpath = albumManager.relativePath(
-      filename,
-      await albumManager.getCurrentAlbum()
-    );
-    index = state.searchResults.findIndex((item) => item.filename === relpath);
-  }
-  return index;
 }

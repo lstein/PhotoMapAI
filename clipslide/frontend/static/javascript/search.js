@@ -4,14 +4,11 @@ import { state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
 const IMAGE_SCORE_CUTOFF = 0.75; // Default image score cutoff
-const TEXT_SCORE_CUTOFF = 0.25; // Default text score cutoff
+const TEXT_SCORE_CUTOFF = 0.20; // Default text score cutoff
 
 // Call the server to fetch the next image based on the current mode (random or chronological).
-export async function fetchNextImage(lastImage = null, backward = false) {
+export async function fetchNextImage(index) {
   let response;
-  let currentScore;
-  let currentCluster;
-  let currentColor;
   if (!state.album) return null; // No album set, cannot fetch image
 
   let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
@@ -19,36 +16,7 @@ export async function fetchNextImage(lastImage = null, backward = false) {
   try {
     let url;
     const params = new URLSearchParams();
-
-    // If in search mode, then we are browsing the search results
-    if (state.searchResults?.length > 0) {
-      let indexToRetrieve = 0;
-
-      indexToRetrieve = backward
-        ? --state.searchOrigin
-        : state.searchOrigin + state.swiper.slides?.length;
-      indexToRetrieve =
-        (indexToRetrieve + state.searchResults.length) %
-        state.searchResults.length; // wrap
-      const fileToRetrieve = state.searchResults[indexToRetrieve]?.filename;
-
-      currentScore = state.searchResults[indexToRetrieve]?.score || 0;
-      currentCluster = state.searchResults[indexToRetrieve]?.cluster || null;
-      currentColor = state.searchResults[indexToRetrieve]?.color || "#000000";
-
-      params.append("current_image", fileToRetrieve);
-      params.append("offset", 0); // No offset for search results
-      params.append("random", "false");
-    } else {
-      params.append("random", state.mode === "random" ? "true" : "false");
-      if (state.mode === "chronological" && lastImage) {
-        const currentFilepath = lastImage.dataset?.filepath;
-        params.append("current_image", currentFilepath);
-        params.append("offset", backward ? -1 : 1);
-      } else {
-        params.append("offset", 0);
-      }
-    }
+    params.append("index", index);
 
     // Always include album in the path
     url = `retrieve_image/${encodeURIComponent(
@@ -64,9 +32,6 @@ export async function fetchNextImage(lastImage = null, backward = false) {
     }
 
     const data = await response.json();
-    if (currentScore) data.score = currentScore; // Preserve the score from search results
-    if (currentCluster) data.cluster = currentCluster; // Preserve the cluster from umap search results
-    if (currentColor) data.color = currentColor; // Preserve the color from search results
     clearTimeout(spinnerTimeout);
     hideSpinner();
     return data;
@@ -80,9 +45,8 @@ export async function fetchNextImage(lastImage = null, backward = false) {
 
 // Function to set the search results and issue the searchResultsChanged event
 export function setSearchResults(results, searchType) {
-  state.searchResults = results;
   state.searchType = searchType;
-  state.searchOrigin = 0; // This keeps track of the results index of the first slide on swiper's slide array
+  state.searchResults = results;
   window.dispatchEvent(
     new CustomEvent("searchResultsChanged", {
       detail: {
@@ -142,6 +106,7 @@ export async function searchTextAndImage({
       }
     );
     const result = await response.json();
+    console.log("Search results:", result);
     return result.results || [];
   } catch (err) {
     console.error("search_with_text_and_image request failed:", err);

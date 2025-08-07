@@ -10,7 +10,6 @@ export const state = {
   showControlPanelText: true, // Whether to show text in control panels
   mode: "random", // next slide selection when no search is active ("random", "chronological", "search")
   highWaterMark: 20, // Maximum number of slides to load at once
-  currentResult: 0, // When in search mode, this is the currently displayed result index
   searchResults: [], // List of file paths matching the current search query
   album: null, // Default album to use
   availableAlbums: [], // List of available albums

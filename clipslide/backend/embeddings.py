@@ -704,6 +704,7 @@ class Embeddings(BaseModel):
         data = self.open_cached_embeddings(self.embeddings_path)
         embeddings = data["embeddings"]
         filenames = data["filenames"]
+        filename_map = data["filename_map"]
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model, preprocess = clip.load("ViT-B/32", device=device)
@@ -740,13 +741,19 @@ class Embeddings(BaseModel):
             return [], []
 
         # Weighted combination: image + positive - negative
-        combined_embedding = 0
+        combined_embedding = None
         if image_weight > 0.0 and image_embedding is not None:
-            combined_embedding += image_weight * image_embedding
+            combined_embedding = image_weight * image_embedding
         if positive_weight > 0.0 and pos_emb is not None:
-            combined_embedding += positive_weight * pos_emb
+            if combined_embedding is None:
+                combined_embedding = positive_weight * pos_emb
+            else:
+                combined_embedding += positive_weight * pos_emb
         if negative_weight > 0.0 and neg_emb is not None:
-            combined_embedding -= negative_weight * neg_emb
+            if combined_embedding is None:
+                combined_embedding = -negative_weight * neg_emb
+            else:
+                combined_embedding -= negative_weight * neg_emb
 
         # Normalize
         embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=device)
@@ -762,7 +769,9 @@ class Embeddings(BaseModel):
         if not top_indices:
             return [], []
 
-        return top_indices, similarities[top_indices].tolist()
+        # Translate from filename array indices to sorted filename top_indices
+        global_indices = [filename_map[filenames[i]] for i in top_indices]
+        return global_indices, similarities[top_indices].tolist()
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):
         """

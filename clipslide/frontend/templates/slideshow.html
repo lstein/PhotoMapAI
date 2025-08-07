@@ -642,12 +642,14 @@
         <div class="setting-row">
           <label for="locationiqApiKeyInput">LocationIQ Map API Key:</label>
           <div class="setting-input-container">
-            <input
-              type="password"
-              id="locationiqApiKeyInput"
-              placeholder="Enter your LocationIQ API key (optional)"
-              autocomplete="pk-xxxxxxxx"
-            />
+            <form id="locationiqApiKeyForm" autocomplete="off" style="margin:0;">
+              <input
+                type="password"
+                id="locationiqApiKeyInput"
+                placeholder="Enter your LocationIQ API key (optional)"
+                autocomplete="pk-xxxxxxxx"
+              />
+            </form>
             <small
               style="
                 color: #666;

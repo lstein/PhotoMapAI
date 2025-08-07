@@ -1,6 +1,7 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
 import { albumManager } from "./album.js";
+import { getIndexMetadata } from "./index.js";
 import { updateMetadataOverlay } from "./overlay.js";
 import { fetchNextImage } from "./search.js";
 import { state } from "./state.js";
@@ -19,6 +20,7 @@ const hasTouchCapability = isTouchDevice();
 
 document.addEventListener("DOMContentLoaded", async function () {
   const swiperConfig = {
+    passiveListeners: true, // Enable passive listeners for better performance
     navigation: {
       nextEl: ".swiper-button-next",
       prevEl: ".swiper-button-prev",
@@ -41,6 +43,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     mousewheel: {
       enabled: true,
       forceToAxis: true,
+      passive: true, // Add passive: true to avoid the warning
     },
     keyboard: {
       enabled: true,
@@ -144,31 +147,31 @@ export function updateSlideshowIcon() {
 // Add a new slide to Swiper with image and metadata
 export async function addNewSlide(backward = false) {
   if (!state.album) return; // No album set, cannot add slide
-  let nextIndex = 0;
+  let currentScore, currentCluster, currentColor;
 
-  // Search mode
+  let [globalIndex, totalImages, searchIndex] = await getCurrentSlideIndex();
+  // Search mode -- we identify the next image based on the search results array,
+  // then translate this into a global index for retrieval.
   if (state.searchResults?.length > 0) {
-    const totalImages = state.searchResults.length || 1;
-    let resultsIndex = state.currentResult || 0;
-    resultsIndex = backward ? resultsIndex - 1 : resultsIndex + 1;
-    resultsIndex = (resultsIndex + totalImages) % totalImages; // wrap around
-    nextIndex = state.searchResults[resultsIndex];
+    const searchImageCnt = state.searchResults.length || 1;
+    searchIndex = backward ? searchIndex - 1 : searchIndex + 1;
+    searchIndex = (searchIndex + searchImageCnt) % searchImageCnt; // wrap around
+    globalIndex = state.searchResults[searchIndex].index || 0;
+    // remember values for score, cluster and color
+    currentScore = state.searchResults[searchIndex].score || "";
+    currentCluster = state.searchResults[searchIndex].cluster || "";
+    currentColor = state.searchResults[searchIndex].color || "#000000"; // Default
   } else {
     // Album mode -- navigate relative to the current slide's index
-    const currentIndex =
-      state.swiper.slides[state.swiper.activeIndex]?.dataset?.index;
-    const totalImages =
-      state.swiper.slides[state.swiper.activeIndex]?.dataset?.total || 1;
-
     if (state.mode === "random") {
-      nextIndex = Math.floor(Math.random() * totalImages));
+      globalIndex = Math.floor(Math.random() * totalImages);
     } else {
-      nextIndex = backward ? currentIndex - 1 : currentIndex + 1;
-      nextIndex = (nextIndex + totalImages) % (totalImages); // wrap around
+      globalIndex = backward ? globalIndex - 1 : globalIndex + 1;
+      globalIndex = (globalIndex + totalImages) % totalImages; // wrap around
     }
   }
 
-  const data = await fetchNextImage(nextIndex);
+  const data = await fetchNextImage(globalIndex);
 
   if (!data || Object.keys(data).length === 0) {
     return;
@@ -198,11 +201,12 @@ export async function addNewSlide(backward = false) {
   slide.dataset.description = data.description || "";
   slide.dataset.textToCopy = data.textToCopy || "";
   slide.dataset.filepath = path || "";
-  slide.dataset.score = data.score || "";
-  slide.dataset.cluster = data.cluster || "";
+  slide.dataset.score = currentScore || "";
+  slide.dataset.cluster = currentCluster || "";
+  slide.dataset.color = currentColor || "#000000"; // Default color if not provided
   slide.dataset.index = data.index || 0;
   slide.dataset.total = data.total || 0;
-  slide.dataset.color = data.color || "#000000"; // Default color if not provided
+  slide.dataset.searchIndex = searchIndex || 0; // Store the search index for this slide
 
   if (backward) {
     state.swiper.prependSlide(slide);
@@ -222,6 +226,36 @@ export async function addNewSlide(backward = false) {
   });
 }
 
+export async function getCurrentSlideIndex() {
+  let currentSlide = null;
+
+  if (state.swiper && state.swiper.slides.length > 0) {
+    currentSlide = state.swiper.slides[state.swiper.activeIndex];
+  }
+
+  // Handle search results
+  if (state.searchResults.length > 0) {
+    if (!currentSlide) {
+      return [-1, state.searchResults.length, -1]; // Default to first slide if no current slide
+    } else {
+      return [
+        0,
+        state.searchResults.length,
+        parseInt(currentSlide.dataset.searchIndex, 10),
+      ];
+    }
+  }
+
+  // Handle case where swiper or slides are not yet initialized
+  if (!currentSlide) {
+    const metadata = await getIndexMetadata(state.album);
+    return [-1, parseInt(metadata.filename_count, 10), -1]; // Default to first slide if no swiper or slides
+  }
+  // get the index and total from the current slide
+  const activeIndex = currentSlide?.dataset?.index || 0;
+  const totalSlides = currentSlide?.dataset?.total || 1;
+  return [parseInt(activeIndex, 10), parseInt(totalSlides, 10), 0];
+}
 // Add function to handle slide changes
 export async function handleSlideChange() {
   updateMetadataOverlay();
