@@ -29,9 +29,10 @@ config_manager = get_config_manager()
 search_router = APIRouter()
 logger = getLogger(__name__)
 
+
 # Response Models
 class SearchResult(BaseModel):
-    filename: str
+    index: int
     score: float
 
 
@@ -94,20 +95,11 @@ async def search_with_text_and_image(
 )
 async def retrieve_image(
     album_key: str,
-    current_image: Optional[str] = Query(None),
-    offset: int = Query(0),
-    random: bool = Query(False),
+    index: int,
 ) -> SlideSummary:
     """Retrieve metadata for a specific image."""
-    if current_image is not None:
-        image_path = config_manager.find_image_in_album(album_key, current_image)
-        if not image_path:
-            raise HTTPException(status_code=404, detail="Image not found")
-    else:
-        image_path = None
-
     embeddings = get_embeddings_for_album(album_key)
-    slide_metadata = embeddings.retrieve_image(image_path, offset=offset, random=random)
+    slide_metadata = embeddings.retrieve_image(index)
     create_slide_url(slide_metadata, album_key)
     return slide_metadata
 
@@ -130,6 +122,7 @@ async def serve_thumbnail(album_key: str, path: str, size: int = 256) -> FileRes
 
     # Use a safe filename for the thumbnail
     relative_path = config_manager.get_relative_path(str(image_path), album_key)
+    assert relative_path is not None, "Relative path should not be None"
     safe_rel_path = relative_path.replace("/", "_").replace("\\", "_")
     thumb_path = (
         thumb_dir / f"{Path(safe_rel_path).stem}_{size}{Path(safe_rel_path).suffix}"
@@ -174,17 +167,16 @@ async def serve_image(album_key: str, path: str) -> FileResponse:
 
 # Utility Functions
 def create_search_results(
-    results: List[str], scores: List[float], album_key: str
+    results: List[int], scores: List[float], album_key: str
 ) -> SearchResultsResponse:
     """Create a standardized search results response."""
     return SearchResultsResponse(
         results=[
             SearchResult(
-                filename=config_manager.get_relative_path(filename, album_key)
-                or Path(filename).name,
+                index=index,
                 score=float(score),
             )
-            for filename, score in zip(results, scores)
+            for index, score in zip(results, scores)
         ]
     )
 

@@ -20,7 +20,6 @@ import networkx as nx
 import numpy as np
 import torch
 import torch.nn.functional as F
-from fastapi import logger
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 from sklearn.cluster import DBSCAN
@@ -86,7 +85,7 @@ class Embeddings(BaseModel):
             dirs[:] = [d for d in dirs if d != "clipslide_index"]
             for file in [Path(x) for x in files]:
                 files_checked += 1
-                
+
                 # Check if the file has a valid image extension
                 # and that it's length is > minimum_image_size (i.e. not a thumbnail)
                 if (
@@ -412,11 +411,11 @@ class Embeddings(BaseModel):
             traversal_callback,
         )
         total_images = len(image_paths)
-        logger.info(
-            f"Found {total_images} image files in {image_paths_or_dir}"
-        )
-        if (total_images == 0):
-            progress_tracker.set_error(album_key, "No image files found in album directory(ies)")
+        logger.info(f"Found {total_images} image files in {image_paths_or_dir}")
+        if total_images == 0:
+            progress_tracker.set_error(
+                album_key, "No image files found in album directory(ies)"
+            )
             return
 
         progress_tracker.start_operation(album_key, total_images, "indexing")
@@ -558,7 +557,7 @@ class Embeddings(BaseModel):
                 existing_metadatas,
             )
 
-            if (len(filtered_existing.filenames) == 0 and len(new_image_paths) == 0):
+            if len(filtered_existing.filenames) == 0 and len(new_image_paths) == 0:
                 progress_tracker.set_error(
                     album_key, "No images found in album directory(ies)"
                 )
@@ -568,7 +567,9 @@ class Embeddings(BaseModel):
             if not new_image_paths:
                 self._save_embeddings(filtered_existing)
                 progress_tracker.complete_operation(album_key, "No new images found")
-                logger.info(f"No new images found. Removing {len(missing_image_paths)} missing images from index.")
+                logger.info(
+                    f"No new images found. Removing {len(missing_image_paths)} missing images from index."
+                )
                 return filtered_existing
 
             # Update progress tracker with actual count
@@ -642,9 +643,14 @@ class Embeddings(BaseModel):
             umap_model = UMAP(
                 n_neighbors=n_neighbors, n_components=2, min_dist=0.05, metric="cosine"
             )
-            umap_embeddings = umap_model.fit_transform(embeddings)
+            try:
+                umap_embeddings = umap_model.fit_transform(embeddings)
+            except Exception as e:
+                logger.error(f"UMAP fitting failed: {e}")
+                return np.empty((0, 2))
 
         cache_file = self.embeddings_path.parent / "umap.npz"
+        umap_embeddings = np.asarray(umap_embeddings)
         np.savez(cache_file, umap=umap_embeddings)
         logger.info(f"UMAP embeddings shape: {umap_embeddings.shape}")
         return umap_embeddings
@@ -679,7 +685,7 @@ class Embeddings(BaseModel):
         negative_weight: float = 0.5,
         top_k: int = 5,
         minimum_score: float = 0.2,
-    ):
+    ) -> tuple[list[int], list[float]]:
         """
         Search for images similar to a query image and a positive/negative text prompt, with separate weights.
         Any of the queries can be None; if so, their corresponding weight is set to zero and they are not used.
@@ -693,7 +699,7 @@ class Embeddings(BaseModel):
             top_k (int): Number of top results.
             minimum_score (float): Minimum similarity score.
         Returns:
-            tuple: (filenames, similarities)
+            tuple: (indexes, similarities)
         """
         data = self.open_cached_embeddings(self.embeddings_path)
         embeddings = data["embeddings"]
@@ -756,7 +762,7 @@ class Embeddings(BaseModel):
         if not top_indices:
             return [], []
 
-        return filenames[top_indices], similarities[top_indices]
+        return top_indices, similarities[top_indices].tolist()
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):
         """
@@ -797,100 +803,59 @@ class Embeddings(BaseModel):
                 print(fname)
             print()
 
-    @staticmethod
-    @functools.lru_cache(maxsize=3)
-    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, any]:
+    def get_image_path(self, index: int) -> Path:
         """
-        Open embeddings with pre-computed lookup structures.
+        Get the image path for a given index in the embeddings file.
+        Args:
+            index (int): Index of the image to retrieve.
+        Returns: Path to the image file.
         """
-        embeddings_path = Path(embeddings_path)
-        if not embeddings_path.exists():
-            raise FileNotFoundError(
-                f"Embeddings file {embeddings_path} does not exist."
-            )
-
-        data = np.load(embeddings_path, allow_pickle=True)
-
-        # Pre-compute sorted order
-        modtimes = data["modification_times"]
-        sorted_indices = np.argsort(modtimes)
-
-        # Create filename -> position mapping for O(1) lookup
-        sorted_filenames = data["filenames"][sorted_indices]
-        filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
-
-        return {
-            "filenames": data["filenames"],
-            "metadata": data["metadata"],
-            "embeddings": data["embeddings"],
-            "modification_times": data["modification_times"],
-            "sorted_filenames": sorted_filenames,
-            "sorted_metadata": data["metadata"][sorted_indices],
-            "filename_map": filename_map,
-        }
+        data = self.open_cached_embeddings(self.embeddings_path)
+        sorted_filenames = data["sorted_filenames"]
+        if index < 0 or index >= len(sorted_filenames):
+            raise IndexError(f"Index {index} out of bounds for embeddings file.")
+        return Path(sorted_filenames[index])
 
     def retrieve_image(
         self,
-        current_image: Optional[Path] = None,
-        offset: int = 0,
-        random: bool = False,
+        index: int = 0,
     ) -> SlideSummary:
         """
         Retrieve the next image in the sequence or a random image if requested.
         Args:
-            current_image (Path, optional): Path to the current image.
-            random (bool): If True, return a random image instead of the next one.
+            index (int): Index of the image to retrieve.
             Returns:
-                SlideSummary: Path and description o the next image.
+                SlideSummary: Path and description of the requested image.
         """
         data = self.open_cached_embeddings(self.embeddings_path)
-
-        if random:
-            filenames = data["filenames"]
-            metadata = data["metadata"]
-            idx = np.random.randint(len(filenames))
-            return format_metadata(Path(filenames[idx]), metadata[idx], idx, len(filenames))
-
-        # Sequential mode with O(1) lookup
         sorted_filenames = data["sorted_filenames"]
         sorted_metadata = data["sorted_metadata"]
-        filename_map = data["filename_map"]
-
-        if not current_image:
-            return format_metadata(
-                Path(sorted_filenames[offset]), sorted_metadata[offset], offset, len(sorted_filenames)
-            )
-
-        current_filename = current_image.as_posix()
-        if current_filename not in filename_map:
-            raise ValueError(f"Current image {current_image} not found in embeddings.")
-
-        current_idx = filename_map[current_filename]
-        next_idx = (current_idx + offset) % len(sorted_filenames)
+        if index < 0 or index >= len(sorted_filenames):
+            raise IndexError(f"Index {index} out of bounds for embeddings file.")
 
         return format_metadata(
-            Path(sorted_filenames[next_idx]), sorted_metadata[next_idx], next_idx, len(sorted_filenames)
+            Path(sorted_filenames[index]),
+            sorted_metadata[index],
+            index,
+            len(sorted_filenames),
         )
 
-    def remove_image_from_embeddings(self, image_path: Path):
+    def remove_image_from_embeddings(self, index: int) -> None:
         """
         Remove an image from the embeddings file.
-        Optimized version with O(1) lookup and cache invalidation.
         """
-        logger.warning(f"Removing {image_path} from embeddings.")
 
         # Use optimized version for O(1) lookup
         data = self.open_cached_embeddings(self.embeddings_path)
 
         # Load the raw data for modification
+        sorted_filenames = data["sorted_filenames"]
         filenames = data["filenames"]
         embeddings = data["embeddings"]
         modtimes = data["modification_times"]
         metadata = data["metadata"]
 
-        current_filename = image_path.as_posix()
-        if current_filename not in filenames:
-            raise ValueError(f"Image {image_path} not found in embeddings.")
+        current_filename = sorted_filenames[index].as_posix()
 
         # Find the index in the original (unsorted) arrays
         original_idx = np.where(filenames == current_filename)[0][0]
@@ -933,7 +898,39 @@ class Embeddings(BaseModel):
             indices = np.arange(len(filenames))
         for idx in indices:
             image_path = Path(filenames[idx])
-            yield format_metadata(image_path, metadata[idx])
+            yield format_metadata(image_path, metadata[idx], idx, len(filenames))
+
+    @staticmethod
+    @functools.lru_cache(maxsize=3)
+    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, any]:
+        """
+        Open embeddings with pre-computed lookup structures.
+        """
+        embeddings_path = Path(embeddings_path)
+        if not embeddings_path.exists():
+            raise FileNotFoundError(
+                f"Embeddings file {embeddings_path} does not exist."
+            )
+
+        data = np.load(embeddings_path, allow_pickle=True)
+
+        # Pre-compute sorted order
+        modtimes = data["modification_times"]
+        sorted_indices = np.argsort(modtimes)
+
+        # Create filename -> position mapping for O(1) lookup
+        sorted_filenames = data["filenames"][sorted_indices]
+        filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
+
+        return {
+            "filenames": data["filenames"],
+            "metadata": data["metadata"],
+            "embeddings": data["embeddings"],
+            "modification_times": data["modification_times"],
+            "sorted_filenames": sorted_filenames,
+            "sorted_metadata": data["metadata"][sorted_indices],
+            "filename_map": filename_map,
+        }
 
     @staticmethod
     def extract_image_metadata(pil_image: Image.Image) -> dict:

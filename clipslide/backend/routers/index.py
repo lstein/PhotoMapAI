@@ -194,17 +194,12 @@ async def index_metadata(album_key: str) -> EmbeddingsIndexMetadata:
 
 
 @index_router.delete("/delete_image/{album_key}", tags=["Index"])
-async def delete_image(
-    album_key: str,
-    file_to_delete: str = Query(...),
-) -> JSONResponse:
+async def delete_image(album_key: str, index: int) -> JSONResponse:
     """Delete an image file."""
     try:
-        image_path = config_manager.find_image_in_album(album_key, file_to_delete)
-        if not image_path:
-            raise HTTPException(status_code=404, detail="File not found")
-
         album_config = validate_album_exists(album_key)
+        embeddings = Embeddings(embeddings_path=Path(album_config.index))
+        image_path = embeddings.get_image_path(index)
 
         if not validate_image_access(album_config, image_path):
             raise HTTPException(status_code=403, detail="Access denied")
@@ -216,11 +211,14 @@ async def delete_image(
         image_path.unlink()
 
         # Remove from embeddings
-        embeddings = Embeddings(embeddings_path=Path(album_config.index))
-        embeddings.remove_image_from_embeddings(image_path)
+        embeddings.remove_image_from_embeddings(index)
+
+        logger.warning(
+            "TO DO: Remember to update search results after deleting the image!"
+        )
 
         return JSONResponse(
-            content={"success": True, "message": f"Deleted {file_to_delete}"},
+            content={"success": True, "message": f"Deleted {image_path}"},
             status_code=200,
         )
 

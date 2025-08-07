@@ -144,10 +144,31 @@ export function updateSlideshowIcon() {
 // Add a new slide to Swiper with image and metadata
 export async function addNewSlide(backward = false) {
   if (!state.album) return; // No album set, cannot add slide
-  const lastImage = backward
-    ? state.swiper.slides[0]
-    : state.swiper.slides[state.swiper.slides.length - 1];
-  const data = await fetchNextImage(lastImage, backward);
+  let nextIndex = 0;
+
+  // Search mode
+  if (state.searchResults?.length > 0) {
+    const totalImages = state.searchResults.length || 1;
+    let resultsIndex = state.currentResult || 0;
+    resultsIndex = backward ? resultsIndex - 1 : resultsIndex + 1;
+    resultsIndex = (resultsIndex + totalImages) % totalImages; // wrap around
+    nextIndex = state.searchResults[resultsIndex];
+  } else {
+    // Album mode -- navigate relative to the current slide's index
+    const currentIndex =
+      state.swiper.slides[state.swiper.activeIndex]?.dataset?.index;
+    const totalImages =
+      state.swiper.slides[state.swiper.activeIndex]?.dataset?.total || 1;
+
+    if (state.mode === "random") {
+      nextIndex = Math.floor(Math.random() * totalImages));
+    } else {
+      nextIndex = backward ? currentIndex - 1 : currentIndex + 1;
+      nextIndex = (nextIndex + totalImages) % (totalImages); // wrap around
+    }
+  }
+
+  const data = await fetchNextImage(nextIndex);
 
   if (!data || Object.keys(data).length === 0) {
     return;
@@ -236,7 +257,7 @@ export function removeSlidesAfterCurrent() {
 
 // Reset all the slides and reload the swiper, optionally keeping the current slide.
 export async function resetAllSlides(keep_current_slide = false) {
-  if (!state.swiper) return;  // happens on first load.
+  if (!state.swiper) return; // happens on first load.
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow(); // Pause the slideshow if it's running
   if (keep_current_slide && !state.dataChanged) {
@@ -305,7 +326,7 @@ window.addEventListener("albumChanged", () => {
 // When clearing search results, we want to keep the current
 // slide to avoid displaying something unexpected.
 window.addEventListener("searchResultsChanged", (event) => {
-  const searchType  = event.detail?.searchType;
+  const searchType = event.detail?.searchType;
   if (searchType === "switchAlbum") return;
   const keep_current_slide = searchType === "clear";
   resetAllSlides(keep_current_slide);
