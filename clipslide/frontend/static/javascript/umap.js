@@ -1,8 +1,9 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album.js";
-import { getCurrentFilepath, setSearchResults } from "./search.js";
+import { getImagePath, setSearchResults } from "./search.js";
 import { state } from "./state.js";
+import { getCurrentSlideIndex } from "./swiper.js";
 import { getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {
@@ -141,16 +142,6 @@ export async function fetchUmapData() {
     );
     points = await response.json();
 
-    // The point filenames returned by umap_data are absolute paths, but we need relative paths
-    // So we do a one-time call to the API to fix this
-    let album = await getCachedAlbum();
-    if (album) {
-      // Convert absolute paths to relative paths}
-      points.forEach((point) => {
-        point.filename = albumManager.relativePath(point.filename, album);
-      });
-    }
-
     // Compute clusters and colors
     clusters = [...new Set(points.map((p) => p.cluster))];
     colors = clusters.map((c, i) => palette[i % palette.length]);
@@ -167,19 +158,10 @@ export async function fetchUmapData() {
     const markerColors = points.map((p) => getClusterColor(p.cluster));
     const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.08 : 0.5));
 
-    // Prepare hover text
-    const hoverText = points.map(
-      (p) =>
-        `${
-          p.cluster === -1 ? "Unclustered" : `Cluster ${p.cluster}`
-        }<br>${p.filename.split("/").pop()}`
-    );
-
     // Main trace: all points
     const allPointsTrace = {
       x: points.map((p) => p.x),
       y: points.map((p) => p.y),
-      text: hoverText,
       mode: "markers",
       type: "scattergl",
       marker: {
@@ -187,21 +169,21 @@ export async function fetchUmapData() {
         opacity: markerAlphas,
         size: 5,
       },
-      customdata: points.map((p) => p.filename),
+      customdata: points.map((p) => p.index),
       name: "All Points",
       hoverinfo: "none",
     };
 
     // Current image marker trace
-    const currentImageFilename = getCurrentFilepath();
+    const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
     const currentPoint = points.find(
-      (p) => p.filename === currentImageFilename
+      (p) => p.index === globalIndex
     );
     const currentImageTrace = currentPoint
       ? {
           x: [currentPoint.x],
           y: [currentPoint.y],
-          text: [currentPoint.filename.split("/").pop()],
+          text: ["Current slide: " + (await getImagePath(state.album, currentPoint.index)).split("/").pop()],
           mode: "markers",
           type: "scattergl",
           marker: {
@@ -226,7 +208,7 @@ export async function fetchUmapData() {
             line: { color: "#000", width: 2 },
           },
           name: "Current Image",
-          hoverinfo: "text",
+          hoverinfo: "none",
         };
 
     Plotly.newPlot(
@@ -281,15 +263,15 @@ export async function fetchUmapData() {
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
         if (pt.curveNumber !== 0) return;
-        const filename = pt.customdata;
+        const index = pt.customdata;
         const cluster = points[pt.pointIndex]?.cluster ?? -1;
         // Add hover delay
         hoverTimer = setTimeout(() => {
           createUmapThumbnail({
             x: eventData.event.clientX,
             y: eventData.event.clientY,
-            filename,
-            cluster,
+            index: index,
+            cluster: cluster,
           });
         }, 200); // 200ms delay (adjust as desired)
       });
@@ -304,14 +286,14 @@ export async function fetchUmapData() {
 
       gd.on("plotly_selected", function (eventData) {
         if (!eventData || !eventData.points || !eventData.points.length) return;
-        const selectedFilenames = eventData.points
+        const selectedIndexes = eventData.points
           .filter((pt) => pt.curveNumber === 0)
           .map((pt) => pt.customdata);
 
-        const selectedResults = selectedFilenames.map((filename) => {
-          const point = points.find((p) => p.filename === filename);
+        const selectedResults = selectedIndexes.map((index) => {
+          const point = points.find((p) => p.index === index);
           return {
-            filename,
+            index: index,
             color: getClusterColor(point?.cluster ?? -1),
             score: point?.score ?? 1.0,
           };
@@ -336,30 +318,30 @@ export async function fetchUmapData() {
     document
       .getElementById("umapPlot")
       .on("plotly_click", async function (data) {
-        const clickedFilename = data.points[0].customdata;
-        const clickedPoint = points.find((p) => p.filename === clickedFilename);
+        const clickedIndex = data.points[0].customdata;
+        const clickedPoint = points.find((p) => p.index === clickedIndex);
         if (!clickedPoint) return;
         const clickedCluster = clickedPoint.cluster;
         const clusterIndex = clusters.indexOf(clickedCluster);
         const clusterColor = colors[clusterIndex % colors.length];
-        let clusterFilenames = points
+        let clusterIndices = points
           .filter((p) => p.cluster === clickedCluster)
-          .map((p) => p.filename);
+          .map((p) => p.index);
 
         // Remove clickedFilename from the list
-        clusterFilenames = clusterFilenames.filter(
-          (fn) => fn !== clickedFilename
+        clusterIndices = clusterIndices.filter(
+          (fn) => fn !== clickedIndex
         );
 
         // --- Sort by ascending distance from clicked point ---
         const clickedCoords = [clickedPoint.x, clickedPoint.y];
         // Build a lookup map once
-        const filenameToPoint = Object.fromEntries(
-          points.map((p) => [p.filename, p])
+        const indexToPoint = Object.fromEntries(
+          points.map((p) => [p.index, p])
         );
-        clusterFilenames.sort((a, b) => {
-          const pa = filenameToPoint[a];
-          const pb = filenameToPoint[b];
+        clusterIndices.sort((a, b) => {
+          const pa = indexToPoint[a];
+          const pb = indexToPoint[b];
           const da = pa
             ? Math.hypot(pa.x - clickedCoords[0], pa.y - clickedCoords[1])
             : Infinity;
@@ -370,10 +352,10 @@ export async function fetchUmapData() {
         });
 
         // Promote the clicked filename to the first position
-        const sortedClusterFilenames = [clickedFilename, ...clusterFilenames];
+        const sortedClusterIndices = [clickedIndex, ...clusterIndices];
 
-        const clusterMembers = sortedClusterFilenames.map((filename) => ({
-          filename: filename,
+        const clusterMembers = sortedClusterIndices.map((index) => ({
+          index: index,
           cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
           color: clusterColor,
         }));
@@ -397,10 +379,10 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
   let markerColors, markerAlphas;
   if (highlight && searchResults.length > 0) {
     const searchSet = new Set(
-      searchResults.map((r) => (typeof r === "string" ? r : r.filename))
+      searchResults.map((r) => r.index)
     );
     markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.1 : searchSet.has(p.filename) ? 1.0 : 0.2));
+    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.1 : searchSet.has(p.index) ? 1.0 : 0.2));
   } else {
     markerColors = points.map((p) => getClusterColor(p.cluster));
     markerAlphas = points.map((p) => (p.cluster === -1 ? 0.1 : 0.5));
@@ -438,18 +420,17 @@ export async function updateCurrentImageMarker() {
   if (!points.length) return;
   const plotDiv = document.getElementById("umapPlot");
   if (!plotDiv || !plotDiv.data || plotDiv.data.length < 2) return;
-  let currentImageFilename = getCurrentFilepath();
-  // Use cached album to avoid repeated API calls
-  const album = await getCachedAlbum();
-  currentImageFilename = albumManager.relativePath(currentImageFilename, album);
-  const currentPoint = points.find((p) => p.filename === currentImageFilename);
+  const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
+  if (globalIndex === -1) return; // No current image
+  const currentPoint = points.find((p) => p.index === globalIndex);
   if (!currentPoint) return;
+  console.log("Updating current image marker:", currentPoint, "Index:", globalIndex);
   Plotly.restyle(
     "umapPlot",
     {
       x: [[currentPoint.x]],
       y: [[currentPoint.y]],
-      text: [[currentPoint.filename.split("/").pop()]],
+      // text: [["Current Slide"]],
     },
     1 // current image marker trace is always index 1
   );
@@ -462,10 +443,8 @@ export async function ensureCurrentMarkerInView(padFraction = 0.1) {
   const plotDiv = document.getElementById("umapPlot");
   if (!plotDiv || !plotDiv.layout) return;
 
-  let currentImageFilename = getCurrentFilepath();
-  const album = await getCachedAlbum();
-  currentImageFilename = albumManager.relativePath(currentImageFilename, album);
-  const currentPoint = points.find((p) => p.filename === currentImageFilename);
+  const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
+  const currentPoint = points.find((p) => p.index === globalIndex);
   if (!currentPoint) return;
 
   const x = currentPoint.x;
@@ -503,6 +482,7 @@ export async function ensureCurrentMarkerInView(padFraction = 0.1) {
 
 function ensureUmapWindowInView() {
   const win = document.getElementById("umapFloatingWindow");
+  if (!win) return;
   const rect = win.getBoundingClientRect();
   let left = rect.left;
   let top = rect.top;
@@ -545,15 +525,17 @@ window.addEventListener("albumChanged", async () => {
 // --- Thumbnail Preview on Hover ---
 let umapThumbnailDiv = null;
 
-function createUmapThumbnail({ x, y, filename, cluster }) {
+async function createUmapThumbnail({ x, y, index, cluster }) {
   // Remove any existing thumbnail
   if (umapThumbnailDiv) {
     umapThumbnailDiv.remove();
     umapThumbnailDiv = null;
   }
 
+  const filename = await getImagePath(state.album, index);
+  if (!filename) return; // No valid filename, exit early
+
   // Find cluster color and label
-  const clusterIdx = clusters.indexOf(cluster);
   const clusterColor = getClusterColor(cluster);
   const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster}`;
   const textIsDark = isColorLight(clusterColor) ? "#222" : "#fff";
@@ -562,7 +544,7 @@ function createUmapThumbnail({ x, y, filename, cluster }) {
     : "0 1px 2px #000, 0 0px 8px #000";
 
   // Build image URL (use thumbnail endpoint)
-  const imgUrl = `thumbnails/${state.album}/${filename}?size=256`;
+  const imgUrl = `thumbnails/${state.album}/${index}?size=256`;
 
   // Create the thumbnail div
   umapThumbnailDiv = document.createElement("div");

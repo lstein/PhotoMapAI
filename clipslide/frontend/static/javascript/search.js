@@ -118,6 +118,12 @@ export function getCurrentFilepath() {
   return document.getElementById("filepathText")?.textContent?.trim();
 }
 
+export async function getImagePath(album, index) {
+  const response = await fetch(`image_path/${album}/${index}`);
+  if (!response.ok) return null;
+  return await response.text();
+}
+
 // Guesstimate the best search score cutoff from the weights applied.
 export function calculate_search_score_cutoff(
   imageFile,

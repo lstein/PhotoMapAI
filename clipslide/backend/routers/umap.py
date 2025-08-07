@@ -44,11 +44,11 @@ async def get_umap_data(
         {
             "x": float(x),
             "y": float(y),
-            "filename": str(fname),
+            "index": int(idx),
             "cluster": int(cluster),
         }
-        for (x, y, fname, cluster) in zip(
-            umap_embeddings[:, 0], umap_embeddings[:, 1], filenames, labels
+        for idx, (x, y, cluster) in enumerate(
+            zip(umap_embeddings[:, 0], umap_embeddings[:, 1], labels)
         )
     ]
     return JSONResponse(points)

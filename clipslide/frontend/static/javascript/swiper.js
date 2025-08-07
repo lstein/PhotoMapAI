@@ -224,6 +224,9 @@ export async function addNewSlide(backward = false) {
   });
 }
 
+// Returns an array of [globalIndex, totalImages, searchIndex]
+// searchIndex is the index within the search results.
+// Indices are returned as -1 if not available.
 export async function getCurrentSlideIndex() {
   let currentSlide = null;
 
@@ -237,7 +240,7 @@ export async function getCurrentSlideIndex() {
       return [-1, state.searchResults.length, -1]; // Default to first slide if no current slide
     } else {
       return [
-        0,
+        parseInt(currentSlide?.dataset?.index, 10),
         state.searchResults.length,
         parseInt(currentSlide.dataset.searchIndex, 10),
       ];

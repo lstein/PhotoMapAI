@@ -104,12 +104,16 @@ async def retrieve_image(
     return slide_metadata
 
 
-@search_router.get("/thumbnails/{album_key}/{path:path}", tags=["Search"])
-async def serve_thumbnail(album_key: str, path: str, size: int = 256) -> FileResponse:
-    """Serve a reduced-size thumbnail for an image."""
-    image_path = config_manager.find_image_in_album(album_key, path)
-    if not image_path:
-        raise HTTPException(status_code=404, detail="Image not found")
+@search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])
+async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileResponse:
+    """Serve a reduced-size thumbnail for an image by index."""
+    embeddings = get_embeddings_for_album(album_key)
+    try:
+        image_path = embeddings.get_image_path(index)
+    except Exception as e:
+        raise HTTPException(
+            status_code=404, detail=f"Image not found for index {index}: {e}"
+        )
 
     album_config = validate_album_exists(album_key)
     if not validate_image_access(album_config, image_path):
@@ -163,6 +167,25 @@ async def serve_image(album_key: str, path: str) -> FileResponse:
     # I'm not sure this is doing anything useful
     # return serve_image_with_exif_rotation(image_path)
     return FileResponse(image_path)
+
+
+@search_router.get(
+    "/image_path/{album_key}/{index}",
+    response_model=str,
+    tags=["Search"],
+)
+async def get_image_path(album_key: str, index: int) -> str:
+    """
+    Return the image path for a given index in the album.
+    """
+    embeddings = get_embeddings_for_album(album_key)
+    try:
+        image_path = embeddings.get_image_path(index)
+        return str(image_path)
+    except Exception as e:
+        raise HTTPException(
+            status_code=404, detail=f"Image not found for index {index}: {e}"
+        )
 
 
 # Utility Functions
