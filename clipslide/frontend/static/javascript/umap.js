@@ -548,63 +548,29 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
 
   // Create the thumbnail div
   umapThumbnailDiv = document.createElement("div");
-  umapThumbnailDiv.style.position = "fixed";
-  umapThumbnailDiv.style.zIndex = 99999;
-  umapThumbnailDiv.style.background = clusterColor;
-  umapThumbnailDiv.style.border = "2px solid #222";
-  umapThumbnailDiv.style.borderRadius = "10px";
-  umapThumbnailDiv.style.boxShadow = "0 4px 24px rgba(0,0,0,0.7)";
-  umapThumbnailDiv.style.padding = "12px 12px 0 12px";
-  umapThumbnailDiv.style.pointerEvents = "none";
-  umapThumbnailDiv.style.transition = "opacity 0.1s";
-  umapThumbnailDiv.style.opacity = "0.98";
-  umapThumbnailDiv.style.minWidth = "160px";
-  umapThumbnailDiv.style.maxWidth = "260px";
-  umapThumbnailDiv.style.maxHeight = "400px";
-  umapThumbnailDiv.style.display = "flex";
-  umapThumbnailDiv.style.flexDirection = "column";
-  umapThumbnailDiv.style.alignItems = "center";
-  umapThumbnailDiv.style.fontFamily = "inherit";
-  umapThumbnailDiv.style.visibility = "hidden"; // <-- Hide until loaded
+  umapThumbnailDiv.className = "umap-thumbnail";
+  umapThumbnailDiv.style.background = clusterColor; // keep dynamic color
 
   // Thumbnail image
   const img = document.createElement("img");
   img.src = imgUrl;
   img.alt = filename.split("/").pop();
-  img.style.maxWidth = "240px";
-  img.style.maxHeight = "360px";
-  img.style.borderRadius = "8px";
-  img.style.display = "block";
-  img.style.margin = "0 auto";
-  img.style.background = "#222";
-  img.style.boxShadow = "0 2px 8px rgba(0,0,0,0.4)";
   umapThumbnailDiv.appendChild(img);
 
   // Filename
   const fnameDiv = document.createElement("div");
+  fnameDiv.className = "umap-thumbnail-filename";
   fnameDiv.textContent = filename.split("/").pop();
-  fnameDiv.style.fontSize = "0.95em";
   fnameDiv.style.color = textIsDark;
   fnameDiv.style.textShadow = textShadow;
-  fnameDiv.style.marginTop = "6px";
-  fnameDiv.style.marginBottom = "2px";
-  fnameDiv.style.textAlign = "center";
-  fnameDiv.style.wordBreak = "break-all";
   umapThumbnailDiv.appendChild(fnameDiv);
 
   // Cluster label
   const clusterDiv = document.createElement("div");
+  clusterDiv.className = "umap-thumbnail-cluster";
   clusterDiv.textContent = clusterLabel;
-  clusterDiv.style.fontSize = "0.95em";
-  clusterDiv.style.fontWeight = "bold";
   clusterDiv.style.color = textIsDark;
   clusterDiv.style.textShadow = textShadow;
-  clusterDiv.style.background = "rgba(0,0,0,0.25)";
-  clusterDiv.style.width = "100%";
-  clusterDiv.style.textAlign = "center";
-  clusterDiv.style.borderRadius = "0 0 8px 8px";
-  clusterDiv.style.padding = "2px 0 4px 0";
-  clusterDiv.style.marginTop = "2px";
   umapThumbnailDiv.appendChild(clusterDiv);
 
   document.body.appendChild(umapThumbnailDiv);

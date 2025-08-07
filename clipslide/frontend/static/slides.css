@@ -1898,3 +1898,53 @@ body {
     display: none !important;
   }
 }
+
+/* ===== UMAP THUMBNAIL DIV STYLES ===== */
+.umap-thumbnail {
+  position: fixed;
+  z-index: 99999;
+  border: 2px solid #222;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.7);
+  padding: 12px 12px 0 12px;
+  pointer-events: none;
+  transition: opacity 0.1s;
+  opacity: 0.98;
+  min-width: 160px;
+  max-width: 260px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: inherit;
+  visibility: hidden;
+}
+
+.umap-thumbnail img {
+  max-width: 240px;
+  max-height: 360px;
+  border-radius: 8px;
+  display: block;
+  margin: 0 auto;
+  background: #222;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.umap-thumbnail-filename {
+  font-size: 0.95em;
+  margin-top: 6px;
+  margin-bottom: 2px;
+  text-align: center;
+  word-break: break-all;
+}
+
+.umap-thumbnail-cluster {
+  font-size: 0.95em;
+  font-weight: bold;
+  background: rgba(0,0,0,0.25);
+  width: 100%;
+  text-align: center;
+  border-radius: 0 0 8px 8px;
+  padding: 2px 0 4px 0;
+  margin-top: 2px;
+}
