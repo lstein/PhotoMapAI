@@ -8,15 +8,17 @@ import {
   toggleMetadataOverlay,
   updateMetadataOverlay,
 } from "./overlay.js";
-import { getCurrentFilepath } from "./search.js";
 import { state } from "./state.js";
 import {
   addNewSlide,
+  getCurrentFilepath,
+  getCurrentSlideIndex,
   pauseSlideshow,
   resumeSlideshow,
-  updateSlideshowIcon,
+  updateSlideshowIcon
 } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
+import { toggleUmapWindow } from "./umap.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
 // Constants
@@ -35,6 +37,7 @@ const KEYBOARD_SHORTCUTS = {
   i: () => toggleMetadataOverlay(),
   Escape: () => hideMetadataOverlay(),
   f: () => toggleFullscreen(),
+  m: () => toggleUmapWindow(),
   " ": (e) => handleSpacebarToggle(e),
 };
 
@@ -113,21 +116,22 @@ function handleCopyText() {
 
 // Delete the current file
 async function handleDeleteCurrentFile() {
-  const currentFilepath = getCurrentFilepath();
+  const [globalIndex, totalImages, searchIndex] = await getCurrentSlideIndex();
+  const currentFilepath = await getCurrentFilepath();
 
-  if (!currentFilepath) {
+  if (globalIndex === -1 || !currentFilepath) {
     alert("No image selected for deletion.");
     return;
   }
 
-  if (!confirmDelete(currentFilepath)) {
+  if (!confirmDelete(currentFilepath, globalIndex)) {
     return;
   }
 
   try {
     showSpinner();
-    await deleteImage(currentFilepath, state.album);
-    await handleSuccessfulDelete(currentFilepath);
+    await deleteImage(state.album, globalIndex);
+    await handleSuccessfulDelete(globalIndex, searchIndex);
     hideSpinner();
     console.log("Image deleted successfully");
   } catch (error) {
@@ -137,23 +141,20 @@ async function handleDeleteCurrentFile() {
   }
 }
 
-function confirmDelete(filepath) {
+function confirmDelete(filepath, globalIndex) {
   return confirm(
-    `Are you sure you want to delete this image?\n\n${filepath}\n\nThis action cannot be undone.`
+    `Are you sure you want to delete this image?\n\n${filepath} (Index ${globalIndex})\n\nThis action cannot be undone.`
   );
 }
 
-async function handleSuccessfulDelete(currentFilepath) {
-  // remove from search results
+async function handleSuccessfulDelete(globalIndex, searchIndex) {
+  // remove from search results, and adjust subsequent global indices downward by 1
   if (state.searchResults?.length > 0) {
-    const index = state.searchResults.findIndex(
-      (slide) => slide.filepath === currentFilepath
-    );
-    if (index !== -1) {
-      state.searchResults.splice(index, 1);
-      if (state.searchOrigin >= index) {
-        state.searchOrigin--; // Adjust search origin if necessary
-      }
+      state.searchResults.splice(searchIndex, 1);
+      for (let i = 0; i < state.searchResults.length; i++) {
+        if (state.searchResults[i].index > globalIndex) {
+          state.searchResults[i].index -= 1;
+        } 
     }
   }
 
@@ -161,10 +162,10 @@ async function handleSuccessfulDelete(currentFilepath) {
   if (state.swiper?.slides?.length > 0) {
     // find index of the currentFilePath
     const currentIndex = state.swiper.slides.findIndex(
-      (slide) => slide.dataset.filepath === currentFilepath
+      (slide) => slide.dataset.index === globalIndex.toString()
     );
     if (currentIndex === -1) {
-      console.warn("Current file not found in swiper slides:", currentFilepath);
+      console.warn("Current file with global index not found in swiper slides:", globalIndex);
       return;
     }
     state.swiper.removeSlide(currentIndex);

@@ -88,9 +88,9 @@ def build_index(client, new_album, monkeypatch):
         pytest.fail(f"Indexing did not complete: {str(e)}")
 
 
-def fetch_filename(client, album_key, offset) -> str:
+def fetch_filename(client, album_key, index) -> str:
     """Helper function to fetch the filename from the album."""
-    response = client.get(f"/retrieve_image/{album_key}?offset={offset}")
+    response = client.get(f"/retrieve_image/{album_key}/{index}")
     assert response.status_code == 200
     return response.json().get("filename", "")
 

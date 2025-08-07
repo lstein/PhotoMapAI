@@ -37,12 +37,18 @@ def test_delete_image(
     build_index(client, new_album, monkeypatch)
 
     album_key = new_album["key"]
-    filename_to_delete = fetch_filename(client, album_key, 0)
+
+    # Fetch the first slide, check its index
+    response = client.get(f"/retrieve_image/{album_key}/0")
+    data = response.json()
+    assert data.get("index") == 0
+
+    # Get the filename
+    filename_to_delete = data.get("filename")
+    assert filename_to_delete is not None
 
     # Delete the image
-    response = client.delete(
-        f"/delete_image/{album_key}?file_to_delete={filename_to_delete}"
-    )
+    response = client.delete(f"/delete_image/{album_key}/0")
     assert response.status_code == 200
     assert response.json().get("success") is True
 

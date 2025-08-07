@@ -169,59 +169,64 @@ export async function addNewSlide(backward = false) {
     }
   }
 
-  const data = await fetchNextImage(globalIndex);
+  try {
+    const data = await fetchNextImage(globalIndex);
 
-  if (!data || Object.keys(data).length === 0) {
+    if (!data || Object.keys(data).length === 0) {
+      return;
+    }
+
+    const path = data.filepath;
+    const url = data.url;
+    const slide = document.createElement("div");
+    slide.className = "swiper-slide";
+
+    // Use feature detection
+    if (hasTouchCapability) {
+      // Touch-capable device - with zoom container
+      slide.innerHTML = `
+        <div class="swiper-zoom-container">
+          <img src="${url}" alt="${data.filename}" />
+        </div>
+     `;
+    } else {
+      // Non-touch device - direct image
+      slide.innerHTML = `
+        <img src="${url}" alt="${data.filename}" />
+      `;
+    }
+
+    slide.dataset.filename = data.filename || "";
+    slide.dataset.description = data.description || "";
+    slide.dataset.textToCopy = data.textToCopy || "";
+    slide.dataset.filepath = path || "";
+    slide.dataset.score = currentScore || "";
+    slide.dataset.cluster = currentCluster || "";
+    slide.dataset.color = currentColor || "#000000"; // Default color if not provided
+    slide.dataset.index = data.index || 0;
+    slide.dataset.total = data.total || 0;
+    slide.dataset.searchIndex = searchIndex || 0; // Store the search index for this slide
+
+    if (backward) {
+      state.swiper.prependSlide(slide);
+    } else {
+      state.swiper.appendSlide(slide);
+    }
+    // Delay high water mark enforcement to allow transition to finish
+    setTimeout(() => enforceHighWaterMark(backward), 500);
+
+    const img = slide.querySelector("img");
+    img.addEventListener("dragstart", function (e) {
+      e.dataTransfer.setData(
+        "DownloadURL",
+        `image/jpeg:${data.filename || "image.jpg"}:${data.url}`
+      );
+    });
+  } catch (error) {
+    console.error("Failed to add new slide:", error);
+    alert(`Failed to add new slide: ${error.message}`);
     return;
   }
-
-  const path = data.filepath;
-  const url = data.url;
-  const slide = document.createElement("div");
-  slide.className = "swiper-slide";
-
-  // Use feature detection
-  if (hasTouchCapability) {
-    // Touch-capable device - with zoom container
-    slide.innerHTML = `
-      <div class="swiper-zoom-container">
-        <img src="${url}" alt="${data.filename}" />
-      </div>
-    `;
-  } else {
-    // Non-touch device - direct image
-    slide.innerHTML = `
-      <img src="${url}" alt="${data.filename}" />
-    `;
-  }
-
-  slide.dataset.filename = data.filename || "";
-  slide.dataset.description = data.description || "";
-  slide.dataset.textToCopy = data.textToCopy || "";
-  slide.dataset.filepath = path || "";
-  slide.dataset.score = currentScore || "";
-  slide.dataset.cluster = currentCluster || "";
-  slide.dataset.color = currentColor || "#000000"; // Default color if not provided
-  slide.dataset.index = data.index || 0;
-  slide.dataset.total = data.total || 0;
-  slide.dataset.searchIndex = searchIndex || 0; // Store the search index for this slide
-
-  if (backward) {
-    state.swiper.prependSlide(slide);
-  } else {
-    state.swiper.appendSlide(slide);
-  }
-
-  // Delay high water mark enforcement to allow transition to finish
-  setTimeout(() => enforceHighWaterMark(backward), 500);
-
-  const img = slide.querySelector("img");
-  img.addEventListener("dragstart", function (e) {
-    e.dataTransfer.setData(
-      "DownloadURL",
-      `image/jpeg:${data.filename || "image.jpg"}:${data.url}`
-    );
-  });
 }
 
 // Returns an array of [globalIndex, totalImages, searchIndex]
@@ -257,6 +262,20 @@ export async function getCurrentSlideIndex() {
   const totalSlides = currentSlide?.dataset?.total || 1;
   return [parseInt(activeIndex, 10), parseInt(totalSlides, 10), 0];
 }
+
+export async function getCurrentFilepath() {
+  const [globalIndex, ,] = await getCurrentSlideIndex();
+  if (globalIndex === -1) return null;
+  // Call the /image_path/ endpoint to get the filepath
+  const response = await fetch(
+    `image_path/${encodeURIComponent(state.album)}/${encodeURIComponent(
+      globalIndex
+    )}`
+  );
+  if (!response.ok) return null;
+  return await response.text();
+}
+
 // Add function to handle slide changes
 export async function handleSlideChange() {
   updateMetadataOverlay();

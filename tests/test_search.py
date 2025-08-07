@@ -4,7 +4,13 @@ from pathlib import Path
 from urllib.parse import quote
 
 import pytest
-from fixtures import client, count_test_images, new_album, poll_during_indexing
+from fixtures import (
+    client,
+    count_test_images,
+    fetch_filename,
+    new_album,
+    poll_during_indexing,
+)
 
 TEST_IMAGE_COUNT = count_test_images()
 
@@ -122,10 +128,11 @@ def test_image_search(client, new_album, monkeypatch):
     assert slide_summary.get("results") is not None
     assert len(slide_summary["results"]) > 0
     filenames = [
-        result["filename"]
+        fetch_filename(client, new_album["key"], result["index"])
         for result in slide_summary["results"]
         if result["score"] > 0.6
     ]
+
     assert (
         Path(TEST_IMAGE_FILE).name in filenames
     ), "Image search did not return expected image"
@@ -169,7 +176,7 @@ def test_text_search(client, new_album, monkeypatch):
     assert slide_summary.get("results") is not None
     assert len(slide_summary["results"]) > 0
     filenames = [
-        result["filename"]
+        fetch_filename(client, new_album["key"], result["index"])
         for result in slide_summary["results"]
         if result["score"] > 0.25
     ]

@@ -6,7 +6,7 @@ from fixtures import build_index, client, count_test_images, fetch_filename, new
 TEST_IMAGE_COUNT = count_test_images()
 
 
-def test_retrieve_by_offset(client, new_album, monkeypatch):
+def test_retrieve_slide(client, new_album, monkeypatch):
     """Test the ability to retrieve an image URL using the /retrieve_image/ API."""
     build_index(client, new_album, monkeypatch)
 
@@ -16,7 +16,7 @@ def test_retrieve_by_offset(client, new_album, monkeypatch):
     # Test sequential retrieval using /retrieve_image/{album}
     slides = []
     for i in range(TEST_IMAGE_COUNT):
-        response = client.get(f"/retrieve_image/{album_key}?offset={i}&random=false")
+        response = client.get(f"/retrieve_image/{album_key}/{i}")
         assert response.status_code == 200
         slide_metadata = response.json()
         assert slide_metadata["filename"] is not None
@@ -26,31 +26,7 @@ def test_retrieve_by_offset(client, new_album, monkeypatch):
     assert len(set(slides)) == TEST_IMAGE_COUNT  # Ensure all slides are unique
 
 
-def test_retrieve_random_image(client, new_album, monkeypatch):
-    build_index(client, new_album, monkeypatch)
-    # Test random retrieval
-    album_key = new_album["key"]
-    slides = [fetch_filename(client, album_key, i) for i in range(TEST_IMAGE_COUNT)]
-    assert len(slides) == TEST_IMAGE_COUNT
-
-    response = client.get(f"/retrieve_image/{album_key}?random=true")
-    assert response.status_code == 200
-    slide_metadata = response.json()
-    slide_random = slide_metadata["filename"]
-    assert slide_random is not None
-    assert slide_random in slides  # Should be one of the indexed images
-
-    random_slides = []
-    for i in range(TEST_IMAGE_COUNT):
-        response = client.get(f"/retrieve_image/{album_key}?offset=0&random=true")
-        assert response.status_code == 200
-        slide_metadata = response.json()
-        random_slides.append(slide_metadata["filename"])
-    unique = set(random_slides)
-    assert len(unique) > 1  # should get several different slides
-
-
-def test_retrieve_image_by_offset(client, new_album, monkeypatch):
+def test_retrieve_image(client, new_album, monkeypatch):
     """Test retrieving an image by offset."""
     build_index(client, new_album, monkeypatch)
 
@@ -61,10 +37,14 @@ def test_retrieve_image_by_offset(client, new_album, monkeypatch):
     assert filename2 is not None
 
     # Retrieve the subsequent image
-    response = client.get(
-        f"/retrieve_image/{album_key}?current_image={filename2}&offset=1"
-    )
+    response = client.get(f"/images/{album_key}/{filename2}")
     assert response.status_code == 200
-    slide_metadata = response.json()
-    assert slide_metadata["filename"] is not None
-    assert slide_metadata["index"] == 2
+    image_data = response.content
+    assert image_data  # Ensure we received image data
+    # compare data contents to the original image
+    src_images = Path(__file__).parent / "test_images"
+    original_image = src_images / filename2
+    assert original_image.exists()
+    with open(original_image, "rb") as f:
+        original_data = f.read()
+    assert image_data == original_data

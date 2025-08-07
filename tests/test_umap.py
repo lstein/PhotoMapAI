@@ -15,5 +15,8 @@ def test_umap_construction(client, new_album, monkeypatch):
     assert len(umap_data) == 9  # Should match the number of images in the album
     slides = [fetch_filename(client, album_key, i) for i in range(9)]
     for point in umap_data:
-        assert Path(point["filename"]).name in slides
+        assert (
+            Path(fetch_filename(client, new_album["key"], point["index"])).name
+            in slides
+        )
         assert point["cluster"] is not None

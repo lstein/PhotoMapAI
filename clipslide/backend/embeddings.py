@@ -853,37 +853,40 @@ class Embeddings(BaseModel):
         """
         Remove an image from the embeddings file.
         """
+        try:
+            # Use optimized version for O(1) lookup
+            data = self.open_cached_embeddings(self.embeddings_path)
 
-        # Use optimized version for O(1) lookup
-        data = self.open_cached_embeddings(self.embeddings_path)
+            # Load the raw data for modification
+            sorted_filenames = data["sorted_filenames"]
+            filenames = data["filenames"]
+            embeddings = data["embeddings"]
+            modtimes = data["modification_times"]
+            metadata = data["metadata"]
 
-        # Load the raw data for modification
-        sorted_filenames = data["sorted_filenames"]
-        filenames = data["filenames"]
-        embeddings = data["embeddings"]
-        modtimes = data["modification_times"]
-        metadata = data["metadata"]
+            current_filename = sorted_filenames[index]
 
-        current_filename = sorted_filenames[index].as_posix()
+            # Find the index in the original (unsorted) arrays
+            original_idx = np.where(filenames == current_filename)[0][0]
 
-        # Find the index in the original (unsorted) arrays
-        original_idx = np.where(filenames == current_filename)[0][0]
+            # Remove from all arrays
+            filenames = np.delete(filenames, original_idx)
+            embeddings = np.delete(embeddings, original_idx, axis=0)
+            modtimes = np.delete(modtimes, original_idx)
+            metadata = np.delete(metadata, original_idx)
 
-        # Remove from all arrays
-        filenames = np.delete(filenames, original_idx)
-        embeddings = np.delete(embeddings, original_idx, axis=0)
-        modtimes = np.delete(modtimes, original_idx)
-        metadata = np.delete(metadata, original_idx)
-
-        # Save updated data
-        self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
-        np.savez(
-            self.embeddings_path,
-            embeddings=embeddings,
-            filenames=filenames,
-            modification_times=modtimes,
-            metadata=metadata,
-        )
+            # Save updated data
+            self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
+            np.savez(
+                self.embeddings_path,
+                embeddings=embeddings,
+                filenames=filenames,
+                modification_times=modtimes,
+                metadata=metadata,
+            )
+        except Exception as e:
+            logger.error(e)
+            raise
 
         # Clear the LRU cache since the file has changed
         self.open_cached_embeddings.cache_clear()

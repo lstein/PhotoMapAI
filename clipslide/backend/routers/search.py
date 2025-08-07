@@ -89,13 +89,13 @@ async def search_with_text_and_image(
 
 # Image Retrieval Routes
 @search_router.get(
-    "/retrieve_image/{album_key}",
+    "/retrieve_image/{album_key}/{index}",
     response_model=SlideSummary,
     tags=["Search"],
 )
 async def retrieve_image(
     album_key: str,
-    index: int = Query(..., ge=0),
+    index: int,
 ) -> SlideSummary:
     """Retrieve metadata for a specific image."""
     embeddings = get_embeddings_for_album(album_key)

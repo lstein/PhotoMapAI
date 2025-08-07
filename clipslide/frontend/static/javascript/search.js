@@ -4,7 +4,7 @@ import { state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
 const IMAGE_SCORE_CUTOFF = 0.75; // Default image score cutoff
-const TEXT_SCORE_CUTOFF = 0.20; // Default text score cutoff
+const TEXT_SCORE_CUTOFF = 0.2; // Default text score cutoff
 
 // Call the server to fetch the next image based on the current mode (random or chronological).
 export async function fetchNextImage(index) {
@@ -15,13 +15,11 @@ export async function fetchNextImage(index) {
 
   try {
     let url;
-    const params = new URLSearchParams();
-    params.append("index", index);
 
-    // Always include album in the path
+    // Album and index go into path
     url = `retrieve_image/${encodeURIComponent(
       state.album
-    )}?${params.toString()}`;
+    )}/${encodeURIComponent(index)}`;
 
     response = await fetch(url, {
       method: "GET",
@@ -106,7 +104,6 @@ export async function searchTextAndImage({
       }
     );
     const result = await response.json();
-    console.log("Search results:", result);
     return result.results || [];
   } catch (err) {
     console.error("search_with_text_and_image request failed:", err);
@@ -114,12 +111,8 @@ export async function searchTextAndImage({
   }
 }
 
-export function getCurrentFilepath() {
-  return document.getElementById("filepathText")?.textContent?.trim();
-}
-
 export async function getImagePath(album, index) {
-  const response = await fetch(`image_path/${album}/${index}`);
+  const response = await fetch(`image_path/${encodeURIComponent(album)}/${encodeURIComponent(index)}`);
   if (!response.ok) return null;
   return await response.text();
 }

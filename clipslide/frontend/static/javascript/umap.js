@@ -90,7 +90,7 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
 };
 
 // --- Show/Hide UMAP Window ---
-document.getElementById("showUmapBtn").onclick = async () => {
+export async function toggleUmapWindow() {
   const umapWindow = document.getElementById("umapFloatingWindow");
   const labelDiv = document.querySelector("#showUmapBtn + .button-label");
   if (umapWindow.style.display === "block") {
@@ -112,7 +112,9 @@ document.getElementById("showUmapBtn").onclick = async () => {
     if (epsSpinner) epsSpinner.value = data.eps;
     await fetchUmapData();
   }
-};
+}
+
+document.getElementById("showUmapBtn").onclick = () => toggleUmapWindow();
 document.getElementById("umapCloseBtn").onclick = () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
 };
@@ -176,14 +178,17 @@ export async function fetchUmapData() {
 
     // Current image marker trace
     const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
-    const currentPoint = points.find(
-      (p) => p.index === globalIndex
-    );
+    const currentPoint = points.find((p) => p.index === globalIndex);
     const currentImageTrace = currentPoint
       ? {
           x: [currentPoint.x],
           y: [currentPoint.y],
-          text: ["Current slide: " + (await getImagePath(state.album, currentPoint.index)).split("/").pop()],
+          text: [
+            "Current slide: " +
+              (await getImagePath(state.album, currentPoint.index))
+                .split("/")
+                .pop(),
+          ],
           mode: "markers",
           type: "scattergl",
           marker: {
@@ -329,9 +334,7 @@ export async function fetchUmapData() {
           .map((p) => p.index);
 
         // Remove clickedFilename from the list
-        clusterIndices = clusterIndices.filter(
-          (fn) => fn !== clickedIndex
-        );
+        clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
 
         // --- Sort by ascending distance from clicked point ---
         const clickedCoords = [clickedPoint.x, clickedPoint.y];
@@ -378,11 +381,11 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
   if (!points.length) return;
   let markerColors, markerAlphas;
   if (highlight && searchResults.length > 0) {
-    const searchSet = new Set(
-      searchResults.map((r) => r.index)
-    );
+    const searchSet = new Set(searchResults.map((r) => r.index));
     markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.1 : searchSet.has(p.index) ? 1.0 : 0.2));
+    markerAlphas = points.map((p) =>
+      p.cluster === -1 ? 0.1 : searchSet.has(p.index) ? 1.0 : 0.2
+    );
   } else {
     markerColors = points.map((p) => getClusterColor(p.cluster));
     markerAlphas = points.map((p) => (p.cluster === -1 ? 0.1 : 0.5));
@@ -581,9 +584,18 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
 
   // Wait for the image to load before showing the div
   img.onload = () => {
-    const rect = umapThumbnailDiv.getBoundingClientRect();
+    // Make sure the thumbnail div is still present in the DOM
+    if (!umapThumbnailDiv || !document.body.contains(umapThumbnailDiv)) return;
+    let rect = null;
+    try {
+      rect = umapThumbnailDiv.getBoundingClientRect();
+    } catch (e) {
+      console.warn("Error getting thumbnail div dimensions:", e);
+      return; // Exit if we can't get dimensions
+    }
     if (left + rect.width > window.innerWidth - 10) left = x - rect.width - pad;
-    if (top + rect.height > window.innerHeight - 10) top = y - rect.height - pad;
+    if (top + rect.height > window.innerHeight - 10)
+      top = y - rect.height - pad;
     umapThumbnailDiv.style.left = `${Math.max(0, left)}px`;
     umapThumbnailDiv.style.top = `${Math.max(0, top)}px`;
     umapThumbnailDiv.style.visibility = "visible"; // <-- Show after loaded

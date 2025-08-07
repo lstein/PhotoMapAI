@@ -193,7 +193,7 @@ async def index_metadata(album_key: str) -> EmbeddingsIndexMetadata:
     )
 
 
-@index_router.delete("/delete_image/{album_key}", tags=["Index"])
+@index_router.delete("/delete_image/{album_key}/{index}", tags=["Index"])
 async def delete_image(album_key: str, index: int) -> JSONResponse:
     """Delete an image file."""
     try:
@@ -207,15 +207,12 @@ async def delete_image(album_key: str, index: int) -> JSONResponse:
         if not image_path.exists() or not image_path.is_file():
             raise HTTPException(status_code=404, detail="File not found")
 
+        print(f"Deleting image: {image_path}")
         # Delete the file
         image_path.unlink()
 
         # Remove from embeddings
         embeddings.remove_image_from_embeddings(index)
-
-        logger.warning(
-            "TO DO: Remember to update search results after deleting the image!"
-        )
 
         return JSONResponse(
             content={"success": True, "message": f"Deleted {image_path}"},
@@ -234,15 +231,6 @@ async def _update_index_background_async(album_key: str, album_config):
     try:
         image_paths = [Path(path) for path in album_config.image_paths]
         index_path = Path(album_config.index)
-
-        # Let the indexer handle this.
-        # Validate paths exist
-        # existing_paths = [path for path in image_paths if path.exists()]
-        # if not existing_paths:
-        #     progress_tracker.set_error(
-        #         album_key, f"None of the image paths exist: {album_config.image_paths}"
-        #     )
-        #     return
 
         embeddings = Embeddings(embeddings_path=index_path)
 

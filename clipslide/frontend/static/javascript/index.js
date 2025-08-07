@@ -21,10 +21,10 @@ export async function updateIndex(albumKey) {
     return null;
 }
 
-export async function deleteImage(filepath, albumKey) {
+export async function deleteImage(albumKey, index) {
   try {
     const response = await fetch(
-      `delete_image/${encodeURIComponent(albumKey)}?file_to_delete=${encodeURIComponent(filepath)}`,
+      `delete_image/${encodeURIComponent(albumKey)}/${encodeURIComponent(index)}`,
       {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
