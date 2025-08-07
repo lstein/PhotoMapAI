@@ -267,7 +267,7 @@ export async function fetchUmapData() {
       },
       {
         modeBarButtonsToRemove: ["select2d", "lasso2d"],
-        scrollZoom: true, // <--- Enable scroll wheel zoom
+        scrollZoom: true,
       }
     ).then((gd) => {
       document.getElementById("umapContent").style.display = "block";
@@ -327,13 +327,6 @@ export async function fetchUmapData() {
       // Show the EPS spinner container now that the plot is ready
       const epsContainer = document.getElementById("umapEpsContainer");
       if (epsContainer) epsContainer.style.display = "block";
-
-      // Fix: Remove Plotly's wheel event and re-add as passive
-      const plotDiv = document.getElementById("umapPlot");
-      // Remove all wheel listeners (Plotly may add more than one)
-      plotDiv.removeEventListener('wheel', Plotly.Plots.wheelListener);
-      // Add a passive wheel listener (dummy handler, Plotly will still work)
-      plotDiv.addEventListener('wheel', function(e) {}, { passive: true });
     });
 
     // Ensure the current image marker is visible after plot initialization

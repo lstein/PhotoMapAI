@@ -20,7 +20,6 @@ const hasTouchCapability = isTouchDevice();
 
 document.addEventListener("DOMContentLoaded", async function () {
   const swiperConfig = {
-    passiveListeners: true, // Enable passive listeners for better performance
     navigation: {
       nextEl: ".swiper-button-next",
       prevEl: ".swiper-button-prev",
@@ -40,11 +39,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     simulateTouch: true,
     touchStartPreventDefault: false,
     touchMoveStopPropagation: false,
-    mousewheel: {
-      enabled: true,
-      forceToAxis: true,
-      passive: true, // Add passive: true to avoid the warning
-    },
     keyboard: {
       enabled: true,
       onlyInViewport: true,
