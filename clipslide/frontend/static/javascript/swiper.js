@@ -145,7 +145,6 @@ export function updateSlideshowIcon() {
 // Add a new slide to Swiper with image and metadata
 export async function addNewSlide(backward = false) {
   if (!state.album) return; // No album set, cannot add slide
-  let currentScore, currentCluster, currentColor;
 
   let [globalIndex, totalImages, searchIndex] = await getCurrentSlideIndex();
   // Search mode -- we identify the next image based on the search results array,
@@ -155,10 +154,6 @@ export async function addNewSlide(backward = false) {
     searchIndex = backward ? searchIndex - 1 : searchIndex + 1;
     searchIndex = (searchIndex + searchImageCnt) % searchImageCnt; // wrap around
     globalIndex = state.searchResults[searchIndex].index || 0;
-    // remember values for score, cluster and color
-    currentScore = state.searchResults[searchIndex].score || "";
-    currentCluster = state.searchResults[searchIndex].cluster || "";
-    currentColor = state.searchResults[searchIndex].color || "#000000"; // Default
   } else {
     // Album mode -- navigate relative to the current slide's index
     if (state.mode === "random") {
@@ -167,6 +162,25 @@ export async function addNewSlide(backward = false) {
       globalIndex = backward ? globalIndex - 1 : globalIndex + 1;
       globalIndex = (globalIndex + totalImages) % totalImages; // wrap around
     }
+  }
+  await addSlideByIndex(globalIndex, searchIndex, backward);
+}
+
+export async function addSlideByIndex(
+  globalIndex,
+  searchIndex = null,
+  backward = false
+) {
+  if (!state.swiper) return; // No swiper instance available
+
+  // This is ugly.
+  let currentScore, currentCluster, currentColor;
+  if (searchIndex !== null && state.searchResults?.length > 0) {
+    // remember values for score, cluster and color
+    console.log("In addSlideByIndex, globalIndex: ", globalIndex, ", searchIndex:", searchIndex);
+    currentScore = state.searchResults[searchIndex]?.score || "";
+    currentCluster = state.searchResults[searchIndex]?.cluster || "";
+    currentColor = state.searchResults[searchIndex]?.color || "#000000"; // Default
   }
 
   try {
@@ -290,13 +304,18 @@ export async function handleSlideChange() {
         filename,
         await albumManager.getCurrentAlbum()
       );
-      index = state.searchResults.findIndex(
-        (item) => item.filename === relpath
-      );
     }
   }
-
-  setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
+  window.dispatchEvent(
+    new CustomEvent("slideChanged", {
+      detail: {
+        globalIndex: parseInt(activeSlide?.dataset?.index, 10) || 0, // Global index in album
+        total: parseInt(activeSlide?.dataset?.total, 10) || 0, // Total slides in album
+        searchIndex: parseInt(activeSlide?.dataset?.searchIndex, 10) || 0, // Index in search results
+      },
+    })
+  );
+  // setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
 }
 
 export function removeSlidesAfterCurrent() {

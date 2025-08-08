@@ -64,7 +64,7 @@ body {
   opacity: 0.6;
   --swiper-navigation-color: #fff;
   font-weight: bold;
-  font-size: 2.0em;
+  font-size: 2em;
   text-shadow: 0 0 4px #000;
   width: 64px;
   height: 64px;
@@ -79,7 +79,7 @@ body {
 .swiper-button-prev::after {
   color: #fff !important;
   font-weight: bold;
-  font-size: 1.0em;
+  font-size: 1em;
   text-shadow: 0 0 4px #000;
   -webkit-text-stroke: 1.5px #fff;
   stroke: 1.5px #fff;
@@ -352,7 +352,7 @@ body {
 }
 
 /* ===== FIXED SCORE DISPLAY ===== */
-.fixed-score-display {
+/* .fixed-score-display {
   position: fixed;
   top: 20px;
   left: 20px;
@@ -369,7 +369,7 @@ body {
   -webkit-font-smoothing: antialiased;
   transition: opacity 0.3s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
+} */
 
 .fixed-score-display.visible {
   display: block;
@@ -1905,7 +1905,7 @@ body {
   z-index: 99999;
   border: 2px solid #222;
   border-radius: 10px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.7);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
   padding: 12px 12px 0 12px;
   pointer-events: none;
   transition: opacity 0.1s;
@@ -1927,7 +1927,7 @@ body {
   display: block;
   margin: 0 auto;
   background: #222;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 .umap-thumbnail-filename {
@@ -1941,10 +1941,70 @@ body {
 .umap-thumbnail-cluster {
   font-size: 0.95em;
   font-weight: bold;
-  background: rgba(0,0,0,0.25);
+  background: rgba(0, 0, 0, 0.25);
   width: 100%;
   text-align: center;
   border-radius: 0 0 8px 8px;
   padding: 2px 0 4px 0;
   margin-top: 2px;
+}
+
+.score-slider-container {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  width: 100%;
+}
+
+.slide-seek-slider {
+  margin-bottom: 6px;
+  width: 50vw;
+  max-width: 600px;
+  min-width: 180px;
+  height: 18px;
+  accent-color: #888;
+  background: transparent;
+  border: none;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.fixed-score-display {
+  min-width: 140px;
+  max-width: 220px;
+  width: 180px;
+  font-size: 1.05em;
+  padding: 2px 18px;
+  border-radius: 12px;
+  background: rgba(30,30,30,0.85);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  cursor: pointer;
+  user-select: none;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  white-space: nowrap;
+  pointer-events: auto;
+  margin-right: 16px;
+}
+
+.score-slider-row {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 500;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  pointer-events: auto;
+  width: auto;
 }
