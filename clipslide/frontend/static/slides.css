@@ -1949,19 +1949,6 @@ body {
   margin-top: 2px;
 }
 
-.score-slider-container {
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10001;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  pointer-events: auto;
-  width: 100%;
-}
-
 .slide-seek-slider {
   margin-bottom: 6px;
   width: 50vw;
@@ -1983,9 +1970,9 @@ body {
   font-size: 1.05em;
   padding: 2px 18px;
   border-radius: 12px;
-  background: rgba(30,30,30,0.85);
+  background: rgba(30, 30, 30, 0.85);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   cursor: pointer;
   user-select: none;
   min-height: 24px;
@@ -1995,6 +1982,10 @@ body {
   white-space: nowrap;
   pointer-events: auto;
   margin-right: 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .score-slider-row {

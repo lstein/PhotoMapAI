@@ -17,10 +17,16 @@ function initializeEvents() {
 
   // Show/hide slider on score display click/tap
   scoreDisplay.scoreElement.addEventListener("click", toggleSlider);
-  scoreDisplay.scoreElement.addEventListener("touchstart", (e) => {
+  
+  // Touch event for mobile devices
+  scoreDisplay.scoreElement.addEventListener("touchend", (e) => {
     e.preventDefault();
+    e.stopPropagation();
     toggleSlider();
   });
+
+  // Make sure the score element has proper touch handling
+  scoreDisplay.scoreElement.style.touchAction = "manipulation";
 
   // When slider changes, update score display and seek to slide
   slider.addEventListener("input", async function () {
@@ -115,7 +121,6 @@ async function toggleSlider() {
   slider.style.display = sliderVisible ? "block" : "none";
   if (sliderVisible) {
     await updateSliderRange();
-    // slider.value = getCurrentSliderValue();
   }
 }
 
