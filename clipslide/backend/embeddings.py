@@ -22,7 +22,6 @@ import torch
 import torch.nn.functional as F
 from PIL import Image, ImageOps
 from pydantic import BaseModel
-from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 from umap import UMAP
@@ -326,7 +325,7 @@ class Embeddings(BaseModel):
         )
 
         # Convert missing paths to strings for comparison
-        missing_image_strings = {str(path) for path in missing_image_paths}
+        missing_image_strings = {path.as_posix() for path in missing_image_paths}
 
         # Create mask for images that still exist (NOT in missing set)
         mask = np.array(
@@ -335,6 +334,7 @@ class Embeddings(BaseModel):
 
         # Debug output
         removed_count = len(existing_filenames) - np.sum(mask)
+        logger.info(f"Filtered {removed_count} missing images from index")
 
         return IndexResult(
             embeddings=existing_embeddings[mask],
@@ -476,24 +476,32 @@ class Embeddings(BaseModel):
                 existing_metadatas,
             )
 
-            # If no new images, save filtered data and return
-            if not new_image_paths:
-                self._save_embeddings(filtered_existing)
-                logger.info("No new images found. The index is up to date.")
-                return filtered_existing
+            if len(filtered_existing.filenames) == 0 and len(new_image_paths) == 0:
+                logger.warning(
+                    "No images found in album directory(ies). Exiting update."
+                )
+                return
 
-            # Progress bar for new images
-            total_images = len(new_image_paths)
-            progress_callback = tqdm_progress_callback(total_images)
+            # Update progress tracker with actual count
+            total_new_images = len(new_image_paths)
+            logger.info(
+                f"Found {total_new_images} new images to index, {len(missing_image_paths)} missing. Beginning indexing..."
+            )
 
             # Process new images
-            new_result = self._process_images_batch(
-                list(new_image_paths), progress_callback=progress_callback
+            new_result = self._process_images_batch(list(new_image_paths))
+
+            new_files_indexed = new_result.embeddings.shape[0]
+            old_files_removed = len(missing_image_paths)
+            logger.info(
+                f"New files indexed: {new_files_indexed}, Old files removed: {old_files_removed}"
             )
 
             # If no new embeddings were created, return existing data
-            if new_result.embeddings.shape[0] == 0:
-                self._save_embeddings(filtered_existing)
+            if new_files_indexed == 0 and old_files_removed == 0:
+                logger.info(
+                    "No new images needed to be indexed. Will not regenerate umap"
+                )
                 return IndexResult(
                     embeddings=filtered_existing.embeddings,
                     filenames=filtered_existing.filenames,
@@ -503,16 +511,23 @@ class Embeddings(BaseModel):
                     bad_files=new_result.bad_files,
                 )
 
+            # Final progress update
+            logger.info(f"Indexing completed successfully. Saving updated index...")
+
             # Combine and save
             combined_result = self._combine_index_results(filtered_existing, new_result)
-            combined_result.umap_embeddings = self.create_umap_index(
-                combined_result.embeddings
-            )
             self._save_embeddings(combined_result)
+
+            # Rebuild the umap index
+            new_result.umap_embeddings = self.umap_embeddings
+            logger.info(
+                f"UMAP index created with shape: {new_result.umap_embeddings.shape}"
+            )
 
             return combined_result
 
         except Exception as e:
+            logger.error(f"Failed to update index: {e}")
             raise
 
     async def update_index_async(
@@ -563,15 +578,6 @@ class Embeddings(BaseModel):
                 )
                 return
 
-            # If no new images, return early
-            if not new_image_paths:
-                self._save_embeddings(filtered_existing)
-                progress_tracker.complete_operation(album_key, "No new images found")
-                logger.info(
-                    f"No new images found. Removing {len(missing_image_paths)} missing images from index."
-                )
-                return filtered_existing
-
             # Update progress tracker with actual count
             total_new_images = len(new_image_paths)
             progress_tracker.start_operation(album_key, total_new_images, "indexing")
@@ -581,8 +587,17 @@ class Embeddings(BaseModel):
                 list(new_image_paths), album_key
             )
 
+            new_files_indexed = new_result.embeddings.shape[0]
+            old_files_removed = len(missing_image_paths)
+            logger.info(
+                f"New files indexed: {new_files_indexed}, Old files removed: {old_files_removed}"
+            )
+
             # If no new embeddings were created, return existing data
-            if new_result.embeddings.shape[0] == 0:
+            if new_files_indexed == 0 and old_files_removed == 0:
+                logger.info(
+                    "No new images needed to be indexed. Will not regenerate umap"
+                )
                 progress_tracker.complete_operation(
                     album_key, "No new images needed to be indexed"
                 )
@@ -595,12 +610,6 @@ class Embeddings(BaseModel):
                     bad_files=new_result.bad_files,
                 )
 
-            # Rebuild the umap index
-            progress_tracker.start_operation(album_key, total_new_images, "umapping")
-            new_result.umap_embeddings = await asyncio.to_thread(
-                self.create_umap_index, new_result.embeddings
-            )
-
             # Final progress update
             progress_tracker.update_progress(
                 album_key, total_new_images, "Saving updated index"
@@ -609,6 +618,12 @@ class Embeddings(BaseModel):
             # Combine and save
             combined_result = self._combine_index_results(filtered_existing, new_result)
             self._save_embeddings(combined_result)
+
+            # Rebuild the umap index
+            progress_tracker.start_operation(album_key, total_new_images, "umapping")
+            new_result.umap_embeddings = await asyncio.to_thread(
+                lambda: self.umap_embeddings
+            )
 
             # Mark as completed
             progress_tracker.complete_operation(
