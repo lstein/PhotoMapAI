@@ -6,6 +6,7 @@ import './javascript/events.js';
 import './javascript/overlay.js';
 import './javascript/search-ui.js';
 import './javascript/search.js';
+import './javascript/seek-slider.js';
 import './javascript/settings.js';
 import './javascript/state.js';
 import './javascript/swiper.js';

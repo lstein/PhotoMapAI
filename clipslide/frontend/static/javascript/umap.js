@@ -418,6 +418,12 @@ window.addEventListener("searchResultsChanged", function (e) {
   setUmapColorMode();
 });
 
+window.addEventListener("slideChanged", async () => {
+  // Ensure the current image marker is updated when the slide changes
+  // add a slight timeout to ensure the slide is fully loaded.
+  setTimeout(() => updateCurrentImageMarker(), 500);
+});
+
 // --- Update Current Image Marker ---
 export async function updateCurrentImageMarker() {
   if (!points.length) return;
