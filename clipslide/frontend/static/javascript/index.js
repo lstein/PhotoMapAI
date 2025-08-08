@@ -21,6 +21,25 @@ export async function updateIndex(albumKey) {
     return null;
 }
 
+// This function is called to remove the index for a specific album
+// It needs to be called when the index is corrupted or needs to be reset for whatever reason
+export async function removeIndex(albumKey) {
+  try {
+    const response = await fetch(`remove_index/${albumKey}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to remove index: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (e) {
+    console.warn("Failed to remove index.");
+    throw e;
+  }
+}
+
 export async function deleteImage(albumKey, index) {
   try {
     const response = await fetch(
@@ -50,15 +69,32 @@ export async function getIndexMetadata(albumKey) {
     });
 
     if (response.status === 404) {
-      console.warn("Index metadata not found for album:", albumKey);
-      return null;
+      throw new Error("missing");
+    }
+
+    if (response.status === 500) {
+      throw new Error("corrupted");
     }
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch index metadata: ${response.statusText}`);
+      throw new Error(`unknown:${response.status}`);
     }
+
     return await response.json();
   } catch (error) {
+    let errorType = "corrupted";
+    if (error.message === "missing") {
+      errorType = "missing";
+    } else if (error.message === "corrupted") {
+      errorType = "corrupted";
+    } else if (error.message && error.message.startsWith("unknown:")) {
+      errorType = "unknown";
+    }
+    window.dispatchEvent(
+      new CustomEvent("albumIndexError", {
+        detail: { albumKey, errorType, error },
+      })
+    );
     console.error("Failed to get index metadata:", error);
     return null;
   }

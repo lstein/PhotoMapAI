@@ -84,6 +84,38 @@ async def update_index_async(
         )
 
 
+@index_router.delete("/remove_index/{album_key}", tags=["Index"])
+async def remove_index(album_key: str) -> JSONResponse:
+    """Remove the embeddings index for the specified album."""
+    try:
+        album_config = config_manager.get_album(album_key)
+        if not album_config:
+            raise HTTPException(
+                status_code=404, detail=f"Album '{album_key}' not found"
+            )
+
+        index_path = Path(album_config.index)
+        if not index_path.exists():
+            raise HTTPException(status_code=404, detail="Index file does not exist")
+
+        # Remove the index file
+        index_path.unlink()
+        logger.info(f"Removed index file: {index_path}")
+
+        return JSONResponse(
+            content={
+                "success": True,
+                "message": f"Removed index for album '{album_key}'",
+            },
+            status_code=200,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to remove index: {str(e)}")
+
+
 @index_router.get(
     "/index_progress/{album_key}", response_model=ProgressResponse, tags=["Index"]
 )

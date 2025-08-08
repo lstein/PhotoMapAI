@@ -1,7 +1,7 @@
 // album-management.js
 import { exitSearchMode } from "./search-ui.js";
 
-import { getIndexMetadata, updateIndex } from "./index.js";
+import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
 import { setAlbum, state } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
@@ -43,6 +43,7 @@ export class AlbumManager {
 
     this.progressPollers = new Map();
     this.isSetupMode = false;
+    this.autoIndexingAlbums = new Set();
 
     this.initializeEventListeners();
   }
@@ -127,6 +128,57 @@ export class AlbumManager {
         }
       }, 500);
     });
+
+    // Handle missing/corrupted index errors and start indexing automatically
+    window.addEventListener("albumIndexError", async (e) => {
+      const { albumKey, errorType } = e.detail;
+
+      // Prevent duplicate auto-indexing for the same album
+      if (this.autoIndexingAlbums.has(albumKey)) {
+        console.log(`Auto-indexing already triggered for album: ${albumKey}`);
+        return;
+      }
+      this.autoIndexingAlbums.add(albumKey);
+
+      await albumManager.show();
+      setTimeout(async () => {
+        const cardElement = document.querySelector(
+          `.album-card[data-album-key="${albumKey}"]`
+        );
+        if (cardElement) {
+          // Show a user-friendly error message in the card
+          let errorDiv = cardElement.querySelector(".album-error-message");
+          if (!errorDiv) {
+            errorDiv = document.createElement("div");
+            errorDiv.className = "album-error-message";
+            cardElement.appendChild(errorDiv);
+          }
+          if (errorType === "missing") {
+            errorDiv.textContent =
+              "This album's index is missing. Indexing will start automatically.";
+          } else if (errorType === "corrupted") {
+            errorDiv.textContent =
+              "This album's index is corrupted. Indexing will start automatically.";
+          } else {
+            errorDiv.textContent =
+              "This album's index is corrupted or unreadable. Indexing will start automatically.";
+          }
+          errorDiv.style.color = "#b00020";
+          errorDiv.style.marginTop = "0.5em";
+          errorDiv.style.fontWeight = "bold";
+
+          cardElement.scrollIntoView({ behavior: "smooth", block: "center" });
+
+          // Automatically start indexing
+          await albumManager.startIndexing(
+            albumKey,
+            cardElement,
+            errorType === "corrupted"
+          );
+          albumManager.showProgressUI(cardElement);
+        }
+      }, 500);
+    });
   }
 
   // Utility methods
@@ -135,7 +187,7 @@ export class AlbumManager {
     return await response.json();
   }
 
- async getAlbum(albumKey) {
+  async getAlbum(albumKey) {
     const response = await fetch(`album/${albumKey}/`);
     return await response.json();
   }
@@ -656,7 +708,28 @@ export class AlbumManager {
   }
 
   // Indexing functionality
-  async startIndexing(albumKey, cardElement) {
+  async startIndexing(albumKey, cardElement, isCorrupted = false) {
+    // Prevent duplicate indexing requests
+    if (this.progressPollers.has(albumKey)) {
+      console.log(`Indexing already in progress for album: ${albumKey}`);
+      return;
+    }
+
+    if (isCorrupted) {
+      console.log(`Starting indexing for corrupted album: ${albumKey}`);
+      const response = await removeIndex(albumKey);
+      console.log(`Remove index response:`, response);
+      if (!response.success) {
+        const album = await this.getAlbum(albumKey);
+        alert(
+          `Failed to remove corrupted index for album: ${albumKey}.` +
+            ` Please remove the index file manually and try again.` +
+            ` The path for the index file is: ${album.index}`
+        );
+        await this.handleIndexingCompletion(albumKey, cardElement);
+        return;
+      }
+    }
     const progress = await updateIndex(albumKey);
     if (!progress) return;
     this.showProgressUIWithoutScroll(cardElement, progress);
@@ -677,8 +750,10 @@ export class AlbumManager {
   }
 
   showProgressUIWithoutScroll(cardElement, progress = null) {
-    const progressContainer = cardElement.querySelector(".progress-container");
     const createBtn = cardElement.querySelector(".create-index-btn");
+    createBtn.disabled = true; // Disable while indexing
+
+    const progressContainer = cardElement.querySelector(".progress-container");
     const cancelBtn = cardElement.querySelector(".cancel-index-btn");
     const status = cardElement.querySelector(".index-status");
     const estimatedTime = cardElement.querySelector(".estimated-time");
@@ -692,12 +767,13 @@ export class AlbumManager {
   }
 
   hideProgressUI(cardElement) {
-    const progressContainer = cardElement.querySelector(".progress-container");
     const createBtn = cardElement.querySelector(".create-index-btn");
+    createBtn.disabled = false; // Re-enable when done
+
+    const progressContainer = cardElement.querySelector(".progress-container");
     const cancelBtn = cardElement.querySelector(".cancel-index-btn");
 
     progressContainer.style.display = "none";
-    createBtn.style.display = "inline-block";
     cancelBtn.style.display = "none";
   }
 
@@ -765,6 +841,25 @@ export class AlbumManager {
         this.completeSetupMode();
         this.hide();
       }, AlbumManager.AUTO_INDEX_DELAY);
+    }
+
+    // Remove from autoIndexingAlbums set so future errors can trigger again
+    this.autoIndexingAlbums.delete(albumKey);
+
+    // --- Restore UI state ---
+    if (cardElement) {
+      // Show the "Update Index" button
+      const createBtn = cardElement.querySelector(".create-index-btn");
+      if (createBtn) {
+        createBtn.style.display = "inline-block";
+        createBtn.disabled = false;
+      }
+
+      // Remove error message if present
+      const errorDiv = cardElement.querySelector(".album-error-message");
+      if (errorDiv) {
+        errorDiv.remove();
+      }
     }
   }
 
@@ -857,6 +952,9 @@ export class AlbumManager {
     } catch (error) {
       console.error("Failed to cancel indexing:", error);
     }
+
+    // Remove from autoIndexingAlbums set so future errors can trigger again
+    this.autoIndexingAlbums.delete(albumKey);
   }
 
   async checkForOngoingIndexing() {
