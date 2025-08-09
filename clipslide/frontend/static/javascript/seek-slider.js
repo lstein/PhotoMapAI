@@ -16,7 +16,6 @@ function initializeEvents() {
 
   // Show/hide slider on score display click/tap
   scoreDisplay.scoreElement.addEventListener("click", toggleSlider);
-
   // Touch event for mobile devices
   scoreDisplay.scoreElement.addEventListener("touchend", (e) => {
     e.preventDefault();
@@ -94,7 +93,6 @@ function initializeEvents() {
 
     // Fade out after 5s
     slider.classList.add("fade-out");
-    // Cancel any previous fade out
     if (fadeOutTimeoutId) {
       clearTimeout(fadeOutTimeoutId);
     }
@@ -103,6 +101,10 @@ function initializeEvents() {
       sliderVisible = false;
       fadeOutTimeoutId = null;
     }, 5000);
+
+    // Blur the slider to remove focus. Otherwise the slider and swiper fight over
+    // who responds to arrow keys.
+    slider.blur();
   });
 
   window.addEventListener("slideChanged", async (event) => {
@@ -113,6 +115,7 @@ function initializeEvents() {
     }, 500);
   });
 }
+
 
 async function toggleSlider() {
   sliderVisible = !sliderVisible;
