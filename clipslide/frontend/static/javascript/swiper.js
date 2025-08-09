@@ -177,7 +177,6 @@ export async function addSlideByIndex(
   let currentScore, currentCluster, currentColor;
   if (searchIndex !== null && state.searchResults?.length > 0) {
     // remember values for score, cluster and color
-    console.log("In addSlideByIndex, globalIndex: ", globalIndex, ", searchIndex:", searchIndex);
     currentScore = state.searchResults[searchIndex]?.score || "";
     currentCluster = state.searchResults[searchIndex]?.cluster || "";
     currentColor = state.searchResults[searchIndex]?.color || "#000000"; // Default

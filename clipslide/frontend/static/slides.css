@@ -1961,6 +1961,14 @@ body {
   display: block;
   margin-left: auto;
   margin-right: auto;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.slide-seek-slider.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .fixed-score-display {

@@ -11,13 +11,12 @@ let fadeOutTimeoutId = null;
 document.addEventListener("DOMContentLoaded", initializeEvents);
 
 function initializeEvents() {
-  console.log("Initializing seek slider events");
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
 
   // Show/hide slider on score display click/tap
   scoreDisplay.scoreElement.addEventListener("click", toggleSlider);
-  
+
   // Touch event for mobile devices
   scoreDisplay.scoreElement.addEventListener("touchend", (e) => {
     e.preventDefault();
@@ -64,7 +63,6 @@ function initializeEvents() {
 
   // When slider is released, seek to slide
   slider.addEventListener("change", async function () {
-    console.log("Slider change event fired");
     let globalIndex;
     let [, totalSlides] = await getCurrentSlideIndex();
 
@@ -75,22 +73,23 @@ function initializeEvents() {
       globalIndex = targetIndex;
     }
     // Seek: reset slides and load previous, current, next
-    console.log(
-      "Seeking to slide index:",
-      globalIndex,
-      "targetIndex:",
-      targetIndex
-    );
     await state.swiper.removeAllSlides();
 
-    if (globalIndex < totalSlides - 1) {
-      await addSlideByIndex(globalIndex, targetIndex);
-      await addSlideByIndex(globalIndex + 1, targetIndex + 1);
-    } else {
-      await addSlideByIndex(globalIndex - 1, targetIndex - 1);
-      await addSlideByIndex(globalIndex, targetIndex);
-      state.swiper.slideTo(1);
+    // Add 2 slides before and after the current one
+    let origin = -2;
+    let slides_to_add = 5;
+    if (globalIndex + origin < 0) {
+      origin = 0;
     }
+    const swiperContainer = document.querySelector(".swiper");
+    swiperContainer.style.visibility = "hidden";
+    for (let i = origin; i < slides_to_add; i++) {
+      if (targetIndex + i >= totalSlides) break;
+      await addSlideByIndex(globalIndex + i, targetIndex + i);
+    }
+    state.swiper.slideTo(-origin, 0); // Slide to the current one
+    swiperContainer.style.visibility = "visible";
+
     updateMetadataOverlay();
 
     // Fade out after 5s
@@ -100,8 +99,7 @@ function initializeEvents() {
       clearTimeout(fadeOutTimeoutId);
     }
     fadeOutTimeoutId = setTimeout(() => {
-      slider.classList.remove("fade-out");
-      slider.style.display = "none";
+      slider.classList.remove("visible");
       sliderVisible = false;
       fadeOutTimeoutId = null;
     }, 5000);
@@ -118,9 +116,11 @@ function initializeEvents() {
 
 async function toggleSlider() {
   sliderVisible = !sliderVisible;
-  slider.style.display = sliderVisible ? "block" : "none";
   if (sliderVisible) {
+    slider.classList.add("visible");
     await updateSliderRange();
+  } else {
+    slider.classList.remove("visible");
   }
 }
 
