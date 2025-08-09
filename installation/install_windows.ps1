@@ -45,7 +45,7 @@ Write-Host "Activating virtual environment and installing ClipSlide..."
 pip install --upgrade pip
 pip install "$PSScriptRoot"
 
-# 5. Print out instructions for running start_slideshow
+# 5. Print out instructions for running start_clipslide
 # $slideshowPath = Resolve-Path .\.venv\Scripts\start_slideshow.exe
 # Write-Host "`nClipSlide installed successfully in $installDir!" -ForegroundColor Green
 # Write-Host "To start the slideshow, run:" -ForegroundColor Yellow
@@ -55,7 +55,7 @@ pip install "$PSScriptRoot"
 
 # 6. Create a batch script to start the slideshow
 $batPath = Join-Path $installDir "start_clipslide.bat"
-$exePath = "$installDir\.venv\Scripts\start_slideshow.exe"
+$exePath = "$installDir\.venv\Scripts\start_clipslide.exe"
 
 $batContent = "@echo off`r`n" +
 "REM This script starts the ClipSlide server`r`n" +

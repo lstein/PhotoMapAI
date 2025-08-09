@@ -39,6 +39,9 @@ testing = [
     "asynctest",
     "pytest-asyncio",
 ]
+development = [
+    "mkdocs-material",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]  # Look in the current directory (repo root)
