@@ -13,6 +13,37 @@ document.addEventListener("DOMContentLoaded", initializeEvents);
 function initializeEvents() {
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
+  const hotspot = document.getElementById("sliderHotspot");
+
+  // Show slider on hotspot hover
+  hotspot.addEventListener("mouseenter", () => {
+    slider.classList.add("visible");
+    sliderVisible = true;
+    updateSliderRange();
+    if (fadeOutTimeoutId) {
+      clearTimeout(fadeOutTimeoutId);
+      fadeOutTimeoutId = null;
+    }
+  });
+
+  // Hide slider when mouse leaves both hotspot and slider
+  hotspot.addEventListener("mouseleave", hideSliderWithDelay);
+  slider.addEventListener("mouseleave", hideSliderWithDelay);
+
+  function hideSliderWithDelay() {
+    // Only hide if mouse is not over hotspot or slider
+    if (
+      !hotspot.matches(':hover') &&
+      !slider.matches(':hover')
+    ) {
+      if (fadeOutTimeoutId) clearTimeout(fadeOutTimeoutId);
+      fadeOutTimeoutId = setTimeout(() => {
+        slider.classList.remove("visible");
+        sliderVisible = false;
+        fadeOutTimeoutId = null;
+      }, 600); // fade out delay
+    }
+  }
 
   // Show/hide slider on score display click/tap
   scoreDisplay.scoreElement.addEventListener("click", toggleSlider);
