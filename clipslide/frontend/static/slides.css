@@ -2008,6 +2008,7 @@ body {
   touch-action: manipulation;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  display: none;
 }
 
 .score-slider-row {
