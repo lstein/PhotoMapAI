@@ -14,9 +14,19 @@ function initializeEvents() {
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
   const hotspot = document.getElementById("sliderHotspot");
+  const scoreElement = scoreDisplay.scoreElement;
 
-  // Show slider on hotspot hover
-  hotspot.addEventListener("mouseenter", () => {
+  // Show slider on hover over score display or hotspot
+  scoreElement.addEventListener("mouseenter", showSlider);
+  hotspot.addEventListener("mouseenter", showSlider);
+  slider.addEventListener("mouseenter", showSlider);
+
+  // Hide slider when mouse leaves score display, hotspot, or slider
+  scoreElement.addEventListener("mouseleave", hideSliderWithDelay);
+  hotspot.addEventListener("mouseleave", hideSliderWithDelay);
+  slider.addEventListener("mouseleave", hideSliderWithDelay);
+
+  function showSlider() {
     slider.classList.add("visible");
     sliderVisible = true;
     updateSliderRange();
@@ -24,15 +34,12 @@ function initializeEvents() {
       clearTimeout(fadeOutTimeoutId);
       fadeOutTimeoutId = null;
     }
-  });
-
-  // Hide slider when mouse leaves both hotspot and slider
-  hotspot.addEventListener("mouseleave", hideSliderWithDelay);
-  slider.addEventListener("mouseleave", hideSliderWithDelay);
+  }
 
   function hideSliderWithDelay() {
-    // Only hide if mouse is not over hotspot or slider
+    // Only hide if mouse is not over score element, hotspot, or slider
     if (
+      !scoreElement.matches(':hover') &&
       !hotspot.matches(':hover') &&
       !slider.matches(':hover')
     ) {
@@ -131,7 +138,7 @@ function initializeEvents() {
       slider.classList.remove("visible");
       sliderVisible = false;
       fadeOutTimeoutId = null;
-    }, 5000);
+    }, 600);
 
     // Blur the slider to remove focus. Otherwise the slider and swiper fight over
     // who responds to arrow keys.
