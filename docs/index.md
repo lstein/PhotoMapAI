@@ -1,10 +1,10 @@
-# ClipSlide
+# PhotoMap
 
 Rediscover your photo collection!
 
-ClipSlide is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events and themes.
+PhotoMap is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events and themes.
 
-![Semantic Map](img/clipslide_slide_with_semantic_map.png)
+![Semantic Map](img/photomap_slide_with_semantic_map.png)
 
 ## Features
 - Fast browsing of large image collections
@@ -21,8 +21,8 @@ ClipSlide is a fast, modern image browser and search tool for large photo collec
 
 1. **Create a virtual environment for the app:**
 
-        python3 -m venv ~/clipslide     (or choose your own installation location)
-        source ~/clipslide/bin/activate
+        python3 -m venv ~/photomap     (or choose your own installation location)
+        source ~/photomap/bin/activate
 
 2. **Install the app:**  
    From within the code repository (the one containing README.md)
@@ -31,7 +31,7 @@ ClipSlide is a fast, modern image browser and search tool for large photo collec
 
 3. **Run the app:**
 
-        ~/clipslide/bin/start_clipslide
+        ~/photomap/bin/start_photomap
 
 4. **Open your browser:**  
    Navigate to `http://localhost:8050`.
@@ -43,12 +43,12 @@ ClipSlide is a fast, modern image browser and search tool for large photo collec
 Open a PowerShell window and type these commands in.
 
 1. **Launch the Windows installer **
-    - Navigate to the ClipSlide source code folder and launch `installation/install_windows`.
+    - Navigate to the photomap source code folder and launch `installation/install_windows`.
     - If you are prompted to install python, please do so and try again. 
-    - When prompted, select an install location for ClipSlide. This will create a launcher script in the selected location named `start_clipslide.bat`
+    - When prompted, select an install location for photomap. This will create a launcher script in the selected location named `start_photomap.bat`
 
 3. **Run the app:**
-    Launch `start_clipslide.bat`.
+    Launch `start_photomap.bat`.
 
 4. **Open your browser:**  
    Navigate to `http://localhost:8050`
