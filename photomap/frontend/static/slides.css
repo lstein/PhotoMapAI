@@ -1949,7 +1949,7 @@ body {
   margin-top: 2px;
 }
 
-.slide-seek-slider {
+/* .slide-seek-slider {
   width: 32vw;
   max-width: 400px;
   min-width: 120px;
@@ -1965,12 +1965,8 @@ body {
   display: block;
   position: relative;
   z-index: 502;
-}
+} */
 
-.slide-seek-slider.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
 
 .slider-hotspot {
   position: absolute;
@@ -2022,9 +2018,10 @@ body {
 }
 
 .slide-seek-slider {
-  width: 32vw;
-  max-width: 400px;
-  min-width: 120px;
+  width: 100%;
+  position: relative;
+  /* max-width: 400px;
+  min-width: 120px; */
   height: 18px;
   accent-color: #888;
   background: transparent;
@@ -2035,7 +2032,6 @@ body {
   pointer-events: none;
   transition: opacity 0.3s;
   display: block;
-  position: relative;
   z-index: 502;
 }
 
@@ -2055,4 +2051,54 @@ body {
   cursor: pointer;
   z-index: 501;
   background: transparent;
+}
+
+.slider-with-ticks-container {
+  position: relative;
+  width: 60vw; /* 75% of viewport width */
+  max-width: 900px;
+  min-width: 180px;
+  margin: 0 auto;
+}
+
+.slider-ticks {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  width: 100%;
+  height: 28px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.slider-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 0;
+}
+
+.slider-tick-mark {
+  width: 2px;
+  height: 12px;
+  background: #faea0e;
+  margin-bottom: 2px;
+  opacity: 0.7;
+}
+
+.slider-tick-label {
+  font-size: 0.85em;
+  color: #fff; /* White text */
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0.95;
+  margin-top: 2px;
+  user-select: none;
+  background: rgba(30, 30, 30, 0.85); /* Semi-transparent gray */
+  border-radius: 6px;
+  padding: 2px 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }

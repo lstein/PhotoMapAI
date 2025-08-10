@@ -4,7 +4,7 @@ import { state } from "./state.js";
 import { addSlideByIndex, getCurrentSlideIndex } from "./swiper.js";
 
 let sliderVisible = false;
-let scoreText, slider;
+let scoreText, slider, ticksContainer;
 let fadeOutTimeoutId = null;
 
 // Initialize event listeners after the DOM is fully loaded
@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", initializeEvents);
 function initializeEvents() {
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
+  ticksContainer = document.getElementById("sliderTicks"); // Add this
   const hotspot = document.getElementById("sliderHotspot");
   const scoreElement = scoreDisplay.scoreElement;
 
@@ -30,6 +31,7 @@ function initializeEvents() {
     slider.classList.add("visible");
     sliderVisible = true;
     updateSliderRange();
+    renderSliderTicks(); // <-- add this
     if (fadeOutTimeoutId) {
       clearTimeout(fadeOutTimeoutId);
       fadeOutTimeoutId = null;
@@ -37,7 +39,6 @@ function initializeEvents() {
   }
 
   function hideSliderWithDelay() {
-    // Only hide if mouse is not over score element, hotspot, or slider
     if (
       !scoreElement.matches(':hover') &&
       !hotspot.matches(':hover') &&
@@ -47,8 +48,9 @@ function initializeEvents() {
       fadeOutTimeoutId = setTimeout(() => {
         slider.classList.remove("visible");
         sliderVisible = false;
+        ticksContainer.innerHTML = "";
         fadeOutTimeoutId = null;
-      }, 600); // fade out delay
+      }, 600);
     }
   }
 
@@ -66,6 +68,7 @@ function initializeEvents() {
 
   // When slider changes, update score display and seek to slide
   slider.addEventListener("input", async function () {
+    await renderSliderTicks();
     // Cancel any pending fade out
     if (fadeOutTimeoutId) {
       clearTimeout(fadeOutTimeoutId);
@@ -129,7 +132,7 @@ function initializeEvents() {
 
     updateMetadataOverlay();
 
-    // Fade out after 5s
+    // Fade out after 600ms
     slider.classList.add("fade-out");
     if (fadeOutTimeoutId) {
       clearTimeout(fadeOutTimeoutId);
@@ -137,6 +140,7 @@ function initializeEvents() {
     fadeOutTimeoutId = setTimeout(() => {
       slider.classList.remove("visible");
       sliderVisible = false;
+      ticksContainer.innerHTML = ""; // <-- Ensure ticks/labels are hidden
       fadeOutTimeoutId = null;
     }, 600);
 
@@ -150,7 +154,94 @@ function initializeEvents() {
       const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
       slider.value =
         state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
+      await renderSliderTicks();
     }, 500);
+  });
+
+  // Initial render
+  renderSliderTicks();
+}
+
+// Helper to render ticks
+async function renderSliderTicks() {
+  if (!slider || !ticksContainer) return;
+  if (!sliderVisible || !slider.classList.contains("visible")) {
+    ticksContainer.innerHTML = "";
+    return;
+  }
+  let ticks = [];
+  const numTicks = 10;
+  let min = parseInt(slider.min, 10);
+  let max = parseInt(slider.max, 10);
+
+  if (max <= min) {
+    ticksContainer.innerHTML = "";
+    return;
+  }
+
+  // Calculate tick positions
+  let positions = [];
+  for (let i = 0; i < numTicks; i++) {
+    let pos = Math.round(min + ((max - min) * i) / (numTicks - 1));
+    positions.push(pos);
+  }
+
+  // Album mode: show modification dates
+  if (!state.searchResults || state.searchResults.length === 0) {
+    // Fetch modification dates for ticks
+    ticks = await Promise.all(
+      positions.map(async (idx) => {
+        try {
+          const albumKey = state.album;
+          const resp = await fetch(`image_info/${albumKey}/${idx - 1}`);
+          if (!resp.ok) return "";
+          const info = await resp.json();
+          const date = new Date(info.last_modified * 1000);
+          return `${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+        } catch {
+          return "";
+        }
+      })
+    );
+  }
+  // Search mode: show similarity scores
+  else if (
+    state.searchResults.length > 0 &&
+    state.searchResults[0].score !== undefined
+  ) {
+    ticks = positions.map((idx) => {
+      const result = state.searchResults[idx - 1];
+      return result ? result.score.toFixed(3) : "";
+    });
+  }
+  // Cluster mode: show cluster indexes
+  else if (
+    state.searchResults.length > 0 &&
+    state.searchResults[0].cluster !== undefined
+  ) {
+    ticks = positions.map((idx) => {
+      return `${idx}`;
+    });
+  }
+
+  // Render ticks
+  ticksContainer.innerHTML = "";
+  positions.forEach((pos, i) => {
+    const percent = ((pos - min) / (max - min)) * 100;
+    const tick = document.createElement("div");
+    tick.className = "slider-tick";
+    tick.style.left = `${percent}%`;
+
+    const mark = document.createElement("div");
+    mark.className = "slider-tick-mark";
+    tick.appendChild(mark);
+
+    const labelDiv = document.createElement("div");
+    labelDiv.className = "slider-tick-label";
+    labelDiv.textContent = ticks[i] ?? "";
+    tick.appendChild(labelDiv);
+
+    ticksContainer.appendChild(tick);
   });
 }
 
@@ -160,8 +251,10 @@ async function toggleSlider() {
   if (sliderVisible) {
     slider.classList.add("visible");
     await updateSliderRange();
+    await renderSliderTicks(); // <-- add this
   } else {
     slider.classList.remove("visible");
+    ticksContainer.innerHTML = ""; // <-- hide ticks when slider hidden
   }
 }
 
