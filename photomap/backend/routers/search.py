@@ -40,6 +40,14 @@ class SearchResultsResponse(BaseModel):
     results: List[SearchResult]
 
 
+# Basic information about the image stored in the index
+class ImageData(BaseModel):
+    image_path: str
+    album_key: str
+    index: int
+    last_modified: float
+
+
 # Search Routes
 class SearchWithTextAndImageRequest(BaseModel):
     positive_query: str = ""
@@ -102,6 +110,41 @@ async def retrieve_image(
     slide_metadata = embeddings.retrieve_image(index)
     create_slide_url(slide_metadata, album_key)
     return slide_metadata
+
+
+# Basic information about the image stored in the index
+@search_router.get(
+    "/image_info/{album_key}/{index}",
+    response_model=ImageData,
+    tags=["Search"],
+)
+async def image_info(
+    album_key: str,
+    index: int,
+) -> ImageData:
+    """Retrieve basic metadata on an image."""
+    embeddings = get_embeddings_for_album(album_key)
+    data = embeddings.indexes
+    sorted_filenames = data["sorted_filenames"]
+    filename_map = data["filename_map"]
+    modification_times = data["sorted_modification_times"]
+    if index < 0 or index >= len(sorted_filenames):
+        raise HTTPException(status_code=404, detail="Index out of range")
+    filename = sorted_filenames[index]
+    if filename not in filename_map:
+        raise HTTPException(status_code=404, detail="Image not found in index")
+    original_index = filename_map[filename]
+
+    logger.info(
+        f"{index=}; {filename=}; {original_index=}; {data['filenames'][original_index]}; modified={modification_times[original_index]}"
+    )
+
+    return ImageData(
+        image_path=str(filename),
+        last_modified=modification_times[original_index],
+        album_key=album_key,
+        index=index,
+    )
 
 
 @search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])

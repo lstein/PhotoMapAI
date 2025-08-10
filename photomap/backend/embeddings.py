@@ -689,6 +689,17 @@ class Embeddings(BaseModel):
         data = np.load(cache_file, allow_pickle=True)
         return data["umap"]
 
+    @property
+    def indexes(self) -> Dict[str, np.ndarray]:
+        """
+        Load all indexes from the embeddings file.
+
+        Returns:
+            Dict[str, np.ndarray]: Dictionary containing all indexes.
+        """
+        data = self.open_cached_embeddings(self.embeddings_path)
+        return data
+
     # Main search entry point.
     def search_images_by_text_and_image(
         self,
@@ -929,7 +940,7 @@ class Embeddings(BaseModel):
 
     @staticmethod
     @functools.lru_cache(maxsize=3)
-    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, any]:
+    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, np.ndarray]:
         """
         Open embeddings with pre-computed lookup structures.
         """
@@ -954,6 +965,7 @@ class Embeddings(BaseModel):
             "metadata": data["metadata"],
             "embeddings": data["embeddings"],
             "modification_times": data["modification_times"],
+            "sorted_modification_times": modtimes[sorted_indices],
             "sorted_filenames": sorted_filenames,
             "sorted_metadata": data["metadata"][sorted_indices],
             "filename_map": filename_map,
