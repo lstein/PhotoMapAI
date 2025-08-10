@@ -2110,3 +2110,18 @@ body {
   padding: 2px 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
+
+/* This is the label for the context of the slider, such as "score" or "date" */
+.context-label {
+  position: absolute;
+  left: -120px;
+  top: 18px;
+  font-size: 0.85em;
+  color: white;
+  font-weight: bold;
+  text-align: right;
+  width: 70px;
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0.9;
+}

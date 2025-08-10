@@ -4,7 +4,7 @@ import { state } from "./state.js";
 import { addSlideByIndex, getCurrentSlideIndex } from "./swiper.js";
 
 let sliderVisible = false;
-let scoreText, slider, ticksContainer, sliderContainer;
+let scoreText, slider, ticksContainer, sliderContainer, contextLabel;
 let fadeOutTimeoutId = null;
 
 // Initialize event listeners after the DOM is fully loaded
@@ -15,6 +15,7 @@ function initializeEvents() {
   slider = document.getElementById("slideSeekSlider");
   ticksContainer = document.getElementById("sliderTicks");
   sliderContainer = document.getElementById("sliderWithTicksContainer");
+  contextLabel = document.getElementById("contextLabel"); // Add this
   const hotspot = document.getElementById("sliderHotspot");
   const scoreElement = scoreDisplay.scoreElement;
 
@@ -169,18 +170,22 @@ function initializeEvents() {
 
 // Helper to render ticks
 async function renderSliderTicks() {
-  if (!slider || !ticksContainer || !sliderContainer) return;
+  if (!slider || !ticksContainer || !contextLabel) return;
   if (!sliderVisible || !sliderContainer.classList.contains("visible")) {
     ticksContainer.innerHTML = "";
+    contextLabel.textContent = "";
     return;
   }
+
   let ticks = [];
-  const numTicks = 10;
+  let contextText = "";
+  const numTicks = 5;
   let min = parseInt(slider.min, 10);
   let max = parseInt(slider.max, 10);
 
   if (max <= min) {
     ticksContainer.innerHTML = "";
+    contextLabel.textContent = "";
     return;
   }
 
@@ -193,6 +198,7 @@ async function renderSliderTicks() {
 
   // Album mode: show modification dates
   if (!state.searchResults || state.searchResults.length === 0) {
+    contextText = "Date";
     // Fetch modification dates for ticks
     ticks = await Promise.all(
       positions.map(async (idx) => {
@@ -217,6 +223,7 @@ async function renderSliderTicks() {
     state.searchResults.length > 0 &&
     state.searchResults[0].score !== undefined
   ) {
+    contextText = "Score";
     ticks = positions.map((idx) => {
       const result = state.searchResults[idx - 1];
       return result ? result.score.toFixed(3) : "";
@@ -227,13 +234,21 @@ async function renderSliderTicks() {
     state.searchResults.length > 0 &&
     state.searchResults[0].cluster !== undefined
   ) {
+    contextText = "Cluster Position";
     ticks = positions.map((idx) => {
       return `${idx}`;
     });
   }
 
-  // Render ticks
+  // Set context label
+  contextLabel.textContent = contextText;
+
+  // Clear and rebuild ticks (but preserve contextLabel)
+  const existingContextLabel = contextLabel;
   ticksContainer.innerHTML = "";
+  ticksContainer.appendChild(existingContextLabel);
+
+  // Render ticks as before
   positions.forEach((pos, i) => {
     const percent = ((pos - min) / (max - min)) * 100;
     const tick = document.createElement("div");
