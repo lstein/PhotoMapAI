@@ -4,7 +4,7 @@ import { state } from "./state.js";
 import { addSlideByIndex, getCurrentSlideIndex } from "./swiper.js";
 
 let sliderVisible = false;
-let scoreText, slider, ticksContainer;
+let scoreText, slider, ticksContainer, sliderContainer;
 let fadeOutTimeoutId = null;
 
 // Initialize event listeners after the DOM is fully loaded
@@ -13,7 +13,8 @@ document.addEventListener("DOMContentLoaded", initializeEvents);
 function initializeEvents() {
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
-  ticksContainer = document.getElementById("sliderTicks"); // Add this
+  ticksContainer = document.getElementById("sliderTicks");
+  sliderContainer = document.getElementById("sliderWithTicksContainer");
   const hotspot = document.getElementById("sliderHotspot");
   const scoreElement = scoreDisplay.scoreElement;
 
@@ -28,10 +29,11 @@ function initializeEvents() {
   slider.addEventListener("mouseleave", hideSliderWithDelay);
 
   function showSlider() {
-    slider.classList.add("visible");
+    sliderContainer.classList.add("visible");
     sliderVisible = true;
-    updateSliderRange();
-    renderSliderTicks(); // <-- add this
+    updateSliderRange().then(() => {
+      renderSliderTicks();
+    });
     if (fadeOutTimeoutId) {
       clearTimeout(fadeOutTimeoutId);
       fadeOutTimeoutId = null;
@@ -40,13 +42,13 @@ function initializeEvents() {
 
   function hideSliderWithDelay() {
     if (
-      !scoreElement.matches(':hover') &&
-      !hotspot.matches(':hover') &&
-      !slider.matches(':hover')
+      !scoreElement.matches(":hover") &&
+      !hotspot.matches(":hover") &&
+      !slider.matches(":hover")
     ) {
       if (fadeOutTimeoutId) clearTimeout(fadeOutTimeoutId);
       fadeOutTimeoutId = setTimeout(() => {
-        slider.classList.remove("visible");
+        sliderContainer.classList.remove("visible");
         sliderVisible = false;
         ticksContainer.innerHTML = "";
         fadeOutTimeoutId = null;
@@ -73,7 +75,7 @@ function initializeEvents() {
     if (fadeOutTimeoutId) {
       clearTimeout(fadeOutTimeoutId);
       fadeOutTimeoutId = null;
-      slider.classList.remove("fade-out");
+      sliderContainer.classList.remove("fade-out");
     }
     const targetIndex = parseInt(slider.value, 10) - 1;
     let globalIndex;
@@ -125,7 +127,13 @@ function initializeEvents() {
     swiperContainer.style.visibility = "hidden";
     for (let i = origin; i < slides_to_add; i++) {
       if (targetIndex + i >= totalSlides) break;
-      await addSlideByIndex(globalIndex + i, targetIndex + i);
+      let randomMode =
+        state.mode === "random" && state.searchResults?.length === 0; // in random mode, seek to the chosen image, but surrount it with random images
+      let seekIndex =
+        randomMode && i != 0
+          ? Math.floor(Math.random() * totalSlides)
+          : globalIndex + i;
+      await addSlideByIndex(seekIndex, targetIndex + i);
     }
     state.swiper.slideTo(-origin, 0); // Slide to the current one
     swiperContainer.style.visibility = "visible";
@@ -133,16 +141,16 @@ function initializeEvents() {
     updateMetadataOverlay();
 
     // Fade out after 600ms
-    slider.classList.add("fade-out");
+    sliderContainer.classList.add("fade-out");
     if (fadeOutTimeoutId) {
       clearTimeout(fadeOutTimeoutId);
     }
     fadeOutTimeoutId = setTimeout(() => {
-      slider.classList.remove("visible");
+      sliderContainer.classList.remove("visible");
       sliderVisible = false;
-      ticksContainer.innerHTML = ""; // <-- Ensure ticks/labels are hidden
+      ticksContainer.innerHTML = "";
       fadeOutTimeoutId = null;
-    }, 600);
+    }, 5000);
 
     // Blur the slider to remove focus. Otherwise the slider and swiper fight over
     // who responds to arrow keys.
@@ -155,17 +163,14 @@ function initializeEvents() {
       slider.value =
         state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
       await renderSliderTicks();
-    }, 500);
+    }, 1000);
   });
-
-  // Initial render
-  renderSliderTicks();
 }
 
 // Helper to render ticks
 async function renderSliderTicks() {
-  if (!slider || !ticksContainer) return;
-  if (!sliderVisible || !slider.classList.contains("visible")) {
+  if (!slider || !ticksContainer || !sliderContainer) return;
+  if (!sliderVisible || !sliderContainer.classList.contains("visible")) {
     ticksContainer.innerHTML = "";
     return;
   }
@@ -197,7 +202,10 @@ async function renderSliderTicks() {
           if (!resp.ok) return "";
           const info = await resp.json();
           const date = new Date(info.last_modified * 1000);
-          return `${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+          return `${String(date.getMonth() + 1).padStart(
+            2,
+            "0"
+          )}/${date.getFullYear()}`;
         } catch {
           return "";
         }
@@ -245,16 +253,15 @@ async function renderSliderTicks() {
   });
 }
 
-
 async function toggleSlider() {
   sliderVisible = !sliderVisible;
   if (sliderVisible) {
-    slider.classList.add("visible");
+    sliderContainer.classList.add("visible"); // <-- use container
     await updateSliderRange();
-    await renderSliderTicks(); // <-- add this
+    await renderSliderTicks();
   } else {
-    slider.classList.remove("visible");
-    ticksContainer.innerHTML = ""; // <-- hide ticks when slider hidden
+    sliderContainer.classList.remove("visible"); // <-- use container
+    ticksContainer.innerHTML = "";
   }
 }
 
@@ -270,31 +277,4 @@ async function updateSliderRange() {
     // slider.value = globalIndex + 1; // 1-based index
     slider.max = totalSlides;
   }
-}
-
-// Get current slide index for slider value (1-based)
-function getCurrentSliderValue() {
-  if (state.searchResults?.length > 0) {
-    return (
-      (state.swiper?.slides[state.swiper.activeIndex]?.dataset?.searchIndex ||
-        0) + 1
-    );
-  } else {
-    return (
-      (state.swiper?.slides[state.swiper.activeIndex]?.dataset?.index || 0) + 1
-    );
-  }
-}
-
-// Helper to get score for a given index
-function getScoreForIndex(globalIndex) {
-  if (state.searchResults?.length > 0) {
-    const result = state.searchResults.find((r) => r.index === globalIndex);
-    return result?.score?.toFixed(3) ?? "0.000";
-  }
-  // For album mode, you may want to fetch score from slide or elsewhere
-  const slide = state.swiper?.slides?.find(
-    (s) => parseInt(s.dataset.index, 10) === globalIndex
-  );
-  return slide?.dataset?.score ?? "0.000";
 }
