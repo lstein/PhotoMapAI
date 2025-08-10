@@ -1,16 +1,16 @@
 # ClipSlide
 
-Rediscover your photo collection using semantic mapping!
+Rediscover your photo collection!
 
-ClipSlide is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, clustering, and interactive slideshows, with a responsive web interface. It's unique feature is a "semantic map" to cluster and visualize your images by their style and content. Browse the semantic map to find and explore thematically-related groups of images, or use text and/or image similarity search to find specific people, places or events.
+ClipSlide is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events and themes.
 
 ![Semantic Map](img/clipslide_slide_with_semantic_map.png)
 
 ## Features
 - Fast browsing of large image collections
 - AI-based text and image similarity search
-- AI-based clustering and visualization
-- Album management
+- Thematic image clustering and visualization
+- Flexible album management
 - Responsive UI for desktop and mobile
 - Extensible backend (FastAPI)
 
@@ -53,7 +53,7 @@ Open a PowerShell window and type these commands in.
 4. **Open your browser:**  
    Navigate to `http://localhost:8050`
 
-## Documentation Structure
+## Detailed Guides
 - [Installation](installation.md)
 - [User Guide](user-guide/basic-usage.md)
 - [Configuration](configuration.md)
