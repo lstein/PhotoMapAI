@@ -1,6 +1,6 @@
-# clipslide/backend/config.py
+# photomap/backend/config.py
 """
-Configuration management for ClipSlide backend.
+Configuration management for PhotoMap backend.
 This module handles loading, saving, and managing photo album configurations.
 It uses a YAML file to store album details and provides methods to manipulate albums.
 """
@@ -112,7 +112,7 @@ class Config(BaseModel):
 
 
 class ConfigManager:
-    """Manages ClipSlide configuration file with Pydantic validation."""
+    """Manages PhotoMap configuration file with Pydantic validation."""
 
     def __init__(self, config_path: Optional[Path] = None):
         """Initialize configuration manager.
@@ -126,11 +126,11 @@ class ConfigManager:
     def _get_default_config_path(self) -> Path:
         """Get platform-specific default configuration file path."""
         # Try environment variable first
-        if "CLIPSLIDE_CONFIG" in os.environ:
-            return Path(os.environ["CLIPSLIDE_CONFIG"])
+        if "PHOTOMAP_CONFIG" in os.environ:
+            return Path(os.environ["PHOTOMAP_CONFIG"])
 
         # Use platformdirs for cross-platform config directory
-        config_dir = Path(user_config_dir("clipslide", "clipslide"))
+        config_dir = Path(user_config_dir("photomap", "photomap"))
         config_dir.mkdir(parents=True, exist_ok=True)
         return config_dir / "config.yaml"
 

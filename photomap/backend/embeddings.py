@@ -80,8 +80,8 @@ class Embeddings(BaseModel):
         files_checked = 0
 
         for root, dirs, files in os.walk(directory):
-            # Remove 'clipslide_index' from dirs so os.walk skips it and its subdirs
-            dirs[:] = [d for d in dirs if d != "clipslide_index"]
+            # Remove 'photomap_index' from dirs so os.walk skips it and its subdirs
+            dirs[:] = [d for d in dirs if d != "photomap_index"]
             for file in [Path(x) for x in files]:
                 files_checked += 1
 

@@ -10,13 +10,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from clipslide.backend.config import Album, create_album
+from photomap.backend.config import Album, create_album
 
 
 @pytest.fixture
 def client():
     """Fixture to create a test client for the Clipslide application."""
-    from clipslide.backend.clipslide_server import app
+    from photomap.backend.photomap_server import app
 
     return TestClient(app)
 
@@ -72,7 +72,7 @@ def poll_during_indexing(client, album_key, timeout=60):
 
 def build_index(client, new_album, monkeypatch):
     """Helper function to build the index for the album."""
-    from clipslide.backend.embeddings import Embeddings
+    from photomap.backend.embeddings import Embeddings
 
     monkeypatch.setattr(
         Embeddings, "minimum_image_size", 10 * 1024

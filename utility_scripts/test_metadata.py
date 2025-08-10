@@ -3,7 +3,7 @@ Test metadata formatting.
 '''
 
 from pathlib import Path
-from clipslide.backend.embeddings import Embeddings
+from photomap.backend.embeddings import Embeddings
 
 EMBEDDINGS = '/net/cubox/CineRAID/Archive/InvokeAI/2023/1/embeddings.npz'
 

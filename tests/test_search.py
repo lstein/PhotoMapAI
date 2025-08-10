@@ -17,7 +17,7 @@ TEST_IMAGE_COUNT = count_test_images()
 
 def test_index_update(client, new_album, monkeypatch):
     """Test the creation of an index for the given album."""
-    from clipslide.backend.embeddings import Embeddings
+    from photomap.backend.embeddings import Embeddings
 
     monkeypatch.setattr(
         Embeddings, "minimum_image_size", 10 * 1024
@@ -59,7 +59,7 @@ def test_index_update(client, new_album, monkeypatch):
 def test_index_exists(client, new_album, monkeypatch):
     """Test the index_exists endpoint."""
 
-    from clipslide.backend.embeddings import Embeddings
+    from photomap.backend.embeddings import Embeddings
 
     monkeypatch.setattr(
         Embeddings, "minimum_image_size", 10 * 1024
@@ -95,7 +95,7 @@ def test_index_exists(client, new_album, monkeypatch):
 
 def test_image_search(client, new_album, monkeypatch):
     """Test the search functionality."""
-    from clipslide.backend.embeddings import Embeddings
+    from photomap.backend.embeddings import Embeddings
 
     TEST_IMAGE_FILE = "./tests/test_images/flower1.jpeg"
     TEST_TEXT_FILE = "./tests/test_images/building1.jpeg"
@@ -143,7 +143,7 @@ def test_image_search(client, new_album, monkeypatch):
 
 def test_text_search(client, new_album, monkeypatch):
     """Test the search functionality."""
-    from clipslide.backend.embeddings import Embeddings
+    from photomap.backend.embeddings import Embeddings
 
     TEST_POS_FILE = "./tests/test_images/flower1.jpeg"
     TEST_NEG_FILE = "./tests/test_images/building1.jpeg"

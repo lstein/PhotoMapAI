@@ -4,7 +4,7 @@ Tests for the albums functionality of the Clipslide application.
 """
 from fixtures import client
 
-from clipslide.backend.config import create_album, get_config_manager, Album
+from photomap.backend.config import create_album, get_config_manager, Album
 
 def test_config():
     manager = get_config_manager()
@@ -82,7 +82,7 @@ def test_album_routes(client):
     assert albums[0]['name'] == 'Updated Test Album'
 
     # Check the EPS get/set functionality
-    from clipslide.backend.routers.album import UmapEpsSetRequest  # delay import to avoid early initialization of config manager
+    from photomap.backend.routers.album import UmapEpsSetRequest  # delay import to avoid early initialization of config manager
     response = client.post("/set_umap_eps", json=UmapEpsSetRequest(eps=0.50, album=album.key).model_dump())
     assert response.status_code == 200
     assert response.json() == {"success": True, "eps": 0.50}

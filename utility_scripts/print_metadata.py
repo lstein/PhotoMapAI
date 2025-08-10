@@ -4,7 +4,7 @@ import sys
 import json
 from PIL import Image
 
-from clipslide.backend.embeddings import Embeddings
+from photomap.backend.embeddings import Embeddings
 
 for path in sys.argv[1:]:
     try:

@@ -1,5 +1,5 @@
 """
-clipslide.backend.routers.search
+photomap.backend.routers.search
 This module contains the search-related API endpoints for the Clipslide backend.
 It allows searching images by similarity or text, retrieving image metadata,
 and serving images and thumbnails.

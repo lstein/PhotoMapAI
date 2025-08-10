@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "clipslide"
+name = "photomap"
 version = "0.3.0"
-description = "Image indexing and retrieval using CLIP"
+description = "AI-based image clustering and exploration tool"
 authors = [
     { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
 ]
@@ -42,16 +42,16 @@ testing = [
 
 [tool.setuptools.packages.find]
 where = ["."]  # Look in the current directory (repo root)
-include = ["clipslide*"]  # Include clipslide package and subpackages
+include = ["photomap*"]  # Include photomap package and subpackages
 
 # Include package data files
 [tool.setuptools.package-data]
-"clipslide.frontend" = ["static/**", "templates/**"]
+"photomap.frontend" = ["static/**", "templates/**"]
 
 [project.scripts]
-index_images = "clipslide.backend.imagetool:main"
-update_images = "clipslide.backend.imagetool:main"
-search_images = "clipslide.backend.imagetool:main"
-search_text = "clipslide.backend.imagetool:main"
-find_duplicate_images = "clipslide.backend.imagetool:main"
-start_clipslide = "clipslide.backend.clipslide_server:main"
+index_images = "photomap.backend.imagetool:main"
+update_images = "photomap.backend.imagetool:main"
+search_images = "photomap.backend.imagetool:main"
+search_text = "photomap.backend.imagetool:main"
+find_duplicate_images = "photomap.backend.imagetool:main"
+start_photomap = "photomap.backend.photomap_server:main"

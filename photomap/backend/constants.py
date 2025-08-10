@@ -1,5 +1,5 @@
 '''
-clipslide.backend.constants
+photomap.backend.constants
 Constants used elsewhere in the application.
 Also defines the function get_package_resource_path to retrieve paths to static files or templates.
 '''
@@ -29,14 +29,14 @@ DEFAULT_TOP_K = 20
 try:
     for i in range(len(sys.argv)):
         if sys.argv[i] == "--config":
-            os.environ["CLIPSLIDE_CONFIG"] = sys.argv[i+1]
+            os.environ["PHOTOMAP_CONFIG"] = sys.argv[i+1]
 except IndexError as e:
     logger.warning("Could not parse --config option. Will use default config.")
 
 def get_package_resource_path(resource_name: str) -> str:
     """Get the path to a package resource (static files or templates)."""
     try:
-        package_files = files("clipslide.frontend")
+        package_files = files("photomap.frontend")
         resource_path = package_files / resource_name
 
         if hasattr(resource_path, "as_posix"):

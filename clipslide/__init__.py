@@ -1,1 +1,0 @@
-# This file makes clipslide a package

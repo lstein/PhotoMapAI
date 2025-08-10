@@ -540,7 +540,7 @@ export class AlbumManager {
       key: formData.key,
       name: formData.name,
       image_paths: paths,
-      index: `${paths[0]}/clipslide_index/embeddings.npz`,
+      index: `${paths[0]}/photomap_index/embeddings.npz`,
       umap_eps: 0.1,
       description: formData.description,
     };

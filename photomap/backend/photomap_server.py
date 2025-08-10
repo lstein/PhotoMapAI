@@ -22,7 +22,7 @@ from .routers.index import index_router
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
-app = FastAPI(title="ClipSlide")
+app = FastAPI(title="PhotoMap")
 
 # Include routers
 for router in [umap_router, search_router, index_router, album_router]:
@@ -76,19 +76,19 @@ def main():
         "--config",
         type=Path,
         default=None,
-        help="Path to the configuration file (default: ~/.config/clipslide/config.yaml, uses environment variable CLIPSLIDE_CONFIG)",
+        help="Path to the configuration file (default: ~/.config/photomap/config.yaml, uses environment variable PHOTOMAP_CONFIG)",
     )
     parser.add_argument(
         "--host",
         type=str,
         default="127.0.0.1",
-        help="Network interface to run the server on (default: 127.0.0.1), uses environment variable CLIPSLIDE_HOST",
+        help="Network interface to run the server on (default: 127.0.0.1), uses environment variable PHOTOMAP_HOST",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=8050,
-        help="Port to run the server on (default: 8050), uses environment variable CLIPSLIDE_PORT",
+        help="Port to run the server on (default: 8050), uses environment variable PHOTOMAP_PORT",
     )
     parser.add_argument(
         "--cert",
@@ -109,19 +109,19 @@ def main():
     )
     args = parser.parse_args()
 
-    repo_root = Path(get_package_resource_path("clipslide"),'../..').resolve()
+    repo_root = Path(get_package_resource_path("photomap"),'../..').resolve()
 
-    port = args.port or int(os.environ.get("CLIPSLIDE_PORT", "8050"))
-    host = args.host or os.environ.get("CLIPSLIDE_HOST", "127.0.0.1")
+    port = args.port or int(os.environ.get("PHOTOMAP_PORT", "8050"))
+    host = args.host or os.environ.get("PHOTOMAP_HOST", "127.0.0.1")
 
     if args.config:
-        os.environ["CLIPSLIDE_CONFIG"] = args.config.as_posix()
+        os.environ["PHOTOMAP_CONFIG"] = args.config.as_posix()
 
     config = get_config_manager()
     logger.info(f"Starting Clipslide server with backend root: {repo_root} and configuration file {config.config_path}")
 
     uvicorn.run(
-        "clipslide.backend.clipslide_server:app",
+        "photomap.backend.photomap_server:app",
         host=host,
         port=port,
         reload=args.reload,

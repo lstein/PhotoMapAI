@@ -1,5 +1,5 @@
 """
-clipslide.backend.routers.index
+photomap.backend.routers.index
 This module contains the index-related API endpoints for the Clipslide backend.
 It allows creating, deleting, and checking the existence of embeddings indices for albums.
 """
