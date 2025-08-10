@@ -55,6 +55,10 @@
       <div id="fixedScoreDisplay" class="fixed-score-display">
         <span id="scoreText">score=0.000</span>
       </div>
+
+      <!-- Invisible hover zone that covers slider + ticks area -->
+      <div id="sliderHoverZone" class="slider-hover-zone"></div>
+
       <div id="sliderWithTicksContainer" class="slider-with-ticks-container">
         <input
           type="range"
@@ -65,9 +69,10 @@
           value="1"
           tabindex="-1"
         />
-        <div id="sliderTicks" class="slider-ticks">
-          <div id="contextLabel" class="context-label"></div>
-          <div class="ticks-container" id="ticksContainer"></div>
+
+        <span id="contextLabel" class="context-label"></span>
+        <div class="slider-ticks-row">
+          <div id="sliderTicks" class="slider-ticks"></div>
         </div>
       </div>
     </div>
@@ -565,11 +570,11 @@
             id="umapColorModeContainer"
             style="display: flex; flex-direction: column; margin-bottom: 12px"
           >
-            <label style="display: flex; align-items: center; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 8px">
               <input
                 type="checkbox"
                 id="umapHighlightSelection"
-                style="margin-right: 6px;"
+                style="margin-right: 6px"
               />
               Highlight selection
             </label>
@@ -659,7 +664,11 @@
         <div class="setting-row">
           <label for="locationiqApiKeyInput">LocationIQ Map API Key:</label>
           <div class="setting-input-container">
-            <form id="locationiqApiKeyForm" autocomplete="off" style="margin:0;">
+            <form
+              id="locationiqApiKeyForm"
+              autocomplete="off"
+              style="margin: 0"
+            >
               <input
                 type="password"
                 id="locationiqApiKeyInput"

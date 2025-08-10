@@ -14,18 +14,19 @@ document.addEventListener("DOMContentLoaded", initializeEvents);
 function initializeEvents() {
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
-  ticksContainer = document.getElementById("ticksContainer");
+  ticksContainer = document.getElementById("sliderTicks"); // <-- Change this line
   sliderContainer = document.getElementById("sliderWithTicksContainer");
   contextLabel = document.getElementById("contextLabel");
+  const hoverZone = document.getElementById("sliderHoverZone");
   const scoreElement = scoreDisplay.scoreElement;
 
-  // Show slider on hover over score display or slider container
+  // Show slider on hover over score display or hover zone
   scoreElement.addEventListener("mouseenter", showSlider);
-  sliderContainer.addEventListener("mouseenter", showSlider);
+  hoverZone.addEventListener("mouseenter", showSlider);
 
-  // Hide slider when mouse leaves score display, slider container, or slider
+  // Hide slider when mouse leaves score display or hover zone
   scoreElement.addEventListener("mouseleave", hideSliderWithDelay);
-  sliderContainer.addEventListener("mouseleave", hideSliderWithDelay);
+  hoverZone.addEventListener("mouseleave", hideSliderWithDelay);
 
   function showSlider() {
     sliderContainer.classList.add("visible");
@@ -41,14 +42,12 @@ function initializeEvents() {
 
   function hideSliderWithDelay(event) {
     // Only hide if the mouse has actually left the container, not just moved between children
-    if (
-      !sliderContainer.contains(event.relatedTarget)
-    ) {
+    if (!sliderContainer.contains(event.relatedTarget)) {
       if (fadeOutTimeoutId) clearTimeout(fadeOutTimeoutId);
       fadeOutTimeoutId = setTimeout(() => {
         sliderContainer.classList.remove("visible");
         sliderVisible = false;
-        ticksContainer.innerHTML = "";
+        if (ticksContainer) ticksContainer.innerHTML = "";
         fadeOutTimeoutId = null;
       }, 600);
     }
@@ -230,9 +229,7 @@ async function renderSliderTicks() {
   contextLabel.textContent = contextText;
 
   // Clear and rebuild ticks (but preserve contextLabel)
-  const existingContextLabel = contextLabel;
   ticksContainer.innerHTML = "";
-  ticksContainer.appendChild(existingContextLabel);
 
   // Render ticks as before
   positions.forEach((pos, i) => {
