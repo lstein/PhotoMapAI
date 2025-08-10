@@ -6,6 +6,7 @@ import { addSlideByIndex, getCurrentSlideIndex } from "./swiper.js";
 let sliderVisible = false;
 let scoreText, slider, ticksContainer, sliderContainer, contextLabel;
 let fadeOutTimeoutId = null;
+let TICK_COUNT = 10; // Number of ticks to show on the slider
 
 // Initialize event listeners after the DOM is fully loaded
 document.addEventListener("DOMContentLoaded", initializeEvents);
@@ -13,21 +14,18 @@ document.addEventListener("DOMContentLoaded", initializeEvents);
 function initializeEvents() {
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
-  ticksContainer = document.getElementById("sliderTicks");
+  ticksContainer = document.getElementById("ticksContainer");
   sliderContainer = document.getElementById("sliderWithTicksContainer");
-  contextLabel = document.getElementById("contextLabel"); // Add this
-  const hotspot = document.getElementById("sliderHotspot");
+  contextLabel = document.getElementById("contextLabel");
   const scoreElement = scoreDisplay.scoreElement;
 
-  // Show slider on hover over score display or hotspot
+  // Show slider on hover over score display or slider container
   scoreElement.addEventListener("mouseenter", showSlider);
-  hotspot.addEventListener("mouseenter", showSlider);
-  slider.addEventListener("mouseenter", showSlider);
+  sliderContainer.addEventListener("mouseenter", showSlider);
 
-  // Hide slider when mouse leaves score display, hotspot, or slider
+  // Hide slider when mouse leaves score display, slider container, or slider
   scoreElement.addEventListener("mouseleave", hideSliderWithDelay);
-  hotspot.addEventListener("mouseleave", hideSliderWithDelay);
-  slider.addEventListener("mouseleave", hideSliderWithDelay);
+  sliderContainer.addEventListener("mouseleave", hideSliderWithDelay);
 
   function showSlider() {
     sliderContainer.classList.add("visible");
@@ -41,11 +39,10 @@ function initializeEvents() {
     }
   }
 
-  function hideSliderWithDelay() {
+  function hideSliderWithDelay(event) {
+    // Only hide if the mouse has actually left the container, not just moved between children
     if (
-      !scoreElement.matches(":hover") &&
-      !hotspot.matches(":hover") &&
-      !slider.matches(":hover")
+      !sliderContainer.contains(event.relatedTarget)
     ) {
       if (fadeOutTimeoutId) clearTimeout(fadeOutTimeoutId);
       fadeOutTimeoutId = setTimeout(() => {
@@ -136,22 +133,11 @@ function initializeEvents() {
           : globalIndex + i;
       await addSlideByIndex(seekIndex, targetIndex + i);
     }
+    // Introduvce a slight delay to ensure the swiper is ready
     state.swiper.slideTo(-origin, 0); // Slide to the current one
     swiperContainer.style.visibility = "visible";
 
     updateMetadataOverlay();
-
-    // Fade out after 600ms
-    sliderContainer.classList.add("fade-out");
-    if (fadeOutTimeoutId) {
-      clearTimeout(fadeOutTimeoutId);
-    }
-    fadeOutTimeoutId = setTimeout(() => {
-      sliderContainer.classList.remove("visible");
-      sliderVisible = false;
-      ticksContainer.innerHTML = "";
-      fadeOutTimeoutId = null;
-    }, 5000);
 
     // Blur the slider to remove focus. Otherwise the slider and swiper fight over
     // who responds to arrow keys.
@@ -179,7 +165,7 @@ async function renderSliderTicks() {
 
   let ticks = [];
   let contextText = "";
-  const numTicks = 5;
+  const numTicks = TICK_COUNT;
   let min = parseInt(slider.min, 10);
   let max = parseInt(slider.max, 10);
 

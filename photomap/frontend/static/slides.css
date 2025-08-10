@@ -1960,25 +1960,12 @@ body {
   margin: 0;
   vertical-align: middle;
   opacity: 0;
-  pointer-events: none;
+  pointer-events: none; rwli
   transition: opacity 0.3s;
   display: block;
   position: relative;
   z-index: 502;
 } */
-
-.slider-hotspot {
-  position: absolute;
-  left: calc(180px + 16px); /* width of score display + margin-right */
-  top: 0;
-  width: 32vw;
-  max-width: 400px;
-  min-width: 120px;
-  height: 32px;
-  cursor: pointer;
-  z-index: 501;
-  background: transparent;
-}
 
 .fixed-score-display {
   min-width: 140px;
@@ -2026,30 +2013,9 @@ body {
   background: transparent;
   border: none;
   margin: 0;
-  vertical-align: middle;
-  /* opacity: 0; */
-  /* pointer-events: none; */
   transition: opacity 0.3s;
   display: block;
   z-index: 502;
-}
-
-/* .slide-seek-slider.visible {
-  opacity: 1;
-  pointer-events: auto;
-} */
-
-.slider-hotspot {
-  position: absolute;
-  left: calc(180px + 16px); /* width of score display + margin-right */
-  top: 0;
-  width: 32vw;
-  max-width: 400px;
-  min-width: 120px;
-  height: 32px;
-  cursor: pointer;
-  z-index: 501;
-  background: transparent;
 }
 
 .slider-with-ticks-container {
@@ -2059,13 +2025,12 @@ body {
   min-width: 180px;
   margin: 0 auto;
   opacity: 0;
-  pointer-events: none;
+  pointer-events: auto;
   transition: opacity 0.3s;
 }
 
 .slider-with-ticks-container.visible {
   opacity: 1;
-  pointer-events: auto;
 }
 
 .slider-ticks {
