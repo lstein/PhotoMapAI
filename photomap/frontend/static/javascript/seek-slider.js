@@ -54,13 +54,19 @@ function initializeEvents() {
   }
 
   // Show/hide slider on score display click/tap
-  scoreDisplay.scoreElement.addEventListener("click", toggleSlider);
-  // Touch event for mobile devices
-  scoreDisplay.scoreElement.addEventListener("touchend", (e) => {
+  function handleScoreTap(e) {
     e.preventDefault();
     e.stopPropagation();
     toggleSlider();
-  });
+  }
+
+  // Use touch events for iPad/mobile, click for desktop
+  if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
+    scoreDisplay.scoreElement.addEventListener("touchend", handleScoreTap);
+    hoverZone.addEventListener("touchend", handleScoreTap);
+  } else {
+    scoreDisplay.scoreElement.addEventListener("click", handleScoreTap);
+  }
 
   // Make sure the score element has proper touch handling
   scoreDisplay.scoreElement.style.touchAction = "manipulation";
@@ -254,25 +260,23 @@ async function renderSliderTicks() {
 async function toggleSlider() {
   sliderVisible = !sliderVisible;
   if (sliderVisible) {
-    sliderContainer.classList.add("visible"); // <-- use container
+    sliderContainer.classList.add("visible");
     await updateSliderRange();
     await renderSliderTicks();
   } else {
-    sliderContainer.classList.remove("visible"); // <-- use container
+    sliderContainer.classList.remove("visible");
     ticksContainer.innerHTML = "";
   }
 }
 
 // Update slider range and value based on mode
 async function updateSliderRange() {
-  const [globalIndex, totalSlides, searchIndex] = await getCurrentSlideIndex();
+  const [, totalSlides] = await getCurrentSlideIndex();
   if (state.searchResults?.length > 0) {
     slider.min = 1;
-    // slider.value = searchIndex + 1; // 1-based index
     slider.max = state.searchResults.length;
   } else {
     slider.min = 1;
-    // slider.value = globalIndex + 1; // 1-based index
     slider.max = totalSlides;
   }
 }
