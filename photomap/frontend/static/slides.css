@@ -233,7 +233,7 @@ body {
 .slider-with-ticks-container {
   position: relative;
   width: 60vw;
-  max-width: 900px;
+  /* max-width: 900px; */
   min-width: 320px;
   margin: 0 auto;
   opacity: 0;
@@ -241,6 +241,7 @@ body {
   transition: opacity 0.3s;
   z-index: 2;
 }
+
 
 .slider-with-ticks-container.visible {
   opacity: 1;
@@ -1950,5 +1951,13 @@ body {
 
   #descriptionText {
     font-size: 1em;
+  }
+
+  .slider-with-ticks-container {
+    width: 98vw;
+    max-width: 100vw;
+    min-width: 120px;
+    margin-left: 1vw;
+    margin-right: 1vw;
   }
 }
