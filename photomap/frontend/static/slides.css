@@ -326,6 +326,21 @@ body {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
+.slider-info-panel {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(30,30,30,0.95);
+  color: #faea0e;
+  font-size: 0.95em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 10;
+  white-space: nowrap;
+  transition: left 0.05s, top 0.05s;
+  display: none;
+}
+
 /* ===== SWIPER BUTTON GROUPS ===== */
 #swiperPrevBtnGroup,
 #swiperNextBtnGroup {

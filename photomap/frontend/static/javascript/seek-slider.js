@@ -19,6 +19,7 @@ function initializeEvents() {
   contextLabel = document.getElementById("contextLabel");
   hoverZone = document.getElementById("sliderHoverZone");
   const scoreElement = scoreDisplay.scoreElement;
+  const infoPanel = document.getElementById("sliderInfoPanel");
 
   // Show slider on hover over score display or hover zone
   scoreElement.addEventListener("mouseenter", showSlider);
@@ -63,8 +64,63 @@ function initializeEvents() {
   scoreDisplay.scoreElement.style.touchAction = "manipulation";
 
   // When slider changes, update score display and seek to slide
-  slider.addEventListener("input", async function () {
+  slider.addEventListener("input", async function (e) {
     await renderSliderTicks();
+    resetFadeOutTimer();
+
+    const value = parseInt(slider.value, 10);
+    let panelText = "";
+    if (
+      state.searchResults?.length > 0 &&
+      state.searchResults[0].score !== undefined
+    ) {
+      const result = state.searchResults[value - 1];
+      panelText = result ? `Score: ${result.score.toFixed(3)}` : "";
+    } else if (!state.searchResults || state.searchResults.length === 0) {
+      try {
+        const albumKey = state.album;
+        const resp = await fetch(`image_info/${albumKey}/${value - 1}`);
+        if (resp.ok) {
+          const info = await resp.json();
+          const date = new Date(info.last_modified * 1000);
+          panelText = `${String(date.getDate()).padStart(2, "0")}/${String(
+            date.getMonth() + 1
+          ).padStart(2, "0")}/${String(date.getFullYear()).slice(-2)}`;
+        }
+      } catch {
+        panelText = "";
+      }
+    } else if (state.searchResults[0].cluster !== undefined) {
+      panelText = "";
+    }
+
+    if (panelText) {
+      infoPanel.textContent = panelText;
+      infoPanel.style.display = "block";
+
+      // Position panel above mouse if possible, else above thumb
+      let left = 0;
+      let top = 0;
+      const containerRect = sliderContainer.getBoundingClientRect();
+
+      if (e && typeof e.clientX === "number") {
+        // Mouse event: position above mouse
+        left = e.clientX - containerRect.left - infoPanel.offsetWidth / 2;
+        top = slider.offsetTop - infoPanel.offsetHeight - 8;
+      } else {
+        // Fallback: position above slider thumb
+        const percent = (value - slider.min) / (slider.max - slider.min);
+        const sliderRect = slider.getBoundingClientRect();
+        left = percent * sliderRect.width - infoPanel.offsetWidth / 2;
+        top = slider.offsetTop - infoPanel.offsetHeight - 8;
+      }
+
+      infoPanel.style.left = `${left}px`;
+      infoPanel.style.top = `${top}px`;
+    } else {
+      infoPanel.style.display = "none";
+    }
+
     resetFadeOutTimer();
     const targetIndex = parseInt(slider.value, 10) - 1;
     let globalIndex;
@@ -137,6 +193,14 @@ function initializeEvents() {
       await renderSliderTicks();
       resetFadeOutTimer();
     }, 1000);
+  });
+
+  // Hide panel when slider loses focus or mouse leaves
+  slider.addEventListener("mouseleave", () => {
+    infoPanel.style.display = "none";
+  });
+  slider.addEventListener("blur", () => {
+    infoPanel.style.display = "none";
   });
 }
 
