@@ -4,20 +4,20 @@ import { state } from "./state.js";
 import { addSlideByIndex, getCurrentSlideIndex } from "./swiper.js";
 
 let sliderVisible = false;
-let scoreText, slider, ticksContainer, sliderContainer, contextLabel;
+let scoreText, slider, ticksContainer, sliderContainer, contextLabel, hoverZone;
 let fadeOutTimeoutId = null;
 let TICK_COUNT = 10; // Number of ticks to show on the slider
+const FADE_OUT_DELAY = 10000; // 10 seconds
 
-// Initialize event listeners after the DOM is fully loaded
 document.addEventListener("DOMContentLoaded", initializeEvents);
 
 function initializeEvents() {
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
-  ticksContainer = document.getElementById("sliderTicks"); // <-- Change this line
+  ticksContainer = document.getElementById("sliderTicks");
   sliderContainer = document.getElementById("sliderWithTicksContainer");
   contextLabel = document.getElementById("contextLabel");
-  const hoverZone = document.getElementById("sliderHoverZone");
+  hoverZone = document.getElementById("sliderHoverZone");
   const scoreElement = scoreDisplay.scoreElement;
 
   // Show slider on hover over score display or hover zone
@@ -28,31 +28,6 @@ function initializeEvents() {
   scoreElement.addEventListener("mouseleave", hideSliderWithDelay);
   hoverZone.addEventListener("mouseleave", hideSliderWithDelay);
 
-  function showSlider() {
-    sliderContainer.classList.add("visible");
-    sliderVisible = true;
-    updateSliderRange().then(() => {
-      renderSliderTicks();
-    });
-    if (fadeOutTimeoutId) {
-      clearTimeout(fadeOutTimeoutId);
-      fadeOutTimeoutId = null;
-    }
-  }
-
-  function hideSliderWithDelay(event) {
-    // Only hide if the mouse has actually left the container, not just moved between children
-    if (!sliderContainer.contains(event.relatedTarget)) {
-      if (fadeOutTimeoutId) clearTimeout(fadeOutTimeoutId);
-      fadeOutTimeoutId = setTimeout(() => {
-        sliderContainer.classList.remove("visible");
-        sliderVisible = false;
-        if (ticksContainer) ticksContainer.innerHTML = "";
-        fadeOutTimeoutId = null;
-      }, 600);
-    }
-  }
-
   // Show/hide slider on score display click/tap
   function handleScoreTap(e) {
     e.preventDefault();
@@ -62,8 +37,24 @@ function initializeEvents() {
 
   // Use touch events for iPad/mobile, click for desktop
   if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
-    scoreDisplay.scoreElement.addEventListener("touchend", handleScoreTap);
-    hoverZone.addEventListener("touchend", handleScoreTap);
+    scoreElement.addEventListener(
+      "touchend",
+      (event) => {
+        handleScoreTap(event);
+        hideSliderWithDelay(event);
+      },
+      {
+        passive: false,
+      }
+    );
+    hoverZone.addEventListener(
+      "touchend",
+      (event) => {
+        handleScoreTap(event);
+        hideSliderWithDelay(event);
+      },
+      { passive: false }
+    );
   } else {
     scoreDisplay.scoreElement.addEventListener("click", handleScoreTap);
   }
@@ -74,12 +65,7 @@ function initializeEvents() {
   // When slider changes, update score display and seek to slide
   slider.addEventListener("input", async function () {
     await renderSliderTicks();
-    // Cancel any pending fade out
-    if (fadeOutTimeoutId) {
-      clearTimeout(fadeOutTimeoutId);
-      fadeOutTimeoutId = null;
-      sliderContainer.classList.remove("fade-out");
-    }
+    resetFadeOutTimer();
     const targetIndex = parseInt(slider.value, 10) - 1;
     let globalIndex;
     if (state.searchResults?.length > 0) {
@@ -103,11 +89,11 @@ function initializeEvents() {
       globalIndex = targetIndex;
       scoreDisplay.showIndex(globalIndex, slider.max);
     }
-    // scoreText.textContent = `score=${getScoreForIndex(globalIndex)}`;
   });
 
   // When slider is released, seek to slide
   slider.addEventListener("change", async function () {
+    resetFadeOutTimer();
     let globalIndex;
     let [, totalSlides] = await getCurrentSlideIndex();
 
@@ -117,10 +103,8 @@ function initializeEvents() {
     } else {
       globalIndex = targetIndex;
     }
-    // Seek: reset slides and load previous, current, next
     await state.swiper.removeAllSlides();
 
-    // Add 2 slides before and after the current one
     let origin = -2;
     let slides_to_add = 5;
     if (globalIndex + origin < 0) {
@@ -131,21 +115,17 @@ function initializeEvents() {
     for (let i = origin; i < slides_to_add; i++) {
       if (targetIndex + i >= totalSlides) break;
       let randomMode =
-        state.mode === "random" && state.searchResults?.length === 0; // in random mode, seek to the chosen image, but surrount it with random images
+        state.mode === "random" && state.searchResults?.length === 0;
       let seekIndex =
         randomMode && i != 0
           ? Math.floor(Math.random() * totalSlides)
           : globalIndex + i;
       await addSlideByIndex(seekIndex, targetIndex + i);
     }
-    // Introduvce a slight delay to ensure the swiper is ready
-    state.swiper.slideTo(-origin, 0); // Slide to the current one
+    state.swiper.slideTo(-origin, 0);
     swiperContainer.style.visibility = "visible";
 
     updateMetadataOverlay();
-
-    // Blur the slider to remove focus. Otherwise the slider and swiper fight over
-    // who responds to arrow keys.
     slider.blur();
   });
 
@@ -155,8 +135,51 @@ function initializeEvents() {
       slider.value =
         state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
       await renderSliderTicks();
+      resetFadeOutTimer();
     }, 1000);
   });
+}
+
+function showSlider() {
+  sliderContainer.classList.add("visible");
+  sliderVisible = true;
+  updateSliderRange().then(() => {
+    renderSliderTicks();
+  });
+  resetFadeOutTimer();
+}
+
+function hideSliderWithDelay(event) {
+  // Only hide if the mouse has actually left the container, not just moved between children
+  if (!sliderContainer.contains(event.relatedTarget)) {
+    clearFadeOutTimer();
+    fadeOutTimeoutId = setTimeout(() => {
+      sliderContainer.classList.remove("visible");
+      sliderVisible = false;
+      if (ticksContainer) ticksContainer.innerHTML = "";
+      fadeOutTimeoutId = null;
+    }, 600);
+  }
+}
+
+function resetFadeOutTimer() {
+  clearFadeOutTimer();
+  fadeOutTimeoutId = setTimeout(() => {
+    // Only fade out if mouse is NOT inside hoverZone
+    if (!hoverZone.matches(":hover")) {
+      sliderContainer.classList.remove("visible");
+      sliderVisible = false;
+      if (ticksContainer) ticksContainer.innerHTML = "";
+      fadeOutTimeoutId = null;
+    }
+  }, FADE_OUT_DELAY);
+}
+
+function clearFadeOutTimer() {
+  if (fadeOutTimeoutId) {
+    clearTimeout(fadeOutTimeoutId);
+    fadeOutTimeoutId = null;
+  }
 }
 
 // Helper to render ticks
@@ -234,10 +257,9 @@ async function renderSliderTicks() {
   // Set context label
   contextLabel.textContent = contextText;
 
-  // Clear and rebuild ticks (but preserve contextLabel)
+  // Clear and rebuild ticks
   ticksContainer.innerHTML = "";
 
-  // Render ticks as before
   positions.forEach((pos, i) => {
     const percent = ((pos - min) / (max - min)) * 100;
     const tick = document.createElement("div");
@@ -263,9 +285,11 @@ async function toggleSlider() {
     sliderContainer.classList.add("visible");
     await updateSliderRange();
     await renderSliderTicks();
+    resetFadeOutTimer();
   } else {
     sliderContainer.classList.remove("visible");
-    ticksContainer.innerHTML = "";
+    if (ticksContainer) ticksContainer.innerHTML = "";
+    clearFadeOutTimer();
   }
 }
 
