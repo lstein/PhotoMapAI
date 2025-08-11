@@ -64,11 +64,44 @@ function initializeEvents() {
   scoreDisplay.scoreElement.style.touchAction = "manipulation";
 
   // When slider changes, update score display and seek to slide
+  let lastFetchTime = 0;
+  const FETCH_THROTTLE_MS = 200; // Maximum one request per 200ms
+
   slider.addEventListener("input", async function (e) {
-    await renderSliderTicks();
+    const now = Date.now();
+    const value = parseInt(slider.value, 10);
+
+    // Show panel immediately with placeholder
+    infoPanel.style.display = "block";
+
+    // Only fetch if enough time has passed
+    if (now - lastFetchTime >= FETCH_THROTTLE_MS) {
+      lastFetchTime = now;
+
+      if (!state.searchResults || state.searchResults.length === 0) {
+        try {
+          const albumKey = state.album;
+          const resp = await fetch(`image_info/${albumKey}/${value - 1}`);
+          if (resp.ok) {
+            const info = await resp.json();
+            const date = new Date(info.last_modified * 1000);
+            const panelText = `${String(date.getDate()).padStart(
+              2,
+              "0"
+            )}/${String(date.getMonth() + 1).padStart(
+              2,
+              "0"
+            )}/${String(date.getFullYear()).slice(-2)}`;
+            infoPanel.textContent = panelText;
+          }
+        } catch {
+          infoPanel.textContent = "";
+        }
+      }
+    }
+
     resetFadeOutTimer();
 
-    const value = parseInt(slider.value, 10);
     let panelText = "";
     if (
       state.searchResults?.length > 0 &&
