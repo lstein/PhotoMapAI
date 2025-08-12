@@ -135,10 +135,6 @@ async def image_info(
         raise HTTPException(status_code=404, detail="Image not found in index")
     original_index = filename_map[filename]
 
-    logger.info(
-        f"{index=}; {filename=}; {original_index=}; {data['filenames'][original_index]}; modified={modification_times[original_index]}"
-    )
-
     return ImageData(
         image_path=str(filename),
         last_modified=modification_times[original_index],
