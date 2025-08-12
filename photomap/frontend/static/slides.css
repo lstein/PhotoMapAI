@@ -39,7 +39,6 @@ body {
   -khtml-user-drag: none;
   -moz-user-drag: none;
   -o-user-drag: none;
-  /* Add this line for native pinch-zoom */
   touch-action: pinch-zoom;
 }
 
@@ -158,7 +157,7 @@ body {
   font-size: 1em;
   font-weight: bold;
   text-align: center;
-  margin-bottom: 0.2em; /* Add a little space below the label */
+  margin-bottom: 0.2em;
   letter-spacing: 0.5px;
   width: 100%;
   display: block;
@@ -172,7 +171,174 @@ body {
   justify-content: center;
   gap: 1em;
   width: 100%;
-  /* Remove any margin-top if present */
+}
+
+/* ===== SCORE DISPLAY & SLIDER ===== */
+.fixed-score-display {
+  min-width: 140px;
+  max-width: 220px;
+  width: 180px;
+  font-size: 1.05em;
+  padding: 2px 18px;
+  border-radius: 12px;
+  background: rgba(30, 30, 30, 0.85);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  user-select: none;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  white-space: nowrap;
+  pointer-events: auto;
+  margin-right: 16px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: none;
+}
+
+.fixed-score-display.visible {
+  display: block;
+  opacity: 0.5;
+}
+
+.fixed-score-display.hidden {
+  display: none;
+  opacity: 0;
+}
+
+.score-slider-row {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 500;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 60px;
+}
+
+.slider-hover-zone {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: auto;
+  background: transparent;
+}
+
+.slider-with-ticks-container {
+  position: relative;
+  width: 60vw;
+  /* max-width: 900px; */
+  min-width: 320px;
+  margin: 0 auto;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.3s;
+  z-index: 2;
+}
+
+
+.slider-with-ticks-container.visible {
+  opacity: 1;
+}
+
+.slide-seek-slider {
+  width: 100%;
+  position: relative;
+  height: 18px;
+  accent-color: #888;
+  background: transparent;
+  border: none;
+  margin: 0;
+  transition: opacity 0.3s;
+  display: block;
+  z-index: 502;
+}
+.slider-ticks-row {
+  position: absolute;
+  left: 0;
+  top: 100%; /* Position just below the slider */
+  width: 100%; /* Full width of the slider container */
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.context-label {
+  position: absolute;
+  right: 100%;
+  top: 100%; /* Same vertical position as ticks */
+  font-size: 0.85em;
+  color: white;
+  font-weight: bold;
+  text-align: right;
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0.9;
+  width: 80px;
+  margin-top: 10px; /* Align with tick labels */
+  margin-right: 32px;
+  z-index: 3;
+}
+
+.slider-ticks {
+  flex: 1;
+  position: relative;
+  height: 32px;
+}
+
+.slider-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 0;
+}
+
+.slider-tick-mark {
+  width: 2px;
+  height: 8px;
+  transform: translateY(-4px);
+  background: white;
+  margin-bottom: 2px;
+  opacity: 0.7;
+}
+
+.slider-tick-label {
+  font-size: 0.75em;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0.95;
+  user-select: none;
+  background: rgba(30, 30, 30, 0.85);
+  border-radius: 4px;
+  padding: 1px 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.slider-info-panel {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(30,30,30,0.95);
+  color: #faea0e;
+  font-size: 0.95em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 10;
+  white-space: nowrap;
+  transition: left 0.05s, top 0.05s;
+  display: none;
 }
 
 /* ===== SWIPER BUTTON GROUPS ===== */
@@ -235,7 +401,6 @@ body {
   pointer-events: auto;
 }
 
-/* Fix the close button positioning */
 #closeOverlayBtn {
   position: absolute;
   top: 20px;
@@ -258,29 +423,6 @@ body {
   background: rgba(0, 0, 0, 0.9);
 }
 
-/* Add these new animations */
-@keyframes slideUpFromBottom {
-  from {
-    opacity: 0;
-    transform: translateY(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideDownToBottom {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(100%);
-  }
-}
-
 /* ===== FILE INFO BANNER ===== */
 .filename-banner {
   position: relative;
@@ -296,7 +438,6 @@ body {
   pointer-events: auto;
 }
 
-/* Update text alignment for left-side placement */
 .filenameDescContainer {
   display: flex;
   flex-direction: column;
@@ -351,34 +492,15 @@ body {
   margin-bottom: 0.5em;
 }
 
-/* ===== FIXED SCORE DISPLAY ===== */
-/* .fixed-score-display {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 8px 16px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 6px;
-  z-index: 5000;
-  pointer-events: none;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  -webkit-font-smoothing: antialiased;
-  transition: opacity 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-} */
-
-.fixed-score-display.visible {
-  display: block;
-  opacity: 0.5;
-}
-
-.fixed-score-display.hidden {
-  display: none;
-  opacity: 0;
+#filenameText {
+  display: inline-block;
+  max-width: 100%;
+  font-weight: bold;
+  color: #fff700;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
+  vertical-align: middle;
 }
 
 /* ===== SPINNER ===== */
@@ -429,16 +551,14 @@ body {
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
   padding: 1.2em 1.5em;
   z-index: 2000;
-  /* width: 33vw; */
   min-width: 300px;
-  /* max-width: 75vw; */
   transition: opacity 0.2s;
 }
 
 .search-controls {
   display: flex;
-  flex-direction: column; /* <-- stack children vertically */
-  align-items: stretch; /* <-- make children fill width */
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.5em;
   position: relative;
 }
@@ -509,7 +629,6 @@ body {
   align-self: flex-end;
 }
 
-/* Text search inputs */
 .vertical-search-inputs {
   display: flex;
   flex-direction: column;
@@ -550,7 +669,6 @@ body {
   color: #fff;
 }
 
-/* Bold yellow for the Search label */
 .search-label[for="searchInput"],
 .search-label[for="negativeSearchInput"] {
   color: #faea0e;
@@ -609,7 +727,7 @@ body {
 .settings-modal {
   position: fixed;
   min-width: 320px;
-  z-index: 11000; /* higher than the umap window */
+  z-index: 11000;
 }
 
 .settings-header {
@@ -752,7 +870,6 @@ body {
   border: 1px solid #888;
   background: #333;
   color: #fff;
-  /* font-size: 0.5em; */
   min-width: 150px;
 }
 
@@ -766,9 +883,6 @@ body {
 .album-management-modal {
   color: #fff;
   margin: 0;
-}
-
-.album-management-modal {
   width: 80vw;
   max-width: 800px;
   max-height: 80vh;
@@ -793,21 +907,7 @@ body {
   gap: 1em;
   align-items: center;
 }
-/* 
-.album-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-  margin: 0;
-}
 
-.album-text {
-  color: #fff;
-  font-size: 1.1em;
-  margin: 0;
-} */
-
-/* ===== ADD ALBUM SECTION ===== */
 .add-album-section {
   display: none;
   margin-bottom: 2em;
@@ -836,7 +936,6 @@ body {
   cursor: pointer;
 }
 
-/* ===== FORM STYLES ===== */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -874,7 +973,6 @@ body {
   gap: 0.5em;
 }
 
-/* ===== ALBUM CARD STYLES ===== */
 .album-card {
   background: #333;
   border-radius: 8px;
@@ -890,7 +988,7 @@ body {
 
 .album-details {
   display: grid;
-  grid-template-columns: 1.5fr 1fr auto; /* album-text, indexing-section, action-buttons */
+  grid-template-columns: 1.5fr 1fr auto;
   gap: 1em;
   align-items: start;
 }
@@ -941,19 +1039,15 @@ body {
 .index-status.scanning {
   color: #636ceb;
 }
-
 .index-status.indexing {
   color: #ff9800 !important;
 }
-
 .index-status.completed {
   color: green !important;
 }
-
 .index-status.error {
   color: #b00020 !important;
 }
-
 .index-status.umapping {
   color: #2196f3 !important;
 }
@@ -989,7 +1083,6 @@ body {
   margin-top: 0;
 }
 
-/* ===== PROGRESS STYLES ===== */
 .progress-container {
   display: none;
   width: 100%;
@@ -1157,7 +1250,6 @@ body {
   pointer-events: none;
 }
 
-/* ===== FULLSCREEN INDICATOR ===== */
 .fullscreen-playback-indicator {
   position: fixed;
   top: 50%;
@@ -1184,7 +1276,6 @@ body {
   transform: translate(-50%, -50%) scale(1);
 }
 
-/* ===== EXIF METADATA ===== */
 .exif-metadata {
   white-space: normal !important;
 }
@@ -1257,15 +1348,12 @@ body {
 #uploadImageInput {
   display: none;
 }
-
 #playIcon {
   display: inline;
 }
-
 #pauseIcon {
   display: none;
 }
-
 #clearSearchBtn {
   display: none;
 }
@@ -1275,7 +1363,6 @@ body {
 #textSearchPanel.dragover {
   outline: 2px dashed limegreen;
   background: rgba(0, 255, 0, 0.1);
-  /* padding: 0; */
 }
 
 #imageSearchBtn,
@@ -1283,58 +1370,6 @@ body {
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
-}
-
-/* ===== RESPONSIVE DESIGN ===== */
-@media (max-width: 768px) {
-  .album-management-modal {
-    width: 95vw;
-    max-height: 90vh;
-    padding: 1em;
-  }
-
-  .album-card {
-    font-size: 0.9em;
-  }
-
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  #filenameBanner {
-    min-width: 180px;
-    padding: 0.5em 1em;
-    font-size: 0.95em;
-    overflow-wrap: anywhere;
-    word-break: break-all;
-  }
-
-  #descriptionText {
-    font-size: 1em;
-  }
-}
-
-@media (max-width: 100%) {
-  #filenameBanner {
-    min-width: 180px;
-    padding: 0.5em 1em;
-    font-size: 0.95em;
-  }
-
-  #descriptionText {
-    font-size: 1em;
-  }
-}
-
-#filenameText {
-  display: inline-block;
-  max-width: 100%;
-  font-weight: bold;
-  color: #fff700;
-  overflow-wrap: anywhere;
-  word-break: break-all;
-  white-space: normal;
-  vertical-align: middle;
 }
 
 /* ===== ALBUM SELECTOR GROUP ===== */
@@ -1356,7 +1391,6 @@ body {
   padding: 0.4em 0.8em;
 }
 
-/* Move Add Album button 2-3 pixels to the left to avoid collision with close box */
 #showAddAlbumBtn {
   transform: translateX(-3px);
 }
@@ -1376,26 +1410,20 @@ body {
   flex-direction: row;
 }
 
-/* When container is visible, slide it out to the right */
 .banner-drawer-container.visible {
-  transform: translateX(0); /* Slide out from left edge */
+  transform: translateX(0);
 }
 
-/* Hide container in fullscreen mode */
 .banner-drawer-container.hidden-fullscreen {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
 }
 
-/* Make sure only drawer is visible at left when container is hidden */
 .banner-drawer-container:not(.visible) {
-  transform: translateX(
-    calc(-100% + 20px)
-  ); /* Show only drawer tab from left */
+  transform: translateX(calc(-100% + 20px));
 }
 
-/* ===== OVERLAY DRAWER ===== */
 .overlay-drawer {
   position: relative;
   width: 20px;
@@ -1410,14 +1438,8 @@ body {
 .drawer-handle {
   width: 100%;
   height: 100%;
-  /* File folder tab shape -  narrower at right since it's on the right */
   background: rgba(240, 209, 209, 0.5);
-  clip-path: polygon(
-    0% 0%,
-    80% 20%,
-    80% 80%,
-    0% 100%
-  ); /* Vertical trapezoid on right */
+  clip-path: polygon(0% 0%, 80% 20%, 80% 80%, 0% 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1433,6 +1455,7 @@ body {
 .banner-drawer-container.visible .drawer-handle {
   background: rgba(0, 0, 0, 0.5);
 }
+
 .drawer-arrow {
   transition: transform 0.3s ease;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
@@ -1440,16 +1463,14 @@ body {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  color: #faea0e; /* Yellow color for SVG stroke */
-  fill: #faea0e; /* Yellow color for SVG fill */
+  color: #faea0e;
+  fill: #faea0e;
 }
 
-/* When container is visible, flip arrow to left */
 .banner-drawer-container.visible .drawer-arrow {
-  transform: rotate(-90deg) translateY(-5px); /* Point left when banner is visible */
+  transform: rotate(-90deg) translateY(-5px);
 }
 
-/* ===== COPY TEXT BUTTON ===== */
 #copyTextBtn {
   background: transparent !important;
   border: none;
@@ -1478,8 +1499,7 @@ body {
   fill: currentColor;
 }
 
-/* Add to slides.css */
-/* Zoom container for mobile devices */
+/* ===== ZOOM & SWIPER ENHANCEMENTS ===== */
 .swiper-zoom-container {
   width: 100%;
   height: 100%;
@@ -1499,23 +1519,20 @@ body {
   user-select: none;
 }
 
-/* When zoomed, show move cursor */
 .swiper-slide-zoomed .swiper-zoom-container {
   cursor: move;
 }
 
-/* Swiper wrapper */
 .swiper-wrapper {
   display: flex;
 }
 
-/* Upload link positioning */
 .upload-link-container {
   position: absolute;
-  top: 100%; /* Position below the button */
+  top: 100%;
   left: 50%;
   transform: translate(-50%, -18px);
-  margin-top: 2px; /* Small gap below button */
+  margin-top: 2px;
   white-space: nowrap;
 }
 
@@ -1544,8 +1561,6 @@ body {
   font-size: 12px;
   color: #fff;
   text-align: center;
-  /* transform: translateY(-100%); */
-  /* margin-top: 2px; */
   opacity: 0.8;
 }
 
@@ -1556,27 +1571,25 @@ body {
   gap: 2px;
 }
 
-/* Hide the entire container when the button is hidden */
 .clear-search-container:has(#clearSearchBtn[style*="display: none"]) {
   display: none;
 }
 
-/* Alternative approach if :has() isn't supported */
 #clearSearchBtn[style*="display: none"] + .button-label {
   display: none;
 }
 
+/* ===== UMAP FLOATING WINDOW ===== */
 #umapFloatingWindow {
   position: fixed;
-  z-index: 2000; /* or higher than main content, but lower than spinner */
+  z-index: 1000;
   display: none;
   top: 8px;
   right: 8px;
-  background: rgba(24, 24, 32, 0.75) !important; /* dark background */
-  color: #eee; /* light text */
+  background: rgba(24, 24, 32, 0.75) !important;
+  color: #eee;
   box-shadow: 0 4px 32px rgba(0, 0, 0, 0.7);
   border-radius: 12px;
-  z-index: 1000;
   min-width: 200px;
   min-height: 200px;
   width: auto;
@@ -1585,7 +1598,6 @@ body {
   padding: 4px;
   max-width: 100vw !important;
   max-height: 100vh !important;
-  border-radius: 0 !important;
 }
 
 #umapColorModeContainer {
@@ -1601,6 +1613,7 @@ body {
   border-radius: 50%;
   transition: background 0.2s;
 }
+
 .icon-btn:hover,
 .icon-btn:focus {
   background: rgba(255, 255, 255, 0.12);
@@ -1608,24 +1621,15 @@ body {
 
 .icon-btn.active {
   box-shadow: 0 0 8px 2px #4caf50, 0 0 16px 4px #2196f3;
-  background: rgba(76, 175, 80, 0.1); /* subtle green glow background */
+  background: rgba(76, 175, 80, 0.1);
   border: 2px solid #4caf50;
   z-index: 2;
-}
-
-.search-icons-row {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 1em;
-  width: 100%;
 }
 
 #albumsScrollContainer {
   max-height: 60vh;
   overflow-y: auto;
-  padding-right: 8px; /* Optional: for scrollbar spacing */
+  padding-right: 8px;
 }
 
 #umapTitlebar {
@@ -1642,15 +1646,6 @@ body {
   font-size: 1em;
 }
 
-.control-icons-row {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 1em;
-  width: 100%;
-}
-
 .control-icon-container {
   display: flex;
   flex-direction: column;
@@ -1658,7 +1653,6 @@ body {
   gap: 2px;
 }
 
-/* Show and hide labels in the control panels */
 .hide-panel-text .control-panel-title,
 .hide-panel-text .button-label,
 .hide-panel-text .search-panel-title,
@@ -1666,7 +1660,7 @@ body {
   display: none !important;
 }
 
-/* Weight Slider Widget */
+/* ===== WEIGHT SLIDER WIDGET ===== */
 .weight-slider {
   display: flex;
   align-items: center;
@@ -1730,16 +1724,10 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 110px;
-  max-width: 140px;
-  flex-shrink: 0;
-  margin-right: 0.5em;
-}
-
-/* Make the thumbnail area larger and keep it centered */
-.search-image-column {
   min-width: 140px;
   max-width: 180px;
+  flex-shrink: 0;
+  margin-right: 0.5em;
 }
 
 .search-image-label {
@@ -1785,7 +1773,6 @@ body {
   font-size: 2.2em;
 }
 
-/* Center the image weight slider perfectly under the thumbnail */
 .search-image-column .search-row {
   width: 100%;
   display: flex;
@@ -1805,7 +1792,6 @@ body {
   padding: 0;
 }
 
-/* This ensures the slider itself is centered */
 #imgPromptWeightSlider {
   transform: translateX(-25%);
   margin-left: 0 auto;
@@ -1813,10 +1799,8 @@ body {
   justify-content: center;
 }
 
-/* Indent the positive and negative weight sliders under their respective input fields */
 #posPromptWeightSlider,
 #negPromptWeightSlider {
-  /* Optional: ensure the slider itself doesn't stretch full width */
   width: max-content;
 }
 
@@ -1828,7 +1812,6 @@ body {
   width: 100%;
 }
 
-/* Each label/input pair is a row in the grid */
 .search-label {
   grid-column: 1;
   text-align: right;
@@ -1857,7 +1840,6 @@ body {
   color: #fff;
 }
 
-/* Weight row styling */
 .weight-row {
   display: flex;
   align-items: center;
@@ -1865,11 +1847,11 @@ body {
   margin-top: 0.2em;
 }
 
-/* Make Swiper pagination bullets larger, with a white border and subtle shadow */
+/* ===== SWIPER PAGINATION ===== */
 .swiper-pagination-bullet {
   width: 16px;
   height: 16px;
-  background: rgba(255, 255, 255, 0.75); /* Brighter background */
+  background: rgba(255, 255, 255, 0.75);
   border: 2px solid #fff;
   box-shadow: 0 0 4px 2px rgba(0, 0, 0, 0.4);
   opacity: 1;
@@ -1883,7 +1865,6 @@ body {
   box-shadow: 0 0 8px 3px #fa4913cc, 0 0 4px 2px rgba(0, 0, 0, 0.4);
 }
 
-/* Optional: Make the pagination row stand out with a background and rounded corners */
 .swiper-pagination {
   position: relative;
   padding: 6px 18px;
@@ -1893,13 +1874,7 @@ body {
   bottom: 50px !important;
 }
 
-@media (max-width: 480px) {
-  .swiper-pagination {
-    display: none !important;
-  }
-}
-
-/* ===== UMAP THUMBNAIL DIV STYLES ===== */
+/* ===== UMAP THUMBNAIL STYLES ===== */
 .umap-thumbnail {
   position: fixed;
   z-index: 99999;
@@ -1949,110 +1924,55 @@ body {
   margin-top: 2px;
 }
 
-.slide-seek-slider {
-  width: 32vw;
-  max-width: 400px;
-  min-width: 120px;
-  height: 18px;
-  accent-color: #888;
-  background: transparent;
-  border: none;
-  margin: 0;
-  vertical-align: middle;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s;
-  display: block;
-  position: relative;
-  z-index: 502;
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 768px) {
+  .album-management-modal {
+    width: 95vw;
+    max-height: 90vh;
+    padding: 1em;
+  }
+
+  .album-card {
+    font-size: 0.9em;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #filenameBanner {
+    min-width: 180px;
+    padding: 0.5em 1em;
+    font-size: 0.95em;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+
+  #descriptionText {
+    font-size: 1em;
+  }
 }
 
-.slide-seek-slider.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
+@media (max-width: 480px) {
+  .swiper-pagination {
+    display: none !important;
+  }
 
-.slider-hotspot {
-  position: absolute;
-  left: calc(180px + 16px); /* width of score display + margin-right */
-  top: 0;
-  width: 32vw;
-  max-width: 400px;
-  min-width: 120px;
-  height: 32px;
-  cursor: pointer;
-  z-index: 501;
-  background: transparent;
-}
+  #filenameBanner {
+    min-width: 180px;
+    padding: 0.5em 1em;
+    font-size: 0.95em;
+  }
 
-.fixed-score-display {
-  min-width: 140px;
-  max-width: 220px;
-  width: 180px;
-  font-size: 1.05em;
-  padding: 2px 18px;
-  border-radius: 12px;
-  background: rgba(30, 30, 30, 0.85);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  cursor: pointer;
-  user-select: none;
-  min-height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  white-space: nowrap;
-  pointer-events: auto;
-  margin-right: 16px;
-  cursor: pointer;
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  display: none;
-}
+  #descriptionText {
+    font-size: 1em;
+  }
 
-.score-slider-row {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  z-index: 500;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-}
-
-.slide-seek-slider {
-  width: 32vw;
-  max-width: 400px;
-  min-width: 120px;
-  height: 18px;
-  accent-color: #888;
-  background: transparent;
-  border: none;
-  margin: 0;
-  vertical-align: middle;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s;
-  display: block;
-  position: relative;
-  z-index: 502;
-}
-
-.slide-seek-slider.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.slider-hotspot {
-  position: absolute;
-  left: calc(180px + 16px); /* width of score display + margin-right */
-  top: 0;
-  width: 32vw;
-  max-width: 400px;
-  min-width: 120px;
-  height: 32px;
-  cursor: pointer;
-  z-index: 501;
-  background: transparent;
+  .slider-with-ticks-container {
+    width: 98vw;
+    max-width: 100vw;
+    min-width: 120px;
+    margin-left: 1vw;
+    margin-right: 1vw;
+  }
 }

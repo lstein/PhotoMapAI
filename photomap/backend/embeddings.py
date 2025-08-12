@@ -12,6 +12,7 @@ import functools
 import logging
 import os
 import warnings
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, ClassVar, Dict, Generator, Optional, Set
 
@@ -143,6 +144,27 @@ class Embeddings(BaseModel):
             raise ValueError("Input must be a Path object or a list of Paths.")
         return images
 
+    def _get_modification_time(self, metadata: dict) -> Optional[float]:
+        """
+        Extract the modification time from image metadata.
+        If no valid EXIF date is found, use the file's last modified time.
+        """
+        # Check for common EXIF date fields
+        date_fields = ["DateTimeOriginal", "DateTimeDigitized", "DateTime"]
+        for field in date_fields:
+            if field in metadata:
+                date_str = metadata[field]
+                try:
+                    # EXIF date format is "YYYY:MM:DD HH:MM:SS"
+                    dt = datetime.strptime(date_str, "%Y:%m:%d %H:%M:%S")
+                    return dt.timestamp()
+                except ValueError:
+                    logger.warning(f"Invalid {field} format: {date_str}")
+                    continue
+
+        # No usable EXIF date found, so return None
+        return None
+
     def _process_single_image(
         self, image_path: Path, model, preprocess, device: str
     ) -> tuple[Optional[np.ndarray], Optional[float], Optional[dict]]:
@@ -158,8 +180,12 @@ class Embeddings(BaseModel):
             pil_image = pil_image.convert("RGB")
 
             # Get file metadata
-            modification_time = image_path.stat().st_mtime
             metadata = self.extract_image_metadata(pil_image)
+
+            # Try to get the image creation/modification time from EXIF data
+            modification_time = self._get_modification_time(metadata)
+            if modification_time is None:
+                modification_time = image_path.stat().st_mtime
 
             # Create the CLIP embedding
             image = preprocess(pil_image).unsqueeze(0).to(device)
@@ -689,6 +715,17 @@ class Embeddings(BaseModel):
         data = np.load(cache_file, allow_pickle=True)
         return data["umap"]
 
+    @property
+    def indexes(self) -> Dict[str, np.ndarray]:
+        """
+        Load all indexes from the embeddings file.
+
+        Returns:
+            Dict[str, np.ndarray]: Dictionary containing all indexes.
+        """
+        data = self.open_cached_embeddings(self.embeddings_path)
+        return data
+
     # Main search entry point.
     def search_images_by_text_and_image(
         self,
@@ -929,7 +966,7 @@ class Embeddings(BaseModel):
 
     @staticmethod
     @functools.lru_cache(maxsize=3)
-    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, any]:
+    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, np.ndarray]:
         """
         Open embeddings with pre-computed lookup structures.
         """
@@ -954,6 +991,7 @@ class Embeddings(BaseModel):
             "metadata": data["metadata"],
             "embeddings": data["embeddings"],
             "modification_times": data["modification_times"],
+            "sorted_modification_times": modtimes[sorted_indices],
             "sorted_filenames": sorted_filenames,
             "sorted_metadata": data["metadata"][sorted_indices],
             "filename_map": filename_map,
