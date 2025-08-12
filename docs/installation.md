@@ -19,9 +19,9 @@ PhotoMap will take advantage of the built-in GPU acceleration on Apple M1, M2 an
 Before installing PhotoMap, you'll need to install Python and optionally CUDA.
 
 - [Python](/installation/python/)
-- [CUDA](/installation/cuda/) *Only if you need NVidia GPU card support*
+- [CUDA](/installation/cuda/) (*Only if you need NVidia GPU card support*)
 
-Now follow the installation directions for [Linux & MacOS](#linux-&-macos) or [Windows](#windows)
+After the preqrequisites are installed, follow the installation directions for [Linux & MacOS](#linux-&-macos) or [Windows](#windows).
 
 ---
 
@@ -33,17 +33,19 @@ Download the PhotoMap source code as a .zip file from the latest stable Releases
 
 Choose a convenient location in your home directory and unzip the file to create a new folder named `PhotoMap`.
 
-### 2. In a command line window, enter the PhotoMap folder and run the `pip` (Python package installer) command to create a home for the PhotoMap executable and library files:
+### 2. Create an installation directory for the executables
+
+In a command line window, enter the PhotoMap folder and run the `pip` (Python package installer) command to create a home for the PhotoMap executable and library files:
 
 ```bash
 cd ~/PhotoMap
-pip -mvenv Executables --prompt photomap
+pip -mvenv install --prompt photomap
 ```
 
 ### 3. Activate the folder for installation:
 
 ```bash
-source Executables/bin/activate
+source install/bin/activate
 ```
 
 Your system prompt should change to read `(photomap)` at this point.
@@ -73,14 +75,15 @@ To exit the server, press ^C (control-C).
 To launch it again, you may (re)activate the Executables folder:
 
 ```bash
-source Executables/bin/activate
+cd ~/PhotoMap
+source install/bin/activate
 start_photomap
 ```
 
 Alternatively, you can run it directly from its folder:
 
 ```bash
-./Executables/bin/start_photomap
+~/PhotoMap/install/bin/start_photomap
 ```
 
 Or just use the file browser to navigate to the `start_photomap` script and double-click it.
