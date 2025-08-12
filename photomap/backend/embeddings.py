@@ -77,6 +77,7 @@ class Embeddings(BaseModel):
             progress_callback: Optional callback function(count, message) for progress updates
             update_interval: How often to call progress_callback (every N files found)
         """
+        logger.info(f"Scanning directory {directory} for image files...")
         image_files = []
         files_checked = 0
 

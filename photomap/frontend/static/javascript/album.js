@@ -333,6 +333,18 @@ export class AlbumManager {
     }
   }
 
+  showIndexingCompletedUI(cardElement) {
+    const cancelBtn = cardElement.querySelector(".cancel-index-btn");
+    const updateBtn = cardElement.querySelector(".create-index-btn");
+    const progressContainer = cardElement.querySelector(".progress-container");
+
+    // Hide the Cancel button and the progress indicator
+    cancelBtn.style.display = "none";
+    progressContainer.style.display = "none";
+    // Show the Update Index button
+    updateBtn.style.display = "inline-block";
+  }
+
   createCompletionMessage() {
     const completionMessage = document.createElement("div");
     completionMessage.className = "completion-message";
@@ -567,6 +579,11 @@ export class AlbumManager {
     this.hideAddAlbumForm();
     await this.loadAlbums();
 
+    // Set state.album directly to avoid triggering slideshow before indexing
+    if (state.album === null) {
+      state.album = albumKey;
+    }
+
     if (this.isSetupMode) {
       await this.setupModeIndexingInProgress();
     }
@@ -580,13 +597,10 @@ export class AlbumManager {
     ).find((card) => card.dataset.albumKey === albumKey);
 
     if (albumCard) {
-      const status = albumCard.querySelector(".index-status");
-      status.textContent = "Auto-starting indexing for new album...";
-      status.className = AlbumManager.STATUS_CLASSES.INDEXING;
-
-      setTimeout(async () => {
-        await this.startIndexing(albumKey, albumCard);
-        this.showProgressUI(albumCard); // Scroll into view
+      // Don't start indexing again - it's already running
+      // Just show the progress UI and let the existing polling handle updates
+      setTimeout(() => {
+        this.showProgressUI(albumCard); // This will scroll into view
       }, AlbumManager.AUTO_INDEX_DELAY);
     }
   }
@@ -814,6 +828,7 @@ export class AlbumManager {
 
   async handleIndexingCompletion(albumKey, cardElement = null) {
     await loadAvailableAlbums();
+    this.showIndexingCompletedUI(cardElement);
 
     if (albumKey === state.album) {
       console.log(
