@@ -1,9 +1,12 @@
-site_name: ClipSlide
+site_name: PhotoMap
 docs_dir: docs
 
 nav:
   - Home: index.md
-  - Installation: installation.md
+  - Installation: 
+      - Overview: installation.md
+      - Python Setup: installation/python.md
+      - CUDA Setup: installation/cuda.md
   - User Guide:
       - Basic Usage: user-guide/basic-usage.md
       - Search: user-guide/search.md
