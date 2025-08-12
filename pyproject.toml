@@ -9,7 +9,7 @@ description = "AI-based image clustering and exploration tool"
 authors = [
     { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "Pillow",
     "clip-anytorch",
@@ -38,6 +38,9 @@ testing = [
     "httpx",
     "asynctest",
     "pytest-asyncio",
+]
+development = [
+    "mkdocs-material",
 ]
 
 [tool.setuptools.packages.find]

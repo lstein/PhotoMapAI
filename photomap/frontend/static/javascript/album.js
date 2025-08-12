@@ -317,7 +317,7 @@ export class AlbumManager {
       text-align: center;
     `;
     setupMessage.innerHTML = `
-      <h3 style="margin: 0 0 0.5em 0;">Welcome to ClipSlide!</h3>
+      <h3 style="margin: 0 0 0.5em 0;">Welcome to PhotoMap!</h3>
       <p style="margin: 0;">
         To get started, please add your first image album below. 
         You'll need to specify the name and directory paths containing your images.
@@ -776,8 +776,14 @@ export class AlbumManager {
     createBtn.style.display = "none";
     cancelBtn.style.display = "inline-block";
 
-    status.className = AlbumManager.STATUS_CLASSES.INDEXING;
-    status.textContent = "Indexing in progress...";
+    // Only set generic message if no progress data is provided
+    if (!progress) {
+      status.className = AlbumManager.STATUS_CLASSES.INDEXING;
+      status.textContent = "Indexing in progress...";
+    } else {
+      // Use the actual progress data to show proper status
+      this.updateProgress(cardElement, progress);
+    }
   }
 
   hideProgressUI(cardElement) {

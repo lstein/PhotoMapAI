@@ -1,4 +1,5 @@
-# 1. Check Python version (same as before)
+
+# 1. Check Python version 
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
     Write-Host "Python is not installed. Please install Python 3.8 or higher from https://www.python.org/downloads/windows/" -ForegroundColor Red
@@ -9,6 +10,12 @@ $version = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_
 if ([version]$version -lt [version]"3.8") {
     Write-Host "Python version $version found. Please install Python 3.8 or higher from https://www.python.org/downloads/windows/" -ForegroundColor Red
     exit 1
+}
+
+# 2. Check whether CUDA is installed
+$cuda_installed = $false
+if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+    $cuda_installed = $true
 }
 
 # 2. Set default install location to AppData\Local\Programs\photomap
@@ -43,6 +50,10 @@ if (-not (Test-Path $venvActivate)) {
 Write-Host "Activating virtual environment and installing PhotoMap..."
 & $venvActivate
 pip install --upgrade pip
+if ($cuda_installed) {
+    Write-Host "CUDA detected. Installing PyTorch with CUDA support..." -ForegroundColor Green
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
+}
 pip install "$PSScriptRoot"
 
 # 5. Print out instructions for running start_photomap
@@ -51,7 +62,7 @@ pip install "$PSScriptRoot"
 # Write-Host "To start the slideshow, run:" -ForegroundColor Yellow
 # Write-Host "`n    $slideshowPath`n" -ForegroundColor Cyan
 # Write-Host "Or, if your shell is not activated, run:" -ForegroundColor Yellow
-# Write-Host "`n    $installDir\.venv\Scripts\start_slideshow.exe`n" -ForegroundColor Cyan
+# Write-Host "`n    $installDir\.venv\Scripts\start_photomap.exe`n" -ForegroundColor Cyan
 
 # 6. Create a batch script to start the slideshow
 $batPath = Join-Path $installDir "start_photomap.bat"
@@ -67,3 +78,6 @@ Write-Host "`nA shortcut batch script has been created at:" -ForegroundColor Gre
 Write-Host "    $batPath" -ForegroundColor Cyan
 Write-Host "You can run this script to start the PhotoMap server." -ForegroundColor Yellow
 Write-Host "For convenience, you may copy it to a folder in your PATH." -ForegroundColor Yellow
+
+
+input("Press any key to continue...")

@@ -1,0 +1,26 @@
+site_name: PhotoMap
+docs_dir: docs
+
+nav:
+  - Home: index.md
+  - Installation: 
+      - Overview: installation.md
+      - Python Setup: installation/python.md
+      - CUDA Setup: installation/cuda.md
+  - User Guide:
+      - Basic Usage: user-guide/basic-usage.md
+      - Search: user-guide/search.md
+      - Albums: user-guide/albums.md
+      - Controls: user-guide/controls.md
+  - Configuration: configuration.md
+  - Developer Guide:
+      - Architecture: developer/architecture.md
+      - API: developer/api.md
+      - Frontend: developer/frontend.md
+  - Troubleshooting: troubleshooting.md
+
+theme:
+  name: material
+
+extra_css:
+  - stylesheets/extra.css

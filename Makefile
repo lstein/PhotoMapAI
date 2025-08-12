@@ -42,6 +42,5 @@ openapi:
 # Serve the mkdocs site w/ live reload
 .PHONY: docs
 docs:
-	echo Not implemented
-	exit -1
-	mkdocs serve
+	mkdocs build --clean
+	mkdocs serve --dev-addr=0.0.0.0:8000

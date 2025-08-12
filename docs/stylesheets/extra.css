@@ -1,0 +1,10 @@
+.img-hover-zoom {
+  max-width: 100%;
+  transition: transform 0.2s;
+  cursor: zoom-in;
+  z-index: 100;
+}
+.img-hover-zoom:hover {
+  transform: scale(1.75);
+  z-index: 999;
+}
