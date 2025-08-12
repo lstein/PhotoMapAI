@@ -22,3 +22,5 @@ nav:
 theme:
   name: material
 
+extra_css:
+  - stylesheets/extra.css

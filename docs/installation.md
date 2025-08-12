@@ -23,6 +23,8 @@ Before installing PhotoMap, you'll need to install Python and optionally CUDA.
 
 Now follow the installation directions for [Linux & MacOS](#linux-&-macos) or [Windows](#windows)
 
+---
+
 ## Linux & MacOS
 
 ### 1. Download and unpack the source code
@@ -81,7 +83,9 @@ Alternatively, you can run it directly from its folder:
 ./Executables/bin/start_photomap
 ```
 
-Or just use the file browser to navigate to the `start_photomap` script and double-click it!
+Or just use the file browser to navigate to the `start_photomap` script and double-click it.
+
+---
 
 ## Windows
 
@@ -103,6 +107,4 @@ Double-click `start_photomap.bat` to launch the server. You should see a few sta
 
 To exit the server, press ^C (control-C). 
 
-To relaunch the server, run the `start_photomap` .bat script again. For your convenience, you may move this script anywhere you like. However, don't move the PhotoMap directory!
-
-
+To relaunch the server, run the `start_photomap` .bat script again. For your convenience, you may move this script anywhere you like. Don't move the PhotoMap directory, or the script will not be able to find it again.
