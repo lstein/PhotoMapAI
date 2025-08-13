@@ -68,10 +68,11 @@ pip install "$PSScriptRoot"
 $batPath = Join-Path $installDir "start_photomap.bat"
 $exePath = "$installDir\.venv\Scripts\start_photomap.exe"
 
-$batContent = "@echo off`r`n" +
-"REM This script starts the PhotoMap server`r`n" +
-"\"$exePath\"`r`n"
-
+$batContent = @"
+@echo off
+REM This script starts the PhotoMap server
+"$exePath"
+"@
 Set-Content -Path $batPath -Value $batContent -Encoding ASCII
 
 Write-Host "`nA shortcut batch script has been created at:" -ForegroundColor Green
@@ -80,4 +81,5 @@ Write-Host "You can run this script to start the PhotoMap server." -ForegroundCo
 Write-Host "For convenience, you may copy it to a folder in your PATH." -ForegroundColor Yellow
 
 
-input("Press any key to continue...")
+Write-Host "Press any key to continue..."
+$x = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
