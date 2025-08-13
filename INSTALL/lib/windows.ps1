@@ -1,4 +1,3 @@
-
 # 1. Check Python version 
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
@@ -14,13 +13,28 @@ if ([version]$version -lt [version]"3.8") {
 
 # 2. Check whether CUDA is installed
 $cuda_installed = $false
+$cuda_version = $null
+
 if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
-    $cuda_installed = $true
+    try {
+        $nvidia_output = nvidia-smi 2>$null
+        if ($nvidia_output) {
+            $cuda_installed = $true
+            # Extract CUDA version using regex
+            if ($nvidia_output -match "CUDA Version:\s+(\d+\.\d+)") {
+                $cuda_version = $matches[1]
+                Write-Host "CUDA Version $cuda_version detected." -ForegroundColor Green
+            }
+        }
+    }
+    catch {
+        Write-Host "Could not determine CUDA version." -ForegroundColor Yellow
+    }
 }
 
-# 2. Set default install location to AppData\Local\Programs\photomap
+# 2. Set default install location to Documents folder
 $envUser = $env:USERNAME
-$defaultInstallDir = "C:\Users\$envUser\AppData\Local\Programs\PhotoMap"
+$defaultInstallDir = "$env:USERPROFILE\Documents\PhotoMap"
 
 $installDir = Read-Host "Enter install location for PhotoMap virtual environment [$defaultInstallDir]"
 
@@ -49,12 +63,34 @@ if (-not (Test-Path $venvActivate)) {
 
 Write-Host "Activating virtual environment and installing PhotoMap..."
 & $venvActivate
-pip install --upgrade pip
+python -mpip install --upgrade pip
 if ($cuda_installed) {
     Write-Host "CUDA detected. Installing PyTorch with CUDA support..." -ForegroundColor Green
-    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
+    # Choose PyTorch CUDA version based on detected CUDA version
+    $cuda_suffix = ""
+    if ([version]$cuda_version -ge [version]"12.4") {
+        $cuda_suffix = "cu124"
+    } elseif ([version]$cuda_version -ge [version]"12.1") {
+        $cuda_suffix = "cu121"
+    } elseif ([version]$cuda_version -ge [version]"11.8") {
+        $cuda_suffix = "cu118"
+    } else {
+        Write-Host "CUDA version $cuda_version may not be fully supported. Installing CPU-only PyTorch..." -ForegroundColor Yellow
+        $cuda_suffix = ""
+    }
+    
+    if ($cuda_suffix) {
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/$cuda_suffix
+    } else {
+        pip install torch torchvision
+    }
+} else {
+    Write-Host "No CUDA detected. Installing CPU-only PyTorch..." -ForegroundColor Yellow
+    pip install torch torchvision
 }
-pip install "$PSScriptRoot"
+
+# The repo root is two levels up from the installation script
+pip install "$PSScriptRoot\..\.."
 
 # 5. Print out instructions for running start_photomap
 # $slideshowPath = Resolve-Path .\.venv\Scripts\start_slideshow.exe
@@ -65,7 +101,7 @@ pip install "$PSScriptRoot"
 # Write-Host "`n    $installDir\.venv\Scripts\start_photomap.exe`n" -ForegroundColor Cyan
 
 # 6. Create a batch script to start the slideshow
-$batPath = Join-Path $installDir "start_photomap.bat"
+$batPath = Join-Path $env:USERPROFILE "Desktop\start_photomap.bat"
 $exePath = "$installDir\.venv\Scripts\start_photomap.exe"
 
 $batContent = @"
