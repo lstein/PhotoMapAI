@@ -22,7 +22,7 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
 $envUser = $env:USERNAME
 $defaultInstallDir = "C:\Users\$envUser\AppData\Local\Programs\PhotoMap"
 
-$installDir = Read-Host "Enter install location for PhotoMap virtual environment [`$defaultInstallDir`]"
+$installDir = Read-Host "Enter install location for PhotoMap virtual environment [$defaultInstallDir]"
 
 if ([string]::IsNullOrWhiteSpace($installDir)) {
     $installDir = $defaultInstallDir
@@ -49,7 +49,7 @@ if (-not (Test-Path $venvActivate)) {
 
 Write-Host "Activating virtual environment and installing PhotoMap..."
 & $venvActivate
-pip install --upgrade pip
+python -mpip install --upgrade pip
 if ($cuda_installed) {
     Write-Host "CUDA detected. Installing PyTorch with CUDA support..." -ForegroundColor Green
     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
