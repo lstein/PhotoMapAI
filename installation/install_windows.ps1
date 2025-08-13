@@ -22,7 +22,7 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
 $envUser = $env:USERNAME
 $defaultInstallDir = "C:\Users\$envUser\AppData\Local\Programs\PhotoMap"
 
-$installDir = Read-Host "Enter install location for PhotoMap virtual environment [`$defaultInstallDir`]"
+$installDir = Read-Host "Enter install location for PhotoMap virtual environment [$defaultInstallDir]"
 
 if ([string]::IsNullOrWhiteSpace($installDir)) {
     $installDir = $defaultInstallDir
