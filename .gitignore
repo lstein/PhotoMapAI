@@ -99,5 +99,5 @@ test_scripts/test_pick_from_image.py
 # Directories used for testing
 icloudpd
 
-# mkdocs directories
+# Cache directories for mkdocs etc
 site
