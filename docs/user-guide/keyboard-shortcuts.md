@@ -16,10 +16,9 @@ On tablets, phones and other touch-enabled devices, these gestures work:
 
 | Gesture         | Action                       |
 |-------------|------------------------------|
-| Swipe Right | Next image                 |
-| Swipe Left   | Previous image              |
-| Swipe Up     | Show image info drawer      |
-| Swipe Down   | Hide image info drawer      |
+| Swipe Left | Next image                 |
+| Swipe Right   | Previous image              |
+| Double-Finger Tap | Show/hide image info drawer      |
 | Pinch        | Zoom in and out of image    |
 | Tap          | Play/Pause slideshow        |
 | Long Hold    | Show system image menu  |
