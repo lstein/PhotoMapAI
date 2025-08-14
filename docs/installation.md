@@ -21,7 +21,32 @@ Before installing PhotoMap, you'll need to install Python and optionally CUDA.
 - [Python](/installation/python/)
 - [CUDA](/installation/cuda/) (*Only if you need NVidia GPU card support*)
 
-After the preqrequisites are installed, follow the installation directions for [Linux & MacOS](#linux-&-macos) or [Windows](#windows).
+After the preqrequisites are installed, follow the installation directions for [Linux & MacOS](#linux-&-macos) or [Windows](#windows). For those who are comfortable with the command shell, there are also instructions for [Manual Installs](#manual-installation)
+
+---
+
+
+## Windows
+
+### 1. Download and unpack the source code
+
+Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
+
+Choose a convenient location in your home folder and unzip the file to create a new folder named `PhotoMap`.
+
+### 2. Run the installer script
+
+Navigate to the unpacked `PhotoMap` folder, find the `INSTALL` folder, and double-click the `install_windows` script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named `start_photomap`.
+
+### 3. Start the server
+
+Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server. Cut and paste this into your browser, and follow the prompts to configure and index your first album. See [Albums](../user-guide/albums) for a walkthrough.
+
+### 4. Exiting and relaunching
+
+To exit the server, press ^C (control-C). 
+
+To relaunch the server, run the `start_photomap` .bat script again. For your convenience, you may move this script anywhere you like. Don't move the PhotoMap folder, or the script will not be able to find it again. If this happens, simply re-run the installer script to generate an updated launcher.
 
 ---
 
@@ -33,7 +58,27 @@ Download the PhotoMap source code as a .zip file from the latest stable Releases
 
 Choose a convenient location in your home directory and unzip the file to create a new folder named `PhotoMap`.
 
-### 2. Create an installation directory for the executables
+### 2. Run the installer script
+
+Navigate to the `PhotoMap` folder and launch the `install_linux_mac` shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named `start_photomap` on your desktop.
+
+### 3. Start the server
+
+Double click `start_photomap` to launch the server. You will see a few startup messages followed by the URL for the running server. Cut and paste this into your browser and follow the prompts to configure and index your first album. See [Albums](../user-guide/albums) for a walkthrough.
+
+### 4. Exiting and relaunching
+
+To exit the server, press ^C (control-C). 
+
+To relaunch the server, run the `start_photomap` launcher again. For your convenience, you may move this script anywhere you like. If you move the PhotoMap folder itself, you will need to re-run the installer script.
+
+---
+
+## Manual Installation
+
+Download and unpack the source code as described in the sections above. Then follow these steps:
+
+### 1. Create an installation directory for the executables
 
 In a command line window, enter the PhotoMap folder and run the `pip` (Python package installer) command to create a home for the PhotoMap executable and library files:
 
@@ -42,7 +87,7 @@ cd ~/PhotoMap
 pip -mvenv install --prompt photomap
 ```
 
-### 3. Activate the folder for installation:
+### 2. Activate the folder for installation:
 
 ```bash
 source install/bin/activate
@@ -50,7 +95,7 @@ source install/bin/activate
 
 Your system prompt should change to read `(photomap)` at this point.
 
-### 4. Install PhotoMap and its libraries:
+### 3. Install PhotoMap and its libraries:
 
 ```bash
 pip install .
@@ -58,7 +103,7 @@ pip install .
 
 This will download and install all the libraries that PhotoMap requires. Depending on your internet speed, this may take a while.
 
-### 5. Launch the PhotoMap application.
+### 4. Launch the PhotoMap application.
 
 If installation completed without errors, launch the PhotoMap server with the `start_photomap` command:
 
@@ -68,46 +113,23 @@ start_photomap
 
 You should see a few startup messages, followed by the URL for the running server. Cut and paste this into your browser, and follow the prompts to configure and index your first album. See [Albums](../user-guide/albums) for a walkthrough.
 
-### 6. Exiting and relaunching
+### 5. Exiting and relaunching
 
 To exit the server, press ^C (control-C). 
 
-To launch it again, you may (re)activate the Executables folder:
+To launch the server again, run its executable.
+
+On Windows:
 
 ```bash
-cd ~/PhotoMap
-source install/bin/activate
-start_photomap
+C:\path\to\PhotoMap\install\scripts\start_photomap.exe
 ```
 
-Alternatively, you can run it directly from its folder:
+On Linux/MacOS:
 
-```bash
-~/PhotoMap/install/bin/start_photomap
+```
+bash
+/path/to/PhotoMap/install/bin/start_photomap
 ```
 
-Or just use the file browser to navigate to the `start_photomap` script and double-click it.
-
----
-
-## Windows
-
-### 1. Download and unpack the source code
-
-Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
-
-Choose a convenient location in your home directory and unzip the file to create a new folder named `PhotoMap`.
-
-### 2. Run the installer script
-
-Open a Powershell command-line window, navigate to `PhotoMap`, find the `installation` folder, and double-click the `install_windows` script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named `start_photomap`.
-
-### 3. Start the server
-
-Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server. Cut and paste this into your browser, and follow the prompts to configure and index your first album. See [Albums](../user-guide/albums) for a walkthrough.
-
-### 4. Exiting and relaunching
-
-To exit the server, press ^C (control-C). 
-
-To relaunch the server, run the `start_photomap` .bat script again. For your convenience, you may move this script anywhere you like. Don't move the PhotoMap directory, or the script will not be able to find it again.
+You can also just use the file browser to navigate to the `start_photomap` executable and double-click it.

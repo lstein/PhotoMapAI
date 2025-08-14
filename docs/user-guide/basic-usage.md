@@ -20,8 +20,49 @@ The screenshot below shows the dialogue after populating it on a Linux or MacOS 
 
 Once the album is set up to your liking, press the `Add Album` button at the bottom left and indexing will start:
 
-<img src="/img/photomap_album_setup_indexing.png" width="3480" alt="Album indexing" class="img-hover-zoom">
+<img src="/img/photomap_album_setup_indexing.png" width="480" alt="Album indexing" class="img-hover-zoom">
 
-Indexing can take some time. On a system equipped with an NVidia GPU, indexing a collection of ~50,000 images will take about two hours. On a system with CPU only, the process will take overnight. Mac users with hardware accelerated M1/2/3 chips will see performance somewhere in between the two. It is suggested to start with a small collection of photos (~1000) for your first album in order to test PhotoMap and get comfortable with its features.
+Indexing can take some time. On a system equipped with an NVidia GPU, indexing a collection of ~50,000 images will take about two hours. On a system with CPU only, the process will take overnight. Mac users with hardware accelerated M1/2/3 chips will see performance somewhere in between the two. It is suggested to start with a small collection of photos (1000-2000 images) for your first album in order to test PhotoMap and get comfortable with its features.
 
 Once indexing is complete, the dialogue will close and you can start exploring your collection.
+
+## Browsing your Collection
+
+The album browsing interface is shown below. Hover over the image to see the key to the various buttons and controls for album browsing:
+
+<div class="photomap-overlay-container">
+  <img src="/img/photomap_basic_usage_1_base.png" width="480" class="photomap-base" alt="Base image">
+  <img src="/img/photomap_basic_usage_1_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
+</div>
+
+Going from left to right:
+
+- The *Next Image* and *Previous Image* buttons advance to the next or previous photographs in the album.
+- The *Gear* button opens up a dialogue that lets you adjust the behavior and appearance of PhotoMap.
+- The *Trash* icon permanently deletes the current photo from the album and removes the disk file (after confirmation).
+- The *Fullscreen* button puts PhotoMap into fullscreen mode and hides most of the control elements.
+- The *Play/Pause* button starts and stops a slideshow in which the photos autoadvance after a user-adjustable interval.
+- The *Target* icon opens and closes the [semantic map](semantic-map).
+- The *Landscape* icon initiates a search for images similar to the one currently displayed.
+- The *Magnifier* icon opens up a search dialogue that lets you search by image similarity and/or a text description of image content.
+
+Finally, the inconspicuous tab with the yellow arrow on the left margin of the window opens a drawer that displays the image's EXIF date, including the date the photo was taken, GPS information (if available), and camera information.
+
+Hover near the top of the window to reveal a slider that will let you seek forward and backward among the images. If no search is active, the slider shows the images sorted by their date. If a image or text similarity search is active, the slider changes to indicate the match score (higher numbers are better matches):
+
+<img src="/img/photomap_basic_usage_2.png" width="680" alt="Seek Slider" class="img-hover-zoom">
+
+## Displaying the Semantic Map
+
+Click the ⊙ (target) icon to open the [Semantic Map](semantic-map):
+
+<img src="/img/photomap_semantic_map_1.png" width="480" alt="Semantic Map" class="img-hover-zoom">
+
+This shows all the photos in your album, clustered and colored by similarity. The initial view shows the entire collection, with a yellow target marking the current image on display. Use the mouse and scrollwheel to zoom in and out of the map and pan around. If you zoom in enough, you will see individual dots for each photo. Hover the mouse over areas of interest to see thumbnail previews of the corresponding images.
+
+If you don't see anything, or if the colors are very faint, this means that there were insufficient images in the album to cluster well. You can fix this by increasing the cluster strength. Go to the *Cluster Strength* field and increase its value until you are satisfied with the display.
+
+If you hover over the top of the map, additional navigation controls appear for zooming in and out, panning, resetting to the default scale, and downloading the map as a PNG image.
+
+<img src="/img/photomap_semantic_map_2.png" width="480" alt="Semantic Map Nav Controls" class="img-hover-zoom">
+
