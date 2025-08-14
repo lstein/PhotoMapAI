@@ -188,8 +188,10 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
 
 
 # File Management Routes
+# Do NOT provide a response_model here, as it may be an image or a converted stream
+# and FastAPI refuses to work with Union types in response_model.
 @search_router.get("/images/{album_key}/{path:path}", tags=["Search"])
-async def serve_image(album_key: str, path: str) -> FileResponse:
+async def serve_image(album_key: str, path: str):
     """Serve images from different albums dynamically."""
     image_path = config_manager.find_image_in_album(album_key, path)
     if not image_path:
@@ -203,9 +205,10 @@ async def serve_image(album_key: str, path: str) -> FileResponse:
     if not image_path.exists() or not image_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    # I'm not sure this is doing anything useful
-    # return serve_image_with_exif_rotation(image_path)
-    return FileResponse(image_path)
+    if image_path.suffix.lower() in {".heic", ".heif"}:
+        return serve_image_with_conversion(image_path)
+    else:
+        return FileResponse(image_path)
 
 
 @search_router.get(
@@ -248,19 +251,19 @@ def create_slide_url(slide_metadata: SlideSummary, album_key: str) -> None:
     relative_path = config_manager.get_relative_path(
         str(slide_metadata.filepath), album_key
     )
+    logger.info(f"Creating URL for slide: {slide_metadata.filepath} -> {relative_path}")
     slide_metadata.url = f"/images/{album_key}/{relative_path}"
 
 
 # This is not currently used. It can be applied to the end of the image serving
 # function to return a StreamingResponse with EXIF rotation applied.
 # In practice, I'm seeing pauses during image serving when using this.
-def serve_image_with_exif_rotation(image_path: Path) -> StreamingResponse:
-    logger.info(f"Serving image with EXIF rotation: {image_path}")
+def serve_image_with_conversion(image_path: Path) -> StreamingResponse:
     try:
         with Image.open(image_path) as im:
             im = ImageOps.exif_transpose(im)
             buf = BytesIO()
-            format = im.format or "PNG"
+            format = "PNG"
             im.save(buf, format=format)
             buf.seek(0)
             return StreamingResponse(buf, media_type=f"image/{format.lower()}")

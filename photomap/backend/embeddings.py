@@ -22,6 +22,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image, ImageOps
+from pillow_heif import register_heif_opener
 from pydantic import BaseModel
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
@@ -33,6 +34,18 @@ from .metadata_modules import SlideSummary
 from .progress import progress_tracker
 
 logger = logging.getLogger(__name__)
+register_heif_opener()  # Register HEIF opener for PIL
+SUPPORTED_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp",
+    ".gif",
+    ".webp",
+    ".tiff",
+    ".heif",
+    ".heic",
+}
 
 
 class IndexResult(BaseModel):
@@ -64,7 +77,7 @@ class Embeddings(BaseModel):
     def get_image_files_from_directory(
         self,
         directory: Path,
-        exts: Set[str] = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
+        exts: Set[str] = SUPPORTED_EXTENSIONS,
         progress_callback: Optional[Callable] = None,
         update_interval: int = 100,
     ) -> list[Path]:
@@ -114,7 +127,7 @@ class Embeddings(BaseModel):
     def get_image_files(
         self,
         image_paths_or_dir: list[Path] | Path,
-        exts: Set[str] = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
+        exts: Set[str] = SUPPORTED_EXTENSIONS,
         progress_callback: Optional[Callable] = None,
     ) -> list[Path]:
         """
@@ -434,8 +447,7 @@ class Embeddings(BaseModel):
         image_paths = await asyncio.to_thread(
             self.get_image_files,
             image_paths_or_dir,
-            {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff"},
-            traversal_callback,
+            progress_callback=traversal_callback,
         )
         total_images = len(image_paths)
         logger.info(f"Found {total_images} image files in {image_paths_or_dir}")

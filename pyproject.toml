@@ -19,6 +19,7 @@ dependencies = [
     "networkx",
     "numpy",
     "pandas",
+    "pillow-heif",
     "platformdirs",
     "pydantic",
     "python-multipart",
