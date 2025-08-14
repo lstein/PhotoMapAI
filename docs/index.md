@@ -16,6 +16,7 @@ PhotoMap is a fast, modern image browser and search tool for large photo collect
 - Thematic image clustering and visualization
 - Flexible album management
 - Responsive UI for desktop and mobile
+- Support for wide range of image formats, including Apple's HEIC
 - Extensible backend (FastAPI)
 
 ## The Semantic Map
