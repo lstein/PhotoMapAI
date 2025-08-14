@@ -538,11 +538,8 @@ window.addEventListener("albumChanged", async () => {
 let umapThumbnailDiv = null;
 
 async function createUmapThumbnail({ x, y, index, cluster }) {
-  // Remove any existing thumbnail
-  if (umapThumbnailDiv) {
-    umapThumbnailDiv.remove();
-    umapThumbnailDiv = null;
-  }
+  // Always remove any existing thumbnail before creating a new one
+  removeUmapThumbnail();
 
   const filename = await getImagePath(state.album, index);
   if (!filename) return; // No valid filename, exit early
@@ -619,10 +616,9 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
 }
 
 function removeUmapThumbnail() {
-  if (umapThumbnailDiv) {
-    umapThumbnailDiv.remove();
-    umapThumbnailDiv = null;
-  }
+  // Remove all elements with the umap-thumbnail class
+  document.querySelectorAll('.umap-thumbnail').forEach(div => div.remove());
+  umapThumbnailDiv = null;
 }
 
 export function setUmapColorMode() {
