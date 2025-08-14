@@ -678,38 +678,28 @@ body {
 /* ===== MODAL BASE STYLES ===== */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100dvh;
-  z-index: 2000;
-  background: rgba(0, 0, 0, 0.5);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-  pointer-events: none;
+  top: 0; left: 0;
+  width: 100vw; 
+  height: 100vh;
+  background: rgba(0,0,0,0.5);
+  z-index: 99999;
+  display: none;
+  align-items: center;
+  justify-content: center;
 }
 
 .modal-overlay.visible {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-}
-
-.modal-overlay.album-management {
-  z-index: 3000;
-  background: rgba(0, 0, 0, 0.7);
+  display: flex;
 }
 
 .modal-content {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   background: #222;
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 2em;
+  width: 90vw;
+  max-width: 600px;
   box-shadow: 0 4px 32px #000;
+  position: relative;
 }
 
 .modal-close {
@@ -1298,6 +1288,13 @@ body {
 .exif-metadata tr {
   margin: 0 !important;
   padding: 0 !important;
+}
+
+.metadata-link {  
+  color: #faea0e;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 0.7em;
 }
 
 /* ===== ANIMATIONS ===== */

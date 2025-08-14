@@ -190,7 +190,8 @@ export async function addSlideByIndex(
     }
 
     const path = data.filepath;
-    const url = data.url;
+    const url = data.image_url;
+    const metadata_url = data.metadata_url;
     const slide = document.createElement("div");
     slide.className = "swiper-slide";
 
@@ -219,6 +220,7 @@ export async function addSlideByIndex(
     slide.dataset.index = data.index || 0;
     slide.dataset.total = data.total || 0;
     slide.dataset.searchIndex = searchIndex || 0; // Store the search index for this slide
+    slide.dataset.metadata_url = metadata_url || "";
 
     if (backward) {
       state.swiper.prependSlide(slide);
@@ -227,14 +229,6 @@ export async function addSlideByIndex(
     }
     // Delay high water mark enforcement to allow transition to finish
     setTimeout(() => enforceHighWaterMark(backward), 500);
-
-    const img = slide.querySelector("img");
-    img.addEventListener("dragstart", function (e) {
-      e.dataTransfer.setData(
-        "DownloadURL",
-        `image/jpeg:${data.filename || "image.jpg"}:${data.url}`
-      );
-    });
   } catch (error) {
     console.error("Failed to add new slide:", error);
     alert(`Failed to add new slide: ${error.message}`);

@@ -6,6 +6,7 @@ and serving images and thumbnails.
 """
 
 import base64
+import json
 from io import BytesIO
 from logging import getLogger
 from pathlib import Path
@@ -143,6 +144,26 @@ async def image_info(
     )
 
 
+@search_router.get(
+    "/get_metadata/{album_key}/{index}",
+    tags=["Search"],
+)
+async def get_metadata(album_key: str, index: int):
+    """
+    Download the JSON-formatted metadata for an image by album key and index.
+    """
+    embeddings = get_embeddings_for_album(album_key)
+    if not embeddings:
+        raise HTTPException(status_code=404, detail="Album not found")
+    indexes = embeddings.indexes
+    metadata = indexes["sorted_metadata"]
+    if index < 0 or index >= len(metadata):
+        raise HTTPException(status_code=404, detail="Index out of range")
+    metadata_json = json.dumps(metadata[index], indent=2).encode("utf-8")
+    buffer = BytesIO(metadata_json)
+    return StreamingResponse(buffer, media_type="application/json")
+
+
 @search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])
 async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileResponse:
     """Serve a reduced-size thumbnail for an image by index."""
@@ -251,8 +272,11 @@ def create_slide_url(slide_metadata: SlideSummary, album_key: str) -> None:
     relative_path = config_manager.get_relative_path(
         str(slide_metadata.filepath), album_key
     )
-    logger.info(f"Creating URL for slide: {slide_metadata.filepath} -> {relative_path}")
-    slide_metadata.url = f"/images/{album_key}/{relative_path}"
+    logger.debug(
+        f"Creating URL for slide: {slide_metadata.filepath} -> {relative_path}"
+    )
+    slide_metadata.metadata_url = f"get_metadata/{album_key}/{slide_metadata.index}"
+    slide_metadata.image_url = f"images/{album_key}/{relative_path}"
 
 
 # This is not currently used. It can be applied to the end of the image serving

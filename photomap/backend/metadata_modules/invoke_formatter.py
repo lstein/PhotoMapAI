@@ -4,11 +4,13 @@ backend.metadata_modules.invoke_formatter
 Format metadata from invoke module, including human-readable tags.
 Returns an HTML representation of the metadata.
 """
-from datetime import datetime       
+
+from datetime import datetime
 from pathlib import Path
-from typing import List, Any
+from typing import Any, List
+
+from .invoke import Invoke3Metadata, Invoke5Metadata, InvokeLegacyMetadata
 from .slide_summary import SlideSummary
-from .invoke import InvokeLegacyMetadata, Invoke3Metadata, Invoke5Metadata
 
 
 def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSummary:
@@ -39,7 +41,9 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
 
     # get modification time for the file
     modification_time = None
-    if (mtime := Path(slide_data.filepath).stat().st_mtime if slide_data.filepath else None):
+    if mtime := (
+        Path(slide_data.filepath).stat().st_mtime if slide_data.filepath else None
+    ):
         modification_time = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
 
     if not extractor_class:

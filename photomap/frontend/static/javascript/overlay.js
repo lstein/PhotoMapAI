@@ -38,6 +38,7 @@ export function updateMetadataOverlay() {
     slide.dataset.filename || "";
   document.getElementById("filepathText").textContent =
     slide.dataset.filepath || "";
+  document.getElementById("metadataLink").href = slide.dataset.metadata_url || "#";
   state.currentTextToCopy = slide.dataset.textToCopy || "";
   updateCurrentImageScore(slide);
 }
@@ -73,3 +74,41 @@ async function updateCurrentImageScore(activeSlide) {
     return;
   }
 }
+
+// Metadata modal logic
+const metadataModal = document.getElementById("metadataModal");
+const metadataTextArea = document.getElementById("metadataTextArea");
+const closeMetadataModalBtn = document.getElementById("closeMetadataModalBtn");
+const metadataLink = document.getElementById("metadataLink");
+
+// Show modal and fetch metadata
+metadataLink.addEventListener("click", async function (e) {
+  e.preventDefault();
+  if (!metadataModal || !metadataTextArea) return;
+  metadataModal.classList.add("visible");
+
+  // Fetch JSON metadata from the link's href
+  try {
+    const resp = await fetch(metadataLink.href);
+    if (resp.ok) {
+      const text = await resp.text();
+      metadataTextArea.value = text;
+    } else {
+      metadataTextArea.value = "Failed to load metadata.";
+    }
+  } catch (err) {
+    metadataTextArea.value = "Error loading metadata.";
+  }
+});
+
+// Hide modal on close button
+closeMetadataModalBtn.addEventListener("click", function () {
+  metadataModal.classList.remove("visible");
+});
+
+// Hide modal when clicking outside the modal content
+metadataModal.addEventListener("click", function (e) {
+  if (e.target === metadataModal) {
+    metadataModal.classList.remove("visible");
+  }
+});
