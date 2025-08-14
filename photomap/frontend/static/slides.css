@@ -1586,7 +1586,8 @@ body {
   display: none;
   top: 8px;
   right: 8px;
-  background: rgba(24, 24, 32, 0.75) !important;
+  /* background: rgba(24, 24, 32, 0.75) !important; */
+  background: rgb(24, 24, 32) !important;
   color: #eee;
   box-shadow: 0 4px 32px rgba(0, 0, 0, 0.7);
   border-radius: 12px;

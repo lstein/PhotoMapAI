@@ -263,6 +263,7 @@ export async function fetchUmapData() {
 
       setUmapColorMode();
       let hoverTimer = null;
+      let isHovering = false;
 
       gd.on("plotly_hover", function (eventData) {
         if (!eventData || !eventData.points || !eventData.points.length) return;
@@ -270,18 +271,21 @@ export async function fetchUmapData() {
         if (pt.curveNumber !== 0) return;
         const index = pt.customdata;
         const cluster = points[pt.pointIndex]?.cluster ?? -1;
-        // Add hover delay
+        isHovering = true;
         hoverTimer = setTimeout(() => {
-          createUmapThumbnail({
-            x: eventData.event.clientX,
-            y: eventData.event.clientY,
-            index: index,
-            cluster: cluster,
-          });
-        }, 150); // Adjust delay as desired
+          if (isHovering) {
+            createUmapThumbnail({
+              x: eventData.event.clientX,
+              y: eventData.event.clientY,
+              index: index,
+              cluster: cluster,
+            });
+          }
+        }, 100);
       });
 
       gd.on("plotly_unhover", function () {
+        isHovering = false;
         if (hoverTimer) {
           clearTimeout(hoverTimer);
           hoverTimer = null;
@@ -734,6 +738,7 @@ function setUmapWindowSize(sizeKey) {
   const win = document.getElementById("umapFloatingWindow");
   const plotDiv = document.getElementById("umapPlot");
   const contentDiv = document.getElementById("umapContent");
+  win.style.opacity = "0.75"; // default opacity for all sizes
   if (sizeKey === "shaded") {
     if (contentDiv) contentDiv.style.display = "none";
     win.style.width = "";
@@ -747,12 +752,13 @@ function setUmapWindowSize(sizeKey) {
     win.style.left = "0px";
     win.style.top = "0px";
     win.style.width = window.innerWidth + "px";
-    win.style.height = window.innerHeight - controlsHeight + "px";
+    win.style.height = window.innerHeight + "px";
     win.style.minHeight = "200px";
     win.style.maxWidth = "100vw";
-    win.style.maxHeight = window.innerHeight - controlsHeight + "px";
+    win.style.maxHeight = "100vh";
+    win.style.opacity = "1";
     plotDiv.style.width = window.innerWidth - 32 + "px";
-    plotDiv.style.height = window.innerHeight - controlsHeight - 128 + "px";
+    plotDiv.style.height = window.innerHeight - controlsHeight + "px";
 
     Plotly.relayout(plotDiv, {
       width: window.innerWidth - 32,
