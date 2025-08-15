@@ -5,12 +5,15 @@ Format metadata from invoke module, including human-readable tags.
 Returns an HTML representation of the metadata.
 """
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
 from .invoke import Invoke3Metadata, Invoke5Metadata, InvokeLegacyMetadata
 from .slide_summary import SlideSummary
+
+logger = logging.getLogger(__name__)
 
 
 def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSummary:
@@ -56,8 +59,10 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     model = extractor.get_model()
     seed = extractor.get_seed()
     loras = _format_list(extractor.get_loras())
-    reference_images = _format_list(extractor.get_reference_images())
-    control_layers = _format_list(extractor.get_control_layers())
+    reference_images = extractor.get_reference_images()
+    reference_image_table = _format_list(reference_images) if reference_images else None
+    control_layers = extractor.get_control_layers()
+    control_layer_table = _format_list(control_layers) if control_layers else None
 
     html = "<table class='invoke-metadata'>"
     if modification_time:
@@ -72,14 +77,17 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
         html += f"<tr><th>Seed</th><td>{seed}</td></tr>"
     if loras:
         html += f"<tr><th>Loras</th><td>{loras}</td></tr>"
-    if reference_images:
-        html += f"<tr><th>IPAdapters</th><td>{reference_images}</td></tr>"
-    if control_layers:
-        html += f"<tr><th>Control Layers</th><td>{control_layers}</td></tr>"
+    if reference_image_table:
+        html += f"<tr><th>IPAdapters</th><td>{reference_image_table}</td></tr>"
+    if control_layer_table:
+        html += f"<tr><th>Control Layers</th><td>{control_layer_table}</td></tr>"
     html += "</table>"
 
     slide_data.description = html
     slide_data.textToCopy = positive_prompt if positive_prompt else slide_data.filepath
+    slide_data.reference_images = [
+        x.image_name for x in reference_images + control_layers
+    ]
     return slide_data
 
 

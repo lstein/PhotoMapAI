@@ -19,3 +19,4 @@ class SlideSummary(BaseModel):
     textToCopy: str = ""
     index: int = 0
     total: int = 0
+    reference_images: list[str] = []

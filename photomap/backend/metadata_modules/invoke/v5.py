@@ -1,18 +1,21 @@
 """
 Extract Invoke5 metadata from the raw metadata dictionary.
 """
+
 """
 Support for metadata extraction from images created with InvokeAI v3.
 """
 
 from typing import List
+
 from .invoke_metadata_abc import (
-    InvokeMetadataABC,
-    Prompts,
-    Lora,
-    ReferenceImage,
     ControlLayer,
+    InvokeMetadataABC,
+    Lora,
+    Prompts,
+    ReferenceImage,
 )
+
 
 class Invoke5Metadata(InvokeMetadataABC):
     def get_prompts(self) -> Prompts:
@@ -58,7 +61,8 @@ class Invoke5Metadata(InvokeMetadataABC):
                 model_name=lora.get("model", {}).get("name", "Unknown Lora"),
                 weight=lora.get("weight", 1.0),
             )
-            for lora in loras if "lora" in lora
+            for lora in loras
+            if "lora" in lora
         ]
 
     def get_reference_images(self) -> List[ReferenceImage]:
@@ -68,14 +72,21 @@ class Invoke5Metadata(InvokeMetadataABC):
         Returns:
             List[ReferenceImage]: A list of ReferenceImage named tuples containing model_name, reference image, and weight.
         """
-        reference_images = self.raw_metadata.get("canvas_v2_metadata", {}).get("referenceImages", [])
+        reference_images = self.raw_metadata.get("canvas_v2_metadata", {}).get(
+            "referenceImages", []
+        )
         return [
             ReferenceImage(
-                model_name=image.get("ipAdapter", {}).get('model', {}).get('name','Unknown Model'),
-                reference_image=image.get("ipAdapter", {}).get("image", {}).get("image_name", ""),
+                model_name=image.get("ipAdapter", {})
+                .get("model", {})
+                .get("name", "Unknown Model"),
+                image_name=image.get("ipAdapter", {})
+                .get("image", {})
+                .get("image_name", ""),
                 weight=image.get("ipAdapter", {}).get("weight", 1.0),
             )
-            for image in reference_images if image.get("isEnabled", False)
+            for image in reference_images
+            if image.get("isEnabled", False)
         ]
 
     def get_control_layers(self) -> List[ControlLayer]:
@@ -87,9 +98,10 @@ class Invoke5Metadata(InvokeMetadataABC):
         control_layers = self.raw_metadata.get("controlLayers", [])
         return [
             ControlLayer(
-                model_name=layer.get("controlAdapter", {}).get('name', 'Unknown Model'),
-                reference_image=layer.get("objects", {}).get('image_name', ''),
+                model_name=layer.get("controlAdapter", {}).get("name", "Unknown Model"),
+                image_name=layer.get("objects", {}).get("image_name", ""),
                 weight=layer.get("controlAdapter", {}).get("weight", 1.0),
             )
-            for layer in control_layers if layer.get("isEnabled", False)
+            for layer in control_layers
+            if layer.get("isEnabled", False)
         ]

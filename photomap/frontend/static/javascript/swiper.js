@@ -221,6 +221,7 @@ export async function addSlideByIndex(
     slide.dataset.total = data.total || 0;
     slide.dataset.searchIndex = searchIndex || 0; // Store the search index for this slide
     slide.dataset.metadata_url = metadata_url || "";
+    slide.dataset.reference_images = JSON.stringify(data.reference_images || []);
 
     if (backward) {
       state.swiper.prependSlide(slide);

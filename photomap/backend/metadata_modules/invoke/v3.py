@@ -3,12 +3,13 @@ Support for metadata extraction from images created with InvokeAI v3.
 """
 
 from typing import List
+
 from .invoke_metadata_abc import (
-    InvokeMetadataABC,
-    Prompts,
-    Lora,
-    ReferenceImage,
     ControlLayer,
+    InvokeMetadataABC,
+    Lora,
+    Prompts,
+    ReferenceImage,
 )
 
 
@@ -73,7 +74,7 @@ class Invoke3Metadata(InvokeMetadataABC):
         Extract reference image (IPAdapter) information from the raw metadata.
 
         Returns:
-            List[ReferenceImage]: A list of ReferenceImage named tuples containing model_name, reference image, and weight.
+            List[ReferenceImage]: A list of ReferenceImage named tuples containing model_name, reference image name, and weight.
         """
         reference_images = self.raw_metadata.get("ipAdapters", [])
         return [
@@ -81,7 +82,7 @@ class Invoke3Metadata(InvokeMetadataABC):
                 model_name=image.get("ip_adapter_model", {}).get(
                     "model_name", "Unknown Model"
                 ),
-                reference_image=image.get("image", {}).get("image_name", ""),
+                image_name=image.get("image", {}).get("image_name", ""),
                 weight=image.get("weight", 1.0),
             )
             for image in reference_images
