@@ -1297,6 +1297,19 @@ body {
   font-size: 0.7em;
 }
 
+.invoke-metadata, .invoke-tuples {
+  border-collapse: collapse;
+  border: 1px solid #bbb;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.invoke-metadata th, .invoke-metadata td,
+.invoke-tuples th, .invoke-tuples td {
+  border: 1px solid #555;
+  padding: 6px 10px;
+}
+
 /* ===== ANIMATIONS ===== */
 @keyframes shimmer {
   0% {
