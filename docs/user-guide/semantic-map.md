@@ -42,6 +42,12 @@ There is also a navigation bar at the top of the plot that appears when you hove
 
 On tablet devices, the best way to zoom into an area of interest is to use the magnifier icon and/or a combination of the pan tool and the Zoom in/out icons.
 
+## Selecting Clusters
+
+Clicking on any colored image dot will select all the images in its cluster and add them to the main display's search results. You will see the selected cluster become brighter, while all the other clusters will dim. This effect can be turned on and off by clicking on the checkbox in the bottom right corner labeld "Highlight selection."
+
+When a cluster is selected, the image search results will be sorted according to their distance from the image you clicked on in the semantic map. If you leave the semantic map window open and scroll through the results, you will see the yellow map position marker move increasingly far away from the original point. At the same time, the displayed full-size images will slowly diverge and become more diverse.
+
 ## Moving the Map Window
 
 The map window can be repositioned anywhere on the screen by clicking and dragging on its titlebar. In addition it can be resized by clicking the resize icons shown in the screenshot below (mouse over to see the legend).
