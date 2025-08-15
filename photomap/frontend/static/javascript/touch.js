@@ -9,40 +9,21 @@ import { pauseSlideshow } from "./swiper.js";
 let touchStartY = null;
 let touchStartX = null;
 let touchStartTime = null;
-let twoFingerTouchStart = null;
 const swipeThreshold = 50; // Minimum distance in px for a swipe
 const tapThreshold = 10; // Maximum movement in px for a tap
-const tapTimeThreshold = 300; // Maximum time in ms for a tap
+const tapTimeThreshold = 500; // Maximum time in ms for a tap
 
 function handleTouchStart(e) {
-  if (e.touches && e.touches.length === 1) {
-    // Single finger touch
+  // Only track single-finger touches
+  if (e.touches.length === 1) {
     touchStartY = e.touches[0].clientY;
     touchStartX = e.touches[0].clientX;
     touchStartTime = Date.now();
-    twoFingerTouchStart = null;
-  } else if (e.touches && e.touches.length === 2) {
-    // Two finger touch - track for two-finger tap
-    twoFingerTouchStart = {
-      time: Date.now(),
-      finger1: { x: e.touches[0].clientX, y: e.touches[0].clientY },
-      finger2: { x: e.touches[1].clientX, y: e.touches[1].clientY },
-    };
-    // Reset single touch tracking
-    touchStartY = null;
-    touchStartX = null;
-    touchStartTime = null;
-  } else {
-    // More than 2 fingers - reset everything
-    touchStartY = null;
-    touchStartX = null;
-    touchStartTime = null;
-    twoFingerTouchStart = null;
   }
 }
 
 function handleTouchMove(e) {
-  // If this is a multi-touch event, reset single-touch tracking
+  // Ignore multi-touch events
   if (!e.touches || e.touches.length !== 1) {
     touchStartY = null;
     touchStartX = null;
@@ -64,42 +45,7 @@ function handleTouchMove(e) {
 }
 
 function handleTouchEnd(e) {
-  // Handle two-finger tap
-  if (twoFingerTouchStart && e.changedTouches && e.changedTouches.length >= 1) {
-    const touchDuration = Date.now() - twoFingerTouchStart.time;
-
-    // Check if this was a quick two-finger tap (not a long press or drag)
-    if (touchDuration < tapTimeThreshold) {
-      // Check if fingers didn't move much
-      let fingersMoved = false;
-      for (let i = 0; i < Math.min(e.changedTouches.length, 2); i++) {
-        const touch = e.changedTouches[i];
-        const startFinger =
-          i === 0
-            ? twoFingerTouchStart.finger1
-            : twoFingerTouchStart.finger2;
-        const deltaX = Math.abs(touch.clientX - startFinger.x);
-        const deltaY = Math.abs(touch.clientY - startFinger.y);
-
-        if (deltaX > tapThreshold || deltaY > tapThreshold) {
-          fingersMoved = true;
-          break;
-        }
-      }
-
-      if (!fingersMoved) {
-        e.preventDefault();
-        toggleMetadataOverlay();
-        twoFingerTouchStart = null;
-        return;
-      }
-    }
-
-    twoFingerTouchStart = null;
-    return;
-  }
-
-  // Handle single-finger events
+  // Handle single-finger events only
   if (touchStartY === null || touchStartX === null) return;
 
   // Ignore if this was a multi-touch event
@@ -165,7 +111,6 @@ function handleTouchEnd(e) {
     }
   } else {
     // Only detect horizontal swipe (left/right) for pausing slideshow
-    // Removed vertical swipe detection since we now use two-finger tap for overlay
     if (
       Math.abs(deltaX) > Math.abs(deltaY) &&
       Math.abs(deltaX) > swipeThreshold
