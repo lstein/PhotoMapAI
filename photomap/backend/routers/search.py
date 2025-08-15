@@ -6,6 +6,7 @@ and serving images and thumbnails.
 """
 
 import base64
+import json
 from io import BytesIO
 from logging import getLogger
 from pathlib import Path
@@ -143,6 +144,26 @@ async def image_info(
     )
 
 
+@search_router.get(
+    "/get_metadata/{album_key}/{index}",
+    tags=["Search"],
+)
+async def get_metadata(album_key: str, index: int):
+    """
+    Download the JSON-formatted metadata for an image by album key and index.
+    """
+    embeddings = get_embeddings_for_album(album_key)
+    if not embeddings:
+        raise HTTPException(status_code=404, detail="Album not found")
+    indexes = embeddings.indexes
+    metadata = indexes["sorted_metadata"]
+    if index < 0 or index >= len(metadata):
+        raise HTTPException(status_code=404, detail="Index out of range")
+    metadata_json = json.dumps(metadata[index], indent=2).encode("utf-8")
+    buffer = BytesIO(metadata_json)
+    return StreamingResponse(buffer, media_type="application/json")
+
+
 @search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])
 async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileResponse:
     """Serve a reduced-size thumbnail for an image by index."""
@@ -230,6 +251,36 @@ async def get_image_path(album_key: str, index: int) -> str:
         )
 
 
+@search_router.get(
+    "/image_by_name/{album_key}/{filename:path}",
+    response_class=FileResponse,
+    tags=["Search"],
+)
+async def get_image_by_name(album_key: str, filename: str) -> FileResponse:
+    """
+    Serve an image by its filename within the specified album.
+    """
+    embeddings = get_embeddings_for_album(album_key)
+    if not embeddings:
+        raise HTTPException(status_code=404, detail="Album not found")
+    indexes = embeddings.indexes
+    # inefficient linear search for the filename, but still pretty quick!
+    absolute_paths = [
+        x for x in indexes["sorted_filenames"] if Path(x).name == filename
+    ]
+    if not absolute_paths:
+        raise HTTPException(status_code=404, detail="Image not found")
+    image_path = config_manager.find_image_in_album(album_key, absolute_paths[0])
+    if not image_path:
+        raise HTTPException(status_code=404, detail="Image not found in album")
+    album_config = validate_album_exists(album_key)
+    if not validate_image_access(album_config, image_path):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not image_path.exists() or not image_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(image_path)
+
+
 # Utility Functions
 def create_search_results(
     results: List[int], scores: List[float], album_key: str
@@ -251,8 +302,11 @@ def create_slide_url(slide_metadata: SlideSummary, album_key: str) -> None:
     relative_path = config_manager.get_relative_path(
         str(slide_metadata.filepath), album_key
     )
-    logger.info(f"Creating URL for slide: {slide_metadata.filepath} -> {relative_path}")
-    slide_metadata.url = f"/images/{album_key}/{relative_path}"
+    logger.debug(
+        f"Creating URL for slide: {slide_metadata.filepath} -> {relative_path}"
+    )
+    slide_metadata.metadata_url = f"get_metadata/{album_key}/{slide_metadata.index}"
+    slide_metadata.image_url = f"images/{album_key}/{relative_path}"
 
 
 # This is not currently used. It can be applied to the end of the image serving

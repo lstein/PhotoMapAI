@@ -14,7 +14,9 @@ class SlideSummary(BaseModel):
     filename: str
     filepath: str
     description: str = ""
-    url: str = ""
+    image_url: str = ""
+    metadata_url: str = ""
     textToCopy: str = ""
     index: int = 0
     total: int = 0
+    reference_images: list[str] = []
