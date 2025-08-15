@@ -11,6 +11,7 @@ On devices equipped with a keyboard, you can use the following key shortcuts:
 | f           | Toggle fullscreen            |
 | m           | Toggle UMAP window           |
 | Space       | Play/Pause slideshow         |
+| Scrollwheel | Next/Previous image
 
 On tablets, phones and other touch-enabled devices, these gestures work:
 
@@ -18,7 +19,6 @@ On tablets, phones and other touch-enabled devices, these gestures work:
 |-------------|------------------------------|
 | Swipe Left | Next image                 |
 | Swipe Right   | Previous image              |
-| Double-Finger Tap | Show/hide image info drawer      |
 | Pinch        | Zoom in and out of image    |
 | Tap          | Play/Pause slideshow        |
-| Long Hold    | Show system image menu  |
+| Touch and Hold   | Show system image menu  |

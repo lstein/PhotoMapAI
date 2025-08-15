@@ -20,7 +20,21 @@ The default value of eps is 0.07, which empirically seems to work well for colle
 
 What does "semantically similar" mean? Embeddings capture many different aspects of an image, ranging from low-level features such as brightness and color palette, to high-level features such as particular people and places. This can lead to interesting appositions. For example, say you have three photos depicting (1) Mary at the playground; (2) Mary at a birthday party; and (3) Timmy at a birthday party. (1) and (2) will mapped close together because they share the same subject, Mary. (2) and (3) will be close together because they share the same event, a birthday party. Because of these relationships, (1) and (3) will also likely be close together as well, but further apart than either of the other two pairs.
 
-Therefore you will find clusters that contain a mixture of relationships, and sometimes you will find yourself scratching your head to figure out why several images cluster together. Usually, however, you'll see a common theme. For example, my family photo collection contains clusters of "kids climbing trees," "pets," and "weddings on the maternal side of the family."
+Therefore you will find clusters that contain a mixture of relationships. Sometimes you will find yourself scratching your head to figure out why several images cluster together, but more often you'll discover delightfully unexpected groupings. For example, my family photo collection contains clusters corresponding to "kids climbing trees," "pets yawning," and "weddings on the maternal side of the family."
 
-## Interacting with the Map
+## Navigating the Map
+
+By default, clicking and dragging on the map will move it around (panning). The mouse scrollwheel will zoom in and out, centered on the current position of the mouse.
+
+<img src="/img/photomap_semantic_map_umap_navigation_bar.png" width="480" alt="Semantic Map" class="img-hover-zoom">
+
+There is also a navigation bar at the top of the plot that appears when you hover over it. From left to right, the icons have the following functions:
+
+- **Camera Icon** - Snapshot the current map and save it to disk as a PNG image.
+- **Magnifier Icon** - Outline a rectangular region of the map and zoom into it.
+- **NSEW Arrows Icon** - Pan the image (default behavior).
+- **+ and - icons** - Zoom in and zoom out.
+- **Crossed Arrows Icon** - Zoom out until the entire map is in view.
+- **Home Icon** - Reset view to the default.
+- **Plotly Icon** - Advertisement for the plotting package used to plot the map.
 
