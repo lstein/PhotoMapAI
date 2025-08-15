@@ -223,7 +223,6 @@ function initializeEvents() {
       const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
       slider.value =
         state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
-      await renderSliderTicks();
       resetFadeOutTimer();
     }, 1000);
   });
