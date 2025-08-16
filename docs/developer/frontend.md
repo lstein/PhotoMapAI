@@ -29,7 +29,7 @@ The frontend code is organized into the following main components:
 - **Event Handling (`events.js`, `touch.js`)**  
   Centralizes event listeners for slide transitions, overlay toggling, and gesture support.
 
-- **Stylesheets (`slides.css`, `extra.css`)**  
+- **Stylesheets (`slides.css`)**  
   Provides base styles, responsive layouts, and theme customization.
 
 ---
@@ -70,7 +70,7 @@ The frontend code is organized into the following main components:
 
 - **JavaScript:** `photomap/frontend/static/javascript/`
 - **CSS:** `photomap/frontend/static/`
-- **Templates:** `photomap/frontend/templates/`
+- **HTML Templates:** `photomap/frontend/templates/`
 - **Documentation:** `docs/developer/frontend.md`
 
 ---
