@@ -268,6 +268,9 @@ async def get_image_by_name(album_key: str, filename: str) -> FileResponse:
     absolute_paths = [
         x for x in indexes["sorted_filenames"] if Path(x).name == filename
     ]
+    logger.info(
+        f"Searching for image {filename} in album {album_key}: found {len(absolute_paths)} matches"
+    )
     if not absolute_paths:
         raise HTTPException(status_code=404, detail="Image not found")
     image_path = config_manager.find_image_in_album(album_key, absolute_paths[0])

@@ -956,6 +956,7 @@ class Embeddings(BaseModel):
         # Clear the LRU cache since the file has changed
         self.open_cached_embeddings.cache_clear()
 
+    # This is not used in the current implementation, but can be useful for testing.
     def iterate_images(
         self, random: bool = False
     ) -> Generator[SlideSummary, None, None]:

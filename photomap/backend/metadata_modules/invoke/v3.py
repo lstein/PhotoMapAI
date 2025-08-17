@@ -2,6 +2,7 @@
 Support for metadata extraction from images created with InvokeAI v3.
 """
 
+from logging import getLogger
 from typing import List
 
 from .invoke_metadata_abc import (
@@ -11,6 +12,8 @@ from .invoke_metadata_abc import (
     Prompts,
     ReferenceImage,
 )
+
+logger = getLogger(__name__)
 
 
 class Invoke3Metadata(InvokeMetadataABC):
@@ -95,4 +98,7 @@ class Invoke3Metadata(InvokeMetadataABC):
         Returns:
             List[ControlLayer]: A list of ControlLayer named tuples containing layer_type, reference, and weight.
         """
+        logger.warning(
+            "Control layers extraction is not currently supported in Invoke v3 metadata."
+        )
         return []  # Not currently supported. TO DO: Add later
