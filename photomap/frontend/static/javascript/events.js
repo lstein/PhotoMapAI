@@ -110,7 +110,14 @@ function handleSpacebarToggle(e) {
 // Copy text to clipboard
 function handleCopyText() {
   if (state.currentTextToCopy) {
-    navigator.clipboard.writeText(state.currentTextToCopy);
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(state.currentTextToCopy)
+        .catch((err) => {
+          alert("Failed to copy text: " + err);
+        });
+    } else {
+      alert("Clipboard API not available. Please copy manually.");
+    }
   }
 }
 

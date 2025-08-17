@@ -64,3 +64,151 @@
   vertical-align: middle;
 }
 
+.exif-metadata {
+  white-space: normal !important;
+}
+
+.exif-metadata table {
+  margin: 0 !important;
+  padding: 0 !important;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+.exif-metadata th,
+.exif-metadata td {
+  padding: 2px 6px !important;
+  margin: 0 !important;
+  font-size: 0.98em;
+  vertical-align: top;
+}
+
+.exif-metadata tr {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.metadata-link {  
+  color: #faea0e;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 0.7em;
+}
+
+.invoke-metadata, .invoke-tuples {
+  border-collapse: collapse;
+  border: 1px solid #bbb;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.invoke-metadata th, .invoke-metadata td,
+.invoke-tuples th, .invoke-tuples td {
+  border: 1px solid #555;
+  padding: 6px 10px;
+}
+
+/* ===== BANNER DRAWER CONTAINER ===== */
+.banner-drawer-container {
+  position: fixed;
+  left: 0;
+  bottom: 82px;
+  transform: translateX(-100%);
+  width: auto;
+  max-width: 60vw;
+  z-index: 1000;
+  transition: transform 0.4s ease;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: row;
+}
+
+.banner-drawer-container.visible {
+  transform: translateX(0);
+}
+
+.banner-drawer-container.hidden-fullscreen {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.banner-drawer-container:not(.visible) {
+  transform: translateX(calc(-100% + 20px));
+}
+
+.overlay-drawer {
+  position: relative;
+  width: 20px;
+  height: 100px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  order: 2;
+  display: flex;
+  align-items: center;
+}
+
+.drawer-handle {
+  width: 100%;
+  height: 100%;
+  background: rgba(240, 209, 209, 0.5);
+  clip-path: polygon(0% 0%, 80% 20%, 80% 80%, 0% 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.drawer-handle:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.banner-drawer-container.visible .drawer-handle {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.drawer-arrow {
+  transition: transform 0.3s ease;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  transform: rotate(90deg);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  color: #faea0e;
+  fill: #faea0e;
+}
+
+.banner-drawer-container.visible .drawer-arrow {
+  transform: rotate(-90deg) translateY(-5px);
+}
+
+#copyTextBtn {
+  background: transparent !important;
+  border: none;
+  color: #fff;
+  padding: 0.2em;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+#copyTextBtn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+#copyTextBtn svg {
+  color: #fff;
+  fill: currentColor;
+}
+

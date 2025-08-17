@@ -327,3 +327,8 @@
   font-size: 0.85em;
 }
 
+#showAddAlbumBtn {
+  transform: translateX(-3px);
+}
+
+
