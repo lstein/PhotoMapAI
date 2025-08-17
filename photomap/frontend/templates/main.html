@@ -30,13 +30,27 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
     />
-    <link rel="stylesheet" type="text/css" href="static/slides.css" />
-
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script
       src="https://cdn.plot.ly/plotly-3.0.1.min.js"
       charset="utf-8"
     ></script>
+    <link rel="stylesheet" type="text/css" href="static/css/base.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/modal-base.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/spinners.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/swiper.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/control-and-search-panels.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/score-slider.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/swiper.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/settings.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/metadata-drawer.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/search.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/settings.css" />
+    <link rel="stylesheet" type="text/css" href="static/css/album-manager.css" />
+
+    <link rel="stylesheet" type="text/css" href="static/slides.css" />
+
+
     <script>
       // Pass server data to JavaScript
       window.slideshowConfig = {
@@ -50,17 +64,16 @@
   </head>
 
   <body>
-    {% include "modules/spinner.html" %}
+    {% include "modules/spinner.html" %} 
     {% include "modules/score_slider.html" %} 
-    {% include "modules/swiper.html" %}
-    {% include "modules/metadata-drawer.html" %}
+    {% include "modules/swiper.html" %} 
+    {% include "modules/metadata-drawer.html" %} 
     {% include "modules/control-panel.html" %}
-    {% include "modules/search-panel.html" %}
-    {% include "modules/search-dialog.html" %}
-    {% include "modules/umap-floating-window.html" %}
+    {% include "modules/search-panel.html" %} 
+    {% include "modules/search-dialog.html" %} 
+    {% include "modules/umap-floating-window.html" %} 
     {% include "modules/settings.html" %}
-    {% include "modules/album-manager.html" %}
+    {% include "modules/album-manager.html" %} 
     {% include "modules/metadata-modal.html" %}
-
   </body>
 </html>

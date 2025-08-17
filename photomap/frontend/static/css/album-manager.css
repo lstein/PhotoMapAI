@@ -1,0 +1,329 @@
+/* CSS styles for the album management modal dialog */
+/* ===== ALBUM MANAGEMENT MODAL ===== */
+.album-management-modal {
+  color: #fff;
+  margin: 0;
+  width: 80vw;
+  max-width: 800px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.album-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5em;
+}
+
+.album-header h2 {
+  color: #fff;
+  margin: 0;
+  font-size: 1.5em;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 1em;
+  align-items: center;
+}
+
+.add-album-section {
+  display: none;
+  margin-bottom: 2em;
+  padding: 1em;
+  background: #333;
+  border-radius: 8px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1em;
+}
+
+.section-header h3 {
+  color: #fff;
+  margin: 0;
+}
+
+.cancel-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 1.2em;
+  cursor: pointer;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1em;
+  margin-bottom: 1em;
+}
+
+.form-group {
+  margin-bottom: 1em;
+}
+
+.form-group label {
+  color: #fff;
+  font-size: 14px;
+  display: block;
+  margin-bottom: 0.5em;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 0.5em;
+  border-radius: 4px;
+  border: 1px solid #888;
+  background: #444;
+  color: #fff;
+}
+
+.form-group textarea {
+  resize: vertical;
+}
+
+.form-buttons {
+  display: flex;
+  gap: 0.5em;
+}
+
+.album-card {
+  background: #333;
+  border-radius: 8px;
+  margin-bottom: 1em;
+  padding: 1em;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.album-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.album-details {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr auto;
+  gap: 1em;
+  align-items: start;
+}
+
+.album-name {
+  color: #fff;
+  margin: 0 0 0.5em 0;
+  font-size: 1.1em;
+}
+
+.album-key {
+  color: #aaa;
+  font-size: 0.9em;
+  margin-bottom: 0.3em;
+}
+
+.album-description {
+  color: #ccc;
+  font-size: 0.9em;
+  margin-bottom: 0.3em;
+}
+
+.album-paths {
+  color: #aaa;
+  font-size: 0.85em;
+  margin-bottom: 0.5em;
+}
+
+.indexing-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 200px;
+}
+
+.index-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.index-status {
+  color: #aaa;
+  font-size: 0.9em;
+}
+
+.index-status.scanning {
+  color: #636ceb;
+}
+.index-status.indexing {
+  color: #ff9800 !important;
+}
+.index-status.completed {
+  color: green !important;
+}
+.index-status.error {
+  color: #b00020 !important;
+}
+.index-status.umapping {
+  color: #2196f3 !important;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.5em;
+  margin-top: 1em;
+  justify-content: flex-end;
+}
+
+.action-buttons.vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  justify-content: flex-start;
+  align-items: flex-end;
+  margin-top: 0;
+}
+
+.action-buttons.vertical button {
+  width: auto;
+  min-width: 80px;
+  align-self: flex-end;
+}
+
+.edit-form {
+  display: none;
+}
+
+.edit-form h5 {
+  color: #fff;
+  margin-top: 0;
+}
+
+.progress-container {
+  display: none;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-bottom: 0.3em;
+}
+
+.progress-bar-track {
+  flex: 1;
+  height: 8px;
+  background: #555;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4caf50, #2196f3);
+  transition: width 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+.progress-text {
+  color: #fff;
+  font-size: 0.85em;
+  min-width: 40px;
+  text-align: right;
+}
+
+.estimated-time {
+  color: #aaa;
+  font-size: 0.8em;
+  text-align: right;
+  min-height: 1.2em;
+}
+
+/* ===== BUTTON STYLES ===== */
+.btn-primary {
+  background: #4caf50;
+  border: none;
+  color: #fff;
+  padding: 0.5em 1em;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-secondary {
+  background: #666;
+  border: none;
+  color: #fff;
+  padding: 0.5em 1em;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-edit {
+  background: #ff9800;
+  border: none;
+  color: #fff;
+  padding: 0.4em 0.8em;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.btn-delete {
+  background: #f44336;
+  border: none;
+  color: #fff;
+  padding: 0.4em 0.8em;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.btn-index {
+  background: #2196f3;
+  border: none;
+  color: #fff;
+  padding: 0.4em 0.8em;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.btn-cancel {
+  display: none;
+  background: #f44336;
+  border: none;
+  color: #fff;
+  padding: 0.4em 0.8em;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+

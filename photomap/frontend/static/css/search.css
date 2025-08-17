@@ -1,0 +1,159 @@
+/* CSS styles for the combined image/text search panel dialog */
+/* ===== TEXT SEARCH PANEL ===== */
+#textSearchPanel {
+  display: none;
+  position: fixed;
+  bottom: 80px;
+  right: 40px;
+  background: rgba(30, 30, 30, 0.75);
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+  padding: 1.2em 1.5em;
+  z-index: 2000;
+  min-width: 300px;
+  transition: opacity 0.2s;
+}
+
+.search-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5em;
+  position: relative;
+}
+
+.search-input-container {
+  position: relative;
+  display: flex;
+  width: 100%;
+}
+
+.search-input-container label {
+  color: #fff;
+  font-size: 1em;
+  margin-right: 0.5em;
+  white-space: nowrap;
+}
+
+.search-input-container input[type="text"] {
+  margin-right: 1em;
+  min-width: 120px;
+}
+
+#searchInput,
+#negativeSearchInput {
+  flex: 1;
+  font-size: 1.1em;
+  padding: 0.4em 2.2em 0.4em 0.7em;
+  border-radius: 6px;
+  border: 1px solid #888;
+  background: #222;
+  color: #fff;
+  width: 350px;
+  min-width: 200px;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: block;
+}
+
+#clearTextSearchBtn,
+#clearNegativeTextSearchBtn {
+  position: absolute;
+  right: 0.5em;
+  top: 50%;
+  transform: translate(-10px, -100%);
+  background: #333;
+  border: none;
+  border-radius: 6px;
+  width: 1.8em;
+  height: 1.8em;
+  color: #fff;
+  font-size: 1.1em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+#doSearchBtn {
+  margin-left: 1em;
+  padding: 0.4em 1.2em;
+  border-radius: 6px;
+  border: none;
+  background: #444;
+  color: #fff;
+  font-size: 1em;
+  cursor: pointer;
+  align-self: flex-end;
+}
+
+.vertical-search-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  width: 100%;
+}
+
+.search-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5em;
+  width: 100%;
+}
+
+.search-label {
+  min-width: 80px;
+  text-align: right;
+  color: #fff;
+  font-size: 1em;
+  margin-right: 0.5em;
+}
+
+.search-field-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.search-field-wrapper input[type="text"] {
+  width: 100%;
+  font-size: 1.1em;
+  padding: 0.4em 2.2em 0.4em 0.7em;
+  border-radius: 6px;
+  border: 1px solid #888;
+  background: #222;
+  color: #fff;
+}
+
+.search-label[for="searchInput"],
+.search-label[for="negativeSearchInput"] {
+  color: #faea0e;
+  font-weight: bold;
+}
+
+.query-image-label,
+.query-image {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  padding: 0.3em 0.8em;
+  border-radius: 6px;
+  font-size: 1.1em;
+  font-weight: bold;
+  z-index: 5000;
+  pointer-events: none;
+  user-select: none;
+}
+.query-image {
+  width: 32px;
+  height: 32px;
+  background-size: cover;
+  background-position: center;
+  border-radius: 50%;
+}

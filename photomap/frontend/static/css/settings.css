@@ -1,0 +1,172 @@
+/* CSS styles for the settings modal dialog */
+/* ===== SETTINGS MODAL ===== */
+.settings-modal {
+  position: fixed;
+  min-width: 320px;
+  z-index: 11000;
+}
+
+.settings-header {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+#slideshowSettingsLabel {
+  color: #f3ef0a;
+  margin-bottom: 1em;
+  font-size: 1.5em !important;
+  text-align: center;
+}
+
+#slideshowIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.settings-main {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.delay-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  margin-right: 2em;
+}
+
+.delay-control-buttons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+#slowerBtn,
+#fasterBtn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+#slowerBtn:hover,
+#fasterBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+#modeControls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #fff;
+  justify-content: flex-start;
+}
+
+#modeControls > span {
+  margin-bottom: 0.5em;
+}
+
+#modeRadioGroup {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+}
+
+#modeLabel {
+  margin-bottom: 1.2em;
+}
+
+#modeRadioGroup label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+#modeRadioGroup input[type="radio"] {
+  margin: 0;
+}
+
+.setting-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1em;
+  margin-top: 1em;
+}
+
+.setting-row label,
+#delayLabel,
+#modeLabel {
+  font-size: 16px;
+  color: #faea0e;
+  align-self: flex-start;
+  text-align: right;
+}
+
+.setting-input-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+}
+
+#highWaterMarkInput {
+  width: 4em;
+  border-radius: 4px;
+  border: 1px solid #888;
+  padding: 0.2em;
+}
+
+#locationiqApiKeyInput {
+  width: 100%;
+  border-radius: 4px;
+  border: 1px solid #888;
+  padding: 0.2em;
+}
+
+#albumSelect {
+  padding: 0.5em;
+  border-radius: 4px;
+  border: 1px solid #888;
+  background: #333;
+  color: #fff;
+  min-width: 150px;
+}
+
+#albumSelect:focus {
+  outline: none;
+  border-color: #00ff99;
+  box-shadow: 0 0 4px rgba(0, 255, 153, 0.3);
+}
+
+#delayValue {
+  color: #fff;
+  font-weight: bold;
+  min-width: 30px;
+  text-align: center;
+  font-size: 16px;
+}
+
+#delayLabel,
+#modeLabel {
+  color: #fff;
+  white-space: nowrap;
+  margin-bottom: 0.5em;
+}
+

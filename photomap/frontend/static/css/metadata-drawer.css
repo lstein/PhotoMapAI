@@ -1,0 +1,66 @@
+/* CSS styles for the metadata drawer */
+/* ===== FILE INFO BANNER ===== */
+.filename-banner {
+  position: relative;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  padding: 1em 2em;
+  box-sizing: border-box;
+  text-align: left;
+  border-radius: 8px 0 0 8px;
+  margin: 0;
+  order: 1;
+  pointer-events: auto;
+}
+
+.filenameDescContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  margin-bottom: 0;
+}
+
+.filenameRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5em;
+  white-space: nowrap;
+}
+
+#descriptionText {
+  color: #ccc;
+  font-size: 1em;
+  margin: 0.5em 0;
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-height: 40vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+#filepathText {
+  color: #ccc;
+  font-size: 0.8em;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  text-align: left;
+  word-break: break-word;
+  white-space: pre-line;
+}
+
+#filenameText {
+  display: inline-block;
+  max-width: 100%;
+  font-weight: bold;
+  color: #fff700;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
+  vertical-align: middle;
+}
+
