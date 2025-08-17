@@ -1,0 +1,87 @@
+<!-- HTML template for the combined image/text search dialog -->
+<div id="textSearchPanel">
+  <button id="closeTextSearchBtn" class="modal-close" title="Close search" aria-label="Close">
+    ✖
+  </button>
+  <div class="search-controls">
+    <div class="search-input-container vertical-search-inputs">
+      <div class="search-image-column">
+        <div class="search-image-label">Image Search</div>
+        <div id="searchImageThumbArea">
+          <!-- JS will insert thumbnail or upload box here -->
+        </div>
+        <div class="search-row">
+          <label
+            for="imgPromptWeightSlider"
+            class="search-label"
+            style="visibility: hidden"
+            >Image Weight:</label
+          >
+          <div class="search-field-wrapper">
+            <div id="imgPromptWeightSlider"></div>
+          </div>
+        </div>
+      </div>
+      <div class="search-fields-column">
+        <!-- Row 1: Positive search -->
+        <label for="searchInput" class="search-label">Text Search:</label>
+        <div class="search-field-wrapper">
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="Enter search terms..."
+            autocomplete="off"
+          />
+          <button id="clearTextSearchBtn" title="Clear search">&#10005;</button>
+          <div class="weight-row">
+            <label for="posPromptWeightSlider" class="weight-label"
+              >Weight:</label
+            >
+            <div id="posPromptWeightSlider"></div>
+          </div>
+        </div>
+        <!-- Row 2: Negative search -->
+        <label for="negativeSearchInput" class="search-label"
+          >Text to Avoid:</label
+        >
+        <div class="search-field-wrapper">
+          <input
+            id="negativeSearchInput"
+            type="text"
+            placeholder="Exclude terms..."
+            autocomplete="off"
+          />
+          <button id="clearNegativeTextSearchBtn" title="Clear exclude">
+            &#10005;
+          </button>
+          <div class="weight-row">
+            <label for="negPromptWeightSlider" class="weight-label"
+              >Weight:</label
+            >
+            <div id="negPromptWeightSlider"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="search-bottom-row">
+      <span class="search-upload-hint" style="color: white; font-size: 80%">
+        Or paste, drag or
+        <a
+          href="#"
+          id="uploadImageLink"
+          class="upload-link"
+          style="font-size: inherit"
+          >upload</a
+        >
+        <input
+          type="file"
+          id="uploadImageInput"
+          accept="image/*"
+          style="display: none"
+        />
+        a search image.
+      </span>
+      <button id="doSearchBtn">Search</button>
+    </div>
+  </div>
+</div>
