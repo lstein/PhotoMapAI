@@ -120,11 +120,28 @@
 }
 
 .setting-input-container {
+  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  flex: 1;
+  align-items: stretch; /* <-- changed from flex-start */
+}
+
+.setting-input-container input[type="checkbox"] {
+  align-self: flex-start;
+  margin-top: 0.3em;
+}
+
+#locationiqApiKeyForm {
   width: 100%;
+  margin: 0;
+}
+
+#locationiqApiKeyInput {
+  width: 100%;
+  box-sizing: border-box; /* ensures padding/border don't shrink the input */
+  border-radius: 4px;
+  border: 1px solid #888;
+  padding: 0.2em;
 }
 
 #highWaterMarkInput {
@@ -134,12 +151,6 @@
   padding: 0.2em;
 }
 
-#locationiqApiKeyInput {
-  width: 380px;  /* FIX: hard-coded value */
-  border-radius: 4px;
-  border: 1px solid #888;
-  padding: 0.2em;
-}
 
 #albumSelect {
   padding: 0.5em;
