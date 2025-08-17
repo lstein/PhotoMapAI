@@ -1,0 +1,39 @@
+<!-- Drawer Container for image metadata drawer -->
+<div id="bannerDrawerContainer" class="banner-drawer-container">
+  <!-- Overlay Drawer Toggle -->
+  <div id="overlayDrawer" class="overlay-drawer">
+    <div class="drawer-handle">
+      <svg class="drawer-arrow" viewBox="0 0 18 18">
+        <path d="M7 14l5-5 5 5z" fill="currentColor" />
+      </svg>
+    </div>
+  </div>
+
+  <!-- File Info Banner -->
+  <div id="filenameBanner" class="filename-banner">
+    <div class="filenameDescContainer">
+      <div class="filenameRow">
+        <span id="filenameText"></span>
+        <button id="copyTextBtn" title="Copy text">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
+            />
+          </svg>
+        </button>
+      </div>
+      <div id="descriptionText"></div>
+      <div id="filepathText"></div>
+      <div id="metadataLinkContainer">
+        <a
+          id="metadataLink"
+          href="#"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="metadata-link"
+          >View Metadata (JSON)</a
+        >
+      </div>
+    </div>
+  </div>
+</div>

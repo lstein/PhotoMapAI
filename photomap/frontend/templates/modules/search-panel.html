@@ -1,0 +1,98 @@
+<!-- HTML template for the search icons -- show/hide semantic map, search by image similarity, search by text -->
+<!-- Search Panel -->
+<div id="searchPanel">
+  <div class="search-panel-title">Search</div>
+  <div class="search-icons-row">
+    <div class="search-icon-container">
+      <button id="showUmapBtn" title="Show UMAP">
+        <span id="showUmapIcon">
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <!-- Outer circle -->
+            <circle cx="12" cy="12" r="9" />
+            <!-- Center dot -->
+            <circle cx="12" cy="12" r="2.2" fill="#fff" />
+            <!-- Rays -->
+            <line x1="12" y1="0" x2="12" y2="7" />
+            <line x1="12" y1="17" x2="12" y2="24" />
+            <line x1="0" y1="12" x2="7" y2="12" />
+            <line x1="17" y1="12" x2="24" y2="12" />
+          </svg>
+        </span>
+      </button>
+      <div class="button-label">By Map</div>
+    </div>
+
+    <div class="search-icon-container">
+      <button id="imageSearchBtn" title="Search for similar images">
+        <span id="imageSearchIcon">
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </span>
+      </button>
+      <div class="button-label">By Image</div>
+    </div>
+
+    <div class="search-icon-container">
+      <button id="textSearchBtn" title="Search">
+        <span id="textSearchIcon">
+          <svg
+            id="searchIcon"
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </span>
+      </button>
+      <div class="button-label">By Text</div>
+    </div>
+
+    <div class="clear-search-container">
+      <button id="clearSearchBtn" title="Clear Search" style="display: none">
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#fff"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="4" y="4" width="16" height="16" rx="2" ry="2" />
+          <line x1="8" y1="8" x2="16" y2="16" />
+          <line x1="16" y1="8" x2="8" y2="16" />
+        </svg>
+      </button>
+      <div class="button-label">Clear</div>
+    </div>
+  </div>
+</div>
