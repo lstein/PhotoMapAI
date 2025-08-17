@@ -1,0 +1,138 @@
+<!-- Album Management Overlay Modal -->
+<div id="albumManagementOverlay" class="modal-overlay album-management">
+  <div class="modal-content album-management-modal" id="albumManagementContent">
+    <!-- Header with Add Album Button (fixed) -->
+    <div class="album-header">
+      <h2>Album Management</h2>
+      <div class="header-buttons">
+        <button id="showAddAlbumBtn" class="btn-primary">+ Add Album</button>
+        <button id="closeAlbumManagementBtn" class="modal-close" title="Close">
+          ✖
+        </button>
+      </div>
+    </div>
+
+    <!-- Add New Album Section (fixed, if desired) -->
+    <div id="addAlbumSection" class="add-album-section">
+      <div class="section-header">
+        <h3>Add New Album</h3>
+        <button id="cancelAddAlbumBtn" class="cancel-btn" title="Cancel">
+          ✖
+        </button>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Album Key</label>
+          <input
+            id="newAlbumKey"
+            type="text"
+            placeholder="e.g., vacation_2024"
+          />
+        </div>
+        <div class="form-group">
+          <label>Display Name</label>
+          <input
+            id="newAlbumName"
+            type="text"
+            placeholder="e.g., Vacation 2024"
+          />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <input
+          id="newAlbumDescription"
+          type="text"
+          placeholder="Optional description"
+        />
+      </div>
+
+      <div class="form-group">
+        <label>Image Paths (one per line)</label>
+        <textarea
+          id="newAlbumPaths"
+          placeholder="/path/to/images&#10;/another/path/to/images"
+          rows="3"
+        ></textarea>
+      </div>
+
+      <div class="form-buttons">
+        <button id="addAlbumBtn" class="btn-primary">Add Album</button>
+        <button id="cancelAddAlbumBtn2" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Scrollable Albums Section -->
+    <div id="albumsScrollContainer" style="max-height: 60vh; overflow-y: auto">
+      <div id="existingAlbumsSection">
+        <h3>Albums</h3>
+        <div id="albumsList">
+          <!-- Albums will be populated here -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Album Card Template -->
+<template id="albumCardTemplate">
+  <div class="album-card">
+    <div class="album-info">
+      <div class="album-details">
+        <div class="album-text">
+          <h4 class="album-name"></h4>
+          <div class="album-key"></div>
+          <div class="album-description"></div>
+          <div class="album-paths"></div>
+        </div>
+        <div class="indexing-section">
+          <!-- Index Status and Button -->
+          <div class="index-controls">
+            <div class="index-status">Ready to index</div>
+            <button class="create-index-btn btn-index">Update Index</button>
+            <button class="cancel-index-btn btn-cancel">Cancel</button>
+          </div>
+          <!-- Progress Container -->
+          <div class="progress-container">
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar-track">
+                <div class="progress-bar"></div>
+                <div class="progress-bar-shimmer"></div>
+              </div>
+              <div class="progress-text">0%</div>
+            </div>
+            <div class="estimated-time"></div>
+          </div>
+        </div>
+        <div class="action-buttons vertical">
+          <button class="edit-album-btn btn-edit">Edit</button>
+          <button class="delete-album-btn btn-delete">Delete</button>
+        </div>
+      </div>
+    </div>
+    <!-- Edit Form -->
+    <div class="edit-form">
+      <h5>Edit Album</h5>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Display Name</label>
+          <input class="edit-album-name" type="text" />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input class="edit-album-description" type="text" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Image Paths (one per line)</label>
+        <textarea class="edit-album-paths" rows="3"></textarea>
+      </div>
+      <div class="form-buttons">
+        <button class="save-album-btn btn-primary">Save Changes</button>
+        <button class="cancel-edit-btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+</template>

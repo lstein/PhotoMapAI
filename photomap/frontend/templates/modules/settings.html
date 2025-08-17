@@ -1,0 +1,117 @@
+<!-- Settings Overlay Modal -->
+<!-- These are the settings triggered by the gear icon in the control panel -->
+
+<div id="settingsOverlay" class="modal-overlay">
+  <div class="modal-content settings-modal">
+    <button id="closeSettingsBtn" class="modal-close" title="Close settings">
+      ✖
+    </button>
+
+    <div class="settings-header">
+      <span id="slideshowSettingsLabel">PhotoMap Settings</span>
+    </div>
+
+    <div class="settings-main">
+      <!-- Left column: Slower/Faster/Interval -->
+      <div class="delay-controls">
+        <div id="delayLabel">Image Change Interval</div>
+
+        <div class="delay-control-buttons">
+          <button id="fasterBtn" title="Faster">&#9664;</button>
+          <span id="delayValue">10</span>
+          <button id="slowerBtn" title="Slower">&#9654;</button>
+        </div>
+      </div>
+
+      <!-- Right column: Mode controls -->
+      <div id="modeControls">
+        <div id="modeLabel">Image Browse Order:</div>
+
+        <div id="modeRadioGroup">
+          <label
+            ><input
+              type="radio"
+              id="modeRandom"
+              name="mode"
+              value="random"
+              checked
+            />
+            Random</label
+          >
+          <label
+            ><input
+              type="radio"
+              id="modeChronological"
+              name="mode"
+              value="chronological"
+            />
+            Chronological</label
+          >
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings rows -->
+    <div class="setting-row">
+      <label for="highWaterMarkInput">Max Images in History:</label>
+      <div class="setting-input-container">
+        <input
+          id="highWaterMarkInput"
+          type="number"
+          min="2"
+          max="100"
+          value="10"
+        />
+      </div>
+    </div>
+
+    <!-- Row for control panel text visibility -->
+    <div class="setting-row">
+      <label for="showControlPanelTextCheckbox">Show Button Labels:</label>
+      <div class="setting-input-container">
+        <input type="checkbox" id="showControlPanelTextCheckbox" />
+      </div>
+    </div>
+
+    <!-- Input for the LocationIQ API Key -->
+    <div class="setting-row">
+      <label for="locationiqApiKeyInput">LocationIQ Map API Key:</label>
+      <div class="setting-input-container">
+        <form id="locationiqApiKeyForm" autocomplete="off" style="margin: 0">
+          <input
+            type="password"
+            id="locationiqApiKeyInput"
+            placeholder="Enter your LocationIQ API key (optional)"
+            autocomplete="pk-xxxxxxxx"
+          />
+        </form>
+        <small
+          style="
+            color: #666;
+            font-size: 0.85em;
+            display: block;
+            margin-top: 4px;
+          "
+        >
+          Optional: Enables location names and maps in EXIF data.
+          <a
+            href="https://locationiq.com"
+            target="_blank"
+            style="color: #007bff"
+            >Get a free key</a
+          >
+        </small>
+      </div>
+    </div>
+
+    <div class="setting-row">
+      <label for="albumSelect">Album:</label>
+      <div class="album-selector-group">
+        <select id="albumSelect">
+          <option value="">Loading albums...</option>
+        </select>
+        <button id="manageAlbumsBtn" class="btn-primary">Manage Albums</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,25 @@
+<!-- This is the modal that shows the JSON dump of image metadata. -->
+<!-- Metadata Modal -->
+<div id="metadataModal" class="modal-overlay">
+  <div class="modal-content">
+    <button id="closeMetadataModalBtn" class="modal-close" title="Close">
+      ✖
+    </button>
+    <h3 style="color: #faea0e; margin-top: 0">Image Metadata (JSON)</h3>
+    <textarea
+      id="metadataTextArea"
+      readonly
+      style="
+        width: 100%;
+        height: 300px;
+        font-family: monospace;
+        font-size: 1em;
+        padding: 1em;
+        border-radius: 8px;
+        background: #222;
+        color: #fff;
+        border: 1px solid #888;
+      "
+    ></textarea>
+  </div>
+</div>
