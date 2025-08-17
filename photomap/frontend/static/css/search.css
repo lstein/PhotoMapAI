@@ -157,3 +157,246 @@
   background-position: center;
   border-radius: 50%;
 }
+
+.upload-link-container {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, -18px);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.upload-link {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.upload-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+}
+
+.upload-link:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+
+.button-label {
+  font-size: 12px;
+  color: #fff;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.search-icon-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.clear-search-container:has(#clearSearchBtn[style*="display: none"]) {
+  display: none;
+}
+
+#clearSearchBtn[style*="display: none"] + .button-label {
+  display: none;
+}
+
+.search-bottom-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1em;
+  width: 100%;
+  gap: 1em;
+}
+
+.weight-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.2em;
+}
+
+.search-upload-hint {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+}
+
+.search-input-container.vertical-search-inputs {
+  display: flex;
+  flex-direction: row;
+  gap: 1.5em;
+  width: 100%;
+}
+
+.search-image-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 140px;
+  max-width: 180px;
+  flex-shrink: 0;
+  margin-right: 0.5em;
+}
+
+.search-image-column .search-row {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+.search-image-column .search-field-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: auto !important;
+  min-width: 0 !important;
+  flex: 0 0 auto !important;
+  padding: 0;
+}
+
+.search-fields-column {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 0.5em 1em;
+  align-items: start;
+  width: 100%;
+}
+
+.search-label {
+  grid-column: 1;
+  text-align: right;
+  align-self: start;
+  margin-top: 0.2em;
+  width: 140px;
+  box-sizing: border-box;
+}
+
+.search-field-wrapper {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  width: 100%;
+  position: relative;
+}
+
+.search-field-wrapper input[type="text"] {
+  width: 100%;
+  font-size: 1.1em;
+  padding: 0.4em 2.2em 0.4em 0.7em;
+  border-radius: 6px;
+  border: 1px solid #888;
+  background: #222;
+  color: #fff;
+}
+
+.search-image-label {
+  color: #faea0e;
+  font-weight: bold;
+  font-size: 1.08em;
+  margin-bottom: 0.4em;
+  text-align: center;
+  width: 100%;
+  letter-spacing: 0.5px;
+}
+
+#searchImageThumbArea {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 0.7em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-thumb-img {
+  max-width: 110px;
+  max-height: 110px;
+  border-radius: 8px;
+  object-fit: contain;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  background: #222;
+}
+
+.search-thumb-placeholder {
+  width: 110px;
+  height: 110px;
+  border: 2px dashed #aaa;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #aaa;
+  background: #181818;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  font-size: 2.2em;
+}
+
+
+/* ===== WEIGHT SLIDER WIDGET ===== */
+.weight-slider {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+  user-select: none;
+}
+
+.weight-slider-bar {
+  width: 120px;
+  height: 10px;
+  background: #333;
+  border-radius: 5px;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.weight-slider-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #faea0e 60%, #fff700 100%);
+  border-radius: 5px 0 0 5px;
+  transition: width 0.15s;
+}
+
+.weight-slider-value {
+  min-width: 2.5em;
+  text-align: right;
+  color: #faea0e;
+  font-size: 0.95em;
+  margin-left: 0.5em;
+  font-family: monospace;
+}
+
+/* Field-specific weight sliders */
+#imgPromptWeightSlider {
+  transform: translateX(-25%);
+  margin-left: 0 auto;
+  display: flex;
+  justify-content: center;
+}
+
+#posPromptWeightSlider,
+#negPromptWeightSlider {
+  width: max-content;
+}
+

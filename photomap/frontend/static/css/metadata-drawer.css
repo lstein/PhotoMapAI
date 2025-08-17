@@ -88,22 +88,25 @@
   padding: 0 !important;
 }
 
-.metadata-link {  
+.metadata-link {
   color: #faea0e;
   text-decoration: none;
   font-weight: bold;
   font-size: 0.7em;
 }
 
-.invoke-metadata, .invoke-tuples {
+.invoke-metadata,
+.invoke-tuples {
   border-collapse: collapse;
   border: 1px solid #bbb;
   width: 100%;
   margin: 0.5em 0;
 }
 
-.invoke-metadata th, .invoke-metadata td,
-.invoke-tuples th, .invoke-tuples td {
+.invoke-metadata th,
+.invoke-metadata td,
+.invoke-tuples th,
+.invoke-tuples td {
   border: 1px solid #555;
   padding: 6px 10px;
 }
@@ -212,3 +215,29 @@
   fill: currentColor;
 }
 
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 768px) {
+  #filenameBanner {
+    min-width: 180px;
+    padding: 0.5em 1em;
+    font-size: 0.95em;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+
+  #descriptionText {
+    font-size: 1em;
+  }
+}
+
+@media (max-width: 480px) {
+  #filenameBanner {
+    min-width: 180px;
+    padding: 0.5em 1em;
+    font-size: 0.95em;
+  }
+
+  #descriptionText {
+    font-size: 1em;
+  }
+}

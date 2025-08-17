@@ -84,6 +84,17 @@
   display: block;
   z-index: 502;
 }
+
+@media (max-width: 480px) {
+  .slider-with-ticks-container {
+    width: 98vw;
+    max-width: 100vw;
+    min-width: 120px;
+    margin-left: 1vw;
+    margin-right: 1vw;
+  }
+}
+
 .slider-ticks-row {
   position: absolute;
   left: 0;

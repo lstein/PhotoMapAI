@@ -331,4 +331,25 @@
   transform: translateX(-3px);
 }
 
+#albumsScrollContainer {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
 
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 768px) {
+  .album-management-modal {
+    width: 95vw;
+    max-height: 90vh;
+    padding: 1em;
+  }
+
+  .album-card {
+    font-size: 0.9em;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

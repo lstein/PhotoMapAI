@@ -88,3 +88,18 @@
   justify-content: center;
   pointer-events: none;
 }
+
+.control-icon-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hide-panel-text .control-panel-title,
+.hide-panel-text .button-label,
+.hide-panel-text .search-panel-title,
+.hide-panel-text .search-icon-container .button-label {
+  display: none !important;
+}
+
