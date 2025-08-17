@@ -1,22 +1,21 @@
 # slideshow_server.py
 import logging
 import os
-import numpy as np
 from pathlib import Path
-from fastapi import (
-    FastAPI,
-    Request,
-)
+from typing import Optional
+
+import numpy as np
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .constants import get_package_resource_path
 from .config import get_config_manager
-from .routers.umap import umap_router
+from .constants import get_package_resource_path
 from .routers.album import album_router
-from .routers.search import search_router
 from .routers.index import index_router
+from .routers.search import search_router
+from .routers.umap import umap_router
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -35,32 +34,33 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 templates_path = get_package_resource_path("templates")
 templates = Jinja2Templates(directory=templates_path)
 
+
 # Main Routes
 @app.get("/", response_class=HTMLResponse, tags=["Main"])
 async def get_root(
     request: Request,
-    album: str = None,
+    album: Optional[str] = None,
     delay: int = 0,
-    high_water_mark: int = None,
-    mode: str = None,
+    high_water_mark: Optional[int] = None,
+    mode: Optional[str] = None,
 ):
     """Serve the main slideshow page."""
     config_manager = get_config_manager()
     if album is not None:
         albums = config_manager.get_albums()
-        if (albums and album in albums):
+        if albums and album in albums:
             pass
-        elif (albums):
+        elif albums:
             album = list(albums.keys())[0]
 
     return templates.TemplateResponse(
         request,
-        "slideshow.html",
+        "main.html",
         {
             "album": album,
             "delay": delay,
             "mode": mode,
-            "highWaterMark": high_water_mark
+            "highWaterMark": high_water_mark,
         },
     )
 
@@ -68,8 +68,9 @@ async def get_root(
 # Main Entry Point
 def main():
     """Main entry point for the slideshow server."""
-    import uvicorn
     import argparse
+
+    import uvicorn
 
     parser = argparse.ArgumentParser(description="Run the Clipslide slideshow server.")
     parser.add_argument(
@@ -109,7 +110,7 @@ def main():
     )
     args = parser.parse_args()
 
-    repo_root = Path(get_package_resource_path("photomap"),'../..').resolve()
+    repo_root = Path(get_package_resource_path("photomap"), "../..").resolve()
 
     port = args.port or int(os.environ.get("PHOTOMAP_PORT", "8050"))
     host = args.host or os.environ.get("PHOTOMAP_HOST", "127.0.0.1")
@@ -118,7 +119,9 @@ def main():
         os.environ["PHOTOMAP_CONFIG"] = args.config.as_posix()
 
     config = get_config_manager()
-    logger.info(f"Starting Clipslide server with backend root: {repo_root} and configuration file {config.config_path}")
+    logger.info(
+        f"Starting Clipslide server with backend root: {repo_root} and configuration file {config.config_path}"
+    )
 
     uvicorn.run(
         "photomap.backend.photomap_server:app",
@@ -130,6 +133,7 @@ def main():
         ssl_certfile=str(args.cert) if args.cert else None,
         log_level="info",
     )
+
 
 if __name__ == "__main__":
     main()
