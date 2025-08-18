@@ -5,7 +5,16 @@
     <button id="closeMetadataModalBtn" class="modal-close" title="Close">
       ✖
     </button>
-    <h3 style="color: #faea0e; margin-top: 0">Image Metadata (JSON)</h3>
+    <div style="display: flex; align-items: center; gap: 0.5em;">
+      <h3 style="color: #faea0e; margin-top: 0; margin-bottom: 0;">Image Metadata (JSON)</h3>
+      <button id="copyMetadataBtn" title="Copy metadata" style="background: none; border: none; cursor: pointer; padding: 0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
+          />
+        </svg>
+      </button>
+    </div>
     <textarea
       id="metadataTextArea"
       readonly

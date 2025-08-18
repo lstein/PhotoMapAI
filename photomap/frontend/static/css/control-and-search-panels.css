@@ -55,6 +55,14 @@
   opacity: 1;
 }
 
+/* Drag-over highlight for search panel */
+#searchPanel.drag-over {
+  border: 2px dashed #00ff99;
+  box-shadow: 0 0 12px 2px #00ff9980;
+  background: rgba(30, 30, 30, 0.45);
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
 .control-panel-title,
 .search-panel-title {
   color: #fff;

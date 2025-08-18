@@ -187,7 +187,8 @@
   transform: rotate(-90deg) translateY(-5px);
 }
 
-#copyTextBtn {
+#copyTextBtn,
+#copyMetadataBtn {
   background: transparent !important;
   border: none;
   color: #fff;
@@ -206,12 +207,14 @@
 }
 
 #copyTextBtn:hover,
+#copyMetadataBtn:hover,
 .copy-icon:hover {
   opacity: 1;
   transform: scale(1.1);
 }
 
-#copyTextBtn svg {
+#copyTextBtn svg,
+#copyMetadataBtn svg {
   color: #fff;
   fill: currentColor;
 }

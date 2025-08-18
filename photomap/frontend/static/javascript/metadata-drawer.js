@@ -186,3 +186,21 @@ document.addEventListener("click", function (e) {
     }
   }
 });
+
+const copyMetadataBtn = document.getElementById("copyMetadataBtn");
+
+if (copyMetadataBtn && metadataTextArea) {
+  copyMetadataBtn.addEventListener("click", function () {
+    const text = metadataTextArea.value;
+    if (text) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          copyMetadataBtn.title = "Copied!";
+          setTimeout(() => { copyMetadataBtn.title = "Copy metadata"; }, 1000);
+        })
+        .catch(() => {
+          copyMetadataBtn.title = "Copy failed";
+        });
+    }
+  });
+}
