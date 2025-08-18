@@ -42,5 +42,6 @@ openapi:
 # Serve the mkdocs site w/ live reload
 .PHONY: docs
 docs:
+	sed 's|img/|docs/img/|g' docs/index.md > README.md
 	mkdocs build --clean
 	mkdocs serve --dev-addr=0.0.0.0:8000
