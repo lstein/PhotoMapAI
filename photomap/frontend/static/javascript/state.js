@@ -5,7 +5,6 @@ import { switchAlbum } from "./settings.js";
 
 export const state = {
   swiper: null, // Will be initialized in swiper.js
-  currentTextToCopy: "", // Text to be copied to clipboard
   currentDelay: 5, // Delay in seconds for slide transitions
   showControlPanelText: true, // Whether to show text in control panels
   mode: "random", // next slide selection when no search is active ("random", "chronological", "search")

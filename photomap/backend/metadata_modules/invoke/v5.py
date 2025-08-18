@@ -139,6 +139,27 @@ class Invoke5Metadata(InvokeMetadataABC):
             )
         )
 
+    def get_raster_images(self) -> List[str]:
+        """
+        Extract raster image information from the raw metadata.
+        """
+        raster_layers = self.raw_metadata.get("canvas_v2_metadata", {}).get(
+            "rasterLayers", []
+        )
+        result = []
+        if not raster_layers:
+            return result
+        # Iterate through each raster layer and extract images
+        for layer in raster_layers:
+            if not layer.get("isEnabled", False):
+                continue
+            images = [
+                object.get("image", {}).get("image_name", "Unknown Image")
+                for object in layer.get("objects", [])
+            ]
+            result.extend(images)
+        return result
+
     def _get_control_layers(self) -> List[ControlLayer]:
         """
         This is called to get the control layers when the metadata contains a controlLayers field.

@@ -87,7 +87,6 @@ export function updateMetadataOverlay() {
   document.getElementById("filepathText").textContent =
     slide.dataset.filepath || "";
   document.getElementById("metadataLink").href = slide.dataset.metadata_url || "#";
-  state.currentTextToCopy = slide.dataset.textToCopy || "";
   updateCurrentImageScore(slide);
 }
 

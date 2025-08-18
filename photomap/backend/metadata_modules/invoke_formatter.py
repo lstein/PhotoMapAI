@@ -61,6 +61,7 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     loras = _format_list(extractor.get_loras())
     reference_images = extractor.get_reference_images()
     reference_image_table = _format_list(reference_images) if reference_images else None
+    raster_images = extractor.get_raster_images()
     control_layers = extractor.get_control_layers()
     control_layer_table = _format_list(control_layers) if control_layers else None
 
@@ -68,15 +69,17 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     if modification_time:
         html += f"<tr><th>Date</th><td>{modification_time}</td></tr>"
     if positive_prompt:
-        html += f"<tr><th>Positive Prompt</th><td>{positive_prompt}</td></tr>"
+        html += f'<tr><th>Positive Prompt</th><td class="copyme">{positive_prompt}</td></tr>'
     if negative_prompt:
-        html += f"<tr><th>Negative Prompt</th><td>{negative_prompt}</td></tr>"
+        html += f'<tr><th>Negative Prompt</th><td class="copyme">{negative_prompt}</td></tr>'
     if model:
         html += f"<tr><th>Model</th><td>{model}</td></tr>"
     if seed is not None:
         html += f"<tr><th>Seed</th><td>{seed}</td></tr>"
     if loras:
         html += f"<tr><th>Loras</th><td>{loras}</td></tr>"
+    if raster_images:
+        html += f"<tr><th>Raster Images</th><td>{', '.join(raster_images)}</td></tr>"
     if reference_image_table:
         html += f"<tr><th>IPAdapters</th><td>{reference_image_table}</td></tr>"
     if control_layer_table:
@@ -84,10 +87,10 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     html += "</table>"
 
     slide_data.description = html
-    slide_data.textToCopy = positive_prompt if positive_prompt else slide_data.filepath
     slide_data.reference_images = [
         x.image_name for x in reference_images + control_layers
     ]
+    slide_data.reference_images.extend(raster_images)
     return slide_data
 
 

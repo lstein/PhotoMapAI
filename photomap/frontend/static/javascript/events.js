@@ -7,7 +7,7 @@ import {
   showMetadataOverlay,
   toggleMetadataOverlay,
   updateMetadataOverlay,
-} from "./overlay.js";
+} from "./metadata-drawer.js";
 import { state } from "./state.js";
 import {
   addNewSlide,
@@ -109,9 +109,11 @@ function handleSpacebarToggle(e) {
 
 // Copy text to clipboard
 function handleCopyText() {
-  if (state.currentTextToCopy) {
+  const activeSlide = state.swiper.slides[state.swiper.activeIndex];
+  if (activeSlide) {
+    const filepath = activeSlide.dataset.filepath || "";
     if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-      navigator.clipboard.writeText(state.currentTextToCopy)
+      navigator.clipboard.writeText(filepath)
         .catch((err) => {
           alert("Failed to copy text: " + err);
         });

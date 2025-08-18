@@ -2,7 +2,7 @@
 // This file initializes the Swiper instance and manages slide transitions.
 import { albumManager } from "./album.js";
 import { getIndexMetadata } from "./index.js";
-import { updateMetadataOverlay } from "./overlay.js";
+import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchNextImage } from "./search.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
@@ -212,7 +212,6 @@ export async function addSlideByIndex(
 
     slide.dataset.filename = data.filename || "";
     slide.dataset.description = data.description || "";
-    slide.dataset.textToCopy = data.textToCopy || "";
     slide.dataset.filepath = path || "";
     slide.dataset.score = currentScore || "";
     slide.dataset.cluster = currentCluster || "";

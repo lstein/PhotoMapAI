@@ -117,10 +117,6 @@ def format_exif_metadata(
     html += "</table></div></div>"  # Close right column and flex container
 
     slide_data.description = html
-    slide_data.textToCopy = f"{slide_data.filename}"
-    if gps_lat and gps_lon:
-        slide_data.textToCopy += f" - GPS: {gps_lat:.6f}, {gps_lon:.6f}"
-
     return slide_data
 
 

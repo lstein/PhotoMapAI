@@ -82,9 +82,7 @@ class Invoke3Metadata(InvokeMetadataABC):
         reference_images = self.raw_metadata.get("ipAdapters", [])
         return [
             ReferenceImage(
-                model_name=image.get("ip_adapter_model", {}).get(
-                    "model_name", "Unknown Model"
-                ),
+                model_name=image.get("ip_adapter_model", {}).get("model_name"),
                 image_name=image.get("image", {}).get("image_name", ""),
                 weight=image.get("weight", 1.0),
             )
@@ -98,7 +96,24 @@ class Invoke3Metadata(InvokeMetadataABC):
         Returns:
             List[ControlLayer]: A list of ControlLayer named tuples containing layer_type, reference, and weight.
         """
-        logger.warning(
-            "Control layers extraction is not currently supported in Invoke v3 metadata."
-        )
-        return []  # Not currently supported. TO DO: Add later
+        control_layers = self.raw_metadata.get("controlnets", [])
+        if not control_layers:
+            return []
+        return [
+            ControlLayer(
+                model_name=layer.get("control_model", {}).get("model_name")
+                or layer.get("control_model", {}).get("name", "Unknown Model"),
+                image_name=layer.get("image", {}).get("image_name", ""),
+                weight=layer.get("control_weight", 1.0),
+            )
+            for layer in control_layers
+        ]
+
+    def get_raster_images(self) -> List[str]:
+        """
+        Extract raster image information from the raw metadata.
+
+        Returns:
+            List[str]: A list of raster image names.
+        """
+        return []  # not yet supported for older Invoke versions

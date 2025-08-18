@@ -14,6 +14,7 @@ Prompts = namedtuple("Prompts", ["positive_prompt", "negative_prompt"])
 Lora = namedtuple("Lora", ["model_name", "weight"])
 ReferenceImage = namedtuple("ReferenceImage", ["model_name", "image_name", "weight"])
 ControlLayer = namedtuple("ControlLayer", ["model_name", "image_name", "weight"])
+RasterImage = namedtuple("RasterImage", ["model_name", "image_name", "weight"])
 
 
 class InvokeMetadataABC(BaseModel, ABC):
@@ -70,6 +71,16 @@ class InvokeMetadataABC(BaseModel, ABC):
 
         Returns:
             List[ReferenceImage]: A list of ReferenceImage named tuples containing model_name, reference image, and weight.
+        """
+        pass
+
+    @abstractmethod
+    def get_raster_images(self) -> List[str]:
+        """
+        Extract raster image information from the raw metadata.
+
+        Returns:
+            List[str]: A list of raster image names.
         """
         pass
 

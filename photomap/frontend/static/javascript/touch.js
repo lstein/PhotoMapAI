@@ -2,7 +2,7 @@
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
 import { toggleSlideshowWithIndicator } from "./events.js";
-import { toggleMetadataOverlay } from "./overlay.js";
+import { toggleMetadataOverlay } from "./metadata-drawer.js";
 import { pauseSlideshow } from "./swiper.js";
 
 // Touch events

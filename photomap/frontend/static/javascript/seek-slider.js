@@ -1,4 +1,4 @@
-import { updateMetadataOverlay } from "./overlay.js";
+import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { scoreDisplay } from "./score-display.js";
 import { state } from "./state.js";
 import { addSlideByIndex, getCurrentSlideIndex } from "./swiper.js";

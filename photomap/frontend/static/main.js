@@ -3,7 +3,7 @@
 
 import './javascript/album.js';
 import './javascript/events.js';
-import './javascript/overlay.js';
+import './javascript/metadata-drawer.js';
 import './javascript/search-ui.js';
 import './javascript/search.js';
 import './javascript/seek-slider.js';
