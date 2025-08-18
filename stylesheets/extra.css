@@ -1,0 +1,38 @@
+.img-hover-zoom {
+  max-width: 100%;
+  transition: transform 0.2s;
+  cursor: zoom-in;
+  z-index: 100;
+}
+.img-hover-zoom:hover {
+  transform: scale(1.75);
+  z-index: 999;
+}
+
+.photomap-overlay-container {
+  position: relative;
+  display: inline-block;
+  width: 640px; /* match your base image width */
+  height: auto;
+}
+
+.photomap-base {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.photomap-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.photomap-overlay-container:hover .photomap-overlay {
+  opacity: 1;
+}
