@@ -38,7 +38,7 @@ When viewing a photo in full-screen mode, you can pop out a little drawer to sho
 
 <img src="img/photomap_metadata.png" alt="Image Metadata" class="img-hover-zoom">
 
-If you are a user of the [InvokeAI](https://github.com/invoke-ai/InvokeAI) text-to-image generation tool, you can get quick access to the key settings used to generate the image.
+If you are a user of the [InvokeAI](https://github.com/invoke-ai/InvokeAI) text-to-image generation tool, you can get quick access to the key settings used to generate the image, including the prompts, model and LoRAs in use, and the input images used for IPAdapters, ControlNets and the img2img raster layer. You can also display the full generation metadata in native JSON format and copy it to the clipboard.
 
 <img src="img/photomap_invokeai.png" alt="InvokeAI Metadata" class="img-hover-zoom">
 
