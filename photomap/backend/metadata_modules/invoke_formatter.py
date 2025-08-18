@@ -65,17 +65,24 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     control_layers = extractor.get_control_layers()
     control_layer_table = _format_list(control_layers) if control_layers else None
 
+    copy_svg = (
+        '<span class="copy-icon" title="Copy">'
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;">'
+        '<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>'
+        "</svg></span>"
+    )
+
     html = "<table class='invoke-metadata'>"
     if modification_time:
         html += f"<tr><th>Date</th><td>{modification_time}</td></tr>"
     if positive_prompt:
-        html += f'<tr><th>Positive Prompt</th><td class="copyme">{positive_prompt}</td></tr>'
+        html += f'<tr><th>Positive Prompt</th><td class="copyme">{positive_prompt}{copy_svg}</td></tr>'
     if negative_prompt:
-        html += f'<tr><th>Negative Prompt</th><td class="copyme">{negative_prompt}</td></tr>'
+        html += f'<tr><th>Negative Prompt</th><td class="copyme">{negative_prompt}{copy_svg}</td></tr>'
     if model:
         html += f"<tr><th>Model</th><td>{model}</td></tr>"
     if seed is not None:
-        html += f"<tr><th>Seed</th><td>{seed}</td></tr>"
+        html += f'<tr><th>Seed</th><td class="copyme">{seed}{copy_svg}</td></tr>'
     if loras:
         html += f"<tr><th>Loras</th><td>{loras}</td></tr>"
     if raster_images:

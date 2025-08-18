@@ -205,7 +205,8 @@
   min-height: 24px;
 }
 
-#copyTextBtn:hover {
+#copyTextBtn:hover,
+.copy-icon:hover {
   opacity: 1;
   transform: scale(1.1);
 }
@@ -240,4 +241,18 @@
   #descriptionText {
     font-size: 1em;
   }
+}
+
+.copy-icon {
+  cursor: pointer;
+  margin-left: 0.5em;
+  color: white;
+  font-size: 1em;
+  vertical-align: middle;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.copy-icon:hover {
+  opacity: 1;
+  filter: brightness(1.2);
 }

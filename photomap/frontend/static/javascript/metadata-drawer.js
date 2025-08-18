@@ -159,3 +159,30 @@ metadataModal.addEventListener("click", function (e) {
     metadataModal.classList.remove("visible");
   }
 });
+
+document.addEventListener("click", function (e) {
+  // Check if the click is on the copy icon or its SVG child
+  let icon = e.target.closest(".copy-icon");
+  if (icon) {
+    // Find the parent td.copyme
+    let td = icon.closest("td.copyme");
+    if (td) {
+      // Clone the td, remove the icon, and get the text
+      let clone = td.cloneNode(true);
+      let iconClone = clone.querySelector(".copy-icon");
+      if (iconClone) iconClone.remove();
+      let text = clone.textContent.trim();
+      if (text) {
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            icon.title = "Copied!";
+            setTimeout(() => { icon.title = "Copy"; }, 1000);
+          })
+          .catch((e) => {
+            console.error("Failed to copy text:", e);
+            icon.title = "Copy failed";
+          });
+      }
+    }
+  }
+});
