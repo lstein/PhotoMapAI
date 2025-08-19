@@ -2,13 +2,13 @@
 # 1. Check Python version 
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
-    Write-Host "Python is not installed. Please install Python 3.8 or higher from https://www.python.org/downloads/windows/" -ForegroundColor Red
+    Write-Host "Python is not installed. Please install Python 3.10 or higher from https://www.python.org/downloads/windows/" -ForegroundColor Red
     exit 1
 }
 
 $version = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-if ([version]$version -lt [version]"3.8") {
-    Write-Host "Python version $version found. Please install Python 3.8 or higher from https://www.python.org/downloads/windows/" -ForegroundColor Red
+if ([version]$version -lt [version]"3.10") {
+    Write-Host "Python version $version found. Please install Python 3.10 or higher from https://www.python.org/downloads/windows/" -ForegroundColor Red
     exit 1
 }
 
