@@ -1,3 +1,4 @@
+#!/usr/bin/pwsh
 
 # 1. Check Python version 
 $python = Get-Command python -ErrorAction SilentlyContinue
@@ -22,7 +23,7 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
 $envUser = $env:USERNAME
 $defaultInstallDir = "C:\Users\$envUser\AppData\Local\Programs\PhotoMap"
 
-$installDir = Read-Host "Enter install location for PhotoMap virtual environment [`$defaultInstallDir`]"
+$installDir = Read-Host "Enter install location for PhotoMap virtual environment [$defaultInstallDir]"
 
 if ([string]::IsNullOrWhiteSpace($installDir)) {
     $installDir = $defaultInstallDir
@@ -36,12 +37,12 @@ if (-not (Test-Path $installDir)) {
 
 Set-Location $installDir
 
-# 3. Create virtual environment in .venv
-Write-Host "Creating virtual environment in $installDir\.venv ..."
-python -m venv .venv
+# 3. Create virtual environment in the installdir
+Write-Host "Creating virtual environment in $installDir ..."
+python -m venv . --prompt "photomap"
 
 # 4. Activate virtual environment and install PhotoMap
-$venvActivate = ".\.venv\Scripts\Activate.ps1"
+$venvActivate = ".\Scripts\Activate.ps1"
 if (-not (Test-Path $venvActivate)) {
     Write-Host "Failed to create virtual environment. Exiting." -ForegroundColor Red
     exit 1
@@ -57,16 +58,16 @@ if ($cuda_installed) {
 pip install "$PSScriptRoot"
 
 # 5. Print out instructions for running start_photomap
-# $slideshowPath = Resolve-Path .\.venv\Scripts\start_slideshow.exe
+# $slideshowPath = Resolve-Path .\Scripts\start_slideshow.exe
 # Write-Host "`nPhotoMap installed successfully in $installDir!" -ForegroundColor Green
 # Write-Host "To start the slideshow, run:" -ForegroundColor Yellow
 # Write-Host "`n    $slideshowPath`n" -ForegroundColor Cyan
 # Write-Host "Or, if your shell is not activated, run:" -ForegroundColor Yellow
-# Write-Host "`n    $installDir\.venv\Scripts\start_photomap.exe`n" -ForegroundColor Cyan
+# Write-Host "`n    $installDir\Scripts\start_photomap.exe`n" -ForegroundColor Cyan
 
 # 6. Create a batch script to start the slideshow
 $batPath = Join-Path $installDir "start_photomap.bat"
-$exePath = "$installDir\.venv\Scripts\start_photomap.exe"
+$exePath = "$installDir\Scripts\start_photomap.exe"
 
 $batContent = @"
 @echo off
