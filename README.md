@@ -14,6 +14,7 @@ PhotoMap is a fast, modern image browser and search tool for large photo collect
 - Flexible album management
 - Responsive UI for desktop and mobile
 - Support for wide range of image formats, including Apple's HEIC
+- Integration with the <a href="https://github.com/invoke-ai/InvokeAI">InvokeAI</a> AI image generation system
 - Extensible backend (FastAPI)
 
 ## The Semantic Map
@@ -40,7 +41,7 @@ When viewing a photo in full-screen mode, you can pop out a little drawer to sho
 
 <img src="docs/img/photomap_metadata.png" alt="Image Metadata" class="img-hover-zoom">
 
-If you are a user of the [InvokeAI](https://github.com/invoke-ai/InvokeAI) text-to-image generation tool, you can get quick access to the key settings used to generate the image, including the prompts, model and LoRAs in use, and the input images used for IPAdapters, ControlNets and the img2img raster layer. You can also display the full generation metadata in native JSON format and copy it to the clipboard.
+If you are a user of the [InvokeAI](https://github.com/invoke-ai/InvokeAI) text-to-image generation tool, you can get quick access to the key settings used to generate the image, including the prompts, model and LoRAs in use, and the input images used for IPAdapters, ControlNets and the img2img raster layer. You can also display and copy the full generation graph in native JSON format and copy it to the clipboard.
 
 <img src="docs/img/photomap_invokeai.png" alt="InvokeAI Metadata" class="img-hover-zoom">
 
@@ -52,6 +53,7 @@ PhotoMap supports most of the other features you would expect, including support
 
 ## Quick Start
 
+Here are quick start instructions for Windows, Mac and Linux users using the automated installer scripts that are provided with this package. For instructions on manual installation, see [Installation](installation.md). 
 
 ### Windows
 
