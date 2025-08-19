@@ -44,3 +44,7 @@ openapi:
 docs:
 	mkdocs build --clean
 	mkdocs serve --dev-addr=0.0.0.0:8000
+
+deploy-docs:
+	sed 's|img/|docs/img/|g' docs/index.md > README.md
+	mkdocs gh-deploy

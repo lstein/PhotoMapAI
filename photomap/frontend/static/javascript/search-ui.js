@@ -275,11 +275,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         setSearchImage(event.target.result, file);
       };
       reader.readAsDataURL(file);
-      // Do NOT call insertUploadedImageFile or searchWithImage here
-      textSearchPanel.style.opacity = 0;
-      setTimeout(() => {
-        textSearchPanel.style.display = "none";
-      }, 200);
     } catch (err) {
       console.error("Image search failed:", err);
       alert("Failed to search with image: " + err.message);

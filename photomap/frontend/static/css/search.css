@@ -414,3 +414,9 @@
   line-height: 1;
 }
 
+#imageSearchBtn.dragover,
+#searchPanel.dragover,
+#textSearchPanel.dragover {
+  outline: 2px dashed limegreen;
+  background: rgba(0, 255, 0, 0.1);
+}
