@@ -188,7 +188,6 @@ document.addEventListener("DOMContentLoaded", async function () {
           setSearchImage(event.target.result, file);
         };
         reader.readAsDataURL(file);
-        // Do NOT call insertUploadedImageFile or searchWithImage here
       } finally {
         hideSpinner();
       }

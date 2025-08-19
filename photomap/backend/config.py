@@ -180,7 +180,7 @@ class ConfigManager:
                         albums=albums,
                         locationiq_api_key=config_data.get(
                             "locationiq_api_key"
-                        ),  # Add this
+                        ),
                     )
 
                 except Exception as e:

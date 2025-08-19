@@ -234,7 +234,7 @@ export async function fetchUmapData() {
           linecolor: "#888",
           tickcolor: "#888",
           range: [xMin, xMax],
-          scaleanchor: "y", // <-- Add this line
+          scaleanchor: "y", 
         },
         yaxis: {
           gridcolor: "rgba(255,255,255,0.15)",
@@ -759,7 +759,7 @@ function setUmapWindowSize(sizeKey) {
     Plotly.relayout(plotDiv, {
       width: window.innerWidth - 32,
       height: window.innerHeight - controlsHeight - 128,
-      "xaxis.scaleanchor": "y", // <-- Add this line for equal axis scale
+      "xaxis.scaleanchor": "y", 
     });
   } else {
     if (contentDiv) contentDiv.style.display = "block";
