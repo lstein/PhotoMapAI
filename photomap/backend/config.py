@@ -328,7 +328,7 @@ class ConfigManager:
             return None
 
         fp = Path(full_path)
-        for image_path in album.image_paths:
+        for image_path in [Path(x).resolve() for x in album.image_paths]:
             try:
                 return fp.relative_to(image_path).as_posix()
             except ValueError:
