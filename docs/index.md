@@ -2,9 +2,13 @@
 
 Rediscover your photo collection!
 
-PhotoMap is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events and themes.
+PhotoMap is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.
 
-<img src="img/photomap_slide_with_semantic_map.png" alt="Overview of UI" class="img-hover-zoom">
+<div class="photomap-overlay-container">
+  <img src="/img/photomap_slide_with_semantic_map_base.png" width="480" class="photomap-base" alt="Base image">
+  <img src="/img/photomap_slide_with_semantic_map_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
+</div>
+
 
 ## Features
 - Fast browsing of large image collections
@@ -12,6 +16,7 @@ PhotoMap is a fast, modern image browser and search tool for large photo collect
 - Thematic image clustering and visualization
 - Flexible album management
 - Responsive UI for desktop and mobile
+- Support for wide range of image formats, including Apple's HEIC
 - Extensible backend (FastAPI)
 
 ## The Semantic Map
@@ -50,41 +55,47 @@ PhotoMap supports most of the other features you would expect, including support
 
 ## Quick Start
 
-### Linux / Mac
-
-1. **Create a virtual environment for the app:**
-
-        python3 -m venv ~/photomap     (or choose your own installation location)
-        source ~/photomap/bin/activate
-
-2. **Install the app:**  
-   From within the code repository (the one containing README.md)
-
-        pip install .
-
-3. **Run the app:**
-
-        ~/photomap/bin/start_photomap
-
-4. **Open your browser:**  
-   Navigate to `http://localhost:8050`.
-
----
 
 ### Windows
 
-Open a PowerShell window and type these commands in.
+#### 1. Download and unpack the source code
 
-1. **Launch the Windows installer **
-    - Navigate to the photomap source code folder and launch `installation/install_windows`.
-    - If you are prompted to install python, please do so and try again. 
-    - When prompted, select an install location for photomap. This will create a launcher script in the selected location named `start_photomap.bat`
+Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
 
-3. **Run the app:**
-    Launch `start_photomap.bat`.
+Choose a convenient location in your home folder and unzip the file to create a new folder named `PhotoMap`.
 
-4. **Open your browser:**  
-   Navigate to `http://localhost:8050`
+#### 2. Run the installer script
+
+Navigate to the unpacked `PhotoMap` folder, find the `INSTALL` folder, and double-click the `install_windows` script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named `start_photomap`.
+
+#### 3. Start the server
+
+Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server. 
+
+
+#### 4. **Open your browser:**  
+   Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
+
+---
+
+### Linux & Mac
+
+#### 1. Download and unpack the source code
+
+Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
+
+Choose a convenient location in your home directory and unzip the file to create a new folder named `PhotoMap`.
+
+#### 2. Run the installer script
+
+Navigate to the `PhotoMap` folder and launch the `install_linux_mac` shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named `start_photomap` on your desktop.
+
+#### 3. Start the server
+
+Double click `start_photomap` to launch the server. You will see a few startup messages followed by the URL for the running server.
+
+#### 4. **Open your browser:**  
+   Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
 
 ## Detailed Guides
 - [Installation](installation.md)

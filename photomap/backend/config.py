@@ -4,17 +4,18 @@ Configuration management for PhotoMap backend.
 This module handles loading, saving, and managing photo album configurations.
 It uses a YAML file to store album details and provides methods to manipulate albums.
 """
+import logging
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
-import logging
 from platformdirs import user_config_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
-from functools import lru_cache
 
 logger = logging.getLogger(__name__)
+
 
 class Album(BaseModel):
     """Represents a photo album configuration."""
@@ -233,6 +234,7 @@ class ConfigManager:
         config.albums[album.key] = album
         self._config = config
         self.save_config()
+        self._config = None  # Clear cache to ensure fresh reads
         return True
 
     def update_album(self, album: Album) -> bool:
@@ -252,6 +254,7 @@ class ConfigManager:
         config.albums[album.key] = album
         self._config = config
         self.save_config()
+        self._config = None  # Clear cache to ensure fresh reads
         return True
 
     def delete_album(self, key: str) -> bool:
@@ -271,6 +274,7 @@ class ConfigManager:
         del config.albums[key]
         self._config = config
         self.save_config()
+        self._config = None  # Clear cache to ensure fresh reads
         return True
 
     def get_photo_albums_dict(self) -> Dict[str, str]:
@@ -375,7 +379,12 @@ class ConfigManager:
 
 # Convenience functions for creating albums
 def create_album(
-    key: str, name: str, image_paths: List[str], index: str, umap_eps: float, description: str = ""
+    key: str,
+    name: str,
+    image_paths: List[str],
+    index: str,
+    umap_eps: float,
+    description: str = "",
 ) -> Album:
     """Create a new Album instance with validation.
 
@@ -404,5 +413,3 @@ def create_album(
 def get_config_manager(config_path: Optional[Path] = None) -> ConfigManager:
     """Get a singleton instance of ConfigManager."""
     return ConfigManager(config_path=config_path)
-
-
