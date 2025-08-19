@@ -1,6 +1,6 @@
 # Configuration
 
-PhotoMap is primarily configured through the web interface as described in [Basic Usage](/user-guide/basic-usage#changing-settings) and [Albums](/user-guide/albums). However, there are a number of runtime parameters that control how the web service behaves.
+PhotoMap is primarily configured through the web interface as described in [Basic Usage](user-guide/basic-usage.md#changing-settings) and [Albums](user-guide/albums.md). However, there are a number of runtime parameters that control how the web service behaves.
 
 ## Changing the Web Host and Port
 
@@ -26,6 +26,71 @@ PHOTOMAP_HOST="0.0.0.0" PHOTOMAP_PORT="8000" start_photomap
 Or you can permanently fix these environment variables by setting them in your shell's profile, e.g. `.bashrc`.
 
 On Windows systems, setting environment variables can be done through the GUI as well as on the command line. See [How to Set Environment Variables in Windows](https://phoenixnap.com/kb/windows-set-environment-variable) for a good walkthrough.
+
+## Running PhotoMap Under HTTPS
+
+By default, PhotoMap runs as a non-secure `HTTP` service. This generates a warning icon in some browsers, but more seriously prevents cut and paste between the PhotoMap tab and browser tabs and desktop applications. 
+
+There are several ways to enable HTTP for PhotoMap:
+
+### Install a Self-Signed SSL Certificate
+
+In this method, you generate self-signed encryption certificate and
+private key files and point PhotoMap to them using its `--cert` and
+`--key` command-line options.
+
+Guides to generating and installing self-signed certificates:
+
+- [Creating Self-Signed Certificates with Windows PowerShell](https://learn.microsoft.com/en-us/entra/identity-platform/howto-create-self-signed-certificate). Please apply the arguments to create .crt and .pem files.
+
+- [Creating Self-Signed Certificates with OpenSSL (Mac/Linux)](https://gist.github.com/elklein96/a15090f35a41e16bdc8574a7fb81e119)
+
+These methods will leave you with two files, a .crt certificate file,
+and a .pem key file. Relaunch the PhotoMap server using `--cert
+/path/to/.crt file` and `--key /path/to/.pem file`. If you are using
+the desktop launcher to start the server, simply open the launcher
+file with a text editor, and add the `--cert` and `--key` options to
+the end of the line that ends with `start_photomap`.
+
+After installing the certificate/key pair and relaunching the server,
+you will be able to access the PhotoMap server using the https://
+URL. Your browser will complain about an unknown certificate authority
+when you first load the URL and ask you to confirm that you trust the site.
+
+### Use Certbot
+
+The [Certbot](https://certbot.eff.org/) tool provides public certificates that
+browsers automatically trust. It is very easy to use, but it requires that you
+have a web running on port 80 that accepts incoming HTTP connections.
+
+Once the Certbot certificate and keyfile are generated, follow the
+directions in the previous section to configure PhotoMap to use them.
+
+
+### Use a Reverse Proxy
+
+A final option is to keep PhotoMap running on HTTP, but use a reverse
+proxy from a running web server to translate HTTPS requests on the
+reverse proxy into HTTP requests to PhotoMap. The main advantage of this
+is that you get the additional benefit of all the web server's configuration
+controls, such as the ability to add password protection.
+
+Here are some guides for setting up reverse proxies. The first is a
+general guide for configuring a reverse proxy with the popular Nginx
+web server. The second features a Windows-specific walkthrough.
+
+- [NGINX Reverse Proxy](https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/)
+- [NGINX Reverse Proxy on Windows](https://virendra.dev/blog/setting-up-nginx-as-a-reverse-proxy-on-windows)
+
+You will need to install encryption certificates for the Nginx server using [Certbot](https://certbot.eff.org/). The final configuration of the proxy server will look something like this:
+
+    	location /photomap/ {
+        proxy_pass http://localhost:8050/;
+
+This is saying that when a request comes in for
+`https://your.host/photomap/` it will be translated into a request to
+`http://localhost:8050/` where PhotoMap is running. It is possible to
+run the proxy server and the PhotoMap server on separate machines as well.
 
 ## Pointing to an Alternative Configuration File
 

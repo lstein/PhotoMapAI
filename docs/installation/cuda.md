@@ -28,5 +28,5 @@ Go to the [CUDA 12.9 Download Page](https://developer.nvidia.com/cuda-12-9-0-dow
 
 In a command shell, run the `nvidia-smi` command as in (1) and confirm that the expected version is installed.
 
-[PhotoMap Installation](../installation/)
+[PhotoMap Installation](../installation.md)
 

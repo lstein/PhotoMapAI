@@ -8,7 +8,7 @@ The first time you launch PhotoMap it will prompt you to create an album with th
 
 <img src="../../img/photomap_album_setup.png" width="640" alt="Album creation dialogue" class="img-hover-zoom">
 
-Enter a short lowercase key for the album, such as "family", a longer descriptive name such as "Family Photos 2025", and optionally a description of the album. (The key can be used in URLs if you wish to share a particular album in a text or email message as [described here](albums#selecting_an_album_by_its_url)).
+Enter a short lowercase key for the album, such as "family", a longer descriptive name such as "Family Photos 2025", and optionally a description of the album. (The key can be used in URLs if you wish to share a particular album in a text or email message as [described here](albums.md#selecting-an-album-by-url)).
 
 You'll now need to tell the album where its photos are stored. Enter one or more filesystem paths in the text field at the bottom named "Image Paths". Photos can be stored in a single large folder, or stored in multiple nestered folders. They can reside on the local disk or on a shared disk. If you wish, you can point the album to multiple folders, and their contents will be combined into a single album.
 
@@ -26,7 +26,7 @@ Indexing can take some time. On a system equipped with an NVidia GPU, indexing a
 
 Once indexing is complete, the dialogue will close and you can start exploring your collection.
 
-For more information on adding and modifying albums see [Albums](../albums).
+For more information on adding and modifying albums see [Albums](albums.md).
 
 ## Browsing your Collection
 
@@ -44,7 +44,7 @@ Going from left to right:
 - The *Trash* icon permanently deletes the current photo from the album and removes the disk file (after confirmation).
 - The *Fullscreen* button puts PhotoMap into fullscreen mode and hides most of the control elements.
 - The *Play/Pause* button starts and stops a slideshow in which the photos autoadvance after a user-adjustable interval.
-- The *Target* icon opens and closes the [semantic map](semantic-map).
+- The *Target* icon opens and closes the [semantic map](semantic-map.md).
 - The *Landscape* icon initiates a search for images similar to the one currently displayed.
 - The *Magnifier* icon opens up a search dialogue that lets you search by image similarity and/or a text description of image content.
 
@@ -54,11 +54,11 @@ Hover near the top of the window to reveal a slider that will let you seek forwa
 
 <img src="../../img/photomap_basic_usage_2.png" width="680" alt="Seek Slider" class="img-hover-zoom">
 
-You can navigate through your album, enter and exit fullscreen, and start and stop the slideshow with a variety of keystrokes and gestures on touch-enabled devices. See [Keyboard Shortcuts](keyboard-shortcuts) for details.
+You can navigate through your album, enter and exit fullscreen, and start and stop the slideshow with a variety of keystrokes and gestures on touch-enabled devices. See [Keyboard Shortcuts](keyboard-shortcuts.md) for details.
 
 ## Displaying the Semantic Map
 
-Click the ⊙ (target) icon to open the [Semantic Map](semantic-map):
+Click the ⊙ (target) icon to open the [Semantic Map](semantic-map.md):
 
 <img src="../../img/photomap_semantic_map_1.png" width="480" alt="Semantic Map" class="img-hover-zoom">
 
@@ -83,4 +83,4 @@ The Gear icon opens the settings dialogue, which allows you to adjust the appear
 - **Max Images in History** -- PhotoMap keeps a small number of recently-viewed photos in memory. The others are swapped in and out to disk. This value controls how many images are kept in memory at once. Reduce the size if you are having memory problems or the application seems to be slowing down.
 - **LocationIQ Map API Key** -- This optional API key lets PhotoMap display thumbnail maps and named locations for photos that contain GPS geolocation information. If you wish to enable this feature, get a key for free from [LocationIQ](http://locationiq.com/) and paste it into the field. If not present, PhotoMap will display the longitude and latitude of the photo, but not the map or place name.
 - **Album** -- This pulldown menu lists all the albums you have configured and allows you to switch among them. Note that when you switch albums, the settings dialogue will close immediately and the window will display the first photo from the selected albums.
-- **Manage Albums** -- This green button will open the [Album Manager](../albums), where you can create, edit and delete albums.
+- **Manage Albums** -- This green button will open the [Album Manager](albums.md), where you can create, edit and delete albums.

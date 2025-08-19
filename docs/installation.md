@@ -18,10 +18,10 @@ PhotoMap will take advantage of the built-in GPU acceleration on Apple M1, M2 an
 
 Before installing PhotoMap, you'll need to install Python and optionally CUDA.
 
-- [Python](/installation/python/)
-- [CUDA](/installation/cuda/) (*Only if you need NVidia GPU card support*)
+- [Python](installation/python.md)
+- [CUDA](installation/cuda.md) (*Only if you need NVidia GPU card support*)
 
-After the preqrequisites are installed, follow the installation directions for [Linux & MacOS](#linux-&-macos) or [Windows](#windows). For those who are comfortable with the command shell, there are also instructions for [Manual Installs](#manual-installation)
+After the preqrequisites are installed, follow the installation directions for [Linux & MacOS](#linux-macos) or [Windows](#windows). For those who are comfortable with the command shell, there are also instructions for [Manual Installs](#manual-installation)
 
 ---
 
@@ -40,7 +40,7 @@ Navigate to the unpacked `PhotoMap` folder, find the `INSTALL` folder, and doubl
 
 ### 3. Start the server
 
-Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server. Cut and paste this into your browser, and follow the prompts to configure and index your first album. See [Albums](../user-guide/albums) for a walkthrough.
+Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server. Cut and paste this into your browser, and follow the prompts to configure and index your first album. See [Albums](user-guide/albums.md) for a walkthrough.
 
 ### 4. Exiting and relaunching
 
@@ -64,7 +64,7 @@ Navigate to the `PhotoMap` folder and launch the `install_linux_mac` shell scrip
 
 ### 3. Start the server
 
-Double click `start_photomap` to launch the server. You will see a few startup messages followed by the URL for the running server. Cut and paste this into your browser and follow the prompts to configure and index your first album. See [Albums](../user-guide/albums) for a walkthrough.
+Double click `start_photomap` to launch the server. You will see a few startup messages followed by the URL for the running server. Cut and paste this into your browser and follow the prompts to configure and index your first album. See [Albums](user-guide/albums.md) for a walkthrough.
 
 ### 4. Exiting and relaunching
 
@@ -111,7 +111,7 @@ If installation completed without errors, launch the PhotoMap server with the `s
 start_photomap
 ```
 
-You should see a few startup messages, followed by the URL for the running server. Cut and paste this into your browser, and follow the prompts to configure and index your first album. See [Albums](../user-guide/albums) for a walkthrough.
+You should see a few startup messages, followed by the URL for the running server. Cut and paste this into your browser, and follow the prompts to configure and index your first album. See [Albums](user-guide/albums.md) for a walkthrough.
 
 ### 5. Exiting and relaunching
 

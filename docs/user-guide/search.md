@@ -9,7 +9,7 @@ PhotoMap provides several types of AI-enabled search across your image/photo col
 - **Search by Image** - Provide an image and PhotoMap will find matches against it.
 - **Search by Text** - Type in a word or phrase and PhotoMap will find the closest matches.
 - **Search by Text and Image** - Provide image and text to find matches that best combine the two. You can also provide a "negative search text" to disfavor certain image content.
-- **Search by Map** - Browse images that are clustered together in the [semantic map](semantic-map).
+- **Search by Map** - Browse images that are clustered together in the [semantic map](semantic-map.md).
 
 ## Search by Image
 
@@ -47,7 +47,7 @@ An advanced use of the search interface allows you to search simultaneously on i
 
 ## Search by Map
 
-Clicking on the ⊙ (target) icon will open the [Semantic Map](semantic-map) and position a yellow marker on the dot that corresponds to the current image in view:
+Clicking on the ⊙ (target) icon will open the [Semantic Map](semantic-map.md) and position a yellow marker on the dot that corresponds to the current image in view:
 
 <img src="../../img/photomap_semantic_map_3.png" width="480" alt="Semantic Map" class="img-hover-zoom">
 

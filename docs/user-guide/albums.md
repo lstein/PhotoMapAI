@@ -46,4 +46,10 @@ To make changes to an album's definition, including changing its display name, d
 
 To delete an album, click on the red <span class="red-button-text">Delete</span> button next to the album entry. This will delete the configuration for the album, but doesn't change the underlying image files or the PhotoMap indexes. In particular, if you now add a new album that contains the same image path(s) as the previously-deleted album, the leftover indexes will be recognized and valid and you will not need to reindex.
 
+## Selecting an Album by URL
 
+You can easily construct a URL that will directly select an album of your choice. Use the format:
+
+   http://localhost:8050?album=<album_key>
+   
+Where `album_key` is the key (not the name) for the album you wish to load.
