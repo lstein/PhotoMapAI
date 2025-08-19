@@ -6,13 +6,13 @@ PhotoMap allows you to organize your photos and other images into a series of al
 
 Bring up the Album Manager by clicking on the **Settings** gear icon and then the green <span class="green-button-text">Manage Albums</span>> button.
 
-<img src="/img/photomap_settings.png" width="640">
+<img src="../../img/photomap_settings.png" width="640">
 
 The Album Management dialogue provides you with controls for creating new albums, editing existing ones, deleting unwanted albums, and bringing an album's contents up to date after you've added or removed image file from its folder paths.
 
 <div class="photomap-overlay-container">
-  <img src="/img/photomap_album_overview_base.png" width="480" class="photomap-base" alt="Base image">
-  <img src="/img/photomap_album_overview_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
+  <img src="../../img/photomap_album_overview_base.png" width="480" class="photomap-base" alt="Base image">
+  <img src="../../img/photomap_album_overview_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
 </div>
 
 To add an album, press the green <span class="green-button-text">Add Album</span> button. This will add a new section to the dialogue window that prompts you to enter the following fields:
@@ -22,7 +22,7 @@ To add an album, press the green <span class="green-button-text">Add Album</span
 - **Description** (optional) - A description of the album.
 - **Image Paths** - One or more filesystem paths to the folders that contain image files to incorporate into the album.
 
-<img src="/img/photomap_album_add.png" width="640" class="img-hover-zoom">
+<img src="../../img/photomap_album_add.png" width="640" class="img-hover-zoom">
 
 You are free to organize your image files in any way you wish. You can dump them into a single big folder, or organize them into multiple nested subfolders. During indexing, PhotoMap will traverse the folder structure and identify all image files of type JPEG, PNG, TIFF, HEIF, and HEIC.
 
