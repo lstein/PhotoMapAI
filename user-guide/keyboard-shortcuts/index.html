@@ -9,6 +9,10 @@
       
       
       
+        <link rel="prev" href="../semantic-map/">
+      
+      
+        <link rel="next" href="../../configuration/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -16,11 +20,14 @@
     
     
       
-        <title>Keyboard shortcuts - PhotoMap</title>
+        <title>Keyboard Shortcuts - PhotoMap</title>
       
     
     
       <link rel="stylesheet" href="../../assets/stylesheets/main.7e37652d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -51,13 +58,23 @@
   </head>
   
   
-    <body dir="ltr">
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
+      
+        
+        <a href="#keyboard-and-tablet-shortcuts" class="md-skip">
+          Skip to content
+        </a>
       
     </div>
     <div data-md-component="announce">
@@ -91,15 +108,15 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Keyboard shortcuts
+              Keyboard Shortcuts
             
           </span>
         </div>
       </div>
     </div>
     
+      
     
-      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
     
     
     
@@ -320,18 +337,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -347,7 +366,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             User Guide
@@ -430,17 +449,50 @@
   
   
     <li class="md-nav__item">
-      <a href="../controls/" class="md-nav__link">
+      <a href="../semantic-map/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Controls
+    Semantic Map
     
   </span>
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Keyboard Shortcuts
+    
+  </span>
+  
+
+      </a>
+      
     </li>
   
 
@@ -520,7 +572,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/architecture.md" class="md-nav__link">
+      <a href="../../developer/architecture/" class="md-nav__link">
         
   
   
@@ -543,7 +595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/api.md" class="md-nav__link">
+      <a href="../../developer/api/" class="md-nav__link">
         
   
   
@@ -566,7 +618,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend.md" class="md-nav__link">
+      <a href="../../developer/frontend/" class="md-nav__link">
         
   
   
@@ -628,6 +680,8 @@
   
   
   
+    
+  
   
 </nav>
                   </div>
@@ -643,9 +697,81 @@
 
 
 
-  <h1>Keyboard shortcuts</h1>
-
-
+<h1 id="keyboard-and-tablet-shortcuts">Keyboard and Tablet Shortcuts</h1>
+<p>On devices equipped with a keyboard, you can use the following key shortcuts:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>→ (Right)</td>
+<td>Next image</td>
+</tr>
+<tr>
+<td>← (Left)</td>
+<td>Previous image</td>
+</tr>
+<tr>
+<td>↑ (Up), i</td>
+<td>Show image info drawer</td>
+</tr>
+<tr>
+<td>↓ (Down), Esc</td>
+<td>Hide image info drawer</td>
+</tr>
+<tr>
+<td>f</td>
+<td>Toggle fullscreen</td>
+</tr>
+<tr>
+<td>m</td>
+<td>Toggle UMAP window</td>
+</tr>
+<tr>
+<td>Space</td>
+<td>Play/Pause slideshow</td>
+</tr>
+<tr>
+<td>Scrollwheel</td>
+<td>Next/Previous image</td>
+</tr>
+</tbody>
+</table>
+<p>On tablets, phones and other touch-enabled devices, these gestures work:</p>
+<table>
+<thead>
+<tr>
+<th>Gesture</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Swipe Left</td>
+<td>Next image</td>
+</tr>
+<tr>
+<td>Swipe Right</td>
+<td>Previous image</td>
+</tr>
+<tr>
+<td>Pinch</td>
+<td>Zoom in and out of image</td>
+</tr>
+<tr>
+<td>Tap</td>
+<td>Play/Pause slideshow</td>
+</tr>
+<tr>
+<td>Touch and Hold</td>
+<td>Show system image menu</td>
+</tr>
+</tbody>
+</table>
 
 
 

@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../user-guide/controls/">
+        <link rel="prev" href="../user-guide/keyboard-shortcuts/">
       
       
-        <link rel="next" href="../troubleshooting/">
+        <link rel="next" href="../developer/architecture/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -25,6 +25,9 @@
     
     
       <link rel="stylesheet" href="../assets/stylesheets/main.7e37652d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -55,13 +58,23 @@
   </head>
   
   
-    <body dir="ltr">
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
+      
+        
+        <a href="#configuration" class="md-skip">
+          Skip to content
+        </a>
       
     </div>
     <div data-md-component="announce">
@@ -102,8 +115,8 @@
       </div>
     </div>
     
+      
     
-      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
     
     
     
@@ -434,12 +447,35 @@
   
   
     <li class="md-nav__item">
-      <a href="../user-guide/controls/" class="md-nav__link">
+      <a href="../user-guide/semantic-map/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Controls
+    Semantic Map
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user-guide/keyboard-shortcuts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Keyboard Shortcuts
     
   </span>
   
@@ -470,6 +506,21 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Configuration
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
       
       <a href="./" class="md-nav__link md-nav__link--active">
         
@@ -482,6 +533,43 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#changing-the-web-host-and-port" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changing the Web Host and Port
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pointing-to-an-alternative-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pointing to an Alternative Configuration File
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -532,7 +620,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../developer/architecture.md" class="md-nav__link">
+      <a href="../developer/architecture/" class="md-nav__link">
         
   
   
@@ -555,7 +643,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../developer/api.md" class="md-nav__link">
+      <a href="../developer/api/" class="md-nav__link">
         
   
   
@@ -578,7 +666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../developer/frontend.md" class="md-nav__link">
+      <a href="../developer/frontend/" class="md-nav__link">
         
   
   
@@ -640,6 +728,34 @@
   
   
   
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#changing-the-web-host-and-port" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changing the Web Host and Port
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pointing-to-an-alternative-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pointing to an Alternative Configuration File
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -655,9 +771,57 @@
 
 
 
-  <h1>Configuration</h1>
-
-
+<h1 id="configuration">Configuration</h1>
+<p>PhotoMap is primarily configured through the web interface as described in <a href="/user-guide/basic-usage#changing-settings">Basic Usage</a> and <a href="/user-guide/albums">Albums</a>. However, there are a number of runtime parameters that control how the web service behaves.</p>
+<h2 id="changing-the-web-host-and-port">Changing the Web Host and Port</h2>
+<p>By default, PhotoMap runs its web service on port 8050 and only accepts connections on the local machine (<code>localhost</code>). These can be changed on the command line used to launch the application using the <code>--port</code> and <code>--host</code> options:</p>
+<pre><code>start_photomap --port 8000 --host 0.0.0.0
+</code></pre>
+<p>This command changes the port to port 8000, and allows PhotoMap to listen for connections on the wildcard IP address <code>0.0.0.0</code>, meaning that it will accept connections for any network-accessible location.</p>
+<p>If you are using a launcher script to start PhotoMap (e.g. <code>start_photomap.bat</code>) you can change these values by opening the script in a text editor (<code>Notepad</code> on Windows), finding the line containing <code>start_photomap</code>, and adding the options as shown above.</p>
+<p>Alternatively, you can change the port and host interface by setting two environment variables prior to launching PhotoMap. These are:</p>
+<ul>
+<li><code>PHOTOMAP_HOST</code> - the host interface to accept connections from</li>
+<li><code>PHOTOMAP_PORT</code> - the listen port</li>
+</ul>
+<p>On Linux and Macintosh systems, you can set these environment variables on the command line like so:</p>
+<pre><code class="language-bash">PHOTOMAP_HOST=&quot;0.0.0.0&quot; PHOTOMAP_PORT=&quot;8000&quot; start_photomap
+</code></pre>
+<p>Or you can permanently fix these environment variables by setting them in your shell's profile, e.g. <code>.bashrc</code>.</p>
+<p>On Windows systems, setting environment variables can be done through the GUI as well as on the command line. See <a href="https://phoenixnap.com/kb/windows-set-environment-variable">How to Set Environment Variables in Windows</a> for a good walkthrough.</p>
+<h2 id="pointing-to-an-alternative-configuration-file">Pointing to an Alternative Configuration File</h2>
+<p>PhotoMap stores its album definitions and other configuration information in a configuration file. It is not usually necessary to manipulate it directly, but if you wish you can point to an alternative config file in order to have multiple PhotoMap servers each hosting separate album collections.</p>
+<p>The config file is stored in different places depending on the platform:</p>
+<table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Config File Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Linux</td>
+<td>~/.config/photomap/config.yaml</td>
+</tr>
+<tr>
+<td>MacOS</td>
+<td>~/Library/Application Support/photomap/config.yaml</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td>C:\Users\<user>\AppData\Roaming\photomap\config.yaml</td>
+</tr>
+</tbody>
+</table>
+<p>To run PhotoMap off a different config file, you may launch it with the <code>--config</code> option on the command line, similar to setting the port and host. In the below example we specify an alternative config file named <code>photomap_2.yaml</code></p>
+<pre><code>start_photomap --config ~/photomap_2.yaml
+</code></pre>
+<p>If the indicated config file doesn't exist when you launch PhotoMap, it will be created automatically.</p>
+<p>You may also point to an alternative configuration file by setting the environment variable <code>PHOTOMAP_CONFIG</code>, as described in the previous section:</p>
+<pre><code class="language-bash">PHOTOMAP_CONFIG=~/photomap_2.yaml start_photomap
+</code></pre>
+<p>It is also possible, but not recommended, to edit the configuration file directly using a text editor. The format is straightforward to understand, but liable to change in the future.</p>
 
 
 

@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../albums/">
+        <link rel="prev" href="../../configuration/">
       
       
-        <link rel="next" href="../../configuration/">
+        <link rel="next" href="../api/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,11 +20,14 @@
     
     
       
-        <title>Controls - PhotoMap</title>
+        <title>Architecture - PhotoMap</title>
       
     
     
       <link rel="stylesheet" href="../../assets/stylesheets/main.7e37652d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -55,13 +58,23 @@
   </head>
   
   
-    <body dir="ltr">
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
+      
+        
+        <a href="#photomap-architecture" class="md-skip">
+          Skip to content
+        </a>
       
     </div>
     <div data-md-component="announce">
@@ -95,15 +108,15 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Controls
+              Architecture
             
           </span>
         </div>
       </div>
     </div>
     
+      
     
-      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
     
     
     
@@ -324,20 +337,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -353,7 +364,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             User Guide
@@ -367,7 +378,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../basic-usage/" class="md-nav__link">
+      <a href="../../user-guide/basic-usage/" class="md-nav__link">
         
   
   
@@ -390,7 +401,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../search/" class="md-nav__link">
+      <a href="../../user-guide/search/" class="md-nav__link">
         
   
   
@@ -413,7 +424,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../albums/" class="md-nav__link">
+      <a href="../../user-guide/albums/" class="md-nav__link">
         
   
   
@@ -433,28 +444,43 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../user-guide/semantic-map/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Controls
+    Semantic Map
     
   </span>
   
 
       </a>
-      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/keyboard-shortcuts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Keyboard Shortcuts
+    
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -493,18 +519,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
@@ -520,7 +548,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Developer Guide
@@ -531,10 +559,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../developer/architecture.md" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Architecture
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -545,6 +595,122 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#component-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      Component Diagram
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key Components
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Components">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#frontend" class="md-nav__link">
+    <span class="md-ellipsis">
+      Frontend
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backend
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Storage
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Flow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extensibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      Extensibility
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technologies-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      Technologies Used
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Development Notes
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -557,7 +723,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/api.md" class="md-nav__link">
+      <a href="../api/" class="md-nav__link">
         
   
   
@@ -580,7 +746,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/frontend.md" class="md-nav__link">
+      <a href="../frontend/" class="md-nav__link">
         
   
   
@@ -642,6 +808,112 @@
   
   
   
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#component-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      Component Diagram
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key Components
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Components">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#frontend" class="md-nav__link">
+    <span class="md-ellipsis">
+      Frontend
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backend
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Storage
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Flow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extensibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      Extensibility
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technologies-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      Technologies Used
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Development Notes
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -657,9 +929,109 @@
 
 
 
-  <h1>Controls</h1>
-
-
+<h1 id="photomap-architecture">PhotoMap Architecture</h1>
+<p>PhotoMap is a modular web application designed for efficient photo management, AI-powered search, and interactive visualization. Its architecture is organized into distinct layers and components to ensure scalability, maintainability, and ease of development.</p>
+<hr />
+<h2 id="overview">Overview</h2>
+<p>PhotoMap consists of three main layers:</p>
+<ol>
+<li>
+<p><strong>Frontend</strong></p>
+<ul>
+<li>Built with HTML, CSS, and JavaScript (ES6 modules).</li>
+<li>Provides a responsive user interface for browsing, searching, and visualizing photos.</li>
+<li>Uses libraries such as Swiper for slideshows and Plotly for UMAP visualizations.</li>
+</ul>
+</li>
+<li>
+<p><strong>Backend</strong>  </p>
+<ul>
+<li>Powered by FastAPI (Python).</li>
+<li>Handles API requests, image processing, metadata extraction, and search operations.</li>
+<li>Integrates with AI models for similarity and text-based search.</li>
+</ul>
+</li>
+<li>
+<p><strong>Storage &amp; Configuration</strong>  </p>
+<ul>
+<li>Stores images, thumbnails, and metadata on disk.</li>
+<li>Uses YAML configuration files to manage albums and application settings.</li>
+</ul>
+</li>
+</ol>
+<hr />
+<h2 id="component-diagram">Component Diagram</h2>
+<pre><code>+-------------------+      REST API      +-------------------+      Disk/YAML     +--------------+
+|   Frontend UI     | &lt;----------------&gt; |     Backend       | &lt;----------------&gt; | Images/Config|
++-------------------+                    +-------------------+                    +--------------+
+</code></pre>
+<hr />
+<h2 id="key-components">Key Components</h2>
+<h3 id="frontend">Frontend</h3>
+<ul>
+<li><strong>Slideshow &amp; Gallery</strong>: Interactive image browsing with keyboard and touch support.</li>
+<li><strong>Search Panel</strong>: AI-enabled search (similarity, text, metadata).</li>
+<li><strong>UMAP Visualization</strong>: Clustered view of image embeddings.</li>
+<li><strong>Settings &amp; Album Manager</strong>: Album creation, editing, and configuration.</li>
+</ul>
+<h3 id="backend">Backend</h3>
+<ul>
+<li><strong>API Routers</strong>:  </li>
+<li><code>/search</code>: Search endpoints (similarity, text, metadata).</li>
+<li><code>/albums</code>: Album management.</li>
+<li><code>/images</code>: Image and thumbnail serving.</li>
+<li><strong>Metadata Extraction</strong>: Parses and formats image metadata (EXIF, AI-generated).</li>
+<li><strong>Indexing &amp; Embeddings</strong>: Generates and stores image embeddings for fast search.</li>
+<li><strong>Config Manager</strong>: Loads and updates YAML configuration files.</li>
+</ul>
+<h3 id="storage">Storage</h3>
+<ul>
+<li><strong>Images</strong>: Original and processed images stored in album directories.</li>
+<li><strong>Thumbnails</strong>: Cached thumbnails for fast display.</li>
+<li><strong>Metadata</strong>: JSON and YAML files for image and album metadata.</li>
+</ul>
+<hr />
+<h2 id="data-flow">Data Flow</h2>
+<ol>
+<li>
+<p><strong>User Interaction</strong>:<br />
+   User browses or searches for images via the frontend UI.</p>
+</li>
+<li>
+<p><strong>API Request</strong>:<br />
+   Frontend sends requests to backend endpoints for images, search, or metadata.</p>
+</li>
+<li>
+<p><strong>Processing</strong>:<br />
+   Backend processes requests, performs AI search, extracts metadata, and returns results.</p>
+</li>
+<li>
+<p><strong>Rendering</strong>:<br />
+   Frontend updates UI with images, overlays, and search results.</p>
+</li>
+</ol>
+<hr />
+<h2 id="extensibility">Extensibility</h2>
+<ul>
+<li><strong>Modular Routers</strong>: Easily add new API endpoints.</li>
+<li><strong>Pluggable Metadata Modules</strong>: Support for custom metadata extraction.</li>
+<li><strong>Frontend Components</strong>: Add new panels or visualizations with minimal changes.</li>
+</ul>
+<hr />
+<h2 id="technologies-used">Technologies Used</h2>
+<ul>
+<li><strong>Frontend</strong>: HTML5, CSS3, JavaScript (ES6), Swiper, Plotly</li>
+<li><strong>Backend</strong>: Python 3, FastAPI, Pydantic, PIL/Pillow, UMAP, YAML</li>
+<li><strong>Storage</strong>: Local filesystem, YAML/JSON</li>
+</ul>
+<hr />
+<h2 id="development-notes">Development Notes</h2>
+<ul>
+<li>All major components are documented in the <code>docs/developer/</code> section.</li>
+<li>See <code>docs/developer/api.md</code> for endpoint details.</li>
+<li>See <code>docs/developer/frontend.md</code> for UI component structure.</li>
+</ul>
+<hr />
 
 
 

@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../search/">
+        <link rel="prev" href="../api/">
       
       
-        <link rel="next" href="../semantic-map/">
+        <link rel="next" href="../../troubleshooting/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>Albums - PhotoMap</title>
+        <title>Frontend - PhotoMap</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#managing-albums" class="md-skip">
+        <a href="#frontend-architecture" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Albums
+              Frontend
             
           </span>
         </div>
@@ -337,20 +337,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -366,7 +364,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             User Guide
@@ -380,7 +378,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../basic-usage/" class="md-nav__link">
+      <a href="../../user-guide/basic-usage/" class="md-nav__link">
         
   
   
@@ -403,7 +401,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../search/" class="md-nav__link">
+      <a href="../../user-guide/search/" class="md-nav__link">
         
   
   
@@ -423,32 +421,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Albums
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../user-guide/albums/" class="md-nav__link">
         
   
   
@@ -459,62 +435,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#adding-albums" class="md-nav__link">
-    <span class="md-ellipsis">
-      Adding Albums
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#indexing-albums" class="md-nav__link">
-    <span class="md-ellipsis">
-      Indexing Albums
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#editing-an-album" class="md-nav__link">
-    <span class="md-ellipsis">
-      Editing an Album
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#deleting-an-album" class="md-nav__link">
-    <span class="md-ellipsis">
-      Deleting an Album
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -527,7 +447,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../semantic-map/" class="md-nav__link">
+      <a href="../../user-guide/semantic-map/" class="md-nav__link">
         
   
   
@@ -550,7 +470,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../keyboard-shortcuts/" class="md-nav__link">
+      <a href="../../user-guide/keyboard-shortcuts/" class="md-nav__link">
         
   
   
@@ -599,18 +519,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
@@ -626,7 +548,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Developer Guide
@@ -640,7 +562,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -663,7 +585,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer/api/" class="md-nav__link">
+      <a href="../api/" class="md-nav__link">
         
   
   
@@ -683,10 +605,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../developer/frontend/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Frontend
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -697,6 +641,80 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structure
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-technologies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key Technologies
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Flow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extending-the-frontend" class="md-nav__link">
+    <span class="md-ellipsis">
+      Extending the Frontend
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      File Locations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#further-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      Further Reading
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -758,36 +776,54 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#adding-albums" class="md-nav__link">
+  <a href="#structure" class="md-nav__link">
     <span class="md-ellipsis">
-      Adding Albums
+      Structure
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#indexing-albums" class="md-nav__link">
+  <a href="#key-technologies" class="md-nav__link">
     <span class="md-ellipsis">
-      Indexing Albums
+      Key Technologies
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#editing-an-album" class="md-nav__link">
+  <a href="#data-flow" class="md-nav__link">
     <span class="md-ellipsis">
-      Editing an Album
+      Data Flow
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#deleting-an-album" class="md-nav__link">
+  <a href="#extending-the-frontend" class="md-nav__link">
     <span class="md-ellipsis">
-      Deleting an Album
+      Extending the Frontend
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      File Locations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#further-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      Further Reading
     </span>
   </a>
   
@@ -809,36 +845,92 @@
 
 
 
-<h1 id="managing-albums">Managing Albums</h1>
-<p>PhotoMap allows you to organize your photos and other images into a series of albums. Each album draws its images from one or more folders of images, and manages independent search indexes and semantic maps. Albums may also overlap by having some image paths in common -- with some restrictions.</p>
-<h2 id="adding-albums">Adding Albums</h2>
-<p>Bring up the Album Manager by clicking on the <strong>Settings</strong> gear icon and then the green <span class="green-button-text">Manage Albums</span>&gt; button.</p>
-<p><img src="/img/photomap_settings.png" width="640"></p>
-<p>The Album Management dialogue provides you with controls for creating new albums, editing existing ones, deleting unwanted albums, and bringing an album's contents up to date after you've added or removed image file from its folder paths.</p>
-<div class="photomap-overlay-container">
-  <img src="/img/photomap_album_overview_base.png" width="480" class="photomap-base" alt="Base image">
-  <img src="/img/photomap_album_overview_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
-</div>
-
-<p>To add an album, press the green <span class="green-button-text">Add Album</span> button. This will add a new section to the dialogue window that prompts you to enter the following fields:</p>
+<h1 id="frontend-architecture">Frontend Architecture</h1>
+<p>The PhotoMap frontend is a modular, responsive web application built with HTML, CSS, and JavaScript (ES6 modules). It provides an interactive user interface for browsing, searching, and visualizing photo collections.</p>
+<hr />
+<h2 id="structure">Structure</h2>
+<p>The frontend code is organized into the following main components:</p>
 <ul>
-<li><strong>Album Key</strong> - This is a short mnemonic text that is used to uniquely identify the album. You can add it to PhotoMap's URL in order to go directly to the album of your choice, so it is best to avoid spaces and symbols. Once the key is assigned, you can't change it.</li>
-<li><strong>Display Name</strong> - This is the name of the album that will be displayed in the settings Album popup menu and the browser tab window title.</li>
-<li><strong>Description</strong> (optional) - A description of the album.</li>
-<li><strong>Image Paths</strong> - One or more filesystem paths to the folders that contain image files to incorporate into the album.</li>
+<li>
+<p><strong>Slideshow &amp; Gallery (<code>swiper.js</code>, <code>seek-slider.js</code>)</strong><br />
+  Handles image navigation, transitions, and keyboard/touch controls.</p>
+</li>
+<li>
+<p><strong>Metadata Overlay (<code>overlay.js</code>)</strong><br />
+  Displays image metadata, prompts, and reference images as overlays.</p>
+</li>
+<li>
+<p><strong>Search Panel (<code>search.js</code>)</strong><br />
+  Provides AI-enabled search (similarity, text, metadata) and displays results.</p>
+</li>
+<li>
+<p><strong>UMAP Visualization (<code>umap.js</code>)</strong><br />
+  Renders interactive UMAP plots for image clustering and exploration.</p>
+</li>
+<li>
+<p><strong>Album Management (<code>album.js</code>)</strong><br />
+  Allows users to create, edit, and manage albums.</p>
+</li>
+<li>
+<p><strong>Settings Dialog (<code>settings.js</code>)</strong><br />
+  Manages application settings, album selection, and configuration options.</p>
+</li>
+<li>
+<p><strong>Event Handling (<code>events.js</code>, <code>touch.js</code>)</strong><br />
+  Centralizes event listeners for slide transitions, overlay toggling, and gesture support.</p>
+</li>
+<li>
+<p><strong>Stylesheets (<code>slides.css</code>)</strong><br />
+  Provides base styles, responsive layouts, and theme customization.</p>
+</li>
 </ul>
-<p><img src="/img/photomap_album_add.png" width="640" class="img-hover-zoom"></p>
-<p>You are free to organize your image files in any way you wish. You can dump them into a single big folder, or organize them into multiple nested subfolders. During indexing, PhotoMap will traverse the folder structure and identify all image files of type JPEG, PNG, TIFF, HEIF, and HEIC.</p>
-<h2 id="indexing-albums">Indexing Albums</h2>
-<p>For fast search and retrieval, PhotoMap indexes all the image files it finds and stores them in a compact set of indexes. Indexing begins automatically when you first add an album, and will continue in the background even if you navigate away from the Album Manager, or even close the browser.</p>
-<p>The time it takes to index depends on how many image files you have, their size, the speed of the disk media, and the availability of a GPU. On a typical Windows machine with an NVidia graphics card, it takes ~2 hours to index 80,000 images located on a network mounted disk. Expect the speed to be noticeably faster on a collection of images located on a local solid-state disk, and much slower (about 10X) on a machine that lacks GPU acceleration.</p>
-<p>During indexing, PhotoMap will display its progress in three phases. First, it traverses the directory(ies) specified in the album configuration to identify and count image files. During this time PhotoMap displays the number of images it has found, but is unable to provide a time or %completion estimate. Second, it runs each image through a machine learning (AI) model to extract high-dimensional semantic information from the image (technically an "embedding"). During this phase, which is usually the longest in duration, PhotoMap will display its progress towards completion and an ETA. Lastly, PhotoMap generates the cluster map for all the image embeddings it has generated (technically, this is called a "umap"). The umap creation phase typically takes less than a minute and does not benefit from GPU acceleration.</p>
-<p>When the indexing process is done, you will find the generated indexes stored in a folder named "photomap_index" located in the first image folder path of the album. Try not to remove or rename this folder. The indexes are relatively small. A folder of 80,000 images that totals 85 GB yields an index that is 300 MB in size.</p>
-<p>When you add or remove image files from an album's image directory, you will need to reindex the album. Navigate to the album in the Album Manager list and press the blue <span class="blue-button-text">Update Index</span> button. The update operation will only reindex the files that have been added or removed and will be much faster than the first comprehensive indexing operation.</p>
-<h2 id="editing-an-album">Editing an Album</h2>
-<p>To make changes to an album's definition, including changing its display name, description or paths, click the orange <span class="orange-button-text">Edit</span> button next to the album's entry in the Album Manager dialogue. Note that you cannot change the album key once the Album is initialized.</p>
-<h2 id="deleting-an-album">Deleting an Album</h2>
-<p>To delete an album, click on the red <span class="red-button-text">Delete</span> button next to the album entry. This will delete the configuration for the album, but doesn't change the underlying image files or the PhotoMap indexes. In particular, if you now add a new album that contains the same image path(s) as the previously-deleted album, the leftover indexes will be recognized and valid and you will not need to reindex.</p>
+<hr />
+<h2 id="key-technologies">Key Technologies</h2>
+<ul>
+<li><strong>JavaScript (ES6 modules)</strong>: Modular code organization and dynamic UI updates.</li>
+<li><strong>Swiper.js</strong>: Responsive slideshow and gallery navigation.</li>
+<li><strong>Plotly.js</strong>: Interactive UMAP visualizations.</li>
+<li><strong>Fetch API</strong>: Communicates with backend REST endpoints.</li>
+<li><strong>CSS3</strong>: Responsive design and theming.</li>
+</ul>
+<hr />
+<h2 id="data-flow">Data Flow</h2>
+<ol>
+<li>
+<p><strong>User Interaction</strong><br />
+   Users interact with the UI via clicks, taps, swipes, and keyboard shortcuts.</p>
+</li>
+<li>
+<p><strong>API Requests</strong><br />
+   The frontend sends requests to backend endpoints for images, metadata, search, and album management.</p>
+</li>
+<li>
+<p><strong>Rendering</strong><br />
+   The UI updates dynamically based on backend responses, displaying images, overlays, search results, and visualizations.</p>
+</li>
+</ol>
+<hr />
+<h2 id="extending-the-frontend">Extending the Frontend</h2>
+<ul>
+<li><strong>Add new panels or dialogs</strong> by creating new JS modules and updating the main HTML template.</li>
+<li><strong>Customize styles</strong> in <code>slides.css</code> and <code>extra.css</code>.</li>
+<li><strong>Integrate new visualizations</strong> by importing libraries and adding new modules.</li>
+<li><strong>Connect to new backend endpoints</strong> using the Fetch API.</li>
+</ul>
+<hr />
+<h2 id="file-locations">File Locations</h2>
+<ul>
+<li><strong>JavaScript:</strong> <code>photomap/frontend/static/javascript/</code></li>
+<li><strong>CSS:</strong> <code>photomap/frontend/static/</code></li>
+<li><strong>HTML Templates:</strong> <code>photomap/frontend/templates/</code></li>
+<li><strong>Documentation:</strong> <code>docs/developer/frontend.md</code></li>
+</ul>
+<hr />
+<h2 id="further-reading">Further Reading</h2>
+<ul>
+<li><a href="../architecture/">Architecture Overview</a></li>
+<li><a href="../api/">API Reference</a></li>
+</ul>
 
 
 

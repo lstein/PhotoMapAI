@@ -24,6 +24,9 @@
     
       <link rel="stylesheet" href="assets/stylesheets/main.7e37652d.min.css">
       
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.06af60db.min.css">
+      
       
 
 
@@ -53,7 +56,12 @@
   </head>
   
   
-    <body dir="ltr">
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -105,8 +113,8 @@
       </div>
     </div>
     
+      
     
-      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
     
     
     
@@ -299,20 +307,104 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#linux-mac" class="md-nav__link">
+  <a href="#windows" class="md-nav__link">
     <span class="md-ellipsis">
-      Linux / Mac
+      Windows
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Windows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-download-and-unpack-the-source-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Download and unpack the source code
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#windows" class="md-nav__link">
+  <a href="#2-run-the-installer-script" class="md-nav__link">
     <span class="md-ellipsis">
-      Windows
+      2. Run the installer script
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-start-the-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Start the server
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-open-your-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Open your browser:
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linux-mac" class="md-nav__link">
+    <span class="md-ellipsis">
+      Linux &amp; Mac
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Linux &amp; Mac">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-download-and-unpack-the-source-code_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Download and unpack the source code
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-run-the-installer-script_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Run the installer script
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-start-the-server_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Start the server
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-open-your-browser_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Open your browser:
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -566,12 +658,35 @@
   
   
     <li class="md-nav__item">
-      <a href="user-guide/controls/" class="md-nav__link">
+      <a href="user-guide/semantic-map/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Controls
+    Semantic Map
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="user-guide/keyboard-shortcuts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Keyboard Shortcuts
     
   </span>
   
@@ -656,7 +771,7 @@
   
   
     <li class="md-nav__item">
-      <a href="developer/architecture.md" class="md-nav__link">
+      <a href="developer/architecture/" class="md-nav__link">
         
   
   
@@ -679,7 +794,7 @@
   
   
     <li class="md-nav__item">
-      <a href="developer/api.md" class="md-nav__link">
+      <a href="developer/api/" class="md-nav__link">
         
   
   
@@ -702,7 +817,7 @@
   
   
     <li class="md-nav__item">
-      <a href="developer/frontend.md" class="md-nav__link">
+      <a href="developer/frontend/" class="md-nav__link">
         
   
   
@@ -829,20 +944,104 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#linux-mac" class="md-nav__link">
+  <a href="#windows" class="md-nav__link">
     <span class="md-ellipsis">
-      Linux / Mac
+      Windows
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Windows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-download-and-unpack-the-source-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Download and unpack the source code
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#windows" class="md-nav__link">
+  <a href="#2-run-the-installer-script" class="md-nav__link">
     <span class="md-ellipsis">
-      Windows
+      2. Run the installer script
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-start-the-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Start the server
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-open-your-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Open your browser:
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linux-mac" class="md-nav__link">
+    <span class="md-ellipsis">
+      Linux &amp; Mac
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Linux &amp; Mac">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-download-and-unpack-the-source-code_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Download and unpack the source code
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-run-the-installer-script_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Run the installer script
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-start-the-server_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Start the server
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-open-your-browser_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Open your browser:
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -878,8 +1077,12 @@
 
 <h1 id="photomap">PhotoMap</h1>
 <p>Rediscover your photo collection!</p>
-<p>PhotoMap is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events and themes.</p>
-<p><img src="img/photomap_slide_with_semantic_map.png" alt="Overview of UI" class="img-hover-zoom"></p>
+<p>PhotoMap is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.</p>
+<div class="photomap-overlay-container">
+  <img src="/img/photomap_slide_with_semantic_map_base.png" width="480" class="photomap-base" alt="Base image">
+  <img src="/img/photomap_slide_with_semantic_map_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
+</div>
+
 <h2 id="features">Features</h2>
 <ul>
 <li>Fast browsing of large image collections</li>
@@ -887,6 +1090,7 @@
 <li>Thematic image clustering and visualization</li>
 <li>Flexible album management</li>
 <li>Responsive UI for desktop and mobile</li>
+<li>Support for wide range of image formats, including Apple's HEIC</li>
 <li>Extensible backend (FastAPI)</li>
 </ul>
 <h2 id="the-semantic-map">The Semantic Map</h2>
@@ -907,57 +1111,33 @@
 <p>PhotoMap supports most of the other features you would expect, including support for multiple separate photo albums, the ability to browse photos chronologically, an uncluttered fullscreen mode, and of course a configurable slideshow mode that can show images sequentially or shuffled.</p>
 <hr />
 <h2 id="quick-start">Quick Start</h2>
-<h3 id="linux-mac">Linux / Mac</h3>
-<ol>
-<li>
-<p><strong>Create a virtual environment for the app:</strong></p>
-<pre><code>python3 -m venv ~/photomap     (or choose your own installation location)
-source ~/photomap/bin/activate
-</code></pre>
-</li>
-<li>
-<p><strong>Install the app:</strong><br />
-   From within the code repository (the one containing README.md)</p>
-<pre><code>pip install .
-</code></pre>
-</li>
-<li>
-<p><strong>Run the app:</strong></p>
-<pre><code>~/photomap/bin/start_photomap
-</code></pre>
-</li>
-<li>
-<p><strong>Open your browser:</strong><br />
-   Navigate to <code>http://localhost:8050</code>.</p>
-</li>
-</ol>
-<hr />
 <h3 id="windows">Windows</h3>
-<p>Open a PowerShell window and type these commands in.</p>
-<ol>
-<li>
-<p>**Launch the Windows installer **</p>
-<ul>
-<li>Navigate to the photomap source code folder and launch <code>installation/install_windows</code>.</li>
-<li>If you are prompted to install python, please do so and try again. </li>
-<li>When prompted, select an install location for photomap. This will create a launcher script in the selected location named <code>start_photomap.bat</code></li>
-</ul>
-</li>
-<li>
-<p><strong>Run the app:</strong>
-    Launch <code>start_photomap.bat</code>.</p>
-</li>
-<li>
-<p><strong>Open your browser:</strong><br />
-   Navigate to <code>http://localhost:8050</code></p>
-</li>
-</ol>
+<h4 id="1-download-and-unpack-the-source-code">1. Download and unpack the source code</h4>
+<p>Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.</p>
+<p>Choose a convenient location in your home folder and unzip the file to create a new folder named <code>PhotoMap</code>.</p>
+<h4 id="2-run-the-installer-script">2. Run the installer script</h4>
+<p>Navigate to the unpacked <code>PhotoMap</code> folder, find the <code>INSTALL</code> folder, and double-click the <code>install_windows</code> script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named <code>start_photomap</code>.</p>
+<h4 id="3-start-the-server">3. Start the server</h4>
+<p>Double-click <code>start_photomap.bat</code> to launch the server. You should see a few startup messages, followed by the URL for the running server. </p>
+<h4 id="4-open-your-browser">4. <strong>Open your browser:</strong></h4>
+<p>Navigate to <code>http://localhost:8050</code> and follow the prompts to create and populate your first album.</p>
+<hr />
+<h3 id="linux-mac">Linux &amp; Mac</h3>
+<h4 id="1-download-and-unpack-the-source-code_1">1. Download and unpack the source code</h4>
+<p>Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.</p>
+<p>Choose a convenient location in your home directory and unzip the file to create a new folder named <code>PhotoMap</code>.</p>
+<h4 id="2-run-the-installer-script_1">2. Run the installer script</h4>
+<p>Navigate to the <code>PhotoMap</code> folder and launch the <code>install_linux_mac</code> shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named <code>start_photomap</code> on your desktop.</p>
+<h4 id="3-start-the-server_1">3. Start the server</h4>
+<p>Double click <code>start_photomap</code> to launch the server. You will see a few startup messages followed by the URL for the running server.</p>
+<h4 id="4-open-your-browser_1">4. <strong>Open your browser:</strong></h4>
+<p>Navigate to <code>http://localhost:8050</code> and follow the prompts to create and populate your first album.</p>
 <h2 id="detailed-guides">Detailed Guides</h2>
 <ul>
 <li><a href="installation/">Installation</a></li>
 <li><a href="user-guide/basic-usage/">User Guide</a></li>
 <li><a href="configuration/">Configuration</a></li>
-<li><a href="developer/architecture.md">Developer Guide</a></li>
+<li><a href="developer/architecture/">Developer Guide</a></li>
 <li><a href="troubleshooting/">Troubleshooting</a></li>
 </ul>
 
