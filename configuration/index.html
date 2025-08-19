@@ -16,7 +16,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.17">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.16">
     
     
       
@@ -559,6 +559,48 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#running-photomap-under-https" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running PhotoMap Under HTTPS
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running PhotoMap Under HTTPS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#install-a-self-signed-ssl-certificate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Install a Self-Signed SSL Certificate
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-certbot" class="md-nav__link">
+    <span class="md-ellipsis">
+      Use Certbot
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-a-reverse-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Use a Reverse Proxy
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#pointing-to-an-alternative-configuration-file" class="md-nav__link">
     <span class="md-ellipsis">
       Pointing to an Alternative Configuration File
@@ -747,6 +789,48 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#running-photomap-under-https" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running PhotoMap Under HTTPS
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running PhotoMap Under HTTPS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#install-a-self-signed-ssl-certificate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Install a Self-Signed SSL Certificate
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-certbot" class="md-nav__link">
+    <span class="md-ellipsis">
+      Use Certbot
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-a-reverse-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Use a Reverse Proxy
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#pointing-to-an-alternative-configuration-file" class="md-nav__link">
     <span class="md-ellipsis">
       Pointing to an Alternative Configuration File
@@ -772,7 +856,7 @@
 
 
 <h1 id="configuration">Configuration</h1>
-<p>PhotoMap is primarily configured through the web interface as described in <a href="/user-guide/basic-usage#changing-settings">Basic Usage</a> and <a href="/user-guide/albums">Albums</a>. However, there are a number of runtime parameters that control how the web service behaves.</p>
+<p>PhotoMap is primarily configured through the web interface as described in <a href="../user-guide/basic-usage/#changing-settings">Basic Usage</a> and <a href="../user-guide/albums/">Albums</a>. However, there are a number of runtime parameters that control how the web service behaves.</p>
 <h2 id="changing-the-web-host-and-port">Changing the Web Host and Port</h2>
 <p>By default, PhotoMap runs its web service on port 8050 and only accepts connections on the local machine (<code>localhost</code>). These can be changed on the command line used to launch the application using the <code>--port</code> and <code>--host</code> options:</p>
 <pre><code>start_photomap --port 8000 --host 0.0.0.0
@@ -789,6 +873,59 @@
 </code></pre>
 <p>Or you can permanently fix these environment variables by setting them in your shell's profile, e.g. <code>.bashrc</code>.</p>
 <p>On Windows systems, setting environment variables can be done through the GUI as well as on the command line. See <a href="https://phoenixnap.com/kb/windows-set-environment-variable">How to Set Environment Variables in Windows</a> for a good walkthrough.</p>
+<h2 id="running-photomap-under-https">Running PhotoMap Under HTTPS</h2>
+<p>By default, PhotoMap runs as a non-secure <code>HTTP</code> service. This generates a warning icon in some browsers, but more seriously prevents cut and paste between the PhotoMap tab and browser tabs and desktop applications. </p>
+<p>There are several ways to enable HTTP for PhotoMap:</p>
+<h3 id="install-a-self-signed-ssl-certificate">Install a Self-Signed SSL Certificate</h3>
+<p>In this method, you generate self-signed encryption certificate and
+private key files and point PhotoMap to them using its <code>--cert</code> and
+<code>--key</code> command-line options.</p>
+<p>Guides to generating and installing self-signed certificates:</p>
+<ul>
+<li>
+<p><a href="https://learn.microsoft.com/en-us/entra/identity-platform/howto-create-self-signed-certificate">Creating Self-Signed Certificates with Windows PowerShell</a>. Please apply the arguments to create .crt and .pem files.</p>
+</li>
+<li>
+<p><a href="https://gist.github.com/elklein96/a15090f35a41e16bdc8574a7fb81e119">Creating Self-Signed Certificates with OpenSSL (Mac/Linux)</a></p>
+</li>
+</ul>
+<p>These methods will leave you with two files, a .crt certificate file,
+and a .pem key file. Relaunch the PhotoMap server using <code>--cert
+/path/to/.crt file</code> and <code>--key /path/to/.pem file</code>. If you are using
+the desktop launcher to start the server, simply open the launcher
+file with a text editor, and add the <code>--cert</code> and <code>--key</code> options to
+the end of the line that ends with <code>start_photomap</code>.</p>
+<p>After installing the certificate/key pair and relaunching the server,
+you will be able to access the PhotoMap server using the https://
+URL. Your browser will complain about an unknown certificate authority
+when you first load the URL and ask you to confirm that you trust the site.</p>
+<h3 id="use-certbot">Use Certbot</h3>
+<p>The <a href="https://certbot.eff.org/">Certbot</a> tool provides public certificates that
+browsers automatically trust. It is very easy to use, but it requires that you
+have a web running on port 80 that accepts incoming HTTP connections.</p>
+<p>Once the Certbot certificate and keyfile are generated, follow the
+directions in the previous section to configure PhotoMap to use them.</p>
+<h3 id="use-a-reverse-proxy">Use a Reverse Proxy</h3>
+<p>A final option is to keep PhotoMap running on HTTP, but use a reverse
+proxy from a running web server to translate HTTPS requests on the
+reverse proxy into HTTP requests to PhotoMap. The main advantage of this
+is that you get the additional benefit of all the web server's configuration
+controls, such as the ability to add password protection.</p>
+<p>Here are some guides for setting up reverse proxies. The first is a
+general guide for configuring a reverse proxy with the popular Nginx
+web server. The second features a Windows-specific walkthrough.</p>
+<ul>
+<li><a href="https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/">NGINX Reverse Proxy</a></li>
+<li><a href="https://virendra.dev/blog/setting-up-nginx-as-a-reverse-proxy-on-windows">NGINX Reverse Proxy on Windows</a></li>
+</ul>
+<p>You will need to install encryption certificates for the Nginx server using <a href="https://certbot.eff.org/">Certbot</a>. The final configuration of the proxy server will look something like this:</p>
+<pre><code>    location /photomap/ {
+    proxy_pass http://localhost:8050/;
+</code></pre>
+<p>This is saying that when a request comes in for
+<code>https://your.host/photomap/</code> it will be translated into a request to
+<code>http://localhost:8050/</code> where PhotoMap is running. It is possible to
+run the proxy server and the PhotoMap server on separate machines as well.</p>
 <h2 id="pointing-to-an-alternative-configuration-file">Pointing to an Alternative Configuration File</h2>
 <p>PhotoMap stores its album definitions and other configuration information in a configuration file. It is not usually necessary to manipulate it directly, but if you wish you can point to an alternative config file in order to have multiple PhotoMap servers each hosting separate album collections.</p>
 <p>The config file is stored in different places depending on the platform:</p>
@@ -870,10 +1007,10 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.92b07e13.min.js"></script>
+      <script src="../assets/javascripts/bundle.50899def.min.js"></script>
       
     
   </body>
