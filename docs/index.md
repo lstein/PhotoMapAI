@@ -5,8 +5,8 @@ Rediscover your photo collection!
 PhotoMap is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.
 
 <div class="photomap-overlay-container">
-  <img src="/img/photomap_slide_with_semantic_map_base.png" width="480" class="photomap-base" alt="Base image">
-  <img src="/img/photomap_slide_with_semantic_map_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
+  <img src="img/photomap_slide_with_semantic_map_base.png" width="480" class="photomap-base" alt="Base image">
+  <img src="img/photomap_slide_with_semantic_map_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
 </div>
 
 
