@@ -6,7 +6,7 @@ PhotoMap is organized into a series of photo albums. Each album is a collection 
 
 The first time you launch PhotoMap it will prompt you to create an album with the screen shown below.
 
-<img src="/img/photomap_album_setup.png" width="640" alt="Album creation dialogue" class="img-hover-zoom">
+<img src="../../img/photomap_album_setup.png" width="640" alt="Album creation dialogue" class="img-hover-zoom">
 
 Enter a short lowercase key for the album, such as "family", a longer descriptive name such as "Family Photos 2025", and optionally a description of the album. (The key can be used in URLs if you wish to share a particular album in a text or email message as [described here](albums#selecting_an_album_by_its_url)).
 
@@ -16,11 +16,11 @@ PhotoMap supports photos in JPEG or PNG format. Support for Apple's HEIC/HEIF fo
 
 The screenshot below shows the dialogue after populating it on a Linux or MacOS system. On Windows systems use the usual `C:\path\to\directory` notation.
 
-<img src="/img/photomap_album_setup_filled.png" width="480" alt="Album creation dialogue" class="img-hover-zoom">
+<img src="../../img/photomap_album_setup_filled.png" width="480" alt="Album creation dialogue" class="img-hover-zoom">
 
 Once the album is set up to your liking, press the `Add Album` button at the bottom left and indexing will start:
 
-<img src="/img/photomap_album_setup_indexing.png" width="480" alt="Album indexing" class="img-hover-zoom">
+<img src="../../img/photomap_album_setup_indexing.png" width="480" alt="Album indexing" class="img-hover-zoom">
 
 Indexing can take some time. On a system equipped with an NVidia GPU, indexing a collection of ~50,000 images will take about two hours. On a system with CPU only, the process will take overnight. Mac users with hardware accelerated M1/2/3 chips will see performance somewhere in between the two. It is suggested to start with a small collection of photos (1000-2000 images) for your first album in order to test PhotoMap and get comfortable with its features.
 
@@ -33,8 +33,8 @@ For more information on adding and modifying albums see [Albums](../albums).
 The album browsing interface is shown below. Hover over the image to see the key to the various buttons and controls for album browsing:
 
 <div class="photomap-overlay-container">
-  <img src="/img/photomap_basic_usage_1_base.png" width="480" class="photomap-base" alt="Base image">
-  <img src="/img/photomap_basic_usage_1_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
+  <img src="../../img/photomap_basic_usage_1_base.png" width="480" class="photomap-base" alt="Base image">
+  <img src="../../img/photomap_basic_usage_1_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
 </div>
 
 Going from left to right:
@@ -52,7 +52,7 @@ Finally, the inconspicuous tab with the yellow arrow on the left margin of the w
 
 Hover near the top of the window to reveal a slider that will let you seek forward and backward among the images. If no search is active, the slider shows the images sorted by their date. If a image or text similarity search is active, the slider changes to indicate the match score (higher numbers are better matches):
 
-<img src="/img/photomap_basic_usage_2.png" width="680" alt="Seek Slider" class="img-hover-zoom">
+<img src="../../img/photomap_basic_usage_2.png" width="680" alt="Seek Slider" class="img-hover-zoom">
 
 You can navigate through your album, enter and exit fullscreen, and start and stop the slideshow with a variety of keystrokes and gestures on touch-enabled devices. See [Keyboard Shortcuts](keyboard-shortcuts) for details.
 
@@ -60,7 +60,7 @@ You can navigate through your album, enter and exit fullscreen, and start and st
 
 Click the ⊙ (target) icon to open the [Semantic Map](semantic-map):
 
-<img src="/img/photomap_semantic_map_1.png" width="480" alt="Semantic Map" class="img-hover-zoom">
+<img src="../../img/photomap_semantic_map_1.png" width="480" alt="Semantic Map" class="img-hover-zoom">
 
 This shows all the photos in your album, clustered and colored by similarity. The initial view shows the entire collection, with a yellow target marking the current photo on display. Use the mouse and scrollwheel to zoom in and out of the map and pan around. If you zoom in enough, you will see individual dots for each photo. Hover the mouse over areas of interest to see thumbnail previews of the corresponding images. 
 
@@ -70,13 +70,13 @@ If you don't see anything, or if the colors are very faint, this means that ther
 
 If you hover over the top of the map, additional navigation controls appear for zooming in and out, panning, resetting to the default scale, and downloading the map as a PNG image.
 
-<img src="/img/photomap_semantic_map_2.png" width="480" alt="Semantic Map Nav Controls" class="img-hover-zoom">
+<img src="../../img/photomap_semantic_map_2.png" width="480" alt="Semantic Map Nav Controls" class="img-hover-zoom">
 
 ## Changing Settings
 
 The Gear icon opens the settings dialogue, which allows you to adjust the appearance and behavior of PhotoMap:
 
-<img src="/img/photomap_settings.png" width="480" alt="PhotoMap Settings Dialogue" class="img-hover-zoom">
+<img src="../../img/photomap_settings.png" width="480" alt="PhotoMap Settings Dialogue" class="img-hover-zoom">
 
 - **Image Change Interval** -- When the slideshow is running, this controls how long each image will be displayed, in seconds.
 - **Image Browse Order** -- When the slideshow is running, or when you are browsing the album without an active search, this controls the order in which photos are displayed. "Random" will present the images in shuffled order, while "Chronological" will show them in order from oldest to newest.
