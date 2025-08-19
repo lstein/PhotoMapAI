@@ -36,3 +36,23 @@
 .photomap-overlay-container:hover .photomap-overlay {
   opacity: 1;
 }
+
+.orange-button-text {
+  color: orange;
+  font-weight: bold;
+}
+
+.green-button-text {
+  color: green;
+  font-weight: bold;
+}
+
+.red-button-text {
+  color: red;
+  font-weight: bold;
+}
+
+.blue-button-text {
+  color: rgb(143, 143, 243);
+  font-weight: bold;
+}
