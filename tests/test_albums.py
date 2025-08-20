@@ -1,9 +1,9 @@
 """
 test_albums.py
-Tests for the albums functionality of the Clipslide application.
+Tests for the albums functionality of the PhotoMap application.
 """
 from fixtures import client
-
+from pathlib import Path
 from photomap.backend.config import create_album, get_config_manager, Album
 
 def test_config():

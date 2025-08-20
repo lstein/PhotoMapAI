@@ -11,15 +11,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from photomap.backend.config import Album, create_album
-
+from photomap.backend.config import get_config_manager
 
 @pytest.fixture
-def client():
-    """Fixture to create a test client for the Clipslide application."""
+def client() -> TestClient:
+    """Fixture to create a test client for the PhotoMap application."""
     from photomap.backend.photomap_server import app
 
     return TestClient(app)
-
 
 @pytest.fixture
 def new_album(client, tmp_path) -> dict:
