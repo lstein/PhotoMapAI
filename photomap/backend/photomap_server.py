@@ -72,7 +72,7 @@ def main():
 
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="Run the Clipslide slideshow server.")
+    parser = argparse.ArgumentParser(description="Run the PhotoMap slideshow server.")
     parser.add_argument(
         "--config",
         type=Path,
@@ -120,7 +120,7 @@ def main():
 
     config = get_config_manager()
     logger.info(
-        f"Starting Clipslide server with backend root: {repo_root} and configuration file {config.config_path}"
+        f"Starting PhotoMap server with backend root: {repo_root} and configuration file {config.config_path}"
     )
 
     uvicorn.run(

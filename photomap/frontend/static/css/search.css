@@ -416,7 +416,8 @@
 
 #imageSearchBtn.dragover,
 #searchPanel.dragover,
-#textSearchPanel.dragover {
+#textSearchPanel.dragover,
+#searchImageThumbArea.dragover {
   outline: 2px dashed limegreen;
   background: rgba(0, 255, 0, 0.1);
 }

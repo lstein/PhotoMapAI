@@ -249,18 +249,20 @@ document.addEventListener("DOMContentLoaded", async function () {
     negativeSearchInput.value = "";
   });
 
-  textSearchPanel.addEventListener("dragover", function (e) {
+  const searchImageThumbArea = document.getElementById("searchImageThumbArea");
+
+  searchImageThumbArea.addEventListener("dragover", function (e) {
     e.preventDefault();
-    textSearchPanel.classList.add("dragover");
+    searchImageThumbArea.classList.add("dragover");
   });
 
-  textSearchPanel.addEventListener("dragleave", function (e) {
+  searchImageThumbArea.addEventListener("dragleave", function (e) {
     e.preventDefault();
-    textSearchPanel.classList.remove("dragover");
+    searchImageThumbArea.classList.remove("dragover");
   });
 
   // Drag-and-drop onto the search panel (do NOT auto-search, just set image)
-  textSearchPanel.addEventListener("drop", async function (e) {
+  searchImageThumbArea.addEventListener("drop", async function (e) {
     e.preventDefault();
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
@@ -278,7 +280,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       console.error("Image search failed:", err);
       alert("Failed to search with image: " + err.message);
     } finally {
-      textSearchPanel.classList.remove("dragover");
+      searchImageThumbArea.classList.remove("dragover");
       hideSpinner();
     }
   });

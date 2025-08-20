@@ -1,15 +1,20 @@
 #!/usr/bin/pwsh
 
 # 1. Check Python version 
+$install_python_message = "Please install Python 3.10, 3.11 or 3.12 from https://www.python.org/downloads/windows"
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
-    Write-Host "Python is not installed. Please install Python 3.10 or higher from https://www.python.org/downloads/windows/" -ForegroundColor Red
+    Write-Host "Python is not installed. $install_python_message" -ForegroundColor Red
     exit 1
 }
 
-$version = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-if ([version]$version -lt [version]"3.10") {
-    Write-Host "Python version $version found. Please install Python 3.10 or higher from https://www.python.org/downloads/windows/" -ForegroundColor Red
+$version = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+if (-not $version) {
+    Write-Host "Python is not installed. $install_python_message" -ForegroundColor Red
+    exit 1
+}
+if ([version]$version -lt [version]"3.10" -or [version]$version -ge [version]"3.13") {
+    Write-Host "Python version $version found. $install_python_message" -ForegroundColor Red
     exit 1
 }
 

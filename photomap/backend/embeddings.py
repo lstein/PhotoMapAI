@@ -140,6 +140,7 @@ class Embeddings(BaseModel):
         Returns:
             list of Path: List of image file paths.
         """
+        logger.info("get_image_files called with progress_callback")
         if isinstance(image_paths_or_dir, Path):
             # If it's a single Path object, treat it as a directory
             images = self.get_image_files_from_directory(
