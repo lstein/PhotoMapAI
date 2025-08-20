@@ -13,4 +13,4 @@ def set_temp_config_env(tmp_path_factory):
     }
     with open(config_path, "w") as f:
         yaml.dump(config_data, f)
-    os.environ["CLIPSLIDE_CONFIG"] = str(config_path)
+    os.environ["PHOTOMAP_CONFIG"] = str(config_path)
