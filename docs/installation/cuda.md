@@ -8,10 +8,10 @@ CUDA version 13 is not currently supported by the AI libraries underlying PhotoM
 
 ### 1. First test whether CUDA is already installed:
 
-Open a command window and type the command:
+Open a command window and type the command `nvidia-smi`:
 
 ```bash
-nvidia-smi
+PS C:\Users\username> nvidia-smi
 Mon Aug 11 21:33:57 2025       
 +---------------------------------------------------------------------------------------+
 | NVIDIA-SMI 535.230.02             Driver Version: 535.230.02   CUDA Version: 12.6     |

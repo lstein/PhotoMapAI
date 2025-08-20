@@ -669,9 +669,31 @@ export class AlbumManager {
     editForm.querySelector(".edit-album-name").value = album.name;
     editForm.querySelector(".edit-album-description").value =
       album.description || "";
-    editForm.querySelector(".edit-album-paths").value = (
-      album.image_paths || []
-    ).join("\n");
+    const pathsField = editForm.querySelector(".edit-album-paths");
+    pathsField.value = (album.image_paths || []).join("\n");
+
+    // Enable drag-and-drop for file/folder paths
+    pathsField.addEventListener("dragover", function (e) {
+      e.preventDefault();
+    });
+    pathsField.addEventListener("drop", function (e) {
+      e.preventDefault();
+      if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+        for (let i = 0; i < e.dataTransfer.items.length; i++) {
+          const item = e.dataTransfer.items[i];
+          if (item.kind === "file") {
+            const file = item.getAsFile();
+            // Unfortunately most browsers disable file.path for security reasons
+            const path = file.path || file.name;
+            // Append to textarea, with newline
+            if (pathsField.value.length > 0 && !pathsField.value.endsWith("\n")) {
+              pathsField.value += "\n";
+            }
+            pathsField.value += path + "\n";
+          }
+        }
+      }
+    });
 
     // Show edit form
     albumInfo.style.display = "none";
@@ -890,8 +912,17 @@ export class AlbumManager {
     const status = cardElement.querySelector(".index-status");
     const estimatedTime = cardElement.querySelector(".estimated-time");
 
-    progressBar.style.width = `${progress.progress_percentage}%`;
-    progressText.textContent = `${Math.round(progress.progress_percentage)}%`;
+    // Defensive: ensure progress_percentage is a number between 0 and 100
+    let percentage = Number(progress.progress_percentage);
+    if (isNaN(percentage) || percentage < 0) percentage = 0;
+    if (percentage > 100) percentage = 100;
+    progressBar.style.width = `${percentage}%`;
+    progressText.textContent = `${Math.round(percentage)}%`;
+
+    // Defensive: ensure current_step is a string
+    if (typeof progress.current_step !== "string" || !progress.current_step) {
+      progress.current_step = "Indexing in progress...";
+    }
 
     // Update estimated time remaining
     if (

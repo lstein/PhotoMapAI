@@ -399,6 +399,9 @@ def create_album(
     Returns:
         Validated Album instance
     """
+    # expand ~ in paths and resolve
+    image_paths = [str(Path(x).expanduser().resolve()) for x in image_paths]
+    index = str(Path(index).expanduser().resolve())
     return Album(
         key=key,
         name=name,
