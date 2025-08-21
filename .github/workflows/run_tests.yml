@@ -7,8 +7,11 @@ on:
     branches: [ master, main ]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  run_tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Checkout code
