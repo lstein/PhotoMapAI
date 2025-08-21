@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "photomap"
-version = "0.3.0"
+version = "0.4.0"
 description = "AI-based image clustering and exploration tool"
 authors = [
     { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
@@ -42,7 +42,9 @@ testing = [
     "pytest-asyncio",
 ]
 development = [
+    "build",
     "mkdocs-material",
+    "twine",
 ]
 
 [tool.setuptools.packages.find]
