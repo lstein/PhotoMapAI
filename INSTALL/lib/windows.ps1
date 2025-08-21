@@ -27,15 +27,16 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
         $nvidia_output = nvidia-smi 2>$null
         if ($nvidia_output) {
             $cuda_installed = $true
+            $nvidia_output_str = $nvidia_output -join "`n"
             # Extract CUDA version using regex
-            if ($nvidia_output -match "CUDA Version:\s+(\d+\.\d+)") {
+            if ($nvidia_output_str -match "CUDA Version:\s+(\d+\.\d+)") {
                 $cuda_version = $matches[1]
                 Write-Host "CUDA Version $cuda_version detected." -ForegroundColor Green
             }
         }
     }
     catch {
-        Write-Host "Could not determine CUDA version." -ForegroundColor Yellow
+        Write-Host "Could not determine CUDA version: $($_.Exception.Message)." -ForegroundColor Yellow
     }
 }
 

@@ -26,6 +26,7 @@ dependencies = [
     "PyYAML",
     "requests",
     "scikit-learn",
+    "setuptools<67",  # Avoid deprecation warning from CLIP dependency
     "torch",
     "tqdm",
     "umap-learn",
