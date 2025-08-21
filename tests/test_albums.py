@@ -25,11 +25,15 @@ def test_add_delete_album():
                          description='A test album',
                          )
     manager.add_album(album)
-    assert manager.has_albums() is True
-    assert album.key in manager.get_albums()
-    assert album.index == Path('./tests/test_images', 'embeddings.npz').resolve().as_posix()
-    assert Path('./tests/test_images').resolve().as_posix() in album.image_paths
-    manager.delete_album(album.key)
+    try:
+        assert manager.has_albums() is True
+        assert album.key in manager.get_albums()
+        assert Path(album.index).resolve().as_posix() == Path('./tests/test_images', 'embeddings.npz').resolve().as_posix()
+        assert Path('./tests/test_images').resolve().as_posix() in [Path(x).resolve().as_posix() for x in album.image_paths]
+    except AssertionError as e:
+        raise e
+    finally:
+        manager.delete_album(album.key)
     assert album.key not in manager.get_albums()
 
 def test_album_routes(client):
@@ -62,8 +66,8 @@ def test_album_routes(client):
     album = Album.from_dict(data=albums[0], key=albums[0]['key'])
     assert album.key == 'test_album'
     assert album.name == 'Test Album'
-    assert album.image_paths == [Path('./tests/test_images').resolve().as_posix()]
-    assert album.index == Path('./tests/test_images', 'embeddings.npz').resolve().as_posix()
+    assert [Path(x).resolve().as_posix() for x in album.image_paths] == [Path('./tests/test_images').resolve().as_posix()]
+    assert Path(album.index).resolve().as_posix() == Path('./tests/test_images', 'embeddings.npz').resolve().as_posix()
     assert album.umap_eps == 0.1
     assert album.description == 'A test album'
 

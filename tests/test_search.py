@@ -52,7 +52,7 @@ def test_index_update(client, new_album, monkeypatch):
     assert response.status_code == 200
     metadata = response.json()
     assert metadata["filename_count"] == len(embeddings["filenames"])
-    assert metadata["embeddings_path"] == str(embeddings_path)
+    assert Path(metadata["embeddings_path"]).resolve().as_posix() == Path(embeddings_path).resolve().as_posix()
     assert metadata["last_modified"] is not None
 
 
