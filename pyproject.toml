@@ -4,12 +4,27 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "photomapai"
-version = "0.5.0"
+version = "0.5.1"
 description = "AI-based image clustering and exploration tool"
 authors = [
     { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
 ]
-requires-python = ">=3.10"
+readme = { content-type = "text/markdown", file = "README.md" }
+license = { file = "LICENSE" }
+requires-python = ">=3.10, <3.13"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: Viewers",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "Pillow",
     "clip-anytorch",
@@ -32,6 +47,9 @@ dependencies = [
     "umap-learn",
     "uvicorn",
 ]
+
+[project.urls]
+Homepage = "https://github.com/lstein/PhotoMapAI"
 
 [project.optional-dependencies]
 testing = [

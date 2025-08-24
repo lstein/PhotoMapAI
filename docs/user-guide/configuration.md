@@ -1,6 +1,6 @@
 # Configuration
 
-PhotoMapAI is primarily configured through the web interface as described in [Basic Usage](user-guide/basic-usage.md#changing-settings) and [Albums](user-guide/albums.md). However, there are a number of runtime parameters that control how the web service behaves.
+PhotoMapAI is primarily configured through the web interface as described in [Basic Usage](basic-usage.md#changing-settings) and [Albums](albums.md). However, there are a number of runtime parameters that control how the web service behaves.
 
 ## Changing the Web Host and Port
 

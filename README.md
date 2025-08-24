@@ -1,10 +1,10 @@
-# PhotoMap
+# PhotoMapAI
 
 Rediscover your photo collection!
 
 PhotoMapAI is a fast, modern image browser and search tool for large photo collections. It uses the CLIP computer vision model to enable text and image-based search, image clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.
 
- <img src="docs/img/photomap_slide_with_semantic_map.png" alt="PhotoMap main display showing the semantic map of the user's photo album">
+ <img src="https://github.com/lstein/PhotoMapAI/blob/master/docs/img/photomap_slide_with_semantic_map.png?raw=true" alt="PhotoMap main display showing the semantic map of the user's photo album">
 
 ## Features
 - Fast browsing of large image collections
@@ -20,7 +20,7 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 
 PhotoMap's unique feature is its ability to identify thematically similar images and automatically cluster them, creating a "semantic map":
 
-<img src="docs/img/photomap_big_semantic_map.png" alt="Big Semantic Map" class="img-hover-zoom">
+<img src="https://github.com/lstein/PhotoMapAI/blob/master/docs/img/photomap_big_semantic_map.png?raw=true" alt="Big Semantic Map" class="img-hover-zoom">
 
 In this map, each image in the photo collection is represented as a dot. The colors distinguish different clusters of related images. You can zoom in and out of the map and pan around it. Hover the mouse over a dot in order to see a preview thumbnail of its image, or click on a cluster to view its contents at full resolution.
 
@@ -30,7 +30,7 @@ You can move the semantic map around, shrink it down in size, or hide it altoget
 
 PhotoMap lets you search your collection by similarity to another image, by text, or by a combination of image and text as shown below:
 
-<img src="docs/img/photomap_search_interface.png" alt="Big Semantic Map" class="img-hover-zoom">
+<img src="https://github.com/lstein/PhotoMapAI/blob/master/docs/img/photomap_search_interface.png?raw=true" alt="Big Semantic Map" class="img-hover-zoom">
 
 You can start an image similarity search by uploading a local image file, dragging an image from a web browser window or file browser, or by selecting an existing image from your collection. There's also a "Text to Avoid" field, which can be used to disfavor certain image content.
 
@@ -38,11 +38,11 @@ You can start an image similarity search by uploading a local image file, draggi
 
 When viewing a photo in full-screen mode, you can pop out a little drawer to show its metadata, including the GPS location (if available), and the phone settings:
 
-<img src="docs/img/photomap_metadata.png" alt="Image Metadata" class="img-hover-zoom">
+<img src="https://github.com/lstein/PhotoMapAI/blob/master/docs/img/photomap_metadata.png?raw=true" alt="Image Metadata" class="img-hover-zoom">
 
 If you are a user of the [InvokeAI](https://github.com/invoke-ai/InvokeAI) text-to-image generation tool, you can get quick access to the key settings used to generate the image, including the prompts, model and LoRAs in use, and the input images used for IPAdapters, ControlNets and the img2img raster layer. You can also display and copy the full generation graph in native JSON format and copy it to the clipboard.
 
-<img src="docs/img/photomap_invokeai.png" alt="InvokeAI Metadata" class="img-hover-zoom">
+<img src="https://github.com/lstein/PhotoMapAI/blob/master/docs/img/photomap_invokeai.png?raw=true" alt="InvokeAI Metadata" class="img-hover-zoom">
 
 ## Other Features
 
@@ -52,7 +52,7 @@ PhotoMap supports most of the other features you would expect, including support
 
 ## Quick Start
 
-Here are quick start instructions for Windows, Mac and Linux users using the automated installer scripts that are provided with this package. For instructions on manual installation, see [Installation](installation.md). 
+Here are quick start instructions for Windows, Mac and Linux users using the automated installer scripts that are provided with this package. For instructions on manual installation, see [Installation](https://lstein.github.io/PhotoMapAI/installation/). 
 
 ### Windows
 
@@ -96,9 +96,8 @@ Double click `start_photomap` to launch the server. You will see a few startup m
    Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
 
 ## Detailed Guides
-- [Installation](installation.md)
-- [User Guide](user-guide/basic-usage.md)
-- [Configuration](configuration.md)
-- [Developer Guide](developer/architecture.md)
-- [Troubleshooting](troubleshooting.md)
-
+- [Installation](https://lstein.github.io/PhotoMapAI/installation/)
+- [User Guide](https://lstein.github.io/PhotoMapAI/user-guide/basic-usage/)
+- [Configuration](https://lstein.github.io/PhotoMapAI/user-guide/configuration/)
+- [Developer Guide](https://lstein.github.io/PhotoMapAI/developer/architecture.md)
+- [Troubleshooting](https://lstein.github.io/PhotoMapAI/)

@@ -100,7 +100,7 @@ Double click `start_photomap` to launch the server. You will see a few startup m
 ## Detailed Guides
 - [Installation](installation.md)
 - [User Guide](user-guide/basic-usage.md)
-- [Configuration](configuration.md)
+- [Configuration](user-guide/configuration.md)
 - [Developer Guide](developer/architecture.md)
 - [Troubleshooting](troubleshooting.md)
 
