@@ -1,19 +1,19 @@
 #Search
 
-PhotoMap provides several types of AI-enabled search across your image/photo collection:
+PhotoMapAI provides several types of AI-enabled search across your image/photo collection:
 
 <div style="text-align: center;">
 <img src="../../img/photomap_search_1.png" width="180" class="img-hover-zoom" alt="Search Panel">
 </div>
 
-- **Search by Image** - Provide an image and PhotoMap will find matches against it.
-- **Search by Text** - Type in a word or phrase and PhotoMap will find the closest matches.
+- **Search by Image** - Provide an image and PhotoMapAI will find matches against it.
+- **Search by Text** - Type in a word or phrase and PhotoMapAI will find the closest matches.
 - **Search by Text and Image** - Provide image and text to find matches that best combine the two. You can also provide a "negative search text" to disfavor certain image content.
 - **Search by Map** - Browse images that are clustered together in the [semantic map](semantic-map.md).
 
 ## Search by Image
 
-To search PhotoMap by image similarity:
+To search PhotoMapAI by image similarity:
 
 1. Find images similar to the one currently on display in the main window.
 
@@ -37,7 +37,7 @@ The screenshot below shows the results of an image search on a photo of a generi
 
 ## Search by Text
 
-Open the search **By Text** magnifying glass icon and type your search term into the input field labeled "Text Search." A wide variety of search terms are accepted. You can search for people ("blonde man in wool sweater"), subjects ("birthday party"), styles ("graphic novel"), or photography-related descriptors ("out of focus", "motion blur"). You can search for certain celebrities by name, but you *cannot* search for family members, friends and other private individuals. (Providing a way to train PhotoMap with custom data is a potential future improvement.)
+Open the search **By Text** magnifying glass icon and type your search term into the input field labeled "Text Search." A wide variety of search terms are accepted. You can search for people ("blonde man in wool sweater"), subjects ("birthday party"), styles ("graphic novel"), or photography-related descriptors ("out of focus", "motion blur"). You can search for certain celebrities by name, but you *cannot* search for family members, friends and other private individuals. (Providing a way to train PhotoMapAI with custom data is a potential future improvement.)
 
 ## Search by a Combination of Text and Image
 
@@ -51,11 +51,11 @@ Clicking on the ⊙ (target) icon will open the [Semantic Map](semantic-map.md) 
 
 <img src="../../img/photomap_semantic_map_3.png" width="480" alt="Semantic Map" class="img-hover-zoom">
 
-If you hover over dots adjacent to the current one, PhotoMap will pop up a thumbnail image to show you the neighbors of the current image. Clicking on a colored cluster will select all members of the cluster, dim other clusters, and set the selected cluster's members as the current search results. To turn off the cluster highlighting and restore full brightness to all clusters, uncheck the **Highlight selection** checkbox in the bottom right-hand corner.
+If you hover over dots adjacent to the current one, PhotoMapAI will pop up a thumbnail image to show you the neighbors of the current image. Clicking on a colored cluster will select all members of the cluster, dim other clusters, and set the selected cluster's members as the current search results. To turn off the cluster highlighting and restore full brightness to all clusters, uncheck the **Highlight selection** checkbox in the bottom right-hand corner.
 
 ## Clearing the Search
 
-When a search is active, a green checkmark on top of one or more search icons indicates the search type, and a clear search **X Icon** appears in the row of search icons. Click this box to clear the search results and reset PhotoMap to album browsing mode. Alternatively you can individually clear the similarity search image, and the positive and negative text search fields, by clicking on the **X** marks in their respective fields of the combined image and text search dialogue.
+When a search is active, a green checkmark on top of one or more search icons indicates the search type, and a clear search **X Icon** appears in the row of search icons. Click this box to clear the search results and reset PhotoMapAI to album browsing mode. Alternatively you can individually clear the similarity search image, and the positive and negative text search fields, by clicking on the **X** marks in their respective fields of the combined image and text search dialogue.
 
 <div class="photomap-overlay-container" width="140">
   <img src="../../img/photomap_search_clearbox_base.png" class="photomap-base" alt="Base image">

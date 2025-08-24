@@ -1,12 +1,12 @@
-# PhotoMap Architecture
+# PhotoMapAI Architecture
 
-PhotoMap is a modular web application designed for efficient photo management, AI-powered search, and interactive visualization. Its architecture is organized into distinct layers and components to ensure scalability, maintainability, and ease of development.
+PhotoMapAI is a modular web application designed for efficient photo management, AI-powered search, and interactive visualization. Its architecture is organized into distinct layers and components to ensure scalability, maintainability, and ease of development.
 
 ---
 
 ## Overview
 
-PhotoMap consists of three main layers:
+PhotoMapAI consists of three main layers:
 
 1. **Frontend**
     - Built with HTML, CSS, and JavaScript (ES6 modules).

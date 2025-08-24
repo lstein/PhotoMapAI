@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-The PhotoMap frontend is a modular, responsive web application built with HTML, CSS, and JavaScript (ES6 modules). It provides an interactive user interface for browsing, searching, and visualizing photo collections.
+The PhotoMapAI frontend is a modular, responsive web application built with HTML, CSS, and JavaScript (ES6 modules). It provides an interactive user interface for browsing, searching, and visualizing photo collections.
 
 ---
 
