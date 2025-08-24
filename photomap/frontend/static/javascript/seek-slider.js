@@ -8,6 +8,7 @@ let scoreText, slider, ticksContainer, sliderContainer, contextLabel, hoverZone;
 let fadeOutTimeoutId = null;
 let TICK_COUNT = 10; // Number of ticks to show on the slider
 const FADE_OUT_DELAY = 10000; // 10 seconds
+let isUserSeeking = false;
 
 document.addEventListener("DOMContentLoaded", initializeEvents);
 
@@ -182,6 +183,7 @@ function initializeEvents() {
 
   // When slider is released, seek to slide
   slider.addEventListener("change", async function () {
+    isUserSeeking = true; // Set flag before seeking
     resetFadeOutTimer();
     let globalIndex;
     let [, totalSlides] = await getCurrentSlideIndex();
@@ -216,10 +218,17 @@ function initializeEvents() {
 
     updateMetadataOverlay();
     slider.blur();
+
+    // Reset flag after a short delay
+    setTimeout(() => {
+      isUserSeeking = false;
+    }, 1500); // Slightly longer than the slideChanged timeout
   });
 
   window.addEventListener("slideChanged", async (event) => {
     setTimeout(async () => {
+      if (isUserSeeking) return; // Don't update slider if user is seeking
+
       const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
       slider.value =
         state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
