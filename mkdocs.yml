@@ -1,4 +1,4 @@
-site_name: PhotoMap
+site_name: PhotoMapAI
 docs_dir: docs
 
 nav:
@@ -11,9 +11,9 @@ nav:
       - Basic Usage: user-guide/basic-usage.md
       - Search: user-guide/search.md
       - Albums: user-guide/albums.md
+      - Configuration: user-guide/configuration.md
       - Semantic Map: user-guide/semantic-map.md
       - Keyboard Shortcuts: user-guide/keyboard-shortcuts.md
-  - Configuration: configuration.md
   - Developer Guide:
       - Architecture: developer/architecture.md
       - API: developer/api.md
