@@ -65,13 +65,13 @@ create_desktop_launcher() {
 create_linux_launcher() {
     local install_path="$1"
     local desktop_dir="$HOME/Desktop"
-    local launcher_file="$desktop_dir/PhotoMap.desktop"
+    local launcher_file="$desktop_dir/PhotoMapAI.desktop"
     
     # Check if Desktop directory exists
     if [[ ! -d "$desktop_dir" ]]; then
         print_warn "Desktop directory not found. Trying to create launcher in ~/.local/share/applications/"
         desktop_dir="$HOME/.local/share/applications"
-        launcher_file="$desktop_dir/PhotoMap.desktop"
+        launcher_file="$desktop_dir/PhotoMapAI.desktop"
         mkdir -p "$desktop_dir"
     fi
     
@@ -79,9 +79,9 @@ create_linux_launcher() {
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=PhotoMap
+Name=PhotoMapAI
 Comment=AI-based image clustering and exploration tool
-Exec=$install_path/bin/start_photomapai
+Exec=Exec=sh -c '$install_path/bin/start_photomap; echo "Press Enter to exit..."; read'
 Icon=image-x-generic
 Terminal=true
 Categories=Graphics;Photography;
@@ -126,7 +126,7 @@ EOF
     # Create launcher script that opens Terminal
     cat > "$app_dir/Contents/MacOS/PhotoMap" << EOF
 #!/bin/bash
-osascript -e "tell application \"Terminal\" to do script \"cd '$install_path' && source bin/activate && start_photomapai\""
+osascript -e "tell application \"Terminal\" to do script \"cd '$install_path' && source bin/activate && start_photomap\""
 EOF
     
     chmod +x "$app_dir/Contents/MacOS/PhotoMap"
@@ -152,7 +152,7 @@ main() {
     print_info "Detected OS: $os_type"
     
     # Step 3: Ask for installation directory
-    local default_install="$HOME/photomapai"
+    local default_install="$HOME/photomap"
     echo
     read -p "Where would you like to install PhotoMap? [$default_install]: " install_path
     install_path="${install_path:-$default_install}"
@@ -174,7 +174,7 @@ main() {
         rm -rf "$install_path"
     fi
     
-    python3 -m venv "$install_path" --prompt photomapai
+    python3 -m venv "$install_path" --prompt photomap
     
     # Activate virtual environment
     source "$install_path/bin/activate"
@@ -195,7 +195,7 @@ main() {
     print_info "Installation completed successfully!"
     print_info "To start PhotoMap:"
     print_info "  1. Activate the environment: source $install_path/bin/activate"
-    print_info "  2. Run: start_photomapai"
+    print_info "  2. Run: start_photomap"
     print_info ""
     print_info "Or use the desktop launcher that was created just now."
 }
@@ -205,3 +205,5 @@ trap 'print_error "Installation failed at line $LINENO"' ERR
 
 # Run main function
 main "$@"
+print_info "Press Enter to exit..."
+read
