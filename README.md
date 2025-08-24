@@ -58,7 +58,7 @@ Here are quick start instructions for Windows, Mac and Linux users using the aut
 
 #### 1. Download and unpack the source code
 
-Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
+Download the PhotoMap source code as a .zip file from the latest stable [Releases page](https://github.com/lstein/PhotoMapAI/releases). For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
 
 Choose a convenient location in your home folder and unzip the file to create a new folder named `PhotoMap`.
 
@@ -80,7 +80,7 @@ Double-click `start_photomap.bat` to launch the server. You should see a few sta
 
 #### 1. Download and unpack the source code
 
-Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
+Download the PhotoMap source code as a .zip file from the latest stable [Releases page](https://github.com/lstein/PhotoMapAI/releases). For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
 
 Choose a convenient location in your home directory and unzip the file to create a new folder named `PhotoMap`.
 
@@ -94,6 +94,35 @@ Double click `start_photomap` to launch the server. You will see a few startup m
 
 #### 4. **Open your browser:**  
    Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
+
+
+### Manual Install
+
+Follow these instructions if you are comfortable with installing Python packages on the command line.
+
+#### Mac/Linux
+
+Make sure that your version of Python is between 3.10 and 3.12. Not all required libraries are available in 3.13.
+
+   python3 -m venv ~/photomap --prompt photomap
+   source ~/photomap/bin/activate
+   python3 -m pip install --upgrade pip
+   pip install photomapai
+   start_photomap
+
+Then open your web browser and point it to [http://127.0.0.1:8050](http://128.0.0.1:8050). Follow the prompts to create your first album.
+
+#### Windows
+
+Make sure that your version of Python is between 3.10 and 3.12. Not all required libraries are available in 3.13. Also make sure that Python is on your PATH.
+
+   python3 -m venv C:\Users\<your name>\Documents\photomap --prompt photomap
+   C:\Users\<your name>\Documents\photomap\Scripts\activate
+   python3 -m pip install --upgrade pip
+   pip install photomapai
+   start_photomap
+
+Then open your web browser and point it to [http://127.0.0.1:8050](http://128.0.0.1:8050). Follow the prompts to create your first album.
 
 ## Detailed Guides
 - [Installation](https://lstein.github.io/PhotoMapAI/installation/)

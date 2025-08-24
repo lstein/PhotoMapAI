@@ -120,7 +120,7 @@ def main():
 
     config = get_config_manager()
     logger.info(
-        f"Starting PhotoMap server with backend root: {repo_root} and configuration file {config.config_path}"
+        f"Starting PhotoMapAI server on port {port} with backend root `{repo_root}` and configuration file `{config.config_path}`"
     )
 
     uvicorn.run(
