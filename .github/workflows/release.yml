@@ -1,4 +1,4 @@
-name: Release to TestPyPI
+name: Release to PyPi
 
 on:
   workflow_dispatch:
@@ -6,6 +6,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: pypi
 
     permissions:
       contents: write
@@ -49,6 +50,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://upload.pypi.org/legacy/
-        environment: pypi
         # env:
         #   TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
