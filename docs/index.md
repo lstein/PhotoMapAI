@@ -1,8 +1,8 @@
-# PhotoMap
+# PhotoMapAI
 
 Rediscover your photo collection!
 
-PhotoMap is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.
+PhotoMapAI is a fast, modern image browser and search tool for large photo collections. It supports text and image-based search, semantic clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.
 
 <div class="photomap-overlay-container">
   <img src="img/photomap_slide_with_semantic_map_base.png" width="480" class="photomap-base" alt="Base image">
@@ -21,7 +21,7 @@ PhotoMap is a fast, modern image browser and search tool for large photo collect
 
 ## The Semantic Map
 
-PhotoMap's unique feature is its ability to identify thematically similar images and automatically cluster them, creating a "semantic map":
+PhotoMapAI's unique feature is its ability to identify thematically similar images and automatically cluster them, creating a "semantic map":
 
 <img src="img/photomap_big_semantic_map.png" alt="Big Semantic Map" class="img-hover-zoom">
 
@@ -31,7 +31,7 @@ You can move the semantic map around, shrink it down in size, or hide it altoget
 
 ## Text and Image Similarity Search
 
-PhotoMap lets you search your collection by similarity to another image, by text, or by a combination of image and text as shown below:
+PhotoMapAI lets you search your collection by similarity to another image, by text, or by a combination of image and text as shown below:
 
 <img src="img/photomap_search_interface.png" alt="Big Semantic Map" class="img-hover-zoom">
 
@@ -49,7 +49,7 @@ If you are a user of the [InvokeAI](https://github.com/invoke-ai/InvokeAI) text-
 
 ## Other Features
 
-PhotoMap supports most of the other features you would expect, including support for multiple separate photo albums, the ability to browse photos chronologically, an uncluttered fullscreen mode, and of course a configurable slideshow mode that can show images sequentially or shuffled.
+PhotoMapAI supports most of the other features you would expect, including support for multiple separate photo albums, the ability to browse photos chronologically, an uncluttered fullscreen mode, and of course a configurable slideshow mode that can show images sequentially or shuffled.
 
 ---
 
@@ -60,13 +60,13 @@ PhotoMap supports most of the other features you would expect, including support
 
 #### 1. Download and unpack the source code
 
-Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
+Download the PhotoMapAI source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMapAI home page.
 
-Choose a convenient location in your home folder and unzip the file to create a new folder named `PhotoMap`.
+Choose a convenient location in your home folder and unzip the file to create a new folder named `PhotoMapAI`.
 
 #### 2. Run the installer script
 
-Navigate to the unpacked `PhotoMap` folder, find the `INSTALL` folder, and double-click the `install_windows` script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named `start_photomap`.
+Navigate to the unpacked `PhotoMapAI` folder, find the `INSTALL` folder, and double-click the `install_windows` script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named `start_photomap`.
 
 #### 3. Start the server
 
@@ -82,13 +82,13 @@ Double-click `start_photomap.bat` to launch the server. You should see a few sta
 
 #### 1. Download and unpack the source code
 
-Download the PhotoMap source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
+Download the PhotoMapAI source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMapAI home page.
 
-Choose a convenient location in your home directory and unzip the file to create a new folder named `PhotoMap`.
+Choose a convenient location in your home directory and unzip the file to create a new folder named `PhotoMapAI`.
 
 #### 2. Run the installer script
 
-Navigate to the `PhotoMap` folder and launch the `install_linux_mac` shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named `start_photomap` on your desktop.
+Navigate to the `PhotoMapAI` folder and launch the `install_linux_mac` shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named `start_photomap` on your desktop.
 
 #### 3. Start the server
 

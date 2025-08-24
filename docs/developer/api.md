@@ -1,6 +1,6 @@
-# PhotoMap API Reference
+# PhotoMapAI API Reference
 
-PhotoMap is driven by a Pydantic data model and a series of FastAPI endpoints. You may access and test these endpoints using [http://localhost:8050/docs](http://localhost:8050/docs)
+PhotoMapAI is driven by a Pydantic data model and a series of FastAPI endpoints. You may access and test these endpoints using [http://localhost:8050/docs](http://localhost:8050/docs)
 
 ## Album Management Endpoints
 

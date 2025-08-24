@@ -2,7 +2,7 @@
 
 CUDA library versions 12.6 through 12.9 are required to take advantage of GPU acceleration on NVidia graphics cards. Acceleration will dramatically speed up indexing of your photo collection by about 10X. After the index is built, GPU acceleration offers only a modest increase in performance when searching image content by text or image similarity. Note that CUDA is **not** available (or required) for MacOS systems.
 
-CUDA version 13 is not currently supported by the AI libraries underlying PhotoMap.
+CUDA version 13 is not currently supported by the AI libraries underlying PhotoMapAI.
 
 ## Steps to Install CUDA
 
@@ -28,5 +28,5 @@ Go to the [CUDA 12.9 Download Page](https://developer.nvidia.com/cuda-12-9-0-dow
 
 In a command shell, run the `nvidia-smi` command as in (1) and confirm that the expected version is installed.
 
-[PhotoMap Installation](../installation.md)
+[PhotoMapAI Installation](../installation.md)
 

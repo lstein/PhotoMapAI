@@ -1,10 +1,10 @@
 # Basic Usage
 
-PhotoMap is organized into a series of photo albums. Each album is a collection of images on the local machine or a shared drive.
+PhotoMapAI is organized into a series of photo albums. Each album is a collection of images on the local machine or a shared drive.
 
 ## Creating an album
 
-The first time you launch PhotoMap it will prompt you to create an album with the screen shown below.
+The first time you launch PhotoMapAI it will prompt you to create an album with the screen shown below.
 
 <img src="../../img/photomap_album_setup.png" width="640" alt="Album creation dialogue" class="img-hover-zoom">
 
@@ -12,7 +12,7 @@ Enter a short lowercase key for the album, such as "family", a longer descriptiv
 
 You'll now need to tell the album where its photos are stored. Enter one or more filesystem paths in the text field at the bottom named "Image Paths". Photos can be stored in a single large folder, or stored in multiple nestered folders. They can reside on the local disk or on a shared disk. If you wish, you can point the album to multiple folders, and their contents will be combined into a single album.
 
-PhotoMap supports photos in JPEG, PNG, TIFF, and HEIC/HEIF formats.
+PhotoMapAI supports photos in JPEG, PNG, TIFF, and HEIC/HEIF formats.
 
 The screenshot below shows the dialogue after populating it on a Linux or MacOS system. On Windows systems use the usual `C:\path\to\directory` notation.
 
@@ -22,7 +22,7 @@ Once the album is set up to your liking, press the `Add Album` button at the bot
 
 <img src="../../img/photomap_album_setup_indexing.png" width="480" alt="Album indexing" class="img-hover-zoom">
 
-Indexing can take some time. On a system equipped with an NVidia GPU, indexing a collection of ~50,000 images will take about two hours. On a system with CPU only, the process will take overnight. Mac users with hardware accelerated M1/2/3 chips will see performance somewhere in between the two. It is suggested to start with a small collection of photos (1000-2000 images) for your first album in order to test PhotoMap and get comfortable with its features.
+Indexing can take some time. On a system equipped with an NVidia GPU, indexing a collection of ~50,000 images will take about two hours. On a system with CPU only, the process will take overnight. Mac users with hardware accelerated M1/2/3 chips will see performance somewhere in between the two. It is suggested to start with a small collection of photos (1000-2000 images) for your first album in order to test PhotoMapAI and get comfortable with its features.
 
 Once indexing is complete, the dialogue will close and you can start exploring your collection.
 
@@ -40,9 +40,9 @@ The album browsing interface is shown below. Hover over the image to see the key
 Going from left to right:
 
 - The *Next Image* and *Previous Image* buttons advance to the next or previous photographs in the album.
-- The *Gear* button opens up a dialogue that lets you adjust the behavior and appearance of PhotoMap.
+- The *Gear* button opens up a dialogue that lets you adjust the behavior and appearance of PhotoMapAI.
 - The *Trash* icon permanently deletes the current photo from the album and removes the disk file (after confirmation).
-- The *Fullscreen* button puts PhotoMap into fullscreen mode and hides most of the control elements.
+- The *Fullscreen* button puts PhotoMapAI into fullscreen mode and hides most of the control elements.
 - The *Play/Pause* button starts and stops a slideshow in which the photos autoadvance after a user-adjustable interval.
 - The *Target* icon opens and closes the [semantic map](semantic-map.md).
 - The *Landscape* icon initiates a search for images similar to the one currently displayed.
@@ -74,13 +74,13 @@ If you hover over the top of the map, additional navigation controls appear for 
 
 ## Changing Settings
 
-The Gear icon opens the settings dialogue, which allows you to adjust the appearance and behavior of PhotoMap:
+The Gear icon opens the settings dialogue, which allows you to adjust the appearance and behavior of PhotoMapAI:
 
-<img src="../../img/photomap_settings.png" width="480" alt="PhotoMap Settings Dialogue" class="img-hover-zoom">
+<img src="../../img/photomap_settings.png" width="480" alt="PhotoMapAI Settings Dialogue" class="img-hover-zoom">
 
 - **Image Change Interval** -- When the slideshow is running, this controls how long each image will be displayed, in seconds.
 - **Image Browse Order** -- When the slideshow is running, or when you are browsing the album without an active search, this controls the order in which photos are displayed. "Random" will present the images in shuffled order, while "Chronological" will show them in order from oldest to newest.
-- **Max Images in History** -- PhotoMap keeps a small number of recently-viewed photos in memory. The others are swapped in and out to disk. This value controls how many images are kept in memory at once. Reduce the size if you are having memory problems or the application seems to be slowing down.
-- **LocationIQ Map API Key** -- This optional API key lets PhotoMap display thumbnail maps and named locations for photos that contain GPS geolocation information. If you wish to enable this feature, get a key for free from [LocationIQ](http://locationiq.com/) and paste it into the field. If not present, PhotoMap will display the longitude and latitude of the photo, but not the map or place name.
+- **Max Images in History** -- PhotoMapAI keeps a small number of recently-viewed photos in memory. The others are swapped in and out to disk. This value controls how many images are kept in memory at once. Reduce the size if you are having memory problems or the application seems to be slowing down.
+- **LocationIQ Map API Key** -- This optional API key lets PhotoMapAI display thumbnail maps and named locations for photos that contain GPS geolocation information. If you wish to enable this feature, get a key for free from [LocationIQ](http://locationiq.com/) and paste it into the field. If not present, PhotoMapAI will display the longitude and latitude of the photo, but not the map or place name.
 - **Album** -- This pulldown menu lists all the albums you have configured and allows you to switch among them. Note that when you switch albums, the settings dialogue will close immediately and the window will display the first photo from the selected albums.
 - **Manage Albums** -- This green button will open the [Album Manager](albums.md), where you can create, edit and delete albums.
