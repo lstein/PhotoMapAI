@@ -101,3 +101,4 @@ scripts
 
 # Cache directories for mkdocs etc
 site
+utility_scripts

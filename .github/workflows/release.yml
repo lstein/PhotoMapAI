@@ -48,4 +48,7 @@ jobs:
       - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: https://test.pypi.org/legacy/
+          repository-url: https://upload.pypi.org/legacy/
+        environment: pypi
+        # env:
+        #   TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
