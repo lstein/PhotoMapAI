@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "photomap"
-version = "0.4.2"
+name = "photomapai"
+version = "0.5.0"
 description = "AI-based image clustering and exploration tool"
 authors = [
     { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
@@ -61,4 +61,4 @@ update_images = "photomap.backend.imagetool:main"
 search_images = "photomap.backend.imagetool:main"
 search_text = "photomap.backend.imagetool:main"
 find_duplicate_images = "photomap.backend.imagetool:main"
-start_photomap = "photomap.backend.photomap_server:main"
+start_photomapai = "photomap.backend.photomap_server:main"

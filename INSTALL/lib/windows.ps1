@@ -60,7 +60,7 @@ Set-Location $installDir
 
 # 3. Create virtual environment in the installdir
 Write-Host "Creating virtual environment in $installDir ..."
-python -m venv . --prompt "photomap"
+python -m venv . --prompt "photomapai"
 
 # 4. Activate virtual environment and install PhotoMap
 $venvActivate = ".\Scripts\Activate.ps1"
@@ -109,8 +109,8 @@ pip install "$PSScriptRoot\..\.."
 # Write-Host "`n    $installDir\Scripts\start_photomap.exe`n" -ForegroundColor Cyan
 
 # 6. Create a batch script to start the slideshow
-$batPath = Join-Path $env:USERPROFILE "Desktop\start_photomap.bat"
-$exePath = "$installDir\Scripts\start_photomap.exe"
+$batPath = Join-Path $env:USERPROFILE "Desktop\start_photomapai.bat"
+$exePath = "$installDir\Scripts\start_photomapai.exe"
 
 $batContent = @"
 @echo off

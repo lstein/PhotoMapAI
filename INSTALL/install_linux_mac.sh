@@ -81,7 +81,7 @@ Version=1.0
 Type=Application
 Name=PhotoMap
 Comment=AI-based image clustering and exploration tool
-Exec=$install_path/bin/start_photomap
+Exec=$install_path/bin/start_photomapai
 Icon=image-x-generic
 Terminal=true
 Categories=Graphics;Photography;
@@ -110,7 +110,7 @@ create_mac_launcher() {
     <key>CFBundleExecutable</key>
     <string>PhotoMap</string>
     <key>CFBundleIdentifier</key>
-    <string>com.lincolnstein.photomap</string>
+    <string>com.lincolnstein.photomapai</string>
     <key>CFBundleName</key>
     <string>PhotoMap</string>
     <key>CFBundleVersion</key>
@@ -126,7 +126,7 @@ EOF
     # Create launcher script that opens Terminal
     cat > "$app_dir/Contents/MacOS/PhotoMap" << EOF
 #!/bin/bash
-osascript -e "tell application \"Terminal\" to do script \"cd '$install_path' && source bin/activate && start_photomap\""
+osascript -e "tell application \"Terminal\" to do script \"cd '$install_path' && source bin/activate && start_photomapai\""
 EOF
     
     chmod +x "$app_dir/Contents/MacOS/PhotoMap"
@@ -152,7 +152,7 @@ main() {
     print_info "Detected OS: $os_type"
     
     # Step 3: Ask for installation directory
-    local default_install="$HOME/photomap"
+    local default_install="$HOME/photomapai"
     echo
     read -p "Where would you like to install PhotoMap? [$default_install]: " install_path
     install_path="${install_path:-$default_install}"
@@ -174,7 +174,7 @@ main() {
         rm -rf "$install_path"
     fi
     
-    python3 -m venv "$install_path" --prompt photomap
+    python3 -m venv "$install_path" --prompt photomapai
     
     # Activate virtual environment
     source "$install_path/bin/activate"
@@ -195,9 +195,9 @@ main() {
     print_info "Installation completed successfully!"
     print_info "To start PhotoMap:"
     print_info "  1. Activate the environment: source $install_path/bin/activate"
-    print_info "  2. Run: start_photomap"
+    print_info "  2. Run: start_photomapai"
     print_info ""
-    print_info "Or use the desktop launcher that was created."
+    print_info "Or use the desktop launcher that was created just now."
 }
 
 # Error handling
