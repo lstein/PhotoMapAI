@@ -1,6 +1,6 @@
 This favicon was generated using the following font:
 
-- Font Title: Dekko
+- Font Title: Capriola
 - Font Author: undefined
-- Font Source: https://fonts.gstatic.com/s/dekko/v22/46khlb_wWjfSrttFR0vsfl1B.ttf
+- Font Source: https://fonts.gstatic.com/s/capriola/v14/wXKoE3YSppcvo1PDln_8L-AinG8y.ttf
 - Font License: undefined)
