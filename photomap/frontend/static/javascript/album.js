@@ -548,11 +548,14 @@ export class AlbumManager {
       .map((path) => path.trim())
       .filter((path) => path.length > 0);
 
+    // Always set index path based on first path
+    const indexPath = paths.length > 0 ? `${paths[0]}/photomap_index/embeddings.npz` : "";
+
     const newAlbum = {
       key: formData.key,
       name: formData.name,
       image_paths: paths,
-      index: `${paths[0]}/photomap_index/embeddings.npz`,
+      index: indexPath,
       umap_eps: 0.1,
       description: formData.description,
     };
@@ -713,16 +716,21 @@ export class AlbumManager {
   async saveAlbumChanges(cardElement, album) {
     const editForm = cardElement.querySelector(".edit-form");
 
+    const updatedPaths = editForm
+      .querySelector(".edit-album-paths")
+      .value.split("\n")
+      .map((path) => path.trim())
+      .filter((path) => path.length > 0);
+
+    // Always set index path based on first path
+    const indexPath = updatedPaths.length > 0 ? `${updatedPaths[0]}/photomap_index/embeddings.npz` : "";
+
     const updatedAlbum = {
       key: album.key,
       name: editForm.querySelector(".edit-album-name").value,
       description: editForm.querySelector(".edit-album-description").value,
-      image_paths: editForm
-        .querySelector(".edit-album-paths")
-        .value.split("\n")
-        .map((path) => path.trim())
-        .filter((path) => path.length > 0),
-      index: album.index,
+      image_paths: updatedPaths,
+      index: indexPath,
     };
 
     try {
