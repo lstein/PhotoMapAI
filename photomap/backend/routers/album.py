@@ -98,6 +98,8 @@ async def update_album(album_data: dict) -> JSONResponse:
             description=album_data.get("description", ""),
         )
 
+        logger.info(f"Updating album: {album.key} with index {album.index}")
+
         if config_manager.update_album(album):
             return JSONResponse(
                 content={
