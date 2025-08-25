@@ -3,7 +3,7 @@
 
 export async function startIndexUpdate(albumKey) {
   // Start the operation
-  const response = await fetch("/update_index_async/", {
+  const response = await fetch("update_index_async/", {
     method: "POST",
     body: new FormData([["album_key", albumKey]]),
   });

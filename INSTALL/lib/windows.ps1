@@ -1,21 +1,29 @@
 #!/usr/bin/pwsh
 
+function Show-ErrorAndExit {
+    param (
+        [string]$Message
+    )
+    Write-Host "hate!!!"
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
+    Write-Host "Press any key to continue..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
 # 1. Check Python version 
 $install_python_message = "Please install Python 3.10, 3.11 or 3.12 from https://www.python.org/downloads/windows"
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
-    Write-Host "Python is not installed. $install_python_message" -ForegroundColor Red
-    exit 1
+    Show-ErrorAndExit "Python is not installed. $install_python_message" -ForegroundColor Red
 }
 
 $version = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
 if (-not $version) {
-    Write-Host "Python is not installed. $install_python_message" -ForegroundColor Red
-    exit 1
+    Show-ErrorAndExit "Python is not installed. $install_python_message" -ForegroundColor Red
 }
 if ([version]$version -lt [version]"3.10" -or [version]$version -ge [version]"3.13") {
-    Write-Host "Python version $version found. $install_python_message" -ForegroundColor Red
-    exit 1
+    Show-ErrorAndExit "Python version $version found. $install_python_message" -ForegroundColor Red
 }
 
 # 2. Check whether CUDA is installed
@@ -40,9 +48,32 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
     }
 }
 
-# 2. Set default install location to Documents folder
-$envUser = $env:USERNAME
-$defaultInstallDir = "$env:USERPROFILE\Documents\PhotoMap"
+# 3. Check for Microsoft Visual C++ Redistributable DLLs
+$requiredDlls = @("msvcp140.dll", "vcruntime140.dll")
+$system32 = "$env:windir\System32"
+$missingDlls = $requiredDlls | Where-Object { -not (Test-Path (Join-Path $system32 $_)) }
+
+if ($missingDlls.Count -gt 0) {
+    Write-Host "Missing Microsoft Visual C++ Runtime DLLs: $($missingDlls -join ', ')" -ForegroundColor Red
+    Write-Host "You need to install the Microsoft Visual C++ Redistributable (x64) for Python and CLIP to work." -ForegroundColor Yellow
+    Write-Host "Download and install from:" -ForegroundColor Cyan
+    Write-Host "https://aka.ms/vs/17/release/vc_redist.x64.exe" -ForegroundColor Cyan
+
+    # Optionally, download and start the installer automatically:
+    $installerPath = "$env:TEMP\vc_redist.x64.exe"
+    Write-Host "Downloading Visual C++ Redistributable installer..."
+    Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $installerPath
+    Write-Host "Launching installer. Please complete the installation and then re-run this script."
+    Start-Process $installerPath
+    Write-Host "Press any key to exit..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
+
+# 4. Set default install location to Documents folder
+$documentsPath = [Environment]::GetFolderPath('MyDocuments')
+$defaultInstallDir = Join-Path $documentsPath "PhotoMap"
 
 $installDir = Read-Host "Enter install location for PhotoMap virtual environment [$defaultInstallDir]"
 
@@ -58,15 +89,16 @@ if (-not (Test-Path $installDir)) {
 
 Set-Location $installDir
 
-# 3. Create virtual environment in the installdir
+# 5. Create virtual environment in the installdir
 Write-Host "Creating virtual environment in $installDir ..."
 python -m venv . --prompt "photomap"
 
-# 4. Activate virtual environment and install PhotoMap
+# 6. Activate virtual environment and install PhotoMap
 $venvActivate = ".\Scripts\Activate.ps1"
 if (-not (Test-Path $venvActivate)) {
     Write-Host "Failed to create virtual environment. Exiting." -ForegroundColor Red
-    exit 1
+    Write-Host "Press any key to continue..."
+    $x = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
 Write-Host "Activating virtual environment and installing PhotoMap..."
@@ -100,22 +132,20 @@ if ($cuda_installed) {
 # The repo root is two levels up from the installation script
 pip install "$PSScriptRoot\..\.."
 
-# 5. Print out instructions for running start_photomap
-# $slideshowPath = Resolve-Path .\Scripts\start_slideshow.exe
-# Write-Host "`nPhotoMap installed successfully in $installDir!" -ForegroundColor Green
-# Write-Host "To start the slideshow, run:" -ForegroundColor Yellow
-# Write-Host "`n    $slideshowPath`n" -ForegroundColor Cyan
-# Write-Host "Or, if your shell is not activated, run:" -ForegroundColor Yellow
-# Write-Host "`n    $installDir\Scripts\start_photomap.exe`n" -ForegroundColor Cyan
+# 7. install the clip model
+Write-Host "Installing the CLIP model..."
+python -c "import clip; clip.load('ViT-B/32')"
 
-# 6. Create a batch script to start the slideshow
-$batPath = Join-Path $env:USERPROFILE "Desktop\start_photomap.bat"
+# 8. Create a batch script to start the server
+$desktopPath = [Environment]::GetFolderPath('Desktop')
+$batPath = Join-Path $desktopPath "start_photomap.bat"
 $exePath = "$installDir\Scripts\start_photomap.exe"
 
 $batContent = @"
 @echo off
 REM This script starts the PhotoMap server
 "$exePath"
+pause
 "@
 Set-Content -Path $batPath -Value $batContent -Encoding ASCII
 
