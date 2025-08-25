@@ -4,9 +4,63 @@ function Show-ErrorAndExit {
     param (
         [string]$Message
     )
-    Write-Host "hate!!!"
     Write-Host "[ERROR] $Message" -ForegroundColor Red
     Write-Host "Press any key to continue..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
+function Install-Python {
+    param (
+        [string]$ReasonMessage = "Python is not installed."
+    )
+    $pythonInstallerUrl = "https://www.python.org/ftp/python/3.12.3/python-3.12.3-amd64.exe"
+    $pythonInstallerPath = "$env:TEMP\python-installer.exe"
+
+    $response = Read-Host "$ReasonMessage Would you like to download and install Python now? (Y/N)"
+    if ($response -notin @('Y', 'y')) {
+        Write-Host "Python installation cancelled by user."
+        Write-Host "Press any key to exit..."
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        exit 1
+    }
+
+    Write-Host "Downloading Python installer from $pythonInstallerUrl ..."
+    Invoke-WebRequest -Uri $pythonInstallerUrl -OutFile $pythonInstallerPath
+
+    Write-Host "Launching Python installer. Please complete the installation and then re-run this script."
+    Write-Host "Be sure to check 'Add Python to PATH' during installation."
+    Start-Process $pythonInstallerPath
+
+    Write-Host "Installation complete. Please close this terminal window and relaunch the PhotoMapAI installer." -ForegroundColor Yellow
+    Write-Host "Press any key to exit..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
+function Install-VisualCPlusPlus {
+    param (
+        [string]$ReasonMessage = "Missing Microsoft Visual C++ Runtime DLLs."
+    )
+    $vcUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    $vcInstallerPath = "$env:TEMP\vc_redist.x64.exe"
+
+    $response = Read-Host "$ReasonMessage Would you like to download and install the Microsoft Visual C++ Redistributable now? (Y/N)"
+    if ($response -notin @('Y', 'y')) {
+        Write-Host "Visual C++ installation cancelled by user."
+        Write-Host "Press any key to exit..."
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        exit 1
+    }
+
+    Write-Host "Downloading Visual C++ Redistributable installer from $vcUrl ..."
+    Invoke-WebRequest -Uri $vcUrl -OutFile $vcInstallerPath
+
+    Write-Host "Launching installer. Please complete the installation and then re-run this script."
+    Start-Process $vcInstallerPath
+
+    Write-Host "Installation complete. Please close this terminal window and relaunch the PhotoMapAI installer." -ForegroundColor Yellow
+    Write-Host "Press any key to exit..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1
 }
@@ -15,15 +69,15 @@ function Show-ErrorAndExit {
 $install_python_message = "Please install Python 3.10, 3.11 or 3.12 from https://www.python.org/downloads/windows"
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
-    Show-ErrorAndExit "Python is not installed. $install_python_message" -ForegroundColor Red
+    Install-Python "Python is not installed."
 }
 
 $version = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
 if (-not $version) {
-    Show-ErrorAndExit "Python is not installed. $install_python_message" -ForegroundColor Red
+    Install-Python "Could not determine Python version."
 }
 if ([version]$version -lt [version]"3.10" -or [version]$version -ge [version]"3.13") {
-    Show-ErrorAndExit "Python version $version found. $install_python_message" -ForegroundColor Red
+    Install-Python "An incompatible Python version is installed."
 }
 
 # 2. Check whether CUDA is installed
@@ -54,20 +108,8 @@ $system32 = "$env:windir\System32"
 $missingDlls = $requiredDlls | Where-Object { -not (Test-Path (Join-Path $system32 $_)) }
 
 if ($missingDlls.Count -gt 0) {
-    Write-Host "Missing Microsoft Visual C++ Runtime DLLs: $($missingDlls -join ', ')" -ForegroundColor Red
-    Write-Host "You need to install the Microsoft Visual C++ Redistributable (x64) for Python and CLIP to work." -ForegroundColor Yellow
-    Write-Host "Download and install from:" -ForegroundColor Cyan
-    Write-Host "https://aka.ms/vs/17/release/vc_redist.x64.exe" -ForegroundColor Cyan
-
-    # Optionally, download and start the installer automatically:
-    $installerPath = "$env:TEMP\vc_redist.x64.exe"
-    Write-Host "Downloading Visual C++ Redistributable installer..."
-    Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $installerPath
-    Write-Host "Launching installer. Please complete the installation and then re-run this script."
-    Start-Process $installerPath
-    Write-Host "Press any key to exit..."
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    exit 1
+    $dllList = $missingDlls -join ', '
+    Install-VisualCPlusPlus "Missing Microsoft Visual C++ Runtime DLLs: $dllList"
 }
 
 
