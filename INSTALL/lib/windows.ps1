@@ -1,21 +1,29 @@
 #!/usr/bin/pwsh
 
+function Show-ErrorAndExit {
+    param (
+        [string]$Message
+    )
+    Write-Host "hate!!!"
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
+    Write-Host "Press any key to continue..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
 # 1. Check Python version 
 $install_python_message = "Please install Python 3.10, 3.11 or 3.12 from https://www.python.org/downloads/windows"
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
-    Write-Host "Python is not installed. $install_python_message" -ForegroundColor Red
-    exit 1
+    Show-ErrorAndExit "Python is not installed. $install_python_message" -ForegroundColor Red
 }
 
 $version = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
 if (-not $version) {
-    Write-Host "Python is not installed. $install_python_message" -ForegroundColor Red
-    exit 1
+    Show-ErrorAndExit "Python is not installed. $install_python_message" -ForegroundColor Red
 }
 if ([version]$version -lt [version]"3.10" -or [version]$version -ge [version]"3.13") {
-    Write-Host "Python version $version found. $install_python_message" -ForegroundColor Red
-    exit 1
+    Show-ErrorAndExit "Python version $version found. $install_python_message" -ForegroundColor Red
 }
 
 # 2. Check whether CUDA is installed
@@ -41,8 +49,8 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
 }
 
 # 2. Set default install location to Documents folder
-$envUser = $env:USERNAME
-$defaultInstallDir = "$env:USERPROFILE\Documents\PhotoMap"
+$documentsPath = [Environment]::GetFolderPath('MyDocuments')
+$defaultInstallDir = Join-Path $documentsPath "PhotoMap"
 
 $installDir = Read-Host "Enter install location for PhotoMap virtual environment [$defaultInstallDir]"
 
@@ -66,7 +74,8 @@ python -m venv . --prompt "photomap"
 $venvActivate = ".\Scripts\Activate.ps1"
 if (-not (Test-Path $venvActivate)) {
     Write-Host "Failed to create virtual environment. Exiting." -ForegroundColor Red
-    exit 1
+    Write-Host "Press any key to continue..."
+    $x = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
 Write-Host "Activating virtual environment and installing PhotoMap..."
