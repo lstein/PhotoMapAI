@@ -253,6 +253,7 @@ export class AlbumManager {
   // Main show/hide methods
   async show() {
     await this.loadAlbums();
+    await this.checkForOngoingIndexing(); // <-- Move this after loadAlbums
     this.overlay.classList.add("visible");
 
     // Ensure add album form is hidden when opening normally
@@ -260,9 +261,6 @@ export class AlbumManager {
       this.addAlbumSection.style.display = "none";
       this.addAlbumSection.classList.remove("slide-down", "slide-up");
     }
-
-    // Check for ongoing indexing operations
-    await this.checkForOngoingIndexing();
   }
 
   hide() {
@@ -761,10 +759,34 @@ export class AlbumManager {
 
   // Indexing functionality
   async startIndexing(albumKey, cardElement, isCorrupted = false) {
-    // Prevent duplicate indexing requests
+    // Prevent duplicate indexing requests (local guard)
     if (this.progressPollers.has(albumKey)) {
       console.log(`Indexing already in progress for album: ${albumKey}`);
       return;
+    }
+
+    // Backend guard: check if indexing is already running
+    try {
+      const response = await fetch(`index_progress/${albumKey}`);
+      if (response.ok) {
+        const progress = await response.json();
+        if (
+          progress.status === "indexing" ||
+          progress.status === "scanning" ||
+          progress.status === "umapping"
+        ) {
+          console.log(
+            `Backend reports indexing already in progress for album: ${albumKey}`
+          );
+          this.showProgressUIWithoutScroll(cardElement, progress);
+          this.startProgressPolling(albumKey, cardElement);
+          return;
+        }
+      }
+    } catch (error) {
+      console.debug(
+        `Could not check backend indexing status for album: ${albumKey}`
+      );
     }
 
     if (isCorrupted) {
