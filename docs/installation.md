@@ -40,9 +40,9 @@ Navigate to the unpacked `PhotoMapAI` folder, find the `INSTALL` folder, and dou
 
 ### 3. [Optional] Install Microsoft C++ Runtime DLLs
 
-You may get a message on step 4 that you need to install the Microsoft
-C++ Runtime DLLs.  If you get this message, go to the provided link
-and install the libraries.
+Several of PhotoMapAI's dependencies require Microsoft
+C++ Runtime DLLs. If these are not present, the installer will
+attempt to download and install them on your behalf. You will need to relaunch the install script after this is done.
 
 ### 4. Start the server
 
