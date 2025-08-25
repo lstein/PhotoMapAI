@@ -10,13 +10,12 @@ authors = [
     { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
 ]
 readme = { content-type = "text/markdown", file = "README.md" }
-license = { file = "LICENSE" }
+license = "MIT"
 requires-python = ">=3.10, <3.13"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

@@ -109,7 +109,8 @@ pip install "$PSScriptRoot\..\.."
 # Write-Host "`n    $installDir\Scripts\start_photomap.exe`n" -ForegroundColor Cyan
 
 # 6. Create a batch script to start the slideshow
-$batPath = Join-Path $env:USERPROFILE "Desktop\start_photomap.bat"
+$desktopPath = [Environment]::GetFolderPath('Desktop')
+$batPath = Join-Path $desktopPath "start_photomap.bat"
 $exePath = "$installDir\Scripts\start_photomap.exe"
 
 $batContent = @"

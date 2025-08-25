@@ -1,4 +1,5 @@
 # slideshow_server.py
+print("Loading, please wait...")
 import logging
 import os
 from pathlib import Path
