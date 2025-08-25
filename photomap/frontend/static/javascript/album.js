@@ -739,6 +739,8 @@ export class AlbumManager {
       index: indexPath,
     };
 
+    console.log("Setting index path to:", indexPath);
+
     try {
       const response = await fetch("update_album/", {
         method: "POST",
