@@ -109,15 +109,11 @@ if ($cuda_installed) {
 # The repo root is two levels up from the installation script
 pip install "$PSScriptRoot\..\.."
 
-# 5. Print out instructions for running start_photomap
-# $slideshowPath = Resolve-Path .\Scripts\start_slideshow.exe
-# Write-Host "`nPhotoMap installed successfully in $installDir!" -ForegroundColor Green
-# Write-Host "To start the slideshow, run:" -ForegroundColor Yellow
-# Write-Host "`n    $slideshowPath`n" -ForegroundColor Cyan
-# Write-Host "Or, if your shell is not activated, run:" -ForegroundColor Yellow
-# Write-Host "`n    $installDir\Scripts\start_photomap.exe`n" -ForegroundColor Cyan
+# 5. install the clip model
+Write-Host "Installing the CLIP model..."
+python -c "import clip; clip.load('ViT-B/32')"
 
-# 6. Create a batch script to start the slideshow
+# 6. Create a batch script to start the server
 $desktopPath = [Environment]::GetFolderPath('Desktop')
 $batPath = Join-Path $desktopPath "start_photomap.bat"
 $exePath = "$installDir\Scripts\start_photomap.exe"

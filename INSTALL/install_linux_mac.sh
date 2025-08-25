@@ -186,8 +186,12 @@ main() {
     # Step 5: Install PhotoMap
     print_info "Installing PhotoMap..."
     pip install -e .
+
+    # Step 6: Install the CLIP model
+    print_info "Downloading CLIP model..."
+    python -c "import clip; clip.load('ViT-B/32')"
     
-    # Step 6: Create desktop launcher
+    # Step 7: Create desktop launcher
     print_info "Creating desktop launcher..."
     create_desktop_launcher "$install_path" "$os_type"
     
