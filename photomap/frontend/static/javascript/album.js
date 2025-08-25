@@ -317,7 +317,7 @@ export class AlbumManager {
       text-align: center;
     `;
     setupMessage.innerHTML = `
-      <h3 style="margin: 0 0 0.5em 0;">Welcome to PhotoMap!</h3>
+      <h3 style="margin: 0 0 0.5em 0;">Welcome to PhotoMapAI!</h3>
       <p style="margin: 0;">
         To get started, please add your first image album below. 
         You'll need to specify the name and directory paths containing your images.
@@ -367,6 +367,12 @@ export class AlbumManager {
   }
 
   showCompletionMessage() {
+    // Remove any existing completion message before adding a new one
+    const existingCompletion = this.overlay.querySelector(".completion-message");
+    if (existingCompletion && existingCompletion.parentNode) {
+      existingCompletion.remove();
+    }
+
     const completionMessage = this.createCompletionMessage();
     if (this.elements.albumManagementContent) {
       this.elements.albumManagementContent.insertBefore(
