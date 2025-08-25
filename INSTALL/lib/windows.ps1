@@ -48,7 +48,30 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
     }
 }
 
-# 2. Set default install location to Documents folder
+# 3. Check for Microsoft Visual C++ Redistributable DLLs
+$requiredDlls = @("msvcp140.dll", "vcruntime140.dll")
+$system32 = "$env:windir\System32"
+$missingDlls = $requiredDlls | Where-Object { -not (Test-Path (Join-Path $system32 $_)) }
+
+if ($missingDlls.Count -gt 0) {
+    Write-Host "Missing Microsoft Visual C++ Runtime DLLs: $($missingDlls -join ', ')" -ForegroundColor Red
+    Write-Host "You need to install the Microsoft Visual C++ Redistributable (x64) for Python and CLIP to work." -ForegroundColor Yellow
+    Write-Host "Download and install from:" -ForegroundColor Cyan
+    Write-Host "https://aka.ms/vs/17/release/vc_redist.x64.exe" -ForegroundColor Cyan
+
+    # Optionally, download and start the installer automatically:
+    $installerPath = "$env:TEMP\vc_redist.x64.exe"
+    Write-Host "Downloading Visual C++ Redistributable installer..."
+    Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $installerPath
+    Write-Host "Launching installer. Please complete the installation and then re-run this script."
+    Start-Process $installerPath
+    Write-Host "Press any key to exit..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
+
+# 4. Set default install location to Documents folder
 $documentsPath = [Environment]::GetFolderPath('MyDocuments')
 $defaultInstallDir = Join-Path $documentsPath "PhotoMap"
 
@@ -66,11 +89,11 @@ if (-not (Test-Path $installDir)) {
 
 Set-Location $installDir
 
-# 3. Create virtual environment in the installdir
+# 5. Create virtual environment in the installdir
 Write-Host "Creating virtual environment in $installDir ..."
 python -m venv . --prompt "photomap"
 
-# 4. Activate virtual environment and install PhotoMap
+# 6. Activate virtual environment and install PhotoMap
 $venvActivate = ".\Scripts\Activate.ps1"
 if (-not (Test-Path $venvActivate)) {
     Write-Host "Failed to create virtual environment. Exiting." -ForegroundColor Red
@@ -109,33 +132,11 @@ if ($cuda_installed) {
 # The repo root is two levels up from the installation script
 pip install "$PSScriptRoot\..\.."
 
-# 5. Check for Microsoft Visual C++ Redistributable DLLs
-$requiredDlls = @("msvcp140.dll", "vcruntime140.dll")
-$system32 = "$env:windir\System32"
-$missingDlls = $requiredDlls | Where-Object { -not (Test-Path (Join-Path $system32 $_)) }
-
-if ($missingDlls.Count -gt 0) {
-    Write-Host "Missing Microsoft Visual C++ Runtime DLLs: $($missingDlls -join ', ')" -ForegroundColor Red
-    Write-Host "You need to install the Microsoft Visual C++ Redistributable (x64) for Python and CLIP to work." -ForegroundColor Yellow
-    Write-Host "Download and install from:" -ForegroundColor Cyan
-    Write-Host "https://aka.ms/vs/17/release/vc_redist.x64.exe" -ForegroundColor Cyan
-
-    # Optionally, download and start the installer automatically:
-    $installerPath = "$env:TEMP\vc_redist.x64.exe"
-    Write-Host "Downloading Visual C++ Redistributable installer..."
-    Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $installerPath
-    Write-Host "Launching installer. Please complete the installation and then re-run this script."
-    Start-Process $installerPath
-    Write-Host "Press any key to exit..."
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    exit 1
-}
-
-# 6. install the clip model
+# 7. install the clip model
 Write-Host "Installing the CLIP model..."
 python -c "import clip; clip.load('ViT-B/32')"
 
-# 7. Create a batch script to start the server
+# 8. Create a batch script to start the server
 $desktopPath = [Environment]::GetFolderPath('Desktop')
 $batPath = Join-Path $desktopPath "start_photomap.bat"
 $exePath = "$installDir\Scripts\start_photomap.exe"
