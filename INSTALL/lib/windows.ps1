@@ -126,6 +126,7 @@ $batContent = @"
 @echo off
 REM This script starts the PhotoMap server
 "$exePath"
+pause
 "@
 Set-Content -Path $batPath -Value $batContent -Encoding ASCII
 
