@@ -317,7 +317,7 @@ export class AlbumManager {
       text-align: center;
     `;
     setupMessage.innerHTML = `
-      <h3 style="margin: 0 0 0.5em 0;">Welcome to PhotoMap!</h3>
+      <h3 style="margin: 0 0 0.5em 0;">Welcome to PhotoMapAI!</h3>
       <p style="margin: 0;">
         To get started, please add your first image album below. 
         You'll need to specify the name and directory paths containing your images.
@@ -367,6 +367,12 @@ export class AlbumManager {
   }
 
   showCompletionMessage() {
+    // Remove any existing completion message before adding a new one
+    const existingCompletion = this.overlay.querySelector(".completion-message");
+    if (existingCompletion && existingCompletion.parentNode) {
+      existingCompletion.remove();
+    }
+
     const completionMessage = this.createCompletionMessage();
     if (this.elements.albumManagementContent) {
       this.elements.albumManagementContent.insertBefore(
@@ -548,11 +554,14 @@ export class AlbumManager {
       .map((path) => path.trim())
       .filter((path) => path.length > 0);
 
+    // Always set index path based on first path
+    const indexPath = paths.length > 0 ? `${paths[0]}/photomap_index/embeddings.npz` : "";
+
     const newAlbum = {
       key: formData.key,
       name: formData.name,
       image_paths: paths,
-      index: `${paths[0]}/photomap_index/embeddings.npz`,
+      index: indexPath,
       umap_eps: 0.1,
       description: formData.description,
     };
@@ -713,17 +722,24 @@ export class AlbumManager {
   async saveAlbumChanges(cardElement, album) {
     const editForm = cardElement.querySelector(".edit-form");
 
+    const updatedPaths = editForm
+      .querySelector(".edit-album-paths")
+      .value.split("\n")
+      .map((path) => path.trim())
+      .filter((path) => path.length > 0);
+
+    // Always set index path based on first path
+    const indexPath = updatedPaths.length > 0 ? `${updatedPaths[0]}/photomap_index/embeddings.npz` : "";
+
     const updatedAlbum = {
       key: album.key,
       name: editForm.querySelector(".edit-album-name").value,
       description: editForm.querySelector(".edit-album-description").value,
-      image_paths: editForm
-        .querySelector(".edit-album-paths")
-        .value.split("\n")
-        .map((path) => path.trim())
-        .filter((path) => path.length > 0),
-      index: album.index,
+      image_paths: updatedPaths,
+      index: indexPath,
     };
+
+    console.log("Setting index path to:", indexPath);
 
     try {
       const response = await fetch("update_album/", {
