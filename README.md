@@ -66,12 +66,18 @@ Choose a convenient location in your home folder and unzip the file to create a 
 
 Navigate to the unpacked `PhotoMap` folder, find the `INSTALL` folder, and double-click the `install_windows` script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named `start_photomap`.
 
-#### 3. Start the server
+#### 3. [Optional] Install Microsoft C++ Runtime DLLs
+
+Several of PhotoMapAI's dependencies require Microsoft
+C++ Runtime DLLs. If these are not present, the installer will
+attempt to download and install them on your behalf. You will need to relaunch the install script after this is done.
+
+#### 4. Start the server
 
 Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server. 
 
 
-#### 4. **Open your browser:**  
+#### 5. **Open your browser:**  
    Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
 
 ---
