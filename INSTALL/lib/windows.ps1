@@ -109,11 +109,33 @@ if ($cuda_installed) {
 # The repo root is two levels up from the installation script
 pip install "$PSScriptRoot\..\.."
 
-# 5. install the clip model
+# 5. Check for Microsoft Visual C++ Redistributable DLLs
+$requiredDlls = @("msvcp140.dll", "vcruntime140.dll")
+$system32 = "$env:windir\System32"
+$missingDlls = $requiredDlls | Where-Object { -not (Test-Path (Join-Path $system32 $_)) }
+
+if ($missingDlls.Count -gt 0) {
+    Write-Host "Missing Microsoft Visual C++ Runtime DLLs: $($missingDlls -join ', ')" -ForegroundColor Red
+    Write-Host "You need to install the Microsoft Visual C++ Redistributable (x64) for Python and CLIP to work." -ForegroundColor Yellow
+    Write-Host "Download and install from:" -ForegroundColor Cyan
+    Write-Host "https://aka.ms/vs/17/release/vc_redist.x64.exe" -ForegroundColor Cyan
+
+    # Optionally, download and start the installer automatically:
+    $installerPath = "$env:TEMP\vc_redist.x64.exe"
+    Write-Host "Downloading Visual C++ Redistributable installer..."
+    Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $installerPath
+    Write-Host "Launching installer. Please complete the installation and then re-run this script."
+    Start-Process $installerPath
+    Write-Host "Press any key to exit..."
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
+# 6. install the clip model
 Write-Host "Installing the CLIP model..."
 python -c "import clip; clip.load('ViT-B/32')"
 
-# 6. Create a batch script to start the server
+# 7. Create a batch script to start the server
 $desktopPath = [Environment]::GetFolderPath('Desktop')
 $batPath = Join-Path $desktopPath "start_photomap.bat"
 $exePath = "$installDir\Scripts\start_photomap.exe"
