@@ -39,7 +39,7 @@ You can start an image similarity search by uploading a local image file, draggi
 
 ## Support for Image Metadata
 
-When viewing a photo in full-screen mode, you can pop out a little drawer to show its metadata, including the GPS location (if available), and the phone settings:
+When viewing a photo in full-screen mode, you can pop out a little drawer to show its metadata, including the GPS location (if available), and the camera/phone settings:
 
 <img src="img/photomap_metadata.png" alt="Image Metadata" class="img-hover-zoom">
 
