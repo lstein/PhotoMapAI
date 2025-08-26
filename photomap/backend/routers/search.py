@@ -174,7 +174,7 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
         raise HTTPException(
             status_code=404, detail=f"Image not found for index {index}: {e}"
         )
-
+    
     album_config = validate_album_exists(album_key)
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
@@ -205,12 +205,14 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}")
 
+    logger.info(f"Created thumbnail at {thumb_path}")
     return FileResponse(thumb_path)
 
 
 # File Management Routes
-# Do NOT provide a response_model here, as it may be an image or a converted stream
-# and FastAPI refuses to work with Union types in response_model.
+# Do NOT provide a response_model here, as it may be either an image
+# or a converted stream and FastAPI refuses to work with Union types
+# in response_model.
 @search_router.get("/images/{album_key}/{path:path}", tags=["Search"])
 async def serve_image(album_key: str, path: str):
     """Serve images from different albums dynamically."""
@@ -219,6 +221,9 @@ async def serve_image(album_key: str, path: str):
         raise HTTPException(status_code=404, detail="Image not found")
 
     album_config = validate_album_exists(album_key)
+
+    logger.info(f"Validating {image_path} against {album_config.image_paths}")
+    logger.info(f"Resolved versions: {Path(image_path).resolve()} against {[Path(x).resolve() for x in album_config.image_paths]}")
 
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")

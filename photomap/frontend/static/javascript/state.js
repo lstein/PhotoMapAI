@@ -7,7 +7,7 @@ export const state = {
   swiper: null, // Will be initialized in swiper.js
   currentDelay: 5, // Delay in seconds for slide transitions
   showControlPanelText: true, // Whether to show text in control panels
-  mode: "random", // next slide selection when no search is active ("random", "chronological", "search")
+  mode: "chronological", // next slide selection when no search is active ("random", "chronological")
   highWaterMark: 20, // Maximum number of slides to load at once
   searchResults: [], // List of file paths matching the current search query
   album: null, // Default album to use

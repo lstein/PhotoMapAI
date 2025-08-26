@@ -26,19 +26,18 @@ class Album(BaseModel):
         ..., min_length=1, description="List of paths containing images"
     )
     index: str = Field(..., description="Path to the embeddings index file")
-    umap_eps: float = Field(default=0.1, description="UMAP epsilon parameter")
+    umap_eps: float = Field(default=0.2, description="UMAP epsilon parameter")
     description: str = Field(default="", description="Album description")
 
     @field_validator("image_paths")
     @classmethod
-    def validate_image_paths(cls, v: List[str]) -> List[str]:
-        """Validate that image paths exist."""
-        for path in v:
-            path_obj = Path(path)
-            if not path_obj.exists():
-                # Just warn, don't fail - paths might be mounted later
+    def expand_and_validate_image_paths(cls, v: List[str]) -> List[str]:
+        """Expand ~ and warn if image paths do not exist."""
+        expanded = [str(Path(path).expanduser()) for path in v]
+        for path in expanded:
+            if not Path(path).exists():
                 print(f"Warning: Image path does not exist: {path}")
-        return v
+        return expanded
 
     @field_validator("index")
     @classmethod
