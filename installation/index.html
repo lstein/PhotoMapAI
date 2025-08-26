@@ -386,18 +386,27 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-start-the-server" class="md-nav__link">
+  <a href="#3-optional-install-microsoft-c-runtime-dlls" class="md-nav__link">
     <span class="md-ellipsis">
-      3. Start the server
+      3. [Optional] Install Microsoft C++ Runtime DLLs
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#4-exiting-and-relaunching" class="md-nav__link">
+  <a href="#4-start-the-server" class="md-nav__link">
     <span class="md-ellipsis">
-      4. Exiting and relaunching
+      4. Start the server
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-exiting-and-relaunching" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Exiting and relaunching
     </span>
   </a>
   
@@ -437,7 +446,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-start-the-server_1" class="md-nav__link">
+  <a href="#3-start-the-server" class="md-nav__link">
     <span class="md-ellipsis">
       3. Start the server
     </span>
@@ -446,7 +455,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#4-exiting-and-relaunching_1" class="md-nav__link">
+  <a href="#4-exiting-and-relaunching" class="md-nav__link">
     <span class="md-ellipsis">
       4. Exiting and relaunching
     </span>
@@ -506,7 +515,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#5-exiting-and-relaunching" class="md-nav__link">
+  <a href="#5-exiting-and-relaunching_1" class="md-nav__link">
     <span class="md-ellipsis">
       5. Exiting and relaunching
     </span>
@@ -973,18 +982,27 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-start-the-server" class="md-nav__link">
+  <a href="#3-optional-install-microsoft-c-runtime-dlls" class="md-nav__link">
     <span class="md-ellipsis">
-      3. Start the server
+      3. [Optional] Install Microsoft C++ Runtime DLLs
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#4-exiting-and-relaunching" class="md-nav__link">
+  <a href="#4-start-the-server" class="md-nav__link">
     <span class="md-ellipsis">
-      4. Exiting and relaunching
+      4. Start the server
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-exiting-and-relaunching" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Exiting and relaunching
     </span>
   </a>
   
@@ -1024,7 +1042,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-start-the-server_1" class="md-nav__link">
+  <a href="#3-start-the-server" class="md-nav__link">
     <span class="md-ellipsis">
       3. Start the server
     </span>
@@ -1033,7 +1051,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#4-exiting-and-relaunching_1" class="md-nav__link">
+  <a href="#4-exiting-and-relaunching" class="md-nav__link">
     <span class="md-ellipsis">
       4. Exiting and relaunching
     </span>
@@ -1093,7 +1111,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#5-exiting-and-relaunching" class="md-nav__link">
+  <a href="#5-exiting-and-relaunching_1" class="md-nav__link">
     <span class="md-ellipsis">
       5. Exiting and relaunching
     </span>
@@ -1151,9 +1169,13 @@
 <p>Choose a convenient location in your home folder and unzip the file to create a new folder named <code>PhotoMapAI</code>.</p>
 <h3 id="2-run-the-installer-script">2. Run the installer script</h3>
 <p>Navigate to the unpacked <code>PhotoMapAI</code> folder, find the <code>INSTALL</code> folder, and double-click the <code>install_windows</code> script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named <code>start_photomap</code>.</p>
-<h3 id="3-start-the-server">3. Start the server</h3>
+<h3 id="3-optional-install-microsoft-c-runtime-dlls">3. [Optional] Install Microsoft C++ Runtime DLLs</h3>
+<p>Several of PhotoMapAI's dependencies require Microsoft
+C++ Runtime DLLs. If these are not present, the installer will
+attempt to download and install them on your behalf. You will need to relaunch the install script after this is done.</p>
+<h3 id="4-start-the-server">4. Start the server</h3>
 <p>Double-click <code>start_photomap.bat</code> to launch the server. You should see a few startup messages, followed by the URL for the running server. Cut and paste this into your browser, and follow the prompts to configure and index your first album. See <a href="../user-guide/albums/">Albums</a> for a walkthrough.</p>
-<h3 id="4-exiting-and-relaunching">4. Exiting and relaunching</h3>
+<h3 id="5-exiting-and-relaunching">5. Exiting and relaunching</h3>
 <p>To exit the server, press ^C (control-C). </p>
 <p>To relaunch the server, run the <code>start_photomap</code> .bat script again. For your convenience, you may move this script anywhere you like. Don't move the PhotoMapAI folder, or the script will not be able to find it again. If this happens, simply re-run the installer script to generate an updated launcher.</p>
 <hr />
@@ -1163,9 +1185,9 @@
 <p>Choose a convenient location in your home directory and unzip the file to create a new folder named <code>PhotoMapAI</code>.</p>
 <h3 id="2-run-the-installer-script_1">2. Run the installer script</h3>
 <p>Navigate to the <code>PhotoMapAI</code> folder and launch the <code>install_linux_mac</code> shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named <code>start_photomap</code> on your desktop.</p>
-<h3 id="3-start-the-server_1">3. Start the server</h3>
+<h3 id="3-start-the-server">3. Start the server</h3>
 <p>Double click <code>start_photomap</code> to launch the server. You will see a few startup messages followed by the URL for the running server. Cut and paste this into your browser and follow the prompts to configure and index your first album. See <a href="../user-guide/albums/">Albums</a> for a walkthrough.</p>
-<h3 id="4-exiting-and-relaunching_1">4. Exiting and relaunching</h3>
+<h3 id="4-exiting-and-relaunching">4. Exiting and relaunching</h3>
 <p>To exit the server, press ^C (control-C). </p>
 <p>To relaunch the server, run the <code>start_photomap</code> launcher again. For your convenience, you may move this script anywhere you like. If you move the PhotoMapAI folder itself, you will need to re-run the installer script.</p>
 <hr />
@@ -1189,7 +1211,7 @@ pip -mvenv install --prompt photomap
 <pre><code class="language-bash">start_photomap
 </code></pre>
 <p>You should see a few startup messages, followed by the URL for the running server. Cut and paste this into your browser, and follow the prompts to configure and index your first album. See <a href="../user-guide/albums/">Albums</a> for a walkthrough.</p>
-<h3 id="5-exiting-and-relaunching">5. Exiting and relaunching</h3>
+<h3 id="5-exiting-and-relaunching_1">5. Exiting and relaunching</h3>
 <p>To exit the server, press ^C (control-C). </p>
 <p>To launch the server again, run its executable.</p>
 <p>On Windows:</p>
