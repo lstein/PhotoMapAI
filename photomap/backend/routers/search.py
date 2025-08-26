@@ -176,8 +176,6 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
         )
     
     album_config = validate_album_exists(album_key)
-    logger.info(f"Validating {image_path} against {album_config.image_paths}")
-    logger.info(f"Resolved versions: {Path(image_path).resolve()} against {[Path(x).resolve() for x in album_config.image_paths]}")
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
 

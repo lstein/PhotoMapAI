@@ -215,13 +215,8 @@ def validate_image_access(album_config, image_path: Path) -> bool:
         album_config: Album configuration object
         image_path: Path to the image file
     Returns:
-        True if access is allowed, False otherwise"""
-    try:
-        resolved_path = image_path.resolve()
-        for allowed_path in album_config.image_paths:
-            album_root = Path(allowed_path).resolve()
-            if str(resolved_path).startswith(str(album_root)):
-                return True
-        return False
-    except Exception:
-        return False
+        True if access is allowed, False otherwise
+    """
+    # The resolve() call shouldn't really be necessary here, but it fixes problems arising
+    # on mapped Windows network drive paths.
+    return any([image_path.is_relative_to(Path(p).resolve()) for p in album_config.image_paths])
