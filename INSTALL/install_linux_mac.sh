@@ -81,7 +81,7 @@ Version=1.0
 Type=Application
 Name=PhotoMapAI
 Comment=AI-based image clustering and exploration tool
-Exec=Exec=sh -c '$install_path/bin/start_photomap; echo "Press Enter to exit..."; read'
+Exec=sh -c '$install_path/bin/start_photomap; echo "Press Enter to exit..."; read'
 Icon=image-x-generic
 Terminal=true
 Categories=Graphics;Photography;
@@ -126,7 +126,7 @@ EOF
     # Create launcher script that opens Terminal
     cat > "$app_dir/Contents/MacOS/PhotoMap" << EOF
 #!/bin/bash
-osascript -e "tell application \"Terminal\" to do script \"cd '$install_path' && source bin/activate && start_photomap\""
+osascript -e "tell application \"Terminal\" to do script \"cd '$install_path' && source bin/activate && '$install_path/bin/start_photomap'\""
 EOF
     
     chmod +x "$app_dir/Contents/MacOS/PhotoMap"
