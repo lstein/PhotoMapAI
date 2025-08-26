@@ -14,7 +14,7 @@ Open a command window and type the command `nvidia-smi`:
 PS C:\Users\username> nvidia-smi
 Mon Aug 11 21:33:57 2025       
 +---------------------------------------------------------------------------------------+
-| NVIDIA-SMI 535.230.02             Driver Version: 535.230.02   CUDA Version: 12.6     |
+| NVIDIA-SMI 535.230.02             Driver Version: 535.230.02   CUDA Version: 12.9     |
 |-----------------------------------------+----------------------+----------------------+
 (more information follows)
 ```
@@ -28,5 +28,10 @@ Go to the [CUDA 12.9 Download Page](https://developer.nvidia.com/cuda-12-9-0-dow
 
 In a command shell, run the `nvidia-smi` command as in (1) and confirm that the expected version is installed.
 
-[PhotoMapAI Installation](../installation.md)
+### 4. Re-run the PhotoMapAI installer (Windows only).
+
+If you are on a Windows platform, please follow the [PhotoMapAI Installation](../installation.md) instructions to update the Torch machine learning library for CUDA support. The easiest path is to run the [installer script](../installation.md#2-run-the-installer-script) again, and provide it with the same installation path you chose for the original install. Alternatively, you may [manually install](../installation.md#manual-installation) the CUDA version of Torch.
+
+To confirm that CUDA support is enabled, look for a console message about GPU acceleration when PhotoMapAI first launches.
+
 
