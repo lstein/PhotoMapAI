@@ -205,7 +205,6 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}")
 
-    logger.info(f"Created thumbnail at {thumb_path}")
     return FileResponse(thumb_path)
 
 
