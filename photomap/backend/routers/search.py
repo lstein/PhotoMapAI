@@ -174,7 +174,7 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
         raise HTTPException(
             status_code=404, detail=f"Image not found for index {index}: {e}"
         )
-    
+
     album_config = validate_album_exists(album_key)
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
@@ -205,7 +205,6 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}")
 
-    logger.info(f"Created thumbnail at {thumb_path}")
     return FileResponse(thumb_path)
 
 
@@ -221,9 +220,6 @@ async def serve_image(album_key: str, path: str):
         raise HTTPException(status_code=404, detail="Image not found")
 
     album_config = validate_album_exists(album_key)
-
-    logger.info(f"Validating {image_path} against {album_config.image_paths}")
-    logger.info(f"Resolved versions: {Path(image_path).resolve()} against {[Path(x).resolve() for x in album_config.image_paths]}")
 
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
