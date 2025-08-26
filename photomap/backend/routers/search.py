@@ -215,7 +215,7 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
 # in response_model.
 @search_router.get("/images/{album_key}/{path:path}", tags=["Search"])
 async def serve_image(album_key: str, path: str):
-    """Serve images from different albums dynamically."""
+    """Serve images from diffe rent albums dynamically."""
     image_path = config_manager.find_image_in_album(album_key, path)
     if not image_path:
         raise HTTPException(status_code=404, detail="Image not found")
