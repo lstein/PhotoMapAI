@@ -17,11 +17,13 @@ function Install-Python {
     $pythonInstallerUrl = "https://www.python.org/ftp/python/3.12.3/python-3.12.3-amd64.exe"
     $pythonInstallerPath = "$env:TEMP\python-installer.exe"
 
-    $response = Read-Host "$ReasonMessage Would you like to download and install Python now? (Y/N)"
+    $response = Read-Host "$ReasonMessage Would you like to download and install Python now? (Y/N) [Y]"
+    if ([string]::IsNullOrWhiteSpace($response)) {
+        $response = "Y"
+    }
     if ($response -notin @('Y', 'y')) {
         Write-Host "Python installation cancelled by user."
-        Write-Host "Press any key to exit..."
-        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        Pause
         exit 1
     }
 
@@ -29,13 +31,12 @@ function Install-Python {
     Invoke-WebRequest -Uri $pythonInstallerUrl -OutFile $pythonInstallerPath
 
     Write-Host "Launching Python installer. Please complete the installation and then re-run this script."
-    Write-Host "Be sure to check 'Add Python to PATH' during installation."
+    Write-Host "Be sure to check 'Add Python to PATH' during installation. It is also recommended to disable the path length limit."
     Start-Process $pythonInstallerPath
 
-    Write-Host "Installation complete. Please close this terminal window and relaunch the PhotoMapAI installer." -ForegroundColor Yellow
-    Write-Host "Press any key to exit..."
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    exit 1
+    Write-Host "When Python installation is complete please close this terminal window and relaunch the PhotoMapAI installer." -ForegroundColor Yellow
+    Pause
+    exit 0
 }
 
 function Install-VisualCPlusPlus {
@@ -45,11 +46,13 @@ function Install-VisualCPlusPlus {
     $vcUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
     $vcInstallerPath = "$env:TEMP\vc_redist.x64.exe"
 
-    $response = Read-Host "$ReasonMessage Would you like to download and install the Microsoft Visual C++ Redistributable now? (Y/N)"
+    $response = Read-Host "$ReasonMessage Would you like to download and install the Microsoft Visual C++ Redistributable now? (Y/N) [Y]"
+    if ([string]::IsNullOrWhiteSpace($response)) {
+        $response = "Y"
+    }
     if ($response -notin @('Y', 'y')) {
         Write-Host "Visual C++ installation cancelled by user."
-        Write-Host "Press any key to exit..."
-        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        Pause
         exit 1
     }
 
@@ -59,14 +62,12 @@ function Install-VisualCPlusPlus {
     Write-Host "Launching installer. Please complete the installation and then re-run this script."
     Start-Process $vcInstallerPath
 
-    Write-Host "Installation complete. Please close this terminal window and relaunch the PhotoMapAI installer." -ForegroundColor Yellow
-    Write-Host "Press any key to exit..."
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    exit 1
+    Write-Host "When installation is complete please close this terminal window and relaunch the PhotoMapAI installer." -ForegroundColor Yellow
+    Pause
+    exit 0
 }
 
 # 1. Check Python version 
-$install_python_message = "Please install Python 3.10, 3.11 or 3.12 from https://www.python.org/downloads/windows"
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
     Install-Python "Python is not installed."
@@ -79,6 +80,8 @@ if (-not $version) {
 if ([version]$version -lt [version]"3.10" -or [version]$version -ge [version]"3.13") {
     Install-Python "An incompatible Python version is installed."
 }
+
+Write-Host "Python version $version detected." -ForegroundColor Green
 
 # 2. Check whether CUDA is installed
 $cuda_installed = $false
@@ -112,6 +115,7 @@ if ($missingDlls.Count -gt 0) {
     Install-VisualCPlusPlus "Missing Microsoft Visual C++ Runtime DLLs: $dllList"
 }
 
+Write-Host "The required Visual C++ DLLs are installed." -ForegroundColor Green
 
 # 4. Set default install location to Documents folder
 $documentsPath = [Environment]::GetFolderPath('MyDocuments')
@@ -139,8 +143,8 @@ python -m venv . --prompt "photomap"
 $venvActivate = ".\Scripts\Activate.ps1"
 if (-not (Test-Path $venvActivate)) {
     Write-Host "Failed to create virtual environment. Exiting." -ForegroundColor Red
-    Write-Host "Press any key to continue..."
-    $x = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Pause
+    exit 1
 }
 
 Write-Host "Activating virtual environment and installing PhotoMap..."
@@ -196,6 +200,4 @@ Write-Host "    $batPath" -ForegroundColor Cyan
 Write-Host "You can run this script to start the PhotoMap server." -ForegroundColor Yellow
 Write-Host "For convenience, you may copy it to a folder in your PATH." -ForegroundColor Yellow
 
-
-Write-Host "Press any key to continue..."
-$x = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+Pause

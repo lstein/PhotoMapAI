@@ -26,7 +26,7 @@ class Album(BaseModel):
         ..., min_length=1, description="List of paths containing images"
     )
     index: str = Field(..., description="Path to the embeddings index file")
-    umap_eps: float = Field(default=0.1, description="UMAP epsilon parameter")
+    umap_eps: float = Field(default=0.2, description="UMAP epsilon parameter")
     description: str = Field(default="", description="Album description")
 
     @field_validator("image_paths")
