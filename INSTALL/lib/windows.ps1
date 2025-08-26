@@ -5,8 +5,8 @@ function Show-ErrorAndExit {
         [string]$Message
     )
     Write-Host "[ERROR] $Message" -ForegroundColor Red
-    Write-Host "Press any key to continue..." -ForegroundColor Yellow
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Write-Host "Press Enter to continue..." -ForegroundColor Yellow
+    Read-Host
     exit 1
 }
 
@@ -22,8 +22,8 @@ function Install-Python {
         $response = "Y"
     }
     if ($response -notin @('Y', 'y')) {
-        Write-Host "Python installation cancelled by user."
-        Pause
+        Write-Host "Python installation cancelled by user." -ForegroundColor Red
+        Read-Host
         exit 1
     }
 
@@ -35,7 +35,7 @@ function Install-Python {
     Start-Process $pythonInstallerPath
 
     Write-Host "When Python installation is complete please close this terminal window and relaunch the PhotoMapAI installer." -ForegroundColor Yellow
-    Pause
+    Read-Host "Press Enter to continue..."
     exit 0
 }
 
@@ -51,8 +51,8 @@ function Install-VisualCPlusPlus {
         $response = "Y"
     }
     if ($response -notin @('Y', 'y')) {
-        Write-Host "Visual C++ installation cancelled by user."
-        Pause
+        Write-Host "Visual C++ installation cancelled by user." -ForegroundColor Red
+        Read-Host "Press Enter to continue..."
         exit 1
     }
 
@@ -63,7 +63,7 @@ function Install-VisualCPlusPlus {
     Start-Process $vcInstallerPath
 
     Write-Host "When installation is complete please close this terminal window and relaunch the PhotoMapAI installer." -ForegroundColor Yellow
-    Pause
+    Read-Host "Press Enter to continue..."
     exit 0
 }
 
@@ -143,31 +143,22 @@ python -m venv . --prompt "photomap"
 $venvActivate = ".\Scripts\Activate.ps1"
 if (-not (Test-Path $venvActivate)) {
     Write-Host "Failed to create virtual environment. Exiting." -ForegroundColor Red
-    Pause
+    Read-Host "Press Enter to continue..."
     exit 1
 }
 
 Write-Host "Activating virtual environment and installing PhotoMap..."
 & $venvActivate
 python -mpip install --upgrade pip
-if ($cuda_installed) {
-    Write-Host "CUDA detected. Installing PyTorch with CUDA support..." -ForegroundColor Green
-    # Choose PyTorch CUDA version based on detected CUDA version
-    $cuda_suffix = ""
-    if ([version]$cuda_version -ge [version]"12.4") {
-        $cuda_suffix = "cu124"
-    } elseif ([version]$cuda_version -ge [version]"12.1") {
-        $cuda_suffix = "cu121"
-    } elseif ([version]$cuda_version -ge [version]"11.8") {
-        $cuda_suffix = "cu118"
-    } else {
-        Write-Host "CUDA version $cuda_version may not be fully supported. Installing CPU-only PyTorch..." -ForegroundColor Yellow
-        $cuda_suffix = ""
-    }
-    
-    if ($cuda_suffix) {
+if ($cuda_installed -and $cuda_version) {
+    # Only support known CUDA versions for PyTorch 2.8.0 wheels
+    $supported_versions = @("12.9", "12.8", "12.6", "12.5", "12.4", "12.1", "11.8")
+    if ($supported_versions -contains $cuda_version) {
+        $cuda_suffix = "cu$($cuda_version -replace '\.', '')"
+        Write-Host "CUDA version $cuda_version detected. Using PyTorch wheel: $cuda_suffix" -ForegroundColor Green
         pip install torch torchvision --index-url https://download.pytorch.org/whl/$cuda_suffix
     } else {
+        Write-Host "CUDA version $cuda_version may not be fully supported. Installing CPU-only PyTorch..." -ForegroundColor Yellow
         pip install torch torchvision
     }
 } else {
@@ -200,4 +191,4 @@ Write-Host "    $batPath" -ForegroundColor Cyan
 Write-Host "You can run this script to start the PhotoMap server." -ForegroundColor Yellow
 Write-Host "For convenience, you may copy it to a folder in your PATH." -ForegroundColor Yellow
 
-Pause
+Read-Host "Press Enter to close this window and exit the installer..."
