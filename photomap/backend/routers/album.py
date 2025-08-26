@@ -217,6 +217,11 @@ def validate_image_access(album_config, image_path: Path) -> bool:
     Returns:
         True if access is allowed, False otherwise
     """
-    # The resolve() call shouldn't really be necessary here, but it fixes problems arising
+    # The resolve() calls shouldn't really be necessary here, but they fix problems arising
     # on mapped Windows network drive paths.
-    return any([image_path.is_relative_to(Path(p).resolve()) for p in album_config.image_paths])
+    return any(
+        [
+            image_path.resolve().is_relative_to(Path(p).resolve())
+            for p in album_config.image_paths
+        ]
+    )
