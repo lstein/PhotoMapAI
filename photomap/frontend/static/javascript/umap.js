@@ -281,7 +281,7 @@ export async function fetchUmapData() {
               cluster: cluster,
             });
           }
-        }, 100);
+        }, 150);
       });
 
       gd.on("plotly_unhover", function () {
