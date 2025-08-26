@@ -422,6 +422,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#4-re-run-the-photomapai-installer-windows-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Re-run the PhotoMapAI installer (Windows only).
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -825,6 +834,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#4-re-run-the-photomapai-installer-windows-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Re-run the PhotoMapAI installer (Windows only).
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -858,7 +876,7 @@
 <pre><code class="language-bash">PS C:\Users\username&gt; nvidia-smi
 Mon Aug 11 21:33:57 2025       
 +---------------------------------------------------------------------------------------+
-| NVIDIA-SMI 535.230.02             Driver Version: 535.230.02   CUDA Version: 12.6     |
+| NVIDIA-SMI 535.230.02             Driver Version: 535.230.02   CUDA Version: 12.9     |
 |-----------------------------------------+----------------------+----------------------+
 (more information follows)
 </code></pre>
@@ -867,7 +885,9 @@ Mon Aug 11 21:33:57 2025
 <p>Go to the <a href="https://developer.nvidia.com/cuda-12-9-0-download-archive">CUDA 12.9 Download Page</a> and choose your operating system, architecture, and OS version. Select either the "local" or "network" installer. Download the installer, run it, and follow the on-screen prompts.</p>
 <h3 id="3-confirm-that-cuda-is-installed">3. Confirm that CUDA is installed.</h3>
 <p>In a command shell, run the <code>nvidia-smi</code> command as in (1) and confirm that the expected version is installed.</p>
-<p><a href="../">PhotoMapAI Installation</a></p>
+<h3 id="4-re-run-the-photomapai-installer-windows-only">4. Re-run the PhotoMapAI installer (Windows only).</h3>
+<p>If you are on a Windows platform, please follow the <a href="../">PhotoMapAI Installation</a> instructions to update the Torch machine learning library for CUDA support. The easiest path is to run the <a href="../#2-run-the-installer-script">installer script</a> again, and provide it with the same installation path you chose for the original install. Alternatively, you may <a href="../#manual-installation">manually install</a> the CUDA version of Torch.</p>
+<p>To confirm that CUDA support is enabled, look for a console message about GPU acceleration when PhotoMapAI first launches.</p>
 
 
 

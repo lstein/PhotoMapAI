@@ -497,9 +497,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-install-photomapai-and-its-libraries" class="md-nav__link">
+  <a href="#3-install-a-cuda-enabled-version-of-pytorch-optional-windows-only" class="md-nav__link">
     <span class="md-ellipsis">
-      3. Install PhotoMapAI and its libraries:
+      3. Install a CUDA enabled version of PyTorch (Optional: Windows only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-install-photomapai-and-its-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Install PhotoMapAI and its libraries:
     </span>
   </a>
   
@@ -1093,9 +1102,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#3-install-photomapai-and-its-libraries" class="md-nav__link">
+  <a href="#3-install-a-cuda-enabled-version-of-pytorch-optional-windows-only" class="md-nav__link">
     <span class="md-ellipsis">
-      3. Install PhotoMapAI and its libraries:
+      3. Install a CUDA enabled version of PyTorch (Optional: Windows only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-install-photomapai-and-its-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Install PhotoMapAI and its libraries:
     </span>
   </a>
   
@@ -1202,7 +1220,13 @@ pip -mvenv install --prompt photomap
 <pre><code class="language-bash">source install/bin/activate
 </code></pre>
 <p>Your system prompt should change to read <code>(photomap)</code> at this point.</p>
-<h3 id="3-install-photomapai-and-its-libraries">3. Install PhotoMapAI and its libraries:</h3>
+<h3 id="3-install-a-cuda-enabled-version-of-pytorch-optional-windows-only">3. Install a CUDA enabled version of PyTorch (Optional: Windows only)</h3>
+<p>If you have an NVidia graphics card, are installing on a Windows machine, and have the <a href="cuda/">CUDA Library</a> installed, you can take advantage of GPU acceleration by installing a CUDA-enabled version of the PyTorch machine learning library used by PhotoMapAI during photo indexing. <em>This step is not required for Linux or Macintosh systems, which will take advantage of GPU hardware acceleration automatically.</em></p>
+<p>Go to https://pytorch.org/get-started/locally/ and use the version selector to choose the version of PyTorch that matches your CUDA library version. Then issue the recommended installation command, e.g.</p>
+<pre><code class="language-bash">pip install torch torchvision --index-url https://download.pytorch.org/whl/cu129
+</code></pre>
+<p>If you initially installed the CPU-only version of PyTorch, don't despair. You can come back and install CUDA PyTorch at any time.</p>
+<h3 id="4-install-photomapai-and-its-libraries">4. Install PhotoMapAI and its libraries:</h3>
 <pre><code class="language-bash">pip install .
 </code></pre>
 <p>This will download and install all the libraries that PhotoMapAI requires. Depending on your internet speed, this may take a while.</p>
