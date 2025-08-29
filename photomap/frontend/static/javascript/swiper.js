@@ -35,6 +35,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       dynamicBullets: true,
     },
     loop: false,
+    touchEventsTarget: 'container',  // said to increase touch responsiveness over default 'wrapper'
     allowTouchMove: true,
     simulateTouch: true,
     touchStartPreventDefault: false,
@@ -54,9 +55,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           await addNewSlide();
         }
       },
-      slidePrevTransitionStart: async function () {
+      slidePrevTransitionEnd: async function () { // adding new at end of transition makes animation smoother
         // Only add a new slide if we're at the beginning and moving backward
-        if (this.activeIndex <= 0) {
+        if (this.activeIndex <= 1) {
           await addNewSlide(true);
         }
       },
