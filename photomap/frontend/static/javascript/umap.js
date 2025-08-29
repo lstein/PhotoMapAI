@@ -42,6 +42,7 @@ let isFullscreen = false;
 let lastUnshadedSize = "medium"; // Track last non-fullscreen size
 let lastUnshadedPosition = { left: null, top: null }; // Track last position
 let landmarksVisible = false;
+let hoverThumbnailsEnabled = true; // default ON
 
 // Track current zoom level to detect zoom changes
 let currentZoomLevel = null;
@@ -482,8 +483,6 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
 }
 
 // --- Checkbox event handler ---
-let hoverThumbnailsEnabled = true; // default ON
-
 document.addEventListener("DOMContentLoaded", () => {
   const highlightCheckbox = document.getElementById("umapHighlightSelection");
   if (highlightCheckbox) {
@@ -860,7 +859,7 @@ function setUmapWindowSize(sizeKey) {
 
     Plotly.relayout(plotDiv, {
       width: window.innerWidth - 32,
-      height: window.innerHeight - controlsHeight - 128,
+      height: window.innerHeight - controlsHeight,
       "xaxis.scaleanchor": "y", 
     });
   } else {
@@ -1000,7 +999,7 @@ function updateLandmarkTrace() {
   if (!landmarksVisible) return;
 
   // Get clusters in view
-  const clusters = getLargestClustersInView(10);
+  const clusters = getLargestClustersInView(20);
   if (!clusters.length) return;
 
   // Get current axis ranges
@@ -1025,7 +1024,7 @@ function updateLandmarkTrace() {
   const plotHeightPx = plotDiv.offsetHeight || 560;
   const yRange = plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
   const pixelToData = yRange / plotHeightPx;
-  const verticalOffset = 32 * pixelToData;
+  const verticalOffset = 24 * pixelToData;
 
   // Prepare trace data
   const x = clusters.map(c => c.center.x);
