@@ -1297,3 +1297,15 @@ async function handleClusterClick(clickedIndex) {
     toggleFullscreen();
   }
 }
+
+window.addEventListener("resize", () => {
+  // Only resize if UMAP window is in fullscreen mode
+  const win = document.getElementById("umapFloatingWindow");
+  if (!win || win.style.display !== "block") return;
+  if (isFullscreen) {
+    setUmapWindowSize("fullscreen");
+    // Optionally, update landmarks and current image marker
+    updateLandmarkTrace();
+    updateCurrentImageMarker();
+  }
+});
