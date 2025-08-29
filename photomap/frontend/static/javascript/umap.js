@@ -80,7 +80,6 @@ function getClusterColor(cluster) {
 
 // Helper: get cluster centers and representatives
 function getLargestClustersInView(maxLandmarks = 10) {
-  // Get current axis ranges
   const plotDiv = document.getElementById("umapPlot");
   if (!plotDiv || !plotDiv.layout) return [];
   const [xMin, xMax] = plotDiv.layout.xaxis.range;
@@ -96,14 +95,24 @@ function getLargestClustersInView(maxLandmarks = 10) {
 
   let clustersInView = [];
   for (const [cluster, pts] of clusterMap.entries()) {
-    // Find top point (maximum y)
-    let topPoint = pts.reduce((maxP, p) => (p.y > maxP.y ? p : maxP), pts[0]);
-    // Only include if top point is in view
-    if (topPoint.x >= xMin && topPoint.x <= xMax && topPoint.y >= yMin && topPoint.y <= yMax) {
+    // 1. Find horizontal center
+    const centerX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
+    // 2. Find highest point closest to centerX
+    let best = pts[0];
+    for (const p of pts) {
+      if (
+        p.y > best.y ||
+        (p.y === best.y && Math.abs(p.x - centerX) < Math.abs(best.x - centerX))
+      ) {
+        best = p;
+      }
+    }
+    // Only include if best point is in view
+    if (best.x >= xMin && best.x <= xMax && best.y >= yMin && best.y <= yMax) {
       clustersInView.push({
         cluster,
-        center: { x: topPoint.x, y: topPoint.y }, // use top point as "center"
-        representative: topPoint.index,
+        center: { x: best.x, y: best.y },
+        representative: best.index,
         color: getClusterColor(cluster),
         size: pts.length,
       });
