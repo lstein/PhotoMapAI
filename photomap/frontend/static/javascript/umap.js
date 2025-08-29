@@ -1050,7 +1050,7 @@ function updateLandmarkTrace() {
 
   // Add thumbnail images, requesting larger images at higher zoom
   const images = clusters.map((c, i) => ({
-    source: `thumbnails/${state.album}/${c.representative}?size=${thumbSize}`,
+    source: `thumbnails/${state.album}/${c.representative}?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
     x: x[i],
     y: y[i],
     xref: "x",
