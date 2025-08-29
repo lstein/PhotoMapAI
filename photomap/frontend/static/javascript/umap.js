@@ -848,8 +848,12 @@ function setUmapWindowSize(sizeKey) {
   const win = document.getElementById("umapFloatingWindow");
   const plotDiv = document.getElementById("umapPlot");
   const contentDiv = document.getElementById("umapContent");
+  const landmarkCheckbox = document.getElementById("umapShowLandmarks");
+
   win.style.opacity = "0.75"; // default opacity for all sizes
+
   if (sizeKey === "shaded") {
+    // Do not change landmarksVisible or checkbox
     if (contentDiv) contentDiv.style.display = "none";
     win.style.width = "";
     win.style.height = "";
@@ -875,6 +879,13 @@ function setUmapWindowSize(sizeKey) {
       height: window.innerHeight - controlsHeight,
       "xaxis.scaleanchor": "y",
     });
+
+    // Turn landmarks ON in fullscreen
+    if (landmarkCheckbox) {
+      landmarkCheckbox.checked = true;
+      landmarksVisible = true;
+      updateLandmarkTrace();
+    }
   } else {
     if (contentDiv) contentDiv.style.display = "block";
     const { width, height } = UMAP_SIZES[sizeKey];
@@ -903,6 +914,13 @@ function setUmapWindowSize(sizeKey) {
         win.style.top = top + "px";
       }
     }, 0);
+
+    // Turn landmarks OFF in big, medium, small
+    if (landmarkCheckbox) {
+      landmarkCheckbox.checked = false;
+      landmarksVisible = false;
+      updateLandmarkTrace();
+    }
   }
   setActiveResizeIcon(sizeKey);
   ensureUmapWindowInView();
@@ -996,91 +1014,100 @@ addButtonHandlers("umapCloseBtn", () => {
 });
 
 // --- Update Landmark Trace ---
+let isRenderingLandmarks = false;
+
 function updateLandmarkTrace() {
-  const plotDiv = document.getElementById("umapPlot");
-  if (!plotDiv || !plotDiv.layout) return;
+  if (isRenderingLandmarks) return; // Guard: skip if already rendering
+  isRenderingLandmarks = true;
 
-  // Remove previous landmark trace (if any)
-  const landmarkTraceIdx = plotDiv.data?.findIndex(
-    (t) => t.name === "Landmarks"
-  );
-  if (landmarkTraceIdx !== undefined && landmarkTraceIdx !== -1) {
-    Plotly.deleteTraces(plotDiv, landmarkTraceIdx);
+  try {
+    const plotDiv = document.getElementById("umapPlot");
+    if (!plotDiv || !plotDiv.layout) return;
+
+    // Remove previous landmark trace (if any)
+    const landmarkTraceIdx = plotDiv.data?.findIndex(
+      (t) => t.name === "Landmarks"
+    );
+    if (landmarkTraceIdx !== undefined && landmarkTraceIdx !== -1) {
+      Plotly.deleteTraces(plotDiv, landmarkTraceIdx);
+    }
+
+    // Always clear images
+    Plotly.relayout(plotDiv, { images: [] });
+
+    if (!landmarksVisible) return;
+
+    // Get clusters in view
+    const clusters = getLargestClustersInView(20);
+    if (!clusters.length) return;
+
+    // Get current axis ranges
+    const [xMin, xMax] = plotDiv.layout.xaxis.range;
+    const xRange = xMax - xMin;
+
+    // Calculate thumbnail size in data units (adjust multiplier as needed)
+    const imageSize = Math.max(0.2, Math.min(2.0, xRange / 10));
+
+    // Estimate thumbnail size in pixels based on plot width and zoom
+    const plotWidthPx = plotDiv.offsetWidth || 800;
+    const thumbPx = Math.round((imageSize / xRange) * plotWidthPx);
+
+    // Cap thumbnail size at 256 pixels maximum (and keep 64 minimum)
+    const thumbSize = Math.max(64, Math.min(256, thumbPx));
+
+    // Triangle marker size in pixels (constant)
+    const triangleSize = 32;
+
+    // Calculate offset in data units to move up by 24 pixels
+    const plotHeightPx = plotDiv.offsetHeight || 560;
+    const yRange = plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
+    const pixelToData = yRange / plotHeightPx;
+    const verticalOffset = 24 * pixelToData;
+
+    // Prepare trace data
+    const x = clusters.map((c) => c.center.x);
+    const y = clusters.map((c) => c.center.y + verticalOffset);
+    const markerColors = clusters.map((c) => c.color);
+
+    // Triangle-down markers at bottom of thumbnails
+    const landmarkTrace = {
+      x,
+      y,
+      mode: "markers",
+      type: "scatter",
+      marker: {
+        size: triangleSize,
+        color: markerColors,
+        symbol: "triangle-down",
+        line: { width: 2, color: "#000" },
+      },
+      hoverinfo: "none",
+      showlegend: false,
+      name: "Landmarks",
+    };
+
+    // Add thumbnail images
+    const images = clusters.map((c, i) => ({
+      source: `thumbnails/${state.album}/${
+        c.representative
+      }?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
+      x: x[i],
+      y: y[i],
+      xref: "x",
+      yref: "y",
+      sizex: imageSize,
+      sizey: imageSize,
+      xanchor: "center",
+      yanchor: "bottom",
+      layer: "above",
+    }));
+
+    // Add the triangle trace as the LAST trace (highest z-order)
+    Plotly.addTraces(plotDiv, [landmarkTrace]);
+    Plotly.relayout(plotDiv, { images });
+  } finally {
+    isRenderingLandmarks = false; // Clear guard after rendering
   }
-
-  // Always clear images
-  Plotly.relayout(plotDiv, { images: [] });
-
-  if (!landmarksVisible) return;
-
-  // Get clusters in view
-  const clusters = getLargestClustersInView(20);
-  if (!clusters.length) return;
-
-  // Get current axis ranges
-  const [xMin, xMax] = plotDiv.layout.xaxis.range;
-  const xRange = xMax - xMin;
-
-  // Calculate thumbnail size in data units (adjust multiplier as needed)
-  const imageSize = Math.max(0.2, Math.min(1.0, xRange / 20));
-
-  // Estimate thumbnail size in pixels based on plot width and zoom
-  const plotWidthPx = plotDiv.offsetWidth || 800;
-  const thumbPx = Math.round((imageSize / xRange) * plotWidthPx);
-
-  // Cap thumbnail size at 256 pixels maximum (and keep 64 minimum)
-  const thumbSize = Math.max(64, Math.min(256, thumbPx));
-
-  // Triangle marker size in pixels (constant)
-  const triangleSize = 32;
-
-  // Calculate offset in data units to move up by 32 pixels
-  const plotHeightPx = plotDiv.offsetHeight || 560;
-  const yRange = plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
-  const pixelToData = yRange / plotHeightPx;
-  const verticalOffset = 24 * pixelToData;
-
-  // Prepare trace data
-  const x = clusters.map((c) => c.center.x);
-  const y = clusters.map((c) => c.center.y + verticalOffset);
-  const markerColors = clusters.map((c) => c.color);
-
-  // Triangle-down markers at bottom of thumbnails
-  const landmarkTrace = {
-    x,
-    y,
-    mode: "markers",
-    type: "scatter",
-    marker: {
-      size: triangleSize,
-      color: markerColors,
-      symbol: "triangle-down",
-      line: { width: 2, color: "#000" },
-    },
-    hoverinfo: "none",
-    showlegend: false,
-    name: "Landmarks",
-  };
-
-  // Add thumbnail images
-  const images = clusters.map((c, i) => ({
-    source: `thumbnails/${state.album}/${
-      c.representative
-    }?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
-    x: x[i],
-    y: y[i],
-    xref: "x",
-    yref: "y",
-    sizex: imageSize,
-    sizey: imageSize,
-    xanchor: "center",
-    yanchor: "bottom",
-    layer: "above",
-  }));
-
-  // Add the triangle trace as the LAST trace (highest z-order)
-  Plotly.addTraces(plotDiv, [landmarkTrace]);
-  Plotly.relayout(plotDiv, { images });
 }
 
 // Debounced version for event handlers
