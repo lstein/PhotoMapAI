@@ -94,35 +94,22 @@ function getLargestClustersInView(maxLandmarks = 10) {
     clusterMap.get(p.cluster).push(p);
   });
 
-  // Find clusters whose centers are in view
   let clustersInView = [];
   for (const [cluster, pts] of clusterMap.entries()) {
-    // Compute center
-    const cx = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
-    const cy = pts.reduce((sum, p) => sum + p.y, 0) / pts.length;
-    // Representative: closest to center
-    let rep = pts[0];
-    let minDist = Math.hypot(rep.x - cx, rep.y - cy);
-    for (const p of pts) {
-      const d = Math.hypot(p.x - cx, p.y - cy);
-      if (d < minDist) {
-        minDist = d;
-        rep = p;
-      }
-    }
-    // Only include if center is in view
-    if (cx >= xMin && cx <= xMax && cy >= yMin && cy <= yMax) {
+    // Find top point (maximum y)
+    let topPoint = pts.reduce((maxP, p) => (p.y > maxP.y ? p : maxP), pts[0]);
+    // Only include if top point is in view
+    if (topPoint.x >= xMin && topPoint.x <= xMax && topPoint.y >= yMin && topPoint.y <= yMax) {
       clustersInView.push({
         cluster,
-        center: { x: cx, y: cy },
-        representative: rep.index,
+        center: { x: topPoint.x, y: topPoint.y }, // use top point as "center"
+        representative: topPoint.index,
         color: getClusterColor(cluster),
         size: pts.length,
       });
     }
   }
 
-  // Sort by size, largest first, and take up to maxLandmarks
   clustersInView.sort((a, b) => b.size - a.size);
   return clustersInView.slice(0, maxLandmarks);
 }
