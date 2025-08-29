@@ -81,6 +81,31 @@ function getClusterColor(cluster) {
   return colors[idx % colors.length];
 }
 
+// Improved landmark placement algorithm
+function getLandmarkForCluster(pts) {
+  // 1. Find X center
+  const centerX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
+
+  // 2. Compute X spread (standard deviation and range)
+  const xs = pts.map((p) => p.x);
+  const xMean = centerX;
+  const xStd = Math.sqrt(
+    xs.reduce((sum, x) => sum + Math.pow(x - xMean, 2), 0) / xs.length
+  );
+  const xRange = Math.max(...xs) - Math.min(...xs);
+
+  // 3. Filter points near centerX (within 0.5 * std or 0.2 * range)
+  const threshold = Math.max(xStd * 0.5, xRange * 0.2);
+  const candidates = pts.filter((p) => Math.abs(p.x - centerX) <= threshold);
+
+  // 4. Pick highest Y among candidates
+  let best = candidates[0] || pts[0];
+  for (const p of candidates) {
+    if (p.y > best.y) best = p;
+  }
+  return best;
+}
+
 // Helper: get cluster centers and representatives
 function getLargestClustersInView(maxLandmarks = 10) {
   const plotDiv = document.getElementById("umapPlot");
@@ -95,31 +120,6 @@ function getLargestClustersInView(maxLandmarks = 10) {
     if (!clusterMap.has(p.cluster)) clusterMap.set(p.cluster, []);
     clusterMap.get(p.cluster).push(p);
   });
-
-  // Improved landmark placement algorithm
-  function getLandmarkForCluster(pts) {
-    // 1. Find X center
-    const centerX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
-
-    // 2. Compute X spread (standard deviation and range)
-    const xs = pts.map((p) => p.x);
-    const xMean = centerX;
-    const xStd = Math.sqrt(
-      xs.reduce((sum, x) => sum + Math.pow(x - xMean, 2), 0) / xs.length
-    );
-    const xRange = Math.max(...xs) - Math.min(...xs);
-
-    // 3. Filter points near centerX (within 0.5 * std or 0.2 * range)
-    const threshold = Math.max(xStd * 0.5, xRange * 0.2);
-    const candidates = pts.filter((p) => Math.abs(p.x - centerX) <= threshold);
-
-    // 4. Pick highest Y among candidates
-    let best = candidates[0] || pts[0];
-    for (const p of candidates) {
-      if (p.y > best.y) best = p;
-    }
-    return best;
-  }
 
   let clustersInView = [];
   for (const [cluster, pts] of clusterMap.entries()) {
@@ -426,8 +426,21 @@ export async function fetchUmapData() {
       });
 
       gd.on("plotly_redraw", () => {
-        if (suppressRelayoutEvent) return; // Prevent feedback loop
+        if (suppressRelayoutEvent) return;
         debouncedUpdateLandmarkTrace();
+
+        // Bring LandmarkClickTargets trace to the front so that they receive priority for clicks
+        const plotDiv = document.getElementById("umapPlot");
+        const clickTargetTraceIdx = plotDiv.data?.findIndex(
+          (t) => t.name === "LandmarkClickTargets"
+        );
+        if (
+          typeof clickTargetTraceIdx === "number" &&
+          clickTargetTraceIdx >= 0 &&
+          clickTargetTraceIdx < plotDiv.data.length - 1
+        ) {
+          Plotly.moveTraces(plotDiv, clickTargetTraceIdx, plotDiv.data.length - 1);
+        }
       });
 
       // Initial landmark update
@@ -456,16 +469,22 @@ export async function fetchUmapData() {
     document
       .getElementById("umapPlot")
       .on("plotly_click", async function (data) {
-        const clickedIndex = data.points[0].customdata;
-        const traceIndex = data.points[0].curveNumber;
-        
-        // Check if this is a click on the landmark click targets trace
-        if (data.points[0].fullData.name === "LandmarkClickTargets") {
-          // This is a landmark click
-          await handleClusterClick(clickedIndex);
-        } else if (traceIndex === 0) {
-          // This is a regular scatter plot click
-          await handleClusterClick(clickedIndex);
+        const traceName = data.points[0].fullData.name;
+        console.log("Clicked trace:", traceName);
+        if (traceName === "LandmarkClickTargets") {
+          // Get cluster ID from customdata
+          const clusterId = data.points[0].customdata;
+          console.log("Clicked landmark for cluster:", clusterId);
+          // Get all points in this cluster
+          const clusterPoints = points.filter((p) => p.cluster === clusterId);
+          // Use the improved placement algorithm to get the landmark point
+          const landmarkPoint = getLandmarkForCluster(clusterPoints);
+          if (landmarkPoint) {
+            await handleClusterClick(landmarkPoint.index);
+          }
+        } else if (data.points[0].curveNumber === 0) {
+          // Regular scatter plot click
+          await handleClusterClick(data.points[0].customdata);
         }
       });
 
@@ -945,7 +964,7 @@ function setUmapWindowSize(sizeKey) {
   }
   setActiveResizeIcon(sizeKey);
   ensureUmapWindowInView();
-  removeUmapThumbnail();  // just in case
+  removeUmapThumbnail(); // just in case
 }
 
 // Titlebar resizing/dragging code is here.
@@ -1119,8 +1138,11 @@ function updateLandmarkTrace() {
     const verticalOffset = 24 * pixelToData;
 
     // Prepare trace data
-    const clustersInView = getNonOverlappingLandmarks(clusters, imageSize, landmarkCount);
-    console.log("Clusters in view for landmarks:", clustersInView.length);
+    const clustersInView = getNonOverlappingLandmarks(
+      clusters,
+      imageSize,
+      landmarkCount
+    );
     const x = clustersInView.map((c) => c.center.x);
     const y = clustersInView.map((c) => c.center.y + verticalOffset);
     const markerColors = clustersInView.map((c) => c.color);
@@ -1145,18 +1167,18 @@ function updateLandmarkTrace() {
     // Invisible clickable points over thumbnails
     const clickableTrace = {
       x: clustersInView.map((c) => c.center.x),
-      y: clustersInView.map((c) => c.center.y + verticalOffset), // Same position as thumbnails
+      y: clustersInView.map((c) => c.center.y + verticalOffset),
       mode: "markers",
       type: "scatter",
       marker: {
-        size: Math.max(40, triangleSize * 2), // Larger click target than triangle
-        color: "rgba(0,0,0,0)", // Transparent
-        line: { width: 0 }
+        size: Math.max(40, triangleSize * 2),
+        color: "rgba(0,0,0,0)",
+        line: { width: 0 },
       },
       customdata: clustersInView.map((c) => c.cluster), // <-- store cluster ID, not representative index
       hoverinfo: "none",
       showlegend: false,
-      name: "LandmarkClickTargets"
+      name: "LandmarkClickTargets",
     };
 
     // Add thumbnail images
@@ -1202,7 +1224,11 @@ function updateLandmarkTrace() {
 const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 500);
 
 // Helper function to get non-overlapping landmarks
-function getNonOverlappingLandmarks(clusters, imageSize, landmarkCount = landmarkCount) {
+function getNonOverlappingLandmarks(
+  clusters,
+  imageSize,
+  landmarkCount = landmarkCount
+) {
   const placed = [];
   let i = 0;
   while (i < clusters.length && placed.length < landmarkCount) {
@@ -1230,7 +1256,7 @@ function getNonOverlappingLandmarks(clusters, imageSize, landmarkCount = landmar
 async function handleClusterClick(clickedIndex) {
   const clickedPoint = points.find((p) => p.index === clickedIndex);
   if (!clickedPoint) return;
-  
+
   const clickedCluster = clickedPoint.cluster;
   const clusterIndex = clusters.indexOf(clickedCluster);
   const clusterColor = colors[clusterIndex % colors.length];
@@ -1244,9 +1270,7 @@ async function handleClusterClick(clickedIndex) {
   // --- Sort by ascending distance from clicked point ---
   const clickedCoords = [clickedPoint.x, clickedPoint.y];
   // Build a lookup map once
-  const indexToPoint = Object.fromEntries(
-    points.map((p) => [p.index, p])
-  );
+  const indexToPoint = Object.fromEntries(points.map((p) => [p.index, p]));
   clusterIndices.sort((a, b) => {
     const pa = indexToPoint[a];
     const pb = indexToPoint[b];
@@ -1267,7 +1291,7 @@ async function handleClusterClick(clickedIndex) {
     cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
     color: clusterColor,
   }));
-  
+
   setSearchResults(clusterMembers, "cluster");
   if (isFullscreen) {
     lastUnshadedSize = "big"; // Set a default size when exiting fullscreen
