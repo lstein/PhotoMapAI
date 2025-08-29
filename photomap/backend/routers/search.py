@@ -14,7 +14,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
-from PIL import Image, ImageOps, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel
 
 from ..config import get_config_manager
@@ -199,7 +199,10 @@ async def serve_thumbnail(
     # If color is specified, add it to the thumbnail filename to cache separately
     if color:
         color_hex = color.replace("#", "")
-        thumb_path = thumb_dir / f"{Path(safe_rel_path).stem}_{size}_{color_hex}_r{radius}{Path(safe_rel_path).suffix}"
+        thumb_path = (
+            thumb_dir
+            / f"{Path(safe_rel_path).stem}_{size}_{color_hex}_r{radius}{Path(safe_rel_path).suffix}"
+        )
 
     # Generate thumbnail if not cached or outdated
     if (
@@ -215,7 +218,9 @@ async def serve_thumbnail(
                     # Convert hex color to RGB
                     border_color = color
                     if color.startswith("#"):
-                        border_color = tuple(int(color[i : i + 2], 16) for i in (1, 3, 5))
+                        border_color = tuple(
+                            int(color[i : i + 2], 16) for i in (1, 3, 5)
+                        )
                     else:
                         try:
                             border_color = tuple(map(int, color.split(",")))
