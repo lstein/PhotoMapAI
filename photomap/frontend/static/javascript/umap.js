@@ -81,70 +81,6 @@ function getClusterColor(cluster) {
   return colors[idx % colors.length];
 }
 
-// Improved landmark placement algorithm
-function getLandmarkForCluster(pts) {
-  // 1. Find X center
-  const centerX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
-
-  // 2. Compute X spread (standard deviation and range)
-  const xs = pts.map((p) => p.x);
-  const xMean = centerX;
-  const xStd = Math.sqrt(
-    xs.reduce((sum, x) => sum + Math.pow(x - xMean, 2), 0) / xs.length
-  );
-  const xRange = Math.max(...xs) - Math.min(...xs);
-
-  // 3. Filter points near centerX (within 0.5 * std or 0.2 * range)
-  const threshold = Math.max(xStd * 0.5, xRange * 0.2);
-  const candidates = pts.filter((p) => Math.abs(p.x - centerX) <= threshold);
-
-  // 4. Pick highest Y among candidates
-  let best = candidates[0] || pts[0];
-  for (const p of candidates) {
-    if (p.y > best.y) best = p;
-  }
-  return best;
-}
-
-// Helper: get cluster centers and representatives
-function getLargestClustersInView(maxLandmarks = 10) {
-  const plotDiv = document.getElementById("umapPlot");
-  if (!plotDiv || !plotDiv.layout) return [];
-  const [xMin, xMax] = plotDiv.layout.xaxis.range;
-  const [yMin, yMax] = plotDiv.layout.yaxis.range;
-
-  // Group points by cluster
-  const clusterMap = new Map();
-  points.forEach((p) => {
-    if (p.cluster === -1) return;
-    if (!clusterMap.has(p.cluster)) clusterMap.set(p.cluster, []);
-    clusterMap.get(p.cluster).push(p);
-  });
-
-  let clustersInView = [];
-  for (const [cluster, pts] of clusterMap.entries()) {
-    const landmark = getLandmarkForCluster(pts);
-    // Only include if landmark is in view
-    if (
-      landmark.x >= xMin &&
-      landmark.x <= xMax &&
-      landmark.y >= yMin &&
-      landmark.y <= yMax
-    ) {
-      clustersInView.push({
-        cluster,
-        center: { x: landmark.x, y: landmark.y },
-        representative: landmark.index,
-        color: getClusterColor(cluster),
-        size: pts.length,
-      });
-    }
-  }
-
-  clustersInView.sort((a, b) => b.size - a.size);
-  return clustersInView.slice(0, maxLandmarks);
-}
-
 // --- Spinner UI ---
 function showUmapSpinner() {
   document.getElementById("umapSpinner").style.display = "block";
@@ -170,40 +106,7 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
   }, 1000);
 };
 
-// --- Show/Hide UMAP Window ---
-export async function toggleUmapWindow() {
-  const umapWindow = document.getElementById("umapFloatingWindow");
-  if (umapWindow.style.display === "block") {
-    umapWindow.style.display = "none";
-  } else {
-    umapWindow.style.display = "block";
-    ensureUmapWindowInView();
-    if (!umapWindowHasBeenShown) {
-      umapWindowHasBeenShown = true;
-      setUmapWindowSize("fullscreen");
-    }
-    // Fetch configured eps value from server
-    const result = await fetch("get_umap_eps/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ album: state.album }),
-    });
-    const data = await result.json();
-    if (!data.success) {
-      console.error("Failed to fetch UMAP EPS value:", data.message);
-      return;
-    }
-    const epsSpinner = document.getElementById("umapEpsSpinner");
-    if (epsSpinner) epsSpinner.value = data.eps;
-    await fetchUmapData();
-  }
-}
-
-document.getElementById("showUmapBtn").onclick = () => toggleUmapWindow();
-document.getElementById("umapCloseBtn").onclick = () => {
-  document.getElementById("umapFloatingWindow").style.display = "none";
-};
-
+// --- Caching Current Album ---
 let cachedAlbum = null;
 let cachedAlbumName = null;
 
@@ -428,19 +331,6 @@ export async function fetchUmapData() {
       gd.on("plotly_redraw", () => {
         if (suppressRelayoutEvent) return;
         debouncedUpdateLandmarkTrace();
-
-        //   // Bring LandmarkClickTargets trace to the front so that they receive priority for clicks
-        //   const plotDiv = document.getElementById("umapPlot");
-        //   const clickTargetTraceIdx = plotDiv.data?.findIndex(
-        //     (t) => t.name === "LandmarkClickTargets"
-        //   );
-        //   if (
-        //     typeof clickTargetTraceIdx === "number" &&
-        //     clickTargetTraceIdx >= 0 &&
-        //     clickTargetTraceIdx < plotDiv.data.length - 1
-        //   ) {
-        //     Plotly.moveTraces(plotDiv, clickTargetTraceIdx, plotDiv.data.length - 1);
-        //   }
       });
 
       // Initial landmark update
@@ -474,7 +364,7 @@ export async function fetchUmapData() {
           const clusterId = data.points[0].customdata;
           // Get all points in this cluster
           const clusterPoints = points.filter((p) => p.cluster === clusterId);
-          // Use the improved placement algorithm to get the landmark point
+          // Use the landmark placement algorithm to get the landmark point
           const landmarkPoint = getLandmarkForCluster(clusterPoints);
           if (landmarkPoint) {
             await handleClusterClick(landmarkPoint.index);
@@ -787,6 +677,359 @@ function updateUmapColorModeAvailability(searchResults = []) {
   setUmapColorMode();
 }
 
+// ------------- Handling Landmark Thumbnails -------------
+
+// Improved landmark placement algorithm
+function getLandmarkForCluster(pts) {
+  // 1. Find X center
+  const centerX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
+
+  // 2. Compute X spread (standard deviation and range)
+  const xs = pts.map((p) => p.x);
+  const xMean = centerX;
+  const xStd = Math.sqrt(
+    xs.reduce((sum, x) => sum + Math.pow(x - xMean, 2), 0) / xs.length
+  );
+  const xRange = Math.max(...xs) - Math.min(...xs);
+
+  // 3. Filter points near centerX (within 0.5 * std or 0.2 * range)
+  const threshold = Math.max(xStd * 0.5, xRange * 0.2);
+  const candidates = pts.filter((p) => Math.abs(p.x - centerX) <= threshold);
+
+  // 4. Pick highest Y among candidates
+  let best = candidates[0] || pts[0];
+  for (const p of candidates) {
+    if (p.y > best.y) best = p;
+  }
+  return best;
+}
+
+// Helper: get cluster centers and representatives
+function getLargestClustersInView(maxLandmarks = 10) {
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.layout) return [];
+  const [xMin, xMax] = plotDiv.layout.xaxis.range;
+  const [yMin, yMax] = plotDiv.layout.yaxis.range;
+
+  // Group points by cluster
+  const clusterMap = new Map();
+  points.forEach((p) => {
+    if (p.cluster === -1) return;
+    if (!clusterMap.has(p.cluster)) clusterMap.set(p.cluster, []);
+    clusterMap.get(p.cluster).push(p);
+  });
+
+  let clustersInView = [];
+  for (const [cluster, pts] of clusterMap.entries()) {
+    const landmark = getLandmarkForCluster(pts);
+    // Only include if landmark is in view
+    if (
+      landmark.x >= xMin &&
+      landmark.x <= xMax &&
+      landmark.y >= yMin &&
+      landmark.y <= yMax
+    ) {
+      clustersInView.push({
+        cluster,
+        center: { x: landmark.x, y: landmark.y },
+        representative: landmark.index,
+        color: getClusterColor(cluster),
+        size: pts.length,
+      });
+    }
+  }
+
+  clustersInView.sort((a, b) => b.size - a.size);
+  return clustersInView.slice(0, maxLandmarks);
+}
+
+// --- Update Landmark Trace ---
+let isRenderingLandmarks = false;
+let lastImagesJSON = null;
+let suppressRelayoutEvent = false; // Add this flag
+
+function updateLandmarkTrace() {
+  if (isRenderingLandmarks) return;
+  isRenderingLandmarks = true;
+
+  try {
+    const plotDiv = document.getElementById("umapPlot");
+    if (!plotDiv || !plotDiv.layout) return;
+
+    // Remove previous landmark traces (both triangles and click targets)
+    let landmarkTraceIdx = plotDiv.data?.findIndex(
+      (t) => t.name === "Landmarks"
+    );
+    let clickTargetTraceIdx = plotDiv.data?.findIndex(
+      (t) => t.name === "LandmarkClickTargets"
+    );
+
+    // Only delete if index is valid
+    if (
+      typeof landmarkTraceIdx === "number" &&
+      landmarkTraceIdx >= 0 &&
+      landmarkTraceIdx < plotDiv.data.length
+    ) {
+      suppressRelayoutEvent = true;
+      Plotly.deleteTraces(plotDiv, landmarkTraceIdx).then(() => {
+        suppressRelayoutEvent = false;
+      });
+    }
+
+    // Recompute clickTargetTraceIdx after possible deletion above
+    clickTargetTraceIdx = plotDiv.data?.findIndex(
+      (t) => t.name === "LandmarkClickTargets"
+    );
+    if (
+      typeof clickTargetTraceIdx === "number" &&
+      clickTargetTraceIdx >= 0 &&
+      clickTargetTraceIdx < plotDiv.data.length
+    ) {
+      suppressRelayoutEvent = true;
+      Plotly.deleteTraces(plotDiv, clickTargetTraceIdx).then(() => {
+        suppressRelayoutEvent = false;
+      });
+    }
+
+    if (!landmarksVisible) {
+      if (lastImagesJSON !== null) {
+        suppressRelayoutEvent = true;
+        Plotly.relayout(plotDiv, { images: [] }).then(() => {
+          suppressRelayoutEvent = false;
+          lastImagesJSON = null;
+        });
+      }
+      return;
+    }
+
+    // Get clusters in view
+    const clusters = getLargestClustersInView(100);
+    if (!clusters.length) return;
+
+    // Get current axis ranges
+    const [xMin, xMax] = plotDiv.layout.xaxis.range;
+    const xRange = xMax - xMin;
+
+    // Calculate thumbnail size in data units (adjust multiplier as needed)
+    const imageSize = Math.max(0.2, Math.min(2.0, xRange / 10));
+
+    // Estimate thumbnail size in pixels based on plot width and zoom
+    const plotWidthPx = plotDiv.offsetWidth || 800;
+    const thumbPx = Math.round((imageSize / xRange) * plotWidthPx);
+
+    // Cap thumbnail size at 256 pixels maximum (and keep 64 minimum)
+    const thumbSize = Math.max(64, Math.min(256, thumbPx));
+
+    // Triangle marker size in pixels (constant)
+    const triangleSize = 32;
+
+    // Calculate offset in data units to move up by 24 pixels
+    const plotHeightPx = plotDiv.offsetHeight || 560;
+    const yRange =
+      plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
+    const pixelToData = yRange / plotHeightPx;
+    const verticalOffset = 24 * pixelToData;
+
+    // Prepare trace data
+    const clustersInView = getNonOverlappingLandmarks(
+      clusters,
+      imageSize,
+      landmarkCount
+    );
+    const x = clustersInView.map((c) => c.center.x);
+    const y = clustersInView.map((c) => c.center.y + verticalOffset);
+    const markerColors = clustersInView.map((c) => c.color);
+
+    // Triangle-down markers at bottom of thumbnails
+    const landmarkTrace = {
+      x,
+      y,
+      mode: "markers",
+      type: "scatter",
+      marker: {
+        size: triangleSize,
+        color: markerColors,
+        symbol: "triangle-down",
+        line: { width: 2, color: "#000" },
+      },
+      hoverinfo: "none",
+      showlegend: false,
+      name: "Landmarks",
+    };
+
+    // Invisible clickable points over thumbnails
+    const clickableTrace = {
+      x: clustersInView.map((c, i) => x[i]),
+      y: clustersInView.map((c, i) => y[i] + imageSize / 2), // center of image
+      mode: "markers",
+      type: "scatter",
+      marker: {
+        color: "rgba(0, 0, 0, 0)",
+        symbol: "square",
+        size: thumbSize,
+        line: { width: 0 },
+      },
+      customdata: clustersInView.map((c) => c.cluster), // <-- store cluster ID, not representative index
+      hoverinfo: "none",
+      showlegend: false,
+      name: "LandmarkClickTargets",
+    };
+
+    // Add thumbnail images
+    const images = clustersInView.map((c, i) => ({
+      source: `thumbnails/${state.album}/${
+        c.representative
+      }?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
+      x: x[i],
+      y: y[i],
+      xref: "x",
+      yref: "y",
+      sizex: imageSize,
+      sizey: imageSize,
+      xanchor: "center",
+      yanchor: "bottom",
+      layer: "above",
+    }));
+
+    // Only update if images changed, and set suppressRelayoutEvent properly
+    const imagesJSON = JSON.stringify(images);
+    if (imagesJSON !== lastImagesJSON) {
+      suppressRelayoutEvent = true;
+      Plotly.addTraces(plotDiv, [landmarkTrace, clickableTrace])
+        .then(() => {
+          return Plotly.relayout(plotDiv, { images });
+        })
+        .then(() => {
+          suppressRelayoutEvent = false;
+          lastImagesJSON = imagesJSON;
+        });
+    } else {
+      suppressRelayoutEvent = true;
+      Plotly.addTraces(plotDiv, [landmarkTrace, clickableTrace]).then(() => {
+        suppressRelayoutEvent = false;
+      });
+    }
+  } finally {
+    isRenderingLandmarks = false;
+  }
+}
+
+// Debounced version for event handlers
+const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 500);
+
+// Helper function to get non-overlapping landmarks
+function getNonOverlappingLandmarks(
+  clusters,
+  imageSize,
+  landmarkCount = landmarkCount
+) {
+  const placed = [];
+  let i = 0;
+  while (i < clusters.length && placed.length < landmarkCount) {
+    const c = clusters[i];
+    const { x, y } = c.center;
+    // Check overlap with already placed landmarks
+    let overlaps = false;
+    for (const p of placed) {
+      const dx = Math.abs(x - p.x);
+      const dy = Math.abs(y - p.y);
+      if (dx < imageSize && dy < imageSize) {
+        overlaps = true;
+        break;
+      }
+    }
+    if (!overlaps) {
+      placed.push({ ...c, x, y });
+    }
+    i++;
+  }
+  return placed;
+}
+
+// Shared function for cluster clicks
+async function handleClusterClick(clickedIndex) {
+  const clickedPoint = points.find((p) => p.index === clickedIndex);
+  if (!clickedPoint) return;
+
+  const clickedCluster = clickedPoint.cluster;
+  const clusterIndex = clusters.indexOf(clickedCluster);
+  const clusterColor = colors[clusterIndex % colors.length];
+  let clusterIndices = points
+    .filter((p) => p.cluster === clickedCluster)
+    .map((p) => p.index);
+
+  // Remove clickedFilename from the list
+  clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
+
+  // --- Sort by ascending distance from clicked point ---
+  const clickedCoords = [clickedPoint.x, clickedPoint.y];
+  // Build a lookup map once
+  const indexToPoint = Object.fromEntries(points.map((p) => [p.index, p]));
+  clusterIndices.sort((a, b) => {
+    const pa = indexToPoint[a];
+    const pb = indexToPoint[b];
+    const da = pa
+      ? Math.hypot(pa.x - clickedCoords[0], pa.y - clickedCoords[1])
+      : Infinity;
+    const db = pb
+      ? Math.hypot(pb.x - clickedCoords[0], pb.y - clickedCoords[1])
+      : Infinity;
+    return da - db;
+  });
+
+  // Promote the clicked filename to the first position
+  const sortedClusterIndices = [clickedIndex, ...clusterIndices];
+
+  const clusterMembers = sortedClusterIndices.map((index) => ({
+    index: index,
+    cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
+    color: clusterColor,
+  }));
+
+  setSearchResults(clusterMembers, "cluster");
+  if (isFullscreen) {
+    // lastUnshadedSize = "big"; // Set a default size when exiting fullscreen
+    toggleFullscreen();
+  }
+}
+
+// -------------------- Window Management --------------------
+
+// --- Show/Hide UMAP Window ---
+export async function toggleUmapWindow() {
+  const umapWindow = document.getElementById("umapFloatingWindow");
+  if (umapWindow.style.display === "block") {
+    umapWindow.style.display = "none";
+  } else {
+    umapWindow.style.display = "block";
+    ensureUmapWindowInView();
+    if (!umapWindowHasBeenShown) {
+      umapWindowHasBeenShown = true;
+      setUmapWindowSize("fullscreen");
+    }
+    // Fetch configured eps value from server
+    const result = await fetch("get_umap_eps/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ album: state.album }),
+    });
+    const data = await result.json();
+    if (!data.success) {
+      console.error("Failed to fetch UMAP EPS value:", data.message);
+      return;
+    }
+    const epsSpinner = document.getElementById("umapEpsSpinner");
+    if (epsSpinner) epsSpinner.value = data.eps;
+    await fetchUmapData();
+  }
+}
+
+document.getElementById("showUmapBtn").onclick = () => toggleUmapWindow();
+document.getElementById("umapCloseBtn").onclick = () => {
+  document.getElementById("umapFloatingWindow").style.display = "none";
+};
+
+
 // --- Draggable Window ---
 function makeDraggable(dragHandleId, windowId) {
   const dragHandle = document.getElementById(dragHandleId);
@@ -1046,257 +1289,6 @@ addButtonHandlers("umapResizeFullscreen", toggleFullscreen);
 addButtonHandlers("umapCloseBtn", () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
 });
-
-// --- Update Landmark Trace ---
-let isRenderingLandmarks = false;
-let lastImagesJSON = null;
-let suppressRelayoutEvent = false; // Add this flag
-
-function updateLandmarkTrace() {
-  if (isRenderingLandmarks) return;
-  isRenderingLandmarks = true;
-
-  try {
-    const plotDiv = document.getElementById("umapPlot");
-    if (!plotDiv || !plotDiv.layout) return;
-
-    // Remove previous landmark traces (both triangles and click targets)
-    let landmarkTraceIdx = plotDiv.data?.findIndex(
-      (t) => t.name === "Landmarks"
-    );
-    let clickTargetTraceIdx = plotDiv.data?.findIndex(
-      (t) => t.name === "LandmarkClickTargets"
-    );
-
-    // Only delete if index is valid
-    if (
-      typeof landmarkTraceIdx === "number" &&
-      landmarkTraceIdx >= 0 &&
-      landmarkTraceIdx < plotDiv.data.length
-    ) {
-      suppressRelayoutEvent = true;
-      Plotly.deleteTraces(plotDiv, landmarkTraceIdx).then(() => {
-        suppressRelayoutEvent = false;
-      });
-    }
-
-    // Recompute clickTargetTraceIdx after possible deletion above
-    clickTargetTraceIdx = plotDiv.data?.findIndex(
-      (t) => t.name === "LandmarkClickTargets"
-    );
-    if (
-      typeof clickTargetTraceIdx === "number" &&
-      clickTargetTraceIdx >= 0 &&
-      clickTargetTraceIdx < plotDiv.data.length
-    ) {
-      suppressRelayoutEvent = true;
-      Plotly.deleteTraces(plotDiv, clickTargetTraceIdx).then(() => {
-        suppressRelayoutEvent = false;
-      });
-    }
-
-    if (!landmarksVisible) {
-      if (lastImagesJSON !== null) {
-        suppressRelayoutEvent = true;
-        Plotly.relayout(plotDiv, { images: [] }).then(() => {
-          suppressRelayoutEvent = false;
-          lastImagesJSON = null;
-        });
-      }
-      return;
-    }
-
-    // Get clusters in view
-    const clusters = getLargestClustersInView(100);
-    if (!clusters.length) return;
-
-    // Get current axis ranges
-    const [xMin, xMax] = plotDiv.layout.xaxis.range;
-    const xRange = xMax - xMin;
-
-    // Calculate thumbnail size in data units (adjust multiplier as needed)
-    const imageSize = Math.max(0.2, Math.min(2.0, xRange / 10));
-
-    // Estimate thumbnail size in pixels based on plot width and zoom
-    const plotWidthPx = plotDiv.offsetWidth || 800;
-    const thumbPx = Math.round((imageSize / xRange) * plotWidthPx);
-
-    // Cap thumbnail size at 256 pixels maximum (and keep 64 minimum)
-    const thumbSize = Math.max(64, Math.min(256, thumbPx));
-
-    // Triangle marker size in pixels (constant)
-    const triangleSize = 32;
-
-    // Calculate offset in data units to move up by 24 pixels
-    const plotHeightPx = plotDiv.offsetHeight || 560;
-    const yRange =
-      plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
-    const pixelToData = yRange / plotHeightPx;
-    const verticalOffset = 24 * pixelToData;
-
-    // Prepare trace data
-    const clustersInView = getNonOverlappingLandmarks(
-      clusters,
-      imageSize,
-      landmarkCount
-    );
-    const x = clustersInView.map((c) => c.center.x);
-    const y = clustersInView.map((c) => c.center.y + verticalOffset);
-    const markerColors = clustersInView.map((c) => c.color);
-
-    // Triangle-down markers at bottom of thumbnails
-    const landmarkTrace = {
-      x,
-      y,
-      mode: "markers",
-      type: "scatter",
-      marker: {
-        size: triangleSize,
-        color: markerColors,
-        symbol: "triangle-down",
-        line: { width: 2, color: "#000" },
-      },
-      hoverinfo: "none",
-      showlegend: false,
-      name: "Landmarks",
-    };
-
-    // Invisible clickable points over thumbnails
-    const clickableTrace = {
-      x: clustersInView.map((c, i) => x[i]),
-      y: clustersInView.map((c, i) => y[i] + imageSize / 2), // center of image
-      mode: "markers",
-      type: "scatter",
-      marker: {
-        color: "rgba(0, 0, 0, 0)",
-        // color: "red", // temporarily make visible for debugging
-        symbol: "square",
-        size: thumbSize,
-        line: { width: 0 },
-      },
-      customdata: clustersInView.map((c) => c.cluster), // <-- store cluster ID, not representative index
-      hoverinfo: "none",
-      showlegend: false,
-      name: "LandmarkClickTargets",
-    };
-
-    // Add thumbnail images
-    const images = clustersInView.map((c, i) => ({
-      source: `thumbnails/${state.album}/${
-        c.representative
-      }?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
-      x: x[i],
-      y: y[i],
-      xref: "x",
-      yref: "y",
-      sizex: imageSize,
-      sizey: imageSize,
-      xanchor: "center",
-      yanchor: "bottom",
-      layer: "above",
-    }));
-
-    // Only update if images changed, and set suppressRelayoutEvent properly
-    const imagesJSON = JSON.stringify(images);
-    if (imagesJSON !== lastImagesJSON) {
-      suppressRelayoutEvent = true;
-      Plotly.addTraces(plotDiv, [landmarkTrace, clickableTrace])
-        .then(() => {
-          return Plotly.relayout(plotDiv, { images });
-        })
-        .then(() => {
-          suppressRelayoutEvent = false;
-          lastImagesJSON = imagesJSON;
-        });
-    } else {
-      suppressRelayoutEvent = true;
-      Plotly.addTraces(plotDiv, [landmarkTrace, clickableTrace]).then(() => {
-        suppressRelayoutEvent = false;
-      });
-    }
-  } finally {
-    isRenderingLandmarks = false;
-  }
-}
-
-// Debounced version for event handlers
-const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 500);
-
-// Helper function to get non-overlapping landmarks
-function getNonOverlappingLandmarks(
-  clusters,
-  imageSize,
-  landmarkCount = landmarkCount
-) {
-  const placed = [];
-  let i = 0;
-  while (i < clusters.length && placed.length < landmarkCount) {
-    const c = clusters[i];
-    const { x, y } = c.center;
-    // Check overlap with already placed landmarks
-    let overlaps = false;
-    for (const p of placed) {
-      const dx = Math.abs(x - p.x);
-      const dy = Math.abs(y - p.y);
-      if (dx < imageSize && dy < imageSize) {
-        overlaps = true;
-        break;
-      }
-    }
-    if (!overlaps) {
-      placed.push({ ...c, x, y });
-    }
-    i++;
-  }
-  return placed;
-}
-
-// Shared function for cluster clicks
-async function handleClusterClick(clickedIndex) {
-  const clickedPoint = points.find((p) => p.index === clickedIndex);
-  if (!clickedPoint) return;
-
-  const clickedCluster = clickedPoint.cluster;
-  const clusterIndex = clusters.indexOf(clickedCluster);
-  const clusterColor = colors[clusterIndex % colors.length];
-  let clusterIndices = points
-    .filter((p) => p.cluster === clickedCluster)
-    .map((p) => p.index);
-
-  // Remove clickedFilename from the list
-  clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
-
-  // --- Sort by ascending distance from clicked point ---
-  const clickedCoords = [clickedPoint.x, clickedPoint.y];
-  // Build a lookup map once
-  const indexToPoint = Object.fromEntries(points.map((p) => [p.index, p]));
-  clusterIndices.sort((a, b) => {
-    const pa = indexToPoint[a];
-    const pb = indexToPoint[b];
-    const da = pa
-      ? Math.hypot(pa.x - clickedCoords[0], pa.y - clickedCoords[1])
-      : Infinity;
-    const db = pb
-      ? Math.hypot(pb.x - clickedCoords[0], pb.y - clickedCoords[1])
-      : Infinity;
-    return da - db;
-  });
-
-  // Promote the clicked filename to the first position
-  const sortedClusterIndices = [clickedIndex, ...clusterIndices];
-
-  const clusterMembers = sortedClusterIndices.map((index) => ({
-    index: index,
-    cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
-    color: clusterColor,
-  }));
-
-  setSearchResults(clusterMembers, "cluster");
-  if (isFullscreen) {
-    lastUnshadedSize = "big"; // Set a default size when exiting fullscreen
-    toggleFullscreen();
-  }
-}
 
 window.addEventListener("resize", () => {
   // Only resize if UMAP window is in fullscreen mode
