@@ -429,18 +429,18 @@ export async function fetchUmapData() {
         if (suppressRelayoutEvent) return;
         debouncedUpdateLandmarkTrace();
 
-        // Bring LandmarkClickTargets trace to the front so that they receive priority for clicks
-        const plotDiv = document.getElementById("umapPlot");
-        const clickTargetTraceIdx = plotDiv.data?.findIndex(
-          (t) => t.name === "LandmarkClickTargets"
-        );
-        if (
-          typeof clickTargetTraceIdx === "number" &&
-          clickTargetTraceIdx >= 0 &&
-          clickTargetTraceIdx < plotDiv.data.length - 1
-        ) {
-          Plotly.moveTraces(plotDiv, clickTargetTraceIdx, plotDiv.data.length - 1);
-        }
+        //   // Bring LandmarkClickTargets trace to the front so that they receive priority for clicks
+        //   const plotDiv = document.getElementById("umapPlot");
+        //   const clickTargetTraceIdx = plotDiv.data?.findIndex(
+        //     (t) => t.name === "LandmarkClickTargets"
+        //   );
+        //   if (
+        //     typeof clickTargetTraceIdx === "number" &&
+        //     clickTargetTraceIdx >= 0 &&
+        //     clickTargetTraceIdx < plotDiv.data.length - 1
+        //   ) {
+        //     Plotly.moveTraces(plotDiv, clickTargetTraceIdx, plotDiv.data.length - 1);
+        //   }
       });
 
       // Initial landmark update
@@ -456,7 +456,6 @@ export async function fetchUmapData() {
       if (landmarksVisible && typeof landmarkTrace != "undefined") {
         setTimeout(() => {
           Plotly.addTraces(gd, [landmarkTrace]);
-          console.log("Calling relayout in fetchUmapData");
           Plotly.relayout(gd, { images });
         }, 500);
       }
@@ -470,11 +469,9 @@ export async function fetchUmapData() {
       .getElementById("umapPlot")
       .on("plotly_click", async function (data) {
         const traceName = data.points[0].fullData.name;
-        console.log("Clicked trace:", traceName);
         if (traceName === "LandmarkClickTargets") {
           // Get cluster ID from customdata
           const clusterId = data.points[0].customdata;
-          console.log("Clicked landmark for cluster:", clusterId);
           // Get all points in this cluster
           const clusterPoints = points.filter((p) => p.cluster === clusterId);
           // Use the improved placement algorithm to get the landmark point
@@ -1166,13 +1163,15 @@ function updateLandmarkTrace() {
 
     // Invisible clickable points over thumbnails
     const clickableTrace = {
-      x: clustersInView.map((c) => c.center.x),
-      y: clustersInView.map((c) => c.center.y + verticalOffset),
+      x: clustersInView.map((c, i) => x[i]),
+      y: clustersInView.map((c, i) => y[i] + imageSize / 2), // center of image
       mode: "markers",
       type: "scatter",
       marker: {
-        size: Math.max(40, triangleSize * 2),
-        color: "rgba(0,0,0,0)",
+        color: "rgba(0, 0, 0, 0)",
+        // color: "red", // temporarily make visible for debugging
+        symbol: "square",
+        size: thumbSize,
         line: { width: 0 },
       },
       customdata: clustersInView.map((c) => c.cluster), // <-- store cluster ID, not representative index
