@@ -37,9 +37,9 @@ let palette = [
   "#b3b3b3",
 ];
 let mapExists = false;
-let umapColorMode = "cluster"; // Default mode
 let isShaded = false;
-let isFullscreen = false;
+let umapWindowHasBeenShown = false; // Track if window has been shown at least once
+let isFullscreen = true;
 let lastUnshadedSize = "medium"; // Track last non-fullscreen size
 let lastUnshadedPosition = { left: null, top: null }; // Track last position
 let landmarksVisible = false;
@@ -61,8 +61,10 @@ function debounce(func, wait) {
 function getCurrentWindowSize() {
   const win = document.getElementById("umapFloatingWindow");
   const width = parseInt(win.style.width, 10);
-  if (width === UMAP_SIZES.big.width + 60) return "big";
-  return "medium";
+  if (isFullscreen) return "fullscreen";
+  if (width >= UMAP_SIZES.big.width) return "big";
+  if (width >= UMAP_SIZES.medium.width) return "medium";
+  return "small";
 }
 
 // Helper to save current position
@@ -171,12 +173,16 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
 // --- Show/Hide UMAP Window ---
 export async function toggleUmapWindow() {
   const umapWindow = document.getElementById("umapFloatingWindow");
-  const labelDiv = document.querySelector("#showUmapBtn + .button-label");
   if (umapWindow.style.display === "block") {
     umapWindow.style.display = "none";
   } else {
     umapWindow.style.display = "block";
     ensureUmapWindowInView();
+    if (!umapWindowHasBeenShown) {
+      umapWindowHasBeenShown = true;
+      setUmapWindowSize("fullscreen");
+    }
+    // Fetch configured eps value from server
     const result = await fetch("get_umap_eps/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -478,6 +484,7 @@ export async function fetchUmapData() {
           color: clusterColor,
         }));
         setSearchResults(clusterMembers, "cluster");
+        if (isFullscreen) toggleFullscreen();
       });
 
     window.umapPoints = points;
@@ -742,8 +749,9 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
     umapThumbnailDiv.style.visibility = "visible"; // <-- Show after loaded
   };
 
-  // Optionally, handle image load error
+  // Handle image load error
   img.onerror = () => {
+    if (!umapThumbnailDiv || !document.body.contains(umapThumbnailDiv)) return;
     umapThumbnailDiv.style.visibility = "visible";
     img.alt = "Thumbnail not available";
   };
@@ -953,31 +961,24 @@ document.addEventListener("DOMContentLoaded", () => {
   makeDraggable("umapTitlebar", "umapFloatingWindow");
 });
 
-// Double-click titlebar to toggle shaded mode
-document.getElementById("umapTitlebar").ondblclick = () => {
-  const win = document.getElementById("umapFloatingWindow");
+// Shading/restoring
+function toggleShade() {
   if (isShaded) {
     setUmapWindowSize(lastUnshadedSize);
     isShaded = false;
   } else {
     lastUnshadedSize = getCurrentWindowSize();
+    console.log("Last unshaded size:", lastUnshadedSize);
     setUmapWindowSize("shaded");
     isShaded = true;
   }
-};
+}
+
+// Double-click titlebar to toggle shaded mode
+document.getElementById("umapTitlebar").ondblclick = toggleShade;
 
 // Shade icon toggles shaded/unshaded
-document.getElementById("umapResizeShaded").onclick = () => {
-  const win = document.getElementById("umapFloatingWindow");
-  if (isShaded) {
-    setUmapWindowSize(lastUnshadedSize);
-    isShaded = false;
-  } else {
-    lastUnshadedSize = getCurrentWindowSize();
-    setUmapWindowSize("shaded");
-    isShaded = true;
-  }
-};
+document.getElementById("umapResizeShaded").onclick = toggleShade;
 
 // Resize buttons
 function addButtonHandlers(id, handler) {
@@ -1007,7 +1008,7 @@ addButtonHandlers("umapResizeSmall", () => {
   saveCurrentPosition();
   isFullscreen = false;
 });
-addButtonHandlers("umapResizeFullscreen", () => {
+function toggleFullscreen() {
   const win = document.getElementById("umapFloatingWindow");
   if (isFullscreen) {
     setUmapWindowSize(lastUnshadedSize);
@@ -1028,7 +1029,11 @@ addButtonHandlers("umapResizeFullscreen", () => {
     win.style.top = "0px";
     isFullscreen = true;
   }
-});
+  // if any hover thumbnail is visible, remove it
+  removeUmapThumbnail();
+}
+
+addButtonHandlers("umapResizeFullscreen", toggleFullscreen);
 addButtonHandlers("umapCloseBtn", () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
 });
@@ -1080,7 +1085,8 @@ function updateLandmarkTrace() {
 
     // Calculate offset in data units to move up by 24 pixels
     const plotHeightPx = plotDiv.offsetHeight || 560;
-    const yRange = plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
+    const yRange =
+      plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
     const pixelToData = yRange / plotHeightPx;
     const verticalOffset = 24 * pixelToData;
 
@@ -1109,7 +1115,9 @@ function updateLandmarkTrace() {
 
     // Add thumbnail images
     const images = clustersInView.map((c, i) => ({
-      source: `thumbnails/${state.album}/${c.representative}?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
+      source: `thumbnails/${state.album}/${
+        c.representative
+      }?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
       x: x[i],
       y: y[i],
       xref: "x",
