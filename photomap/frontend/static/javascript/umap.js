@@ -457,46 +457,16 @@ export async function fetchUmapData() {
       .getElementById("umapPlot")
       .on("plotly_click", async function (data) {
         const clickedIndex = data.points[0].customdata;
-        const clickedPoint = points.find((p) => p.index === clickedIndex);
-        if (!clickedPoint) return;
-        const clickedCluster = clickedPoint.cluster;
-        const clusterIndex = clusters.indexOf(clickedCluster);
-        const clusterColor = colors[clusterIndex % colors.length];
-        let clusterIndices = points
-          .filter((p) => p.cluster === clickedCluster)
-          .map((p) => p.index);
-
-        // Remove clickedFilename from the list
-        clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
-
-        // --- Sort by ascending distance from clicked point ---
-        const clickedCoords = [clickedPoint.x, clickedPoint.y];
-        // Build a lookup map once
-        const indexToPoint = Object.fromEntries(
-          points.map((p) => [p.index, p])
-        );
-        clusterIndices.sort((a, b) => {
-          const pa = indexToPoint[a];
-          const pb = indexToPoint[b];
-          const da = pa
-            ? Math.hypot(pa.x - clickedCoords[0], pa.y - clickedCoords[1])
-            : Infinity;
-          const db = pb
-            ? Math.hypot(pb.x - clickedCoords[0], pb.y - clickedCoords[1])
-            : Infinity;
-          return da - db;
-        });
-
-        // Promote the clicked filename to the first position
-        const sortedClusterIndices = [clickedIndex, ...clusterIndices];
-
-        const clusterMembers = sortedClusterIndices.map((index) => ({
-          index: index,
-          cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
-          color: clusterColor,
-        }));
-        setSearchResults(clusterMembers, "cluster");
-        if (isFullscreen) toggleFullscreen();
+        const traceIndex = data.points[0].curveNumber;
+        
+        // Check if this is a click on the landmark click targets trace
+        if (data.points[0].fullData.name === "LandmarkClickTargets") {
+          // This is a landmark click
+          await handleClusterClick(clickedIndex);
+        } else if (traceIndex === 0) {
+          // This is a regular scatter plot click
+          await handleClusterClick(clickedIndex);
+        }
       });
 
     window.umapPoints = points;
@@ -1074,13 +1044,37 @@ function updateLandmarkTrace() {
     const plotDiv = document.getElementById("umapPlot");
     if (!plotDiv || !plotDiv.layout) return;
 
-    // Remove previous landmark trace (if any)
-    const landmarkTraceIdx = plotDiv.data?.findIndex(
+    // Remove previous landmark traces (both triangles and click targets)
+    let landmarkTraceIdx = plotDiv.data?.findIndex(
       (t) => t.name === "Landmarks"
     );
-    if (landmarkTraceIdx !== undefined && landmarkTraceIdx !== -1) {
+    let clickTargetTraceIdx = plotDiv.data?.findIndex(
+      (t) => t.name === "LandmarkClickTargets"
+    );
+
+    // Only delete if index is valid
+    if (
+      typeof landmarkTraceIdx === "number" &&
+      landmarkTraceIdx >= 0 &&
+      landmarkTraceIdx < plotDiv.data.length
+    ) {
       suppressRelayoutEvent = true;
       Plotly.deleteTraces(plotDiv, landmarkTraceIdx).then(() => {
+        suppressRelayoutEvent = false;
+      });
+    }
+
+    // Recompute clickTargetTraceIdx after possible deletion above
+    clickTargetTraceIdx = plotDiv.data?.findIndex(
+      (t) => t.name === "LandmarkClickTargets"
+    );
+    if (
+      typeof clickTargetTraceIdx === "number" &&
+      clickTargetTraceIdx >= 0 &&
+      clickTargetTraceIdx < plotDiv.data.length
+    ) {
+      suppressRelayoutEvent = true;
+      Plotly.deleteTraces(plotDiv, clickTargetTraceIdx).then(() => {
         suppressRelayoutEvent = false;
       });
     }
@@ -1148,6 +1142,23 @@ function updateLandmarkTrace() {
       name: "Landmarks",
     };
 
+    // Invisible clickable points over thumbnails
+    const clickableTrace = {
+      x: clustersInView.map((c) => c.center.x),
+      y: clustersInView.map((c) => c.center.y + verticalOffset), // Same position as thumbnails
+      mode: "markers",
+      type: "scatter",
+      marker: {
+        size: Math.max(40, triangleSize * 2), // Larger click target than triangle
+        color: "rgba(0,0,0,0)", // Transparent
+        line: { width: 0 }
+      },
+      customdata: clustersInView.map((c) => c.cluster), // <-- store cluster ID, not representative index
+      hoverinfo: "none",
+      showlegend: false,
+      name: "LandmarkClickTargets"
+    };
+
     // Add thumbnail images
     const images = clustersInView.map((c, i) => ({
       source: `thumbnails/${state.album}/${
@@ -1168,7 +1179,7 @@ function updateLandmarkTrace() {
     const imagesJSON = JSON.stringify(images);
     if (imagesJSON !== lastImagesJSON) {
       suppressRelayoutEvent = true;
-      Plotly.addTraces(plotDiv, [landmarkTrace])
+      Plotly.addTraces(plotDiv, [landmarkTrace, clickableTrace])
         .then(() => {
           return Plotly.relayout(plotDiv, { images });
         })
@@ -1178,7 +1189,7 @@ function updateLandmarkTrace() {
         });
     } else {
       suppressRelayoutEvent = true;
-      Plotly.addTraces(plotDiv, [landmarkTrace]).then(() => {
+      Plotly.addTraces(plotDiv, [landmarkTrace, clickableTrace]).then(() => {
         suppressRelayoutEvent = false;
       });
     }
@@ -1213,4 +1224,53 @@ function getNonOverlappingLandmarks(clusters, imageSize, landmarkCount = landmar
     i++;
   }
   return placed;
+}
+
+// Shared function for cluster clicks
+async function handleClusterClick(clickedIndex) {
+  const clickedPoint = points.find((p) => p.index === clickedIndex);
+  if (!clickedPoint) return;
+  
+  const clickedCluster = clickedPoint.cluster;
+  const clusterIndex = clusters.indexOf(clickedCluster);
+  const clusterColor = colors[clusterIndex % colors.length];
+  let clusterIndices = points
+    .filter((p) => p.cluster === clickedCluster)
+    .map((p) => p.index);
+
+  // Remove clickedFilename from the list
+  clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
+
+  // --- Sort by ascending distance from clicked point ---
+  const clickedCoords = [clickedPoint.x, clickedPoint.y];
+  // Build a lookup map once
+  const indexToPoint = Object.fromEntries(
+    points.map((p) => [p.index, p])
+  );
+  clusterIndices.sort((a, b) => {
+    const pa = indexToPoint[a];
+    const pb = indexToPoint[b];
+    const da = pa
+      ? Math.hypot(pa.x - clickedCoords[0], pa.y - clickedCoords[1])
+      : Infinity;
+    const db = pb
+      ? Math.hypot(pb.x - clickedCoords[0], pb.y - clickedCoords[1])
+      : Infinity;
+    return da - db;
+  });
+
+  // Promote the clicked filename to the first position
+  const sortedClusterIndices = [clickedIndex, ...clusterIndices];
+
+  const clusterMembers = sortedClusterIndices.map((index) => ({
+    index: index,
+    cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
+    color: clusterColor,
+  }));
+  
+  setSearchResults(clusterMembers, "cluster");
+  if (isFullscreen) {
+    lastUnshadedSize = "big"; // Set a default size when exiting fullscreen
+    toggleFullscreen();
+  }
 }
