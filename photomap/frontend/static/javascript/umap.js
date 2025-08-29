@@ -984,16 +984,26 @@ function updateLandmarkTrace() {
   // Calculate thumbnail size in data units (adjust multiplier as needed)
   const imageSize = Math.max(0.2, Math.min(1.0, xRange / 20));
 
+  // Estimate thumbnail size in pixels based on plot width and zoom
+  const plotWidthPx = plotDiv.offsetWidth || 800;
+  const thumbPx = Math.round((imageSize / xRange) * plotWidthPx);
+
+  // Clamp thumbnail size to reasonable values
+  const thumbSize = Math.max(64, Math.min(256, thumbPx));
+
   // Triangle marker size in pixels (constant)
   const triangleSize = 32;
 
-  // Triangle y-position: align top of triangle with bottom of thumbnail
-  // If you want a slight overlap, subtract a small fraction of imageSize
-  const triangleYOffset = imageSize * 0.1; // adjust as needed
+  // Calculate offset in data units to move up by 32 pixels
+  // Convert 32 pixels to data units using the plot's y-range and height
+  const plotHeightPx = plotDiv.offsetHeight || 560;
+  const yRange = plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
+  const pixelToData = yRange / plotHeightPx;
+  const verticalOffset = 32 * pixelToData;
 
   // Prepare trace data
   const x = clusters.map(c => c.center.x);
-  const y = clusters.map(c => c.center.y - triangleYOffset); // minimal offset for overlap
+  const y = clusters.map(c => c.center.y + verticalOffset); // Move up by 32 pixels
   const markerColors = clusters.map(c => c.color);
 
   // Triangle-down markers at bottom of thumbnails
@@ -1003,7 +1013,7 @@ function updateLandmarkTrace() {
     mode: "markers",
     type: "scatter",
     marker: {
-      size: triangleSize, // constant pixel size
+      size: triangleSize,
       color: markerColors,
       symbol: "triangle-down",
       line: { width: 2, color: "#000" }
@@ -1013,11 +1023,11 @@ function updateLandmarkTrace() {
     name: "Landmarks"
   };
 
-  // Add thumbnail images
-  const images = clusters.map((c) => ({
-    source: `thumbnails/${state.album}/${c.representative}?size=64`,
-    x: c.center.x,
-    y: c.center.y,
+  // Add thumbnail images, requesting larger images at higher zoom
+  const images = clusters.map((c, i) => ({
+    source: `thumbnails/${state.album}/${c.representative}?size=${thumbSize}`,
+    x: x[i],
+    y: y[i],
     xref: "x",
     yref: "y",
     sizex: imageSize,
@@ -1027,7 +1037,6 @@ function updateLandmarkTrace() {
     layer: "above"
   }));
 
-  // Add trace and images
   Plotly.addTraces(plotDiv, [landmarkTrace]);
   Plotly.relayout(plotDiv, { images });
 }
