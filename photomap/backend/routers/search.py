@@ -214,7 +214,7 @@ async def serve_thumbnail(
                 im = ImageOps.exif_transpose(im)
                 im.thumbnail((size, size))
                 if color:
-                    border_width = max(4, size // 32)
+                    border_width = max(5, size // 32)
                     # Convert hex color to RGB
                     border_color = color
                     if color.startswith("#"):

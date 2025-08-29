@@ -50,12 +50,11 @@ let currentZoomLevel = null;
 // Add debounce function
 function debounce(func, wait) {
   let timeout;
-  return function(...args) {
+  return function (...args) {
     clearTimeout(timeout);
     timeout = setTimeout(() => func.apply(this, args), wait);
   };
 }
-
 
 // Helper to get current window size
 function getCurrentWindowSize() {
@@ -276,46 +275,50 @@ export async function fetchUmapData() {
           hoverinfo: "none",
         };
 
+    const layout = {
+      showlegend: false,
+      dragmode: "pan",
+      height: UMAP_SIZES.medium.height,
+      width: UMAP_SIZES.medium.width,
+      plot_bgcolor: "rgba(0,0,0,0)", // transparent plot area
+      paper_bgcolor: "rgba(0,0,0,0)", // transparent paper
+      font: { color: "#eee" },
+      xaxis: {
+        gridcolor: "rgba(255,255,255,0.15)",
+        zerolinecolor: "rgba(255,255,255,0.25)",
+        color: "#eee",
+        linecolor: "#888",
+        tickcolor: "#888",
+        range: [xMin, xMax],
+        scaleanchor: "y",
+      },
+      yaxis: {
+        gridcolor: "rgba(255,255,255,0.15)",
+        zerolinecolor: "rgba(255,255,255,0.25)",
+        color: "#eee",
+        linecolor: "#888",
+        tickcolor: "#888",
+        range: [yMin, yMax],
+      },
+      margin: {
+        t: 30,
+        r: 0,
+        b: 30,
+        l: 30,
+        pad: 0,
+      },
+    };
+
+    const config = {
+      modeBarButtonsToRemove: ["select2d", "lasso2d"],
+      scrollZoom: true,
+    };
+
     Plotly.newPlot(
       "umapPlot",
       [allPointsTrace, currentImageTrace],
-      {
-        showlegend: false,
-        dragmode: "pan",
-        height: UMAP_SIZES.medium.height,
-        width: UMAP_SIZES.medium.width,
-        plot_bgcolor: "rgba(0,0,0,0)", // transparent plot area
-        paper_bgcolor: "rgba(0,0,0,0)", // transparent paper
-        font: { color: "#eee" },
-        xaxis: {
-          gridcolor: "rgba(255,255,255,0.15)",
-          zerolinecolor: "rgba(255,255,255,0.25)",
-          color: "#eee",
-          linecolor: "#888",
-          tickcolor: "#888",
-          range: [xMin, xMax],
-          scaleanchor: "y", 
-        },
-        yaxis: {
-          gridcolor: "rgba(255,255,255,0.15)",
-          zerolinecolor: "rgba(255,255,255,0.25)",
-          color: "#eee",
-          linecolor: "#888",
-          tickcolor: "#888",
-          range: [yMin, yMax],
-        },
-        margin: {
-          t: 30,
-          r: 0,
-          b: 30,
-          l: 30,
-          pad: 0,
-        },
-      },
-      {
-        modeBarButtonsToRemove: ["select2d", "lasso2d"],
-        scrollZoom: true,
-      }
+      layout,
+      config
     ).then((gd) => {
       document.getElementById("umapContent").style.display = "block";
       setUmapWindowSize("medium");
@@ -378,10 +381,12 @@ export async function fetchUmapData() {
 
       gd.on("plotly_relayout", (eventData) => {
         // Only update landmarks if this is a zoom/pan event
-        if (eventData["xaxis.range[0]"] !== undefined || 
-            eventData["yaxis.range[0]"] !== undefined ||
-            eventData["xaxis.range"] !== undefined ||
-            eventData["yaxis.range"] !== undefined) {
+        if (
+          eventData["xaxis.range[0]"] !== undefined ||
+          eventData["yaxis.range[0]"] !== undefined ||
+          eventData["xaxis.range"] !== undefined ||
+          eventData["yaxis.range"] !== undefined
+        ) {
           debouncedUpdateLandmarkTrace();
         }
       });
@@ -396,6 +401,14 @@ export async function fetchUmapData() {
       // Show the EPS spinner container now that the plot is ready
       const epsContainer = document.getElementById("umapEpsContainer");
       if (epsContainer) epsContainer.style.display = "block";
+
+      // Add triangle trace and images after plot is created
+      if (landmarksVisible) {
+        setTimeout(() => {
+          Plotly.addTraces(gd, [landmarkTrace]);
+          Plotly.relayout(gd, { images });
+        }, 500);
+      }
     });
 
     // Ensure the current image marker is visible after plot initialization
@@ -718,7 +731,7 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
 
 function removeUmapThumbnail() {
   // Remove all elements with the umap-thumbnail class
-  document.querySelectorAll('.umap-thumbnail').forEach(div => div.remove());
+  document.querySelectorAll(".umap-thumbnail").forEach((div) => div.remove());
   umapThumbnailDiv = null;
 }
 
@@ -860,7 +873,7 @@ function setUmapWindowSize(sizeKey) {
     Plotly.relayout(plotDiv, {
       width: window.innerWidth - 32,
       height: window.innerHeight - controlsHeight,
-      "xaxis.scaleanchor": "y", 
+      "xaxis.scaleanchor": "y",
     });
   } else {
     if (contentDiv) contentDiv.style.display = "block";
@@ -988,11 +1001,13 @@ function updateLandmarkTrace() {
   if (!plotDiv || !plotDiv.layout) return;
 
   // Remove previous landmark trace (if any)
-  const landmarkTraceIdx = plotDiv.data?.findIndex(t => t.name === "Landmarks");
+  const landmarkTraceIdx = plotDiv.data?.findIndex(
+    (t) => t.name === "Landmarks"
+  );
   if (landmarkTraceIdx !== undefined && landmarkTraceIdx !== -1) {
     Plotly.deleteTraces(plotDiv, landmarkTraceIdx);
   }
-  
+
   // Always clear images
   Plotly.relayout(plotDiv, { images: [] });
 
@@ -1013,23 +1028,22 @@ function updateLandmarkTrace() {
   const plotWidthPx = plotDiv.offsetWidth || 800;
   const thumbPx = Math.round((imageSize / xRange) * plotWidthPx);
 
-  // Clamp thumbnail size to reasonable values
+  // Cap thumbnail size at 256 pixels maximum (and keep 64 minimum)
   const thumbSize = Math.max(64, Math.min(256, thumbPx));
 
   // Triangle marker size in pixels (constant)
   const triangleSize = 32;
 
   // Calculate offset in data units to move up by 32 pixels
-  // Convert 32 pixels to data units using the plot's y-range and height
   const plotHeightPx = plotDiv.offsetHeight || 560;
   const yRange = plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
   const pixelToData = yRange / plotHeightPx;
   const verticalOffset = 24 * pixelToData;
 
   // Prepare trace data
-  const x = clusters.map(c => c.center.x);
-  const y = clusters.map(c => c.center.y + verticalOffset); // Move up by 32 pixels
-  const markerColors = clusters.map(c => c.color);
+  const x = clusters.map((c) => c.center.x);
+  const y = clusters.map((c) => c.center.y + verticalOffset);
+  const markerColors = clusters.map((c) => c.color);
 
   // Triangle-down markers at bottom of thumbnails
   const landmarkTrace = {
@@ -1041,16 +1055,18 @@ function updateLandmarkTrace() {
       size: triangleSize,
       color: markerColors,
       symbol: "triangle-down",
-      line: { width: 2, color: "#000" }
+      line: { width: 2, color: "#000" },
     },
     hoverinfo: "none",
     showlegend: false,
-    name: "Landmarks"
+    name: "Landmarks",
   };
 
-  // Add thumbnail images, requesting larger images at higher zoom
+  // Add thumbnail images
   const images = clusters.map((c, i) => ({
-    source: `thumbnails/${state.album}/${c.representative}?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
+    source: `thumbnails/${state.album}/${
+      c.representative
+    }?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
     x: x[i],
     y: y[i],
     xref: "x",
@@ -1059,20 +1075,13 @@ function updateLandmarkTrace() {
     sizey: imageSize,
     xanchor: "center",
     yanchor: "bottom",
-    layer: "above"
+    layer: "above",
   }));
 
+  // Add the triangle trace as the LAST trace (highest z-order)
   Plotly.addTraces(plotDiv, [landmarkTrace]);
   Plotly.relayout(plotDiv, { images });
 }
 
 // Debounced version for event handlers
 const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 1000);
-
-// --- Base64 Thumbnail with Border ---
-function makeThumbnailWithBorder(url, borderColor = "#000", borderWidth = 2) {
-  return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
-    <rect x='0' y='0' width='64' height='64' fill='white' stroke='${borderColor}' stroke-width='${borderWidth}'/>
-    <image href='${url}' x='0' y='0' width='64' height='64'/>
-  </svg>`;
-}
