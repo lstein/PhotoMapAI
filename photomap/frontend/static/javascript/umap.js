@@ -12,7 +12,7 @@ const UMAP_SIZES = {
   small: { width: 340, height: 180 },
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
-const LandmarkCount = 15; // Number of landmarks to show
+const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
 
 let points = [];
 let clusters = [];
@@ -1097,7 +1097,7 @@ function updateLandmarkTrace() {
     }
 
     // Get clusters in view
-    const clusters = getLargestClustersInView(LandmarkCount);
+    const clusters = getLargestClustersInView(100);
     if (!clusters.length) return;
 
     // Get current axis ranges
@@ -1125,7 +1125,8 @@ function updateLandmarkTrace() {
     const verticalOffset = 24 * pixelToData;
 
     // Prepare trace data
-    const clustersInView = getNonOverlappingLandmarks(clusters, imageSize);
+    const clustersInView = getNonOverlappingLandmarks(clusters, imageSize, landmarkCount);
+    console.log("Clusters in view for landmarks:", clustersInView.length);
     const x = clustersInView.map((c) => c.center.x);
     const y = clustersInView.map((c) => c.center.y + verticalOffset);
     const markerColors = clustersInView.map((c) => c.color);
@@ -1190,11 +1191,11 @@ function updateLandmarkTrace() {
 const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 500);
 
 // Helper function to get non-overlapping landmarks
-function getNonOverlappingLandmarks(clusters, imageSize) {
+function getNonOverlappingLandmarks(clusters, imageSize, landmarkCount = landmarkCount) {
   const placed = [];
-  const minDist = imageSize; // Minimum distance between centers to avoid overlap
-
-  clusters.forEach((c) => {
+  let i = 0;
+  while (i < clusters.length && placed.length < landmarkCount) {
+    const c = clusters[i];
     const { x, y } = c.center;
     // Check overlap with already placed landmarks
     let overlaps = false;
@@ -1209,7 +1210,7 @@ function getNonOverlappingLandmarks(clusters, imageSize) {
     if (!overlaps) {
       placed.push({ ...c, x, y });
     }
-  });
-
+    i++;
+  }
   return placed;
 }
