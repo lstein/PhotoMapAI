@@ -325,6 +325,7 @@ export async function fetchUmapData() {
       let isHovering = false;
 
       gd.on("plotly_hover", function (eventData) {
+        if (!hoverThumbnailsEnabled) return; // <-- Only show if enabled
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
         if (pt.curveNumber !== 0) return;
@@ -481,6 +482,8 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
 }
 
 // --- Checkbox event handler ---
+let hoverThumbnailsEnabled = true; // default ON
+
 document.addEventListener("DOMContentLoaded", () => {
   const highlightCheckbox = document.getElementById("umapHighlightSelection");
   if (highlightCheckbox) {
@@ -490,9 +493,23 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Hover thumbnails checkbox
+  const hoverThumbCheckbox = document.getElementById("umapShowHoverThumbnails");
+  if (hoverThumbCheckbox) {
+    hoverThumbCheckbox.checked = true;
+    hoverThumbnailsEnabled = true;
+    hoverThumbCheckbox.addEventListener("change", (e) => {
+      hoverThumbnailsEnabled = e.target.checked;
+      // Remove any popup if disabling
+      if (!hoverThumbnailsEnabled) removeUmapThumbnail();
+    });
+  }
+
+  // Landmarks checkbox
   const landmarkCheckbox = document.getElementById("umapShowLandmarks");
   if (landmarkCheckbox) {
     landmarkCheckbox.checked = false;
+    landmarksVisible = false;
     landmarkCheckbox.addEventListener("change", (e) => {
       landmarksVisible = e.target.checked;
       updateLandmarkTrace();
