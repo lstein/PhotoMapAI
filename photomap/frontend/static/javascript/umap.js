@@ -1111,4 +1111,4 @@ function updateLandmarkTrace() {
 }
 
 // Debounced version for event handlers
-const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 1000);
+const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 500);
