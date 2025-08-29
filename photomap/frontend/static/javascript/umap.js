@@ -347,7 +347,7 @@ export async function fetchUmapData() {
       config
     ).then((gd) => {
       document.getElementById("umapContent").style.display = "block";
-      setUmapWindowSize("medium");
+      setUmapWindowSize("fullscreen");
       hideUmapSpinner();
 
       setUmapColorMode();
@@ -406,18 +406,29 @@ export async function fetchUmapData() {
       });
 
       gd.on("plotly_relayout", (eventData) => {
-        // Only update landmarks if this is a zoom/pan event
-        if (
+        if (suppressRelayoutEvent) return; // Prevent feedback loop
+
+        // Only update landmarks for actual user pan/zoom events, not our programmatic changes
+        const isPanZoom =
           eventData["xaxis.range[0]"] !== undefined ||
           eventData["yaxis.range[0]"] !== undefined ||
           eventData["xaxis.range"] !== undefined ||
-          eventData["yaxis.range"] !== undefined
-        ) {
+          eventData["yaxis.range"] !== undefined;
+
+        const isResize =
+          eventData.width !== undefined || eventData.height !== undefined;
+        const isImageUpdate = eventData.images !== undefined;
+
+        // Only update landmarks for pan/zoom, not for our own image updates or resizes
+        if (isPanZoom && !isImageUpdate && !isResize) {
           debouncedUpdateLandmarkTrace();
         }
       });
 
-      gd.on("plotly_redraw", debouncedUpdateLandmarkTrace);
+      gd.on("plotly_redraw", () => {
+        if (suppressRelayoutEvent) return; // Prevent feedback loop
+        debouncedUpdateLandmarkTrace();
+      });
 
       // Initial landmark update
       if (landmarksVisible) {
@@ -429,9 +440,10 @@ export async function fetchUmapData() {
       if (epsContainer) epsContainer.style.display = "block";
 
       // Add triangle trace and images after plot is created
-      if (landmarksVisible) {
+      if (landmarksVisible && typeof landmarkTrace != "undefined") {
         setTimeout(() => {
           Plotly.addTraces(gd, [landmarkTrace]);
+          console.log("Calling relayout in fetchUmapData");
           Plotly.relayout(gd, { images });
         }, 500);
       }
@@ -877,6 +889,7 @@ function setUmapWindowSize(sizeKey) {
   const plotDiv = document.getElementById("umapPlot");
   const contentDiv = document.getElementById("umapContent");
   const landmarkCheckbox = document.getElementById("umapShowLandmarks");
+  const hoverThumbCheckbox = document.getElementById("umapShowHoverThumbnails");
 
   win.style.opacity = "0.75"; // default opacity for all sizes
 
@@ -914,6 +927,11 @@ function setUmapWindowSize(sizeKey) {
       landmarksVisible = true;
       updateLandmarkTrace();
     }
+    // Turn hover thumbnails OFF in fullscreen
+    if (hoverThumbCheckbox) {
+      hoverThumbCheckbox.checked = false;
+      hoverThumbnailsEnabled = false;
+    }
   } else {
     if (contentDiv) contentDiv.style.display = "block";
     const { width, height } = UMAP_SIZES[sizeKey];
@@ -949,9 +967,15 @@ function setUmapWindowSize(sizeKey) {
       landmarksVisible = false;
       updateLandmarkTrace();
     }
+    // Turn hover thumbnails ON in big, medium, small
+    if (hoverThumbCheckbox) {
+      hoverThumbCheckbox.checked = true;
+      hoverThumbnailsEnabled = true;
+    }
   }
   setActiveResizeIcon(sizeKey);
   ensureUmapWindowInView();
+  removeUmapThumbnail();  // just in case
 }
 
 // Titlebar resizing/dragging code is here.
@@ -968,7 +992,6 @@ function toggleShade() {
     isShaded = false;
   } else {
     lastUnshadedSize = getCurrentWindowSize();
-    console.log("Last unshaded size:", lastUnshadedSize);
     setUmapWindowSize("shaded");
     isShaded = true;
   }
@@ -1040,9 +1063,11 @@ addButtonHandlers("umapCloseBtn", () => {
 
 // --- Update Landmark Trace ---
 let isRenderingLandmarks = false;
+let lastImagesJSON = null;
+let suppressRelayoutEvent = false; // Add this flag
 
 function updateLandmarkTrace() {
-  if (isRenderingLandmarks) return; // Guard: skip if already rendering
+  if (isRenderingLandmarks) return;
   isRenderingLandmarks = true;
 
   try {
@@ -1054,13 +1079,22 @@ function updateLandmarkTrace() {
       (t) => t.name === "Landmarks"
     );
     if (landmarkTraceIdx !== undefined && landmarkTraceIdx !== -1) {
-      Plotly.deleteTraces(plotDiv, landmarkTraceIdx);
+      suppressRelayoutEvent = true;
+      Plotly.deleteTraces(plotDiv, landmarkTraceIdx).then(() => {
+        suppressRelayoutEvent = false;
+      });
     }
 
-    // Always clear images
-    Plotly.relayout(plotDiv, { images: [] });
-
-    if (!landmarksVisible) return;
+    if (!landmarksVisible) {
+      if (lastImagesJSON !== null) {
+        suppressRelayoutEvent = true;
+        Plotly.relayout(plotDiv, { images: [] }).then(() => {
+          suppressRelayoutEvent = false;
+          lastImagesJSON = null;
+        });
+      }
+      return;
+    }
 
     // Get clusters in view
     const clusters = getLargestClustersInView(LandmarkCount);
@@ -1129,11 +1163,26 @@ function updateLandmarkTrace() {
       layer: "above",
     }));
 
-    // Add the triangle trace as the LAST trace (highest z-order)
-    Plotly.addTraces(plotDiv, [landmarkTrace]);
-    Plotly.relayout(plotDiv, { images });
+    // Only update if images changed, and set suppressRelayoutEvent properly
+    const imagesJSON = JSON.stringify(images);
+    if (imagesJSON !== lastImagesJSON) {
+      suppressRelayoutEvent = true;
+      Plotly.addTraces(plotDiv, [landmarkTrace])
+        .then(() => {
+          return Plotly.relayout(plotDiv, { images });
+        })
+        .then(() => {
+          suppressRelayoutEvent = false;
+          lastImagesJSON = imagesJSON;
+        });
+    } else {
+      suppressRelayoutEvent = true;
+      Plotly.addTraces(plotDiv, [landmarkTrace]).then(() => {
+        suppressRelayoutEvent = false;
+      });
+    }
   } finally {
-    isRenderingLandmarks = false; // Clear guard after rendering
+    isRenderingLandmarks = false;
   }
 }
 
