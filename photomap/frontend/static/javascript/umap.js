@@ -41,6 +41,20 @@ let isShaded = false;
 let isFullscreen = false;
 let lastUnshadedSize = "medium"; // Track last non-fullscreen size
 let lastUnshadedPosition = { left: null, top: null }; // Track last position
+let landmarksVisible = false;
+
+// Track current zoom level to detect zoom changes
+let currentZoomLevel = null;
+
+// Add debounce function
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
+
 
 // Helper to get current window size
 function getCurrentWindowSize() {
@@ -62,6 +76,55 @@ function getClusterColor(cluster) {
   if (cluster === -1) return "#cccccc";
   const idx = clusters.indexOf(cluster);
   return colors[idx % colors.length];
+}
+
+// Helper: get cluster centers and representatives
+function getLargestClustersInView(maxLandmarks = 10) {
+  // Get current axis ranges
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.layout) return [];
+  const [xMin, xMax] = plotDiv.layout.xaxis.range;
+  const [yMin, yMax] = plotDiv.layout.yaxis.range;
+
+  // Group points by cluster
+  const clusterMap = new Map();
+  points.forEach((p) => {
+    if (p.cluster === -1) return;
+    if (!clusterMap.has(p.cluster)) clusterMap.set(p.cluster, []);
+    clusterMap.get(p.cluster).push(p);
+  });
+
+  // Find clusters whose centers are in view
+  let clustersInView = [];
+  for (const [cluster, pts] of clusterMap.entries()) {
+    // Compute center
+    const cx = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
+    const cy = pts.reduce((sum, p) => sum + p.y, 0) / pts.length;
+    // Representative: closest to center
+    let rep = pts[0];
+    let minDist = Math.hypot(rep.x - cx, rep.y - cy);
+    for (const p of pts) {
+      const d = Math.hypot(p.x - cx, p.y - cy);
+      if (d < minDist) {
+        minDist = d;
+        rep = p;
+      }
+    }
+    // Only include if center is in view
+    if (cx >= xMin && cx <= xMax && cy >= yMin && cy <= yMax) {
+      clustersInView.push({
+        cluster,
+        center: { x: cx, y: cy },
+        representative: rep.index,
+        color: getClusterColor(cluster),
+        size: pts.length,
+      });
+    }
+  }
+
+  // Sort by size, largest first, and take up to maxLandmarks
+  clustersInView.sort((a, b) => b.size - a.size);
+  return clustersInView.slice(0, maxLandmarks);
 }
 
 // --- Spinner UI ---
@@ -315,6 +378,23 @@ export async function fetchUmapData() {
         );
       });
 
+      gd.on("plotly_relayout", (eventData) => {
+        // Only update landmarks if this is a zoom/pan event
+        if (eventData["xaxis.range[0]"] !== undefined || 
+            eventData["yaxis.range[0]"] !== undefined ||
+            eventData["xaxis.range"] !== undefined ||
+            eventData["yaxis.range"] !== undefined) {
+          debouncedUpdateLandmarkTrace();
+        }
+      });
+
+      gd.on("plotly_redraw", debouncedUpdateLandmarkTrace);
+
+      // Initial landmark update
+      if (landmarksVisible) {
+        setTimeout(updateLandmarkTrace, 500);
+      }
+
       // Show the EPS spinner container now that the plot is ready
       const epsContainer = document.getElementById("umapEpsContainer");
       if (epsContainer) epsContainer.style.display = "block";
@@ -411,6 +491,15 @@ document.addEventListener("DOMContentLoaded", () => {
     highlightCheckbox.checked = false;
     highlightCheckbox.addEventListener("change", () => {
       setUmapColorMode();
+    });
+  }
+
+  const landmarkCheckbox = document.getElementById("umapShowLandmarks");
+  if (landmarkCheckbox) {
+    landmarkCheckbox.checked = false;
+    landmarkCheckbox.addEventListener("change", (e) => {
+      landmarksVisible = e.target.checked;
+      updateLandmarkTrace();
     });
   }
 });
@@ -880,3 +969,89 @@ addButtonHandlers("umapResizeFullscreen", () => {
 addButtonHandlers("umapCloseBtn", () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
 });
+
+// --- Update Landmark Trace ---
+function updateLandmarkTrace() {
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.layout) return;
+
+  // Remove previous landmark trace (if any)
+  const landmarkTraceIdx = plotDiv.data?.findIndex(t => t.name === "Landmarks");
+  if (landmarkTraceIdx !== undefined && landmarkTraceIdx !== -1) {
+    Plotly.deleteTraces(plotDiv, landmarkTraceIdx);
+  }
+  
+  // Always clear images
+  Plotly.relayout(plotDiv, { images: [] });
+
+  if (!landmarksVisible) return;
+
+  // Get clusters in view
+  const clusters = getLargestClustersInView(10);
+  if (!clusters.length) return;
+
+  // Get current axis ranges
+  const [xMin, xMax] = plotDiv.layout.xaxis.range;
+  const xRange = xMax - xMin;
+
+  // Calculate thumbnail size in data units (adjust multiplier as needed)
+  const imageSize = Math.max(0.2, Math.min(1.0, xRange / 20));
+
+  // Triangle marker size in pixels (constant)
+  const triangleSize = 32;
+
+  // Triangle y-position: align top of triangle with bottom of thumbnail
+  // If you want a slight overlap, subtract a small fraction of imageSize
+  const triangleYOffset = imageSize * 0.1; // adjust as needed
+
+  // Prepare trace data
+  const x = clusters.map(c => c.center.x);
+  const y = clusters.map(c => c.center.y - triangleYOffset); // minimal offset for overlap
+  const markerColors = clusters.map(c => c.color);
+
+  // Triangle-down markers at bottom of thumbnails
+  const landmarkTrace = {
+    x,
+    y,
+    mode: "markers",
+    type: "scatter",
+    marker: {
+      size: triangleSize, // constant pixel size
+      color: markerColors,
+      symbol: "triangle-down",
+      line: { width: 2, color: "#000" }
+    },
+    hoverinfo: "none",
+    showlegend: false,
+    name: "Landmarks"
+  };
+
+  // Add thumbnail images
+  const images = clusters.map((c) => ({
+    source: `thumbnails/${state.album}/${c.representative}?size=64`,
+    x: c.center.x,
+    y: c.center.y,
+    xref: "x",
+    yref: "y",
+    sizex: imageSize,
+    sizey: imageSize,
+    xanchor: "center",
+    yanchor: "bottom",
+    layer: "above"
+  }));
+
+  // Add trace and images
+  Plotly.addTraces(plotDiv, [landmarkTrace]);
+  Plotly.relayout(plotDiv, { images });
+}
+
+// Debounced version for event handlers
+const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 1000);
+
+// --- Base64 Thumbnail with Border ---
+function makeThumbnailWithBorder(url, borderColor = "#000", borderWidth = 2) {
+  return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
+    <rect x='0' y='0' width='64' height='64' fill='white' stroke='${borderColor}' stroke-width='${borderWidth}'/>
+    <image href='${url}' x='0' y='0' width='64' height='64'/>
+  </svg>`;
+}
