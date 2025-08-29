@@ -12,6 +12,7 @@ const UMAP_SIZES = {
   small: { width: 340, height: 180 },
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
+const LandmarkCount = 15; // Number of landmarks to show
 
 let points = [];
 let clusters = [];
@@ -93,26 +94,45 @@ function getLargestClustersInView(maxLandmarks = 10) {
     clusterMap.get(p.cluster).push(p);
   });
 
+  // Improved landmark placement algorithm
+  function getLandmarkForCluster(pts) {
+    // 1. Find X center
+    const centerX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
+
+    // 2. Compute X spread (standard deviation and range)
+    const xs = pts.map((p) => p.x);
+    const xMean = centerX;
+    const xStd = Math.sqrt(
+      xs.reduce((sum, x) => sum + Math.pow(x - xMean, 2), 0) / xs.length
+    );
+    const xRange = Math.max(...xs) - Math.min(...xs);
+
+    // 3. Filter points near centerX (within 0.5 * std or 0.2 * range)
+    const threshold = Math.max(xStd * 0.5, xRange * 0.2);
+    const candidates = pts.filter((p) => Math.abs(p.x - centerX) <= threshold);
+
+    // 4. Pick highest Y among candidates
+    let best = candidates[0] || pts[0];
+    for (const p of candidates) {
+      if (p.y > best.y) best = p;
+    }
+    return best;
+  }
+
   let clustersInView = [];
   for (const [cluster, pts] of clusterMap.entries()) {
-    // 1. Find horizontal center
-    const centerX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
-    // 2. Find highest point closest to centerX
-    let best = pts[0];
-    for (const p of pts) {
-      if (
-        p.y > best.y ||
-        (p.y === best.y && Math.abs(p.x - centerX) < Math.abs(best.x - centerX))
-      ) {
-        best = p;
-      }
-    }
-    // Only include if best point is in view
-    if (best.x >= xMin && best.x <= xMax && best.y >= yMin && best.y <= yMax) {
+    const landmark = getLandmarkForCluster(pts);
+    // Only include if landmark is in view
+    if (
+      landmark.x >= xMin &&
+      landmark.x <= xMax &&
+      landmark.y >= yMin &&
+      landmark.y <= yMax
+    ) {
       clustersInView.push({
         cluster,
-        center: { x: best.x, y: best.y },
-        representative: best.index,
+        center: { x: landmark.x, y: landmark.y },
+        representative: landmark.index,
         color: getClusterColor(cluster),
         size: pts.length,
       });
@@ -1038,7 +1058,7 @@ function updateLandmarkTrace() {
     if (!landmarksVisible) return;
 
     // Get clusters in view
-    const clusters = getLargestClustersInView(20);
+    const clusters = getLargestClustersInView(LandmarkCount);
     if (!clusters.length) return;
 
     // Get current axis ranges
@@ -1065,9 +1085,10 @@ function updateLandmarkTrace() {
     const verticalOffset = 24 * pixelToData;
 
     // Prepare trace data
-    const x = clusters.map((c) => c.center.x);
-    const y = clusters.map((c) => c.center.y + verticalOffset);
-    const markerColors = clusters.map((c) => c.color);
+    const clustersInView = getNonOverlappingLandmarks(clusters, imageSize);
+    const x = clustersInView.map((c) => c.center.x);
+    const y = clustersInView.map((c) => c.center.y + verticalOffset);
+    const markerColors = clustersInView.map((c) => c.color);
 
     // Triangle-down markers at bottom of thumbnails
     const landmarkTrace = {
@@ -1087,10 +1108,8 @@ function updateLandmarkTrace() {
     };
 
     // Add thumbnail images
-    const images = clusters.map((c, i) => ({
-      source: `thumbnails/${state.album}/${
-        c.representative
-      }?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
+    const images = clustersInView.map((c, i) => ({
+      source: `thumbnails/${state.album}/${c.representative}?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
       x: x[i],
       y: y[i],
       xref: "x",
@@ -1112,3 +1131,28 @@ function updateLandmarkTrace() {
 
 // Debounced version for event handlers
 const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 500);
+
+// Helper function to get non-overlapping landmarks
+function getNonOverlappingLandmarks(clusters, imageSize) {
+  const placed = [];
+  const minDist = imageSize; // Minimum distance between centers to avoid overlap
+
+  clusters.forEach((c) => {
+    const { x, y } = c.center;
+    // Check overlap with already placed landmarks
+    let overlaps = false;
+    for (const p of placed) {
+      const dx = Math.abs(x - p.x);
+      const dy = Math.abs(y - p.y);
+      if (dx < imageSize && dy < imageSize) {
+        overlaps = true;
+        break;
+      }
+    }
+    if (!overlaps) {
+      placed.push({ ...c, x, y });
+    }
+  });
+
+  return placed;
+}
