@@ -112,3 +112,7 @@
   margin-top: 2px;
 }
 
+#umapEpsContainer,
+#umapColorModeContainer {
+  font-size: 0.85em;
+}

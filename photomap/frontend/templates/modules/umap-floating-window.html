@@ -4,7 +4,7 @@
 <div id="umapFloatingWindow">
   <!-- Titlebar -->
   <div id="umapTitlebar">
-    <span>Semantic Map</span>
+    <span id="semanticMapTitle">Semantic Map</span>
     <div style="display: flex; align-items: center; gap: 8px">
       <!-- Resizing icons -->
       <button id="umapResizeFullscreen" title="Fullscreen" class="icon-btn">
@@ -145,6 +145,23 @@
         id="umapColorModeContainer"
         style="display: flex; flex-direction: column; margin-bottom: 12px"
       >
+        <label style="display: flex; align-items: center; gap: 8px">
+          <input
+            type="checkbox"
+            id="umapShowLandmarks"
+            style="margin-right: 6px"
+          />
+          Show landmarks
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px">
+          <input
+            type="checkbox"
+            id="umapShowHoverThumbnails"
+            checked
+            style="margin-right: 6px"
+          />
+          Show hover thumbnails
+        </label>
         <label style="display: flex; align-items: center; gap: 8px">
           <input
             type="checkbox"
