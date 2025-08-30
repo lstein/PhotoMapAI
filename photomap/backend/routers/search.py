@@ -14,7 +14,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel
 
 from ..config import get_config_manager
@@ -165,8 +165,14 @@ async def get_metadata(album_key: str, index: int):
 
 
 @search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])
-async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileResponse:
-    """Serve a reduced-size thumbnail for an image by index."""
+async def serve_thumbnail(
+    album_key: str,
+    index: int,
+    size: int = 256,
+    color: Optional[str] = None,
+    radius: int = 12,  # Add a radius parameter for rounded corners
+) -> FileResponse:
+    """Serve a reduced-size thumbnail for an image by index, with optional colored border."""
     embeddings = get_embeddings_for_album(album_key)
     try:
         image_path = embeddings.get_image_path(index)
@@ -179,12 +185,10 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Store thumbnails next to the embedding index for the album
     index_path = Path(album_config.index)
     thumb_dir = index_path.parent / "thumbnails"
     thumb_dir.mkdir(exist_ok=True)
 
-    # Use a safe filename for the thumbnail
     relative_path = config_manager.get_relative_path(str(image_path), album_key)
     assert relative_path is not None, "Relative path should not be None"
     safe_rel_path = relative_path.replace("/", "_").replace("\\", "_")
@@ -192,20 +196,52 @@ async def serve_thumbnail(album_key: str, index: int, size: int = 256) -> FileRe
         thumb_dir / f"{Path(safe_rel_path).stem}_{size}{Path(safe_rel_path).suffix}"
     )
 
-    # Generate thumbnail if not cached
+    # If color is specified, add it to the thumbnail filename to cache separately
+    if color:
+        color_hex = color.replace("#", "")
+        thumb_path = (
+            thumb_dir
+            / f"{Path(safe_rel_path).stem}_{size}_{color_hex}_r{radius}{Path(safe_rel_path).suffix}"
+        )
+
+    # Generate thumbnail if not cached or outdated
     if (
         not thumb_path.exists()
         or thumb_path.stat().st_mtime < image_path.stat().st_mtime
     ):
         try:
             with Image.open(image_path) as im:
-                im = ImageOps.exif_transpose(im)  # Correct orientation using EXIF
+                im = ImageOps.exif_transpose(im)
                 im.thumbnail((size, size))
-                im.save(thumb_path, quality=85)
+                if color:
+                    border_width = max(5, size // 32)
+                    # Convert hex color to RGB
+                    border_color = color
+                    if color.startswith("#"):
+                        border_color = tuple(
+                            int(color[i : i + 2], 16) for i in (1, 3, 5)
+                        )
+                    else:
+                        try:
+                            border_color = tuple(map(int, color.split(",")))
+                        except Exception:
+                            border_color = (0, 0, 0)
+                    # Add border
+                    im = ImageOps.expand(im, border=border_width, fill=border_color)
+                # Add rounded corners
+                corner_radius = radius
+                mask = Image.new("L", im.size, 0)
+                draw = ImageDraw.Draw(mask)
+                draw.rounded_rectangle(
+                    [0, 0, im.size[0], im.size[1]], corner_radius, fill=255
+                )
+                im.putalpha(mask)
+                # Save as PNG to preserve transparency
+                im.save(thumb_path.with_suffix(".png"), format="PNG")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}")
 
-    return FileResponse(thumb_path)
+    return FileResponse(thumb_path.with_suffix(".png"))
 
 
 # File Management Routes

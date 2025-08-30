@@ -12,6 +12,7 @@ const UMAP_SIZES = {
   small: { width: 340, height: 180 },
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
+const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
 
 let points = [];
 let clusters = [];
@@ -36,18 +37,34 @@ let palette = [
   "#b3b3b3",
 ];
 let mapExists = false;
-let umapColorMode = "cluster"; // Default mode
 let isShaded = false;
-let isFullscreen = false;
+let umapWindowHasBeenShown = false; // Track if window has been shown at least once
+let isFullscreen = true;
 let lastUnshadedSize = "medium"; // Track last non-fullscreen size
 let lastUnshadedPosition = { left: null, top: null }; // Track last position
+let landmarksVisible = false;
+let hoverThumbnailsEnabled = true; // default ON
+
+// Track current zoom level to detect zoom changes
+let currentZoomLevel = null;
+
+// Add debounce function
+function debounce(func, wait) {
+  let timeout;
+  return function (...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
 
 // Helper to get current window size
 function getCurrentWindowSize() {
   const win = document.getElementById("umapFloatingWindow");
   const width = parseInt(win.style.width, 10);
-  if (width === UMAP_SIZES.big.width + 60) return "big";
-  return "medium";
+  if (isFullscreen) return "fullscreen";
+  if (width >= UMAP_SIZES.big.width) return "big";
+  if (width >= UMAP_SIZES.medium.width) return "medium";
+  return "small";
 }
 
 // Helper to save current position
@@ -89,36 +106,7 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
   }, 1000);
 };
 
-// --- Show/Hide UMAP Window ---
-export async function toggleUmapWindow() {
-  const umapWindow = document.getElementById("umapFloatingWindow");
-  const labelDiv = document.querySelector("#showUmapBtn + .button-label");
-  if (umapWindow.style.display === "block") {
-    umapWindow.style.display = "none";
-  } else {
-    umapWindow.style.display = "block";
-    ensureUmapWindowInView();
-    const result = await fetch("get_umap_eps/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ album: state.album }),
-    });
-    const data = await result.json();
-    if (!data.success) {
-      console.error("Failed to fetch UMAP EPS value:", data.message);
-      return;
-    }
-    const epsSpinner = document.getElementById("umapEpsSpinner");
-    if (epsSpinner) epsSpinner.value = data.eps;
-    await fetchUmapData();
-  }
-}
-
-document.getElementById("showUmapBtn").onclick = () => toggleUmapWindow();
-document.getElementById("umapCloseBtn").onclick = () => {
-  document.getElementById("umapFloatingWindow").style.display = "none";
-};
-
+// --- Caching Current Album ---
 let cachedAlbum = null;
 let cachedAlbumName = null;
 
@@ -216,49 +204,53 @@ export async function fetchUmapData() {
           hoverinfo: "none",
         };
 
+    const layout = {
+      showlegend: false,
+      dragmode: "pan",
+      height: UMAP_SIZES.medium.height,
+      width: UMAP_SIZES.medium.width,
+      plot_bgcolor: "rgba(0,0,0,0)", // transparent plot area
+      paper_bgcolor: "rgba(0,0,0,0)", // transparent paper
+      font: { color: "#eee" },
+      xaxis: {
+        gridcolor: "rgba(255,255,255,0.15)",
+        zerolinecolor: "rgba(255,255,255,0.25)",
+        color: "#eee",
+        linecolor: "#888",
+        tickcolor: "#888",
+        range: [xMin, xMax],
+        scaleanchor: "y",
+      },
+      yaxis: {
+        gridcolor: "rgba(255,255,255,0.15)",
+        zerolinecolor: "rgba(255,255,255,0.25)",
+        color: "#eee",
+        linecolor: "#888",
+        tickcolor: "#888",
+        range: [yMin, yMax],
+      },
+      margin: {
+        t: 30,
+        r: 0,
+        b: 30,
+        l: 30,
+        pad: 0,
+      },
+    };
+
+    const config = {
+      modeBarButtonsToRemove: ["select2d", "lasso2d"],
+      scrollZoom: true,
+    };
+
     Plotly.newPlot(
       "umapPlot",
       [allPointsTrace, currentImageTrace],
-      {
-        showlegend: false,
-        dragmode: "pan",
-        height: UMAP_SIZES.medium.height,
-        width: UMAP_SIZES.medium.width,
-        plot_bgcolor: "rgba(0,0,0,0)", // transparent plot area
-        paper_bgcolor: "rgba(0,0,0,0)", // transparent paper
-        font: { color: "#eee" },
-        xaxis: {
-          gridcolor: "rgba(255,255,255,0.15)",
-          zerolinecolor: "rgba(255,255,255,0.25)",
-          color: "#eee",
-          linecolor: "#888",
-          tickcolor: "#888",
-          range: [xMin, xMax],
-          scaleanchor: "y", 
-        },
-        yaxis: {
-          gridcolor: "rgba(255,255,255,0.15)",
-          zerolinecolor: "rgba(255,255,255,0.25)",
-          color: "#eee",
-          linecolor: "#888",
-          tickcolor: "#888",
-          range: [yMin, yMax],
-        },
-        margin: {
-          t: 30,
-          r: 0,
-          b: 30,
-          l: 30,
-          pad: 0,
-        },
-      },
-      {
-        modeBarButtonsToRemove: ["select2d", "lasso2d"],
-        scrollZoom: true,
-      }
+      layout,
+      config
     ).then((gd) => {
       document.getElementById("umapContent").style.display = "block";
-      setUmapWindowSize("medium");
+      setUmapWindowSize("fullscreen");
       hideUmapSpinner();
 
       setUmapColorMode();
@@ -266,6 +258,7 @@ export async function fetchUmapData() {
       let isHovering = false;
 
       gd.on("plotly_hover", function (eventData) {
+        if (!hoverThumbnailsEnabled) return; // <-- Only show if enabled
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
         if (pt.curveNumber !== 0) return;
@@ -315,9 +308,47 @@ export async function fetchUmapData() {
         );
       });
 
+      gd.on("plotly_relayout", (eventData) => {
+        if (suppressRelayoutEvent) return; // Prevent feedback loop
+
+        // Only update landmarks for actual user pan/zoom events, not our programmatic changes
+        const isPanZoom =
+          eventData["xaxis.range[0]"] !== undefined ||
+          eventData["yaxis.range[0]"] !== undefined ||
+          eventData["xaxis.range"] !== undefined ||
+          eventData["yaxis.range"] !== undefined;
+
+        const isResize =
+          eventData.width !== undefined || eventData.height !== undefined;
+        const isImageUpdate = eventData.images !== undefined;
+
+        // Only update landmarks for pan/zoom, not for our own image updates or resizes
+        if (isPanZoom && !isImageUpdate && !isResize) {
+          debouncedUpdateLandmarkTrace();
+        }
+      });
+
+      gd.on("plotly_redraw", () => {
+        if (suppressRelayoutEvent) return;
+        debouncedUpdateLandmarkTrace();
+      });
+
+      // Initial landmark update
+      if (landmarksVisible) {
+        setTimeout(updateLandmarkTrace, 500);
+      }
+
       // Show the EPS spinner container now that the plot is ready
       const epsContainer = document.getElementById("umapEpsContainer");
       if (epsContainer) epsContainer.style.display = "block";
+
+      // Add triangle trace and images after plot is created
+      if (landmarksVisible && typeof landmarkTrace != "undefined") {
+        setTimeout(() => {
+          Plotly.addTraces(gd, [landmarkTrace]);
+          Plotly.relayout(gd, { images });
+        }, 500);
+      }
     });
 
     // Ensure the current image marker is visible after plot initialization
@@ -327,46 +358,21 @@ export async function fetchUmapData() {
     document
       .getElementById("umapPlot")
       .on("plotly_click", async function (data) {
-        const clickedIndex = data.points[0].customdata;
-        const clickedPoint = points.find((p) => p.index === clickedIndex);
-        if (!clickedPoint) return;
-        const clickedCluster = clickedPoint.cluster;
-        const clusterIndex = clusters.indexOf(clickedCluster);
-        const clusterColor = colors[clusterIndex % colors.length];
-        let clusterIndices = points
-          .filter((p) => p.cluster === clickedCluster)
-          .map((p) => p.index);
-
-        // Remove clickedFilename from the list
-        clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
-
-        // --- Sort by ascending distance from clicked point ---
-        const clickedCoords = [clickedPoint.x, clickedPoint.y];
-        // Build a lookup map once
-        const indexToPoint = Object.fromEntries(
-          points.map((p) => [p.index, p])
-        );
-        clusterIndices.sort((a, b) => {
-          const pa = indexToPoint[a];
-          const pb = indexToPoint[b];
-          const da = pa
-            ? Math.hypot(pa.x - clickedCoords[0], pa.y - clickedCoords[1])
-            : Infinity;
-          const db = pb
-            ? Math.hypot(pb.x - clickedCoords[0], pb.y - clickedCoords[1])
-            : Infinity;
-          return da - db;
-        });
-
-        // Promote the clicked filename to the first position
-        const sortedClusterIndices = [clickedIndex, ...clusterIndices];
-
-        const clusterMembers = sortedClusterIndices.map((index) => ({
-          index: index,
-          cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
-          color: clusterColor,
-        }));
-        setSearchResults(clusterMembers, "cluster");
+        const traceName = data.points[0].fullData.name;
+        if (traceName === "LandmarkClickTargets") {
+          // Get cluster ID from customdata
+          const clusterId = data.points[0].customdata;
+          // Get all points in this cluster
+          const clusterPoints = points.filter((p) => p.cluster === clusterId);
+          // Use the landmark placement algorithm to get the landmark point
+          const landmarkPoint = getLandmarkForCluster(clusterPoints);
+          if (landmarkPoint) {
+            await handleClusterClick(landmarkPoint.index);
+          }
+        } else if (data.points[0].curveNumber === 0) {
+          // Regular scatter plot click
+          await handleClusterClick(data.points[0].customdata);
+        }
       });
 
     window.umapPoints = points;
@@ -411,6 +417,29 @@ document.addEventListener("DOMContentLoaded", () => {
     highlightCheckbox.checked = false;
     highlightCheckbox.addEventListener("change", () => {
       setUmapColorMode();
+    });
+  }
+
+  // Hover thumbnails checkbox
+  const hoverThumbCheckbox = document.getElementById("umapShowHoverThumbnails");
+  if (hoverThumbCheckbox) {
+    hoverThumbCheckbox.checked = true;
+    hoverThumbnailsEnabled = true;
+    hoverThumbCheckbox.addEventListener("change", (e) => {
+      hoverThumbnailsEnabled = e.target.checked;
+      // Remove any popup if disabling
+      if (!hoverThumbnailsEnabled) removeUmapThumbnail();
+    });
+  }
+
+  // Landmarks checkbox
+  const landmarkCheckbox = document.getElementById("umapShowLandmarks");
+  if (landmarkCheckbox) {
+    landmarkCheckbox.checked = false;
+    landmarksVisible = false;
+    landmarkCheckbox.addEventListener("change", (e) => {
+      landmarksVisible = e.target.checked;
+      updateLandmarkTrace();
     });
   }
 });
@@ -608,8 +637,9 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
     umapThumbnailDiv.style.visibility = "visible"; // <-- Show after loaded
   };
 
-  // Optionally, handle image load error
+  // Handle image load error
   img.onerror = () => {
+    if (!umapThumbnailDiv || !document.body.contains(umapThumbnailDiv)) return;
     umapThumbnailDiv.style.visibility = "visible";
     img.alt = "Thumbnail not available";
   };
@@ -617,7 +647,7 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
 
 function removeUmapThumbnail() {
   // Remove all elements with the umap-thumbnail class
-  document.querySelectorAll('.umap-thumbnail').forEach(div => div.remove());
+  document.querySelectorAll(".umap-thumbnail").forEach((div) => div.remove());
   umapThumbnailDiv = null;
 }
 
@@ -646,6 +676,359 @@ function updateUmapColorModeAvailability(searchResults = []) {
   }
   setUmapColorMode();
 }
+
+// ------------- Handling Landmark Thumbnails -------------
+
+// Improved landmark placement algorithm
+function getLandmarkForCluster(pts) {
+  // 1. Find X center
+  const centerX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
+
+  // 2. Compute X spread (standard deviation and range)
+  const xs = pts.map((p) => p.x);
+  const xMean = centerX;
+  const xStd = Math.sqrt(
+    xs.reduce((sum, x) => sum + Math.pow(x - xMean, 2), 0) / xs.length
+  );
+  const xRange = Math.max(...xs) - Math.min(...xs);
+
+  // 3. Filter points near centerX (within 0.5 * std or 0.2 * range)
+  const threshold = Math.max(xStd * 0.5, xRange * 0.2);
+  const candidates = pts.filter((p) => Math.abs(p.x - centerX) <= threshold);
+
+  // 4. Pick highest Y among candidates
+  let best = candidates[0] || pts[0];
+  for (const p of candidates) {
+    if (p.y > best.y) best = p;
+  }
+  return best;
+}
+
+// Helper: get cluster centers and representatives
+function getLargestClustersInView(maxLandmarks = 10) {
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.layout) return [];
+  const [xMin, xMax] = plotDiv.layout.xaxis.range;
+  const [yMin, yMax] = plotDiv.layout.yaxis.range;
+
+  // Group points by cluster
+  const clusterMap = new Map();
+  points.forEach((p) => {
+    if (p.cluster === -1) return;
+    if (!clusterMap.has(p.cluster)) clusterMap.set(p.cluster, []);
+    clusterMap.get(p.cluster).push(p);
+  });
+
+  let clustersInView = [];
+  for (const [cluster, pts] of clusterMap.entries()) {
+    const landmark = getLandmarkForCluster(pts);
+    // Only include if landmark is in view
+    if (
+      landmark.x >= xMin &&
+      landmark.x <= xMax &&
+      landmark.y >= yMin &&
+      landmark.y <= yMax
+    ) {
+      clustersInView.push({
+        cluster,
+        center: { x: landmark.x, y: landmark.y },
+        representative: landmark.index,
+        color: getClusterColor(cluster),
+        size: pts.length,
+      });
+    }
+  }
+
+  clustersInView.sort((a, b) => b.size - a.size);
+  return clustersInView.slice(0, maxLandmarks);
+}
+
+// --- Update Landmark Trace ---
+let isRenderingLandmarks = false;
+let lastImagesJSON = null;
+let suppressRelayoutEvent = false; // Add this flag
+
+function updateLandmarkTrace() {
+  if (isRenderingLandmarks) return;
+  isRenderingLandmarks = true;
+
+  try {
+    const plotDiv = document.getElementById("umapPlot");
+    if (!plotDiv || !plotDiv.layout) return;
+
+    // Remove previous landmark traces (both triangles and click targets)
+    let landmarkTraceIdx = plotDiv.data?.findIndex(
+      (t) => t.name === "Landmarks"
+    );
+    let clickTargetTraceIdx = plotDiv.data?.findIndex(
+      (t) => t.name === "LandmarkClickTargets"
+    );
+
+    // Only delete if index is valid
+    if (
+      typeof landmarkTraceIdx === "number" &&
+      landmarkTraceIdx >= 0 &&
+      landmarkTraceIdx < plotDiv.data.length
+    ) {
+      suppressRelayoutEvent = true;
+      Plotly.deleteTraces(plotDiv, landmarkTraceIdx).then(() => {
+        suppressRelayoutEvent = false;
+      });
+    }
+
+    // Recompute clickTargetTraceIdx after possible deletion above
+    clickTargetTraceIdx = plotDiv.data?.findIndex(
+      (t) => t.name === "LandmarkClickTargets"
+    );
+    if (
+      typeof clickTargetTraceIdx === "number" &&
+      clickTargetTraceIdx >= 0 &&
+      clickTargetTraceIdx < plotDiv.data.length
+    ) {
+      suppressRelayoutEvent = true;
+      Plotly.deleteTraces(plotDiv, clickTargetTraceIdx).then(() => {
+        suppressRelayoutEvent = false;
+      });
+    }
+
+    if (!landmarksVisible) {
+      if (lastImagesJSON !== null) {
+        suppressRelayoutEvent = true;
+        Plotly.relayout(plotDiv, { images: [] }).then(() => {
+          suppressRelayoutEvent = false;
+          lastImagesJSON = null;
+        });
+      }
+      return;
+    }
+
+    // Get clusters in view
+    const clusters = getLargestClustersInView(100);
+    if (!clusters.length) return;
+
+    // Get current axis ranges
+    const [xMin, xMax] = plotDiv.layout.xaxis.range;
+    const xRange = xMax - xMin;
+
+    // Calculate thumbnail size in data units (adjust multiplier as needed)
+    const imageSize = Math.max(0.2, Math.min(2.0, xRange / 10));
+
+    // Estimate thumbnail size in pixels based on plot width and zoom
+    const plotWidthPx = plotDiv.offsetWidth || 800;
+    const thumbPx = Math.round((imageSize / xRange) * plotWidthPx);
+
+    // Cap thumbnail size at 256 pixels maximum (and keep 64 minimum)
+    const thumbSize = Math.max(64, Math.min(256, thumbPx));
+
+    // Triangle marker size in pixels (constant)
+    const triangleSize = 32;
+
+    // Calculate offset in data units to move up by 24 pixels
+    const plotHeightPx = plotDiv.offsetHeight || 560;
+    const yRange =
+      plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
+    const pixelToData = yRange / plotHeightPx;
+    const verticalOffset = 24 * pixelToData;
+
+    // Prepare trace data
+    const clustersInView = getNonOverlappingLandmarks(
+      clusters,
+      imageSize,
+      landmarkCount
+    );
+    const x = clustersInView.map((c) => c.center.x);
+    const y = clustersInView.map((c) => c.center.y + verticalOffset);
+    const markerColors = clustersInView.map((c) => c.color);
+
+    // Triangle-down markers at bottom of thumbnails
+    const landmarkTrace = {
+      x,
+      y,
+      mode: "markers",
+      type: "scatter",
+      marker: {
+        size: triangleSize,
+        color: markerColors,
+        symbol: "triangle-down",
+        line: { width: 2, color: "#000" },
+      },
+      hoverinfo: "none",
+      showlegend: false,
+      name: "Landmarks",
+    };
+
+    // Invisible clickable points over thumbnails
+    const clickableTrace = {
+      x: clustersInView.map((c, i) => x[i]),
+      y: clustersInView.map((c, i) => y[i] + imageSize / 2), // center of image
+      mode: "markers",
+      type: "scatter",
+      marker: {
+        color: "rgba(0, 0, 0, 0)",
+        symbol: "square",
+        size: thumbSize,
+        line: { width: 0 },
+      },
+      customdata: clustersInView.map((c) => c.cluster), // <-- store cluster ID, not representative index
+      hoverinfo: "none",
+      showlegend: false,
+      name: "LandmarkClickTargets",
+    };
+
+    // Add thumbnail images
+    const images = clustersInView.map((c, i) => ({
+      source: `thumbnails/${state.album}/${
+        c.representative
+      }?size=${thumbSize}&color=${encodeURIComponent(c.color)}`,
+      x: x[i],
+      y: y[i],
+      xref: "x",
+      yref: "y",
+      sizex: imageSize,
+      sizey: imageSize,
+      xanchor: "center",
+      yanchor: "bottom",
+      layer: "above",
+    }));
+
+    // Only update if images changed, and set suppressRelayoutEvent properly
+    const imagesJSON = JSON.stringify(images);
+    if (imagesJSON !== lastImagesJSON) {
+      suppressRelayoutEvent = true;
+      Plotly.addTraces(plotDiv, [landmarkTrace, clickableTrace])
+        .then(() => {
+          return Plotly.relayout(plotDiv, { images });
+        })
+        .then(() => {
+          suppressRelayoutEvent = false;
+          lastImagesJSON = imagesJSON;
+        });
+    } else {
+      suppressRelayoutEvent = true;
+      Plotly.addTraces(plotDiv, [landmarkTrace, clickableTrace]).then(() => {
+        suppressRelayoutEvent = false;
+      });
+    }
+  } finally {
+    isRenderingLandmarks = false;
+  }
+}
+
+// Debounced version for event handlers
+const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 500);
+
+// Helper function to get non-overlapping landmarks
+function getNonOverlappingLandmarks(
+  clusters,
+  imageSize,
+  landmarkCount = landmarkCount
+) {
+  const placed = [];
+  let i = 0;
+  while (i < clusters.length && placed.length < landmarkCount) {
+    const c = clusters[i];
+    const { x, y } = c.center;
+    // Check overlap with already placed landmarks
+    let overlaps = false;
+    for (const p of placed) {
+      const dx = Math.abs(x - p.x);
+      const dy = Math.abs(y - p.y);
+      if (dx < imageSize && dy < imageSize) {
+        overlaps = true;
+        break;
+      }
+    }
+    if (!overlaps) {
+      placed.push({ ...c, x, y });
+    }
+    i++;
+  }
+  return placed;
+}
+
+// Shared function for cluster clicks
+async function handleClusterClick(clickedIndex) {
+  const clickedPoint = points.find((p) => p.index === clickedIndex);
+  if (!clickedPoint) return;
+
+  const clickedCluster = clickedPoint.cluster;
+  const clusterIndex = clusters.indexOf(clickedCluster);
+  const clusterColor = colors[clusterIndex % colors.length];
+  let clusterIndices = points
+    .filter((p) => p.cluster === clickedCluster)
+    .map((p) => p.index);
+
+  // Remove clickedFilename from the list
+  clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
+
+  // --- Sort by ascending distance from clicked point ---
+  const clickedCoords = [clickedPoint.x, clickedPoint.y];
+  // Build a lookup map once
+  const indexToPoint = Object.fromEntries(points.map((p) => [p.index, p]));
+  clusterIndices.sort((a, b) => {
+    const pa = indexToPoint[a];
+    const pb = indexToPoint[b];
+    const da = pa
+      ? Math.hypot(pa.x - clickedCoords[0], pa.y - clickedCoords[1])
+      : Infinity;
+    const db = pb
+      ? Math.hypot(pb.x - clickedCoords[0], pb.y - clickedCoords[1])
+      : Infinity;
+    return da - db;
+  });
+
+  // Promote the clicked filename to the first position
+  const sortedClusterIndices = [clickedIndex, ...clusterIndices];
+
+  const clusterMembers = sortedClusterIndices.map((index) => ({
+    index: index,
+    cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
+    color: clusterColor,
+  }));
+
+  setSearchResults(clusterMembers, "cluster");
+  if (isFullscreen) {
+    // lastUnshadedSize = "big"; // Set a default size when exiting fullscreen
+    toggleFullscreen();
+  }
+}
+
+// -------------------- Window Management --------------------
+
+// --- Show/Hide UMAP Window ---
+export async function toggleUmapWindow() {
+  const umapWindow = document.getElementById("umapFloatingWindow");
+  if (umapWindow.style.display === "block") {
+    umapWindow.style.display = "none";
+  } else {
+    umapWindow.style.display = "block";
+    ensureUmapWindowInView();
+    if (!umapWindowHasBeenShown) {
+      umapWindowHasBeenShown = true;
+      setUmapWindowSize("fullscreen");
+    }
+    // Fetch configured eps value from server
+    const result = await fetch("get_umap_eps/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ album: state.album }),
+    });
+    const data = await result.json();
+    if (!data.success) {
+      console.error("Failed to fetch UMAP EPS value:", data.message);
+      return;
+    }
+    const epsSpinner = document.getElementById("umapEpsSpinner");
+    if (epsSpinner) epsSpinner.value = data.eps;
+    await fetchUmapData();
+  }
+}
+
+document.getElementById("showUmapBtn").onclick = () => toggleUmapWindow();
+document.getElementById("umapCloseBtn").onclick = () => {
+  document.getElementById("umapFloatingWindow").style.display = "none";
+};
+
 
 // --- Draggable Window ---
 function makeDraggable(dragHandleId, windowId) {
@@ -734,8 +1117,13 @@ function setUmapWindowSize(sizeKey) {
   const win = document.getElementById("umapFloatingWindow");
   const plotDiv = document.getElementById("umapPlot");
   const contentDiv = document.getElementById("umapContent");
+  const landmarkCheckbox = document.getElementById("umapShowLandmarks");
+  const hoverThumbCheckbox = document.getElementById("umapShowHoverThumbnails");
+
   win.style.opacity = "0.75"; // default opacity for all sizes
+
   if (sizeKey === "shaded") {
+    // Do not change landmarksVisible or checkbox
     if (contentDiv) contentDiv.style.display = "none";
     win.style.width = "";
     win.style.height = "";
@@ -758,9 +1146,21 @@ function setUmapWindowSize(sizeKey) {
 
     Plotly.relayout(plotDiv, {
       width: window.innerWidth - 32,
-      height: window.innerHeight - controlsHeight - 128,
-      "xaxis.scaleanchor": "y", 
+      height: window.innerHeight - controlsHeight,
+      "xaxis.scaleanchor": "y",
     });
+
+    // Turn landmarks ON in fullscreen
+    if (landmarkCheckbox) {
+      landmarkCheckbox.checked = true;
+      landmarksVisible = true;
+      updateLandmarkTrace();
+    }
+    // Turn hover thumbnails OFF in fullscreen
+    if (hoverThumbCheckbox) {
+      hoverThumbCheckbox.checked = false;
+      hoverThumbnailsEnabled = false;
+    }
   } else {
     if (contentDiv) contentDiv.style.display = "block";
     const { width, height } = UMAP_SIZES[sizeKey];
@@ -789,9 +1189,22 @@ function setUmapWindowSize(sizeKey) {
         win.style.top = top + "px";
       }
     }, 0);
+
+    // Turn landmarks OFF in big, medium, small
+    if (landmarkCheckbox) {
+      landmarkCheckbox.checked = false;
+      landmarksVisible = false;
+      updateLandmarkTrace();
+    }
+    // Turn hover thumbnails ON in big, medium, small
+    if (hoverThumbCheckbox) {
+      hoverThumbCheckbox.checked = true;
+      hoverThumbnailsEnabled = true;
+    }
   }
   setActiveResizeIcon(sizeKey);
   ensureUmapWindowInView();
+  removeUmapThumbnail(); // just in case
 }
 
 // Titlebar resizing/dragging code is here.
@@ -801,9 +1214,8 @@ document.addEventListener("DOMContentLoaded", () => {
   makeDraggable("umapTitlebar", "umapFloatingWindow");
 });
 
-// Double-click titlebar to toggle shaded mode
-document.getElementById("umapTitlebar").ondblclick = () => {
-  const win = document.getElementById("umapFloatingWindow");
+// Shading/restoring
+function toggleShade() {
   if (isShaded) {
     setUmapWindowSize(lastUnshadedSize);
     isShaded = false;
@@ -812,20 +1224,13 @@ document.getElementById("umapTitlebar").ondblclick = () => {
     setUmapWindowSize("shaded");
     isShaded = true;
   }
-};
+}
+
+// Double-click titlebar to toggle shaded mode
+document.getElementById("umapTitlebar").ondblclick = toggleShade;
 
 // Shade icon toggles shaded/unshaded
-document.getElementById("umapResizeShaded").onclick = () => {
-  const win = document.getElementById("umapFloatingWindow");
-  if (isShaded) {
-    setUmapWindowSize(lastUnshadedSize);
-    isShaded = false;
-  } else {
-    lastUnshadedSize = getCurrentWindowSize();
-    setUmapWindowSize("shaded");
-    isShaded = true;
-  }
-};
+document.getElementById("umapResizeShaded").onclick = toggleShade;
 
 // Resize buttons
 function addButtonHandlers(id, handler) {
@@ -855,7 +1260,7 @@ addButtonHandlers("umapResizeSmall", () => {
   saveCurrentPosition();
   isFullscreen = false;
 });
-addButtonHandlers("umapResizeFullscreen", () => {
+function toggleFullscreen() {
   const win = document.getElementById("umapFloatingWindow");
   if (isFullscreen) {
     setUmapWindowSize(lastUnshadedSize);
@@ -876,7 +1281,44 @@ addButtonHandlers("umapResizeFullscreen", () => {
     win.style.top = "0px";
     isFullscreen = true;
   }
-});
+  // if any hover thumbnail is visible, remove it
+  removeUmapThumbnail();
+}
+
+addButtonHandlers("umapResizeFullscreen", toggleFullscreen);
 addButtonHandlers("umapCloseBtn", () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
 });
+
+window.addEventListener("resize", () => {
+  // Only resize if UMAP window is in fullscreen mode
+  const win = document.getElementById("umapFloatingWindow");
+  if (!win || win.style.display !== "block") return;
+  if (isFullscreen) {
+    setUmapWindowSize("fullscreen");
+    // Optionally, update landmarks and current image marker
+    updateLandmarkTrace();
+    updateCurrentImageMarker();
+  }
+});
+
+// Helper to set the semantic map window title to the album display name
+function setSemanticMapTitle() {
+  const titleSpan = document.getElementById("semanticMapTitle");
+  if (!titleSpan) return;
+  getCachedAlbum().then(album => {
+    if (album && album.name) {
+      titleSpan.textContent = album.name;
+    } else if (state.album) {
+      titleSpan.textContent = state.album;
+    } else {
+      titleSpan.textContent = "Semantic Map";
+    }
+  });
+}
+
+// Set initial title on DOMContentLoaded
+document.addEventListener("DOMContentLoaded", setSemanticMapTitle);
+
+// Update title when album changes
+window.addEventListener("albumChanged", setSemanticMapTitle);
