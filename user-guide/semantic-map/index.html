@@ -16,7 +16,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.16">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.18">
     
     
       
@@ -588,6 +588,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#controlling-thumbnail-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      Controlling Thumbnail Images
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#selecting-clusters" class="md-nav__link">
     <span class="md-ellipsis">
       Selecting Clusters
@@ -849,6 +858,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#controlling-thumbnail-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      Controlling Thumbnail Images
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#selecting-clusters" class="md-nav__link">
     <span class="md-ellipsis">
       Selecting Clusters
@@ -912,8 +930,18 @@
 <li><strong>Plotly Icon</strong> - Advertisement for the plotting package used to plot the map.</li>
 </ul>
 <p>On tablet devices, the best way to zoom into an area of interest is to use the magnifier icon and/or a combination of the pan tool and the Zoom in/out icons.</p>
+<h2 id="controlling-thumbnail-images">Controlling Thumbnail Images</h2>
+<p>The semantic map can show you preview images in two ways. You can have it pop up thumbnails on the fly as you mouse over the map. You can have it put down static thumbnail landmarks on the most prominent clusters in the current view. Or you can do both!</p>
+<p>These functions are controlled by the checkboxes in the bottom right of the window:</p>
+<p><img src="../../img/photomap_landmarks_and_thumbnails.png" width="480" alt="Thumbnail controls" class="img-hover-zoom"></p>
+<p>Selecting "Show landmarks" will position small static thumbnails on the clusters, while "Show hover thumbnails" will pop up a larger preview window as you hover the mouse over the image dots. The former gives you an overview of what's in your collection. The latter gives you only one preview image at a time, but it is larger and more detailed.</p>
+<p>With "Show landmarks" turned on:
+<img src="../../img/photomap_landmarks.png" width="480" alt="Thumbnail controls" class="img-hover-zoom"></p>
+<p>With "Show hover thumbnails" turned on:
+<img src="../../img/photomap_hover_thumbnail.png" width="480" alt="Thumbnail controls" class="img-hover-zoom"></p>
+<p>By default, landmarks will be turned on and hover images turned off when you enter the map's fullscreen mode. The opposite happens when  you leave fullscreen mode and enter windowed mode. See below for more information on window modes and sizes.</p>
 <h2 id="selecting-clusters">Selecting Clusters</h2>
-<p>Clicking on any colored image dot will select all the images in its cluster and add them to the main display's search results. You will see the selected cluster become brighter, while all the other clusters will dim. This effect can be turned on and off by clicking on the checkbox in the bottom right corner labeld "Highlight selection."</p>
+<p>Clicking on any colored image dot or a landmark preview will select all the images in its cluster and add them to the main display's search results. You will see the selected cluster become brighter, while all the other clusters will dim. This effect can be turned on and off by clicking on the checkbox in the bottom right corner labeld "Highlight selection."</p>
 <p>When a cluster is selected, the image search results will be sorted according to their distance from the image you clicked on in the semantic map. If you leave the semantic map window open and scroll through the results, you will see the yellow map position marker move increasingly far away from the original point. At the same time, the displayed full-size images will slowly diverge and become more diverse.</p>
 <h2 id="moving-the-map-window">Moving the Map Window</h2>
 <p>The map window can be repositioned anywhere on the screen by clicking and dragging on its titlebar. In addition it can be resized by clicking the resize icons shown in the screenshot below (mouse over to see the legend).</p>
@@ -972,10 +1000,10 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.50899def.min.js"></script>
+      <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>
       
     
   </body>
