@@ -24,16 +24,34 @@ class ThumbnailGallery {
     this.wrapper = document.querySelector(".thumbnail-swiper-wrapper");
     this.galleryRow = document.getElementById("thumbnailGalleryRow");
     this.sliderContainer = document.getElementById("sliderWithTicksContainer");
+    this.prevButton = document.querySelector(".thumbnail-pager-prev");
+    this.nextButton = document.querySelector(".thumbnail-pager-next");
 
     if (
+      // overly paranoid check
       !this.container ||
       !this.wrapper ||
       !this.galleryRow ||
-      !this.sliderContainer
+      !this.sliderContainer ||
+      !this.prevButton ||
+      !this.nextButton
     ) {
       console.warn("Thumbnail gallery elements not found");
       return false;
     }
+
+    // Click handlers for pager buttons
+    this.prevButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.previousPage();
+    });
+
+    this.nextButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.nextPage();
+    });
 
     // Listen for slide changes
     window.addEventListener("slideChanged", (event) => {
@@ -116,12 +134,17 @@ class ThumbnailGallery {
 
     this.clear();
     this.currentIndex = centerIndex;
+    this.totalCount =
+      state.searchResults?.length > 0 ? state.searchResults.length : total;
+    const currentPage = Math.floor(centerIndex / this.maxThumbnails);
+    this.currentStartIndex = currentPage * this.maxThumbnails;
 
     // Create thumbnail slides
     for (let i = startIndex; i <= endIndex; i++) {
       await this.createThumbnailSlide(i, i === centerIndex);
     }
 
+    this.updatePagerButtons();
     this.centerOnActive();
   }
 
@@ -193,6 +216,24 @@ class ThumbnailGallery {
     this.wrapper.style.transform = `translateX(${translateX}px)`;
   }
 
+  updatePagerButtons() {
+    if (!this.container) return;
+
+    const hasMultiplePages = this.totalCount > this.maxThumbnails;
+    if (hasMultiplePages) {
+      this.container.classList.add("has-multiple-pages");
+      const isFirstPage = this.currentStartIndex === 0;
+      const isLastPage =
+        this.currentStartIndex + this.maxThumbnails >= this.totalCount;
+      this.prevButton.style.opacity = isFirstPage ? "0.3" : "0.7";
+      this.prevButton.style.pointerEvents = isFirstPage ? "none" : "auto";
+      this.nextButton.style.opacity = isLastPage ? "0.3" : "0.7";
+      this.nextButton.style.pointerEvents = isLastPage ? "none" : "auto";
+    } else {
+      this.container.classList.remove("has-multiple-pages");
+    }
+  }
+
   async getCurrentSlideDetail() {
     console.trace("Getting current slide detail for thumbnail gallery");
     const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
@@ -200,13 +241,7 @@ class ThumbnailGallery {
   }
 
   async onThumbnailClick(index) {
-    // This will need to integrate with your swiper navigation
-    // For now, we'll dispatch a custom event that can be handled elsewhere
-    window.dispatchEvent(
-      new CustomEvent("thumbnailClicked", {
-        detail: { index },
-      })
-    );
+    this.navigateToIndex(index);
   }
 
   navigateToIndex(targetIndex) {
@@ -223,6 +258,34 @@ class ThumbnailGallery {
         detail: { targetIndex, isSearchMode },
       })
     );
+  }
+
+  previousPage() {
+    if (this.currentStartIndex === 0) return; // Already at first page
+
+    const newStartIndex = Math.max(0, this.currentStartIndex - this.maxThumbnails);
+    let centerIndex;
+    if (newStartIndex === 0) {
+      centerIndex = 0;
+    } else {
+      centerIndex = Math.min(
+        newStartIndex + Math.floor(this.maxThumbnails / 2),
+        this.totalCount - 1
+      );
+    }
+    this.navigateToIndex(centerIndex);
+  }
+
+  nextPage() {
+    if (this.currentStartIndex + this.maxThumbnails >= this.totalCount) return; // Already at last page
+
+    const newStartIndex = this.currentStartIndex + this.maxThumbnails;
+    // Center index for new page
+    const centerIndex = Math.min(
+      newStartIndex + Math.floor(this.maxThumbnails / 2),
+      this.totalCount - 1
+    );
+    this.navigateToIndex(centerIndex);
   }
 }
 
