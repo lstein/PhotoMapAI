@@ -217,16 +217,19 @@ function initializeEvents() {
     }, 1500);
   });
 
+  let slideChangedTimer = null;
+
   window.addEventListener("slideChanged", async (event) => {
     searchResultsChanged = true;
-    setTimeout(async () => {
+    if (slideChangedTimer) clearTimeout(slideChangedTimer);
+    slideChangedTimer = setTimeout(async () => {
       if (isUserSeeking) return; // Don't update slider if user is seeking
 
       const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
       slider.value =
         state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
       resetFadeOutTimer();
-    }, 1000);
+    }, 200); // 100ms delay to allow swiper/gallery to settle
   });
 
   // Hide panel when slider loses focus or mouse leaves
@@ -254,12 +257,13 @@ function initializeEvents() {
 }
 
 // Hover handlers for the entire slider row to show/hide slider
-function showSlider() {
+async function showSlider() {
   if (!sliderVisible && sliderContainer) {
     sliderVisible = true;
     sliderContainer.classList.add("visible");
 
-    if (searchResultsChanged)
+    let [, total] = await getCurrentSlideIndex();
+    if (total > 0 && searchResultsChanged)
       updateSliderRange().then(() => {
         renderSliderTicks();
         searchResultsChanged = false;
@@ -304,7 +308,6 @@ function resetFadeOutTimer() {
     if (!sliderContainer.querySelector(":hover")) {
       sliderContainer.classList.remove("visible");
       sliderVisible = false;
-      if (ticksContainer) ticksContainer.innerHTML = "";
       fadeOutTimeoutId = null;
       console.log("Slider faded out due to inactivity.");
     }
