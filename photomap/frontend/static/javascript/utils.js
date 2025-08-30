@@ -66,3 +66,12 @@ export function isColorLight(hex) {
   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
   return brightness > 180;
 }
+
+// Utility debounce function
+export function debounce(fn, delay) {
+  let timer = null;
+  return function (...args) {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}

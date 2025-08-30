@@ -1,25 +1,43 @@
 import { updateMetadataOverlay } from "./metadata-drawer.js";
-import { scoreDisplay } from "./score-display.js";
+import { ScoreDisplay } from "./score-display.js"; // Add this import
 import { state } from "./state.js";
 import { addSlideByIndex, getCurrentSlideIndex } from "./swiper.js";
 
 let sliderVisible = false;
-let scoreText, slider, ticksContainer, sliderContainer, contextLabel, hoverZone;
+let sliderContainer;
+let scoreDisplayElement; // Rename to avoid confusion
+let scoreSliderRow;
+let scoreDisplayObj; // Add this for the actual score display object
+
+let scoreText, slider, ticksContainer, contextLabel, hoverZone;
 let fadeOutTimeoutId = null;
 let TICK_COUNT = 10; // Number of ticks to show on the slider
 const FADE_OUT_DELAY = 10000; // 10 seconds
 let isUserSeeking = false;
 
-document.addEventListener("DOMContentLoaded", initializeEvents);
+// Cache for image info requests
+let imageInfoCache = {}; // albumKey -> [info objects]
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Initialize the DOM elements
+  sliderContainer = document.getElementById("sliderWithTicksContainer");
+  scoreDisplayElement = document.getElementById("fixedScoreDisplay"); // Renamed
+  scoreSliderRow = document.getElementById("scoreSliderRow");
+
+  // Initialize the score display object
+  scoreDisplayObj = new ScoreDisplay(); // Create the score display object
+
+  initializeEvents();
+});
 
 function initializeEvents() {
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
   ticksContainer = document.getElementById("sliderTicks");
-  sliderContainer = document.getElementById("sliderWithTicksContainer");
   contextLabel = document.getElementById("contextLabel");
   hoverZone = document.getElementById("sliderHoverZone");
-  const scoreElement = scoreDisplay.scoreElement;
+
+  const scoreElement = scoreDisplayElement; // Use the DOM element for events
   const infoPanel = document.getElementById("sliderInfoPanel");
 
   // Show slider on hover over score display or hover zone
@@ -58,11 +76,11 @@ function initializeEvents() {
       { passive: false }
     );
   } else {
-    scoreDisplay.scoreElement.addEventListener("click", handleScoreTap);
+    scoreElement.addEventListener("click", handleScoreTap); // Fix: use scoreElement, not scoreDisplay.scoreElement
   }
 
   // Make sure the score element has proper touch handling
-  scoreDisplay.scoreElement.style.touchAction = "manipulation";
+  scoreElement.style.touchAction = "manipulation"; // Fix: use scoreElement
 
   // When slider changes, update score display and seek to slide
   let lastFetchTime = 0;
@@ -89,10 +107,9 @@ function initializeEvents() {
             const panelText = `${String(date.getDate()).padStart(
               2,
               "0"
-            )}/${String(date.getMonth() + 1).padStart(
-              2,
-              "0"
-            )}/${String(date.getFullYear()).slice(-2)}`;
+            )}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(
+              date.getFullYear()
+            ).slice(-2)}`;
             infoPanel.textContent = panelText;
           }
         } catch {
@@ -162,14 +179,16 @@ function initializeEvents() {
       if (state.searchResults[targetIndex]?.cluster !== undefined) {
         const cluster = state.searchResults[targetIndex]?.cluster;
         const color = state.searchResults[targetIndex]?.color;
-        scoreDisplay.showCluster(
+        scoreDisplayObj.showCluster(
+          // Use scoreDisplayObj instead of scoreDisplay
           cluster,
           color,
           targetIndex + 1,
           state.searchResults.length
         );
       } else {
-        scoreDisplay.show(
+        scoreDisplayObj.show(
+          // Use scoreDisplayObj instead of scoreDisplay
           state.searchResults[targetIndex]?.score,
           targetIndex + 1,
           state.searchResults.length
@@ -177,7 +196,7 @@ function initializeEvents() {
       }
     } else {
       globalIndex = targetIndex;
-      scoreDisplay.showIndex(globalIndex, slider.max);
+      scoreDisplayObj.showIndex(globalIndex, slider.max); // Use scoreDisplayObj instead of scoreDisplay
     }
   });
 
@@ -243,15 +262,49 @@ function initializeEvents() {
   slider.addEventListener("blur", () => {
     infoPanel.style.display = "none";
   });
+
+  // Fix the hover event handlers - use scoreDisplayElement for DOM events
+  if (scoreSliderRow) {
+    scoreSliderRow.addEventListener("mouseenter", showSlider);
+    scoreSliderRow.addEventListener("mouseleave", hideSlider);
+  }
+
+  if (scoreDisplayElement) {
+    scoreDisplayElement.addEventListener("mouseenter", showSlider);
+  }
+
+  if (sliderContainer) {
+    sliderContainer.addEventListener("mouseenter", showSlider);
+    sliderContainer.addEventListener("mouseleave", hideSlider);
+  }
 }
 
+// Hover handlers for the entire slider row to show/hide slider
 function showSlider() {
-  sliderContainer.classList.add("visible");
-  sliderVisible = true;
-  updateSliderRange().then(() => {
-    renderSliderTicks();
-  });
-  resetFadeOutTimer();
+  if (!sliderVisible && sliderContainer) {
+    sliderVisible = true;
+    sliderContainer.classList.add("visible");
+
+    updateSliderRange().then(() => {
+      renderSliderTicks();
+    });
+    resetFadeOutTimer();
+
+    // Trigger gallery update if available
+    if (window.thumbnailGallery) {
+      getCurrentSlideIndex().then(([globalIndex, total, searchIndex]) => {
+        const slideDetail = { globalIndex, total, searchIndex };
+        window.thumbnailGallery.updateGallery(slideDetail);
+      });
+    }
+  }
+}
+
+function hideSlider() {
+  if (sliderVisible && sliderContainer) {
+    sliderVisible = false;
+    sliderContainer.classList.remove("visible");
+  }
 }
 
 function hideSliderWithDelay(event) {
@@ -386,26 +439,4 @@ async function renderSliderTicks() {
 
 async function toggleSlider() {
   sliderVisible = !sliderVisible;
-  if (sliderVisible) {
-    sliderContainer.classList.add("visible");
-    await updateSliderRange();
-    await renderSliderTicks();
-    resetFadeOutTimer();
-  } else {
-    sliderContainer.classList.remove("visible");
-    if (ticksContainer) ticksContainer.innerHTML = "";
-    clearFadeOutTimer();
-  }
-}
-
-// Update slider range and value based on mode
-async function updateSliderRange() {
-  const [, totalSlides] = await getCurrentSlideIndex();
-  if (state.searchResults?.length > 0) {
-    slider.min = 1;
-    slider.max = state.searchResults.length;
-  } else {
-    slider.min = 1;
-    slider.max = totalSlides;
-  }
-}
+  if
