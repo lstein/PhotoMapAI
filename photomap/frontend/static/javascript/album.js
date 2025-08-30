@@ -209,8 +209,6 @@ export class AlbumManager {
       this.elements.slideshowTitle.textContent = `Slideshow - ${album.name}`;
     }
 
-    // Refresh slideshow
-    // resetAllSlides();
   }
 
   getNewAlbumFormData() {

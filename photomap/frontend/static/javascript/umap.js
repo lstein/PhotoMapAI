@@ -1301,3 +1301,24 @@ window.addEventListener("resize", () => {
     updateCurrentImageMarker();
   }
 });
+
+// Helper to set the semantic map window title to the album display name
+function setSemanticMapTitle() {
+  const titleSpan = document.getElementById("semanticMapTitle");
+  if (!titleSpan) return;
+  getCachedAlbum().then(album => {
+    if (album && album.name) {
+      titleSpan.textContent = album.name;
+    } else if (state.album) {
+      titleSpan.textContent = state.album;
+    } else {
+      titleSpan.textContent = "Semantic Map";
+    }
+  });
+}
+
+// Set initial title on DOMContentLoaded
+document.addEventListener("DOMContentLoaded", setSemanticMapTitle);
+
+// Update title when album changes
+window.addEventListener("albumChanged", setSemanticMapTitle);
