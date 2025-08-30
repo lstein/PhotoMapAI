@@ -11,8 +11,8 @@ class ThumbnailGallery {
     this.wrapper = null;
     this.thumbnails = [];
     this.currentIndex = -1;
-    this.maxThumbnails = 11; // Show 5 before + current + 5 after
-    this.thumbnailSize = 128; // Size in pixels
+    this.maxThumbnails = 11;  // Show 5 before + current + 5 after
+    this.thumbnailSize = 256; // Sized to share with the umap hovers; will be downscaled
     this.preloadTimer = null;
     this.preloadSlideDetail = null;
     this.preloadDelay = 3000; // 3 seconds
@@ -54,8 +54,12 @@ class ThumbnailGallery {
     });
 
     // Listen for slide changes
+    let slideChangedTimer = null;
     window.addEventListener("slideChanged", (event) => {
-      this.debouncedUpdateGallery(event.detail);
+      if (slideChangedTimer) clearTimeout(slideChangedTimer);
+      slideChangedTimer = setTimeout(() => {
+        this.debouncedUpdateGallery(event.detail);
+      }, 100); // Delay to allow swiper to settle
     });
 
     // Listen for search results changes
@@ -273,6 +277,7 @@ class ThumbnailGallery {
         this.totalCount - 1
       );
     }
+    this.animateGallery('slide-prev');
     this.navigateToIndex(centerIndex);
   }
 
@@ -285,7 +290,18 @@ class ThumbnailGallery {
       newStartIndex + Math.floor(this.maxThumbnails / 2),
       this.totalCount - 1
     );
+    this.animateGallery('slide-next');
     this.navigateToIndex(centerIndex);
+  }
+
+  animateGallery(direction) {
+    if (!this.wrapper) return;
+    this.wrapper.classList.remove('slide-next', 'slide-prev');
+    void this.wrapper.offsetWidth; // Force reflow for restart
+    this.wrapper.classList.add(direction);
+    setTimeout(() => {
+      this.wrapper.classList.remove(direction);
+    }, 300); // Match animation duration
   }
 }
 
