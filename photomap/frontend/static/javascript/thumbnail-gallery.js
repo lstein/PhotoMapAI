@@ -15,7 +15,7 @@ class ThumbnailGallery {
     this.thumbnailSize = 128; // Size in pixels
     this.preloadTimer = null;
     this.preloadSlideDetail = null;
-    this.preloadDelay = 5000; // 5 seconds
+    this.preloadDelay = 3000; // 3 seconds
     this.debouncedUpdateGallery = debounce(this.updateGallery.bind(this), 150);
   }
 

@@ -8,15 +8,13 @@ let sliderContainer;
 let scoreDisplayElement; // Rename to avoid confusion
 let scoreSliderRow;
 let scoreDisplayObj; // Add this for the actual score display object
+let searchResultsChanged = true;
 
 let scoreText, slider, ticksContainer, contextLabel, hoverZone;
 let fadeOutTimeoutId = null;
 let TICK_COUNT = 10; // Number of ticks to show on the slider
 const FADE_OUT_DELAY = 10000; // 10 seconds
 let isUserSeeking = false;
-
-// Cache for image info requests
-let imageInfoCache = {}; // albumKey -> [info objects]
 
 document.addEventListener("DOMContentLoaded", () => {
   // Initialize the DOM elements
@@ -245,6 +243,7 @@ function initializeEvents() {
   });
 
   window.addEventListener("slideChanged", async (event) => {
+    searchResultsChanged = true;
     setTimeout(async () => {
       if (isUserSeeking) return; // Don't update slider if user is seeking
 
@@ -285,9 +284,12 @@ function showSlider() {
     sliderVisible = true;
     sliderContainer.classList.add("visible");
 
-    updateSliderRange().then(() => {
-      renderSliderTicks();
-    });
+    if (searchResultsChanged)
+      updateSliderRange().then(() => {
+        renderSliderTicks();
+        searchResultsChanged = false;
+      });
+
     resetFadeOutTimer();
 
     // Trigger gallery update if available
@@ -324,11 +326,12 @@ function resetFadeOutTimer() {
   clearFadeOutTimer();
   fadeOutTimeoutId = setTimeout(() => {
     // Only fade out if mouse is NOT inside hoverZone
-    if (!hoverZone.matches(":hover")) {
+    if (!sliderContainer.querySelector(":hover")) {
       sliderContainer.classList.remove("visible");
       sliderVisible = false;
       if (ticksContainer) ticksContainer.innerHTML = "";
       fadeOutTimeoutId = null;
+      console.log("Slider faded out due to inactivity.");
     }
   }, FADE_OUT_DELAY);
 }
@@ -439,4 +442,34 @@ async function renderSliderTicks() {
 
 async function toggleSlider() {
   sliderVisible = !sliderVisible;
-  if
+  if (sliderVisible) {
+    sliderContainer.classList.add("visible");
+    // await updateSliderRange();
+    // await renderSliderTicks();
+    resetFadeOutTimer();
+  } else {
+    sliderContainer.classList.remove("visible");
+    if (ticksContainer) ticksContainer.innerHTML = "";
+    clearFadeOutTimer();
+  }
+}
+
+// Update slider range and value based on mode
+async function updateSliderRange() {
+  const [, totalSlides] = await getCurrentSlideIndex();
+  if (state.searchResults?.length > 0) {
+    slider.min = 1;
+    slider.max = state.searchResults.length;
+  } else {
+    slider.min = 1;
+    slider.max = totalSlides;
+  }
+}
+
+window.addEventListener("searchResultsChanged", () => {
+  searchResultsChanged = true;
+});
+
+window.addEventListener("albumChanged", () => {
+  searchResultsChanged = true;
+});
