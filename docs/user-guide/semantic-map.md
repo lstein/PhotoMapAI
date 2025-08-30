@@ -50,13 +50,19 @@ These functions are controlled by the checkboxes in the bottom right of the wind
 
 <img src="../../img/photomap_landmarks_and_thumbnails.png" width="480" alt="Thumbnail controls" class="img-hover-zoom">
 
-Selecting "Show landmarks" will place static thumbnails on the clusters, while "Show hover thumbnails" will pop up previews as you hover over the image dots.
+Selecting "Show landmarks" will position small static thumbnails on the clusters, while "Show hover thumbnails" will pop up a larger preview window as you hover the mouse over the image dots. The former gives you an overview of what's in your collection. The latter gives you only one preview image at a time, but it is larger and more detailed.
 
+With "Show landmarks" turned on:
+<img src="../../img/photomap_landmarks.png" width="480" alt="Thumbnail controls" class="img-hover-zoom">
 
+With "Show hover thumbnails" turned on:
+<img src="../../img/photomap_hover_thumbnail.png" width="480" alt="Thumbnail controls" class="img-hover-zoom">
+
+By default, landmarks will be turned on and hover images turned off when you enter the map's fullscreen mode. The opposite happens when  you leave fullscreen mode and enter windowed mode. See below for more information on window modes and sizes.
 
 ## Selecting Clusters
 
-Clicking on any colored image dot will select all the images in its cluster and add them to the main display's search results. You will see the selected cluster become brighter, while all the other clusters will dim. This effect can be turned on and off by clicking on the checkbox in the bottom right corner labeld "Highlight selection."
+Clicking on any colored image dot or a landmark preview will select all the images in its cluster and add them to the main display's search results. You will see the selected cluster become brighter, while all the other clusters will dim. This effect can be turned on and off by clicking on the checkbox in the bottom right corner labeld "Highlight selection."
 
 When a cluster is selected, the image search results will be sorted according to their distance from the image you clicked on in the semantic map. If you leave the semantic map window open and scroll through the results, you will see the yellow map position marker move increasingly far away from the original point. At the same time, the displayed full-size images will slowly diverge and become more diverse.
 
