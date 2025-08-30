@@ -1,7 +1,6 @@
-import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { ScoreDisplay } from "./score-display.js"; // Add this import
 import { state } from "./state.js";
-import { addSlideByIndex, getCurrentSlideIndex } from "./swiper.js";
+import { getCurrentSlideIndex } from "./swiper.js";
 
 let sliderVisible = false;
 let sliderContainer;
@@ -200,46 +199,22 @@ function initializeEvents() {
 
   // When slider is released, seek to slide
   slider.addEventListener("change", async function () {
-    isUserSeeking = true; // Set flag before seeking
-    resetFadeOutTimer();
-    let globalIndex;
-    let [, totalSlides] = await getCurrentSlideIndex();
-
     const targetIndex = parseInt(slider.value, 10) - 1;
-    if (state.searchResults?.length > 0) {
-      globalIndex = state.searchResults[targetIndex]?.index;
-    } else {
-      globalIndex = targetIndex;
-    }
-    await state.swiper.removeAllSlides();
+    const isSearchMode = state.searchResults?.length > 0;
+    isUserSeeking = true; // Set flag before seeking
 
-    let origin = -2;
-    let slides_to_add = 5;
-    if (globalIndex + origin < 0) {
-      origin = 0;
-    }
-    const swiperContainer = document.querySelector(".swiper");
-    swiperContainer.style.visibility = "hidden";
-    for (let i = origin; i < slides_to_add; i++) {
-      if (targetIndex + i >= totalSlides) break;
-      let randomMode =
-        state.mode === "random" && state.searchResults?.length === 0;
-      let seekIndex =
-        randomMode && i != 0
-          ? Math.floor(Math.random() * totalSlides)
-          : globalIndex + i;
-      await addSlideByIndex(seekIndex, targetIndex + i);
-    }
-    state.swiper.slideTo(-origin, 0);
-    swiperContainer.style.visibility = "visible";
+    // Dispatch event to swiper.js for handling
+    window.dispatchEvent(
+      new CustomEvent("setSlideIndex", {
+        detail: { targetIndex, isSearchMode },
+      })
+    );
 
-    updateMetadataOverlay();
     slider.blur();
-
     // Reset flag after a short delay
     setTimeout(() => {
       isUserSeeking = false;
-    }, 1500); // Slightly longer than the slideChanged timeout
+    }, 1500);
   });
 
   window.addEventListener("slideChanged", async (event) => {

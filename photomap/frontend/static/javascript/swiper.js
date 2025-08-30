@@ -398,3 +398,42 @@ window.addEventListener("searchResultsChanged", (event) => {
   const keep_current_slide = searchType === "clear";
   resetAllSlides(keep_current_slide);
 });
+
+// Add this to swiper.js
+window.addEventListener("setSlideIndex", async (event) => {
+  const { targetIndex, isSearchMode } = event.detail;
+    
+  let globalIndex;
+  let [, totalSlides] = await getCurrentSlideIndex();
+
+  if (isSearchMode && state.searchResults?.length > 0) {
+    globalIndex = state.searchResults[targetIndex]?.index;
+  } else {
+    globalIndex = targetIndex;
+  }
+  
+  await state.swiper.removeAllSlides();
+
+  let origin = -2;
+  let slides_to_add = 5;
+  if (globalIndex + origin < 0) {
+    origin = 0;
+  }
+  
+  const swiperContainer = document.querySelector(".swiper");
+  swiperContainer.style.visibility = "hidden";
+  
+  for (let i = origin; i < slides_to_add; i++) {
+    if (targetIndex + i >= totalSlides) break;
+    let randomMode = state.mode === "random" && state.searchResults?.length === 0;
+    let seekIndex = randomMode && i != 0 
+      ? Math.floor(Math.random() * totalSlides)
+      : globalIndex + i;
+    await addSlideByIndex(seekIndex, targetIndex + i);
+  }
+  
+  state.swiper.slideTo(-origin, 0);
+  swiperContainer.style.visibility = "visible";
+  updateMetadataOverlay();
+
+});

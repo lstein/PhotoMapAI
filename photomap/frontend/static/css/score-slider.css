@@ -298,3 +298,72 @@
 .slider-with-ticks-container.visible .thumbnail-gallery-row {
   display: flex;
 }
+
+/* ===== THUMBNAIL PAGER BUTTONS ===== */
+.thumbnail-pager-prev,
+.thumbnail-pager-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  opacity: 0.7;
+  backdrop-filter: blur(4px);
+}
+
+.thumbnail-pager-prev {
+  left: 4px;
+}
+
+.thumbnail-pager-next {
+  right: 4px;
+}
+
+.thumbnail-pager-prev:hover,
+.thumbnail-pager-next:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.8);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.thumbnail-pager-prev:active,
+.thumbnail-pager-next:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.thumbnail-pager-prev svg,
+.thumbnail-pager-next svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Hide pager buttons when not enough thumbnails */
+.thumbnail-swiper-container:not(.has-multiple-pages) .thumbnail-pager-prev,
+.thumbnail-swiper-container:not(.has-multiple-pages) .thumbnail-pager-next {
+  display: none;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .thumbnail-pager-prev,
+  .thumbnail-pager-next {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .thumbnail-pager-prev svg,
+  .thumbnail-pager-next svg {
+    width: 14px;
+    height: 14px;
+  }
+}

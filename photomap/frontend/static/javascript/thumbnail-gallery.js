@@ -208,6 +208,22 @@ class ThumbnailGallery {
       })
     );
   }
+
+  navigateToIndex(targetIndex) {
+    const slider = document.getElementById("slideSeekSlider");
+    if (!slider) return;
+
+    // Set slider value (1-based)
+    slider.value = targetIndex + 1;
+
+    // Dispatch the same event that the slider uses
+    const isSearchMode = state.searchResults?.length > 0;
+    window.dispatchEvent(
+      new CustomEvent("setSlideIndex", {
+        detail: { targetIndex, isSearchMode },
+      })
+    );
+  }
 }
 
 // Create and initialize the gallery
