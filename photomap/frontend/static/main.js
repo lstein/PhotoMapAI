@@ -10,6 +10,7 @@ import './javascript/seek-slider.js';
 import './javascript/settings.js';
 import './javascript/state.js';
 import './javascript/swiper.js';
+import './javascript/thumbnail-gallery.js';
 import './javascript/umap.js';
 import './javascript/utils.js';
 
