@@ -52,10 +52,12 @@ These functions are controlled by the checkboxes in the bottom right of the wind
 
 Selecting "Show landmarks" will position small static thumbnails on the clusters, while "Show hover thumbnails" will pop up a larger preview window as you hover the mouse over the image dots. The former gives you an overview of what's in your collection. The latter gives you only one preview image at a time, but it is larger and more detailed.
 
-With "Show landmarks" turned on:
+With "Show landmarks" turned on and "Show hover thumbnails" turned off:
+
 <img src="../../img/photomap_landmarks.png" width="480" alt="Thumbnail controls" class="img-hover-zoom">
 
-With "Show hover thumbnails" turned on:
+With "Show hover thumbnails" turned on and "Show landmarks" turned off:
+
 <img src="../../img/photomap_hover_thumbnail.png" width="480" alt="Thumbnail controls" class="img-hover-zoom">
 
 By default, landmarks will be turned on and hover images turned off when you enter the map's fullscreen mode. The opposite happens when  you leave fullscreen mode and enter windowed mode. See below for more information on window modes and sizes.
