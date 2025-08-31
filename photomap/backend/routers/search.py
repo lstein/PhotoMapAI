@@ -201,7 +201,6 @@ async def serve_thumbnail(
             thumb_dir / f"{Path(safe_rel_path).stem}_{size}_{color_hex}_r{radius}.png"
         )
 
-    logger.info(f"Serving thumbnail: {thumb_path}, exists={thumb_path.exists()}")
     # Generate thumbnail if not cached or outdated
     if (
         not thumb_path.exists()
