@@ -276,14 +276,10 @@ class SeekSlider {
     }, this.FADE_OUT_DELAY);
   }
 
-function resetFadeOutTimer() {
-  clearFadeOutTimer();
-  fadeOutTimeoutId = setTimeout(() => {
-    // Only fade out if mouse is NOT inside hoverZone
-    if (!sliderContainer.querySelector(":hover")) {
-      sliderContainer.classList.remove("visible");
-      sliderVisible = false;
-      fadeOutTimeoutId = null;
+  clearFadeOutTimer() {
+    if (this.fadeOutTimeoutId) {
+      clearTimeout(this.fadeOutTimeoutId);
+      this.fadeOutTimeoutId = null;
     }
   }
 
