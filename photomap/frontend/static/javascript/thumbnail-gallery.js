@@ -11,11 +11,11 @@ class ThumbnailGallery {
     this.wrapper = null;
     this.thumbnails = [];
     this.currentIndex = -1;
-    this.maxThumbnails = 11;  // Show 5 before + current + 5 after
+    this.maxThumbnails = 11; // Show 5 before + current + 5 after
     this.thumbnailSize = 256; // Sized to share with the umap hovers; will be downscaled
     this.preloadTimer = null;
     this.preloadSlideDetail = null;
-    this.preloadDelay = 3000; // 3 seconds
+    this.preloadDelay = 10000; // 10 seconds
     this.debouncedUpdateGallery = debounce(this.updateGallery.bind(this), 150);
   }
 
@@ -75,11 +75,11 @@ class ThumbnailGallery {
       this.clear();
     });
 
-    window.addEventListener('resize', () => {
+    window.addEventListener("resize", () => {
       this.maxThumbnails = calculateMaxThumbnails();
       // Optionally, re-render the gallery if visible
-      if (this.sliderContainer.classList.contains('visible')) {
-        this.getCurrentSlideDetail().then(detail => {
+      if (this.sliderContainer.classList.contains("visible")) {
+        this.getCurrentSlideDetail().then((detail) => {
           this.updateGallery(detail);
         });
       }
@@ -101,9 +101,11 @@ class ThumbnailGallery {
     if (!this.wrapper) return;
 
     if (!this.sliderContainer.classList.contains("visible")) {
+      // Guard: If a preload is already running, don't start another
+      if (this.preloadTimer !== null) return;
+
       // Gallery is not visible, set a timer to preload thumbnails
       this.preloadSlideDetail = slideDetail;
-      if (this.preloadTimer) clearTimeout(this.preloadTimer);
       this.preloadTimer = setTimeout(() => {
         // Preload thumbnails in the background
         this.generateThumbnails(this.preloadSlideDetail);
@@ -278,7 +280,10 @@ class ThumbnailGallery {
   previousPage() {
     if (this.currentStartIndex === 0) return; // Already at first page
 
-    const newStartIndex = Math.max(0, this.currentStartIndex - this.maxThumbnails);
+    const newStartIndex = Math.max(
+      0,
+      this.currentStartIndex - this.maxThumbnails
+    );
     let centerIndex;
     if (newStartIndex === 0) {
       centerIndex = 0;
@@ -288,7 +293,7 @@ class ThumbnailGallery {
         this.totalCount - 1
       );
     }
-    this.animateGallery('slide-prev');
+    this.animateGallery("slide-prev");
     this.navigateToIndex(centerIndex);
   }
 
@@ -301,13 +306,13 @@ class ThumbnailGallery {
       newStartIndex + Math.floor(this.maxThumbnails / 2),
       this.totalCount - 1
     );
-    this.animateGallery('slide-next');
+    this.animateGallery("slide-next");
     this.navigateToIndex(centerIndex);
   }
 
   animateGallery(direction) {
     if (!this.wrapper) return;
-    this.wrapper.classList.remove('slide-next', 'slide-prev');
+    this.wrapper.classList.remove("slide-next", "slide-prev");
     void this.wrapper.offsetWidth; // Force reflow for restart
     this.wrapper.classList.add(direction);
     setTimeout(() => {
@@ -329,21 +334,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function calculateMaxThumbnails() {
   const thumbnailWidth = 72; // thumbnail size + gap
-  const container = document.querySelector('.thumbnail-swiper-container');
+  const container = document.querySelector(".thumbnail-swiper-container");
   let containerWidth = container ? container.offsetWidth : 0;
 
   // If containerWidth is 0, get the parent slider container's computed width
   // This is tricky because the thumbnail container may be hidden initially, so
   // if it is 0, we fall back to window width * the default CSS width percentage
   if (!containerWidth) {
-    const sliderContainer = document.querySelector('.slider-with-ticks-container');
+    const sliderContainer = document.querySelector(
+      ".slider-with-ticks-container"
+    );
     if (sliderContainer) {
       // Get computed style width (may be in px or vw)
       let styleWidth = window.getComputedStyle(sliderContainer).width;
       // If width is in px, parse it
-      if (styleWidth.endsWith('px')) {
+      if (styleWidth.endsWith("px")) {
         containerWidth = parseFloat(styleWidth);
-      } else if (styleWidth.endsWith('vw')) {
+      } else if (styleWidth.endsWith("vw")) {
         // Convert vw to px
         const vw = parseFloat(styleWidth);
         containerWidth = window.innerWidth * (vw / 100);
@@ -356,6 +363,9 @@ function calculateMaxThumbnails() {
     }
   }
 
-  const maxThumbnails = Math.max(1, Math.floor(containerWidth / thumbnailWidth));
+  const maxThumbnails = Math.max(
+    1,
+    Math.floor(containerWidth / thumbnailWidth)
+  );
   return maxThumbnails;
 }
