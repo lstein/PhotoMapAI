@@ -272,7 +272,6 @@ class SeekSlider {
         this.sliderContainer.classList.remove("visible");
         this.sliderVisible = false;
         this.fadeOutTimeoutId = null;
-        console.log("Slider faded out due to inactivity.");
       }
     }, this.FADE_OUT_DELAY);
   }
