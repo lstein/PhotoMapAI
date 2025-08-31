@@ -1,48 +1,68 @@
-import { ScoreDisplay } from "./score-display.js"; // Add this import
+import { updateMetadataOverlay } from "./metadata-drawer.js";
+import { scoreDisplay } from "./score-display.js";
 import { state } from "./state.js";
-import { getCurrentSlideIndex } from "./swiper.js";
+import { addSlideByIndex, getCurrentSlideIndex } from "./swiper.js";
 
 let sliderVisible = false;
-let sliderContainer;
-let scoreDisplayElement; // Rename to avoid confusion
-let scoreSliderRow;
-let scoreDisplayObj; // Add this for the actual score display object
-let searchResultsChanged = true;
-
-let scoreText, slider, ticksContainer, contextLabel, hoverZone;
+let scoreText, slider, ticksContainer, sliderContainer, contextLabel, hoverZone;
 let fadeOutTimeoutId = null;
 let TICK_COUNT = 10; // Number of ticks to show on the slider
 const FADE_OUT_DELAY = 10000; // 10 seconds
 let isUserSeeking = false;
 
-document.addEventListener("DOMContentLoaded", () => {
-  // Initialize the DOM elements
-  sliderContainer = document.getElementById("sliderWithTicksContainer");
-  scoreDisplayElement = document.getElementById("fixedScoreDisplay"); // Renamed
-  scoreSliderRow = document.getElementById("scoreSliderRow");
-
-  // Initialize the score display object
-  scoreDisplayObj = new ScoreDisplay(); // Create the score display object
-
-  initializeEvents();
-});
+document.addEventListener("DOMContentLoaded", initializeEvents);
 
 function initializeEvents() {
   scoreText = document.getElementById("scoreText");
   slider = document.getElementById("slideSeekSlider");
   ticksContainer = document.getElementById("sliderTicks");
+  sliderContainer = document.getElementById("sliderWithTicksContainer");
   contextLabel = document.getElementById("contextLabel");
   hoverZone = document.getElementById("sliderHoverZone");
-
-  const scoreElement = scoreDisplayElement; // Use the DOM element for events
+  const scoreElement = scoreDisplay.scoreElement;
   const infoPanel = document.getElementById("sliderInfoPanel");
 
   // Show slider on hover over score display or hover zone
-  scoreElement.addEventListener("click", toggleSlider);
+  scoreElement.addEventListener("mouseenter", showSlider);
   hoverZone.addEventListener("mouseenter", showSlider);
 
   // Hide slider when mouse leaves score display or hover zone
+  scoreElement.addEventListener("mouseleave", hideSliderWithDelay);
   hoverZone.addEventListener("mouseleave", hideSliderWithDelay);
+
+  // Show/hide slider on score display click/tap
+  function handleScoreTap(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleSlider();
+  }
+
+  // Use touch events for iPad/mobile, click for desktop
+  if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
+    scoreElement.addEventListener(
+      "touchend",
+      (event) => {
+        handleScoreTap(event);
+        hideSliderWithDelay(event);
+      },
+      {
+        passive: false,
+      }
+    );
+    hoverZone.addEventListener(
+      "touchend",
+      (event) => {
+        handleScoreTap(event);
+        hideSliderWithDelay(event);
+      },
+      { passive: false }
+    );
+  } else {
+    scoreDisplay.scoreElement.addEventListener("click", handleScoreTap);
+  }
+
+  // Make sure the score element has proper touch handling
+  scoreDisplay.scoreElement.style.touchAction = "manipulation";
 
   // When slider changes, update score display and seek to slide
   let lastFetchTime = 0;
@@ -69,9 +89,10 @@ function initializeEvents() {
             const panelText = `${String(date.getDate()).padStart(
               2,
               "0"
-            )}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(
-              date.getFullYear()
-            ).slice(-2)}`;
+            )}/${String(date.getMonth() + 1).padStart(
+              2,
+              "0"
+            )}/${String(date.getFullYear()).slice(-2)}`;
             infoPanel.textContent = panelText;
           }
         } catch {
@@ -141,16 +162,14 @@ function initializeEvents() {
       if (state.searchResults[targetIndex]?.cluster !== undefined) {
         const cluster = state.searchResults[targetIndex]?.cluster;
         const color = state.searchResults[targetIndex]?.color;
-        scoreDisplayObj.showCluster(
-          // Use scoreDisplayObj instead of scoreDisplay
+        scoreDisplay.showCluster(
           cluster,
           color,
           targetIndex + 1,
           state.searchResults.length
         );
       } else {
-        scoreDisplayObj.show(
-          // Use scoreDisplayObj instead of scoreDisplay
+        scoreDisplay.show(
           state.searchResults[targetIndex]?.score,
           targetIndex + 1,
           state.searchResults.length
@@ -158,91 +177,81 @@ function initializeEvents() {
       }
     } else {
       globalIndex = targetIndex;
-      scoreDisplayObj.showIndex(globalIndex, slider.max); // Use scoreDisplayObj instead of scoreDisplay
+      scoreDisplay.showIndex(globalIndex, slider.max);
     }
   });
 
   // When slider is released, seek to slide
   slider.addEventListener("change", async function () {
-    const targetIndex = parseInt(slider.value, 10) - 1;
-    const isSearchMode = state.searchResults?.length > 0;
     isUserSeeking = true; // Set flag before seeking
+    resetFadeOutTimer();
+    let globalIndex;
+    let [, totalSlides] = await getCurrentSlideIndex();
 
-    // Dispatch event to swiper.js for handling
-    window.dispatchEvent(
-      new CustomEvent("setSlideIndex", {
-        detail: { targetIndex, isSearchMode },
-      })
-    );
+    const targetIndex = parseInt(slider.value, 10) - 1;
+    if (state.searchResults?.length > 0) {
+      globalIndex = state.searchResults[targetIndex]?.index;
+    } else {
+      globalIndex = targetIndex;
+    }
+    await state.swiper.removeAllSlides();
 
+    let origin = -2;
+    let slides_to_add = 5;
+    if (globalIndex + origin < 0) {
+      origin = 0;
+    }
+    const swiperContainer = document.querySelector(".swiper");
+    swiperContainer.style.visibility = "hidden";
+    for (let i = origin; i < slides_to_add; i++) {
+      if (targetIndex + i >= totalSlides) break;
+      let randomMode =
+        state.mode === "random" && state.searchResults?.length === 0;
+      let seekIndex =
+        randomMode && i != 0
+          ? Math.floor(Math.random() * totalSlides)
+          : globalIndex + i;
+      await addSlideByIndex(seekIndex, targetIndex + i);
+    }
+    state.swiper.slideTo(-origin, 0);
+    swiperContainer.style.visibility = "visible";
+
+    updateMetadataOverlay();
     slider.blur();
+
     // Reset flag after a short delay
     setTimeout(() => {
       isUserSeeking = false;
-    }, 1500);
+    }, 1500); // Slightly longer than the slideChanged timeout
   });
 
-  let slideChangedTimer = null;
-
   window.addEventListener("slideChanged", async (event) => {
-    searchResultsChanged = true;
-    if (slideChangedTimer) clearTimeout(slideChangedTimer);
-    slideChangedTimer = setTimeout(async () => {
+    setTimeout(async () => {
       if (isUserSeeking) return; // Don't update slider if user is seeking
 
       const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
       slider.value =
         state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
       resetFadeOutTimer();
-    }, 200); // 100ms delay to allow swiper/gallery to settle
+    }, 1000);
   });
 
-  // Fix the hover event handlers - use scoreDisplayElement for DOM events
-  if (scoreSliderRow) {
-    scoreSliderRow.addEventListener("mouseenter", showSlider);
-    scoreSliderRow.addEventListener("mouseleave", hideSlider);
-  }
-
-  if (scoreDisplayElement) {
-    scoreDisplayElement.addEventListener("mouseenter", showSlider);
-  }
-
-  if (sliderContainer) {
-    sliderContainer.addEventListener("mouseenter", showSlider);
-    sliderContainer.addEventListener("mouseleave", hideSlider);
-  }
+  // Hide panel when slider loses focus or mouse leaves
+  slider.addEventListener("mouseleave", () => {
+    infoPanel.style.display = "none";
+  });
+  slider.addEventListener("blur", () => {
+    infoPanel.style.display = "none";
+  });
 }
 
-// Hover handlers for the entire slider row to show/hide slider
-async function showSlider() {
-  if (!sliderVisible && sliderContainer) {
-    sliderVisible = true;
-    sliderContainer.classList.add("visible");
-
-    let [, total] = await getCurrentSlideIndex();
-    if (total > 0 && searchResultsChanged)
-      updateSliderRange().then(() => {
-        renderSliderTicks();
-        searchResultsChanged = false;
-      });
-
-    resetFadeOutTimer();
-
-    // Trigger gallery update if available
-    if (window.thumbnailGallery) {
-      getCurrentSlideIndex().then(([globalIndex, total, searchIndex]) => {
-        const slideDetail = { globalIndex, total, searchIndex };
-        window.thumbnailGallery.updateGallery(slideDetail);
-      });
-    }
-  }
-}
-
-function hideSlider() {
-  if (sliderVisible && sliderContainer) {
-    sliderVisible = false;
-    sliderContainer.classList.remove("visible");
-  }
+function showSlider() {
+  sliderContainer.classList.add("visible");
+  sliderVisible = true;
+  updateSliderRange().then(() => {
+    renderSliderTicks();
+  });
+  resetFadeOutTimer();
 }
 
 function hideSliderWithDelay(event) {
@@ -252,6 +261,7 @@ function hideSliderWithDelay(event) {
     fadeOutTimeoutId = setTimeout(() => {
       sliderContainer.classList.remove("visible");
       sliderVisible = false;
+      if (ticksContainer) ticksContainer.innerHTML = "";
       fadeOutTimeoutId = null;
     }, 600);
   }
@@ -261,11 +271,11 @@ function resetFadeOutTimer() {
   clearFadeOutTimer();
   fadeOutTimeoutId = setTimeout(() => {
     // Only fade out if mouse is NOT inside hoverZone
-    if (!sliderContainer.querySelector(":hover")) {
+    if (!hoverZone.matches(":hover")) {
       sliderContainer.classList.remove("visible");
       sliderVisible = false;
+      if (ticksContainer) ticksContainer.innerHTML = "";
       fadeOutTimeoutId = null;
-      console.log("Slider faded out due to inactivity.");
     }
   }, FADE_OUT_DELAY);
 }
@@ -376,7 +386,6 @@ async function renderSliderTicks() {
 
 async function toggleSlider() {
   sliderVisible = !sliderVisible;
-  console.log("Toggling slider. Now visible:", sliderVisible);
   if (sliderVisible) {
     sliderContainer.classList.add("visible");
     await updateSliderRange();
@@ -400,11 +409,3 @@ async function updateSliderRange() {
     slider.max = totalSlides;
   }
 }
-
-window.addEventListener("searchResultsChanged", () => {
-  searchResultsChanged = true;
-});
-
-window.addEventListener("albumChanged", () => {
-  searchResultsChanged = true;
-});
