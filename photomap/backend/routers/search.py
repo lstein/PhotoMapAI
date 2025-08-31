@@ -192,16 +192,13 @@ async def serve_thumbnail(
     relative_path = config_manager.get_relative_path(str(image_path), album_key)
     assert relative_path is not None, "Relative path should not be None"
     safe_rel_path = relative_path.replace("/", "_").replace("\\", "_")
-    thumb_path = (
-        thumb_dir / f"{Path(safe_rel_path).stem}_{size}{Path(safe_rel_path).suffix}"
-    )
+    thumb_path = thumb_dir / f"{Path(safe_rel_path).stem}_{size}.png"
 
     # If color is specified, add it to the thumbnail filename to cache separately
     if color:
         color_hex = color.replace("#", "")
         thumb_path = (
-            thumb_dir
-            / f"{Path(safe_rel_path).stem}_{size}_{color_hex}_r{radius}{Path(safe_rel_path).suffix}"
+            thumb_dir / f"{Path(safe_rel_path).stem}_{size}_{color_hex}_r{radius}.png"
         )
 
     # Generate thumbnail if not cached or outdated
