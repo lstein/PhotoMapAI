@@ -38,54 +38,11 @@ function initializeEvents() {
   const infoPanel = document.getElementById("sliderInfoPanel");
 
   // Show slider on hover over score display or hover zone
-  scoreElement.addEventListener("mouseenter", showSlider);
+  scoreElement.addEventListener("click", toggleSlider);
   hoverZone.addEventListener("mouseenter", showSlider);
 
   // Hide slider when mouse leaves score display or hover zone
-  scoreElement.addEventListener("mouseleave", hideSliderWithDelay);
   hoverZone.addEventListener("mouseleave", hideSliderWithDelay);
-
-  // Show/hide slider on score display click/tap
-  function handleScoreTap(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    toggleSlider();
-  }
-
-  // Use touch events for iPad/mobile, click for desktop
-  const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-
-  if (isTouchDevice) {
-    scoreDisplayElement.addEventListener(
-      "touchend",
-      (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleSlider(); // This should always toggle visibility
-      },
-      { passive: false }
-    );
-
-    // Remove fade out and hover-based hiding for touch devices
-    // Optionally, you can disable these handlers:
-    hoverZone.removeEventListener("mouseenter", showSlider);
-    hoverZone.removeEventListener("mouseleave", hideSliderWithDelay);
-    scoreDisplayElement.removeEventListener("mouseenter", showSlider);
-    scoreDisplayElement.removeEventListener("mouseleave", hideSliderWithDelay);
-    scoreSliderRow.removeEventListener("mouseenter", showSlider);
-    scoreSliderRow.removeEventListener("mouseleave", hideSlider);
-    sliderContainer.removeEventListener("mouseenter", showSlider);
-    sliderContainer.removeEventListener("mouseleave", hideSlider);
-
-    // Also, disable fade out timer for touch devices
-    resetFadeOutTimer = function () {};
-    clearFadeOutTimer = function () {};
-  } else {
-    scoreElement.addEventListener("click", handleScoreTap); // Fix: use scoreElement, not scoreDisplay.scoreElement
-
-    // Make sure the score element has proper touch handling
-    scoreElement.style.touchAction = "manipulation"; // Fix: use scoreElement
-  }
 
   // When slider changes, update score display and seek to slide
   let lastFetchTime = 0;
@@ -240,14 +197,6 @@ function initializeEvents() {
     }, 200); // 100ms delay to allow swiper/gallery to settle
   });
 
-  // Hide panel when slider loses focus or mouse leaves
-  slider.addEventListener("mouseleave", () => {
-    infoPanel.style.display = "none";
-  });
-  slider.addEventListener("blur", () => {
-    infoPanel.style.display = "none";
-  });
-
   // Fix the hover event handlers - use scoreDisplayElement for DOM events
   if (scoreSliderRow) {
     scoreSliderRow.addEventListener("mouseenter", showSlider);
@@ -303,7 +252,6 @@ function hideSliderWithDelay(event) {
     fadeOutTimeoutId = setTimeout(() => {
       sliderContainer.classList.remove("visible");
       sliderVisible = false;
-      if (ticksContainer) ticksContainer.innerHTML = "";
       fadeOutTimeoutId = null;
     }, 600);
   }
@@ -428,6 +376,7 @@ async function renderSliderTicks() {
 
 async function toggleSlider() {
   sliderVisible = !sliderVisible;
+  console.log("Toggling slider. Now visible:", sliderVisible);
   if (sliderVisible) {
     sliderContainer.classList.add("visible");
     await updateSliderRange();
