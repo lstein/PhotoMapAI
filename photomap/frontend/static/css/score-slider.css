@@ -1,0 +1,179 @@
+/* ===== SCORE DISPLAY & SLIDER ===== */
+.fixed-score-display {
+  min-width: 140px;
+  max-width: 220px;
+  width: 180px;
+  font-size: 1.05em;
+  padding: 2px 18px;
+  border-radius: 12px;
+  background: rgba(30, 30, 30, 0.85);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  user-select: none;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  white-space: nowrap;
+  pointer-events: auto;
+  margin-right: 16px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: none;
+}
+
+.fixed-score-display.visible {
+  display: block;
+  opacity: 0.5;
+}
+
+.fixed-score-display.hidden {
+  display: none;
+  opacity: 0;
+}
+
+.score-slider-row {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 500;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 60px;
+}
+
+.slider-hover-zone {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: auto;
+  background: transparent;
+}
+
+.slider-with-ticks-container {
+  position: relative;
+  width: 60vw;
+  /* max-width: 900px; */
+  min-width: 320px;
+  margin: 0 auto;
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 0.3s;
+  z-index: 2;
+}
+
+
+.slider-with-ticks-container.visible {
+  opacity: 1;
+}
+
+.slide-seek-slider {
+  width: 100%;
+  position: relative;
+  height: 18px;
+  accent-color: #888;
+  background: transparent;
+  border: none;
+  margin: 0;
+  transition: opacity 0.3s;
+  display: block;
+  z-index: 502;
+}
+
+@media (max-width: 480px) {
+  .slider-with-ticks-container {
+    width: 98vw;
+    max-width: 100vw;
+    min-width: 120px;
+    margin-left: 1vw;
+    margin-right: 1vw;
+  }
+}
+
+.slider-ticks-row {
+  position: absolute;
+  left: 0;
+  top: 100%; /* Position just below the slider */
+  width: 100%; /* Full width of the slider container */
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.context-label {
+  position: absolute;
+  right: 100%;
+  top: 100%; /* Same vertical position as ticks */
+  font-size: 0.85em;
+  color: white;
+  font-weight: bold;
+  text-align: right;
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0.9;
+  width: 80px;
+  margin-top: 10px; /* Align with tick labels */
+  margin-right: 32px;
+  z-index: 3;
+}
+
+.slider-ticks {
+  flex: 1;
+  position: relative;
+  height: 32px;
+}
+
+.slider-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 0;
+}
+
+.slider-tick-mark {
+  width: 2px;
+  height: 8px;
+  transform: translateY(-4px);
+  background: white;
+  margin-bottom: 2px;
+  opacity: 0.7;
+}
+
+.slider-tick-label {
+  font-size: 0.75em;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0.95;
+  user-select: none;
+  background: rgba(30, 30, 30, 0.85);
+  border-radius: 4px;
+  padding: 1px 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.slider-info-panel {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(30,30,30,0.95);
+  color: #faea0e;
+  font-size: 0.95em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 10;
+  white-space: nowrap;
+  transition: left 0.05s, top 0.05s;
+  display: none;
+}
+
