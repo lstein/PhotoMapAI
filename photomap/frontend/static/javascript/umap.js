@@ -4,7 +4,7 @@ import { albumManager } from "./album.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { state } from "./state.js";
 import { getCurrentSlideIndex } from "./swiper.js";
-import { debounce, getPercentile, isColorLight } from "./utils.js";
+import { getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {
   big: { width: 800, height: 560 },
@@ -48,6 +48,14 @@ let hoverThumbnailsEnabled = true; // default ON
 // Track current zoom level to detect zoom changes
 let currentZoomLevel = null;
 
+// Add debounce function
+function debounce(func, wait) {
+  let timeout;
+  return function (...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
 
 // Helper to get current window size
 function getCurrentWindowSize() {
