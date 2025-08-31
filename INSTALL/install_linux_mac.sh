@@ -66,6 +66,10 @@ create_linux_launcher() {
     local install_path="$1"
     local desktop_dir="$HOME/Desktop"
     local launcher_file="$desktop_dir/PhotoMapAI.desktop"
+    local repo_root="$(dirname "$0")/.."
+    local icon_path="$repo_root/photomap/frontend/static/icons/favicon-32x32.png"
+    local install_icon_path="$(realpath "$install_path/etc/favicon-32x32.png")"
+    cp "$icon_path" "$install_icon_path"
     
     # Check if Desktop directory exists
     if [[ ! -d "$desktop_dir" ]]; then
@@ -82,7 +86,7 @@ Type=Application
 Name=PhotoMapAI
 Comment=AI-based image clustering and exploration tool
 Exec=sh -c '$install_path/bin/start_photomap; echo "Press Enter to exit..."; read'
-Icon=image-x-generic
+Icon=$install_icon_path
 Terminal=true
 Categories=Graphics;Photography;
 EOF
@@ -96,11 +100,15 @@ create_mac_launcher() {
     local install_path="$1"
     local desktop_dir="$HOME/Desktop"
     local app_dir="$desktop_dir/PhotoMap.app"
-    
+    local repo_root="$(dirname "$0")/.."
+    local icon_path="$repo_root/photomap/frontend/static/icons/favicon-32x32.icns"
+
     # Create app bundle structure
     mkdir -p "$app_dir/Contents/MacOS"
     mkdir -p "$app_dir/Contents/Resources"
     
+    cp "$icon_path" "$app_dir/Contents/Resources/photomap.icns"
+
     # Create Info.plist
     cat > "$app_dir/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -113,6 +121,8 @@ create_mac_launcher() {
     <string>com.lincolnstein.photomapai</string>
     <key>CFBundleName</key>
     <string>PhotoMap</string>
+    <key>CFBundleIconFile</key>
+    <string>photomap.icns</string>
     <key>CFBundleVersion</key>
     <string>0.3.0</string>
     <key>CFBundleShortVersionString</key>

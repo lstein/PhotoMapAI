@@ -437,7 +437,7 @@ class Embeddings(BaseModel):
         create_index: bool = True,
     ) -> Optional[IndexResult]:
         """Asynchronously index images using CLIP with progress tracking."""
-
+        logger.info("Starting asynchronous indexing operation")
         progress_tracker.start_operation(album_key, 0, "scanning")
 
         def traversal_callback(count, message):
