@@ -8,6 +8,7 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 
 ## Features
 - Fast browsing of large image collections
+- All images are local to your computer; nothing goes out to the internet
 - AI-based text and image similarity search
 - Thematic image clustering and visualization
 - Flexible album management

@@ -12,7 +12,7 @@ Enter a short lowercase key for the album, such as "family", a longer descriptiv
 
 You'll now need to tell the album where its photos are stored. Enter one or more filesystem paths in the text field at the bottom named "Image Paths". Photos can be stored in a single large folder, or stored in multiple nestered folders. They can reside on the local disk or on a shared disk. If you wish, you can point the album to multiple folders, and their contents will be combined into a single album.
 
-PhotoMapAI supports photos in JPEG, PNG, TIFF, and HEIC/HEIF formats.
+PhotoMapAI supports photos in JPEG, PNG, TIFF, GIF, and HEIC/HEIF formats.
 
 The screenshot below shows the dialogue after populating it on a Linux or MacOS system. On Windows systems use the usual `C:\path\to\directory` notation.
 
@@ -50,19 +50,27 @@ Going from left to right:
 
 Finally, the inconspicuous tab with the yellow arrow on the left margin of the window opens a drawer that displays the image's EXIF date, including the date the photo was taken, GPS information (if available), and camera information.
 
-Hover near the top of the window to reveal a slider that will let you seek forward and backward among the images. If no search is active, the slider shows the images sorted by their date. If a image or text similarity search is active, the slider changes to indicate the match score (higher numbers are better matches):
+Hover the mouse near the top of the window to reveal a gallery view and a slider control that will let you seek forward and backward among the images. If no search is active, the slider shows the images sorted by their date. If an image or text similarity search is active, the slider changes to indicate the match score (higher numbers are better matches). If a cluster was selected with the semantic map, then the slider and gallery change to indicate the contents of the cluster.
 
-<img src="../../img/photomap_basic_usage_2.png" width="680" alt="Seek Slider" class="img-hover-zoom">
+<img src="../../img/photomap_basic_usage_2.png" width="480" alt="Seek Slider" class="img-hover-zoom">
 
 You can navigate through your album, enter and exit fullscreen, and start and stop the slideshow with a variety of keystrokes and gestures on touch-enabled devices. See [Keyboard Shortcuts](keyboard-shortcuts.md) for details.
 
 ## Displaying the Semantic Map
 
-Click the ⊙ (target) icon to open the [Semantic Map](semantic-map.md):
+Click the ⊙ (target) icon in the search panel on the bottom right to open the [Semantic Map](semantic-map.md):
+
+<div class="photomap-overlay-container">
+  <img src="../../img/photomap_basic_usage_3_base.png" style="width: 320px" class="photomap-base" alt="Base image">
+  <img src="../../img/photomap_basic_usage_3_overlay.png" style="width: 320px" class="photomap-overlay" alt="Overlay image">
+</div>
+
+This will open up a scatterplot showing all the photos in your album, clustered and colored by similarity.
+
 
 <img src="../../img/photomap_semantic_map_1.png" width="480" alt="Semantic Map" class="img-hover-zoom">
 
-This shows all the photos in your album, clustered and colored by similarity. The initial view shows the entire collection, with a yellow target marking the current photo on display. Use the mouse and scrollwheel to zoom in and out of the map and pan around. If you zoom in enough, you will see individual dots for each photo. Hover the mouse over areas of interest to see thumbnail previews of the corresponding images. 
+The initial view shows the entire collection, with a yellow target (far left side of the screenshot) marking the current photo on display. Use the mouse and scrollwheel to zoom in and out of the map and pan around. If you zoom in enough, you will see individual dots for each photo. The largest clusters are labeled with landmark images shown in the screenshot above as map markers pointing to major clusters. Hover the mouse over areas of interest to see larger thumbnail previews of the corresponding images. You can control whether landmarks and/or hover thumbnails are displayed by selecting those options in the checkboxes at the bottom of the screen. 
 
 Click on a dot to load that photo into the main display, highlight the cluster that you clicked in, and load the contents of the cluster into the search results. You can then use the navigation buttons (or the slideshow) to scroll through the images in the selected cluster.
 
@@ -71,6 +79,8 @@ If you don't see anything, or if the colors are very faint, this means that ther
 If you hover over the top of the map, additional navigation controls appear for zooming in and out, panning, resetting to the default scale, and downloading the map as a PNG image.
 
 <img src="../../img/photomap_semantic_map_2.png" width="480" alt="Semantic Map Nav Controls" class="img-hover-zoom">
+
+You can control the size and position of the semantic map. You can have it appear in fullscreen mode that covers the full size image display beneath it, or you can set it to be a semi-transparent window that floats on top of the full size image. See [Semantic Map](./semantic-map.md) for more details.
 
 ## Changing Settings
 
