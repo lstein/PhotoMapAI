@@ -201,6 +201,7 @@ async def serve_thumbnail(
             thumb_dir / f"{Path(safe_rel_path).stem}_{size}_{color_hex}_r{radius}.png"
         )
 
+    logger.info(f"Serving thumbnail: {thumb_path}, exists={thumb_path.exists()}")
     # Generate thumbnail if not cached or outdated
     if (
         not thumb_path.exists()
@@ -208,7 +209,7 @@ async def serve_thumbnail(
     ):
         try:
             with Image.open(image_path) as im:
-                im = ImageOps.exif_transpose(im)
+                im = ImageOps.exif_transpose(im).convert("RGBA")
                 im.thumbnail((size, size))
                 if color:
                     border_width = max(5, size // 32)
@@ -236,6 +237,7 @@ async def serve_thumbnail(
                 # Save as PNG to preserve transparency
                 im.save(thumb_path.with_suffix(".png"), format="PNG")
         except Exception as e:
+            logger.error(f"Error generating thumbnail for {image_path}: {e}")
             raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}")
 
     return FileResponse(thumb_path.with_suffix(".png"))
