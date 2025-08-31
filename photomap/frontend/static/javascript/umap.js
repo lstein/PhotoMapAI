@@ -13,6 +13,7 @@ const UMAP_SIZES = {
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
+const randomWalkMaxSize = 2000; // Max cluster size to use random walk ordering
 
 let points = [];
 let clusters = [];
@@ -47,7 +48,6 @@ let hoverThumbnailsEnabled = true; // default ON
 
 // Track current zoom level to detect zoom changes
 let currentZoomLevel = null;
-
 
 // Helper to get current window size
 function getCurrentWindowSize() {
@@ -382,6 +382,7 @@ export async function fetchUmapData() {
 export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
   if (!points.length) return;
   let markerColors, markerAlphas;
+
   if (highlight && searchResults.length > 0) {
     const searchSet = new Set(searchResults.map((r) => r.index));
     markerColors = points.map((p) => getClusterColor(p.cluster));
@@ -938,6 +939,53 @@ function getNonOverlappingLandmarks(
   return placed;
 }
 
+// --- Greedy random walk ordering for cluster points ---
+function randomWalkClusterOrder(clusterIndices, points, startIndex) {
+  const indexToPoint = Object.fromEntries(points.map((p) => [p.index, p]));
+  const unvisited = new Set(clusterIndices);
+  const walk = [startIndex];
+  unvisited.delete(startIndex);
+  let current = startIndex;
+
+  while (unvisited.size > 0) {
+    let nearest = null;
+    let nearestDist = Infinity;
+    const currentPoint = indexToPoint[current];
+    for (const idx of unvisited) {
+      const pt = indexToPoint[idx];
+      const dist = Math.hypot(pt.x - currentPoint.x, pt.y - currentPoint.y);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = idx;
+      }
+    }
+    if (nearest !== null) {
+      walk.push(nearest);
+      unvisited.delete(nearest);
+      current = nearest;
+    } else {
+      break;
+    }
+  }
+  return walk;
+}
+
+// -- Fallback ordering of cluster points by proximity to clicked point ---
+function proximityClusterOrder(clusterIndices, points, startIndex) {
+  const indexToPoint = Object.fromEntries(points.map((p) => [p.index, p]));
+  const startPoint = indexToPoint[startIndex];
+  return clusterIndices
+    .map((idx) => ({
+      index: idx,
+      dist: Math.hypot(
+        indexToPoint[idx].x - startPoint.x,
+        indexToPoint[idx].y - startPoint.y
+      ),
+    }))
+    .sort((a, b) => a.dist - b.dist)
+    .map((item) => item.index);
+}
+
 // Shared function for cluster clicks
 async function handleClusterClick(clickedIndex) {
   const clickedPoint = points.find((p) => p.index === clickedIndex);
@@ -953,24 +1001,16 @@ async function handleClusterClick(clickedIndex) {
   // Remove clickedFilename from the list
   clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
 
-  // --- Sort by ascending distance from clicked point ---
-  const clickedCoords = [clickedPoint.x, clickedPoint.y];
-  // Build a lookup map once
-  const indexToPoint = Object.fromEntries(points.map((p) => [p.index, p]));
-  clusterIndices.sort((a, b) => {
-    const pa = indexToPoint[a];
-    const pb = indexToPoint[b];
-    const da = pa
-      ? Math.hypot(pa.x - clickedCoords[0], pa.y - clickedCoords[1])
-      : Infinity;
-    const db = pb
-      ? Math.hypot(pb.x - clickedCoords[0], pb.y - clickedCoords[1])
-      : Infinity;
-    return da - db;
-  });
-
-  // Promote the clicked filename to the first position
-  const sortedClusterIndices = [clickedIndex, ...clusterIndices];
+  // --- Greedy random walk order from clicked point ---
+  const sort_algorithm =
+    clusterIndices.length > randomWalkMaxSize
+      ? proximityClusterOrder
+      : randomWalkClusterOrder;
+  const sortedClusterIndices = sort_algorithm(
+    [clickedIndex, ...clusterIndices],
+    points,
+    clickedIndex
+  );
 
   const clusterMembers = sortedClusterIndices.map((index) => ({
     index: index,
@@ -1020,7 +1060,6 @@ document.getElementById("showUmapBtn").onclick = () => toggleUmapWindow();
 document.getElementById("umapCloseBtn").onclick = () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
 };
-
 
 // --- Draggable Window ---
 function makeDraggable(dragHandleId, windowId) {
@@ -1298,7 +1337,7 @@ window.addEventListener("resize", () => {
 function setSemanticMapTitle() {
   const titleSpan = document.getElementById("semanticMapTitle");
   if (!titleSpan) return;
-  getCachedAlbum().then(album => {
+  getCachedAlbum().then((album) => {
     if (album && album.name) {
       titleSpan.textContent = album.name;
     } else if (state.album) {
