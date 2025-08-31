@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional
+from importlib.metadata import version, PackageNotFoundError
 
 import numpy as np
 from fastapi import FastAPI, Request
@@ -22,7 +23,7 @@ from .routers.umap import umap_router
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
-app = FastAPI(title="PhotoMap")
+app = FastAPI(title="PhotoMapAI")
 
 # Include routers
 for router in [umap_router, search_router, index_router, album_router]:
@@ -34,7 +35,6 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 templates_path = get_package_resource_path("templates")
 templates = Jinja2Templates(directory=templates_path)
-
 
 # Main Routes
 @app.get("/", response_class=HTMLResponse, tags=["Main"])
@@ -62,8 +62,16 @@ async def get_root(
             "delay": delay,
             "mode": mode,
             "highWaterMark": high_water_mark,
+            "version": get_version(),
         },
     )
+
+def get_version():
+    """Get the current version of the PhotoMapAI package."""
+    try:
+        return version("photomapai")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 # Main Entry Point
