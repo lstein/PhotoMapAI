@@ -8,7 +8,13 @@
     </button>
 
     <div class="settings-header">
-      <span id="slideshowSettingsLabel">PhotoMap Settings</span>
+      <span id="slideshowSettingsLabel">PhotoMapAI</span>
+      <span
+        id="settingsVersion"
+        style="font-size: 0.9em; color: #888; margin-left: 8px"
+      >
+        v{{ version }}
+      </span>
     </div>
 
     <div class="settings-main">
@@ -30,21 +36,16 @@
         <div id="modeRadioGroup">
           <label
             ><input
-               type="radio"
-               id="modeChronological"
-               name="mode"
-               value="chronological"
-               checked
-               />
+              type="radio"
+              id="modeChronological"
+              name="mode"
+              value="chronological"
+              checked
+            />
             Chronological</label
           >
           <label
-            ><input
-               type="radio"
-	       id="modeRandom"
-               name="mode"
-               value="random"
-            />
+            ><input type="radio" id="modeRandom" name="mode" value="random" />
             Random</label
           >
         </div>
