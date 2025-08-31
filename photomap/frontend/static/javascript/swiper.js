@@ -425,10 +425,11 @@ window.addEventListener("setSlideIndex", async (event) => {
   
   for (let i = origin; i < slides_to_add; i++) {
     if (targetIndex + i >= totalSlides) break;
-    let randomMode = state.mode === "random" && state.searchResults?.length === 0;
-    let seekIndex = randomMode && i != 0 
-      ? Math.floor(Math.random() * totalSlides)
-      : globalIndex + i;
+    // let randomMode = state.mode === "random" && state.searchResults?.length === 0;
+    // let seekIndex = randomMode && i != 0 
+    //   ? Math.floor(Math.random() * totalSlides)
+    //   : globalIndex + i;
+    let seekIndex = globalIndex + i;
     await addSlideByIndex(seekIndex, targetIndex + i);
   }
   
