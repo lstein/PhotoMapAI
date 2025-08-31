@@ -74,6 +74,17 @@ class ThumbnailGallery {
     window.addEventListener("albumChanged", () => {
       this.clear();
     });
+
+    window.addEventListener('resize', () => {
+      this.maxThumbnails = calculateMaxThumbnails();
+      // Optionally, re-render the gallery if visible
+      if (this.sliderContainer.classList.contains('visible')) {
+        this.getCurrentSlideDetail().then(detail => {
+          this.updateGallery(detail);
+        });
+      }
+    });
+
     return true;
   }
 
@@ -315,3 +326,36 @@ window.thumbnailGallery = thumbnailGallery;
 document.addEventListener("DOMContentLoaded", () => {
   thumbnailGallery.initialize();
 });
+
+function calculateMaxThumbnails() {
+  const thumbnailWidth = 72; // thumbnail size + gap
+  const container = document.querySelector('.thumbnail-swiper-container');
+  let containerWidth = container ? container.offsetWidth : 0;
+
+  // If containerWidth is 0, get the parent slider container's computed width
+  // This is tricky because the thumbnail container may be hidden initially, so
+  // if it is 0, we fall back to window width * the default CSS width percentage
+  if (!containerWidth) {
+    const sliderContainer = document.querySelector('.slider-with-ticks-container');
+    if (sliderContainer) {
+      // Get computed style width (may be in px or vw)
+      let styleWidth = window.getComputedStyle(sliderContainer).width;
+      // If width is in px, parse it
+      if (styleWidth.endsWith('px')) {
+        containerWidth = parseFloat(styleWidth);
+      } else if (styleWidth.endsWith('vw')) {
+        // Convert vw to px
+        const vw = parseFloat(styleWidth);
+        containerWidth = window.innerWidth * (vw / 100);
+      } else {
+        // Fallback to window width
+        containerWidth = window.innerWidth * 0.8;
+      }
+    } else {
+      containerWidth = window.innerWidth * 0.8;
+    }
+  }
+
+  const maxThumbnails = Math.max(1, Math.floor(containerWidth / thumbnailWidth));
+  return maxThumbnails;
+}

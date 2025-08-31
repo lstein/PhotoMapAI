@@ -53,31 +53,39 @@ function initializeEvents() {
   }
 
   // Use touch events for iPad/mobile, click for desktop
-  if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
-    scoreElement.addEventListener(
+  const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+
+  if (isTouchDevice) {
+    scoreDisplayElement.addEventListener(
       "touchend",
       (event) => {
-        handleScoreTap(event);
-        hideSliderWithDelay(event);
-      },
-      {
-        passive: false,
-      }
-    );
-    hoverZone.addEventListener(
-      "touchend",
-      (event) => {
-        handleScoreTap(event);
-        hideSliderWithDelay(event);
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSlider(); // This should always toggle visibility
       },
       { passive: false }
     );
+
+    // Remove fade out and hover-based hiding for touch devices
+    // Optionally, you can disable these handlers:
+    hoverZone.removeEventListener("mouseenter", showSlider);
+    hoverZone.removeEventListener("mouseleave", hideSliderWithDelay);
+    scoreDisplayElement.removeEventListener("mouseenter", showSlider);
+    scoreDisplayElement.removeEventListener("mouseleave", hideSliderWithDelay);
+    scoreSliderRow.removeEventListener("mouseenter", showSlider);
+    scoreSliderRow.removeEventListener("mouseleave", hideSlider);
+    sliderContainer.removeEventListener("mouseenter", showSlider);
+    sliderContainer.removeEventListener("mouseleave", hideSlider);
+
+    // Also, disable fade out timer for touch devices
+    resetFadeOutTimer = function () {};
+    clearFadeOutTimer = function () {};
   } else {
     scoreElement.addEventListener("click", handleScoreTap); // Fix: use scoreElement, not scoreDisplay.scoreElement
-  }
 
-  // Make sure the score element has proper touch handling
-  scoreElement.style.touchAction = "manipulation"; // Fix: use scoreElement
+    // Make sure the score element has proper touch handling
+    scoreElement.style.touchAction = "manipulation"; // Fix: use scoreElement
+  }
 
   // When slider changes, update score display and seek to slide
   let lastFetchTime = 0;
@@ -422,8 +430,8 @@ async function toggleSlider() {
   sliderVisible = !sliderVisible;
   if (sliderVisible) {
     sliderContainer.classList.add("visible");
-    // await updateSliderRange();
-    // await renderSliderTicks();
+    await updateSliderRange();
+    await renderSliderTicks();
     resetFadeOutTimer();
   } else {
     sliderContainer.classList.remove("visible");
