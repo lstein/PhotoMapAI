@@ -7,6 +7,27 @@
   <div id="sliderHoverZone" class="slider-hover-zone"></div>
 
   <div id="sliderWithTicksContainer" class="slider-with-ticks-container">
+    <!-- Move thumbnail gallery inside slider container -->
+    <div id="thumbnailGalleryRow" class="thumbnail-gallery-row">
+      <div class="thumbnail-swiper-container">
+        <!-- Add pager buttons -->
+        <div class="thumbnail-pager-prev">
+          <svg width="27" height="44" viewBox="0 0 27 44" fill="none">
+            <path d="M25.5 2L2 22L25.5 42" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="thumbnail-pager-next">
+          <svg width="27" height="44" viewBox="0 0 27 44" fill="none">
+            <path d="M1.5 2L25 22L1.5 42" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        
+        <div class="thumbnail-swiper-wrapper">
+          <!-- Thumbnails will be inserted here dynamically -->
+        </div>
+      </div>
+    </div>
+
     <input
       type="range"
       id="slideSeekSlider"
