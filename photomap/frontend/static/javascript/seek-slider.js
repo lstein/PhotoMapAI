@@ -265,7 +265,6 @@ function resetFadeOutTimer() {
       sliderContainer.classList.remove("visible");
       sliderVisible = false;
       fadeOutTimeoutId = null;
-      console.log("Slider faded out due to inactivity.");
     }
   }, FADE_OUT_DELAY);
 }
