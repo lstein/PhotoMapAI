@@ -56,6 +56,13 @@ class ThumbnailGallery {
     // Listen for slide changes
     let slideChangedTimer = null;
     window.addEventListener("slideChanged", (event) => {
+      // Clear any preload processes that are still running
+      if (this.preloadTimer) {
+        clearTimeout(this.preloadTimer);
+        this.preloadTimer = null;
+      }
+
+      // Update the gallery after a short delay to allow swiper to settle
       if (slideChangedTimer) clearTimeout(slideChangedTimer);
       slideChangedTimer = setTimeout(() => {
         this.debouncedUpdateGallery(event.detail);
