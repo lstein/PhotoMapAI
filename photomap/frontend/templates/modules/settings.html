@@ -76,6 +76,7 @@
     </div>
 
     <!-- Input for the LocationIQ API Key -->
+    {% if not album_locked %}
     <div class="setting-row">
       <label for="locationiqApiKeyInput">LocationIQ Map API Key:</label>
       <div class="setting-input-container">
@@ -105,7 +106,11 @@
         </small>
       </div>
     </div>
+    {% endif %}
 
+        
+    <!-- Album selection row -->
+    {% if not album_locked %}
     <div class="setting-row">
       <label for="albumSelect">Album:</label>
       <div class="album-selector-group">
@@ -115,5 +120,6 @@
         <button id="manageAlbumsBtn" class="btn-primary">Manage Albums</button>
       </div>
     </div>
+    {% endif %}
   </div>
 </div>

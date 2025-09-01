@@ -5,12 +5,15 @@ Format EXIF metadata for images, including human-readable tags.
 Returns an HTML representation of the EXIF data.
 """
 
+from logging import getLogger
 from pathlib import Path
 from typing import Optional, Tuple
 
 import requests
 
 from .slide_summary import SlideSummary
+
+logger = getLogger(__name__)
 
 
 def format_exif_metadata(
@@ -27,7 +30,7 @@ def format_exif_metadata(
     Returns:
         SlideSummary: structured metadata appropriate for an image with EXIF data.
     """
-
+    logger.info(f"locationiq_api_key: {locationiq_api_key}")
     if not metadata:
         slide_data.description = "<i>No EXIF metadata available.</i>"
         return slide_data

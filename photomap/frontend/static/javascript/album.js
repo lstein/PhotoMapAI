@@ -50,10 +50,12 @@ export class AlbumManager {
 
   initializeEventListeners() {
     // Main management button
-    document.getElementById("manageAlbumsBtn").addEventListener("click", () => {
-      closeSettingsModal();
-      this.show();
-    });
+    const manageAlbumsBtn = document.getElementById("manageAlbumsBtn");
+    if (manageAlbumsBtn)
+      manageAlbumsBtn.addEventListener("click", () => {
+        closeSettingsModal();
+        this.show();
+      });
 
     // Close button
     document
@@ -208,7 +210,6 @@ export class AlbumManager {
     if (this.elements.slideshowTitle) {
       this.elements.slideshowTitle.textContent = `Slideshow - ${album.name}`;
     }
-
   }
 
   getNewAlbumFormData() {
@@ -364,7 +365,9 @@ export class AlbumManager {
 
   showCompletionMessage() {
     // Remove any existing completion message before adding a new one
-    const existingCompletion = this.overlay.querySelector(".completion-message");
+    const existingCompletion = this.overlay.querySelector(
+      ".completion-message"
+    );
     if (existingCompletion && existingCompletion.parentNode) {
       existingCompletion.remove();
     }
@@ -551,7 +554,8 @@ export class AlbumManager {
       .filter((path) => path.length > 0);
 
     // Always set index path based on first path
-    const indexPath = paths.length > 0 ? `${paths[0]}/photomap_index/embeddings.npz` : "";
+    const indexPath =
+      paths.length > 0 ? `${paths[0]}/photomap_index/embeddings.npz` : "";
 
     const newAlbum = {
       key: formData.key,
@@ -691,7 +695,10 @@ export class AlbumManager {
             // Unfortunately most browsers disable file.path for security reasons
             const path = file.path || file.name;
             // Append to textarea, with newline
-            if (pathsField.value.length > 0 && !pathsField.value.endsWith("\n")) {
+            if (
+              pathsField.value.length > 0 &&
+              !pathsField.value.endsWith("\n")
+            ) {
               pathsField.value += "\n";
             }
             pathsField.value += path + "\n";
@@ -725,7 +732,10 @@ export class AlbumManager {
       .filter((path) => path.length > 0);
 
     // Always set index path based on first path
-    const indexPath = updatedPaths.length > 0 ? `${updatedPaths[0]}/photomap_index/embeddings.npz` : "";
+    const indexPath =
+      updatedPaths.length > 0
+        ? `${updatedPaths[0]}/photomap_index/embeddings.npz`
+        : "";
 
     const updatedAlbum = {
       key: album.key,
