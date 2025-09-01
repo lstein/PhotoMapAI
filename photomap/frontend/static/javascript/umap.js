@@ -1243,6 +1243,7 @@ function setUmapWindowSize(sizeKey) {
 document.addEventListener("DOMContentLoaded", () => {
   updateUmapColorModeAvailability();
   makeDraggable("umapTitlebar", "umapFloatingWindow");
+  toggleUmapWindow()
 });
 
 // Shading/restoring
