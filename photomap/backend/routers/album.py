@@ -1,6 +1,7 @@
 import logging
+import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -19,11 +20,34 @@ class UmapEpsGetRequest(BaseModel):
     album: str
 
 
+class LocationIQSetRequest(BaseModel):
+    key: str
+
+
 # Initialize logging
 logger = logging.getLogger(__name__)
 
 album_router = APIRouter()
 config_manager = get_config_manager()
+
+
+def check_album_lock(album_key: Optional[str] = None):
+    locked_album = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
+    if album_key and locked_album and album_key != locked_album:
+        logger.warning(
+            f"Attempt to modify locked album configuration: {album_key} != {locked_album}"
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=f"Album management is locked to album '{locked_album}' in this deployment.",
+        )
+
+    elif locked_album and not album_key:
+        logger.warning("Attempt to modify locked album configuration")
+        raise HTTPException(
+            status_code=403,
+            detail="Album management is locked in this deployment.",
+        )
 
 
 # Album Management Routes
@@ -46,6 +70,8 @@ async def get_available_albums() -> List[Dict[str, Any]]:
                 "image_paths": album.image_paths,
             }
             for key, album in albums.items()
+            if os.environ.get("PHOTOMAP_ALBUM_LOCKED") is None
+            or key == os.environ.get("PHOTOMAP_ALBUM_LOCKED")
         ]
     except Exception as e:
         logger.error(f"Failed to get albums: {e}")
@@ -55,6 +81,7 @@ async def get_available_albums() -> List[Dict[str, Any]]:
 @album_router.get("/album/{album_key}/", tags=["Albums"])
 async def get_album(album_key: str) -> Album:
     """Get details of a specific album."""
+    check_album_lock(album_key)
     album = config_manager.get_album(album_key)
     if not album:
         raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
@@ -65,6 +92,7 @@ async def get_album(album_key: str) -> Album:
 @album_router.post("/add_album/", tags=["Albums"])
 async def add_album(album: Album) -> JSONResponse:
     """Add a new album to the configuration."""
+    check_album_lock()  # May raise a 403 exception
     try:
         logging.info(f"Adding album: {album.key} with paths {album.image_paths}")
         if config_manager.add_album(album):
@@ -88,6 +116,7 @@ async def add_album(album: Album) -> JSONResponse:
 @album_router.post("/update_album/", tags=["Albums"])
 async def update_album(album_data: dict) -> JSONResponse:
     """Update an existing album in the configuration."""
+    check_album_lock()  # May raise a 403 exception
     try:
         album = create_album(
             key=album_data["key"],
@@ -120,6 +149,7 @@ async def update_album(album_data: dict) -> JSONResponse:
 @album_router.delete("/delete_album/{album_key}", tags=["Albums"])
 async def delete_album(album_key: str) -> JSONResponse:
     """Delete an album from the configuration."""
+    check_album_lock()  # May raise a 403 exception
     try:
         if config_manager.delete_album(album_key):
             return JSONResponse(
@@ -142,6 +172,7 @@ async def delete_album(album_key: str) -> JSONResponse:
 @album_router.get("/locationiq_key/", tags=["Albums"])
 async def get_locationiq_key():
     """Get the current LocationIQ API key (masked for security)."""
+    check_album_lock()  # May raise a 403 exception
     api_key = config_manager.get_locationiq_api_key()
     if api_key:
         # Return masked version for security
@@ -157,9 +188,10 @@ async def get_locationiq_key():
 
 
 @album_router.post("/locationiq_key/", tags=["Albums"])
-async def set_locationiq_key(request: dict):
+async def set_locationiq_key(request: LocationIQSetRequest):
     """Set the LocationIQ API key."""
-    api_key = request.get("api_key")
+    check_album_lock()  # May raise a 403 exception
+    api_key = request.key
     try:
         config_manager.set_locationiq_api_key(api_key)
         # Force reload to ensure other parts of app see the change
@@ -171,6 +203,7 @@ async def set_locationiq_key(request: dict):
 
 @album_router.post("/set_umap_eps/", tags=["Albums"])
 async def set_umap_eps(request: UmapEpsSetRequest):
+    check_album_lock()  # May raise a 403 exception
     album_config = config_manager.get_album(request.album)
     if not album_config:
         raise HTTPException(status_code=404, detail="Album not found")
@@ -181,6 +214,7 @@ async def set_umap_eps(request: UmapEpsSetRequest):
 
 @album_router.post("/get_umap_eps/", tags=["Albums"])
 async def get_umap_eps(request: UmapEpsGetRequest):
+    check_album_lock(request.album)  # May raise a 403 exception
     album_config = config_manager.get_album(request.album)
     if not album_config:
         raise HTTPException(status_code=404, detail="Album not found")
@@ -197,6 +231,7 @@ def validate_album_exists(album_key: str):
     Raises:
         HTTPException: If album does not exist
     """
+    check_album_lock(album_key)  # May raise a 403 exception
     album_config = config_manager.get_album(album_key)
     if not album_config:
         raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
@@ -205,6 +240,7 @@ def validate_album_exists(album_key: str):
 
 def get_embeddings_for_album(album_key: str) -> Embeddings:
     """Get embeddings instance for a given album."""
+    check_album_lock(album_key)  # May raise a 403 exception
     album_config = validate_album_exists(album_key)
     return Embeddings(embeddings_path=Path(album_config.index))
 
@@ -219,6 +255,7 @@ def validate_image_access(album_config, image_path: Path) -> bool:
     """
     # The resolve() calls shouldn't really be necessary here, but they fix problems arising
     # on mapped Windows network drive paths.
+    check_album_lock(album_config.key)  # May raise a 403 exception
     return any(
         [
             image_path.resolve().is_relative_to(Path(p).resolve())

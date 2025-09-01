@@ -3,6 +3,8 @@
 import { albumManager } from "./album.js";
 import { switchAlbum } from "./settings.js";
 
+
+// TO DO - CONVERT THIS INTO A CLASS
 export const state = {
   swiper: null, // Will be initialized in swiper.js
   currentDelay: 5, // Delay in seconds for slide transitions
