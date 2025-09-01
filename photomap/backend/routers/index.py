@@ -17,7 +17,7 @@ from ..config import get_config_manager
 from ..constants import DEFAULT_ALBUM
 from ..embeddings import Embeddings
 from ..progress import progress_tracker
-from .album import validate_album_exists, validate_image_access
+from .album import check_album_lock, validate_album_exists, validate_image_access
 
 index_router = APIRouter()
 
@@ -47,6 +47,13 @@ class EmbeddingsIndexMetadata(BaseModel):
     last_modified: float
 
 
+# Note: How check_album_lock is used in this file:
+# For any state-changing operations, such as starting an index update or deleting an index,
+# if the environment variable PHOTOMAP_ALBUM_LOCKED is set, the operation is forbidden.
+# For read-only operations, such as checking if an index exists or getting index metadata,
+# the album_key is checked against the value of PHOTOMAP_ALBUM_LOCKED, and if they don't match, the operation is forbidden.
+
+
 # Index Management Routes
 @index_router.post(
     "/update_index_async/", response_model=dict, status_code=202, tags=["Index"]
@@ -56,6 +63,7 @@ async def update_index_async(
     req: UpdateIndexRequest,
 ) -> dict:
     """Start an asynchronous index update for the specified album."""
+    check_album_lock()  # May raise a 403 exception
     album_key = req.album_key
     try:
         if progress_tracker.is_running(album_key):
@@ -87,6 +95,7 @@ async def update_index_async(
 @index_router.delete("/remove_index/{album_key}", tags=["Index"])
 async def remove_index(album_key: str) -> JSONResponse:
     """Remove the embeddings index for the specified album."""
+    check_album_lock()  # May raise a 403 exception
     try:
         album_config = config_manager.get_album(album_key)
         if not album_config:
@@ -121,6 +130,7 @@ async def remove_index(album_key: str) -> JSONResponse:
 )
 async def get_index_progress(album_key: str) -> ProgressResponse:
     """Get the current progress of an index update operation."""
+    check_album_lock(album_key)  # May raise a 403 exception
     try:
         progress = progress_tracker.get_progress(album_key)
         if not progress:
@@ -165,6 +175,7 @@ async def get_index_progress(album_key: str) -> ProgressResponse:
 @index_router.delete("/cancel_index/{album_key}", tags=["Index"])
 async def cancel_index_operation(album_key: str) -> dict:
     """Cancel an ongoing index operation."""
+    check_album_lock(album_key)  # May raise a 403 exception
     try:
         if not progress_tracker.is_running(album_key):
             raise HTTPException(
@@ -191,6 +202,7 @@ async def cancel_index_operation(album_key: str) -> dict:
 @index_router.get("/index_exists/{album_key}", tags=["Index"])
 async def index_exists(album_key: str) -> dict:
     """Check if the index exists for the specified album."""
+    check_album_lock(album_key)  # May raise a 403 exception
     album_config = config_manager.get_album(album_key)
     if not album_config:
         raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
@@ -206,6 +218,7 @@ async def index_exists(album_key: str) -> dict:
 )
 async def index_metadata(album_key: str) -> EmbeddingsIndexMetadata:
     """Get metadata about the embeddings index for the specified album."""
+    check_album_lock(album_key)  # May raise a 403 exception
     album_config = config_manager.get_album(album_key)
     if not album_config:
         raise HTTPException(status_code=404, detail=f"Album '{album_key}' not found")
@@ -228,6 +241,7 @@ async def index_metadata(album_key: str) -> EmbeddingsIndexMetadata:
 @index_router.delete("/delete_image/{album_key}/{index}", tags=["Index"])
 async def delete_image(album_key: str, index: int) -> JSONResponse:
     """Delete an image file."""
+    check_album_lock()  # May raise a 403 exception
     try:
         album_config = validate_album_exists(album_key)
         embeddings = Embeddings(embeddings_path=Path(album_config.index))
