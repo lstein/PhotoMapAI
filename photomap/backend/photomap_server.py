@@ -2,9 +2,9 @@
 print("Loading, please wait...")
 import logging
 import os
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Optional
-from importlib.metadata import version, PackageNotFoundError
 
 import numpy as np
 from fastapi import FastAPI, Request
@@ -36,6 +36,7 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 templates_path = get_package_resource_path("templates")
 templates = Jinja2Templates(directory=templates_path)
 
+
 # Main Routes
 @app.get("/", response_class=HTMLResponse, tags=["Main"])
 async def get_root(
@@ -66,6 +67,7 @@ async def get_root(
         },
     )
 
+
 def get_version():
     """Get the current version of the PhotoMapAI package."""
     try:
@@ -91,13 +93,13 @@ def main():
     parser.add_argument(
         "--host",
         type=str,
-        default="127.0.0.1",
+        default=None,
         help="Network interface to run the server on (default: 127.0.0.1), uses environment variable PHOTOMAP_HOST",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=8050,
+        default=None,
         help="Port to run the server on (default: 8050), uses environment variable PHOTOMAP_PORT",
     )
     parser.add_argument(

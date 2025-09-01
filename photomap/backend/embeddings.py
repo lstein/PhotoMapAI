@@ -427,6 +427,10 @@ class Embeddings(BaseModel):
             logger.info(
                 f"Indexed {len(result.embeddings)} images and saved to {self.embeddings_path}"
             )
+            result.umap_embeddings = self.create_umap_index(result.embeddings)
+            logger.info(
+                f"Created UMAP index with shape: {result.umap_embeddings.shape}"
+            )
 
         return result
 
@@ -559,7 +563,7 @@ class Embeddings(BaseModel):
             self._save_embeddings(combined_result)
 
             # Rebuild the umap index
-            new_result.umap_embeddings = self.umap_embeddings
+            combined_result.umap_embeddings = self.umap_embeddings
             logger.info(
                 f"UMAP index created with shape: {new_result.umap_embeddings.shape}"
             )

@@ -7,6 +7,7 @@ help:
 	@echo "test             Run the unit tests."
 	@echo "build            Build the package for upload to PyPi."
 	@echo "wheel 			Build the wheel for the current version."
+	@echo "docker-build    	Build the Docker image."
 	@echo "docs             Serve the mkdocs site with live reload."
 	@echo "deploy-docs      Deploy the mkdocs site to GitHub pages."
 
@@ -17,6 +18,10 @@ test:
 .PHONY: build
 build:
 	python -m build
+
+.PHONY: docker-build
+docker-build:
+	docker build -t photomapai-demo .
 
 # Serve the mkdocs site w/ live reload
 .PHONY: docs
