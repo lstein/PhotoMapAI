@@ -101,4 +101,7 @@ scripts
 
 # Cache directories for mkdocs etc
 site
+
+# Utilities, not intended for release
 utility_scripts
+demo_images

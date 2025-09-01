@@ -99,13 +99,13 @@ def main():
     parser.add_argument(
         "--host",
         type=str,
-        default="127.0.0.1",
+        default=None,
         help="Network interface to run the server on (default: 127.0.0.1), uses environment variable PHOTOMAP_HOST",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=8050,
+        default=None,
         help="Port to run the server on (default: 8050), uses environment variable PHOTOMAP_PORT",
     )
     parser.add_argument(

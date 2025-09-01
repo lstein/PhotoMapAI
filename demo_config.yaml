@@ -1,0 +1,9 @@
+albums:
+  demo:
+    description: ~5000 random license-free images from Open Images
+    image_paths:
+    - /app/demo_images
+    index: /app/demo_images/photomap_index/embeddings.npz
+    name: Open Images Demo
+    umap_eps: 0.13
+config_version: 1.0.0
