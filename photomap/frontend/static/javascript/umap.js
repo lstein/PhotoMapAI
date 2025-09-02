@@ -440,13 +440,6 @@ document.addEventListener("DOMContentLoaded", () => {
 // --- Update colorization after search or cluster selection ---
 window.addEventListener("searchResultsChanged", function (e) {
   setUmapColorMode();
-  console.log(
-    "Last unshaded size:",
-    lastUnshadedSize,
-    " fullscreen:",
-    isFullscreen
-  );
-
   // deactivate fullscreen mode when search results have come in
   if (state.searchResults.length > 0 && isFullscreen) {
     toggleFullscreen(false);
