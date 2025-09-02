@@ -442,6 +442,10 @@ window.addEventListener("searchResultsChanged", function (e) {
   const highlightCheckbox = document.getElementById("umapHighlightSelection");
   const highlight = highlightCheckbox && highlightCheckbox.checked;
   setUmapColorMode();
+  // deactivate fullscreen mode when search results have come in
+  if (state.searchResults.length > 0 && isFullscreen) {
+    toggleFullscreen();
+  }
 });
 
 window.addEventListener("slideChanged", async () => {
@@ -1019,10 +1023,6 @@ async function handleClusterClick(clickedIndex) {
   }));
 
   setSearchResults(clusterMembers, "cluster");
-  if (isFullscreen) {
-    // lastUnshadedSize = "big"; // Set a default size when exiting fullscreen
-    toggleFullscreen();
-  }
 }
 
 // -------------------- Window Management --------------------
