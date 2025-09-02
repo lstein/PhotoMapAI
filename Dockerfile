@@ -1,3 +1,5 @@
+# WARNING: This Dockerfile builds the demo version of PhotoMapAI, in which
+# the album is locked to "demo" and all album management features are disabled.
 # Use an official Python base image
 FROM python:3.11-slim
 
@@ -14,10 +16,10 @@ COPY ./demo_images ./demo_images
 COPY ./demo_config.yaml /root/.config/photomap/config.yaml
 RUN pip cache purge
 RUN rm -rf ./photomap ./build ./dist ./demo_images/photomap_index/
-RUN python -c 'from photomap.backend.imagetool import do_index; do_index()' --embeddings ./demo_images/photomap_index/embeddings.npz ./demo_images
+RUN index_images --embeddings ./demo_images/photomap_index/embeddings.npz ./demo_images
 
 # Expose the port your app runs on
-EXPOSE 8050
+EXPOSE 80
 
 # Start the server
-CMD ["python3", "-mphotomap.backend.photomap_server", "--host", "0.0.0.0", "--port", "8050"]
+CMD ["python3", "-mphotomap.backend.photomap_server", "--host", "0.0.0.0", "--port", "80", "--album-locked", "demo"]
