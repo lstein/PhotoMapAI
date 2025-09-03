@@ -26,11 +26,15 @@ docker-build:
 
 .PHONY: docker-demo
 docker-demo:
-	docker build -f docker/Dockerfile.demo -t photomapai-demo .
+	version=$$(grep '^version\s*=' pyproject.toml | sed -E 's/.*=\s*"([^"]+)".*/\1/') \
+	&& 	docker build -f docker/Dockerfile.demo -t lstein/photomapai-demo:v$$version . \
+	&& docker tag lstein/photomapai-demo:v$$version lstein/photomapai-demo:latest
 
 .PHONY: docker
 docker:
-	docker build -f docker/Dockerfile -t photomapai .
+	version=$$(grep '^version\s*=' pyproject.toml | sed -E 's/.*=\s*"([^"]+)".*/\1/') \
+	&& docker build -f docker/Dockerfile -t lstein/photomapai:v$$version  . \
+	&& docker tag lstein/photomapai:v$$version lstein/photomapai:latest 
 
 # Serve the mkdocs site w/ live reload
 .PHONY: docs
