@@ -136,6 +136,10 @@ class ConfigManager:
 
     def get_locationiq_api_key(self) -> Optional[str]:
         """Get the LocationIQ API key."""
+        if os.environ.get(
+            "PHOTOMAP_ALBUM_LOCKED"
+        ):  # In locked-down environments, do not leak the locationIQ key
+            return
         config = self.load_config()
         return config.locationiq_api_key
 
@@ -145,6 +149,10 @@ class ConfigManager:
         Args:
             api_key: API key string or None to remove
         """
+        if os.environ.get(
+            "PHOTOMAP_ALBUM_LOCKED"
+        ):  # In locked-down environments, do not allow changing the locationIQ key
+            raise PermissionError("Album configuration is locked.")
         config = self.load_config()
         # Strip whitespace and treat empty strings as None
         config.locationiq_api_key = (
@@ -177,9 +185,7 @@ class ConfigManager:
                     self._config = Config(
                         config_version=config_data.get("config_version", "1.0.0"),
                         albums=albums,
-                        locationiq_api_key=config_data.get(
-                            "locationiq_api_key"
-                        ),
+                        locationiq_api_key=config_data.get("locationiq_api_key"),
                     )
 
                 except Exception as e:

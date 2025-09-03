@@ -45,6 +45,7 @@ export async function loadAvailableAlbums() {
   try {
     const response = await fetch("available_albums/");
     const albums = await response.json();
+    if (!elements.albumSelect) return; // If album selection is locked, skip
 
     elements.albumSelect.innerHTML = ""; // Clear placeholder
 
@@ -56,6 +57,7 @@ export async function loadAvailableAlbums() {
     }
 
     populateAlbumOptions(albums);
+    // If albums are locked this element won't exist
     elements.albumSelect.value = state.album;
   } catch (error) {
     console.error("Failed to load albums:", error);
@@ -149,7 +151,8 @@ function toggleSettingsModal() {
 async function populateModalFields() {
   elements.highWaterMarkInput.value = state.highWaterMark;
   elements.delayValueSpan.textContent = state.currentDelay;
-  elements.albumSelect.value = state.album;
+  if (elements.albumSelect)
+    elements.albumSelect.value = state.album;
   elements.modeRandom.checked = state.mode === "random";
   elements.modeChronological.checked = state.mode === "chronological";
   elements.showControlPanelTextCheckbox.checked = state.showControlPanelText;
@@ -167,7 +170,6 @@ function validateAndSetHighWaterMark(value) {
     newHighWaterMark = WATERMARK_CONFIG.max;
   }
   state.highWaterMark = newHighWaterMark;
-  console.log(`High water mark set to: ${newHighWaterMark}`);
   saveSettingsToLocalStorage();
 }
 
@@ -222,6 +224,7 @@ function setupModalControls() {
 }
 
 function setupAlbumSelector() {
+  if (!elements.albumSelect) return; // If album selection is locked, skip
   elements.albumSelect.addEventListener("change", function () {
     const newAlbum = this.value;
     if (newAlbum !== state.album) {
@@ -239,6 +242,7 @@ function setupHighWaterMarkControl() {
 
 async function loadLocationIQApiKey() {
   try {
+    if (!elements.locationiqApiKeyInput) return; // If album selection is locked, skip
     const response = await fetch("locationiq_key/");
     const data = await response.json();
 
@@ -273,6 +277,10 @@ async function saveLocationIQApiKey(apiKey) {
 }
 
 function setupLocationIQApiKeyControl() {
+  if (!elements.locationiqApiKeyInput) return; // If album selection is locked, skip
+
+  // Load existing key on initialization
+  loadLocationIQApiKey();
   elements.locationiqApiKeyInput.addEventListener("input", function () {
     // Debounce the save operation
     clearTimeout(this.saveTimeout);
@@ -306,4 +314,4 @@ async function initializeSettings() {
 
 // Initialize settings from the server and local storage
 document.addEventListener("DOMContentLoaded", initializeSettings);
-document.addEventListener("settingsUpdated",initializeSettings);
+document.addEventListener("settingsUpdated", initializeSettings);

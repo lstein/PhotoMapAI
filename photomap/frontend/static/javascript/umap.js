@@ -439,9 +439,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // --- Update colorization after search or cluster selection ---
 window.addEventListener("searchResultsChanged", function (e) {
-  const highlightCheckbox = document.getElementById("umapHighlightSelection");
-  const highlight = highlightCheckbox && highlightCheckbox.checked;
   setUmapColorMode();
+  // deactivate fullscreen mode when search results have come in
+  if (state.searchResults.length > 0 && isFullscreen) {
+    toggleFullscreen(false);
+  }
 });
 
 window.addEventListener("slideChanged", async () => {
@@ -540,7 +542,7 @@ function ensureUmapWindowInView() {
   }
 }
 
-window.addEventListener("albumChanged", async () => {
+async function initializeUmapWindow() {
   // Fetch the album's default EPS value and update the spinner
   const result = await fetch("get_umap_eps/", {
     method: "POST",
@@ -553,8 +555,11 @@ window.addEventListener("albumChanged", async () => {
     if (epsSpinner) epsSpinner.value = data.eps;
   }
   state.dataChanged = true;
+  lastUnshadedSize = "medium"; // Reset to medium on album change
+  setSemanticMapTitle();
   fetchUmapData();
-});
+  toggleFullscreen(true); // Force fullscreen on album change
+}
 
 // --- Thumbnail Preview on Hover ---
 let umapThumbnailDiv = null;
@@ -1019,10 +1024,6 @@ async function handleClusterClick(clickedIndex) {
   }));
 
   setSearchResults(clusterMembers, "cluster");
-  if (isFullscreen) {
-    // lastUnshadedSize = "big"; // Set a default size when exiting fullscreen
-    toggleFullscreen();
-  }
 }
 
 // -------------------- Window Management --------------------
@@ -1243,6 +1244,7 @@ function setUmapWindowSize(sizeKey) {
 document.addEventListener("DOMContentLoaded", () => {
   updateUmapColorModeAvailability();
   makeDraggable("umapTitlebar", "umapFloatingWindow");
+  toggleUmapWindow();
 });
 
 // Shading/restoring
@@ -1291,9 +1293,23 @@ addButtonHandlers("umapResizeSmall", () => {
   saveCurrentPosition();
   isFullscreen = false;
 });
-function toggleFullscreen() {
+function toggleFullscreen(turnOn = null) {
   const win = document.getElementById("umapFloatingWindow");
-  if (isFullscreen) {
+  if (turnOn === null) {
+    turnOn = !isFullscreen;
+  }
+  if (turnOn && isFullscreen)
+    return; // already in fullscreen
+
+  if (turnOn) {
+    lastUnshadedSize = getCurrentWindowSize();
+    lastUnshadedPosition.left = win.style.left;
+    lastUnshadedPosition.top = win.style.top;
+    setUmapWindowSize("fullscreen");
+    win.style.left = "0px";
+    win.style.top = "0px";
+    isFullscreen = true;
+  } else {
     setUmapWindowSize(lastUnshadedSize);
     if (
       lastUnshadedPosition.left !== null &&
@@ -1303,14 +1319,6 @@ function toggleFullscreen() {
       win.style.top = lastUnshadedPosition.top;
     }
     isFullscreen = false;
-  } else {
-    lastUnshadedSize = getCurrentWindowSize();
-    lastUnshadedPosition.left = win.style.left;
-    lastUnshadedPosition.top = win.style.top;
-    setUmapWindowSize("fullscreen");
-    win.style.left = "0px";
-    win.style.top = "0px";
-    isFullscreen = true;
   }
   // if any hover thumbnail is visible, remove it
   removeUmapThumbnail();
@@ -1349,7 +1357,5 @@ function setSemanticMapTitle() {
 }
 
 // Set initial title on DOMContentLoaded
-document.addEventListener("DOMContentLoaded", setSemanticMapTitle);
-
-// Update title when album changes
-window.addEventListener("albumChanged", setSemanticMapTitle);
+document.addEventListener("DOMContentLoaded", initializeUmapWindow);
+window.addEventListener("albumChanged", initializeUmapWindow);

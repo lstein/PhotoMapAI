@@ -47,13 +47,18 @@ async def get_root(
     mode: Optional[str] = None,
 ):
     """Serve the main slideshow page."""
-    config_manager = get_config_manager()
-    if album is not None:
-        albums = config_manager.get_albums()
-        if albums and album in albums:
-            pass
-        elif albums:
-            album = list(albums.keys())[0]
+    if os.environ.get("PHOTOMAP_ALBUM_LOCKED"):
+        album = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
+        album_locked = True
+    else:
+        album_locked = False
+        config_manager = get_config_manager()
+        if album is not None:
+            albums = config_manager.get_albums()
+            if albums and album in albums:
+                pass
+            elif albums:
+                album = list(albums.keys())[0]
 
     return templates.TemplateResponse(
         request,
@@ -64,6 +69,7 @@ async def get_root(
             "mode": mode,
             "highWaterMark": high_water_mark,
             "version": get_version(),
+            "album_locked": album_locked,
         },
     )
 
@@ -115,6 +121,12 @@ def main():
         help="Path to SSL key file (optional, for HTTPS)",
     )
     parser.add_argument(
+        "--album-locked",
+        type=str,
+        default=None,
+        help="Start with a specific locked in album and disable album management (default: None)",
+    )
+    parser.add_argument(
         "--reload",
         action="store_true",
         help="Enable auto-reload when source files change for development (default: False)",
@@ -129,6 +141,9 @@ def main():
     if args.config:
         os.environ["PHOTOMAP_CONFIG"] = args.config.as_posix()
 
+    if args.album_locked:
+        os.environ["PHOTOMAP_ALBUM_LOCKED"] = args.album_locked
+
     config = get_config_manager()
     logger.info(
         f"Starting PhotoMapAI server on port {port} with backend root `{repo_root}` and configuration file `{config.config_path}`"
@@ -139,7 +154,7 @@ def main():
         host=host,
         port=port,
         reload=args.reload,
-        reload_dirs=[repo_root],
+        reload_dirs=[repo_root.as_posix()],
         ssl_keyfile=str(args.key) if args.key else None,
         ssl_certfile=str(args.cert) if args.cert else None,
         log_level="info",
