@@ -14,7 +14,7 @@ import os
 import warnings
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, ClassVar, Dict, Generator, Optional, Set
+from typing import Any, Callable, ClassVar, Dict, Generator, Optional, Set
 
 import clip
 import networkx as nx
@@ -490,7 +490,9 @@ class Embeddings(BaseModel):
             progress_tracker.set_error(album_key, str(e))
             raise
 
-    def update_index(self, image_paths_or_dir: list[Path] | Path) -> IndexResult:
+    def update_index(
+        self, image_paths_or_dir: list[Path] | Path
+    ) -> Optional[IndexResult]:
         """Update existing embeddings with new images."""
         assert (
             self.embeddings_path.exists()
@@ -564,6 +566,7 @@ class Embeddings(BaseModel):
 
             # Rebuild the umap index
             combined_result.umap_embeddings = self.umap_embeddings
+            assert new_result.umap_embeddings is not None
             logger.info(
                 f"UMAP index created with shape: {new_result.umap_embeddings.shape}"
             )
@@ -786,7 +789,8 @@ class Embeddings(BaseModel):
         else:
             pil_image = ImageOps.exif_transpose(query_image_data)
             pil_image = pil_image.convert("RGB")
-            image_tensor = preprocess(pil_image).unsqueeze(0).to(device)
+            image_tensor: torch.Tensor = preprocess(pil_image)  # type: ignore
+            image_tensor = image_tensor.unsqueeze(0).to(device)
             with torch.no_grad():
                 image_embedding = model.encode_image(image_tensor).squeeze(0)
 
@@ -828,6 +832,7 @@ class Embeddings(BaseModel):
         # Normalize
         embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=device)
         norm_embeddings = F.normalize(embeddings_tensor, dim=-1).to(torch.float32)
+        assert combined_embedding is not None
         combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(
             torch.float32
         )
@@ -840,7 +845,7 @@ class Embeddings(BaseModel):
             return [], []
 
         # Translate from filename array indices to sorted filename top_indices
-        global_indices = [filename_map[filenames[i]] for i in top_indices]
+        global_indices = [int(filename_map[filenames[i]]) for i in top_indices]
         return global_indices, similarities[top_indices].tolist()
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):
@@ -981,11 +986,11 @@ class Embeddings(BaseModel):
             indices = np.arange(len(filenames))
         for idx in indices:
             image_path = Path(filenames[idx])
-            yield format_metadata(image_path, metadata[idx], idx, len(filenames))
+            yield format_metadata(image_path, metadata[idx], int(idx), len(filenames))
 
     @staticmethod
     @functools.lru_cache(maxsize=3)
-    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, np.ndarray]:
+    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, Any]:
         """
         Open embeddings with pre-computed lookup structures.
         """

@@ -138,7 +138,7 @@ async def image_info(
 
     return ImageData(
         image_path=str(filename),
-        last_modified=modification_times[original_index],
+        last_modified=float(modification_times[original_index]),
         album_key=album_key,
         index=index,
     )
