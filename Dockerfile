@@ -14,7 +14,7 @@ COPY ./demo_images ./demo_images
 COPY ./demo_config.yaml /root/.config/photomap/config.yaml
 RUN pip cache purge
 RUN rm -rf ./photomap ./build ./dist ./demo_images/photomap_index/
-RUN python -c 'from photomap.backend.imagetool import do_index; do_index()' --embeddings ./demo_images/photomap_index/embeddings.npz ./demo_images
+RUN index_images --embeddings ./demo_images/photomap_index/embeddings.npz ./demo_images
 
 # Expose the port your app runs on
 EXPOSE 8050
