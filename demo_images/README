@@ -1,0 +1,2 @@
+Any image files found in this directory will be copied into /app/demo_images
+when the Docker image is built.
