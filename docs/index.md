@@ -16,6 +16,8 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 - Support for wide range of image formats, including Apple's HEIC
 - Extensible backend (FastAPI)
 
+Try out this <a href="https://photomap.4crabs.org">online demo.</a> (For safety reasons, album management features have been disabled.)
+
 ## The Semantic Map
 
 PhotoMapAI's unique feature is its ability to identify thematically similar images and automatically cluster them, creating a "semantic map":

@@ -9,7 +9,7 @@ COPY photomap ./photomap
 RUN pip install --upgrade pip && pip install --extra-index-url https://download.pytorch.org/whl/cpu .
 RUN python -c "import clip; clip.load('ViT-B/32')"
 
-# Copy your project code
+# Copy contents of demo_images and its config file
 COPY ./demo_images ./demo_images
 COPY ./demo_config.yaml /root/.config/photomap/config.yaml
 RUN pip cache purge
@@ -20,4 +20,4 @@ RUN index_images --embeddings ./demo_images/photomap_index/embeddings.npz ./demo
 EXPOSE 8050
 
 # Start the server
-CMD ["python3", "-mphotomap.backend.photomap_server", "--host", "0.0.0.0", "--port", "8050"]
+CMD ["python3", "-mphotomap.backend.photomap_server", "--host", "0.0.0.0", "--port", "8050", "--album-lock", "demo"]

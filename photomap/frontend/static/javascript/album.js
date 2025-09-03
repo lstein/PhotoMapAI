@@ -5,6 +5,7 @@ import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
 import { setAlbum, state } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
+import { hideSpinner, showSpinner } from "./utils.js";
 
 export class AlbumManager {
   // Constants
@@ -54,6 +55,7 @@ export class AlbumManager {
     if (manageAlbumsBtn)
       manageAlbumsBtn.addEventListener("click", () => {
         closeSettingsModal();
+        showSpinner();
         this.show();
       });
 
@@ -254,6 +256,7 @@ export class AlbumManager {
     await this.loadAlbums();
     await this.checkForOngoingIndexing(); // <-- Move this after loadAlbums
     this.overlay.classList.add("visible");
+    hideSpinner();
 
     // Ensure add album form is hidden when opening normally
     if (!this.isSetupMode) {
@@ -357,7 +360,7 @@ export class AlbumManager {
       <h4 style="margin: 0 0 0.5em 0;">Setup In Progress!</h4>
       <p style="margin: 0;">
         Your album "${state.album}" is being indexed. 
-        Once indexing completes, this window will close and the slideshow will start.
+        Once indexing completes, this window will close and the semantic map will display.
       </p>
     `;
     return completionMessage;
@@ -929,6 +932,8 @@ export class AlbumManager {
       setTimeout(() => {
         this.completeSetupMode();
         this.hide();
+        // send the albumChanged message
+        window.dispatchEvent(new Event("albumChanged"));
       }, AlbumManager.AUTO_INDEX_DELAY);
     }
 

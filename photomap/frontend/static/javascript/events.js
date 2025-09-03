@@ -363,4 +363,27 @@ function initializeEvents() {
 }
 
 // Initialize event listeners after the DOM is fully loaded
-document.addEventListener("DOMContentLoaded", initializeEvents);
+document.addEventListener("DOMContentLoaded", function() {
+  initializeEvents();
+
+  const aboutBtn = document.getElementById("aboutBtn");
+  const aboutModal = document.getElementById("aboutModal");
+  const closeAboutBtn = document.getElementById("closeAboutBtn");
+
+  if (aboutBtn && aboutModal) {
+    aboutBtn.addEventListener("click", () => {
+      aboutModal.style.display = "flex";
+    });
+  }
+  if (closeAboutBtn && aboutModal) {
+    closeAboutBtn.addEventListener("click", () => {
+      aboutModal.style.display = "none";
+    });
+  }
+  // Optional: close modal when clicking outside content
+  aboutModal.addEventListener("click", (e) => {
+    if (e.target === aboutModal) {
+      aboutModal.style.display = "none";
+    }
+  });
+});
