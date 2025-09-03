@@ -17,6 +17,8 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 - Integration with the <a href="https://github.com/invoke-ai/InvokeAI">InvokeAI</a> AI image generation system
 - Extensible backend (FastAPI)
 
+Try out this <a href="https://photomap.4crabs.org">online demo</a>. For security, album manager features have been disabled.
+
 ## The Semantic Map
 
 PhotoMap's unique feature is its ability to identify thematically similar images and automatically cluster them, creating a "semantic map":
