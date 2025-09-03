@@ -11,7 +11,7 @@ RUN python -c "import clip; clip.load('ViT-B/32')"
 
 # Copy contents of demo_images and its config file
 COPY ./demo_images ./demo_images
-COPY ./demo_config.yaml /root/.config/photomap/config.yaml
+COPY ./docker/demo_config.yaml /root/.config/photomap/config.yaml
 RUN pip cache purge
 RUN rm -rf ./photomap ./build ./dist ./demo_images/photomap_index/
 RUN index_images --embeddings ./demo_images/photomap_index/embeddings.npz ./demo_images
