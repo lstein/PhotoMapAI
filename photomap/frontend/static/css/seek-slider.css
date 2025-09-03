@@ -51,7 +51,7 @@
   left: 0;
   top: 0;
   width: 100%;
-  height: 100%;
+  height: calc(100% + 32px); /* Extend 32px below the container to cover tick labels */;
   z-index: 1;
   pointer-events: auto;
   background: transparent;
