@@ -115,6 +115,7 @@ async function getCachedAlbum() {
 // --- Main UMAP Data Fetch and Plot ---
 export async function fetchUmapData() {
   if (mapExists && !state.dataChanged) return;
+  if (!state.album) return;
   showUmapSpinner();
   try {
     const eps =
@@ -544,6 +545,7 @@ function ensureUmapWindowInView() {
 
 async function initializeUmapWindow() {
   // Fetch the album's default EPS value and update the spinner
+  if (!state.album) return;
   const result = await fetch("get_umap_eps/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
