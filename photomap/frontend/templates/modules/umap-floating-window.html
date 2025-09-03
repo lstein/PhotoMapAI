@@ -9,21 +9,34 @@
       <!-- Resizing icons -->
       <button id="umapResizeFullscreen" title="Fullscreen" class="icon-btn">
         <svg width="24" height="24" viewBox="0 0 24 24">
+          <!-- Central point -->
+          <circle cx="12" cy="12" r="1.5" fill="#FFD600" />
+          <!-- Bright square outline -->
           <rect
-            x="2"
-            y="2"
-            width="20"
-            height="20"
+            x="4"
+            y="4"
+            width="16"
+            height="16"
             rx="4"
-            fill="#fff"
-            opacity="0.8"
-          />
-          <polyline
-            points="4,4 20,4 20,20 4,20 4,4"
-            stroke="#888"
-            stroke-width="2"
             fill="none"
+            stroke="#D0D0D0"
+            stroke-width="1"
           />
+          <!-- Arrows to corners -->
+          <g stroke="#FFD600" stroke-width="2.5" fill="#FFD600">
+            <!-- Top-left arrow -->
+            <line x1="12" y1="12" x2="4" y2="4" />
+            <polygon points="4,4 7,4 4,7" />
+            <!-- Top-right arrow -->
+            <line x1="12" y1="12" x2="20" y2="4" />
+            <polygon points="20,4 17,4 20,7" />
+            <!-- Bottom-left arrow -->
+            <line x1="12" y1="12" x2="4" y2="20" />
+            <polygon points="4,20 7,20 4,17" />
+            <!-- Bottom-right arrow -->
+            <line x1="12" y1="12" x2="20" y2="20" />
+            <polygon points="20,20 17,20 20,17" />
+          </g>
         </svg>
       </button>
 
