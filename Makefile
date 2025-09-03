@@ -6,8 +6,9 @@ default: help
 help:
 	@echo "test             Run the unit tests."
 	@echo "build            Build the package for upload to PyPi."
-	@echo "wheel 			Build the wheel for the current version."
-	@echo "docker-build    	Build the Docker image."
+	@echo "wheel            Build the wheel for the current version."
+	@echo "docker-build     Build the Docker image."
+	@echo "docker-demo      Build the Docker demo site image."
 	@echo "docs             Serve the mkdocs site with live reload."
 	@echo "deploy-docs      Deploy the mkdocs site to GitHub pages."
 
@@ -22,6 +23,14 @@ build:
 .PHONY: docker-build
 docker-build:
 	docker build -t photomapai-demo .
+
+.PHONY: docker-demo
+docker-demo:
+	docker build -f docker/Dockerfile.demo -t photomapai-demo .
+
+.PHONY: docker
+docker:
+	docker build -f docker/Dockerfile -t photomapai .
 
 # Serve the mkdocs site w/ live reload
 .PHONY: docs

@@ -1,0 +1,64 @@
+/* Add to your CSS file */
+#aboutModal.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.about-modal {
+  position: relative;
+  max-width: 400px;
+  margin: auto;
+  padding: 2em;
+  background: #222;
+  color: #fff;
+  border-radius: 1em;
+  text-align: center;
+}
+#closeAboutBtn.modal-close {
+  position: absolute;
+  top: 0.5em;
+  right: 0.5em;
+  background: none;
+  border: none;
+  font-size: 1.5em;
+  color: #fff;
+}
+.about-modal-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  position: relative;
+}
+.about-modal-header h2 {
+  margin-bottom: 0.2em;
+}
+#aboutVersion {
+  font-size: 0.9em;
+  color: #888;
+  margin-left: 8px;
+  margin-bottom: 0.7em;
+}
+.about-author a {
+  color: #FFD600;
+  text-decoration: none;
+}
+.about-links-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2em;
+  margin-top: 1em;
+}
+.about-links-row a {
+  color: #FFD600;
+  text-decoration: none;
+  font-weight: bold;
+}
+.about-links-row svg {
+  vertical-align: middle;
+  fill: #FFD600;
+}
