@@ -104,4 +104,6 @@ site
 
 # Utilities, not intended for release
 utility_scripts
-demo_images
+demo_images/*.jpg
+demo_images/*.png
+demo_images/photomap_index

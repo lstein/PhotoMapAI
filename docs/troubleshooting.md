@@ -27,3 +27,9 @@ When first opened, the semantic map scales to show the positions of 98% of the i
 If even after zooming in you see either a handful of large clusters, or many small clusters and lots of unclustered (grey) dots, you may need to adjust the EPS (epsilon) parameter. Open the map window and find the EPS field. If you have too many clusters then increase the EPS value. This makes clustering more aggressive creating a smaller number of larger clusters. Alternatively, if you have too few clusters (or too many unclustered images), try lowering EPS.
 
 It takes a moment for changes to EPS to take effect. The best strategy is to adjust it by small increments. For more information, see [Semantic Map](user-guide/semantic-map.md).
+
+## Indexing gets stuck at 0/0
+
+If you are trying to index an album and the indexing seems to get stuck on the first image, you may have a corrupt index. This most frequently happens when you previously indexed the folder and then moved it to another location.
+
+To fix, look in each of the folders in the album for a `photomap_index` directory. Usually this will be located in the *first* folder of a multi-folder album. Remove this directory completely or rename it to get it out of the way. Then start the indexing process again. This will recreate the index.
