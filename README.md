@@ -17,11 +17,7 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 - Integration with the <a href="https://github.com/invoke-ai/InvokeAI">InvokeAI</a> AI image generation system
 - Extensible backend (FastAPI)
 
-<a href="https://photomap.4crabs.org" target="_new">
-<div >
-   <span style="font-size:1.5em">Try it out!</span>
-</div>
-</a>
+### **[Try it out!](https://photomap.4crabs.org)**
 
 ## The Semantic Map
 
