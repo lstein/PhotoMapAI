@@ -20,6 +20,7 @@
   padding: 4px;
   max-width: 100vw !important;
   max-height: 100vh !important;
+  padding-bottom: 20px;
 }
 
 #umapColorModeContainer {
@@ -116,3 +117,11 @@
 #umapColorModeContainer {
   font-size: 0.85em;
 }
+
+/* #umapHighlightSelection {
+  margin-bottom: 20px !important;
+}
+
+#umapColorModeContainer label:last-child {
+  padding-bottom: 10px;
+} */
