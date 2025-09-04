@@ -588,6 +588,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#moving-and-resizing-the-map-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      Moving and Resizing the Map Window
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#controlling-thumbnail-images" class="md-nav__link">
     <span class="md-ellipsis">
       Controlling Thumbnail Images
@@ -603,14 +612,20 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#moving-the-map-window" class="md-nav__link">
+    <nav class="md-nav" aria-label="Selecting Clusters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unclustered-images" class="md-nav__link">
     <span class="md-ellipsis">
-      Moving the Map Window
+      Unclustered Images
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -880,6 +895,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#moving-and-resizing-the-map-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      Moving and Resizing the Map Window
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#controlling-thumbnail-images" class="md-nav__link">
     <span class="md-ellipsis">
       Controlling Thumbnail Images
@@ -895,14 +919,20 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#moving-the-map-window" class="md-nav__link">
+    <nav class="md-nav" aria-label="Selecting Clusters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unclustered-images" class="md-nav__link">
     <span class="md-ellipsis">
-      Moving the Map Window
+      Unclustered Images
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -938,10 +968,11 @@
 <h3 id="interpreting-clusters">Interpreting Clusters</h3>
 <p>What does "semantically similar" mean? Embeddings capture many different aspects of an image, ranging from low-level features such as brightness and color palette, to high-level features such as particular people and places. This can lead to interesting appositions. For example, say you have three photos depicting (1) Mary at the playground; (2) Mary at a birthday party; and (3) Timmy at a birthday party. (1) and (2) will mapped close together because they share the same subject, Mary. (2) and (3) will be close together because they share the same event, a birthday party. Because of these relationships, (1) and (3) will also likely be close together as well, but further apart than either of the other two pairs.</p>
 <p>Therefore you will find clusters that contain a mixture of relationships. Sometimes you will find yourself scratching your head to figure out why several images cluster together, but more often you'll discover delightfully unexpected groupings. For example, my family photo collection contains clusters corresponding to "kids climbing trees," "pets yawning," and "weddings on the maternal side of the family."</p>
+<hr />
 <h2 id="navigating-the-map">Navigating the Map</h2>
 <p>When you first open the map it will be zoomed almost all the way out. You will likely wish to increase the zoom level in order to see more detail. This is intuitive when using a mouse. The scrollwheel will zoom in and out, while clicking and dragging on the map will move the map around (panning). </p>
+<p>There is also a hidden navigation bar at the top of the plot that appears when you hover the mouse pointer over it. From left to right, the icons have the following functions:</p>
 <p><img src="../../img/photomap_semantic_map_umap_navigation_bar.png" width="480" alt="Semantic Map" class="img-hover-zoom"></p>
-<p>There is also a navigation bar at the top of the plot that appears when you hover over it. From left to right, the icons have the following functions:</p>
 <ul>
 <li><strong>Camera Icon</strong> - Snapshot the current map and save it to disk as a PNG image.</li>
 <li><strong>Magnifier Icon</strong> - Outline a rectangular region of the map and zoom into it.</li>
@@ -952,6 +983,16 @@
 <li><strong>Plotly Icon</strong> - Advertisement for the plotting package used to plot the map.</li>
 </ul>
 <p>On tablet devices, the best way to zoom into an area of interest is to use the magnifier icon and/or a combination of the pan tool and the Zoom in/out icons.</p>
+<hr />
+<h2 id="moving-and-resizing-the-map-window">Moving and Resizing the Map Window</h2>
+<p>The map window can be repositioned anywhere on the screen by clicking and dragging on its titlebar. It can be resized by clicking the resize icons shown in the screenshot below (mouse over to see the legend).</p>
+<div class="photomap-overlay-container">
+  <img src="../../img/photomap_semantic_map_sizing_base.png" width="480" class="photomap-base" alt="Base image">
+  <img src="../../img/photomap_semantic_map_sizing_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
+</div>
+
+<p>The sizes shown are approximate and are adjusted for different size browser windows. The full-screen size (the leftmost icon) covers the entire window and is opaque. Other sizes are slightly transparent to allow you to see the full-size images beneath.</p>
+<p>The shade icon (rightmost) collapses the window so that only the titlebar is visible. This is convenient for temporarily uncluttering the screen.</p>
 <h2 id="controlling-thumbnail-images">Controlling Thumbnail Images</h2>
 <p>The semantic map can show you preview images in two ways. You can have it pop up thumbnails on the fly as you mouse over the map. You can have it put down static thumbnail landmarks on the most prominent clusters in the current view. Or you can do both!</p>
 <p>These functions are controlled by the checkboxes in the bottom right of the window:</p>
@@ -962,18 +1003,13 @@
 <p>With "Show hover thumbnails" turned on and "Show landmarks" turned off:</p>
 <p><img src="../../img/photomap_hover_thumbnail.png" width="480" alt="Thumbnail controls" class="img-hover-zoom"></p>
 <p>By default, landmarks will be turned on and hover images turned off when you enter the map's fullscreen mode. The opposite happens when  you leave fullscreen mode and enter windowed mode. See below for more information on window modes and sizes.</p>
+<hr />
 <h2 id="selecting-clusters">Selecting Clusters</h2>
 <p>Clicking on any colored image dot or a landmark preview will select all the images in its cluster and add them to the main display's search results. You will see the selected cluster become brighter, while all the other clusters will dim. This effect can be turned on and off by clicking on the checkbox in the bottom right corner labeld "Highlight selection."</p>
 <p>When a cluster is selected, the image search results will be sorted according to their distance from the image you clicked on in the semantic map. If you leave the semantic map window open and scroll through the results, you will see the yellow map position marker move increasingly far away from the original point. At the same time, the displayed full-size images will slowly diverge and become more diverse.</p>
-<h2 id="moving-the-map-window">Moving the Map Window</h2>
-<p>The map window can be repositioned anywhere on the screen by clicking and dragging on its titlebar. In addition it can be resized by clicking the resize icons shown in the screenshot below (mouse over to see the legend).</p>
-<div class="photomap-overlay-container">
-  <img src="../../img/photomap_semantic_map_sizing_base.png" width="480" class="photomap-base" alt="Base image">
-  <img src="../../img/photomap_semantic_map_sizing_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
-</div>
-
-<p>The sizes shown are approximate and are adjusted for different size browser windows. The full-screen size (the leftmost icon) covers the entire window and is opaque. Other sizes are slightly transparent to allow you to see the full-size images beneath.</p>
-<p>The shade icon (rightmost) collapses the window so that only the titlebar is visible. This is convenient for temporarily uncluttering the screen.</p>
+<h3 id="unclustered-images">Unclustered Images</h3>
+<p>There will often be images that can't be assigned to any cluster. These appear as light gray dots in scatterplot. Click on one of these to highlight the unclustered images and browse through them.</p>
+<p>You can decrease the number of unclustered images by increasing EPS. This will cluster the images more aggressively and also merge existing clusters. Experiment until you find the setting that works best for you.</p>
 
 
 
