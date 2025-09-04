@@ -82,11 +82,12 @@ To relaunch the server, run the `start_photomap` launcher again. For your conven
 
 ## PyPi  Installation
 
-If you are familiar with installing Python packages, here is a quick four line recipe:
+If you are familiar with installing Python packages, here is a quick recipe:
 
 ```bash
-pip -mvenv photomap --prompt photomap
+python -mvenv photomap --prompt photomap
 source photomap/bin/activate
+pip install --upgrade pip
 pip install photomapai
 start_photomap
 ```

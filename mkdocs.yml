@@ -25,6 +25,8 @@ theme:
   name: material
   palette:
     scheme: slate
+  features:
+    -content.code.copy
 
 extra_css:
   - stylesheets/extra.css
