@@ -4,6 +4,16 @@ Rediscover your photo collection!
 
 PhotoMapAI is a fast, modern image browser and search tool for large photo collections. It uses the CLIP computer vision model to enable text and image-based search, image clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.
 
+<div class="try-demo-container" style="display:flex; align-items:center;gap: 8px;">
+ <span>Try it out here:</span>
+   <a href="https://photomap.4crabs.org" target="_new">
+      <img src="img/demo_icon.png" alt="Demo Icon">
+   </a>
+</div>
+
+<img src="img/photomap_intro.png" alt="PhotoMap Overview" class="img-hover-zoom">
+
+
  <img src="https://github.com/lstein/PhotoMapAI/blob/master/docs/img/photomap_intro.png?raw=true" alt="PhotoMap main display showing the semantic map of the user's photo album">
 
 ## Features
@@ -16,8 +26,6 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 - Support for wide range of image formats, including Apple's HEIC
 - Integration with the <a href="https://github.com/invoke-ai/InvokeAI">InvokeAI</a> AI image generation system
 - Extensible backend (FastAPI)
-
-Try out this <a href="https://photomap.4crabs.org">online demo</a>. For security, album manager features have been disabled.
 
 ## The Semantic Map
 

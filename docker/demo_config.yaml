@@ -1,9 +1,9 @@
 albums:
   demo:
-    description: ~4500 random license-free images from Open Images
+    description: PhotoMapAI Demo ~4500 random license-free images from Open Images
     image_paths:
     - /app/demo_images
     index: /app/demo_images/photomap_index/embeddings.npz
-    name: PhotoMapAI Demo (with album management disabled)
+    name: PhotoMapAI (some features disabled)
     umap_eps: 0.13
 config_version: 1.0.0
