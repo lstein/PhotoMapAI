@@ -62,6 +62,7 @@ development = [
     "build",
     "mkdocs-material",
     "twine",
+    "pymdown-extensions",
 ]
 
 [tool.setuptools.packages.find]
