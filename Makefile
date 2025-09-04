@@ -27,14 +27,16 @@ docker-build:
 .PHONY: docker-demo
 docker-demo:
 	version=$$(grep '^version\s*=' pyproject.toml | sed -E 's/.*=\s*"([^"]+)".*/\1/') \
-	&& 	docker build -f docker/Dockerfile.demo -t lstein/photomapai-demo:v$$version . \
-	&& docker tag lstein/photomapai-demo:v$$version lstein/photomapai-demo:latest
+	&& user=`whoami` \
+	&& docker build -f docker/Dockerfile.demo -t $$user/photomapai-demo:v$$version . \
+	&& docker tag $$user/photomapai-demo:v$$version $$user/photomapai-demo:latest
 
 .PHONY: docker
 docker:
 	version=$$(grep '^version\s*=' pyproject.toml | sed -E 's/.*=\s*"([^"]+)".*/\1/') \
-	&& docker build -f docker/Dockerfile -t lstein/photomapai:v$$version  . \
-	&& docker tag lstein/photomapai:v$$version lstein/photomapai:latest 
+	&& user=`whoami` \
+	&& docker build -f docker/Dockerfile -t $$user/photomapai:v$$version  . \
+	&& docker tag $$user/photomapai:v$$version $$user/photomapai:latest 
 
 # Serve the mkdocs site w/ live reload
 .PHONY: docs
@@ -43,5 +45,4 @@ docs:
 	mkdocs serve --dev-addr=0.0.0.0:8000
 
 deploy-docs:
-	# sed 's|img/|docs/img/|g' docs/index.md > README.md
 	mkdocs gh-deploy
