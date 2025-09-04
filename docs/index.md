@@ -44,11 +44,13 @@ PhotoMapAI lets you search your collection by similarity to another image, by te
 
 You can start an image similarity search by uploading a local image file, dragging an image from a web browser window or file browser, or by selecting an existing image from your collection. There's also a "Text to Avoid" field, which can be used to disfavor certain image content.
 
-## Support for Image Metadata
+## Photo Metadata Display
 
 When viewing a photo in full-screen mode, you can pop out a little drawer to show its metadata, including the GPS location (if available), and the camera/phone settings:
 
 <img src="img/photomap_metadata.png" alt="Image Metadata" class="img-hover-zoom">
+
+### InvokeAI Metadata Support
 
 If you are a user of the [InvokeAI](https://github.com/invoke-ai/InvokeAI) text-to-image generation tool, you can get quick access to the key settings used to generate the image, including the prompts, model and LoRAs in use, and the input images used for IPAdapters, ControlNets and the img2img raster layer. You can also display the full generation metadata in native JSON format and copy it to the clipboard.
 
