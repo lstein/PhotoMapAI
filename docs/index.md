@@ -4,9 +4,19 @@ Rediscover your photo collection!
 
 PhotoMapAI is a fast, modern image browser and search tool for large photo collections. It uses the CLIP computer vision model to enable text and image-based search, image clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.
 
+<div class="try-demo-container">
+ <span>Try it out here:</span>
+   <a href="https://photomap.4crabs.org" target="_new">
+      <img src="img/demo_icon.png" alt="Demo Icon">
+   </a>
+</div>
+
 <img src="img/photomap_intro.png" alt="PhotoMap Overview" class="img-hover-zoom">
 
+---
+
 ## Features
+
 - Fast browsing of large image collections
 - All images are local to your computer; nothing goes out to the internet
 - AI-based text and image similarity search
@@ -15,8 +25,6 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 - Responsive UI for desktop and mobile
 - Support for wide range of image formats, including Apple's HEIC
 - Extensible backend (FastAPI)
-
-Try out this <a href="https://photomap.4crabs.org">online demo.</a> (For safety reasons, album management features have been disabled.)
 
 ## The Semantic Map
 
@@ -54,7 +62,6 @@ PhotoMapAI supports most of the other features you would expect, including suppo
 
 ## Quick Start
 
-
 ### Windows
 
 #### 1. Download and unpack the source code
@@ -69,11 +76,11 @@ Navigate to the unpacked `PhotoMapAI` folder, find the `INSTALL` folder, and dou
 
 #### 3. Start the server
 
-Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server. 
+Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server.
 
+#### 4. **Open your browser:**
 
-#### 4. **Open your browser:**  
-   Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
+Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
 
 ---
 
@@ -93,13 +100,14 @@ Navigate to the `PhotoMapAI` folder and launch the `install_linux_mac` shell scr
 
 Double click `start_photomap` to launch the server. You will see a few startup messages followed by the URL for the running server.
 
-#### 4. **Open your browser:**  
-   Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
+#### 4. **Open your browser:**
+
+Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
 
 ## Detailed Guides
+
 - [Installation](installation.md)
 - [User Guide](user-guide/basic-usage.md)
 - [Configuration](user-guide/configuration.md)
 - [Developer Guide](developer/architecture.md)
 - [Troubleshooting](troubleshooting.md)
-
