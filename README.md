@@ -11,7 +11,7 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
    </a>
 </div>
 
- <img src="https://github.com/lstein/PhotoMapAI/blob/master/docs/img/photomap_intro.png?raw=true" alt="PhotoMap main display showing the semantic map of the user's photo album">
+ <img src="https://raw.githubusercontent.com/lstein/PhotoMapAI/refs/heads/master/docs/img/demo_icon.png" alt="PhotoMap main display showing the semantic map of the user's photo album">
 
 ## Features
 - Fast browsing of large image collections
