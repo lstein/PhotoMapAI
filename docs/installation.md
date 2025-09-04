@@ -80,6 +80,21 @@ To relaunch the server, run the `start_photomap` launcher again. For your conven
 
 ---
 
+## PyPi  Installation
+
+If you are familiar with installing Python packages, here is a quick four line recipe:
+
+```bash
+pip -mvenv photomap --prompt photomap
+source photomap/bin/activate
+pip install photomapai
+start_photomap
+```
+
+After the startup messages, point your browser to http://localhost:8050 and follow the prompts.
+
+---
+
 ## Manual Installation
 
 Download and unpack the source code as described in the sections above. Then follow these steps:
