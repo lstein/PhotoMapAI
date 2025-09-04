@@ -62,6 +62,8 @@ PhotoMapAI supports most of the other features you would expect, including suppo
 
 ## Quick Start
 
+Here are instructions for installation on [Windows](#windows), [Linux/Mac](#linux-mac), [From the Python repo](#python-repository), and [Docker](#docker-install)
+
 ### Windows
 
 #### 1. Download and unpack the source code
@@ -103,6 +105,35 @@ Double click `start_photomap` to launch the server. You will see a few startup m
 #### 4. **Open your browser:**
 
 Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
+
+---
+
+
+### Python Repository
+
+If you are familiar with installing Python packages from the PyPi repo, here is a quick four line recipe:
+
+```bash
+pip -mvenv photomap --prompt photomap
+source photomap/bin/activate
+pip install photomapai
+start_photomap
+```
+
+After the startup messages, point your browser to http://localhost:8050 and follow the prompts.
+
+---
+
+### Docker Install
+
+If you have Docker installed on your system, here is a one-liner to get PhotoMapAI up and running:
+
+```bash
+docker -p 8050:8050 -v /path/to/a/picture_folder:/Pictures lstein/photomapai:latest
+```
+Change `/path/to/a/picture_folder` to a path on your desktop that contains the images/photos you wish to add to an album. After the startup messages, point your browser to http://localhost:8050 and follow the prompts. Your images will be found in the container directory `/Pictures`.
+
+---
 
 ## Detailed Guides
 
