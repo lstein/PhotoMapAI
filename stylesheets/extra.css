@@ -9,10 +9,15 @@
   z-index: 999;
 }
 
+.try-demo-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
 .photomap-overlay-container {
   position: relative;
   display: inline-block;
-  width: 640px; /* match your base image width */
+  width: 640px;
   height: auto;
 }
 

@@ -16,7 +16,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.18">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.16">
     
     
       
@@ -626,6 +626,28 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../../docker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Running from Docker
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -635,10 +657,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
             
   
   
@@ -651,8 +673,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Developer Guide
           </label>
@@ -844,7 +866,7 @@
 <p><img src="../../img/photomap_album_setup.png" width="640" alt="Album creation dialogue" class="img-hover-zoom"></p>
 <p>Enter a short lowercase key for the album, such as "family", a longer descriptive name such as "Family Photos 2025", and optionally a description of the album. (The key can be used in URLs if you wish to share a particular album in a text or email message as <a href="../albums/#selecting-an-album-by-url">described here</a>).</p>
 <p>You'll now need to tell the album where its photos are stored. Enter one or more filesystem paths in the text field at the bottom named "Image Paths". Photos can be stored in a single large folder, or stored in multiple nestered folders. They can reside on the local disk or on a shared disk. If you wish, you can point the album to multiple folders, and their contents will be combined into a single album.</p>
-<p>PhotoMapAI supports photos in JPEG, PNG, TIFF, and HEIC/HEIF formats.</p>
+<p>PhotoMapAI supports photos in JPEG, PNG, TIFF, GIF, and HEIC/HEIF formats.</p>
 <p>The screenshot below shows the dialogue after populating it on a Linux or MacOS system. On Windows systems use the usual <code>C:\path\to\directory</code> notation.</p>
 <p><img src="../../img/photomap_album_setup_filled.png" width="480" alt="Album creation dialogue" class="img-hover-zoom"></p>
 <p>Once the album is set up to your liking, press the <code>Add Album</code> button at the bottom left and indexing will start:</p>
@@ -871,17 +893,24 @@
 <li>The <em>Magnifier</em> icon opens up a search dialogue that lets you search by image similarity and/or a text description of image content.</li>
 </ul>
 <p>Finally, the inconspicuous tab with the yellow arrow on the left margin of the window opens a drawer that displays the image's EXIF date, including the date the photo was taken, GPS information (if available), and camera information.</p>
-<p>Hover near the top of the window to reveal a slider that will let you seek forward and backward among the images. If no search is active, the slider shows the images sorted by their date. If a image or text similarity search is active, the slider changes to indicate the match score (higher numbers are better matches):</p>
-<p><img src="../../img/photomap_basic_usage_2.png" width="680" alt="Seek Slider" class="img-hover-zoom"></p>
+<p>Hover the mouse near the top of the window to reveal a gallery view and a slider control that will let you seek forward and backward among the images. If no search is active, the slider shows the images sorted by their date. If an image or text similarity search is active, the slider changes to indicate the match score (higher numbers are better matches). If a cluster was selected with the semantic map, then the slider and gallery change to indicate the contents of the cluster.</p>
+<p><img src="../../img/photomap_basic_usage_2.png" width="480" alt="Seek Slider" class="img-hover-zoom"></p>
 <p>You can navigate through your album, enter and exit fullscreen, and start and stop the slideshow with a variety of keystrokes and gestures on touch-enabled devices. See <a href="../keyboard-shortcuts/">Keyboard Shortcuts</a> for details.</p>
 <h2 id="displaying-the-semantic-map">Displaying the Semantic Map</h2>
-<p>Click the ⊙ (target) icon to open the <a href="../semantic-map/">Semantic Map</a>:</p>
+<p>Click the ⊙ (target) icon in the search panel on the bottom right to open the <a href="../semantic-map/">Semantic Map</a>:</p>
+<div class="photomap-overlay-container">
+  <img src="../../img/photomap_basic_usage_3_base.png" style="width: 320px" class="photomap-base" alt="Base image">
+  <img src="../../img/photomap_basic_usage_3_overlay.png" style="width: 320px" class="photomap-overlay" alt="Overlay image">
+</div>
+
+<p>This will open up a scatterplot showing all the photos in your album, clustered and colored by similarity.</p>
 <p><img src="../../img/photomap_semantic_map_1.png" width="480" alt="Semantic Map" class="img-hover-zoom"></p>
-<p>This shows all the photos in your album, clustered and colored by similarity. The initial view shows the entire collection, with a yellow target marking the current photo on display. Use the mouse and scrollwheel to zoom in and out of the map and pan around. If you zoom in enough, you will see individual dots for each photo. Hover the mouse over areas of interest to see thumbnail previews of the corresponding images. </p>
+<p>The initial view shows the entire collection, with a yellow target (far left side of the screenshot) marking the current photo on display. Use the mouse and scrollwheel to zoom in and out of the map and pan around. If you zoom in enough, you will see individual dots for each photo. The largest clusters are labeled with landmark images shown in the screenshot above as map markers pointing to major clusters. Hover the mouse over areas of interest to see larger thumbnail previews of the corresponding images. You can control whether landmarks and/or hover thumbnails are displayed by selecting those options in the checkboxes at the bottom of the screen. </p>
 <p>Click on a dot to load that photo into the main display, highlight the cluster that you clicked in, and load the contents of the cluster into the search results. You can then use the navigation buttons (or the slideshow) to scroll through the images in the selected cluster.</p>
 <p>If you don't see anything, or if the colors are very faint, this means that there were insufficient images in the album to cluster well. You can fix this by increasing the cluster strength. Go to the <em>Cluster Strength</em> field and increase its value until you are satisfied with the cluster number and size.</p>
 <p>If you hover over the top of the map, additional navigation controls appear for zooming in and out, panning, resetting to the default scale, and downloading the map as a PNG image.</p>
 <p><img src="../../img/photomap_semantic_map_2.png" width="480" alt="Semantic Map Nav Controls" class="img-hover-zoom"></p>
+<p>You can control the size and position of the semantic map. You can have it appear in fullscreen mode that covers the full size image display beneath it, or you can set it to be a semi-transparent window that floats on top of the full size image. See <a href="../semantic-map/">Semantic Map</a> for more details.</p>
 <h2 id="changing-settings">Changing Settings</h2>
 <p>The Gear icon opens the settings dialogue, which allows you to adjust the appearance and behavior of PhotoMapAI:</p>
 <p><img src="../../img/photomap_settings.png" width="480" alt="PhotoMapAI Settings Dialogue" class="img-hover-zoom"></p>
@@ -941,10 +970,10 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>
+      <script src="../../assets/javascripts/bundle.50899def.min.js"></script>
       
     
   </body>

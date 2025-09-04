@@ -14,7 +14,7 @@
       
       
       <link rel="icon" href="assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.18">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.16">
     
     
       
@@ -432,6 +432,24 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#python-repository" class="md-nav__link">
+    <span class="md-ellipsis">
+      Python Repository
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      Docker Install
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -757,6 +775,28 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="docker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Running from Docker
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -766,10 +806,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
             
   
   
@@ -782,8 +822,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Developer Guide
           </label>
@@ -1070,6 +1110,24 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#python-repository" class="md-nav__link">
+    <span class="md-ellipsis">
+      Python Repository
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      Docker Install
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1106,10 +1164,19 @@
 <h1 id="photomapai">PhotoMapAI</h1>
 <p>Rediscover your photo collection!</p>
 <p>PhotoMapAI is a fast, modern image browser and search tool for large photo collections. It uses the CLIP computer vision model to enable text and image-based search, image clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.</p>
+<div class="try-demo-container">
+ <span>Try it out here:</span>
+   <a href="https://photomap.4crabs.org" target="_new">
+      <img src="img/demo_icon.png" alt="Demo Icon">
+   </a>
+</div>
+
 <p><img src="img/photomap_intro.png" alt="PhotoMap Overview" class="img-hover-zoom"></p>
+<hr />
 <h2 id="features">Features</h2>
 <ul>
 <li>Fast browsing of large image collections</li>
+<li>All images are local to your computer; nothing goes out to the internet</li>
 <li>AI-based text and image similarity search</li>
 <li>Thematic image clustering and visualization</li>
 <li>Flexible album management</li>
@@ -1135,6 +1202,7 @@
 <p>PhotoMapAI supports most of the other features you would expect, including support for multiple separate photo albums, the ability to browse photos chronologically, an uncluttered fullscreen mode, and of course a configurable slideshow mode that can show images sequentially or shuffled.</p>
 <hr />
 <h2 id="quick-start">Quick Start</h2>
+<p>Here are instructions for installation on <a href="#windows">Windows</a>, <a href="#linux-mac">Linux/Mac</a>, <a href="#python-repository">From the Python repo</a>, and <a href="#docker-install">Docker</a></p>
 <h3 id="windows">Windows</h3>
 <h4 id="1-download-and-unpack-the-source-code">1. Download and unpack the source code</h4>
 <p>Download the PhotoMapAI source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMapAI home page.</p>
@@ -1142,7 +1210,7 @@
 <h4 id="2-run-the-installer-script">2. Run the installer script</h4>
 <p>Navigate to the unpacked <code>PhotoMapAI</code> folder, find the <code>INSTALL</code> folder, and double-click the <code>install_windows</code> script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named <code>start_photomap</code>.</p>
 <h4 id="3-start-the-server">3. Start the server</h4>
-<p>Double-click <code>start_photomap.bat</code> to launch the server. You should see a few startup messages, followed by the URL for the running server. </p>
+<p>Double-click <code>start_photomap.bat</code> to launch the server. You should see a few startup messages, followed by the URL for the running server.</p>
 <h4 id="4-open-your-browser">4. <strong>Open your browser:</strong></h4>
 <p>Navigate to <code>http://localhost:8050</code> and follow the prompts to create and populate your first album.</p>
 <hr />
@@ -1156,6 +1224,22 @@
 <p>Double click <code>start_photomap</code> to launch the server. You will see a few startup messages followed by the URL for the running server.</p>
 <h4 id="4-open-your-browser_1">4. <strong>Open your browser:</strong></h4>
 <p>Navigate to <code>http://localhost:8050</code> and follow the prompts to create and populate your first album.</p>
+<hr />
+<h3 id="python-repository">Python Repository</h3>
+<p>If you are familiar with installing Python packages from the PyPi repo, here is a quick four line recipe:</p>
+<pre><code class="language-bash">pip -mvenv photomap --prompt photomap
+source photomap/bin/activate
+pip install photomapai
+start_photomap
+</code></pre>
+<p>After the startup messages, point your browser to http://localhost:8050 and follow the prompts.</p>
+<hr />
+<h3 id="docker-install">Docker Install</h3>
+<p>If you have Docker installed on your system, here is a one-liner to get PhotoMapAI up and running:</p>
+<pre><code class="language-bash">docker -p 8050:8050 -v /path/to/a/picture_folder:/Pictures lstein/photomapai:latest
+</code></pre>
+<p>Change <code>/path/to/a/picture_folder</code> to a path on your desktop that contains the images/photos you wish to add to an album. After the startup messages, point your browser to http://localhost:8050 and follow the prompts. Your images will be found in the container directory <code>/Pictures</code>.</p>
+<hr />
 <h2 id="detailed-guides">Detailed Guides</h2>
 <ul>
 <li><a href="installation/">Installation</a></li>
@@ -1212,10 +1296,10 @@
     
     
       
-      <script id="__config" type="application/json">{"base": ".", "features": [], "search": "assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": ".", "features": [], "search": "assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.92b07e13.min.js"></script>
+      <script src="assets/javascripts/bundle.50899def.min.js"></script>
       
     
   </body>
