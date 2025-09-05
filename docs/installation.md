@@ -62,11 +62,16 @@ To relaunch the server, run the `start_photomap` .bat script again. For your con
 
 Download the PhotoMapAI source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMapAI home page.
 
-Choose a convenient location in your home directory and unzip the file to create a new folder named `PhotoMapAI`.
+Choose a convenient location in your Downloads directory and unzip the file to create a new folder named `PhotoMapAI-X.X.X`, where X.X.X is the current release number
 
 ### 2. Run the installer script
 
-Navigate to the `PhotoMapAI` folder and launch the `install_linux_mac` shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named `start_photomap` on your desktop.
+Launch a command-line shell ("Terminal" on the Mac) and navigate to the `PhotoMap-X.X.X` folder. Launch the `INSTALL/install_linux_mac.sh` shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named `start_photomap` on your desktop. If you are uncomfortable with the command line, here are the commands you need:
+
+```
+cd ~/Downloads/PhotoMap-X.X.X/INSTALL
+/bin/sh install_linux_mac.sh
+```
 
 ### 3. Start the server
 
