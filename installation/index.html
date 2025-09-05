@@ -1240,9 +1240,12 @@ attempt to download and install them on your behalf. You will need to relaunch t
 <h2 id="linux-macos">Linux &amp; MacOS</h2>
 <h3 id="1-download-and-unpack-the-source-code_1">1. Download and unpack the source code</h3>
 <p>Download the PhotoMapAI source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMapAI home page.</p>
-<p>Choose a convenient location in your home directory and unzip the file to create a new folder named <code>PhotoMapAI</code>.</p>
+<p>Choose a convenient location in your Downloads directory and unzip the file to create a new folder named <code>PhotoMapAI-X.X.X</code>, where X.X.X is the current release number</p>
 <h3 id="2-run-the-installer-script_1">2. Run the installer script</h3>
-<p>Navigate to the <code>PhotoMapAI</code> folder and launch the <code>install_linux_mac</code> shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named <code>start_photomap</code> on your desktop.</p>
+<p>Launch a command-line shell ("Terminal" on the Mac) and navigate to the <code>PhotoMap-X.X.X</code> folder. Launch the <code>INSTALL/install_linux_mac.sh</code> shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named <code>start_photomap</code> on your desktop. If you are uncomfortable with the command line, here are the commands you need:</p>
+<pre><code>cd ~/Downloads/PhotoMap-X.X.X/INSTALL
+/bin/sh install_linux_mac.sh
+</code></pre>
 <h3 id="3-start-the-server">3. Start the server</h3>
 <p>Double click <code>start_photomap</code> to launch the server. You will see a few startup messages followed by the URL for the running server. Cut and paste this into your browser and follow the prompts to configure and index your first album. See <a href="../user-guide/albums/">Albums</a> for a walkthrough.</p>
 <h3 id="4-exiting-and-relaunching">4. Exiting and relaunching</h3>
