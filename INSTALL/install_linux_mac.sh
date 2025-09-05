@@ -100,7 +100,7 @@ create_mac_launcher() {
     local install_path="$1"
     local desktop_dir="$HOME/Desktop"
     local app_dir="$desktop_dir/PhotoMap.app"
-    local repo_root="$(dirname "$0")/.."
+    local repo_root=.
     local icon_path="$repo_root/photomap/frontend/static/icons/favicon-32x32.icns"
 
     # Create app bundle structure
