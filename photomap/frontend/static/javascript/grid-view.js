@@ -1,0 +1,147 @@
+import { fetchNextImage } from "./search.js";
+import { state } from "./state.js";
+
+export async function initializeGridSwiper() {
+  // Destroy previous Swiper instance if it exists
+  if (state.swiper) {
+    state.swiper.destroy(true, true);
+    state.swiper = null;
+  }
+
+  // Calculate rows based on window height
+  const minSlideHeight = 256;
+  const maxSlideHeight = 800;
+  const availableHeight = window.innerHeight - 120; // adjust for header/footer
+  const rows = Math.max(1, Math.floor(availableHeight / minSlideHeight));
+  const slideHeight = Math.min(
+    maxSlideHeight,
+    Math.max(minSlideHeight, Math.floor(availableHeight / rows))
+  );
+
+  // Prepare Swiper container
+  const swiperWrapper = document.querySelector(".swiper .swiper-wrapper");
+  swiperWrapper.innerHTML = "";
+
+  // Initialize Swiper in grid mode FIRST
+  state.swiper = new Swiper(".swiper", {
+    direction: "horizontal",
+    slidesPerView: rows,
+    grid: {
+      rows: rows,
+      fill: "column",
+    },
+    spaceBetween: 12,
+    mousewheel: true,
+    keyboard: true,
+    // Add navigation
+    navigation: {
+      nextEl: ".swiper-button-next",
+      prevEl: ".swiper-button-prev",
+    },
+    // Remove scrollbar if you don't want it
+    // scrollbar: false,
+  });
+
+  // Estimate how many slides fit in the viewport (plus buffer)
+  const gridContainer = document.querySelector(".swiper");
+  const columns = Math.floor(gridContainer.offsetWidth / 256) || 1;
+  const slidesPerBatch = rows * columns + columns * 2; // buffer 2 extra rows
+
+  // Now load initial batch of slides using Swiper's API
+  let nextIndex = 0;
+  const batchSize = slidesPerBatch;
+
+  async function loadBatch() {
+    let batchLoaded = 0;
+    const slides = [];
+    for (let i = 0; i < batchSize; i++) {
+      const data = await fetchNextImage(nextIndex++);
+      if (!data) return false;
+      slides.push(`
+        <div class="swiper-slide" style="height:${slideHeight}px">
+          <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover;" />
+        </div>
+      `);
+      batchLoaded++;
+    }
+    state.swiper.appendSlide(slides);
+    state.swiper.update();
+    return batchLoaded > 0;
+  }
+
+  await loadBatch();
+
+  // Infinite scroll: load more slides when reaching the end
+  state.swiper.on("reachEnd", async () => {
+    const loadedMore = await loadBatch();
+    if (loadedMore) {
+      state.swiper.update();
+    }
+  });
+
+  // Setup continuous navigation
+  setupContinuousNavigation();
+}
+
+function setupContinuousNavigation() {
+  const nextBtn = document.querySelector(".swiper-button-next");
+  const prevBtn = document.querySelector(".swiper-button-prev");
+
+  let scrollInterval;
+  let isScrolling = false;
+
+  function startContinuousScroll(direction) {
+    if (isScrolling) return;
+    isScrolling = true;
+
+    // Initial delay before continuous scrolling starts
+    setTimeout(() => {
+      if (isScrolling) {
+        scrollInterval = setInterval(() => {
+          if (direction === "next") {
+            state.swiper.slideNext();
+          } else {
+            state.swiper.slidePrev();
+          }
+        }, 200); // Scroll every 200ms - adjust speed as needed
+      }
+    }, 300); // Wait 300ms before starting continuous scroll
+  }
+
+  function stopContinuousScroll() {
+    isScrolling = false;
+    if (scrollInterval) {
+      clearInterval(scrollInterval);
+      scrollInterval = null;
+    }
+  }
+
+  // Next button events
+  if (nextBtn) {
+    nextBtn.addEventListener("mousedown", () => startContinuousScroll("next"));
+    nextBtn.addEventListener("mouseup", stopContinuousScroll);
+    nextBtn.addEventListener("mouseleave", stopContinuousScroll);
+
+    // Touch events for mobile
+    nextBtn.addEventListener("touchstart", () => startContinuousScroll("next"));
+    nextBtn.addEventListener("touchend", stopContinuousScroll);
+    nextBtn.addEventListener("touchcancel", stopContinuousScroll);
+  }
+
+  // Previous button events
+  if (prevBtn) {
+    prevBtn.addEventListener("mousedown", () => startContinuousScroll("prev"));
+    prevBtn.addEventListener("mouseup", stopContinuousScroll);
+    prevBtn.addEventListener("mouseleave", stopContinuousScroll);
+
+    // Touch events for mobile
+    prevBtn.addEventListener("touchstart", () => startContinuousScroll("prev"));
+    prevBtn.addEventListener("touchend", stopContinuousScroll);
+    prevBtn.addEventListener("touchcancel", stopContinuousScroll);
+  }
+
+  // Stop scrolling if window loses focus
+  window.addEventListener("blur", stopContinuousScroll);
+}
+
+window.initializeGridSwiper = initializeGridSwiper;

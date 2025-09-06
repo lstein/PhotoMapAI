@@ -18,8 +18,28 @@ function isTouchDevice() {
 
 const hasTouchCapability = isTouchDevice();
 
-document.addEventListener("DOMContentLoaded", async function () {
+export async function initializeSingleSwiper() {
+  console.log("Swiper constructor:", typeof Swiper, Swiper);
+  // Destroy previous Swiper instance if it exists
+  if (state.swiper) {
+    state.swiper.destroy(true, true);
+    state.swiper = null;
+  }
+
+  // Clear the swiper wrapper completely
+  const swiperWrapper = document.querySelector(".swiper .swiper-wrapper");
+  if (swiperWrapper) {
+    swiperWrapper.innerHTML = "";
+  }
+
+  // Reset any grid-specific state
+  state.gridViewActive = false;
+
+  // Swiper config for single-image mode
   const swiperConfig = {
+    direction: "horizontal", // Ensure it's horizontal for single view
+    slidesPerView: 1, // Single slide view
+    spaceBetween: 0, // No space between slides in single view
     navigation: {
       nextEl: ".swiper-button-next",
       prevEl: ".swiper-button-prev",
@@ -35,7 +55,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       dynamicBullets: true,
     },
     loop: false,
-    touchEventsTarget: 'container',  // said to increase touch responsiveness over default 'wrapper'
+    touchEventsTarget: "container",
     allowTouchMove: true,
     simulateTouch: true,
     touchStartPreventDefault: false,
@@ -50,24 +70,24 @@ document.addEventListener("DOMContentLoaded", async function () {
     },
     on: {
       slideNextTransitionStart: async function () {
-        // Only add a new slide if we're at the end and moving forward
+        if (state.gridViewActive) return; // Guard against grid view
         if (this.activeIndex >= this.slides.length - 1) {
           await addNewSlide();
         }
       },
-      slidePrevTransitionEnd: async function () { // adding new at end of transition makes animation smoother
-        // Only add a new slide if we're at the beginning and moving backward
+      slidePrevTransitionEnd: async function () {
+        if (state.gridViewActive) return; // Guard against grid view
         if (this.activeIndex <= 1) {
           await addNewSlide(true);
         }
       },
       sliderFirstMove: function () {
+        if (state.gridViewActive) return; // Guard against grid view
         pauseSlideshow();
       },
     },
   };
 
-  // Enable zoom on any device with touch capability
   if (hasTouchCapability) {
     swiperConfig.zoom = {
       maxRatio: 3,
@@ -78,44 +98,70 @@ document.addEventListener("DOMContentLoaded", async function () {
     };
   }
 
-  // Initialize Swiper with conditional config
+  // Initialize Swiper
   state.swiper = new Swiper(".swiper", swiperConfig);
 
-  // Prevent overlay toggle when clicking Swiper navigation buttons
+  // Wait for Swiper to be fully initialized
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  // Add initial slides AFTER Swiper is initialized
+  try {
+    await addNewSlide(false);
+    await addNewSlide(false);
+  } catch (error) {
+    console.error("Failed to add initial slides:", error);
+    // Fallback: try to add at least one slide
+    try {
+      await addNewSlide(false);
+    } catch (fallbackError) {
+      console.error("Failed to add fallback slide:", fallbackError);
+    }
+  }
+
+  // Attach event listeners
   document
     .querySelectorAll(".swiper-button-next, .swiper-button-prev")
     .forEach((btn) => {
       btn.addEventListener("click", function (event) {
-        pauseSlideshow(); // Pause slideshow on navigation
+        if (state.gridViewActive) return; // Guard against grid view
+        pauseSlideshow();
         event.stopPropagation();
-        this.blur(); // Remove focus from button to prevent keyboard navigation issues
+        this.blur();
       });
-      btn.addEventListener("mousedown", function (event) {
+      btn.addEventListener("mousedown", function () {
         this.blur();
       });
     });
 
-  // Update icon on slide change or autoplay events
+  // Update icon on slide change or autoplay events (with guards)
   if (state.swiper) {
-    state.swiper.on("autoplayStart", updateSlideshowIcon);
-    state.swiper.on("autoplayResume", updateSlideshowIcon);
-    state.swiper.on("autoplayStop", updateSlideshowIcon);
-    state.swiper.on("autoplayPause", updateSlideshowIcon);
-    state.swiper.on("slideChange", handleSlideChange);
-    state.swiper.on("scrollbarDragStart", pauseSlideshow);
+    state.swiper.on("autoplayStart", () => {
+      if (!state.gridViewActive) updateSlideshowIcon();
+    });
+    state.swiper.on("autoplayResume", () => {
+      if (!state.gridViewActive) updateSlideshowIcon();
+    });
+    state.swiper.on("autoplayStop", () => {
+      if (!state.gridViewActive) updateSlideshowIcon();
+    });
+    state.swiper.on("autoplayPause", () => {
+      if (!state.gridViewActive) updateSlideshowIcon();
+    });
+    state.swiper.on("slideChange", () => {
+      if (!state.gridViewActive) handleSlideChange();
+    });
+    state.swiper.on("scrollbarDragStart", () => {
+      if (!state.gridViewActive) pauseSlideshow();
+    });
   }
-
-  // Call twice to initialize the carousel and start slideshow if requested
-  await addNewSlide(false);
-  await addNewSlide(false);
 
   // Initial icon state and overlay
   updateSlideshowIcon();
   updateMetadataOverlay();
-});
+}
 
 export function pauseSlideshow() {
-  if (state.swiper && state.swiper.autoplay.running) {
+  if (state.swiper && state.swiper.autoplay?.running) {
     state.swiper.autoplay.stop();
   }
 }
@@ -125,7 +171,7 @@ export function resumeSlideshow() {
     state.swiper.autoplay.stop();
     setTimeout(() => {
       state.swiper.autoplay.start();
-    }, 50); // 50ms delay workaround for tap bug
+    }, 50);
   }
 }
 
@@ -402,7 +448,7 @@ window.addEventListener("searchResultsChanged", (event) => {
 // Add this to swiper.js
 window.addEventListener("setSlideIndex", async (event) => {
   const { targetIndex, isSearchMode } = event.detail;
-    
+
   let globalIndex;
   let [, totalSlides] = await getCurrentSlideIndex();
 
@@ -411,7 +457,7 @@ window.addEventListener("setSlideIndex", async (event) => {
   } else {
     globalIndex = targetIndex;
   }
-  
+
   await state.swiper.removeAllSlides();
 
   let origin = -2;
@@ -419,10 +465,10 @@ window.addEventListener("setSlideIndex", async (event) => {
   if (globalIndex + origin < 0) {
     origin = 0;
   }
-  
+
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.style.visibility = "hidden";
-  
+
   for (let i = origin; i < slides_to_add; i++) {
     if (targetIndex + i >= totalSlides) break;
     // let randomMode = state.mode === "random" && state.searchResults?.length === 0;
@@ -432,9 +478,8 @@ window.addEventListener("setSlideIndex", async (event) => {
     let seekIndex = globalIndex + i;
     await addSlideByIndex(seekIndex, targetIndex + i);
   }
-  
+
   state.swiper.slideTo(-origin, 0);
   swiperContainer.style.visibility = "visible";
   updateMetadataOverlay();
-
 });

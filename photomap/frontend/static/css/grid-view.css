@@ -1,0 +1,29 @@
+#swiperGridView {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(256px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.grid-slide {
+  background: #222;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 256px;
+  max-height: 800px;
+  justify-content: center;
+}
+
+.grid-slide img {
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #111;
+}

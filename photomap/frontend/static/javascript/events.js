@@ -1,6 +1,7 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
 import { checkAlbumIndex } from "./album.js";
+import { initializeGridSwiper } from "./grid-view.js";
 import { deleteImage } from "./index.js";
 import {
   hideMetadataOverlay,
@@ -13,13 +14,14 @@ import {
   addNewSlide,
   getCurrentFilepath,
   getCurrentSlideIndex,
+  initializeSingleSwiper,
   pauseSlideshow,
   resumeSlideshow,
-  updateSlideshowIcon
+  updateSlideshowIcon,
 } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
 import { toggleUmapWindow } from "./umap.js";
-import { hideSpinner, showSpinner } from "./utils.js";
+import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
 // Constants
 const FULLSCREEN_INDICATOR_CONFIG = {
@@ -112,11 +114,13 @@ function handleCopyText() {
   const activeSlide = state.swiper.slides[state.swiper.activeIndex];
   if (activeSlide) {
     const filepath = activeSlide.dataset.filepath || "";
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-      navigator.clipboard.writeText(filepath)
-        .catch((err) => {
-          alert("Failed to copy text: " + err);
-        });
+    if (
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === "function"
+    ) {
+      navigator.clipboard.writeText(filepath).catch((err) => {
+        alert("Failed to copy text: " + err);
+      });
     } else {
       alert("Clipboard API not available. Please copy manually.");
     }
@@ -159,11 +163,11 @@ function confirmDelete(filepath, globalIndex) {
 async function handleSuccessfulDelete(globalIndex, searchIndex) {
   // remove from search results, and adjust subsequent global indices downward by 1
   if (state.searchResults?.length > 0) {
-      state.searchResults.splice(searchIndex, 1);
-      for (let i = 0; i < state.searchResults.length; i++) {
-        if (state.searchResults[i].index > globalIndex) {
-          state.searchResults[i].index -= 1;
-        } 
+    state.searchResults.splice(searchIndex, 1);
+    for (let i = 0; i < state.searchResults.length; i++) {
+      if (state.searchResults[i].index > globalIndex) {
+        state.searchResults[i].index -= 1;
+      }
     }
   }
 
@@ -174,7 +178,10 @@ async function handleSuccessfulDelete(globalIndex, searchIndex) {
       (slide) => slide.dataset.index === globalIndex.toString()
     );
     if (currentIndex === -1) {
-      console.warn("Current file with global index not found in swiper slides:", globalIndex);
+      console.warn(
+        "Current file with global index not found in swiper slides:",
+        globalIndex
+      );
       return;
     }
     state.swiper.removeSlide(currentIndex);
@@ -269,7 +276,10 @@ function setupButtonEventListeners() {
 
   // Start/stop slideshow button
   if (elements.startStopBtn) {
-    elements.startStopBtn.addEventListener("click", toggleSlideshowWithIndicator);
+    elements.startStopBtn.addEventListener(
+      "click",
+      toggleSlideshowWithIndicator
+    );
   }
 
   // Close overlay button
@@ -363,7 +373,7 @@ function initializeEvents() {
 }
 
 // Initialize event listeners after the DOM is fully loaded
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", function () {
   initializeEvents();
 
   const aboutBtn = document.getElementById("aboutBtn");
@@ -386,4 +396,26 @@ document.addEventListener("DOMContentLoaded", function() {
       aboutModal.style.display = "none";
     }
   });
+});
+
+// Show/hide grid button
+document.addEventListener("DOMContentLoaded", function () {
+  const gridViewBtn = document.getElementById("gridViewBtn");
+  const gridViewIcon = gridViewBtn.querySelector("svg");
+  const swiperContainer = document.querySelector(".swiper");
+
+  if (gridViewBtn) {
+    gridViewBtn.addEventListener("click", async () => {
+      state.gridViewActive = !state.gridViewActive;
+      // Always show the swiper container
+      swiperContainer.style.display = "";
+      if (state.gridViewActive) {
+        await initializeGridSwiper();
+      } else {
+        await initializeSingleSwiper();
+      }
+      setCheckmarkOnIcon(gridViewIcon, state.gridViewActive);
+    });
+  }
+  initializeSingleSwiper();
 });
