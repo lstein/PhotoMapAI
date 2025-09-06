@@ -31,9 +31,14 @@ export async function initializeGridSwiper() {
       fill: "column",
     },
     spaceBetween: 12,
-    mousewheel: true,
+    mousewheel: {
+      enabled: true,
+      sensitivity: 10,        // Increase sensitivity (default is 1)
+      releaseOnEdges: true,  // Allow scrolling to continue at edges
+      thresholdDelta: 10,    // Lower threshold for triggering scroll (default is 50)
+      thresholdTime: 100,    // Time window for scroll detection (default is 500)
+    },
     keyboard: true,
-    // Add navigation
     navigation: {
       nextEl: ".swiper-button-next",
       prevEl: ".swiper-button-prev",
