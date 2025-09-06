@@ -8,11 +8,11 @@ export async function initializeGridSwiper() {
     state.swiper = null;
   }
 
-  // Calculate rows based on window height
-  const minSlideHeight = 256;
-  const maxSlideHeight = 800;
-  const availableHeight = window.innerHeight - 120; // adjust for header/footer
-  const rows = Math.max(1, Math.floor(availableHeight / minSlideHeight));
+  // Calculate rows based on window height - UPDATED for smaller slides
+  const minSlideHeight = 180; // Reduced from 256
+  const maxSlideHeight = 600; // Reduced from 800
+  const availableHeight = window.innerHeight - 120;
+  const rows = Math.max(2, Math.floor(availableHeight / minSlideHeight)); // Minimum 2 rows
   const slideHeight = Math.min(
     maxSlideHeight,
     Math.max(minSlideHeight, Math.floor(availableHeight / rows))
@@ -42,10 +42,11 @@ export async function initializeGridSwiper() {
     // scrollbar: false,
   });
 
-  // Estimate how many slides fit in the viewport (plus buffer)
+  // Estimate how many slides fit in the viewport (plus buffer) - UPDATED
   const gridContainer = document.querySelector(".swiper");
-  const columns = Math.floor(gridContainer.offsetWidth / 256) || 1;
-  const slidesPerBatch = rows * columns + columns * 2; // buffer 2 extra rows
+  const minSlideWidth = 180; // Match the minimum height for square-ish slides
+  const columns = Math.floor(gridContainer.offsetWidth / minSlideWidth) || 2; // Minimum 2 columns
+  const slidesPerBatch = rows * columns + columns * 2; // buffer 2 extra columns
 
   // Now load initial batch of slides using Swiper's API
   let nextIndex = 0;
