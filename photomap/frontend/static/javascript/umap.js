@@ -2,8 +2,8 @@
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album.js";
 import { getImagePath, setSearchResults } from "./search.js";
+import { getCurrentSlideIndex } from "./slide-state.js";
 import { state } from "./state.js";
-import { getCurrentSlideIndex } from "./swiper.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {

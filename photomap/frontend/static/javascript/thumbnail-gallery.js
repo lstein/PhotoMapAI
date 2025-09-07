@@ -1,8 +1,8 @@
 // thumbnail-gallery.js
 // This file manages the thumbnail gallery preview above the seek slider
 
+import { getCurrentSlideIndex } from "./slide-state.js";
 import { state } from "./state.js";
-import { getCurrentSlideIndex } from "./swiper.js";
 import { debounce } from "./utils.js";
 
 class ThumbnailGallery {

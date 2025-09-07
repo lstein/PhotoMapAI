@@ -14,10 +14,6 @@ export const state = {
   mode: "chronological", // next slide selection when no search is active ("random", "chronological")
   highWaterMark: 20, // Maximum number of slides to load at once
   album: null, // Default album to use
-  searchResults: [], // List of file paths matching the current search query
-  totalImages: 0, // Total number of images in the current album
-  currentSearchIndex: 0, // Current index in the search results
-  currentGlobalIndex: 0, // Current index in the full album
   availableAlbums: [], // List of available albums
   dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
 };
@@ -96,16 +92,21 @@ export async function setAlbum(newAlbumKey, force = false) {
   console.log("Setting album to", newAlbumKey, "force =", force);
   if (force || state.album !== newAlbumKey) {
     state.album = newAlbumKey;
-    state.currentGlobalIndex = 0;
-    state.currentSearchIndex = 0;
-    state.searchResults = [];
+    
     const metadata = await getIndexMetadata(state.album);
     console.log("Album metadata:", metadata);
-    state.totalImages = metadata.filename_count || 0;
+    
     state.dataChanged = true;
     saveSettingsToLocalStorage();
+    
+    // Update the event to include the metadata for SlideStateManager
     window.dispatchEvent(
-      new CustomEvent("albumChanged", { detail: { album: newAlbumKey } })
+      new CustomEvent("albumChanged", { 
+        detail: { 
+          album: newAlbumKey,
+          totalImages: metadata.filename_count || 0  // Pass this to SlideStateManager
+        } 
+      })
     );
   }
 }

@@ -1,3 +1,4 @@
+import { slideState } from "./slide-state.js";
 import { fetchSlideBatch } from "./slides.js";
 import { state } from "./state.js";
 
@@ -64,10 +65,11 @@ export async function initializeGridSwiper() {
     const slideData = await fetchSlideBatch(firstSlideIndex, batchSize)
     const slides = [];
     for (let i = 0; i < batchSize; i++) {
-      const data = slideData[i]
+      const data = slideData[i];
       if (!data) return false;
+      
       slides.push(`
-        <div class="swiper-slide" style="height:${slideHeight}px">
+        <div class="swiper-slide" style="height:${slideHeight}px" onclick="handleGridSlideClick(${data.index})">
           <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover;" />
         </div>
       `);
@@ -296,3 +298,8 @@ function cleanupGridResizeHandlers() {
 
 window.initializeGridSwiper = initializeGridSwiper;
 window.cleanupGridResizeHandlers = cleanupGridResizeHandlers;
+
+// Handle clicks on grid slides
+window.handleGridSlideClick = function(globalIndex) {
+  slideState.navigateToIndex(globalIndex, false);
+};

@@ -1,6 +1,6 @@
 import { ScoreDisplay } from "./score-display.js";
+import { getCurrentSlideIndex } from "./slide-state.js";
 import { state } from "./state.js";
-import { getCurrentSlideIndex } from "./swiper.js";
 
 class SeekSlider {
   constructor() {
@@ -220,7 +220,7 @@ class SeekSlider {
     if (this.slideChangedTimer) clearTimeout(this.slideChangedTimer);
     this.slideChangedTimer = setTimeout(async () => {
       if (this.isUserSeeking) return;
-      const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
+      const [globalIndex, total, searchIndex] = getCurrentSlideIndex();
       this.slider.value =
         state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
       this.resetFadeOutTimer();
@@ -231,7 +231,7 @@ class SeekSlider {
     if (!this.sliderVisible && this.sliderContainer) {
       this.sliderVisible = true;
       this.sliderContainer.classList.add("visible");
-      let [, total] = await getCurrentSlideIndex();
+      let [globalIndex, total, searchIndex] = getCurrentSlideIndex();
       if (total > 0 && this.searchResultsChanged)
         this.updateSliderRange().then(() => {
           this.renderSliderTicks();
@@ -239,10 +239,8 @@ class SeekSlider {
         });
       this.resetFadeOutTimer();
       if (window.thumbnailGallery) {
-        getCurrentSlideIndex().then(([globalIndex, total, searchIndex]) => {
-          const slideDetail = { globalIndex, total, searchIndex };
-          window.thumbnailGallery.updateGallery(slideDetail);
-        });
+        const slideDetail = { globalIndex, total, searchIndex };
+        window.thumbnailGallery.updateGallery(slideDetail);
       }
     }
   }
@@ -386,7 +384,7 @@ class SeekSlider {
   }
 
   async updateSliderRange() {
-    const [, totalSlides] = await getCurrentSlideIndex();
+    const [, totalSlides] = getCurrentSlideIndex();
     if (state.searchResults?.length > 0) {
       this.slider.min = 1;
       this.slider.max = state.searchResults.length;

@@ -9,11 +9,10 @@ import {
   toggleMetadataOverlay,
   updateMetadataOverlay,
 } from "./metadata-drawer.js";
+import { getCurrentFilepath, getCurrentSlideIndex } from "./slide-state.js";
 import { state } from "./state.js";
 import {
   addNewSlide,
-  getCurrentFilepath,
-  getCurrentSlideIndex,
   initializeSingleSwiper,
   pauseSlideshow,
   resumeSlideshow,
@@ -93,15 +92,6 @@ function toggleSlideshow() {
   updateSlideshowIcon();
 }
 
-function navigateSlide(direction) {
-  pauseSlideshow(); // Pause on navigation
-  if (direction === "next") {
-    state.swiper.slideNext();
-  } else {
-    state.swiper.slidePrev();
-  }
-}
-
 // Toggle the play/pause state using the spacebar
 function handleSpacebarToggle(e) {
   e.preventDefault();
@@ -129,8 +119,8 @@ function handleCopyText() {
 
 // Delete the current file
 async function handleDeleteCurrentFile() {
-  const [globalIndex, totalImages, searchIndex] = await getCurrentSlideIndex();
-  const currentFilepath = await getCurrentFilepath();
+  const [globalIndex, totalImages, searchIndex] = getCurrentSlideIndex();
+  const currentFilepath = getCurrentFilepath();
 
   if (globalIndex === -1 || !currentFilepath) {
     alert("No image selected for deletion.");
@@ -361,6 +351,13 @@ export function toggleSlideshowWithIndicator() {
     showPlayPauseIndicator(true); // Show play indicator
   }
 }
+
+// Listen for slide changes to update UI
+window.addEventListener("slideChanged", (e) => {
+  const { globalIndex, searchIndex, totalCount, isSearchMode } = e.detail;
+  // Update any UI elements that need to reflect current position
+  // updateUIForSlideChange(e.detail); // TO COME
+});
 
 // MAIN INITIALIZATION FUNCTION
 function initializeEvents() {
