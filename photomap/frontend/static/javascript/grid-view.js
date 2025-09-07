@@ -1,5 +1,7 @@
-import { fetchNextSlideBatch } from "./slides.js";
+import { fetchSlideBatch } from "./slides.js";
 import { state } from "./state.js";
+
+let firstSlideIndex = 0;
 
 export async function initializeGridSwiper() {
   // Destroy previous Swiper instance if it exists
@@ -59,11 +61,10 @@ export async function initializeGridSwiper() {
   async function loadBatch() {
     let batchLoaded = 0;
     console.log("Loading batch of", batchSize, "slides");
-    const slideData = await fetchNextSlideBatch(batchSize)
+    const slideData = await fetchSlideBatch(firstSlideIndex, batchSize)
     const slides = [];
     for (let i = 0; i < batchSize; i++) {
       const data = slideData[i]
-      console.log("Fetched slide data:", data);
       if (!data) return false;
       slides.push(`
         <div class="swiper-slide" style="height:${slideHeight}px">
@@ -71,6 +72,7 @@ export async function initializeGridSwiper() {
         </div>
       `);
       batchLoaded++;
+      firstSlideIndex++;
     }
     state.swiper.appendSlide(slides);
     state.swiper.update();
@@ -218,7 +220,7 @@ function setupGridResizeHandler(initialRows, initialSlideHeight, initialSlidesPe
         
         // Reload slides with new batch size
         async function loadBatchForResize() {
-          const slideData = await fetchNextSlideBatch(newSlidesPerBatch);
+          const slideData = await fetchSlideBatch(firstSlideIndex, newSlidesPerBatch);
           const slides = [];
           for (let i = 0; i < slideData.length; i++) {
             const data = slideData[i];
@@ -232,6 +234,7 @@ function setupGridResizeHandler(initialRows, initialSlideHeight, initialSlidesPe
           if (slides.length > 0) {
             state.swiper.appendSlide(slides);
             state.swiper.update();
+            firstSlideIndex = slides.length;
           }
         }
         
