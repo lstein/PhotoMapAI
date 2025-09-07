@@ -1,4 +1,4 @@
-import { fetchNextImage } from "./search.js";
+import { fetchNextSlideBatch } from "./slides.js";
 import { state } from "./state.js";
 
 export async function initializeGridSwiper() {
@@ -54,14 +54,16 @@ export async function initializeGridSwiper() {
   const slidesPerBatch = rows * columns + columns * 2; // buffer 2 extra columns
 
   // Now load initial batch of slides using Swiper's API
-  let nextIndex = 0;
   const batchSize = slidesPerBatch;
 
   async function loadBatch() {
     let batchLoaded = 0;
+    console.log("Loading batch of", batchSize, "slides");
+    const slideData = await fetchNextSlideBatch(batchSize)
     const slides = [];
     for (let i = 0; i < batchSize; i++) {
-      const data = await fetchNextImage(nextIndex++);
+      const data = slideData[i]
+      console.log("Fetched slide data:", data);
       if (!data) return false;
       slides.push(`
         <div class="swiper-slide" style="height:${slideHeight}px">
@@ -87,6 +89,9 @@ export async function initializeGridSwiper() {
 
   // Setup continuous navigation
   setupContinuousNavigation();
+
+  // Add window resize handler
+  setupGridResizeHandler(rows, slideHeight, slidesPerBatch);
 }
 
 function setupContinuousNavigation() {
@@ -150,4 +155,141 @@ function setupContinuousNavigation() {
   window.addEventListener("blur", stopContinuousScroll);
 }
 
+function setupGridResizeHandler(initialRows, initialSlideHeight, initialSlidesPerBatch) {
+  let resizeTimeout;
+  
+  function handleResize() {
+    // Debounce the resize event to avoid excessive recalculations
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(async () => {
+      if (!state.gridViewActive) return; // Only handle resize when grid is active
+      
+      // Recalculate dimensions
+      const minSlideHeight = 180;
+      const maxSlideHeight = 600;
+      const availableHeight = window.innerHeight - 120;
+      const newRows = Math.max(2, Math.floor(availableHeight / minSlideHeight));
+      const newSlideHeight = Math.min(
+        maxSlideHeight,
+        Math.max(minSlideHeight, Math.floor(availableHeight / newRows))
+      );
+      
+      const gridContainer = document.querySelector(".swiper");
+      const minSlideWidth = 180;
+      const newColumns = Math.floor(gridContainer.offsetWidth / minSlideWidth) || 2;
+      const newSlidesPerBatch = newRows * newColumns + newColumns * 2;
+      
+      // Check if dimensions actually changed
+      if (newRows !== initialRows || Math.abs(newSlideHeight - initialSlideHeight) > 10) {
+        console.log(`Grid resize: ${initialRows}x${Math.floor(gridContainer.offsetWidth / minSlideWidth)} -> ${newRows}x${newColumns}`);
+        
+        // Store current position
+        const currentSlideIndex = state.swiper.activeIndex;
+        
+        // Update Swiper configuration
+        state.swiper.destroy(true, true);
+        
+        // Clear and reinitialize with new dimensions
+        const swiperWrapper = document.querySelector(".swiper .swiper-wrapper");
+        swiperWrapper.innerHTML = "";
+        
+        // Reinitialize Swiper with new dimensions
+        state.swiper = new Swiper(".swiper", {
+          direction: "horizontal",
+          slidesPerView: newRows,
+          grid: {
+            rows: newRows,
+            fill: "column",
+          },
+          spaceBetween: 12,
+          mousewheel: {
+            enabled: true,
+            sensitivity: 10,
+            releaseOnEdges: true,
+            thresholdDelta: 10,
+            thresholdTime: 100,
+          },
+          keyboard: true,
+          navigation: {
+            nextEl: ".swiper-button-next",
+            prevEl: ".swiper-button-prev",
+          },
+        });
+        
+        // Reload slides with new batch size
+        async function loadBatchForResize() {
+          const slideData = await fetchNextSlideBatch(newSlidesPerBatch);
+          const slides = [];
+          for (let i = 0; i < slideData.length; i++) {
+            const data = slideData[i];
+            if (!data) break;
+            slides.push(`
+              <div class="swiper-slide" style="height:${newSlideHeight}px">
+                <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover;" />
+              </div>
+            `);
+          }
+          if (slides.length > 0) {
+            state.swiper.appendSlide(slides);
+            state.swiper.update();
+          }
+        }
+        
+        await loadBatchForResize();
+        
+        // Restore approximate position (adjust for new grid layout)
+        const newSlideIndex = Math.min(currentSlideIndex, state.swiper.slides.length - 1);
+        if (newSlideIndex > 0) {
+          state.swiper.slideTo(newSlideIndex, 0); // No animation for immediate positioning
+        }
+        
+        // Re-setup event handlers
+        state.swiper.on("reachEnd", async () => {
+          const slideData = await fetchNextSlideBatch(newSlidesPerBatch);
+          const slides = [];
+          for (let i = 0; i < slideData.length; i++) {
+            const data = slideData[i];
+            if (!data) break;
+            slides.push(`
+              <div class="swiper-slide" style="height:${newSlideHeight}px">
+                <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover;" />
+              </div>
+            `);
+          }
+          if (slides.length > 0) {
+            state.swiper.appendSlide(slides);
+            state.swiper.update();
+          }
+        });
+        
+        setupContinuousNavigation();
+        
+        // Update stored values for next resize
+        initialRows = newRows;
+        initialSlideHeight = newSlideHeight;
+        initialSlidesPerBatch = newSlidesPerBatch;
+      }
+    }, 300); // 300ms debounce delay
+  }
+  
+  window.addEventListener('resize', handleResize);
+  
+  // Store the handler so we can remove it later if needed
+  if (!window.gridResizeHandlers) {
+    window.gridResizeHandlers = [];
+  }
+  window.gridResizeHandlers.push(handleResize);
+}
+
+// Optional: Clean up resize handlers when switching away from grid view
+function cleanupGridResizeHandlers() {
+  if (window.gridResizeHandlers) {
+    window.gridResizeHandlers.forEach(handler => {
+      window.removeEventListener('resize', handler);
+    });
+    window.gridResizeHandlers = [];
+  }
+}
+
 window.initializeGridSwiper = initializeGridSwiper;
+window.cleanupGridResizeHandlers = cleanupGridResizeHandlers;

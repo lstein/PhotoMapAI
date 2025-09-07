@@ -3,7 +3,7 @@
 import { albumManager } from "./album.js";
 import { getIndexMetadata } from "./index.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
-import { fetchNextImage } from "./search.js";
+import { fetchImageByIndex } from "./search.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
 
@@ -230,7 +230,7 @@ export async function addSlideByIndex(
   }
 
   try {
-    const data = await fetchNextImage(globalIndex);
+    const data = await fetchImageByIndex(globalIndex);
 
     if (!data || Object.keys(data).length === 0) {
       return;

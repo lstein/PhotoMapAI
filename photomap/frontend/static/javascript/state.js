@@ -1,6 +1,7 @@
 // state.js
 // This file manages the state of the application, including slide management and metadata handling.
 import { albumManager } from "./album.js";
+import { getIndexMetadata } from "./index.js";
 import { switchAlbum } from "./settings.js";
 
 
@@ -12,10 +13,13 @@ export const state = {
   showControlPanelText: true, // Whether to show text in control panels
   mode: "chronological", // next slide selection when no search is active ("random", "chronological")
   highWaterMark: 20, // Maximum number of slides to load at once
-  searchResults: [], // List of file paths matching the current search query
   album: null, // Default album to use
+  searchResults: [], // List of file paths matching the current search query
+  totalImages: 0, // Total number of images in the current album
+  currentSearchIndex: 0, // Current index in the search results
+  currentGlobalIndex: 0, // Current index in the full album
   availableAlbums: [], // List of available albums
-  dataChanged: true, // Flag to indicate if umap data has changed
+  dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -89,8 +93,15 @@ export function saveSettingsToLocalStorage() {
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
+  console.log("Setting album to", newAlbumKey, "force =", force);
   if (force || state.album !== newAlbumKey) {
     state.album = newAlbumKey;
+    state.currentGlobalIndex = 0;
+    state.currentSearchIndex = 0;
+    state.searchResults = [];
+    const metadata = await getIndexMetadata(state.album);
+    console.log("Album metadata:", metadata);
+    state.totalImages = metadata.filename_count || 0;
     state.dataChanged = true;
     saveSettingsToLocalStorage();
     window.dispatchEvent(
