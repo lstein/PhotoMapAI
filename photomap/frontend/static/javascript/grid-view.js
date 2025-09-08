@@ -2,6 +2,54 @@ import { fetchImageByIndex } from "./search.js"; // Use individual image fetchin
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 
+let gridSwiperModeChangedHandler = null;
+let gridSearchResultsChangedHandler = null;
+
+// Only add event listeners ONCE
+function addGridEventListeners(
+  loadBatch,
+  centeredBatchStartIndex,
+  loadedImageIndices,
+  state,
+  slidesPerBatch
+) {
+  // Remove previous listeners if they exist
+  if (gridSwiperModeChangedHandler) {
+    window.removeEventListener("swiperModeChanged", gridSwiperModeChangedHandler);
+  }
+  if (gridSearchResultsChangedHandler) {
+    window.removeEventListener("searchResultsChanged", gridSearchResultsChangedHandler);
+  }
+
+  // Define and add new listeners
+  gridSwiperModeChangedHandler = async (event) => {
+    const isGridMode = event.detail?.isGridMode;
+    if (!isGridMode) return;
+
+    // Reset batch position to center around current slide
+    const currentSlide = slideState.getCurrentSlide();
+    console.log(
+      "Resetting grid batch start index around current slide:",
+      currentSlide
+    );
+    let currentBatchStartIndex = centeredBatchStartIndex();
+    loadedImageIndices.clear();
+
+    state.swiper.removeAllSlides(); // Clear existing slides
+    await loadBatch(currentBatchStartIndex); // Load initial batch of slides
+  };
+
+  gridSearchResultsChangedHandler = function () {
+    // Reset to center around current slide
+    let currentBatchStartIndex = centeredBatchStartIndex();
+    loadedImageIndices.clear();
+    loadBatch(currentBatchStartIndex);
+  };
+
+  window.addEventListener("swiperModeChanged", gridSwiperModeChangedHandler);
+  window.addEventListener("searchResultsChanged", gridSearchResultsChangedHandler);
+}
+
 export async function initializeGridSwiper() {
   // Destroy previous Swiper instance if it exists
   if (state.swiper) {
@@ -58,13 +106,12 @@ export async function initializeGridSwiper() {
 
   // Track our current position in the grid - ALWAYS START FROM CURRENT SLIDE POSITION
   const currentSlide = slideState.getCurrentSlide();
-  let currentBatchStartIndex;
-  currentBatchStartIndex = centeredBatchStartIndex();
+  let currentBatchStartIndex = centeredBatchStartIndex();
   let loadedImageIndices = new Set(); // Track which images we've already loaded
   let batchLoading = false; // Prevent concurrent batch loads
 
   // Updated loadBatch function using slideState.resolveOffset()
-  async function loadBatch() {
+  async function loadBatch(startIndex = currentBatchStartIndex) {
     console.log("batchLoading:", batchLoading);
     if (batchLoading) return; // Prevent concurrent loads
     batchLoading = true;
@@ -86,7 +133,7 @@ export async function initializeGridSwiper() {
 
     for (let i = 0; i < slidesPerBatch; i++) {
       // Calculate offset from current slide position
-      const offset = currentBatchStartIndex + i - currentPosition;
+      const offset = startIndex + i - currentPosition;
 
       // Use slideState.resolveOffset to get the correct indices for this position
       const { globalIndex, searchIndex } = slideState.resolveOffset(offset);
@@ -147,30 +194,8 @@ export async function initializeGridSwiper() {
     return index;
   }
 
-  window.addEventListener("swiperModeChanged", async (event) => {
-    const isGridMode = event.detail?.isGridMode;
-    if (!isGridMode) return;
-
-    // Reset batch position to center around current slide
-    const currentSlide = slideState.getCurrentSlide();
-    console.log(
-      "Resetting grid batch start index around current slide:",
-      currentSlide
-    );
-    currentBatchStartIndex = centeredBatchStartIndex();
-    loadedImageIndices.clear();
-
-    state.swiper.removeAllSlides(); // Clear existing slides
-    await loadBatch(); // Load initial batch of slides
-  });
-
-  window.addEventListener("searchResultsChanged", function () {
-    // Reset to center around current slide
-    const currentSlide = slideState.getCurrentSlide();
-    currentBatchStartIndex = centeredBatchStartIndex();
-    loadedImageIndices.clear();
-    loadBatch();
-  });
+  // Add event listeners only once, and always use the latest loadBatch/centeredBatchStartIndex
+  addGridEventListeners(loadBatch, centeredBatchStartIndex, loadedImageIndices, state, slidesPerBatch);
 
   // Load more when reaching the end
   state.swiper.on("reachEnd", async () => {
