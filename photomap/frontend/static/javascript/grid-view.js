@@ -59,31 +59,30 @@ export async function initializeGridSwiper() {
   // Track our current position in the grid - ALWAYS START FROM CURRENT SLIDE POSITION
   const currentSlide = slideState.getCurrentSlide();
   let currentBatchStartIndex;
-
-  if (slideState.isSearchMode) {
-    // In search mode, start from a batch that includes the current search index
-    currentBatchStartIndex = Math.max(
-      0,
-      currentSlide.searchIndex - Math.floor(slidesPerBatch / 2)
-    );
-  } else {
-    // In album mode, start from a batch that includes the current global index
-    currentBatchStartIndex = Math.max(
-      0,
-      currentSlide.globalIndex - Math.floor(slidesPerBatch / 2)
-    );
-  }
-
+  currentBatchStartIndex = centeredBatchStartIndex();
   let loadedImageIndices = new Set(); // Track which images we've already loaded
+  let batchLoading = false; // Prevent concurrent batch loads
 
   // Updated loadBatch function using slideState.resolveOffset()
   async function loadBatch() {
+    console.log("batchLoading:", batchLoading);
+    if (batchLoading) return; // Prevent concurrent loads
+    batchLoading = true;
+
     const slides = [];
     let actuallyLoaded = 0;
 
     // Get current slide info once, outside the loop
     const currentSlide = slideState.getCurrentSlide();
-    const currentPosition = slideState.isSearchMode ? currentSlide.searchIndex : currentSlide.globalIndex;
+    const currentPosition = slideState.isSearchMode
+      ? currentSlide.searchIndex
+      : currentSlide.globalIndex;
+    console.trace(
+      "Loading batch from index:",
+      currentBatchStartIndex,
+      "currentPosition:",
+      currentPosition
+    );
 
     for (let i = 0; i < slidesPerBatch; i++) {
       // Calculate offset from current slide position
@@ -91,7 +90,7 @@ export async function initializeGridSwiper() {
 
       // Use slideState.resolveOffset to get the correct indices for this position
       const { globalIndex, searchIndex } = slideState.resolveOffset(offset);
-
+      console.log("Resolved offset", offset, "to", { globalIndex, searchIndex });
       // If we're out of bounds, stop loading
       if (globalIndex === null) break;
 
@@ -127,8 +126,25 @@ export async function initializeGridSwiper() {
       // Update highlight after adding new slides
       setTimeout(updateCurrentSlideHighlight, 100);
     }
-
+    batchLoading = false;
+    console.log("Finished loading batch, actuallyLoaded:", actuallyLoaded);
     return actuallyLoaded > 0;
+  }
+
+  function centeredBatchStartIndex() {
+    let index;
+    if (slideState.isSearchMode) {
+      index = Math.max(
+        0,
+        currentSlide.searchIndex - Math.floor(slidesPerBatch / 3) + 1
+      );
+    } else {
+      index = Math.max(
+        0,
+        currentSlide.globalIndex - Math.floor(slidesPerBatch / 3) + 1
+      );
+    }
+    return index;
   }
 
   window.addEventListener("swiperModeChanged", async (event) => {
@@ -137,17 +153,11 @@ export async function initializeGridSwiper() {
 
     // Reset batch position to center around current slide
     const currentSlide = slideState.getCurrentSlide();
-    if (slideState.isSearchMode) {
-      currentBatchStartIndex = Math.max(
-        0,
-        currentSlide.searchIndex - Math.floor(slidesPerBatch / 2)
-      );
-    } else {
-      currentBatchStartIndex = Math.max(
-        0,
-        currentSlide.globalIndex - Math.floor(slidesPerBatch / 2)
-      );
-    }
+    console.log(
+      "Resetting grid batch start index around current slide:",
+      currentSlide
+    );
+    currentBatchStartIndex = centeredBatchStartIndex();
     loadedImageIndices.clear();
 
     state.swiper.removeAllSlides(); // Clear existing slides
@@ -157,17 +167,7 @@ export async function initializeGridSwiper() {
   window.addEventListener("searchResultsChanged", function () {
     // Reset to center around current slide
     const currentSlide = slideState.getCurrentSlide();
-    if (slideState.isSearchMode) {
-      currentBatchStartIndex = Math.max(
-        0,
-        currentSlide.searchIndex - Math.floor(slidesPerBatch / 2)
-      );
-    } else {
-      currentBatchStartIndex = Math.max(
-        0,
-        currentSlide.globalIndex - Math.floor(slidesPerBatch / 2)
-      );
-    }
+    currentBatchStartIndex = centeredBatchStartIndex();
     loadedImageIndices.clear();
     loadBatch();
   });
