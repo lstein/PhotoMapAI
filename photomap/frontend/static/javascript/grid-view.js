@@ -46,6 +46,10 @@ export async function initializeGridSwiper() {
     },
   });
 
+  // Add grid-mode class to the swiper container
+  const swiperContainer = document.querySelector(".swiper");
+  swiperContainer.classList.add("grid-mode");
+
   // Calculate grid dimensions
   const gridContainer = document.querySelector(".swiper");
   const minSlideWidth = 180;
@@ -56,40 +60,38 @@ export async function initializeGridSwiper() {
   let currentBatchStartIndex = 0;
   let loadedImageIndices = new Set(); // Track which images we've already loaded
 
+  // Updated loadBatch function with data-global-index
   async function loadBatch() {
     const slides = [];
     let actuallyLoaded = 0;
-    
-    // Try to load a full batch, using slideState to resolve indices
+
     for (let i = 0; i < slidesPerBatch; i++) {
       let globalIndex, searchIndex;
-      
+
       if (slideState.isSearchMode) {
-        // In search mode, use search results
         searchIndex = currentBatchStartIndex + i;
         if (searchIndex >= slideState.searchResults.length) break;
         globalIndex = slideState.searchResults[searchIndex]?.index;
       } else {
-        // In album mode, use global index
         globalIndex = currentBatchStartIndex + i;
         if (globalIndex >= slideState.totalAlbumImages) break;
         searchIndex = null;
       }
-      
-      // Skip if we've already loaded this image
+
       if (loadedImageIndices.has(globalIndex)) {
         continue;
       }
-      
+
       try {
         const data = await fetchImageByIndex(globalIndex);
         if (!data) break;
-        
-        // Mark this image as loaded
+
         loadedImageIndices.add(globalIndex);
-        
+
         slides.push(`
-          <div class="swiper-slide" style="height:${slideHeight}px" onclick="handleGridSlideClick(${globalIndex})">
+          <div class="swiper-slide" style="height:${slideHeight}px" 
+               data-global-index="${globalIndex}"
+               onclick="handleGridSlideClick(${globalIndex})">
             <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover;" />
           </div>
         `);
@@ -99,18 +101,33 @@ export async function initializeGridSwiper() {
         break;
       }
     }
-    
+
     if (slides.length > 0) {
       state.swiper.appendSlide(slides);
       state.swiper.update();
-      currentBatchStartIndex += actuallyLoaded; // Move to next batch
+      currentBatchStartIndex += actuallyLoaded;
+
+      // Update highlight after adding new slides
+      setTimeout(updateCurrentSlideHighlight, 100);
     }
-    
+
     return actuallyLoaded > 0;
   }
 
-  // Load initial batch
-  await loadBatch();
+  window.addEventListener("swiperModeChanged", async (event) => {
+    const isGridMode = event.detail?.isGridMode;
+    if (!isGridMode) return; // Ignore grid mode changes here
+    state.swiper.removeAllSlides(); // Clear existing slides
+    await loadBatch(); // Load initial batch of slides
+  });
+
+  window.addEventListener("searchResultsChanged", function () {
+    // Reset tracking variables
+    currentBatchStartIndex = 0;
+    loadedImageIndices.clear();
+    // Load initial batch for new album
+    loadBatch();
+  });
 
   // Load more when reaching the end
   state.swiper.on("reachEnd", async () => {
@@ -122,6 +139,8 @@ export async function initializeGridSwiper() {
 
   // Add window resize handler
   setupGridResizeHandler(rows, slideHeight, slidesPerBatch);
+  window.addEventListener("slideChanged", updateCurrentSlideHighlight);
+  updateCurrentSlideHighlight();
 }
 
 function setupContinuousNavigation() {
@@ -184,15 +203,19 @@ function setupContinuousNavigation() {
   window.addEventListener("blur", stopContinuousScroll);
 }
 
-function setupGridResizeHandler(initialRows, initialSlideHeight, initialSlidesPerBatch) {
+function setupGridResizeHandler(
+  initialRows,
+  initialSlideHeight,
+  initialSlidesPerBatch
+) {
   let resizeTimeout;
-  
+
   function handleResize() {
     // Debounce the resize event to avoid excessive recalculations
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(async () => {
       if (!state.gridViewActive) return; // Only handle resize when grid is active
-      
+
       // Recalculate dimensions
       const minSlideHeight = 180;
       const maxSlideHeight = 600;
@@ -202,19 +225,27 @@ function setupGridResizeHandler(initialRows, initialSlideHeight, initialSlidesPe
         maxSlideHeight,
         Math.max(minSlideHeight, Math.floor(availableHeight / newRows))
       );
-      
+
       const gridContainer = document.querySelector(".swiper");
       const minSlideWidth = 180;
-      const newColumns = Math.floor(gridContainer.offsetWidth / minSlideWidth) || 2;
+      const newColumns =
+        Math.floor(gridContainer.offsetWidth / minSlideWidth) || 2;
       const newSlidesPerBatch = newRows * newColumns + newColumns * 2;
-      
+
       // Check if dimensions actually changed
-      if (newRows !== initialRows || Math.abs(newSlideHeight - initialSlideHeight) > 10) {
-        console.log(`Grid resize: ${initialRows}x${Math.floor(gridContainer.offsetWidth / minSlideWidth)} -> ${newRows}x${newColumns}`);
-        
+      if (
+        newRows !== initialRows ||
+        Math.abs(newSlideHeight - initialSlideHeight) > 10
+      ) {
+        console.log(
+          `Grid resize: ${initialRows}x${Math.floor(
+            gridContainer.offsetWidth / minSlideWidth
+          )} -> ${newRows}x${newColumns}`
+        );
+
         // Reinitialize the grid completely
         await initializeGridSwiper();
-        
+
         // Update stored values for next resize
         initialRows = newRows;
         initialSlideHeight = newSlideHeight;
@@ -222,9 +253,9 @@ function setupGridResizeHandler(initialRows, initialSlideHeight, initialSlidesPe
       }
     }, 300); // 300ms debounce delay
   }
-  
-  window.addEventListener('resize', handleResize);
-  
+
+  window.addEventListener("resize", handleResize);
+
   // Store the handler so we can remove it later if needed
   if (!window.gridResizeHandlers) {
     window.gridResizeHandlers = [];
@@ -235,11 +266,14 @@ function setupGridResizeHandler(initialRows, initialSlideHeight, initialSlidesPe
 // Clean up resize handlers when switching away from grid view
 function cleanupGridResizeHandlers() {
   if (window.gridResizeHandlers) {
-    window.gridResizeHandlers.forEach(handler => {
-      window.removeEventListener('resize', handler);
+    window.gridResizeHandlers.forEach((handler) => {
+      window.removeEventListener("resize", handler);
     });
     window.gridResizeHandlers = [];
   }
+
+  // Clean up slideChanged listener
+  window.removeEventListener("slideChanged", updateCurrentSlideHighlight);
 }
 
 // Reset grid when search results or album changes
@@ -259,6 +293,26 @@ window.initializeGridSwiper = initializeGridSwiper;
 window.cleanupGridResizeHandlers = cleanupGridResizeHandlers;
 
 // Handle clicks on grid slides
-window.handleGridSlideClick = function(globalIndex) {
+window.handleGridSlideClick = function (globalIndex) {
   slideState.navigateToIndex(globalIndex, false);
+  // The slideChanged event will trigger updateCurrentSlideHighlight()
 };
+
+function updateCurrentSlideHighlight() {
+  if (!state.gridViewActive) return;
+
+  const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
+
+  // Remove existing highlights
+  document.querySelectorAll(".swiper-slide.current-slide").forEach((slide) => {
+    slide.classList.remove("current-slide");
+  });
+
+  // Add highlight to current slide
+  const currentSlide = document.querySelector(
+    `.swiper-slide[data-global-index="${currentGlobalIndex}"]`
+  );
+  if (currentSlide) {
+    currentSlide.classList.add("current-slide");
+  }
+}

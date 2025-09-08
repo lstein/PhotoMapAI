@@ -102,11 +102,9 @@ export async function initializeSingleSwiper() {
         if (state.gridViewActive) return;
         if (isPrepending) return;
 
-        const globalIndex = getCurrentSlideIndex();
+        const [globalIndex,] = getCurrentSlideIndex();
         if (this.activeIndex === 0 && globalIndex > 0) {
-          // Use slideState to resolve previous indices
-          const { globalIndex: nextGlobal, searchIndex: nextSearch } =
-            slideState.resolveOffset(-1);
+          const { globalIndex: prevGlobal, searchIndex: prevSearch } = slideState.resolveOffset(-1);
           if (prevGlobal !== null) {
             const prevExists = Array.from(this.slides).some(
               (el) => parseInt(el.dataset.index, 10) === prevGlobal
@@ -114,7 +112,7 @@ export async function initializeSingleSwiper() {
             if (!prevExists) {
               isPrepending = true;
               this.allowSlidePrev = false;
-              addSlideByIndex(prevGlobal, prevSearch)
+              addSlideByIndex(prevGlobal, prevSearch, true)
                 .then(() => {
                   this.slideTo(1, 0);
                   isPrepending = false;
@@ -197,6 +195,10 @@ export async function initializeSingleSwiper() {
   // Initial icon state and overlay
   updateSlideshowIcon();
   updateMetadataOverlay();
+
+  // Remove grid-mode class from swiper container
+  const swiperContainer = document.querySelector(".swiper");
+  swiperContainer.classList.remove("grid-mode");
 }
 
 export function pauseSlideshow() {
@@ -231,6 +233,7 @@ export function updateSlideshowIcon() {
 // Add a new slide to Swiper with image and metadata
 export async function addNewSlide(offset = 0) {
   if (!state.album) return; // No album set, cannot add slide
+  console.log("swiper.addNewSlide with offset:", offset);
 
   let [globalIndex, totalImages, searchIndex] = getCurrentSlideIndex();
   // Search mode -- we identify the next image based on the search results array,
@@ -363,27 +366,35 @@ export function removeSlidesAfterCurrent() {
 }
 
 // Reset all the slides and reload the swiper, optionally keeping the current slide.
-export async function resetAllSlides(keep_current_slide = false) {
-  if (!state.swiper) return; // happens on first load.
+// TO DO - the keep_current_slide logic is no longer needed.
+export async function resetAllSlides() {
+  if (!state.swiper) return;
   const slideShowRunning = state.swiper?.autoplay?.running;
-  pauseSlideshow(); // Pause the slideshow if it's running
-  if (keep_current_slide && !state.dataChanged) {
-    // Keep the current slide and remove others
-    const { globalIndex } = slideState.getCurrentSlide();
-    const slideEls = state.swiper.slides;
-    let activeIndex = Array.from(slideEls).findIndex(
-      (el) => parseInt(el.dataset.index, 10) === globalIndex
-    );
-    if (activeIndex === -1) activeIndex = 0;
-    const currentSlide = slideEls[activeIndex];
-    state.swiper.removeAllSlides();
-    state.swiper.appendSlide(currentSlide);
-  } else {
-    // Remove all slides
-    state.swiper.removeAllSlides();
-    await addNewSlide(0); // Add first slide
+  pauseSlideshow();
+
+  state.swiper.removeAllSlides();
+
+  const { globalIndex, searchIndex } = slideState.getCurrentSlide();
+
+  // Add previous slide if available
+  const { globalIndex: prevGlobal, searchIndex: prevSearch } = slideState.resolveOffset(-1);
+  if (prevGlobal !== null) {
+    await addSlideByIndex(prevGlobal, prevSearch);
   }
-  await addNewSlide(1); // Add second slide to enable navigation controls
+
+  // Add current slide
+  await addSlideByIndex(globalIndex, searchIndex);
+
+  // Add next slide if available
+  const { globalIndex: nextGlobal, searchIndex: nextSearch } = slideState.resolveOffset(1);
+  if (nextGlobal !== null) {
+    await addSlideByIndex(nextGlobal, nextSearch);
+  }
+
+  // Navigate to the current slide (will be at index 0 or 1 depending on whether prev exists)
+  const slideIndex = prevGlobal !== null ? 1 : 0;
+  state.swiper.slideTo(slideIndex, 0);
+
   updateMetadataOverlay();
   if (slideShowRunning) {
     resumeSlideshow();
@@ -419,14 +430,24 @@ window.addEventListener("albumChanged", () => {
   resetAllSlides();
 });
 
+
+
 // Reset slide show when the search results change.
-// When clearing search results, we want to keep the current
-// slide to avoid displaying something unexpected.
 window.addEventListener("searchResultsChanged", (event) => {
   const searchType = event.detail?.searchType;
   if (searchType === "switchAlbum") return;
-  const keep_current_slide = searchType === "clear";
-  resetAllSlides(keep_current_slide);
+  // This code doesn't seem to be necessary now.
+  // const keep_current_slide = searchType === "clear";
+  // console.log("searchResultsChanged, type:", searchType, "keep current slide:", keep_current_slide);
+  //resetAllSlides(keep_current_slide);
+  resetAllSlides();
+});
+
+// Handle slideshow mode changes
+window.addEventListener("swiperModeChanged", async (event) => {
+  const isGridMode = event.detail?.isGridMode;
+  if (isGridMode) return; // Ignore grid mode changes here
+  resetAllSlides();
 });
 
 // BAD CODE ALERT

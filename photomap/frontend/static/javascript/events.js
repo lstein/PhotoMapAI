@@ -9,7 +9,7 @@ import {
   toggleMetadataOverlay,
   updateMetadataOverlay,
 } from "./metadata-drawer.js";
-import { getCurrentFilepath, getCurrentSlideIndex } from "./slide-state.js";
+import { getCurrentFilepath, getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import {
   addNewSlide,
@@ -411,6 +411,11 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         await initializeSingleSwiper();
       }
+      console.log("slideState after grid toggle:", slideState);
+      const event = new CustomEvent("swiperModeChanged", {
+            detail: { isGridMode: state.gridViewActive },
+          });
+      window.dispatchEvent(event);
       setCheckmarkOnIcon(gridViewIcon, state.gridViewActive);
     });
   }

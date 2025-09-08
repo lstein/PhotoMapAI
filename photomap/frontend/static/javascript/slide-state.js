@@ -138,8 +138,7 @@ class SlideStateManager {
    * @param {number} searchIndex - The search results index (optional)
    */
   updateFromExternal(globalIndex, searchIndex = null) {
-    console.log("Updating from navigation:", { globalIndex, searchIndex });
-    console.log("Is search mode:", this.isSearchMode);
+    console.log("Updating from navigation:", { globalIndex, searchIndex }, "search mode=", this.isSearchMode);
     if (this.isSearchMode && searchIndex !== null) {
       this.currentGlobalIndex = this.searchResults[searchIndex].index;
       this.currentSearchIndex = searchIndex;

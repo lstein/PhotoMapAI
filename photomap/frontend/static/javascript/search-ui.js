@@ -332,7 +332,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       panel.insertBefore(noResultsMsg, panel.firstChild);
     }
 
-    if (e.detail.results.length === 0 && e.detail.searchType !== "clear") {
+    if (e.detail.results?.length === 0 && e.detail.searchType !== "clear") {
       noResultsMsg.textContent = "No images match your search.";
       noResultsMsg.style.display = "block";
       return;
