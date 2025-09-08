@@ -1,5 +1,6 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
+import { eventRegistry } from "./event-registry.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
@@ -20,12 +21,18 @@ let isPrepending = false; // Place this at module scope
 let isAppending = false;
 
 export async function initializeSingleSwiper() {
-  console.log("Swiper constructor:", typeof Swiper, Swiper);
-  // Destroy previous Swiper instance if it exists
+
+  // The swiper shares part of the DOM with the grid view,
+  // so we need to clean up any existing state.
+  // Destroy previous Swiper instance if it exist s
   if (state.swiper) {
     state.swiper.destroy(true, true);
     state.swiper = null;
   }
+
+  // Remove all grid and swiper handlers
+  eventRegistry.removeAll("grid");
+  eventRegistry.removeAll("swiper");
 
   // Clear the swiper wrapper completely
   const swiperWrapper = document.querySelector(".swiper .swiper-wrapper");
@@ -69,68 +76,6 @@ export async function initializeSingleSwiper() {
       enabled: true,
       releaseonEdges: true,
     },
-    on: {
-      slideNextTransitionStart: function () {
-        if (state.gridViewActive) return;
-        if (isAppending) return;
-
-        if (this.activeIndex === this.slides.length - 1) {
-          isAppending = true;
-          this.allowSlideNext = false;
-
-          // Use slideState to resolve next indices based on whether we are in album or search mode
-          const { globalIndex: nextGlobal, searchIndex: nextSearch } =
-            slideState.resolveOffset(+1);
-
-          if (nextGlobal !== null) {
-            addSlideByIndex(nextGlobal, nextSearch)
-              .then(() => {
-                isAppending = false;
-                this.allowSlideNext = true;
-              })
-              .catch(() => {
-                isAppending = false;
-                this.allowSlideNext = true;
-              });
-          } else {
-            isAppending = false;
-            this.allowSlideNext = true;
-          }
-        }
-      },
-      slidePrevTransitionEnd: function () {
-        if (state.gridViewActive) return;
-        if (isPrepending) return;
-
-        const [globalIndex,] = getCurrentSlideIndex();
-        if (this.activeIndex === 0 && globalIndex > 0) {
-          const { globalIndex: prevGlobal, searchIndex: prevSearch } = slideState.resolveOffset(-1);
-          if (prevGlobal !== null) {
-            const prevExists = Array.from(this.slides).some(
-              (el) => parseInt(el.dataset.index, 10) === prevGlobal
-            );
-            if (!prevExists) {
-              isPrepending = true;
-              this.allowSlidePrev = false;
-              addSlideByIndex(prevGlobal, prevSearch, true)
-                .then(() => {
-                  this.slideTo(1, 0);
-                  isPrepending = false;
-                  this.allowSlidePrev = true;
-                })
-                .catch(() => {
-                  isPrepending = false;
-                  this.allowSlidePrev = true;
-                });
-            }
-          }
-        }
-      },
-      sliderFirstMove: function () {
-        if (state.gridViewActive) return; // Guard against grid view
-        pauseSlideshow();
-      },
-    },
   };
 
   if (hasTouchCapability) {
@@ -149,49 +94,13 @@ export async function initializeSingleSwiper() {
   // Wait for Swiper to be fully initialized
   await new Promise((resolve) => setTimeout(resolve, 100));
 
-  // Attach event listeners
-  document
-    .querySelectorAll(".swiper-button-next, .swiper-button-prev")
-    .forEach((btn) => {
-      btn.addEventListener("click", function (event) {
-        if (state.gridViewActive) return; // Guard against grid view
-        pauseSlideshow();
-        event.stopPropagation();
-        this.blur();
-      });
-      btn.addEventListener("mousedown", function () {
-        this.blur();
-      });
-    });
-
-  // Update icon on slide change or autoplay events (with guards)
-  if (state.swiper) {
-    state.swiper.on("autoplayStart", () => {
-      if (!state.gridViewActive) updateSlideshowIcon();
-    });
-    state.swiper.on("autoplayResume", () => {
-      if (!state.gridViewActive) updateSlideshowIcon();
-    });
-    state.swiper.on("autoplayStop", () => {
-      if (!state.gridViewActive) updateSlideshowIcon();
-    });
-    state.swiper.on("autoplayPause", () => {
-      if (!state.gridViewActive) updateSlideshowIcon();
-    });
-    state.swiper.on("scrollbarDragStart", () => {
-      if (!state.gridViewActive) pauseSlideshow();
-    });
-    state.swiper.on("slideChange", function () {
-      if (state.gridViewActive) return;
-      const activeSlide = this.slides[this.activeIndex];
-      if (activeSlide) {
-        const globalIndex = parseInt(activeSlide.dataset.index, 10) || 0;
-        const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10) || 0;
-        slideState.updateFromExternal(globalIndex, searchIndex);
-      }
-      updateMetadataOverlay();
-    });
+  function swiperButtonMouseDownHandler() {
+    this.blur();
   }
+
+  initializeSwiperHandlers();
+  initializeEventHandlers();
+
   // Initial icon state and overlay
   updateSlideshowIcon();
   updateMetadataOverlay();
@@ -199,6 +108,154 @@ export async function initializeSingleSwiper() {
   // Remove grid-mode class from swiper container
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.remove("grid-mode");
+  console.log("Initialized single-image Swiper mode.")
+
+  resetAllSlides();
+}
+
+function initializeSwiperHandlers() {
+  // Update icon on slide change or autoplay events (with guards)
+  if (!state.swiper)  return;
+  
+    state.swiper.on("autoplayStart", () => {
+      if (!state.gridViewActive) updateSlideshowIcon();
+    });
+
+    state.swiper.on("autoplayResume", () => {
+      if (!state.gridViewActive) updateSlideshowIcon();
+    });
+
+    state.swiper.on("autoplayStop", () => {
+      if (!state.gridViewActive) updateSlideshowIcon();
+    });
+
+    state.swiper.on("autoplayPause", () => {
+      if (!state.gridViewActive) updateSlideshowIcon();
+    });
+
+    state.swiper.on("scrollbarDragStart", () => {
+      if (!state.gridViewActive) pauseSlideshow();
+    });
+
+    state.swiper.on("slideChange", function () {
+      const activeSlide = this.slides[this.activeIndex];
+      if (activeSlide) {
+        const globalIndex = parseInt(activeSlide.dataset.index, 10) || 0;
+        const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10) || 0;
+        slideState.updateFromExternal(globalIndex, searchIndex);
+        updateMetadataOverlay();
+      }
+    });
+
+    state.swiper.on("slideNextTransitionStart", function () {
+      if (isAppending) return;
+
+      if (this.activeIndex === this.slides.length - 1) {
+        isAppending = true;
+        this.allowSlideNext = false;
+
+        // Use slideState to resolve next indices based on whether we are in album or search mode
+        const { globalIndex: nextGlobal, searchIndex: nextSearch } =
+          slideState.resolveOffset(+1);
+
+        if (nextGlobal !== null) {
+          addSlideByIndex(nextGlobal, nextSearch)
+            .then(() => {
+              isAppending = false;
+              this.allowSlideNext = true;
+            })
+            .catch(() => {
+              isAppending = false;
+              this.allowSlideNext = true;
+            });
+        } else {
+          isAppending = false;
+          this.allowSlideNext = true;
+        }
+      }
+    });
+
+    state.swiper.on("slidePrevTransitionEnd", function () {
+      if (isPrepending) return;
+
+      const [globalIndex] = getCurrentSlideIndex();
+      if (this.activeIndex === 0 && globalIndex > 0) {
+        const { globalIndex: prevGlobal, searchIndex: prevSearch } =
+          slideState.resolveOffset(-1);
+        if (prevGlobal !== null) {
+          const prevExists = Array.from(this.slides).some(
+            (el) => parseInt(el.dataset.index, 10) === prevGlobal
+          );
+          if (!prevExists) {
+            isPrepending = true;
+            this.allowSlidePrev = false;
+            addSlideByIndex(prevGlobal, prevSearch, true)
+              .then(() => {
+                this.slideTo(1, 0);
+                isPrepending = false;
+                this.allowSlidePrev = true;
+              })
+              .catch(() => {
+                isPrepending = false;
+                this.allowSlidePrev = true;
+              });
+          }
+        }
+      }
+    });
+
+    state.swiper.on("sliderFirstMove", function () {
+      pauseSlideshow();
+    });
+  }
+
+function initializeEventHandlers() {
+
+  // Stop slideshow on next and prev button clicks -- necessary?
+  document
+    .querySelectorAll(".swiper-button-next, .swiper-button-prev")
+    .forEach((btn) => {
+      eventRegistry.install(
+        { type: "swiper", event: "click", object: btn },
+        function (event) {
+          pauseSlideshow();
+          event.stopPropagation();
+          this.blur();
+        }
+      );
+      eventRegistry.install(
+        { type: "swiper", event: "mousedown", object: btn },
+        function (event) {
+          this.blur();
+        }
+      );
+    });
+
+  // Reset slide show when the album changes
+  eventRegistry.install({ type: "swiper", event: "albumChanged" }, () => {
+    resetAllSlides();
+  });
+
+  // Reset slide show when the search results change.
+  eventRegistry.install(
+    { type: "swiper", event: "searchResultsChanged" },
+    (event) => {
+      // const searchType = event.detail?.searchType;
+      // if (searchType === "switchAlbum") return;
+      resetAllSlides();
+    }
+  );
+
+  // Handle slideshow mode changes
+  eventRegistry.install(
+    { type: "swiper", event: "swiperModeChanged" },
+    async (event) => {
+      resetAllSlides();
+    }
+  );
+
+  // Navigate to a slide
+  eventRegistry.install({ type: "swiper", event: "setSlideIndex" }, setSlideIndex);
 }
 
 export function pauseSlideshow() {
@@ -311,7 +368,7 @@ export async function addSlideByIndex(
     slide.dataset.color = currentColor || "#000000"; // Default color if not provided
     slide.dataset.index = data.index || 0;
     slide.dataset.total = data.total || 0;
-    slide.dataset.searchIndex = searchIndex !== null ? searchIndex : '';
+    slide.dataset.searchIndex = searchIndex !== null ? searchIndex : "";
     slide.dataset.metadata_url = metadata_url || "";
     slide.dataset.reference_images = JSON.stringify(
       data.reference_images || []
@@ -377,7 +434,8 @@ export async function resetAllSlides() {
   const { globalIndex, searchIndex } = slideState.getCurrentSlide();
 
   // Add previous slide if available
-  const { globalIndex: prevGlobal, searchIndex: prevSearch } = slideState.resolveOffset(-1);
+  const { globalIndex: prevGlobal, searchIndex: prevSearch } =
+    slideState.resolveOffset(-1);
   if (prevGlobal !== null) {
     await addSlideByIndex(prevGlobal, prevSearch);
   }
@@ -386,7 +444,8 @@ export async function resetAllSlides() {
   await addSlideByIndex(globalIndex, searchIndex);
 
   // Add next slide if available
-  const { globalIndex: nextGlobal, searchIndex: nextSearch } = slideState.resolveOffset(1);
+  const { globalIndex: nextGlobal, searchIndex: nextSearch } =
+    slideState.resolveOffset(1);
   if (nextGlobal !== null) {
     await addSlideByIndex(nextGlobal, nextSearch);
   }
@@ -425,34 +484,8 @@ export function enforceHighWaterMark(backward = false) {
   }
 }
 
-// Reset slide show when the album changes
-window.addEventListener("albumChanged", () => {
-  resetAllSlides();
-});
-
-
-
-// Reset slide show when the search results change.
-window.addEventListener("searchResultsChanged", (event) => {
-  const searchType = event.detail?.searchType;
-  if (searchType === "switchAlbum") return;
-  // This code doesn't seem to be necessary now.
-  // const keep_current_slide = searchType === "clear";
-  // console.log("searchResultsChanged, type:", searchType, "keep current slide:", keep_current_slide);
-  //resetAllSlides(keep_current_slide);
-  resetAllSlides();
-});
-
-// Handle slideshow mode changes
-window.addEventListener("swiperModeChanged", async (event) => {
-  const isGridMode = event.detail?.isGridMode;
-  if (isGridMode) return; // Ignore grid mode changes here
-  resetAllSlides();
-});
-
-// BAD CODE ALERT
-// REMOVE THIS WHEN THE GALLERY IS REMOVED
-window.addEventListener("setSlideIndex", async (event) => {
+// Navigate to a slide based on its index
+async function setSlideIndex(event) {
   const { targetIndex, isSearchMode } = event.detail;
 
   let globalIndex;
@@ -464,10 +497,10 @@ window.addEventListener("setSlideIndex", async (event) => {
     globalIndex = targetIndex;
   }
 
-  await state.swiper.removeAllSlides();
+  state.swiper.removeAllSlides();
 
-  let origin = -2;
-  let slides_to_add = 5;
+  const origin = -2;
+  const slides_to_add = 5;
   if (globalIndex + origin < 0) {
     origin = 0;
   }
@@ -491,4 +524,4 @@ window.addEventListener("setSlideIndex", async (event) => {
 
   swiperContainer.style.visibility = "visible";
   updateMetadataOverlay();
-});
+}
