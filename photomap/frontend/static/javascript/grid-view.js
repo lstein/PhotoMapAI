@@ -56,27 +56,44 @@ export async function initializeGridSwiper() {
   const columns = Math.floor(gridContainer.offsetWidth / minSlideWidth) || 2;
   const slidesPerBatch = rows * columns + columns * 2; // buffer 2 extra columns
 
-  // Track our current position in the grid
-  let currentBatchStartIndex = 0;
+  // Track our current position in the grid - ALWAYS START FROM CURRENT SLIDE POSITION
+  const currentSlide = slideState.getCurrentSlide();
+  let currentBatchStartIndex;
+
+  if (slideState.isSearchMode) {
+    // In search mode, start from a batch that includes the current search index
+    currentBatchStartIndex = Math.max(
+      0,
+      currentSlide.searchIndex - Math.floor(slidesPerBatch / 2)
+    );
+  } else {
+    // In album mode, start from a batch that includes the current global index
+    currentBatchStartIndex = Math.max(
+      0,
+      currentSlide.globalIndex - Math.floor(slidesPerBatch / 2)
+    );
+  }
+
   let loadedImageIndices = new Set(); // Track which images we've already loaded
 
-  // Updated loadBatch function with data-global-index
+  // Updated loadBatch function using slideState.resolveOffset()
   async function loadBatch() {
     const slides = [];
     let actuallyLoaded = 0;
 
-    for (let i = 0; i < slidesPerBatch; i++) {
-      let globalIndex, searchIndex;
+    // Get current slide info once, outside the loop
+    const currentSlide = slideState.getCurrentSlide();
+    const currentPosition = slideState.isSearchMode ? currentSlide.searchIndex : currentSlide.globalIndex;
 
-      if (slideState.isSearchMode) {
-        searchIndex = currentBatchStartIndex + i;
-        if (searchIndex >= slideState.searchResults.length) break;
-        globalIndex = slideState.searchResults[searchIndex]?.index;
-      } else {
-        globalIndex = currentBatchStartIndex + i;
-        if (globalIndex >= slideState.totalAlbumImages) break;
-        searchIndex = null;
-      }
+    for (let i = 0; i < slidesPerBatch; i++) {
+      // Calculate offset from current slide position
+      const offset = currentBatchStartIndex + i - currentPosition;
+
+      // Use slideState.resolveOffset to get the correct indices for this position
+      const { globalIndex, searchIndex } = slideState.resolveOffset(offset);
+
+      // If we're out of bounds, stop loading
+      if (globalIndex === null) break;
 
       if (loadedImageIndices.has(globalIndex)) {
         continue;
@@ -116,16 +133,42 @@ export async function initializeGridSwiper() {
 
   window.addEventListener("swiperModeChanged", async (event) => {
     const isGridMode = event.detail?.isGridMode;
-    if (!isGridMode) return; // Ignore grid mode changes here
+    if (!isGridMode) return;
+
+    // Reset batch position to center around current slide
+    const currentSlide = slideState.getCurrentSlide();
+    if (slideState.isSearchMode) {
+      currentBatchStartIndex = Math.max(
+        0,
+        currentSlide.searchIndex - Math.floor(slidesPerBatch / 2)
+      );
+    } else {
+      currentBatchStartIndex = Math.max(
+        0,
+        currentSlide.globalIndex - Math.floor(slidesPerBatch / 2)
+      );
+    }
+    loadedImageIndices.clear();
+
     state.swiper.removeAllSlides(); // Clear existing slides
     await loadBatch(); // Load initial batch of slides
   });
 
   window.addEventListener("searchResultsChanged", function () {
-    // Reset tracking variables
-    currentBatchStartIndex = 0;
+    // Reset to center around current slide
+    const currentSlide = slideState.getCurrentSlide();
+    if (slideState.isSearchMode) {
+      currentBatchStartIndex = Math.max(
+        0,
+        currentSlide.searchIndex - Math.floor(slidesPerBatch / 2)
+      );
+    } else {
+      currentBatchStartIndex = Math.max(
+        0,
+        currentSlide.globalIndex - Math.floor(slidesPerBatch / 2)
+      );
+    }
     loadedImageIndices.clear();
-    // Load initial batch for new album
     loadBatch();
   });
 
