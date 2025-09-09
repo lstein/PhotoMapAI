@@ -33,9 +33,8 @@ function calculateGridGeometry() {
   // Use the smaller dimension to keep tiles square
   const tileSize = Math.max(
     minTileSize,
-    Math.min(maxTileSize, Math.min(actualTileWidth, actualTileHeight)))
-    ;
-
+    Math.min(maxTileSize, Math.min(actualTileWidth, actualTileHeight))
+  );
   // Calculate slides per batch (one screen worth plus buffer)
   const batchSize = rows * columns * 2; // Load 2 screens worth
 
@@ -151,8 +150,15 @@ function addGridEventListeners() {
 
   if (state.swiper) {
     // Load more when reaching the end
-    state.swiper.on("reachEnd", async () => {
-      await loadBatch();
+    state.swiper.on("slideChange", async () => {
+      console.log("slideChange event detected, slides length:", state.swiper.slides.length, "activeIndex:", state.swiper.activeIndex  );
+      const slidesLeft = Math.floor(state.swiper.slides.length / currentRows) - state.swiper.activeIndex;
+      console.log("Columns left in view:", slidesLeft);
+      if (slidesLeft <= currentColumns) {
+        console.log("Near end of slides, loading more...");
+        console.log("Last slide = ", state.swiper.slides[state.swiper.slides.length - 1].dataset.globalIndex);
+        loadBatch(parseInt(state.swiper.slides[state.swiper.slides.length - 1].dataset.globalIndex,10) + 1, false);
+      }
     });
   }
 
@@ -209,7 +215,7 @@ async function resetAllSlides(targetIndex = null) {
 }
 
 // Load a batch of slides starting at currentBatchStartIndex
-async function loadBatch(startIndex = currentBatchStartIndex) {
+async function loadBatch(startIndex = currentBatchStartIndex, prepend_screen = true) {
   console.log("batchLoading:", batchLoading);
   if (batchLoading) return; // Prevent concurrent loads
   batchLoading = true;
@@ -225,7 +231,7 @@ async function loadBatch(startIndex = currentBatchStartIndex) {
     : currentSlide.globalIndex;
   console.log(
     "Loading batch from index:",
-    currentBatchStartIndex,
+    startIndex,
     "currentPosition:",
     currentPosition
   );
@@ -237,6 +243,7 @@ async function loadBatch(startIndex = currentBatchStartIndex) {
 
     // Use slideState.resolveOffset to get the correct indices for this position
     const { globalIndex, searchIndex } = slideState.resolveOffset(offset);
+    console.log("Resolved offset", offset, "to globalIndex:", globalIndex, "searchIndex:", searchIndex);
     // If we're out of bounds, stop loading
     if (globalIndex === null) break;
 
@@ -272,7 +279,7 @@ async function loadBatch(startIndex = currentBatchStartIndex) {
   }
 
   // --- PREPEND LOGIC: Add a full screen's worth of slides before startIndex ---
-  if (startIndex > 0) {
+  if (prepend_screen && startIndex > 0) {
     const slidesPerScreen = currentColumns * currentRows;
     const prependCount = Math.min(slidesPerScreen, startIndex);
     const prependSlides = [];

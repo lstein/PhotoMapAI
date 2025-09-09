@@ -178,9 +178,9 @@
 
 /* Grid view current slide highlight - only applies in grid mode */
 .swiper.grid-mode .swiper-slide.current-slide {
-  outline: 3px solid #ffd700; /* Golden yellow outline */
-  outline-offset: -3px; /* Keep outline inside the slide */
-  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); /* Optional glow effect */
-  z-index: 10; /* Ensure it appears above other slides */
-  position: relative;
+  box-sizing: border-box;
+  border: 4px solid #ffe066;         /* Brighter, thicker yellow border */
+  border-radius: 12px;               /* Rounded corners */
+  box-shadow: 0 0 8px 2px #ffe06680; /* Soft yellow glow */
+  z-index: 2;
 }
