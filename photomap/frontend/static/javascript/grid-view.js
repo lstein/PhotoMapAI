@@ -131,15 +131,13 @@ function addGridEventListeners() {
   );
 
   eventRegistry.install({ type: "grid", event: "setSlideIndex" }, (e) => {
-    console.log("Received setSlideIndex event:", e.detail);
-    const { targetIndex: index, isSearchMode: isSearchMode } = e.detail;
+    const { targetIndex, isSearchMode } = e.detail;
     if (isSearchMode !== slideState.isSearchMode) {
       console.error("Mismatched search mode in setSlideIndex event");
       return;
     }
-
-    slideState.navigateToIndex(index, isSearchMode);
-    resetAllSlides();
+    slideState.navigateToIndex(targetIndex, isSearchMode);
+    resetAllSlides(targetIndex); // Pass the target index
   });
 
   // Reset grid when search results or album changes
@@ -164,7 +162,7 @@ function addGridEventListeners() {
 
 //------------------ LOADING IMAGES AND BATCHES ------------------//
 // Reset batch position to center around current slide
-async function resetAllSlides() {
+async function resetAllSlides(targetIndex = null) {
   const currentSlide = slideState.getCurrentSlide();
   console.log(
     "Resetting grid batch start index around current slide:",
@@ -173,7 +171,38 @@ async function resetAllSlides() {
   currentBatchStartIndex = centeredBatchStartIndex();
   loadedImageIndices.clear();
   state.swiper.removeAllSlides(); // Clear existing slides
-  await loadBatch(currentBatchStartIndex); // Load initial batch of slides
+
+  // If a targetIndex is provided, recenter the batch around it
+  if (targetIndex !== null) {
+    if (slideState.isSearchMode) {
+      currentBatchStartIndex = Math.max(
+        0,
+        targetIndex - Math.floor(slidesPerBatch / 3) + 1
+      );
+    } else {
+      currentBatchStartIndex = Math.max(
+        0,
+        targetIndex - Math.floor(slidesPerBatch / 3) + 1
+      );
+    }
+  }
+
+  await loadBatch(currentBatchStartIndex);
+
+  // After loading, find the slide index in the DOM and slide to it
+  if (targetIndex !== null) {
+    // Find the DOM index of the slide with data-global-index = globalIndex
+    const globalIndex = slideState.isSearchMode
+      ? state.searchResults[targetIndex]?.index
+      : targetIndex;
+    const slides = Array.from(state.swiper.slides);
+    const domIndex = slides.findIndex(
+      (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
+    );
+    if (domIndex >= 0) {
+      state.swiper.slideTo(domIndex, 0);
+    }
+  }
 }
 
 // Load a batch of slides starting at currentBatchStartIndex
