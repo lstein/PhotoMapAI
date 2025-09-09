@@ -180,6 +180,7 @@ async function resetAllSlides(targetIndex = null) {
   currentBatchStartIndex = centeredBatchStartIndex();
   loadedImageIndices.clear();
   state.swiper.removeAllSlides(); // Clear existing slides
+  state.swiper.update();
 
   // If a targetIndex is provided, recenter the batch around it
   if (targetIndex !== null) {
