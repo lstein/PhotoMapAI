@@ -77,7 +77,7 @@ export async function initializeGridSwiper() {
     slidesPerGroup: currentColumns, // Advance by full columns
     grid: {
       rows: currentRows,
-      fill: "row", // Fill by rows for more intuitive layout
+      fill: "column",
     },
     spaceBetween: 8, // Reduced spacing for better fit
     mousewheel: {
@@ -108,6 +108,9 @@ export async function initializeGridSwiper() {
   updateCurrentSlideHighlight();
   setupContinuousNavigation();
   setupGridResizeHandler();
+
+  // For console debugging
+  window.gridSwiper = state.swiper;
 }
 
 function addGridEventListeners() {
@@ -211,6 +214,7 @@ async function loadBatch(startIndex = currentBatchStartIndex) {
   if (batchLoading) return; // Prevent concurrent loads
   batchLoading = true;
 
+  // --- NORMAL BATCH LOAD (append) ---
   const slides = [];
   let actuallyLoaded = 0;
 
@@ -226,6 +230,7 @@ async function loadBatch(startIndex = currentBatchStartIndex) {
     currentPosition
   );
 
+  // --- NORMAL BATCH LOAD ---
   for (let i = 0; i < slidesPerBatch; i++) {
     // Calculate offset from current slide position
     const offset = startIndex + i - currentPosition;
@@ -261,13 +266,49 @@ async function loadBatch(startIndex = currentBatchStartIndex) {
 
   if (slides.length > 0) {
     state.swiper.appendSlide(slides);
-    state.swiper.update();
-    currentBatchStartIndex += actuallyLoaded;
-
-    // Update highlight after adding new slides
-    setTimeout(updateCurrentSlideHighlight, 100);
+    // Optionally, scroll to the first slide of the batch if needed
+    // state.swiper.slideTo(0, 0);
   }
+
+  // --- PREPEND LOGIC: Add a full screen's worth of slides before startIndex ---
+  if (startIndex > 0) {
+    const slidesPerScreen = currentColumns * currentRows;
+    const prependCount = Math.min(slidesPerScreen, startIndex);
+    const prependSlides = [];
+    for (let i = prependCount - 1; i >= 0; i--) {
+      const offset = startIndex - prependCount + i - currentPosition;
+      const { globalIndex, searchIndex } = slideState.resolveOffset(offset);
+      if (globalIndex === null) continue;
+      if (loadedImageIndices.has(globalIndex)) continue;
+
+      try {
+        const data = await fetchImageByIndex(globalIndex);
+        if (!data) continue;
+
+        loadedImageIndices.add(globalIndex);
+
+        prependSlides.push(`
+          <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
+               data-global-index="${globalIndex}"
+               onclick="handleGridSlideClick(${globalIndex})">
+            <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover; border-radius:4px;" />
+          </div>
+        `);
+      } catch (error) {
+        console.error("Failed to load image (prepend):", error);
+        continue;
+      }
+    }
+    if (prependSlides.length > 0) {
+      state.swiper.prependSlide(prependSlides);
+      // Move to the first slide of the newly loaded batch (top-left of the original batch)
+      state.swiper.slideTo(currentColumns, 0);
+      currentBatchStartIndex -= prependSlides.length;
+    }
+  }
+
   batchLoading = false;
+  updateCurrentSlideHighlight();
   console.log("Finished loading batch, actuallyLoaded:", actuallyLoaded);
   return actuallyLoaded > 0;
 }
@@ -421,6 +462,7 @@ function setupGridResizeHandler() {
 function updateCurrentSlideHighlight() {
   if (!state.gridViewActive) return;
 
+  // Get the global index of the current slide
   const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
 
   // Remove existing highlights
@@ -428,11 +470,13 @@ function updateCurrentSlideHighlight() {
     slide.classList.remove("current-slide");
   });
 
-  // Add highlight to current slide
+  // Add highlight to the current slide
   const currentSlide = document.querySelector(
     `.swiper-slide[data-global-index="${currentGlobalIndex}"]`
   );
   if (currentSlide) {
     currentSlide.classList.add("current-slide");
+    // Optionally, scroll into view if needed:
+    // currentSlide.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 }
