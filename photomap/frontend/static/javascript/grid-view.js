@@ -190,25 +190,56 @@ async function resetAllSlides(targetIndex = null) {
 
   loadedImageIndices.clear();
 
-  console.log("calling removeAllSlides");
-  state.swiper.removeAllSlides(); // Clear existing slides
-  console.log("calling update")
-  state.swiper.update();
+  if (!state.swiper) return;
 
-  console.log("calling loadBatch")
+  console.log("calling removeAllSlides");
+  // remove all slides and force Swiper internal state to a safe baseline
+  try {
+    state.swiper.removeAllSlides();
+  } catch (err) {
+    console.warn("removeAllSlides failed:", err);
+  }
+
+  // Ensure internal structures are recalculated and activeIndex is valid (0)
+  try {
+    state.swiper.update();
+    // jump to 0 instantly to avoid Swiper trying to reference stale slide elements
+    state.swiper.slideTo(0, 0);
+  } catch (err) {
+    console.warn("Swiper reset/update failed:", err);
+  }
+
+  console.log("calling loadBatch");
   await loadBatch(targetIndex);
 
-  // After loading, find the slide index in the DOM and slide to it
-  // Find the DOM index of the slide with data-global-index = globalIndex
+  // After loading, ensure Swiper knows about newly added slides
+  try {
+    state.swiper.update();
+  } catch (err) {
+    console.warn("Swiper update after append failed:", err);
+  }
+
+  // After loading, find the slide index in the DOM and slide to it (safe bounds checking)
   const globalIndex = slideState.indexToGlobal(targetIndex);
-  const slides = Array.from(state.swiper.slides);
+  const slides = Array.from(state.swiper.slides || []);
   let domIndex = slides.findIndex(
-    (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
+    (el) =>
+      el &&
+      el.dataset &&
+      !Number.isNaN(parseInt(el.dataset.globalIndex, 10)) &&
+      parseInt(el.dataset.globalIndex, 10) === globalIndex
   );
+
   if (domIndex >= 0) {
     // domIndex must be a multiple of currentColumns
     domIndex -= domIndex % currentColumns;
-    state.swiper.slideTo(domIndex);
+    // Clamp to existing slide indices
+    domIndex = Math.max(0, Math.min(domIndex, Math.max(0, state.swiper.slides.length - 1)));
+    try {
+      state.swiper.slideTo(domIndex, 0);
+    } catch (err) {
+      console.warn("slideTo failed:", err);
+    }
   }
 }
 
