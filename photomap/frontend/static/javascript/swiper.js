@@ -94,10 +94,6 @@ export async function initializeSingleSwiper() {
   // Wait for Swiper to be fully initialized
   await new Promise((resolve) => setTimeout(resolve, 100));
 
-  function swiperButtonMouseDownHandler() {
-    this.blur();
-  }
-
   initializeSwiperHandlers();
   initializeEventHandlers();
 
@@ -240,8 +236,6 @@ function initializeEventHandlers() {
   eventRegistry.install(
     { type: "swiper", event: "searchResultsChanged" },
     (event) => {
-      // const searchType = event.detail?.searchType;
-      // if (searchType === "switchAlbum") return;
       resetAllSlides();
     }
   );

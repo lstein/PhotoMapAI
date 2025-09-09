@@ -1,54 +1,13 @@
+import { eventRegistry } from "./event-registry.js";
 import { fetchImageByIndex } from "./search.js"; // Use individual image fetching
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 
-let gridSwiperModeChangedHandler = null;
-let gridSearchResultsChangedHandler = null;
-
-// Only add event listeners ONCE
-function addGridEventListeners(
-  loadBatch,
-  centeredBatchStartIndex,
-  loadedImageIndices,
-  state,
-  slidesPerBatch
-) {
-  // Remove previous listeners if they exist
-  if (gridSwiperModeChangedHandler) {
-    window.removeEventListener("swiperModeChanged", gridSwiperModeChangedHandler);
-  }
-  if (gridSearchResultsChangedHandler) {
-    window.removeEventListener("searchResultsChanged", gridSearchResultsChangedHandler);
-  }
-
-  // Define and add new listeners
-  gridSwiperModeChangedHandler = async (event) => {
-    const isGridMode = event.detail?.isGridMode;
-    if (!isGridMode) return;
-
-    // Reset batch position to center around current slide
-    const currentSlide = slideState.getCurrentSlide();
-    console.log(
-      "Resetting grid batch start index around current slide:",
-      currentSlide
-    );
-    let currentBatchStartIndex = centeredBatchStartIndex();
-    loadedImageIndices.clear();
-
-    state.swiper.removeAllSlides(); // Clear existing slides
-    await loadBatch(currentBatchStartIndex); // Load initial batch of slides
-  };
-
-  gridSearchResultsChangedHandler = function () {
-    // Reset to center around current slide
-    let currentBatchStartIndex = centeredBatchStartIndex();
-    loadedImageIndices.clear();
-    loadBatch(currentBatchStartIndex);
-  };
-
-  window.addEventListener("swiperModeChanged", gridSwiperModeChangedHandler);
-  window.addEventListener("searchResultsChanged", gridSearchResultsChangedHandler);
-}
+let loadedImageIndices = new Set(); // Track which images we've already loaded
+let batchLoading = false; // Prevent concurrent batch loads
+let currentBatchStartIndex = 0;
+let slidesPerBatch = 0; // Number of slides to load per batch
+let slideHeight = 200; // Default slide height
 
 export async function initializeGridSwiper() {
   // Destroy previous Swiper instance if it exists
@@ -56,13 +15,14 @@ export async function initializeGridSwiper() {
     state.swiper.destroy(true, true);
     state.swiper = null;
   }
+  loadedImageIndices = new Set(); // Reset loaded images
 
   // Calculate rows based on window height - UPDATED for smaller slides
   const minSlideHeight = 180;
   const maxSlideHeight = 600;
   const availableHeight = window.innerHeight - 120;
   const rows = Math.max(2, Math.floor(availableHeight / minSlideHeight));
-  const slideHeight = Math.min(
+  slideHeight = Math.min(
     maxSlideHeight,
     Math.max(minSlideHeight, Math.floor(availableHeight / rows))
   );
@@ -94,6 +54,9 @@ export async function initializeGridSwiper() {
     },
   });
 
+  // Wait for Swiper to be fully initialized
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
   // Add grid-mode class to the swiper container
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.add("grid-mode");
@@ -102,113 +65,169 @@ export async function initializeGridSwiper() {
   const gridContainer = document.querySelector(".swiper");
   const minSlideWidth = 180;
   const columns = Math.floor(gridContainer.offsetWidth / minSlideWidth) || 2;
-  const slidesPerBatch = rows * columns + columns * 2; // buffer 2 extra columns
+  slidesPerBatch = rows * columns + columns * 2; // buffer 2 extra columns
 
-  // Track our current position in the grid - ALWAYS START FROM CURRENT SLIDE POSITION
+  // Track our current position in the grid
+  currentBatchStartIndex = centeredBatchStartIndex();
+
+  addGridEventListeners();
+  updateCurrentSlideHighlight();
+  setupContinuousNavigation();
+  setupGridResizeHandler(rows, slideHeight, slidesPerBatch);
+}
+
+function addGridEventListeners() {
+  // Remove all grid and swiper handlers
+  eventRegistry.removeAll("grid");
+  eventRegistry.removeAll("swiper");
+
+  eventRegistry.install(
+    { type: "grid", event: "swiperModeChanged" },
+    async (e) => {
+      resetAllSlides();
+    }
+  );
+
+  eventRegistry.install({ type: "grid", event: "searchResultsChanged" }, () => {
+    resetAllSlides();
+    currentBatchStartIndex = centeredBatchStartIndex();
+    loadBatch(currentBatchStartIndex);
+  });
+
+  eventRegistry.install(
+    { type: "grid", event: "slideChanged" },
+    updateCurrentSlideHighlight
+  );
+
+  eventRegistry.install({ type: "grid", event: "setSlideIndex" }, (e) => {
+    console.log("Received setSlideIndex event:", e.detail);
+    const {targetIndex: index, isSearchMode: isSearchMode} = e.detail;
+    if (isSearchMode !== slideState.isSearchMode) {
+      console.error("Mismatched search mode in setSlideIndex event");
+      return;
+    }
+
+    slideState.navigateToIndex(index, isSearchMode);
+    resetAllSlides();
+   // loadBatch(currentBatchStartIndex);
+  });
+
+  // Reset grid when search results or album changes
+  eventRegistry.install({ type: "grid", event: "albumChanged" }, () => {
+    resetAllSlides();
+    loadBatch();
+  });
+
+  if (state.swiper) {
+    // Load more when reaching the end
+    state.swiper.on("reachEnd", async () => {
+      await loadBatch();
+    });
+  }
+
+  // Handle clicks on grid slides
+  window.handleGridSlideClick = function (globalIndex) {
+    slideState.navigateToIndex(globalIndex, false);
+  };
+}
+
+//------------------ LOADING IMAGES AND BATCHES ------------------//
+// Reset batch position to center around current slide
+async function resetAllSlides() {
   const currentSlide = slideState.getCurrentSlide();
-  let currentBatchStartIndex = centeredBatchStartIndex();
-  let loadedImageIndices = new Set(); // Track which images we've already loaded
-  let batchLoading = false; // Prevent concurrent batch loads
+  console.log(
+    "Resetting grid batch start index around current slide:",
+    currentSlide
+  );
+  currentBatchStartIndex = centeredBatchStartIndex();
+  loadedImageIndices.clear();
+  state.swiper.removeAllSlides(); // Clear existing slides
+  await loadBatch(currentBatchStartIndex); // Load initial batch of slides
+}
 
-  // Updated loadBatch function using slideState.resolveOffset()
-  async function loadBatch(startIndex = currentBatchStartIndex) {
-    console.log("batchLoading:", batchLoading);
-    if (batchLoading) return; // Prevent concurrent loads
-    batchLoading = true;
+// Load a batch of slides starting at currentBatchStartIndex
+async function loadBatch(startIndex = currentBatchStartIndex) {
+  console.log("batchLoading:", batchLoading);
+  if (batchLoading) return; // Prevent concurrent loads
+  batchLoading = true;
 
-    const slides = [];
-    let actuallyLoaded = 0;
+  const slides = [];
+  let actuallyLoaded = 0;
 
-    // Get current slide info once, outside the loop
-    const currentSlide = slideState.getCurrentSlide();
-    const currentPosition = slideState.isSearchMode
-      ? currentSlide.searchIndex
-      : currentSlide.globalIndex;
-    console.trace(
-      "Loading batch from index:",
-      currentBatchStartIndex,
-      "currentPosition:",
-      currentPosition
-    );
+  // Get current slide info once, outside the loop
+  const currentSlide = slideState.getCurrentSlide();
+  const currentPosition = slideState.isSearchMode
+    ? currentSlide.searchIndex
+    : currentSlide.globalIndex;
+  console.log(
+    "Loading batch from index:",
+    currentBatchStartIndex,
+    "currentPosition:",
+    currentPosition
+  );
 
-    for (let i = 0; i < slidesPerBatch; i++) {
-      // Calculate offset from current slide position
-      const offset = startIndex + i - currentPosition;
+  for (let i = 0; i < slidesPerBatch; i++) {
+    // Calculate offset from current slide position
+    const offset = startIndex + i - currentPosition;
 
-      // Use slideState.resolveOffset to get the correct indices for this position
-      const { globalIndex, searchIndex } = slideState.resolveOffset(offset);
-      console.log("Resolved offset", offset, "to", { globalIndex, searchIndex });
-      // If we're out of bounds, stop loading
-      if (globalIndex === null) break;
+    // Use slideState.resolveOffset to get the correct indices for this position
+    const { globalIndex, searchIndex } = slideState.resolveOffset(offset);
+    // If we're out of bounds, stop loading
+    if (globalIndex === null) break;
 
-      if (loadedImageIndices.has(globalIndex)) {
-        continue;
-      }
+    if (loadedImageIndices.has(globalIndex)) {
+      continue;
+    }
 
-      try {
-        const data = await fetchImageByIndex(globalIndex);
-        if (!data) break;
+    try {
+      const data = await fetchImageByIndex(globalIndex);
+      if (!data) break;
 
-        loadedImageIndices.add(globalIndex);
+      loadedImageIndices.add(globalIndex);
 
-        slides.push(`
+      slides.push(`
           <div class="swiper-slide" style="height:${slideHeight}px" 
                data-global-index="${globalIndex}"
                onclick="handleGridSlideClick(${globalIndex})">
             <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover;" />
           </div>
         `);
-        actuallyLoaded++;
-      } catch (error) {
-        console.error("Failed to load image:", error);
-        break;
-      }
+      actuallyLoaded++;
+    } catch (error) {
+      console.error("Failed to load image:", error);
+      break;
     }
-
-    if (slides.length > 0) {
-      state.swiper.appendSlide(slides);
-      state.swiper.update();
-      currentBatchStartIndex += actuallyLoaded;
-
-      // Update highlight after adding new slides
-      setTimeout(updateCurrentSlideHighlight, 100);
-    }
-    batchLoading = false;
-    console.log("Finished loading batch, actuallyLoaded:", actuallyLoaded);
-    return actuallyLoaded > 0;
   }
 
-  function centeredBatchStartIndex() {
-    let index;
-    if (slideState.isSearchMode) {
-      index = Math.max(
-        0,
-        currentSlide.searchIndex - Math.floor(slidesPerBatch / 3) + 1
-      );
-    } else {
-      index = Math.max(
-        0,
-        currentSlide.globalIndex - Math.floor(slidesPerBatch / 3) + 1
-      );
-    }
-    return index;
+  if (slides.length > 0) {
+    state.swiper.appendSlide(slides);
+    state.swiper.update();
+    currentBatchStartIndex += actuallyLoaded;
+
+    // Update highlight after adding new slides
+    setTimeout(updateCurrentSlideHighlight, 100);
   }
+  batchLoading = false;
+  console.log("Finished loading batch, actuallyLoaded:", actuallyLoaded);
+  return actuallyLoaded > 0;
+}
 
-  // Add event listeners only once, and always use the latest loadBatch/centeredBatchStartIndex
-  addGridEventListeners(loadBatch, centeredBatchStartIndex, loadedImageIndices, state, slidesPerBatch);
-
-  // Load more when reaching the end
-  state.swiper.on("reachEnd", async () => {
-    await loadBatch();
-  });
-
-  // Setup continuous navigation
-  setupContinuousNavigation();
-
-  // Add window resize handler
-  setupGridResizeHandler(rows, slideHeight, slidesPerBatch);
-  window.addEventListener("slideChanged", updateCurrentSlideHighlight);
-  updateCurrentSlideHighlight();
+// Return an index for a tile that is roughly centered on the window.
+function centeredBatchStartIndex() {
+  let index;
+  const currentSlide = slideState.getCurrentSlide();
+  if (slideState.isSearchMode) {
+    index = Math.max(
+      0,
+      currentSlide.searchIndex - Math.floor(slidesPerBatch / 3) + 1
+    );
+  } else {
+    index = Math.max(
+      0,
+      currentSlide.globalIndex - Math.floor(slidesPerBatch / 3) + 1
+    );
+  }
+  return index;
 }
 
 function setupContinuousNavigation() {
@@ -245,30 +264,66 @@ function setupContinuousNavigation() {
 
   // Next button events
   if (nextBtn) {
-    nextBtn.addEventListener("mousedown", () => startContinuousScroll("next"));
-    nextBtn.addEventListener("mouseup", stopContinuousScroll);
-    nextBtn.addEventListener("mouseleave", stopContinuousScroll);
+    eventRegistry.install(
+      { type: "grid", event: "mousedown", object: nextBtn },
+      () => startContinuousScroll("next")
+    );
+    eventRegistry.install(
+      { type: "grid", event: "mouseup", object: nextBtn },
+      stopContinuousScroll
+    );
+    eventRegistry.install(
+      { type: "grid", event: "mouseleave", object: nextBtn },
+      stopContinuousScroll
+    );
 
     // Touch events for mobile
-    nextBtn.addEventListener("touchstart", () => startContinuousScroll("next"));
-    nextBtn.addEventListener("touchend", stopContinuousScroll);
-    nextBtn.addEventListener("touchcancel", stopContinuousScroll);
+    eventRegistry.install(
+      { type: "grid", event: "touchstart", object: nextBtn },
+      () => startContinuousScroll("next")
+    );
+    eventRegistry.install(
+      { type: "grid", event: "touchend", object: nextBtn },
+      stopContinuousScroll
+    );
+    eventRegistry.install(
+      { type: "grid", event: "touchcancel", object: nextBtn },
+      stopContinuousScroll
+    );
   }
 
   // Previous button events
   if (prevBtn) {
-    prevBtn.addEventListener("mousedown", () => startContinuousScroll("prev"));
-    prevBtn.addEventListener("mouseup", stopContinuousScroll);
-    prevBtn.addEventListener("mouseleave", stopContinuousScroll);
+    eventRegistry.install(
+      { type: "grid", event: "mousedown", object: prevBtn },
+      () => startContinuousScroll("prev")
+    );
+    eventRegistry.install(
+      { type: "grid", event: "mouseup", object: prevBtn },
+      stopContinuousScroll
+    );
+    eventRegistry.install(
+      { type: "grid", event: "mouseleave", object: prevBtn },
+      stopContinuousScroll
+    );
 
     // Touch events for mobile
-    prevBtn.addEventListener("touchstart", () => startContinuousScroll("prev"));
-    prevBtn.addEventListener("touchend", stopContinuousScroll);
-    prevBtn.addEventListener("touchcancel", stopContinuousScroll);
+    eventRegistry.install(
+      { type: "grid", event: "touchstart", object: prevBtn },
+      () => startContinuousScroll("prev")
+    );
+    eventRegistry.install(
+      { type: "grid", event: "touchend", object: prevBtn },
+      stopContinuousScroll
+    );
+    eventRegistry.install(
+      { type: "grid", event: "touchcancel", object: prevBtn },
+      stopContinuousScroll
+    );
   }
 
   // Stop scrolling if window loses focus
-  window.addEventListener("blur", stopContinuousScroll);
+  eventRegistry.install({ type: "grid", event: "blur" }, stopContinuousScroll);
 }
 
 function setupGridResizeHandler(
@@ -322,49 +377,8 @@ function setupGridResizeHandler(
     }, 300); // 300ms debounce delay
   }
 
-  window.addEventListener("resize", handleResize);
-
-  // Store the handler so we can remove it later if needed
-  if (!window.gridResizeHandlers) {
-    window.gridResizeHandlers = [];
-  }
-  window.gridResizeHandlers.push(handleResize);
+  eventRegistry.install({ type: "grid", event: "resize" }, handleResize);
 }
-
-// Clean up resize handlers when switching away from grid view
-function cleanupGridResizeHandlers() {
-  if (window.gridResizeHandlers) {
-    window.gridResizeHandlers.forEach((handler) => {
-      window.removeEventListener("resize", handler);
-    });
-    window.gridResizeHandlers = [];
-  }
-
-  // Clean up slideChanged listener
-  window.removeEventListener("slideChanged", updateCurrentSlideHighlight);
-}
-
-// Reset grid when search results or album changes
-window.addEventListener("searchResultsChanged", () => {
-  if (state.gridViewActive) {
-    initializeGridSwiper();
-  }
-});
-
-window.addEventListener("albumChanged", () => {
-  if (state.gridViewActive) {
-    initializeGridSwiper();
-  }
-});
-
-window.initializeGridSwiper = initializeGridSwiper;
-window.cleanupGridResizeHandlers = cleanupGridResizeHandlers;
-
-// Handle clicks on grid slides
-window.handleGridSlideClick = function (globalIndex) {
-  slideState.navigateToIndex(globalIndex, false);
-  // The slideChanged event will trigger updateCurrentSlideHighlight()
-};
 
 function updateCurrentSlideHighlight() {
   if (!state.gridViewActive) return;
