@@ -111,10 +111,7 @@ export async function initializeGridSwiper() {
 }
 
 function addGridEventListeners() {
-  // Remove all grid and swiper handlers
-  eventRegistry.removeAll("grid");
-  eventRegistry.removeAll("swiper");
-
+  // Handle relevant events
   eventRegistry.install(
     { type: "grid", event: "swiperModeChanged" },
     async (e) => {
@@ -160,6 +157,7 @@ function addGridEventListeners() {
 
   // Handle clicks on grid slides
   window.handleGridSlideClick = function (globalIndex) {
+    console.log("Grid slide clicked, global index:", globalIndex);
     slideState.navigateToIndex(globalIndex, false);
   };
 }
@@ -409,11 +407,3 @@ function updateCurrentSlideHighlight() {
     currentSlide.classList.add("current-slide");
   }
 }
-
-// Clean up grid event handlers
-function cleanupGridResizeHandlers() {
-  eventRegistry.removeAll("grid");
-}
-
-// Make cleanupGridResizeHandlers available globally
-window.cleanupGridResizeHandlers = cleanupGridResizeHandlers;

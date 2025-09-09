@@ -30,10 +30,6 @@ export async function initializeSingleSwiper() {
     state.swiper = null;
   }
 
-  // Remove all grid and swiper handlers
-  eventRegistry.removeAll("grid");
-  eventRegistry.removeAll("swiper");
-
   // Clear the swiper wrapper completely
   const swiperWrapper = document.querySelector(".swiper .swiper-wrapper");
   if (swiperWrapper) {
@@ -106,10 +102,11 @@ export async function initializeSingleSwiper() {
   swiperContainer.classList.remove("grid-mode");
   console.log("Initialized single-image Swiper mode.")
 
-  resetAllSlides();
+  // resetAllSlides();
 }
 
 function initializeSwiperHandlers() {
+  
   // Update icon on slide change or autoplay events (with guards)
   if (!state.swiper)  return;
   
@@ -243,7 +240,8 @@ function initializeEventHandlers() {
   // Handle slideshow mode changes
   eventRegistry.install(
     { type: "swiper", event: "swiperModeChanged" },
-    async (event) => {
+    (event) => {
+      console.log("Swiper mode changed event:", event.detail);
       resetAllSlides();
     }
   );
@@ -426,6 +424,7 @@ export async function resetAllSlides() {
   state.swiper.removeAllSlides();
 
   const { globalIndex, searchIndex } = slideState.getCurrentSlide();
+  console.trace("Resetting all slides, current global index:", globalIndex, "search index:", searchIndex);
 
   // Add previous slide if available
   const { globalIndex: prevGlobal, searchIndex: prevSearch } =
@@ -493,7 +492,7 @@ async function setSlideIndex(event) {
 
   state.swiper.removeAllSlides();
 
-  const origin = -2;
+  let origin = -2;
   const slides_to_add = 5;
   if (globalIndex + origin < 0) {
     origin = 0;

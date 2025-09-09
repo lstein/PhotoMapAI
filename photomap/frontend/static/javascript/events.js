@@ -1,6 +1,7 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
 import { checkAlbumIndex } from "./album.js";
+import { eventRegistry } from "./event-registry.js";
 import { initializeGridSwiper } from "./grid-view.js";
 import { deleteImage } from "./index.js";
 import {
@@ -9,7 +10,11 @@ import {
   toggleMetadataOverlay,
   updateMetadataOverlay,
 } from "./metadata-drawer.js";
-import { getCurrentFilepath, getCurrentSlideIndex, slideState } from "./slide-state.js";
+import {
+  getCurrentFilepath,
+  getCurrentSlideIndex,
+  slideState,
+} from "./slide-state.js";
 import { state } from "./state.js";
 import {
   addNewSlide,
@@ -396,7 +401,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // Show/hide grid button
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
   const gridViewBtn = document.getElementById("gridViewBtn");
   const gridViewIcon = gridViewBtn.querySelector("svg");
   const swiperContainer = document.querySelector(".swiper");
@@ -406,6 +411,8 @@ document.addEventListener("DOMContentLoaded", function () {
       state.gridViewActive = !state.gridViewActive;
       // Always show the swiper container
       swiperContainer.style.display = "";
+      eventRegistry.removeAll("swiper");
+      eventRegistry.removeAll("grid");
       if (state.gridViewActive) {
         await initializeGridSwiper();
       } else {
@@ -413,11 +420,18 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       console.log("slideState after grid toggle:", slideState);
       const event = new CustomEvent("swiperModeChanged", {
-            detail: { isGridMode: state.gridViewActive },
-          });
+        detail: { isGridMode: state.gridViewActive },
+      });
       window.dispatchEvent(event);
       setCheckmarkOnIcon(gridViewIcon, state.gridViewActive);
     });
   }
-  initializeSingleSwiper();
+
+  // Initialize in single image mode
+  await initializeSingleSwiper();
+  console.log("Initial slideState:", slideState);
+  const event = new CustomEvent("swiperModeChanged", {
+    detail: { isGridMode: state.gridViewActive },
+  });
+  window.dispatchEvent(event);
 });
