@@ -8,6 +8,44 @@ let batchLoading = false; // Prevent concurrent batch loads
 let currentBatchStartIndex = 0;
 let slidesPerBatch = 0; // Number of slides to load per batch
 let slideHeight = 200; // Default slide height
+let currentRows = 0; // Track current grid dimensions
+let currentColumns = 0;
+
+// Consolidated geometry calculation function
+function calculateGridGeometry() {
+  const gridContainer = document.querySelector(".swiper");
+  const availableWidth = gridContainer.offsetWidth - 24; // Account for padding
+  const availableHeight = window.innerHeight - 120; // Account for header/footer
+
+  // Target square tile size
+  const targetTileSize = 200; // Base tile size
+  const minTileSize = 150;
+  const maxTileSize = 300;
+
+  // Calculate columns and rows to fit available space with square tiles
+  const columns = Math.max(2, Math.floor(availableWidth / targetTileSize));
+  const rows = Math.max(2, Math.floor(availableHeight / targetTileSize));
+
+  // Calculate actual tile size to fit perfectly in available space
+  const actualTileWidth = Math.floor(availableWidth / columns);
+  const actualTileHeight = Math.floor(availableHeight / rows);
+
+  // Use the smaller dimension to keep tiles square
+  const tileSize = Math.max(
+    minTileSize,
+    Math.min(maxTileSize, Math.min(actualTileWidth, actualTileHeight)))
+    ;
+
+  // Calculate slides per batch (one screen worth plus buffer)
+  const batchSize = rows * columns * 2; // Load 2 screens worth
+
+  return {
+    rows,
+    columns,
+    tileSize,
+    batchSize,
+  };
+}
 
 export async function initializeGridSwiper() {
   // Destroy previous Swiper instance if it exists
@@ -17,14 +55,15 @@ export async function initializeGridSwiper() {
   }
   loadedImageIndices = new Set(); // Reset loaded images
 
-  // Calculate rows based on window height - UPDATED for smaller slides
-  const minSlideHeight = 180;
-  const maxSlideHeight = 600;
-  const availableHeight = window.innerHeight - 120;
-  const rows = Math.max(2, Math.floor(availableHeight / minSlideHeight));
-  slideHeight = Math.min(
-    maxSlideHeight,
-    Math.max(minSlideHeight, Math.floor(availableHeight / rows))
+  // Calculate grid geometry
+  const geometry = calculateGridGeometry();
+  currentRows = geometry.rows;
+  currentColumns = geometry.columns;
+  slideHeight = geometry.tileSize;
+  slidesPerBatch = geometry.batchSize;
+
+  console.log(
+    `Grid initialized: ${currentColumns}x${currentRows}, tile size: ${slideHeight}px, batch size: ${slidesPerBatch}`
   );
 
   // Prepare Swiper container
@@ -34,12 +73,13 @@ export async function initializeGridSwiper() {
   // Initialize Swiper in grid mode
   state.swiper = new Swiper(".swiper", {
     direction: "horizontal",
-    slidesPerView: rows,
+    slidesPerView: currentColumns, // Number of columns
+    slidesPerGroup: currentColumns, // Advance by full columns
     grid: {
-      rows: rows,
-      fill: "column",
+      rows: currentRows,
+      fill: "row", // Fill by rows for more intuitive layout
     },
-    spaceBetween: 12,
+    spaceBetween: 8, // Reduced spacing for better fit
     mousewheel: {
       enabled: true,
       sensitivity: 10,
@@ -61,19 +101,13 @@ export async function initializeGridSwiper() {
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.add("grid-mode");
 
-  // Calculate grid dimensions
-  const gridContainer = document.querySelector(".swiper");
-  const minSlideWidth = 180;
-  const columns = Math.floor(gridContainer.offsetWidth / minSlideWidth) || 2;
-  slidesPerBatch = rows * columns + columns * 2; // buffer 2 extra columns
-
   // Track our current position in the grid
   currentBatchStartIndex = centeredBatchStartIndex();
 
   addGridEventListeners();
   updateCurrentSlideHighlight();
   setupContinuousNavigation();
-  setupGridResizeHandler(rows, slideHeight, slidesPerBatch);
+  setupGridResizeHandler();
 }
 
 function addGridEventListeners() {
@@ -101,7 +135,7 @@ function addGridEventListeners() {
 
   eventRegistry.install({ type: "grid", event: "setSlideIndex" }, (e) => {
     console.log("Received setSlideIndex event:", e.detail);
-    const {targetIndex: index, isSearchMode: isSearchMode} = e.detail;
+    const { targetIndex: index, isSearchMode: isSearchMode } = e.detail;
     if (isSearchMode !== slideState.isSearchMode) {
       console.error("Mismatched search mode in setSlideIndex event");
       return;
@@ -109,7 +143,6 @@ function addGridEventListeners() {
 
     slideState.navigateToIndex(index, isSearchMode);
     resetAllSlides();
-   // loadBatch(currentBatchStartIndex);
   });
 
   // Reset grid when search results or album changes
@@ -186,10 +219,10 @@ async function loadBatch(startIndex = currentBatchStartIndex) {
       loadedImageIndices.add(globalIndex);
 
       slides.push(`
-          <div class="swiper-slide" style="height:${slideHeight}px" 
+          <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
                data-global-index="${globalIndex}"
                onclick="handleGridSlideClick(${globalIndex})">
-            <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover;" />
+            <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover; border-radius:4px;" />
           </div>
         `);
       actuallyLoaded++;
@@ -326,11 +359,7 @@ function setupContinuousNavigation() {
   eventRegistry.install({ type: "grid", event: "blur" }, stopContinuousScroll);
 }
 
-function setupGridResizeHandler(
-  initialRows,
-  initialSlideHeight,
-  initialSlidesPerBatch
-) {
+function setupGridResizeHandler() {
   let resizeTimeout;
 
   function handleResize() {
@@ -339,40 +368,22 @@ function setupGridResizeHandler(
     resizeTimeout = setTimeout(async () => {
       if (!state.gridViewActive) return; // Only handle resize when grid is active
 
-      // Recalculate dimensions
-      const minSlideHeight = 180;
-      const maxSlideHeight = 600;
-      const availableHeight = window.innerHeight - 120;
-      const newRows = Math.max(2, Math.floor(availableHeight / minSlideHeight));
-      const newSlideHeight = Math.min(
-        maxSlideHeight,
-        Math.max(minSlideHeight, Math.floor(availableHeight / newRows))
-      );
+      // Recalculate geometry
+      const newGeometry = calculateGridGeometry();
 
-      const gridContainer = document.querySelector(".swiper");
-      const minSlideWidth = 180;
-      const newColumns =
-        Math.floor(gridContainer.offsetWidth / minSlideWidth) || 2;
-      const newSlidesPerBatch = newRows * newColumns + newColumns * 2;
-
-      // Check if dimensions actually changed
+      // Check if grid dimensions actually changed
       if (
-        newRows !== initialRows ||
-        Math.abs(newSlideHeight - initialSlideHeight) > 10
+        newGeometry.rows !== currentRows ||
+        newGeometry.columns !== currentColumns ||
+        Math.abs(newGeometry.tileSize - slideHeight) > 10
       ) {
         console.log(
-          `Grid resize: ${initialRows}x${Math.floor(
-            gridContainer.offsetWidth / minSlideWidth
-          )} -> ${newRows}x${newColumns}`
+          `Grid resize: ${currentColumns}x${currentRows} -> ${newGeometry.columns}x${newGeometry.rows}, tile size: ${slideHeight}px -> ${newGeometry.tileSize}px`
         );
 
         // Reinitialize the grid completely
         await initializeGridSwiper();
-
-        // Update stored values for next resize
-        initialRows = newRows;
-        initialSlideHeight = newSlideHeight;
-        initialSlidesPerBatch = newSlidesPerBatch;
+        loadBatch(centeredBatchStartIndex());
       }
     }, 300); // 300ms debounce delay
   }
@@ -398,3 +409,11 @@ function updateCurrentSlideHighlight() {
     currentSlide.classList.add("current-slide");
   }
 }
+
+// Clean up grid event handlers
+function cleanupGridResizeHandlers() {
+  eventRegistry.removeAll("grid");
+}
+
+// Make cleanupGridResizeHandlers available globally
+window.cleanupGridResizeHandlers = cleanupGridResizeHandlers;
