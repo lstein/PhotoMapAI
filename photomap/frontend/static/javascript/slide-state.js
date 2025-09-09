@@ -45,6 +45,14 @@ class SlideStateManager {
   }
 
   /**
+   * Get current slide index based on search mode
+   * @returns {number} Current index (search or global)
+   */
+  getCurrentIndex() {
+    return this.isSearchMode ? this.currentSearchIndex : this.currentGlobalIndex;
+  }
+
+  /**
    * Navigate to a specific position
    * @param {number} index - The index to navigate to
    * @param {boolean} isSearchIndex - Whether the index is in search results or global album
@@ -148,6 +156,23 @@ class SlideStateManager {
       this.currentSearchIndex = searchIndex;
     }
     this.notifySlideChanged();
+  }
+  
+  /**
+   * Convert an index into a globalIndex.
+   * The provided index will be interpreted according to the search mode.
+   * @param {number} index - The index to convert
+   * @returns {number|null} The corresponding global index, or null if out of bounds
+   */
+    indexToGlobal(index) {
+    if (this.isSearchMode && this.searchResults.length > 0) {
+      // Clamp to valid range
+      const clampedIndex = Math.max(0, Math.min(index, this.searchResults.length - 1));
+      return this.searchResults[clampedIndex]?.index || null;
+    } else {
+      // Clamp to valid range
+      return Math.max(0, Math.min(index, this.totalAlbumImages - 1));
+    }
   }
 
   /**

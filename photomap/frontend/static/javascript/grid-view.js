@@ -5,7 +5,6 @@ import { state } from "./state.js";
 
 let loadedImageIndices = new Set(); // Track which images we've already loaded
 let batchLoading = false; // Prevent concurrent batch loads
-let currentBatchStartIndex = 0;
 let slidesPerBatch = 0; // Number of slides to load per batch
 let slideHeight = 200; // Default slide height
 let currentRows = 0; // Track current grid dimensions
@@ -100,9 +99,6 @@ export async function initializeGridSwiper() {
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.add("grid-mode");
 
-  // Track our current position in the grid
-  currentBatchStartIndex = centeredBatchStartIndex();
-
   addGridEventListeners();
   updateCurrentSlideHighlight();
   setupContinuousNavigation();
@@ -122,9 +118,7 @@ function addGridEventListeners() {
   );
 
   eventRegistry.install({ type: "grid", event: "searchResultsChanged" }, () => {
-    resetAllSlides();
-    currentBatchStartIndex = centeredBatchStartIndex();
-    loadBatch(currentBatchStartIndex);
+    resetAllSlides(0);
   });
 
   eventRegistry.install(
@@ -144,20 +138,38 @@ function addGridEventListeners() {
 
   // Reset grid when search results or album changes
   eventRegistry.install({ type: "grid", event: "albumChanged" }, () => {
-    resetAllSlides();
-    loadBatch();
+    resetAllSlides(0);
   });
 
   if (state.swiper) {
     // Load more when reaching the end
     state.swiper.on("slideChange", async () => {
-      console.log("slideChange event detected, slides length:", state.swiper.slides.length, "activeIndex:", state.swiper.activeIndex  );
-      const slidesLeft = Math.floor(state.swiper.slides.length / currentRows) - state.swiper.activeIndex;
+      if (batchLoading) return; // Prevent concurrent loads
+      console.log(
+        "slideChange event detected, slides length:",
+        state.swiper.slides.length,
+        "activeIndex:",
+        state.swiper.activeIndex
+      );
+      const slidesLeft =
+        Math.floor(state.swiper.slides.length / currentRows) -
+        state.swiper.activeIndex;
       console.log("Columns left in view:", slidesLeft);
       if (slidesLeft <= currentColumns) {
         console.log("Near end of slides, loading more...");
-        console.log("Last slide = ", state.swiper.slides[state.swiper.slides.length - 1].dataset.globalIndex);
-        loadBatch(parseInt(state.swiper.slides[state.swiper.slides.length - 1].dataset.globalIndex,10) + 1, false);
+        console.log(
+          "Last slide = ",
+          state.swiper.slides[state.swiper.slides.length - 1].dataset
+            .globalIndex
+        );
+        loadBatch(
+          parseInt(
+            state.swiper.slides[state.swiper.slides.length - 1].dataset
+              .globalIndex,
+            10
+          ) + 1,
+          false
+        );
       }
     });
   }
@@ -170,84 +182,83 @@ function addGridEventListeners() {
 }
 
 //------------------ LOADING IMAGES AND BATCHES ------------------//
-// Reset batch position to center around current slide
+// Reset batch to include the current slide in the first screen.
+// @param {number|null} targetIndex - Optional index to include in first screen.
+// If null, use current slide index.
 async function resetAllSlides(targetIndex = null) {
-  const currentSlide = slideState.getCurrentSlide();
-  console.log(
-    "Resetting grid batch start index around current slide:",
-    currentSlide
-  );
-  currentBatchStartIndex = centeredBatchStartIndex();
+  if (targetIndex === null) targetIndex = slideState.getCurrentIndex() || 0;
+
   loadedImageIndices.clear();
+
+  console.log("calling removeAllSlides");
   state.swiper.removeAllSlides(); // Clear existing slides
+  console.log("calling update")
   state.swiper.update();
 
-  // If a targetIndex is provided, recenter the batch around it
-  if (targetIndex !== null) {
-    if (slideState.isSearchMode) {
-      currentBatchStartIndex = Math.max(
-        0,
-        targetIndex - Math.floor(slidesPerBatch / 3) + 1
-      );
-    } else {
-      currentBatchStartIndex = Math.max(
-        0,
-        targetIndex - Math.floor(slidesPerBatch / 3) + 1
-      );
-    }
-  }
-
-  await loadBatch(currentBatchStartIndex);
+  console.log("calling loadBatch")
+  await loadBatch(targetIndex);
 
   // After loading, find the slide index in the DOM and slide to it
-  if (targetIndex !== null) {
-    // Find the DOM index of the slide with data-global-index = globalIndex
-    const globalIndex = slideState.isSearchMode
-      ? state.searchResults[targetIndex]?.index
-      : targetIndex;
-    const slides = Array.from(state.swiper.slides);
-    const domIndex = slides.findIndex(
-      (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
-    );
-    if (domIndex >= 0) {
-      state.swiper.slideTo(domIndex, 0);
-    }
+  // Find the DOM index of the slide with data-global-index = globalIndex
+  const globalIndex = slideState.indexToGlobal(targetIndex);
+  const slides = Array.from(state.swiper.slides);
+  let domIndex = slides.findIndex(
+    (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
+  );
+  if (domIndex >= 0) {
+    // domIndex must be a multiple of currentColumns
+    domIndex -= domIndex % currentColumns;
+    state.swiper.slideTo(domIndex);
   }
 }
 
-// Load a batch of slides starting at currentBatchStartIndex
-async function loadBatch(startIndex = currentBatchStartIndex, prepend_screen = true) {
-  console.log("batchLoading:", batchLoading);
+// Load a batch of slides starting at startIndex
+// The index is either the global index or search index based on current mode.
+// The startIndex will be adjusted to be an even multiple of the screen size.
+// If startIndex is greater than the screen size, then a full screen's worth of slides
+// will be prepended before the startIndex to allow scrolling back.
+async function loadBatch(startIndex = 0) {
+  console.log("loading a batch of slides starting at ", startIndex);
   if (batchLoading) return; // Prevent concurrent loads
   batchLoading = true;
+
+  // Pad startIndex to be a multiple of the screen size
+  const slidesPerScreen = currentColumns * currentRows;
+  startIndex = Math.floor(startIndex / slidesPerScreen) * slidesPerScreen;
+
+  // Subtle gotcha here. The swiper activeIndex is the index of the first visible column.
+  // So if the number of columns is 4, then the activeIndexes will be 0, 4, 8, 12, ...
+  const prepend_screen =
+    state.swiper.activeIndex == 0 && startIndex >= slidesPerScreen;
+
+  // Get the currentPosition for highlighting. This does not
+  // affect the number or order of slides loaded.
+  const currentSlide = slideState.getCurrentSlide();
+  const currentPosition = slideState.isSearchMode
+    ? currentSlide.searchIndex
+    : currentSlide.globalIndex;
 
   // --- NORMAL BATCH LOAD (append) ---
   const slides = [];
   let actuallyLoaded = 0;
 
-  // Get current slide info once, outside the loop
-  const currentSlide = slideState.getCurrentSlide();
-  const currentPosition = slideState.isSearchMode
-    ? currentSlide.searchIndex
-    : currentSlide.globalIndex;
   console.log(
     "Loading batch from index:",
     startIndex,
-    "currentPosition:",
+    "Highlight the slide at:",
     currentPosition
   );
 
   // --- NORMAL BATCH LOAD ---
   for (let i = 0; i < slidesPerBatch; i++) {
     // Calculate offset from current slide position
-    const offset = startIndex + i - currentPosition;
+    const offset = startIndex + i;
 
     // Use slideState.resolveOffset to get the correct indices for this position
-    const { globalIndex, searchIndex } = slideState.resolveOffset(offset);
-    console.log("Resolved offset", offset, "to globalIndex:", globalIndex, "searchIndex:", searchIndex);
-    // If we're out of bounds, stop loading
-    if (globalIndex === null) break;
+    const globalIndex = slideState.indexToGlobal(offset);
 
+    // In the event that the slide is already loaded, skip it.
+    // I'm not sure this logic is necessary if load tracking is done correctly.
     if (loadedImageIndices.has(globalIndex)) {
       continue;
     }
@@ -276,18 +287,15 @@ async function loadBatch(startIndex = currentBatchStartIndex, prepend_screen = t
   if (slides.length > 0) {
     state.swiper.appendSlide(slides);
     // Optionally, scroll to the first slide of the batch if needed
-    // state.swiper.slideTo(0, 0);
+    // state.swiper.slideTo(0);
   }
 
   // --- PREPEND LOGIC: Add a full screen's worth of slides before startIndex ---
-  if (prepend_screen && startIndex > 0) {
-    const slidesPerScreen = currentColumns * currentRows;
-    const prependCount = Math.min(slidesPerScreen, startIndex);
+  if (prepend_screen) {
     const prependSlides = [];
-    for (let i = prependCount - 1; i >= 0; i--) {
-      const offset = startIndex - prependCount + i - currentPosition;
-      const { globalIndex, searchIndex } = slideState.resolveOffset(offset);
-      if (globalIndex === null) continue;
+    for (let i = 0; i < slidesPerScreen; i++) {
+      const globalIndex = slideState.indexToGlobal(startIndex - i - 1); // reverse order
+      // not sure this is wanted here
       if (loadedImageIndices.has(globalIndex)) continue;
 
       try {
@@ -310,9 +318,9 @@ async function loadBatch(startIndex = currentBatchStartIndex, prepend_screen = t
     }
     if (prependSlides.length > 0) {
       state.swiper.prependSlide(prependSlides);
-      // Move to the first slide of the newly loaded batch (top-left of the original batch)
-      state.swiper.slideTo(currentColumns, 0);
-      currentBatchStartIndex -= prependSlides.length;
+      // Move to the first slide of the newly loaded batch.
+      // This will be currentColumns.
+      // state.swiper.slideTo(currentColumns);
     }
   }
 
@@ -320,24 +328,6 @@ async function loadBatch(startIndex = currentBatchStartIndex, prepend_screen = t
   updateCurrentSlideHighlight();
   console.log("Finished loading batch, actuallyLoaded:", actuallyLoaded);
   return actuallyLoaded > 0;
-}
-
-// Return an index for a tile that is roughly centered on the window.
-function centeredBatchStartIndex() {
-  let index;
-  const currentSlide = slideState.getCurrentSlide();
-  if (slideState.isSearchMode) {
-    index = Math.max(
-      0,
-      currentSlide.searchIndex - Math.floor(slidesPerBatch / 3) + 1
-    );
-  } else {
-    index = Math.max(
-      0,
-      currentSlide.globalIndex - Math.floor(slidesPerBatch / 3) + 1
-    );
-  }
-  return index;
 }
 
 function setupContinuousNavigation() {
@@ -460,7 +450,7 @@ function setupGridResizeHandler() {
 
         // Reinitialize the grid completely
         await initializeGridSwiper();
-        loadBatch(centeredBatchStartIndex());
+        loadBatch();
       }
     }, 300); // 300ms debounce delay
   }
