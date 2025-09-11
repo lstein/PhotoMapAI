@@ -29,7 +29,7 @@ export function toggleMetadataOverlay() {
 }
 
 // Function to replace reference image filenames with clickable links
-function replaceReferenceImagesWithLinks(description, referenceImages, albumKey) {
+export function replaceReferenceImagesWithLinks(description, referenceImages, albumKey) {
   if (!description || !referenceImages || !albumKey) {
     return description || "";
   }
@@ -87,34 +87,35 @@ export function updateMetadataOverlay() {
   document.getElementById("filepathText").textContent =
     slide.dataset.filepath || "";
   document.getElementById("metadataLink").href = slide.dataset.metadata_url || "#";
-  updateCurrentImageScore(slide);
+  updateCurrentImageScore(slide.dataset);
 }
 
-async function updateCurrentImageScore(activeSlide) {
-  if (!activeSlide) {
+export async function updateCurrentImageScore(metadata) {
+  if (!metadata) {
     console.warn("No active slide found");
     return;
   }
 
-  const globalIndex = parseInt(activeSlide.dataset.index, 10);
-  const globalTotal = parseInt(activeSlide.dataset.total, 10);
-  const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10);
+  const globalIndex = parseInt(metadata.index, 10);
+  const globalTotal = parseInt(metadata.total, 10);
+  const searchIndex = parseInt(metadata.searchIndex, 10);
 
+  console.log("Updating score display with metadata:", metadata);
   if (state.searchResults.length === 0) {
     scoreDisplay.showIndex(globalIndex, globalTotal);
     return;
   }
 
-  if (activeSlide?.dataset?.score) {
-    const score = parseFloat(activeSlide.dataset.score);
+  if (metadata.score) {
+    const score = parseFloat(metadata.score);
     scoreDisplay.show(score, searchIndex + 1, state.searchResults.length);
     return;
   }
 
-  if (activeSlide?.dataset?.cluster) {
+  if (metadata.cluster) {
     scoreDisplay.showCluster(
-      activeSlide.dataset.cluster,
-      activeSlide.dataset.color,
+      metadata.cluster,
+      metadata.color,
       searchIndex + 1,
       state.searchResults.length
     );

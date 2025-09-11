@@ -1,5 +1,9 @@
 import { eventRegistry } from "./event-registry.js";
 import { toggleGridSwiperView } from "./events.js";
+import {
+  replaceReferenceImagesWithLinks,
+  updateCurrentImageScore,
+} from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js"; // Use individual image fetching
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
@@ -11,6 +15,7 @@ let slidesPerBatch = 0; // Number of slides to load per batch
 let slideHeight = 140; // Default slide height (reduced from 200)
 let currentRows = 0; // Track current grid dimensions
 let currentColumns = 0;
+let slideData = {}; // Store data for each slide
 
 const GRID_MAX_SCREENS = 6; // Keep up to this many screens in memory (tweakable)
 
@@ -56,6 +61,7 @@ export async function initializeGridSwiper() {
     state.swiper = null;
   }
   loadedImageIndices = new Set(); // Reset loaded images
+  slideData = {}; // Reset slide data
 
   // Calculate grid geometry
   const geometry = calculateGridGeometry();
@@ -102,7 +108,6 @@ export async function initializeGridSwiper() {
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.add("grid-mode");
 
-  // --- Add this block ---
   state.swiper.on("slideChange", () => {
     // Get the top-left visible slide's global index
     const slideEl = state.swiper.slides[state.swiper.activeIndex * currentRows];
@@ -114,7 +119,6 @@ export async function initializeGridSwiper() {
       }
     }
   });
-  // --- end block ---
 
   addGridEventListeners();
   updateCurrentSlideHighlight();
@@ -138,10 +142,13 @@ function addGridEventListeners() {
     resetAllSlides(0);
   });
 
-  eventRegistry.install(
-    { type: "grid", event: "slideChanged" },
-    updateCurrentSlideHighlight
-  );
+  eventRegistry.install({ type: "grid", event: "slideChanged" }, function () {
+    updateCurrentSlideHighlight();
+    updateMetadataOverlay();
+    updateCurrentImageScore(
+      slideData[slideState.getCurrentSlide().globalIndex]
+    );
+  });
 
   eventRegistry.install({ type: "grid", event: "setSlideIndex" }, (e) => {
     const { targetIndex, isSearchMode } = e.detail;
@@ -307,16 +314,17 @@ async function loadBatch(startIndex = null, append = true) {
         loadedImageIndices.add(globalIndex);
 
         // Note: slide creation should be its own function call.
-        slides.push(`
-          <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
-              data-global-index="${globalIndex}"
-              data-filename="${data.filename}"
-              onclick="handleGridSlideClick(${globalIndex})"
-              ondblclick="handleGridSlideDblClick(${globalIndex})">
-            <img src="${data.image_url}" alt="${data.filename}" 
-                style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
-          </div>
-        `);
+        slides.push(makeSlideHTML(data, globalIndex));
+        // slides.push(`
+        //   <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;"
+        //       data-global-index="${globalIndex}"
+        //       data-filename="${data.filename}"
+        //       onclick="handleGridSlideClick(${globalIndex})"
+        //       ondblclick="handleGridSlideDblClick(${globalIndex})">
+        //     <img src="${data.image_url}" alt="${data.filename}"
+        //         style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
+        //   </div>
+        // `);
         actuallyLoaded++;
       } catch (error) {
         console.error("Failed to load image:", error);
@@ -339,15 +347,7 @@ async function loadBatch(startIndex = null, append = true) {
         if (!data) continue;
 
         loadedImageIndices.add(globalIndex);
-
-        slides.push(`
-          <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
-               data-global-index="${globalIndex}"
-               onclick="handleGridSlideClick(${globalIndex})">
-                ondblclick="handleGridSlideDblClick(${globalIndex})">
-            <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover; border-radius:4px;" />
-          </div>
-        `);
+        slides.push(makeSlideHTML(data, globalIndex));
       } catch (error) {
         console.error("Failed to load image (prepend):", error);
         continue;
@@ -450,6 +450,7 @@ function enforceHighWaterMark(trimFromEnd = false) {
   // Remove from loadedImageIndices
   for (const g of removedGlobalIndices) {
     loadedImageIndices.delete(g);
+    delete slideData[g];
   }
 
   // Update Swiper internals
@@ -594,7 +595,8 @@ function setupGridResizeHandler() {
       ) {
         // Reinitialize the grid completely
         await initializeGridSwiper();
-        loadBatch();
+        await loadBatch();
+        await loadBatch(); // Load two batches to start
       }
     }, 300); // 300ms debounce delay
   }
@@ -622,4 +624,50 @@ function updateCurrentSlideHighlight() {
     // Optionally, scroll into view if needed:
     // currentSlide.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
+}
+
+// Make the slide and record its metadata prior to inserting into the grid
+//this should be harmonized with swiper.js
+// Data is the image metadata retrieved from the server side
+function makeSlideHTML(data, globalIndex) {
+  const searchIndex = slideState.globalToSearch(globalIndex);
+  if (searchIndex !== null && slideState.searchResults?.length > 0) {
+    data.score = slideState.searchResults[searchIndex]?.score || "";
+    data.cluster = slideState.searchResults[searchIndex]?.cluster || "";
+    data.color = slideState.searchResults[searchIndex]?.color || "#000000"; // Default
+  }
+  data.searchIndex = slideState.globalToSearch(globalIndex);
+  slideData[globalIndex] = data; // Cache the data
+
+  return `
+    <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
+        data-global-index="${globalIndex}"
+        onclick="handleGridSlideClick(${globalIndex})"
+        ondblclick="handleGridSlideDblClick(${globalIndex})">
+      <img src="${data.image_url}" alt="${data.filename}" 
+          style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
+    </div>
+  `;
+}
+
+// Update banner with current slide's metadata
+// To do: harmonize this with the similarly-named function in swiper.js
+function updateMetadataOverlay() {
+  const globalIndex = slideState.getCurrentSlide().globalIndex;
+  const data = slideData[globalIndex];
+  if (!data) return;
+
+  // Process description with reference image links
+  const rawDescription = data["description"] || "";
+  const referenceImages = data["reference_images"] || [];
+  const processedDescription = replaceReferenceImagesWithLinks(
+    rawDescription,
+    referenceImages,
+    state.album
+  );
+
+  document.getElementById("descriptionText").innerHTML = processedDescription;
+  document.getElementById("filenameText").textContent = data["filename"] || "";
+  document.getElementById("filepathText").textContent = data["filepath"] || "";
+  document.getElementById("metadataLink").href = data["metadata_url"] || "#";
 }
