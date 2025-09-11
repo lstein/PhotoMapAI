@@ -1,4 +1,5 @@
 import { eventRegistry } from "./event-registry.js";
+import { toggleGridSwiperView } from "./events.js";
 import { fetchImageByIndex } from "./search.js"; // Use individual image fetching
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
@@ -101,6 +102,20 @@ export async function initializeGridSwiper() {
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.add("grid-mode");
 
+  // --- Add this block ---
+  state.swiper.on("slideChange", () => {
+    // Get the top-left visible slide's global index
+    const slideEl = state.swiper.slides[state.swiper.activeIndex * currentRows];
+    if (slideEl) {
+      const globalIndex = parseInt(slideEl.dataset.globalIndex, 10);
+      console.log("Grid view slideChange, global index:", globalIndex);
+      if (!isNaN(globalIndex)) {
+        slideState.navigateToIndex(globalIndex, false);
+      }
+    }
+  });
+  // --- end block ---
+
   addGridEventListeners();
   updateCurrentSlideHighlight();
   setupContinuousNavigation();
@@ -173,6 +188,17 @@ function addGridEventListeners() {
   window.handleGridSlideClick = function (globalIndex) {
     console.log("Grid slide clicked, global index:", globalIndex);
     slideState.navigateToIndex(globalIndex, false);
+  };
+
+  // Handle double clicks on grid slides
+  window.handleGridSlideDblClick = function (globalIndex) {
+    console.log("Grid slide double clicked, global index:", globalIndex);
+    slideState.navigateToIndex(globalIndex, false), 100;
+
+    // add slight pause so that swiper settles down
+    setTimeout(() => {
+      toggleGridSwiperView(false); // Switch to swiper view
+    });
   };
 }
 
@@ -280,15 +306,17 @@ async function loadBatch(startIndex = null, append = true) {
 
         loadedImageIndices.add(globalIndex);
 
+        // Note: slide creation should be its own function call.
         slides.push(`
-    <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
-        data-global-index="${globalIndex}"
-        data-filename="${data.filename}"
-        onclick="handleGridSlideClick(${globalIndex})">
-      <img src="${data.image_url}" alt="${data.filename}" 
-          style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
-    </div>
-  `);
+          <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
+              data-global-index="${globalIndex}"
+              data-filename="${data.filename}"
+              onclick="handleGridSlideClick(${globalIndex})"
+              ondblclick="handleGridSlideDblClick(${globalIndex})">
+            <img src="${data.image_url}" alt="${data.filename}" 
+                style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
+          </div>
+        `);
         actuallyLoaded++;
       } catch (error) {
         console.error("Failed to load image:", error);
@@ -316,6 +344,7 @@ async function loadBatch(startIndex = null, append = true) {
           <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
                data-global-index="${globalIndex}"
                onclick="handleGridSlideClick(${globalIndex})">
+                ondblclick="handleGridSlideDblClick(${globalIndex})">
             <img src="${data.image_url}" alt="${data.filename}" style="width:100%; height:100%; object-fit:cover; border-radius:4px;" />
           </div>
         `);
@@ -437,7 +466,12 @@ function enforceHighWaterMark(trimFromEnd = false) {
     // Trimmed the tail: clamp active index so it stays valid
     const maxActive = Math.max(0, state.swiper.slides.length - currentColumns);
     const targetActive = Math.min(prevActive, maxActive);
-    console.log("Trimmed end, adjusting active index:", prevActive, "->", targetActive);
+    console.log(
+      "Trimmed end, adjusting active index:",
+      prevActive,
+      "->",
+      targetActive
+    );
     state.swiper.slideTo(targetActive, 0);
   }
 

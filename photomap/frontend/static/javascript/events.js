@@ -12,8 +12,7 @@ import {
 } from "./metadata-drawer.js";
 import {
   getCurrentFilepath,
-  getCurrentSlideIndex,
-  slideState,
+  getCurrentSlideIndex
 } from "./slide-state.js";
 import { state } from "./state.js";
 import {
@@ -400,37 +399,37 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 });
 
-// Show/hide grid button
-document.addEventListener("DOMContentLoaded", async function () {
+// Toggle grid/swiper views
+export async function toggleGridSwiperView(gridView = false) {
+  if (gridView === null)
+    state.gridViewActive = !state.gridViewActive;
+  else state.gridViewActive = gridView;
+  
+  const swiperContainer = document.querySelector(".swiper");
   const gridViewBtn = document.getElementById("gridViewBtn");
   const gridViewIcon = gridViewBtn.querySelector("svg");
-  const swiperContainer = document.querySelector(".swiper");
-
-  if (gridViewBtn) {
-    gridViewBtn.addEventListener("click", async () => {
-      state.gridViewActive = !state.gridViewActive;
-      // Always show the swiper container
-      swiperContainer.style.display = "";
-      eventRegistry.removeAll("swiper");
-      eventRegistry.removeAll("grid");
-      if (state.gridViewActive) {
-        await initializeGridSwiper();
-      } else {
-        await initializeSingleSwiper();
-      }
-      const event = new CustomEvent("swiperModeChanged", {
-        detail: { isGridMode: state.gridViewActive },
-      });
-      window.dispatchEvent(event);
-      setCheckmarkOnIcon(gridViewIcon, state.gridViewActive);
-    });
+  swiperContainer.style.display = ""; // Always show the swiper container
+  eventRegistry.removeAll("swiper");
+  eventRegistry.removeAll("grid");
+  if (state.gridViewActive) {
+    await initializeGridSwiper();
+  } else {
+    await initializeSingleSwiper();
   }
-
-  // Initialize in single image mode
-  await initializeSingleSwiper();
-  console.log("Initial slideState:", slideState);
   const event = new CustomEvent("swiperModeChanged", {
     detail: { isGridMode: state.gridViewActive },
   });
   window.dispatchEvent(event);
+  setCheckmarkOnIcon(gridViewIcon, state.gridViewActive);
+}
+
+// Show/hide grid button
+document.addEventListener("DOMContentLoaded", async function () {
+  const gridViewBtn = document.getElementById("gridViewBtn");
+
+  if (gridViewBtn)
+    gridViewBtn.addEventListener("click", toggleGridSwiperView);
+
+  // Initialize in swiper mode
+  toggleGridSwiperView(false);
 });
