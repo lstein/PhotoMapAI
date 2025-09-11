@@ -35,7 +35,7 @@ function calculateGridGeometry() {
     Math.min(maxTileSize, Math.min(actualTileWidth, actualTileHeight))
   );
   // Calculate slides per batch (one screen worth plus buffer)
-  const batchSize = rows * columns * 2; // Load 2 screens worth
+  const batchSize = rows * columns; // batchSize == screen size
 
   return {
     rows,
@@ -157,19 +157,7 @@ function addGridEventListeners() {
       console.log("Columns left in view:", slidesLeft);
       if (slidesLeft <= currentColumns) {
         console.log("Near end of slides, loading more...");
-        console.log(
-          "Last slide = ",
-          state.swiper.slides[state.swiper.slides.length - 1].dataset
-            .globalIndex
-        );
-        loadBatch(
-          parseInt(
-            state.swiper.slides[state.swiper.slides.length - 1].dataset
-              .globalIndex,
-            10
-          ) + 1,
-          false
-        );
+        loadBatch();
       }
     });
   }
@@ -209,58 +197,49 @@ async function resetAllSlides(targetIndex = null) {
     console.warn("Swiper reset/update failed:", err);
   }
 
-  console.log("calling loadBatch");
-  await loadBatch(targetIndex);
+  const currentSlide = slideState.getCurrentSlide();
+  const currentPosition = slideState.isSearchMode
+    ? currentSlide.searchIndex
+    : currentSlide.globalIndex;
 
-  // After loading, ensure Swiper knows about newly added slides
-  try {
-    state.swiper.update();
-  } catch (err) {
-    console.warn("Swiper update after append failed:", err);
-  }
-
-  // After loading, find the slide index in the DOM and slide to it (safe bounds checking)
-  const globalIndex = slideState.indexToGlobal(targetIndex);
-  const slides = Array.from(state.swiper.slides || []);
-  let domIndex = slides.findIndex(
-    (el) =>
-      el &&
-      el.dataset &&
-      !Number.isNaN(parseInt(el.dataset.globalIndex, 10)) &&
-      parseInt(el.dataset.globalIndex, 10) === globalIndex
-  );
-
-  if (domIndex >= 0) {
-    // domIndex must be a multiple of currentColumns
-    domIndex -= domIndex % currentColumns;
-    // Clamp to existing slide indices
-    domIndex = Math.max(0, Math.min(domIndex, Math.max(0, state.swiper.slides.length - 1)));
-    try {
-      state.swiper.slideTo(domIndex, 0);
-    } catch (err) {
-      console.warn("slideTo failed:", err);
-    }
-  }
+  console.log("calling loadBatch to include index", currentPosition);
+  await loadBatch(currentPosition, true);
+  await loadBatch(); // Load two batches to start in order to enable forward navigation
 }
 
 // Load a batch of slides starting at startIndex
 // The index is either the global index or search index based on current mode.
 // The startIndex will be adjusted to be an even multiple of the screen size.
-// If startIndex is greater than the screen size, then a full screen's worth of slides
-// will be prepended before the startIndex to allow scrolling back.
-async function loadBatch(startIndex = 0) {
-  console.log("loading a batch of slides starting at ", startIndex);
+// If startIndex is null, load the next batch after the last loaded slide.
+async function loadBatch(startIndex = null, append = true) {
   if (batchLoading) return; // Prevent concurrent loads
   batchLoading = true;
+  append = true;
 
-  // Pad startIndex to be a multiple of the screen size
-  const slidesPerScreen = currentColumns * currentRows;
-  startIndex = Math.floor(startIndex / slidesPerScreen) * slidesPerScreen;
+  if (startIndex === null) {
+    // Load after the last loaded slide
+    if (!state.swiper.slides?.length) {
+      startIndex = 0;
+    } else {
+      let lastSlideIndex = state.swiper.slides.length - 1;
+      startIndex = slideState.isSearchMode
+        ? lastSlideIndex
+        : parseInt(
+            state.swiper.slides[lastSlideIndex].dataset.globalIndex,
+            10
+          ) + 1;
+    }
+  }
+
+  console.log("loadBatch called with startIndex:", startIndex);
+  // Round to closest multiple of slidesPerBatch
+  startIndex = Math.floor((startIndex + 1) / slidesPerBatch) * slidesPerBatch;
+  console.log("loading a batch of slides starting at ", startIndex);
 
   // Subtle gotcha here. The swiper activeIndex is the index of the first visible column.
   // So if the number of columns is 4, then the activeIndexes will be 0, 4, 8, 12, ...
   const prepend_screen =
-    state.swiper.activeIndex == 0 && startIndex >= slidesPerScreen;
+    state.swiper.activeIndex == 0 && startIndex >= slidesPerBatch;
 
   // Get the currentPosition for highlighting. This does not
   // affect the number or order of slides loaded.
@@ -269,7 +248,6 @@ async function loadBatch(startIndex = 0) {
     ? currentSlide.searchIndex
     : currentSlide.globalIndex;
 
-  // --- NORMAL BATCH LOAD (append) ---
   const slides = [];
   let actuallyLoaded = 0;
 
@@ -281,50 +259,46 @@ async function loadBatch(startIndex = 0) {
   );
 
   // --- NORMAL BATCH LOAD ---
-  for (let i = 0; i < slidesPerBatch; i++) {
-    // Calculate offset from current slide position
-    const offset = startIndex + i;
+  if (append) {
+    for (let i = 0; i < slidesPerBatch; i++) {
+      // Calculate offset from current slide position
+      const offset = startIndex + i;
 
-    // Use slideState.resolveOffset to get the correct indices for this position
-    const globalIndex = slideState.indexToGlobal(offset);
+      // Use slideState.resolveOffset to get the correct indices for this position
+      const globalIndex = slideState.indexToGlobal(offset);
 
-    // In the event that the slide is already loaded, skip it.
-    // I'm not sure this logic is necessary if load tracking is done correctly.
-    if (loadedImageIndices.has(globalIndex)) {
-      continue;
+      // In the event that the slide is already loaded, skip it.
+      // I'm not sure this logic is necessary if load tracking is done correctly.
+      if (loadedImageIndices.has(globalIndex)) {
+        continue;
+      }
+
+      try {
+        const data = await fetchImageByIndex(globalIndex);
+        if (!data) break;
+
+        loadedImageIndices.add(globalIndex);
+
+        slides.push(`
+    <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
+        data-global-index="${globalIndex}"
+        onclick="handleGridSlideClick(${globalIndex})">
+      <img src="${data.image_url}" alt="${data.filename}" 
+          style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
+    </div>
+  `);
+        actuallyLoaded++;
+      } catch (error) {
+        console.error("Failed to load image:", error);
+        break;
+      }
     }
 
-    try {
-      const data = await fetchImageByIndex(globalIndex);
-      if (!data) break;
-
-      loadedImageIndices.add(globalIndex);
-
-      slides.push(`
-  <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
-       data-global-index="${globalIndex}"
-       onclick="handleGridSlideClick(${globalIndex})">
-    <img src="${data.image_url}" alt="${data.filename}" 
-         style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
-  </div>
-`);
-      actuallyLoaded++;
-    } catch (error) {
-      console.error("Failed to load image:", error);
-      break;
-    }
-  }
-
-  if (slides.length > 0) {
-    state.swiper.appendSlide(slides);
-    // Optionally, scroll to the first slide of the batch if needed
-    // state.swiper.slideTo(0);
-  }
-
-  // --- PREPEND LOGIC: Add a full screen's worth of slides before startIndex ---
-  if (prepend_screen) {
-    const prependSlides = [];
-    for (let i = 0; i < slidesPerScreen; i++) {
+    if (slides.length > 0) state.swiper.appendSlide(slides);
+  } else {
+    console.log("Prepending a screen of slides before index", startIndex);
+    // --- PREPEND LOGIC: Add a full screen's worth of slides before startIndex ---
+    for (let i = 0; i < slidesPerBatch; i++) {
       const globalIndex = slideState.indexToGlobal(startIndex - i - 1); // reverse order
       // not sure this is wanted here
       if (loadedImageIndices.has(globalIndex)) continue;
@@ -335,7 +309,7 @@ async function loadBatch(startIndex = 0) {
 
         loadedImageIndices.add(globalIndex);
 
-        prependSlides.push(`
+        slides.push(`
           <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
                data-global-index="${globalIndex}"
                onclick="handleGridSlideClick(${globalIndex})">
@@ -347,8 +321,8 @@ async function loadBatch(startIndex = 0) {
         continue;
       }
     }
-    if (prependSlides.length > 0) {
-      state.swiper.prependSlide(prependSlides);
+    if (slides.length > 0) {
+      state.swiper.prependSlide(slides);
       // Move to the first slide of the newly loaded batch.
       // This will be currentColumns.
       // state.swiper.slideTo(currentColumns);
@@ -356,6 +330,8 @@ async function loadBatch(startIndex = 0) {
   }
 
   batchLoading = false;
+  const screenContainingCurrent = Math.floor(currentPosition / slidesPerBatch);
+  // state.swiper.slideTo(screenContainingCurrent * currentColumns);
   updateCurrentSlideHighlight();
   console.log("Finished loading batch, actuallyLoaded:", actuallyLoaded);
   return actuallyLoaded > 0;
