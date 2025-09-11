@@ -282,6 +282,7 @@ async function loadBatch(startIndex = null, append = true) {
         slides.push(`
     <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
         data-global-index="${globalIndex}"
+        data-filename="${data.filename}"
         onclick="handleGridSlideClick(${globalIndex})">
       <img src="${data.image_url}" alt="${data.filename}" 
           style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />

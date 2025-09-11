@@ -2,6 +2,7 @@
 // This file handles the search functionality for the Clipslide application.
 // Swiper initialization
 import { calculate_search_score_cutoff, searchImage, searchTextAndImage, setSearchResults } from "./search.js";
+import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { pauseSlideshow, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
@@ -134,7 +135,15 @@ document.addEventListener("DOMContentLoaded", async function () {
   imageSearchBtn.addEventListener("click", async function () {
     searchInput.value = "";
     negativeSearchInput.value = "";
-    const slide = state.swiper.slides[state.swiper.activeIndex];
+    let slide;
+    const currentSlide = slideState.getCurrentSlide();
+    if (currentSlide) {
+      const globalIndex = currentSlide.globalIndex;
+      slide = state.swiper.slides.find((s) => parseInt(s.dataset.globalIndex, 10) === globalIndex);
+      console.log("Found slide for globalIndex", globalIndex, ":", slide);
+    } else {
+      slide = state.swiper.slides[state.swiper.activeIndex];  
+    }
     if (!slide) return;
     const imgUrl = slide.querySelector("img")?.src;
     const filename = slide.dataset.filename || "image.jpg";
