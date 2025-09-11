@@ -23,6 +23,7 @@ class SlideStateManager {
 
     // Listen for album changes
     window.addEventListener("albumChanged", (e) => {
+      console.log("SlideStateManager detected album change:", e.detail);
       this.handleAlbumChanged(e.detail);
     });
   }
@@ -49,7 +50,9 @@ class SlideStateManager {
    * @returns {number} Current index (search or global)
    */
   getCurrentIndex() {
-    return this.isSearchMode ? this.currentSearchIndex : this.currentGlobalIndex;
+    return this.isSearchMode
+      ? this.currentSearchIndex
+      : this.currentGlobalIndex;
   }
 
   /**
@@ -146,7 +149,12 @@ class SlideStateManager {
    * @param {number} searchIndex - The search results index (optional)
    */
   updateFromExternal(globalIndex, searchIndex = null) {
-    console.log("Updating from navigation:", { globalIndex, searchIndex }, "search mode=", this.isSearchMode);
+    console.log(
+      "Updating from navigation:",
+      { globalIndex, searchIndex },
+      "search mode=",
+      this.isSearchMode
+    );
     if (this.isSearchMode && searchIndex !== null) {
       this.currentGlobalIndex = this.searchResults[searchIndex].index;
       this.currentSearchIndex = searchIndex;
@@ -157,17 +165,20 @@ class SlideStateManager {
     }
     this.notifySlideChanged();
   }
-  
+
   /**
    * Convert an index into a globalIndex.
    * The provided index will be interpreted according to the search mode.
    * @param {number} index - The index to convert
    * @returns {number|null} The corresponding global index, or null if out of bounds
    */
-    indexToGlobal(index) {
+  indexToGlobal(index) {
     if (this.isSearchMode && this.searchResults.length > 0) {
       // Clamp to valid range
-      const clampedIndex = Math.max(0, Math.min(index, this.searchResults.length - 1));
+      const clampedIndex = Math.max(
+        0,
+        Math.min(index, this.searchResults.length - 1)
+      );
       return this.searchResults[clampedIndex]?.index || null;
     } else {
       // Clamp to valid range
@@ -202,7 +213,8 @@ class SlideStateManager {
    */
   searchToGlobal(searchIndex) {
     if (this.isSearchMode && this.searchResults.length > 0) {
-      if (searchIndex < 0 || searchIndex >= this.searchResults.length) return null;
+      if (searchIndex < 0 || searchIndex >= this.searchResults.length)
+        return null;
       return this.searchResults[searchIndex]?.index;
     }
     return null;
@@ -213,7 +225,7 @@ class SlideStateManager {
    */
   globalToSearch(globalIndex) {
     if (this.isSearchMode && this.searchResults.length > 0) {
-      return this.searchResults.findIndex(r => r.index === globalIndex);
+      return this.searchResults.findIndex((r) => r.index === globalIndex);
     }
     return null;
   }
@@ -221,7 +233,7 @@ class SlideStateManager {
   // --- Event Handlers ---
 
   handleSearchResultsChanged({ results, searchType }) {
-    if (searchType === "clear") {
+    if (searchType === "clear" || results.length === 0) {
       this.exitSearchMode();
     } else {
       this.enterSearchMode(results, 0);

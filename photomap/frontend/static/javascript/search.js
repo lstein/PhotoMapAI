@@ -45,6 +45,9 @@ export async function fetchImageByIndex(index) {
 export function setSearchResults(results, searchType) {
   state.searchType = searchType;
   state.searchResults = results;
+  console.log("Search results updated:", results.length, "results for type:", searchType);  
+  if (searchType === "switchAlbum")
+    return; // Don't trigger event on album change
   window.dispatchEvent(
     new CustomEvent("searchResultsChanged", {
       detail: {

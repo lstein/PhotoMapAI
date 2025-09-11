@@ -6,7 +6,7 @@ import { state } from "./state.js";
 let loadedImageIndices = new Set(); // Track which images we've already loaded
 let batchLoading = false; // Prevent concurrent batch loads
 let slidesPerBatch = 0; // Number of slides to load per batch
-let slideHeight = 200; // Default slide height
+let slideHeight = 140; // Default slide height (reduced from 200)
 let currentRows = 0; // Track current grid dimensions
 let currentColumns = 0;
 
@@ -16,10 +16,10 @@ function calculateGridGeometry() {
   const availableWidth = gridContainer.offsetWidth - 24; // Account for padding
   const availableHeight = window.innerHeight - 120; // Account for header/footer
 
-  // Target square tile size
-  const targetTileSize = 200; // Base tile size
-  const minTileSize = 150;
-  const maxTileSize = 300;
+  // Target square tile size (reduced)
+  const targetTileSize = 140; // Base tile size (was 200)
+  const minTileSize = 100; // allow smaller tiles
+  const maxTileSize = 200; // cap max size lower than before
 
   // Calculate columns and rows to fit available space with square tiles
   const columns = Math.max(2, Math.floor(availableWidth / targetTileSize));
@@ -77,7 +77,7 @@ export async function initializeGridSwiper() {
       rows: currentRows,
       fill: "column",
     },
-    spaceBetween: 8, // Reduced spacing for better fit
+    spaceBetween: 6, // Reduced spacing for smaller tiles (was 8)
     mousewheel: {
       enabled: true,
       sensitivity: 10,
@@ -138,7 +138,9 @@ function addGridEventListeners() {
 
   // Reset grid when search results or album changes
   eventRegistry.install({ type: "grid", event: "albumChanged" }, () => {
-    resetAllSlides(0);
+    console.log("Grid view detected album change");
+    // slideState.handleAlbumChanged();
+    resetAllSlides();
   });
 
   if (state.swiper) {

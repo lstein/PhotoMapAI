@@ -226,6 +226,8 @@ function initializeEventHandlers() {
 
   // Reset slide show when the album changes
   eventRegistry.install({ type: "swiper", event: "albumChanged" }, () => {
+    console.log("Swiper detected album change");
+    initializeSingleSwiper();
     resetAllSlides();
   });
 
@@ -310,6 +312,7 @@ export async function addSlideByIndex(
   prepend = false
 ) {
   if (!state.swiper) return;
+  console.trace("Adding slide for globalIndex:", globalIndex, "searchIndex:", searchIndex, "prepend:", prepend);
 
   // Prevent duplicates
   const exists = Array.from(state.swiper.slides).some(
