@@ -418,7 +418,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       } else {
         await initializeSingleSwiper();
       }
-      console.log("slideState after grid toggle:", slideState);
       const event = new CustomEvent("swiperModeChanged", {
         detail: { isGridMode: state.gridViewActive },
       });

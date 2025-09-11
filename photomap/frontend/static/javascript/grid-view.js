@@ -11,6 +11,8 @@ let slideHeight = 140; // Default slide height (reduced from 200)
 let currentRows = 0; // Track current grid dimensions
 let currentColumns = 0;
 
+const GRID_MAX_SCREENS = 6; // Keep up to this many screens in memory (tweakable)
+
 // Consolidated geometry calculation function
 function calculateGridGeometry() {
   const gridContainer = document.querySelector(".swiper");
@@ -60,10 +62,6 @@ export async function initializeGridSwiper() {
   currentColumns = geometry.columns;
   slideHeight = geometry.tileSize;
   slidesPerBatch = geometry.batchSize;
-
-  console.log(
-    `Grid initialized: ${currentColumns}x${currentRows}, tile size: ${slideHeight}px, batch size: ${slidesPerBatch}`
-  );
 
   // Prepare Swiper container
   const swiperWrapper = document.querySelector(".swiper .swiper-wrapper");
@@ -142,7 +140,6 @@ function addGridEventListeners() {
 
   // Reset grid when search results or album changes
   eventRegistry.install({ type: "grid", event: "albumChanged" }, () => {
-    console.log("Grid view detected album change");
     // slideState.handleAlbumChanged();
     resetAllSlides();
   });
@@ -151,18 +148,10 @@ function addGridEventListeners() {
     // Load more when reaching the end
     state.swiper.on("slideNextTransitionStart", async () => {
       if (batchLoading) return; // Prevent concurrent loads
-      console.log(
-        "slideChange event detected, slides length:",
-        state.swiper.slides.length,
-        "activeIndex:",
-        state.swiper.activeIndex
-      );
       const slidesLeft =
         Math.floor(state.swiper.slides.length / currentRows) -
         state.swiper.activeIndex;
-      console.log("Columns left in view:", slidesLeft);
       if (slidesLeft <= currentColumns) {
-        console.log("Near end of slides, loading more...");
         loadBatch();
       }
     });
@@ -170,16 +159,11 @@ function addGridEventListeners() {
     // Load more when reaching the start
     state.swiper.on("slidePrevTransitionStart", async () => {
       if (batchLoading) return; // Prevent concurrent loads
-      console.log(
-        "slidePrevTransitionStart event detected, activeIndex:",
-        state.swiper.activeIndex
-      );
       const firstSlide = parseInt(
         state.swiper.slides[0].dataset.globalIndex,
         10
       );
-      if (firstSlide > 0) {
-        console.log("At the beginning of slides, loading previous batch...");
+      if (firstSlide > 0 && state.swiper.activeIndex === 0) {
         loadBatch(firstSlide - 1, false); // Prepend a batch at the start
       }
     });
@@ -204,7 +188,6 @@ async function resetAllSlides(targetIndex = null) {
 
   if (!state.swiper) return;
 
-  console.log("calling removeAllSlides");
   // remove all slides and force Swiper internal state to a safe baseline
   try {
     state.swiper.removeAllSlides();
@@ -226,7 +209,6 @@ async function resetAllSlides(targetIndex = null) {
     ? currentSlide.searchIndex
     : currentSlide.globalIndex;
 
-  console.log("calling loadBatch to include index", currentPosition);
   await loadBatch(currentPosition, true);
   await loadBatch(); // Load two batches to start in order to enable forward navigation
   if (currentPosition > 0) {
@@ -242,6 +224,7 @@ async function resetAllSlides(targetIndex = null) {
 async function loadBatch(startIndex = null, append = true) {
   if (batchLoading) return; // Prevent concurrent loads
   batchLoading = true;
+  console.trace("Loading batch, startIndex:", startIndex, "append:", append);
 
   if (startIndex === null) {
     // Load after the last loaded slide
@@ -258,10 +241,8 @@ async function loadBatch(startIndex = null, append = true) {
     }
   }
 
-  console.log("loadBatch called with startIndex:", startIndex);
   // Round to closest multiple of slidesPerBatch
   startIndex = Math.floor((startIndex + 1) / slidesPerBatch) * slidesPerBatch;
-  console.log("loading a batch of slides starting at ", startIndex);
 
   // Subtle gotcha here. The swiper activeIndex is the index of the first visible column.
   // So if the number of columns is 4, then the activeIndexes will be 0, 4, 8, 12, ...
@@ -277,13 +258,6 @@ async function loadBatch(startIndex = null, append = true) {
 
   const slides = [];
   let actuallyLoaded = 0;
-
-  console.log(
-    "Loading batch from index:",
-    startIndex,
-    "Highlight the slide at:",
-    currentPosition
-  );
 
   // --- NORMAL BATCH LOAD ---
   if (append) {
@@ -323,8 +297,9 @@ async function loadBatch(startIndex = null, append = true) {
     }
 
     if (slides.length > 0) state.swiper.appendSlide(slides);
+    // enforce high water mark after appending
+    enforceHighWaterMark(false);
   } else {
-    console.log("Prepending a screen of slides before index", startIndex);
     // --- PREPEND LOGIC: Add a full screen's worth of slides before startIndex ---
     for (let i = 0; i < slidesPerBatch; i++) {
       const globalIndex = slideState.indexToGlobal(startIndex - i - 1); // reverse order
@@ -352,6 +327,8 @@ async function loadBatch(startIndex = null, append = true) {
     if (slides.length > 0) {
       state.swiper.prependSlide(slides);
       state.swiper.slideTo(currentColumns, 0); // maintain current view
+      // enforce high water mark after prepending (trim the other side)
+      enforceHighWaterMark(true);
     }
   }
 
@@ -359,8 +336,112 @@ async function loadBatch(startIndex = null, append = true) {
   const screenContainingCurrent = Math.floor(currentPosition / slidesPerBatch);
   // state.swiper.slideTo(screenContainingCurrent * currentColumns);
   updateCurrentSlideHighlight();
-  console.log("Finished loading batch, actuallyLoaded:", actuallyLoaded);
   return actuallyLoaded > 0;
+}
+
+//
+// High-water mark trimming: remove slides in batches (slidesPerBatch) from the start or end
+//
+function enforceHighWaterMark(trimFromEnd = false) {
+  if (!state.swiper || !slidesPerBatch || slidesPerBatch <= 0) return;
+
+  const maxScreens = GRID_MAX_SCREENS;
+  const highWaterSlides = slidesPerBatch * maxScreens;
+
+  const len = state.swiper.slides.length;
+  if (len <= highWaterSlides) return;
+
+  // How many slides we need to remove to get back to the high-water mark
+  let excessSlides = len - highWaterSlides;
+  // Number of whole screens to remove (round up so we clear enough)
+  const removeScreens = Math.ceil(excessSlides / slidesPerBatch);
+  const removeCount = Math.min(removeScreens * slidesPerBatch, len);
+
+  // Record indices to remove in one batch operation
+  const removeIndices = [];
+  if (!trimFromEnd) {
+    // remove from start: 0 .. removeCount-1
+    for (let i = 0; i < removeCount; i++) removeIndices.push(i);
+  } else {
+    // remove from end: len-removeCount .. len-1
+    for (let i = len - removeCount; i < len; i++) removeIndices.push(i);
+  }
+
+  // Preserve current active index before removal so we can adjust after
+  const prevActive = state.swiper.activeIndex;
+
+  // Collect global indices to update loadedImageIndices
+  const removedGlobalIndices = [];
+  for (const idx of removeIndices) {
+    const slideEl = state.swiper.slides[idx];
+    if (!slideEl) continue;
+    const g = slideEl.dataset?.globalIndex ?? slideEl.dataset?.index;
+    if (g !== undefined && g !== null && g !== "") {
+      removedGlobalIndices.push(parseInt(g, 10));
+    }
+  }
+
+  console.log(
+    `Enforcing high water mark: removing ${removeCount} slides (${removeScreens} screens) from ${
+      trimFromEnd ? "end" : "start"
+    }`
+  );
+  // Attempt to remove all at once
+  try {
+    state.swiper.removeSlide(removeIndices);
+  } catch (err) {
+    console.log("Batch remove failed, falling back to one-by-one:", err);
+    // Fallback: remove one-by-one (should be rare)
+    if (!trimFromEnd) {
+      for (let i = 0; i < removeCount; i++) {
+        const slideEl = state.swiper.slides[0];
+        if (slideEl) {
+          const g = slideEl.dataset?.globalIndex ?? slideEl.dataset?.index;
+          if (g !== undefined && g !== null && g !== "") {
+            removedGlobalIndices.push(parseInt(g, 10));
+          }
+        }
+        state.swiper.removeSlide(0);
+      }
+    } else {
+      for (let i = 0; i < removeCount; i++) {
+        const idx = state.swiper.slides.length - 1;
+        const slideEl = state.swiper.slides[idx];
+        if (slideEl) {
+          const g = slideEl.dataset?.globalIndex ?? slideEl.dataset?.index;
+          if (g !== undefined && g !== null && g !== "") {
+            removedGlobalIndices.push(parseInt(g, 10));
+          }
+        }
+        state.swiper.removeSlide(idx);
+      }
+    }
+  }
+
+  // Remove from loadedImageIndices
+  for (const g of removedGlobalIndices) {
+    loadedImageIndices.delete(g);
+  }
+
+  // Update Swiper internals
+  state.swiper.update();
+
+  // Adjust active index once to avoid a jump:
+  if (!trimFromEnd) {
+    // We removed removeScreens full screens from the start.
+    // Each screen corresponds to currentColumns columns.
+    const deltaColumns = currentColumns * removeScreens;
+    const newActive = Math.max(0, prevActive - deltaColumns);
+    state.swiper.slideTo(newActive, 0);
+  } else {
+    // Trimmed the tail: clamp active index so it stays valid
+    const maxActive = Math.max(0, state.swiper.slides.length - currentColumns);
+    const targetActive = Math.min(prevActive, maxActive);
+    console.log("Trimmed end, adjusting active index:", prevActive, "->", targetActive);
+    state.swiper.slideTo(targetActive, 0);
+  }
+
+  state.swiper.update();
 }
 
 function setupContinuousNavigation() {
@@ -477,10 +558,6 @@ function setupGridResizeHandler() {
         newGeometry.columns !== currentColumns ||
         Math.abs(newGeometry.tileSize - slideHeight) > 10
       ) {
-        console.log(
-          `Grid resize: ${currentColumns}x${currentRows} -> ${newGeometry.columns}x${newGeometry.rows}, tile size: ${slideHeight}px -> ${newGeometry.tileSize}px`
-        );
-
         // Reinitialize the grid completely
         await initializeGridSwiper();
         loadBatch();
