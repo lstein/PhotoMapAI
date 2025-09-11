@@ -1,3 +1,4 @@
+// I THINK THIS IS UNUSED NOW
 // Functions for retrieving slides from the album or search results
 import { fetchImageByIndex } from "./search.js";
 import { state } from "./state.js";
@@ -22,19 +23,3 @@ export async function fetchSlideBatch(offset=0, count = 1) {
   }
   return slides;
 }
-
-// // Keep track of the current slide index
-// // Returns an array of [globalIndex, totalImages, searchIndex]
-// // searchIndex is the index within the search results.
-// // Indices are returned as -1 if not available.
-// export async function getCurrentSlideIndex() {
-
-//   // Handle search results
-//   if (state.searchResults.length > 0) {
-//     if (state.currentGlobalIndex === -1) {
-//       return [-1, state.searchResults.length, -1]; // Default to first slide if no current slide
-//     } else {
-//       return [state.currentGlobalIndex, state.searchResults.length, state.currentSearchIndex]
-//     }
-//   }
-// }

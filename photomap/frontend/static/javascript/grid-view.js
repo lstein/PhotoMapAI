@@ -2,6 +2,7 @@ import { eventRegistry } from "./event-registry.js";
 import { fetchImageByIndex } from "./search.js"; // Use individual image fetching
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
+import { hideSpinner, showSpinner } from "./utils.js";
 
 let loadedImageIndices = new Set(); // Track which images we've already loaded
 let batchLoading = false; // Prevent concurrent batch loads
@@ -77,6 +78,9 @@ export async function initializeGridSwiper() {
       rows: currentRows,
       fill: "column",
     },
+    virtual: {
+      enabled: false,
+    },
     spaceBetween: 6, // Reduced spacing for smaller tiles (was 8)
     mousewheel: {
       enabled: true,
@@ -145,7 +149,7 @@ function addGridEventListeners() {
 
   if (state.swiper) {
     // Load more when reaching the end
-    state.swiper.on("slideChange", async () => {
+    state.swiper.on("slideNextTransitionStart", async () => {
       if (batchLoading) return; // Prevent concurrent loads
       console.log(
         "slideChange event detected, slides length:",
@@ -162,6 +166,23 @@ function addGridEventListeners() {
         loadBatch();
       }
     });
+
+    // Load more when reaching the start
+    state.swiper.on("slidePrevTransitionStart", async () => {
+      if (batchLoading) return; // Prevent concurrent loads
+      console.log(
+        "slidePrevTransitionStart event detected, activeIndex:",
+        state.swiper.activeIndex
+      );
+      const firstSlide = parseInt(
+        state.swiper.slides[0].dataset.globalIndex,
+        10
+      );
+      if (firstSlide > 0) {
+        console.log("At the beginning of slides, loading previous batch...");
+        loadBatch(firstSlide - 1, false); // Prepend a batch at the start
+      }
+    });
   }
 
   // Handle clicks on grid slides
@@ -176,6 +197,7 @@ function addGridEventListeners() {
 // @param {number|null} targetIndex - Optional index to include in first screen.
 // If null, use current slide index.
 async function resetAllSlides(targetIndex = null) {
+  showSpinner();
   if (targetIndex === null) targetIndex = slideState.getCurrentIndex() || 0;
 
   loadedImageIndices.clear();
@@ -207,6 +229,10 @@ async function resetAllSlides(targetIndex = null) {
   console.log("calling loadBatch to include index", currentPosition);
   await loadBatch(currentPosition, true);
   await loadBatch(); // Load two batches to start in order to enable forward navigation
+  if (currentPosition > 0) {
+    await loadBatch(currentPosition, false); // Prepend a screen if not at start
+  }
+  hideSpinner();
 }
 
 // Load a batch of slides starting at startIndex
@@ -216,7 +242,6 @@ async function resetAllSlides(targetIndex = null) {
 async function loadBatch(startIndex = null, append = true) {
   if (batchLoading) return; // Prevent concurrent loads
   batchLoading = true;
-  append = true;
 
   if (startIndex === null) {
     // Load after the last loaded slide
@@ -326,9 +351,7 @@ async function loadBatch(startIndex = null, append = true) {
     }
     if (slides.length > 0) {
       state.swiper.prependSlide(slides);
-      // Move to the first slide of the newly loaded batch.
-      // This will be currentColumns.
-      // state.swiper.slideTo(currentColumns);
+      state.swiper.slideTo(currentColumns, 0); // maintain current view
     }
   }
 
