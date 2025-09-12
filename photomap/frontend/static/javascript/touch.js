@@ -2,7 +2,6 @@
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
 import { toggleSlideshowWithIndicator } from "./events.js";
-import { toggleMetadataOverlay } from "./metadata-drawer.js";
 import { pauseSlideshow } from "./swiper.js";
 
 // Touch events
@@ -102,14 +101,8 @@ function handleTouchEnd(e) {
     }
   }
 
-  if (isTap) {
-    const container = document.getElementById("bannerDrawerContainer");
-    if (container.classList.contains("visible")) {
-      toggleMetadataOverlay();
-    } else if (document.fullscreenElement) {
-      // Only toggle slideshow if in fullscreen mode
+  if (isTap && document.fullScreenElement) {
       toggleSlideshowWithIndicator();
-    }
   } else {
     // Only detect horizontal swipe (left/right) for pausing slideshow
     if (

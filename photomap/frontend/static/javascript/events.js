@@ -348,6 +348,8 @@ export function toggleSlideshowWithIndicator() {
     pauseSlideshow();
     showPlayPauseIndicator(false); // Show pause indicator
   } else {
+    if (state.gridViewActive)
+      toggleGridSwiperView(false); // Switch to swiper mode if in grid mode
     resumeSlideshow();
     showPlayPauseIndicator(true); // Show play indicator
   }
