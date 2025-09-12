@@ -145,22 +145,18 @@ function addGridEventListeners() {
     }
   );
 
-  eventRegistry.install({ type: "grid", event: "searchResultsChanged" }, (e) => {
-    resetAllSlides(0);
-    // slideState.setCurrentIndex(0, true); // Go to first search result
-    // updateCurrentSlideHighlight();
-    // updateMetadataOverlay();
-    // updateCurrentImageScore(slideData[0] || null);
-  });
+  eventRegistry.install(
+    { type: "grid", event: "searchResultsChanged" },
+    (e) => {
+      resetAllSlides(0);
+    }
+  );
 
-  // eventRegistry.install({ type: "grid", event: "slideChanged" }, function (e) {
-  //   slideState.setCurrentIndex(e.detail.globalIndex, false);
-  //   if (slideData.length === 0) return;
-  //   updateCurrentSlideHighlight();
-  //   updateMetadataOverlay();
-  //   console.log("e.detail = ", e.detail, " slideData = ",slideData[e.detail.globalIndex]);
-  //   updateCurrentImageScore(slideData[e.detail.globalIndex] || null);
-  // });
+  // we don't do anything with this event, yet
+  eventRegistry.install(
+    { type: "grid", event: "slideChanged" },
+    function (e) {}
+  );
 
   eventRegistry.install({ type: "grid", event: "setSlideIndex" }, (e) => {
     const { targetIndex, isSearchMode } = e.detail;
@@ -185,8 +181,30 @@ function addGridEventListeners() {
       const slidesLeft =
         Math.floor(state.swiper.slides.length / currentRows) -
         state.swiper.activeIndex;
+      console.log(
+        "Slides left in grid view:",
+        slidesLeft,
+        "activeIndex:",
+        state.swiper.activeIndex,
+        "total slides:",
+        state.swiper.slides.length / currentRows
+      );
       if (slidesLeft <= currentColumns) {
-        loadBatch();
+        const lastSlideIndex =
+          parseInt(
+            state.swiper.slides[state.swiper.slides.length - 1].dataset.globalIndex,
+            10
+          ) || 0;
+        const index = slideState.isSearchMode
+          ? slideState.globalToSearch(lastSlideIndex) + 1
+          : lastSlideIndex + 1;
+        console.log(
+          "lastSlideIndex:",
+          lastSlideIndex,
+          "loading from index:",
+          index
+        );
+        loadBatch(index, true); // Append a batch at the end
       }
     });
 
@@ -197,15 +215,21 @@ function addGridEventListeners() {
         state.swiper.slides[0].dataset.globalIndex,
         10
       );
+      const index = slideState.isSearchMode ? slideState.globalToSearch(firstSlide) : firstSlide;
       if (firstSlide > 0 && state.swiper.activeIndex === 0) {
-        loadBatch(firstSlide - 1, false); // Prepend a batch at the start
+        loadBatch(index - 1, false); // Prepend a batch at the start
       }
     });
   }
 
   // Handle clicks on grid slides
   window.handleGridSlideClick = function (globalIndex) {
-    console.log("Grid slide clicked, global index:", globalIndex);
+    console.log(
+      "Grid slide clicked, global index:",
+      globalIndex,
+      "search index:",
+      slideState.globalToSearch(globalIndex)
+    );
     slideState.setCurrentIndex(globalIndex, false);
     // adjust the highlight
     updateCurrentSlideHighlight();
@@ -266,8 +290,7 @@ async function resetAllSlides(targetIndex = null) {
   }
   updateCurrentSlideHighlight();
   updateMetadataOverlay();
-  console.log("slideData = ",slideData[0]);
-  updateCurrentImageScore(slideData[0] || null);
+  updateCurrentImageScore(slideData[slideState.searchToGlobal(0)] || null);
   hideSpinner();
 }
 
@@ -284,9 +307,9 @@ async function loadBatch(startIndex = null, append = true) {
     if (!state.swiper.slides?.length) {
       startIndex = 0;
     } else {
-      let lastSlideIndex = state.swiper.slides.length;
+      let lastSlideIndex = state.swiper.slides.length - 1;
       startIndex = slideState.isSearchMode
-        ? lastSlideIndex
+        ? lastSlideIndex + 1
         : parseInt(
             state.swiper.slides[lastSlideIndex].dataset.globalIndex,
             10
@@ -336,16 +359,6 @@ async function loadBatch(startIndex = null, append = true) {
 
         // Note: slide creation should be its own function call.
         slides.push(makeSlideHTML(data, globalIndex));
-        // slides.push(`
-        //   <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;"
-        //       data-global-index="${globalIndex}"
-        //       data-filename="${data.filename}"
-        //       onclick="handleGridSlideClick(${globalIndex})"
-        //       ondblclick="handleGridSlideDblClick(${globalIndex})">
-        //     <img src="${data.image_url}" alt="${data.filename}"
-        //         style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
-        //   </div>
-        // `);
         actuallyLoaded++;
       } catch (error) {
         console.error("Failed to load image:", error);
@@ -383,9 +396,13 @@ async function loadBatch(startIndex = null, append = true) {
   }
 
   batchLoading = false;
-  const screenContainingCurrent = Math.floor(currentPosition / slidesPerBatch);
+  // const screenContainingCurrent = Math.floor(currentPosition / slidesPerBatch);
   // state.swiper.slideTo(screenContainingCurrent * currentColumns);
   updateCurrentSlideHighlight();
+  updateCurrentImageScore(
+    slideData[slideState.indexToGlobal(currentPosition)] || null
+  );
+  updateMetadataOverlay();
   return actuallyLoaded > 0;
 }
 
@@ -645,8 +662,6 @@ function updateCurrentSlideHighlight(globalIndex = null) {
   );
   if (currentSlide) {
     currentSlide.classList.add("current-slide");
-    // Optionally, scroll into view if needed:
-    // currentSlide.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 }
 
@@ -655,7 +670,6 @@ function updateCurrentSlideHighlight(globalIndex = null) {
 // Data is the image metadata retrieved from the server side
 function makeSlideHTML(data, globalIndex) {
   const searchIndex = slideState.globalToSearch(globalIndex);
-  console.log("Making slide for globalIndex:", globalIndex, "searchIndex:", searchIndex);
   if (searchIndex !== null && slideState.searchResults?.length > 0) {
     data.score = slideState.searchResults[searchIndex]?.score || "";
     data.cluster = slideState.searchResults[searchIndex]?.cluster || "";

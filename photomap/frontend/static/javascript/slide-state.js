@@ -259,7 +259,6 @@ class SlideStateManager {
 
   notifySlideChanged() {
     const slideInfo = this.getCurrentSlide();
-    console.trace("Slide changed:", slideInfo);
 
     window.dispatchEvent(
       new CustomEvent("slideChanged", {
