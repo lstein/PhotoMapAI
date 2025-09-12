@@ -135,7 +135,7 @@ function initializeSwiperHandlers() {
     console.log("Swiper slideChange event, activeIndex:", this.activeIndex);
     const activeSlide = this.slides[this.activeIndex];
     if (activeSlide) {
-      const globalIndex = parseInt(activeSlide.dataset.index, 10) || 0;
+      const globalIndex = parseInt(activeSlide.dataset.globalIndex, 10) || 0;
       const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10) || 0;
       slideState.updateFromExternal(globalIndex, searchIndex);
       updateMetadataOverlay();
@@ -183,7 +183,7 @@ function initializeSwiperHandlers() {
         slideState.resolveOffset(-1);
       if (prevGlobal !== null) {
         const prevExists = Array.from(this.slides).some(
-          (el) => parseInt(el.dataset.index, 10) === prevGlobal
+          (el) => parseInt(el.dataset.globalIndex, 10) === prevGlobal
         );
         if (!prevExists) {
           isPrepending = true;
@@ -344,7 +344,7 @@ export async function addSlideByIndex(
 
   // Prevent duplicates
   const exists = Array.from(state.swiper.slides).some(
-    (el) => parseInt(el.dataset.index, 10) === globalIndex
+    (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
   );
   if (exists) return;
 
@@ -389,7 +389,7 @@ export async function addSlideByIndex(
     slide.dataset.score = currentScore || "";
     slide.dataset.cluster = currentCluster || "";
     slide.dataset.color = currentColor || "#000000"; // Default color if not provided
-    slide.dataset.index = data.index || 0;
+    slide.dataset.globalIndex = data.index || 0;
     slide.dataset.total = data.total || 0;
     slide.dataset.searchIndex = searchIndex !== null ? searchIndex : "";
     slide.dataset.metadata_url = metadata_url || "";
@@ -418,12 +418,12 @@ export async function handleSlideChange() {
   const { globalIndex } = slideState.getCurrentSlide();
   const slideEls = state.swiper.slides;
   let activeIndex = Array.from(slideEls).findIndex(
-    (el) => parseInt(el.dataset.index, 10) === globalIndex
+    (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
   );
   if (activeIndex === -1) activeIndex = 0;
   const activeSlide = slideEls[activeIndex];
   if (activeSlide) {
-    const globalIndex = parseInt(activeSlide.dataset.index, 10) || 0;
+    const globalIndex = parseInt(activeSlide.dataset.globalIndex, 10) || 0;
     const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10) || 0;
     slideState.updateFromExternal(globalIndex, searchIndex);
   }
@@ -435,7 +435,7 @@ export function removeSlidesAfterCurrent() {
   const { globalIndex } = slideState.getCurrentSlide();
   const slideEls = state.swiper.slides;
   let activeIndex = Array.from(slideEls).findIndex(
-    (el) => parseInt(el.dataset.index, 10) === globalIndex
+    (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
   );
   if (activeIndex === -1) activeIndex = 0;
   const slidesToRemove = slideEls.length - activeIndex - 1;
@@ -550,7 +550,7 @@ async function setSlideIndex(event) {
   // Find the slide with the correct globalIndex and slide to it
   const slideEls = state.swiper.slides;
   let targetSlideIdx = Array.from(slideEls).findIndex(
-    (el) => parseInt(el.dataset.index, 10) === globalIndex
+    (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
   );
   if (targetSlideIdx === -1) targetSlideIdx = 0;
   state.swiper.slideTo(targetSlideIdx, 0);

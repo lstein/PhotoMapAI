@@ -96,7 +96,7 @@ export async function updateCurrentImageScore(metadata) {
     return;
   }
 
-  const globalIndex = parseInt(metadata.index, 10);
+  const globalIndex = parseInt(metadata.globalIndex, 10);
   const globalTotal = parseInt(metadata.total, 10);
   const searchIndex = parseInt(metadata.searchIndex, 10);
 

@@ -166,7 +166,7 @@ async function handleSuccessfulDelete(globalIndex, searchIndex) {
   if (state.swiper?.slides?.length > 0) {
     // find index of the currentFilePath
     const currentIndex = state.swiper.slides.findIndex(
-      (slide) => slide.dataset.index === globalIndex.toString()
+      (slide) => slide.dataset.globalIndex === globalIndex.toString()
     );
     if (currentIndex === -1) {
       console.warn(

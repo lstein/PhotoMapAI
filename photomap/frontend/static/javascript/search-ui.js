@@ -138,10 +138,10 @@ document.addEventListener("DOMContentLoaded", async function () {
     let slide;
     const currentSlide = slideState.getCurrentSlide();
     console.log("Current slide from slideState:", currentSlide);
-    console.log("globalindex for active slide:", state.swiper?.slides[state.swiper?.activeIndex]?.dataset?.globalIndex);
+    console.log("active slide dataset:", state.swiper?.slides[state.swiper?.activeIndex]?.dataset);
     if (currentSlide) {
-      const globalIndex = currentSlide.globalIndex;
-      slide = state.swiper.slides.find((s) => parseInt(s.dataset.globalIndex, 10) === globalIndex);
+      const globalIndex = currentSlide.globalIndex.toString();
+      slide = state.swiper.slides.find((s) => s.dataset.globalIndex === globalIndex);
       console.log("Found slide for globalIndex", globalIndex, ":", slide);
     } else {
       slide = state.swiper.slides[state.swiper.activeIndex];  
