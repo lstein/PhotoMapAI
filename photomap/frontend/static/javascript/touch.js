@@ -106,7 +106,8 @@ function handleTouchEnd(e) {
     const container = document.getElementById("bannerDrawerContainer");
     if (container.classList.contains("visible")) {
       toggleMetadataOverlay();
-    } else {
+    } else if (document.fullscreenElement) {
+      // Only toggle slideshow if in fullscreen mode
       toggleSlideshowWithIndicator();
     }
   } else {
