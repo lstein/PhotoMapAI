@@ -92,7 +92,7 @@ export function updateMetadataOverlay() {
 
 export async function updateCurrentImageScore(metadata) {
   if (!metadata) {
-    console.warn("No active slide found");
+    console.warn("No score data provided");
     return;
   }
 
@@ -100,7 +100,6 @@ export async function updateCurrentImageScore(metadata) {
   const globalTotal = parseInt(metadata.total, 10);
   const searchIndex = parseInt(metadata.searchIndex, 10);
 
-  console.log("Updating score display with metadata:", metadata);
   if (state.searchResults.length === 0) {
     scoreDisplay.showIndex(globalIndex, globalTotal);
     return;

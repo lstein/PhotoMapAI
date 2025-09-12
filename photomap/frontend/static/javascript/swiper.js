@@ -131,6 +131,8 @@ function initializeSwiperHandlers() {
     });
 
     state.swiper.on("slideChange", function () {
+      if (isAppending || isPrepending) return; // Prevent recursion
+      console.log("Swiper slideChange event, activeIndex:", this.activeIndex);
       const activeSlide = this.slides[this.activeIndex];
       if (activeSlide) {
         const globalIndex = parseInt(activeSlide.dataset.index, 10) || 0;
@@ -312,7 +314,7 @@ export async function addSlideByIndex(
   prepend = false
 ) {
   if (!state.swiper) return;
-  console.trace("Adding slide for globalIndex:", globalIndex, "searchIndex:", searchIndex, "prepend:", prepend);
+  console.log("Adding slide for globalIndex:", globalIndex, "searchIndex:", searchIndex, "prepend:", prepend);
 
   // Prevent duplicates
   const exists = Array.from(state.swiper.slides).some(
@@ -427,7 +429,7 @@ export async function resetAllSlides() {
   state.swiper.removeAllSlides();
 
   const { globalIndex, searchIndex } = slideState.getCurrentSlide();
-  console.trace("Resetting all slides, current global index:", globalIndex, "search index:", searchIndex);
+  console.log("Resetting all slides, current global index:", globalIndex, "search index:", searchIndex);
 
   // Add previous slide if available
   const { globalIndex: prevGlobal, searchIndex: prevSearch } =

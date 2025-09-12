@@ -238,10 +238,6 @@ class SeekSlider {
           this.searchResultsChanged = false;
         });
       this.resetFadeOutTimer();
-      if (window.thumbnailGallery) {
-        const slideDetail = { globalIndex, total, searchIndex };
-        window.thumbnailGallery.updateGallery(slideDetail);
-      }
     }
   }
 

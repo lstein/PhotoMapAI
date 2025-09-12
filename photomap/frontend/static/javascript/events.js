@@ -10,10 +10,7 @@ import {
   toggleMetadataOverlay,
   updateMetadataOverlay,
 } from "./metadata-drawer.js";
-import {
-  getCurrentFilepath,
-  getCurrentSlideIndex
-} from "./slide-state.js";
+import { getCurrentFilepath, getCurrentSlideIndex } from "./slide-state.js";
 import { state } from "./state.js";
 import {
   addNewSlide,
@@ -400,11 +397,10 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // Toggle grid/swiper views
-export async function toggleGridSwiperView(gridView = false) {
-  if (gridView === null)
-    state.gridViewActive = !state.gridViewActive;
+export async function toggleGridSwiperView(gridView = null) {
+  if (gridView === null) state.gridViewActive = !state.gridViewActive;
   else state.gridViewActive = gridView;
-  
+
   const swiperContainer = document.querySelector(".swiper");
   const gridViewBtn = document.getElementById("gridViewBtn");
   const gridViewIcon = gridViewBtn.querySelector("svg");
@@ -428,7 +424,9 @@ document.addEventListener("DOMContentLoaded", async function () {
   const gridViewBtn = document.getElementById("gridViewBtn");
 
   if (gridViewBtn)
-    gridViewBtn.addEventListener("click", toggleGridSwiperView);
+    gridViewBtn.addEventListener("click", () => {
+      toggleGridSwiperView();
+    });
 
   // Initialize in swiper mode
   toggleGridSwiperView(false);

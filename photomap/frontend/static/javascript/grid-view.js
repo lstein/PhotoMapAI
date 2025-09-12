@@ -110,10 +110,17 @@ export async function initializeGridSwiper() {
 
   state.swiper.on("slideChange", () => {
     // Get the top-left visible slide's global index
+    if (batchLoading) return; // Prevent unwanted updates
     const slideEl = state.swiper.slides[state.swiper.activeIndex * currentRows];
     if (slideEl) {
       const globalIndex = parseInt(slideEl.dataset.globalIndex, 10);
-      console.log("Grid view slideChange, global index:", globalIndex);
+      console.log(
+        "Grid view slideChange event, global index:",
+        globalIndex,
+        "current global index:",
+        slideState.currentGlobalIndex
+      );
+      if (globalIndex == slideState.globalIndex) return; // No change
       if (!isNaN(globalIndex)) {
         slideState.navigateToIndex(globalIndex, false);
       }
@@ -138,17 +145,22 @@ function addGridEventListeners() {
     }
   );
 
-  eventRegistry.install({ type: "grid", event: "searchResultsChanged" }, () => {
+  eventRegistry.install({ type: "grid", event: "searchResultsChanged" }, (e) => {
     resetAllSlides(0);
+    // slideState.setCurrentIndex(0, true); // Go to first search result
+    // updateCurrentSlideHighlight();
+    // updateMetadataOverlay();
+    // updateCurrentImageScore(slideData[0] || null);
   });
 
-  eventRegistry.install({ type: "grid", event: "slideChanged" }, function () {
-    updateCurrentSlideHighlight();
-    updateMetadataOverlay();
-    updateCurrentImageScore(
-      slideData[slideState.getCurrentSlide().globalIndex]
-    );
-  });
+  // eventRegistry.install({ type: "grid", event: "slideChanged" }, function (e) {
+  //   slideState.setCurrentIndex(e.detail.globalIndex, false);
+  //   if (slideData.length === 0) return;
+  //   updateCurrentSlideHighlight();
+  //   updateMetadataOverlay();
+  //   console.log("e.detail = ", e.detail, " slideData = ",slideData[e.detail.globalIndex]);
+  //   updateCurrentImageScore(slideData[e.detail.globalIndex] || null);
+  // });
 
   eventRegistry.install({ type: "grid", event: "setSlideIndex" }, (e) => {
     const { targetIndex, isSearchMode } = e.detail;
@@ -194,18 +206,23 @@ function addGridEventListeners() {
   // Handle clicks on grid slides
   window.handleGridSlideClick = function (globalIndex) {
     console.log("Grid slide clicked, global index:", globalIndex);
-    slideState.navigateToIndex(globalIndex, false);
+    slideState.setCurrentIndex(globalIndex, false);
+    // adjust the highlight
+    updateCurrentSlideHighlight();
+    updateCurrentImageScore(slideData[globalIndex] || null);
+    updateMetadataOverlay();
   };
 
   // Handle double clicks on grid slides
   window.handleGridSlideDblClick = function (globalIndex) {
     console.log("Grid slide double clicked, global index:", globalIndex);
-    slideState.navigateToIndex(globalIndex, false), 100;
+    slideState.setCurrentIndex(globalIndex, false);
+    updateCurrentSlideHighlight(globalIndex);
 
     // add slight pause so that swiper settles down
     setTimeout(() => {
       toggleGridSwiperView(false); // Switch to swiper view
-    });
+    }, 100);
   };
 }
 
@@ -243,10 +260,14 @@ async function resetAllSlides(targetIndex = null) {
     : currentSlide.globalIndex;
 
   await loadBatch(currentPosition, true);
-  await loadBatch(); // Load two batches to start in order to enable forward navigation
+  await loadBatch(currentPosition + slidesPerBatch, true); // Load two batches to start in order to enable forward navigation
   if (currentPosition > 0) {
     await loadBatch(currentPosition, false); // Prepend a screen if not at start
   }
+  updateCurrentSlideHighlight();
+  updateMetadataOverlay();
+  console.log("slideData = ",slideData[0]);
+  updateCurrentImageScore(slideData[0] || null);
   hideSpinner();
 }
 
@@ -257,14 +278,13 @@ async function resetAllSlides(targetIndex = null) {
 async function loadBatch(startIndex = null, append = true) {
   if (batchLoading) return; // Prevent concurrent loads
   batchLoading = true;
-  console.trace("Loading batch, startIndex:", startIndex, "append:", append);
 
   if (startIndex === null) {
     // Load after the last loaded slide
     if (!state.swiper.slides?.length) {
       startIndex = 0;
     } else {
-      let lastSlideIndex = state.swiper.slides.length - 1;
+      let lastSlideIndex = state.swiper.slides.length;
       startIndex = slideState.isSearchMode
         ? lastSlideIndex
         : parseInt(
@@ -273,9 +293,10 @@ async function loadBatch(startIndex = null, append = true) {
           ) + 1;
     }
   }
+  console.log("Loading batch, startIndex:", startIndex, "append:", append);
 
   // Round to closest multiple of slidesPerBatch
-  startIndex = Math.floor((startIndex + 1) / slidesPerBatch) * slidesPerBatch;
+  startIndex = Math.floor(startIndex / slidesPerBatch) * slidesPerBatch;
 
   // Subtle gotcha here. The swiper activeIndex is the index of the first visible column.
   // So if the number of columns is 4, then the activeIndexes will be 0, 4, 8, 12, ...
@@ -604,11 +625,14 @@ function setupGridResizeHandler() {
   eventRegistry.install({ type: "grid", event: "resize" }, handleResize);
 }
 
-function updateCurrentSlideHighlight() {
+function updateCurrentSlideHighlight(globalIndex = null) {
   if (!state.gridViewActive) return;
 
   // Get the global index of the current slide
-  const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
+  const currentGlobalIndex =
+    globalIndex === null
+      ? slideState.getCurrentSlide().globalIndex
+      : globalIndex;
 
   // Remove existing highlights
   document.querySelectorAll(".swiper-slide.current-slide").forEach((slide) => {
@@ -631,6 +655,7 @@ function updateCurrentSlideHighlight() {
 // Data is the image metadata retrieved from the server side
 function makeSlideHTML(data, globalIndex) {
   const searchIndex = slideState.globalToSearch(globalIndex);
+  console.log("Making slide for globalIndex:", globalIndex, "searchIndex:", searchIndex);
   if (searchIndex !== null && slideState.searchResults?.length > 0) {
     data.score = slideState.searchResults[searchIndex]?.score || "";
     data.cluster = slideState.searchResults[searchIndex]?.cluster || "";

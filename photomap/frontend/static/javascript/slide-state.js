@@ -37,7 +37,7 @@ class SlideStateManager {
   getCurrentSlide() {
     return {
       globalIndex: this.currentGlobalIndex,
-      searchIndex: this.currentSearchIndex,
+      searchIndex: this.isSearchMode ? this.currentSearchIndex : null,
       totalCount: this.isSearchMode
         ? this.searchResults.length
         : this.totalAlbumImages,
@@ -55,19 +55,19 @@ class SlideStateManager {
       : this.currentGlobalIndex;
   }
 
-  /**
-   * Navigate to a specific position
+    /**
+   * Set the current slide to a specific index without navigating there
    * @param {number} index - The index to navigate to
    * @param {boolean} isSearchIndex - Whether the index is in search results or global album
    */
-  navigateToIndex(index, isSearchIndex = null) {
+  setCurrentIndex(index, isSearchIndex = null) {
     // Auto-detect mode if not specified
     if (isSearchIndex === null) {
       isSearchIndex = this.isSearchMode;
     }
 
     if (isSearchIndex && this.searchResults.length > 0) {
-      // Navigate within search results
+      // Set within search results
       this.currentSearchIndex = Math.max(
         0,
         Math.min(index, this.searchResults.length - 1)
@@ -75,7 +75,7 @@ class SlideStateManager {
       this.currentGlobalIndex =
         this.searchResults[this.currentSearchIndex]?.index || 0;
     } else {
-      // Navigate within full album
+      // Set within full album
       this.currentGlobalIndex = Math.max(
         0,
         Math.min(index, this.totalAlbumImages - 1)
@@ -91,7 +91,15 @@ class SlideStateManager {
         }
       }
     }
+  }
 
+  /**
+   * Navigate to a specific position
+   * @param {number} index - The index to navigate to
+   * @param {boolean} isSearchIndex - Whether the index is in search results or global album
+   */
+  navigateToIndex(index, isSearchIndex = null) {
+    this.setCurrentIndex(index, isSearchIndex);
     this.notifySlideChanged();
   }
 
@@ -251,6 +259,7 @@ class SlideStateManager {
 
   notifySlideChanged() {
     const slideInfo = this.getCurrentSlide();
+    console.trace("Slide changed:", slideInfo);
 
     window.dispatchEvent(
       new CustomEvent("slideChanged", {
