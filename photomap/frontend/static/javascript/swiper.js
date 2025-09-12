@@ -131,7 +131,7 @@ function initializeSwiperHandlers() {
 
   state.swiper.on("slideChange", function () {
     if (isAppending || isPrepending || isInternalSlideChange) return; // Prevent recursion
-    isInternalSlideChange = true;  // guard against recursion
+    isInternalSlideChange = true; // guard against recursion
     console.log("Swiper slideChange event, activeIndex:", this.activeIndex);
     const activeSlide = this.slides[this.activeIndex];
     if (activeSlide) {
@@ -155,18 +155,15 @@ function initializeSwiperHandlers() {
         slideState.resolveOffset(+1);
 
       if (nextGlobal !== null) {
-        for (let i = 0; i < 3; i++) {
-          // Preload a few slides ahead
-          addSlideByIndex(nextGlobal+i, nextSearch+i)
-            .then(() => {
-              isAppending = false;
-              this.allowSlideNext = true;
-            })
-            .catch(() => {
-              isAppending = false;
-              this.allowSlideNext = true;
-            });
-        }
+        addSlideByIndex(nextGlobal, nextSearch)
+          .then(() => {
+            isAppending = false;
+            this.allowSlideNext = true;
+          })
+          .catch(() => {
+            isAppending = false;
+            this.allowSlideNext = true;
+          });
       } else {
         isAppending = false;
         this.allowSlideNext = true;

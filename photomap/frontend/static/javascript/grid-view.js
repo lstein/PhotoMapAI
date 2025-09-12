@@ -192,7 +192,8 @@ function addGridEventListeners() {
       if (slidesLeft <= currentColumns) {
         const lastSlideIndex =
           parseInt(
-            state.swiper.slides[state.swiper.slides.length - 1].dataset.globalIndex,
+            state.swiper.slides[state.swiper.slides.length - 1].dataset
+              .globalIndex,
             10
           ) || 0;
         const index = slideState.isSearchMode
@@ -215,7 +216,9 @@ function addGridEventListeners() {
         state.swiper.slides[0].dataset.globalIndex,
         10
       );
-      const index = slideState.isSearchMode ? slideState.globalToSearch(firstSlide) : firstSlide;
+      const index = slideState.isSearchMode
+        ? slideState.globalToSearch(firstSlide)
+        : firstSlide;
       if (firstSlide > 0 && state.swiper.activeIndex === 0) {
         loadBatch(index - 1, false); // Prepend a batch at the start
       }
@@ -232,7 +235,7 @@ function addGridEventListeners() {
     );
     //slideState.setCurrentIndex(globalIndex, false);
     slideState.navigateToIndex(globalIndex, false);
-    
+
     // adjust the highlight
     updateCurrentSlideHighlight();
     updateCurrentImageScore(slideData[globalIndex] || null);
@@ -250,6 +253,22 @@ function addGridEventListeners() {
       toggleGridSwiperView(false); // Switch to swiper view
     }, 100);
   };
+}
+// Double tap for touch devices
+function addDoubleTapHandler(slideEl, globalIndex) {
+  // Prevent duplicate handlers
+  if (slideEl.dataset.doubleTapHandlerAttached) return;
+  let lastTap = 0;
+  slideEl.addEventListener("touchend", function (e) {
+    const now = Date.now();
+    if (now - lastTap < 350) {
+      window.handleGridSlideDblClick(globalIndex);
+      lastTap = 0;
+    } else {
+      lastTap = now;
+    }
+  });
+  slideEl.dataset.doubleTapHandlerAttached = "true";
 }
 
 //------------------ LOADING IMAGES AND BATCHES ------------------//
@@ -369,6 +388,19 @@ async function loadBatch(startIndex = null, append = true) {
     }
 
     if (slides.length > 0) state.swiper.appendSlide(slides);
+
+    // After appending slides, add the double-tap handler to the new ones.
+    // This needs to be done after appending so we can access the DOM elements.
+    const allSlides = state.swiper.slides;
+    const numNew = slides.length;
+    for (let i = allSlides.length - numNew; i < allSlides.length; i++) {
+      const slideEl = allSlides[i];
+      if (slideEl) {
+        const globalIndex = slideEl.dataset.globalIndex;
+        addDoubleTapHandler(slideEl, globalIndex);
+      }
+    }
+
     // enforce high water mark after appending
     enforceHighWaterMark(false);
   } else {
@@ -392,6 +424,15 @@ async function loadBatch(startIndex = null, append = true) {
     }
     if (slides.length > 0) {
       state.swiper.prependSlide(slides);
+
+      // After prepending slides, add double-tap handlers to all the new ones.
+      for (let i = 0; i < slides.length; i++) {
+        const slideEl = state.swiper.slides[i];
+        if (slideEl) {
+          const globalIndex = slideEl.dataset.globalIndex;
+          addDoubleTapHandler(slideEl, globalIndex);
+        }
+      }
       state.swiper.slideTo(currentColumns, 0); // maintain current view
       // enforce high water mark after prepending (trim the other side)
       enforceHighWaterMark(true);
