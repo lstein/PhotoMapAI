@@ -39,6 +39,7 @@ const KEYBOARD_SHORTCUTS = {
   i: () => toggleMetadataOverlay(),
   Escape: () => hideMetadataOverlay(),
   f: () => toggleFullscreen(),
+  g: () => toggleGridSwiperView(),
   m: () => toggleUmapWindow(),
   " ": (e) => handleSpacebarToggle(e),
 };
