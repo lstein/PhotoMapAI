@@ -409,6 +409,12 @@ export async function toggleGridSwiperView(gridView = null) {
   swiperContainer.style.display = ""; // Always show the swiper container
   eventRegistry.removeAll("swiper");
   eventRegistry.removeAll("grid");
+
+  const pagination = document.querySelector(".swiper-pagination");
+  if (pagination) {
+    pagination.style.display = state.gridViewActive ? "none" : "";
+  }
+
   if (state.gridViewActive) {
     await initializeGridSwiper();
   } else {

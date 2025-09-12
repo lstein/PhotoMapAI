@@ -137,6 +137,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     negativeSearchInput.value = "";
     let slide;
     const currentSlide = slideState.getCurrentSlide();
+    console.log("Current slide from slideState:", currentSlide);
+    console.log("globalindex for active slide:", state.swiper?.slides[state.swiper?.activeIndex]?.dataset?.globalIndex);
     if (currentSlide) {
       const globalIndex = currentSlide.globalIndex;
       slide = state.swiper.slides.find((s) => parseInt(s.dataset.globalIndex, 10) === globalIndex);

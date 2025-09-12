@@ -157,7 +157,7 @@ function initializeSwiperHandlers() {
       if (nextGlobal !== null) {
         for (let i = 0; i < 3; i++) {
           // Preload a few slides ahead
-          addSlideByIndex(nextGlobal, nextSearch)
+          addSlideByIndex(nextGlobal+i, nextSearch+i)
             .then(() => {
               isAppending = false;
               this.allowSlideNext = true;
