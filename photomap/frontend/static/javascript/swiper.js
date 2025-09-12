@@ -21,7 +21,6 @@ let isPrepending = false; // Place this at module scope
 let isAppending = false;
 
 export async function initializeSingleSwiper() {
-
   // The swiper shares part of the DOM with the grid view,
   // so we need to clean up any existing state.
   // Destroy previous Swiper instance if it exist s
@@ -100,60 +99,61 @@ export async function initializeSingleSwiper() {
   // Remove grid-mode class from swiper container
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.remove("grid-mode");
-  console.log("Initialized single-image Swiper mode.")
+  console.log("Initialized single-image Swiper mode.");
 
   // resetAllSlides();
 }
 
 function initializeSwiperHandlers() {
-  
   // Update icon on slide change or autoplay events (with guards)
-  if (!state.swiper)  return;
-  
-    state.swiper.on("autoplayStart", () => {
-      if (!state.gridViewActive) updateSlideshowIcon();
-    });
+  if (!state.swiper) return;
 
-    state.swiper.on("autoplayResume", () => {
-      if (!state.gridViewActive) updateSlideshowIcon();
-    });
+  state.swiper.on("autoplayStart", () => {
+    if (!state.gridViewActive) updateSlideshowIcon();
+  });
 
-    state.swiper.on("autoplayStop", () => {
-      if (!state.gridViewActive) updateSlideshowIcon();
-    });
+  state.swiper.on("autoplayResume", () => {
+    if (!state.gridViewActive) updateSlideshowIcon();
+  });
 
-    state.swiper.on("autoplayPause", () => {
-      if (!state.gridViewActive) updateSlideshowIcon();
-    });
+  state.swiper.on("autoplayStop", () => {
+    if (!state.gridViewActive) updateSlideshowIcon();
+  });
 
-    state.swiper.on("scrollbarDragStart", () => {
-      if (!state.gridViewActive) pauseSlideshow();
-    });
+  state.swiper.on("autoplayPause", () => {
+    if (!state.gridViewActive) updateSlideshowIcon();
+  });
 
-    state.swiper.on("slideChange", function () {
-      if (isAppending || isPrepending) return; // Prevent recursion
-      console.log("Swiper slideChange event, activeIndex:", this.activeIndex);
-      const activeSlide = this.slides[this.activeIndex];
-      if (activeSlide) {
-        const globalIndex = parseInt(activeSlide.dataset.index, 10) || 0;
-        const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10) || 0;
-        slideState.updateFromExternal(globalIndex, searchIndex);
-        updateMetadataOverlay();
-      }
-    });
+  state.swiper.on("scrollbarDragStart", () => {
+    if (!state.gridViewActive) pauseSlideshow();
+  });
 
-    state.swiper.on("slideNextTransitionStart", function () {
-      if (isAppending) return;
+  state.swiper.on("slideChange", function () {
+    if (isAppending || isPrepending) return; // Prevent recursion
+    console.log("Swiper slideChange event, activeIndex:", this.activeIndex);
+    const activeSlide = this.slides[this.activeIndex];
+    if (activeSlide) {
+      const globalIndex = parseInt(activeSlide.dataset.index, 10) || 0;
+      const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10) || 0;
+      slideState.updateFromExternal(globalIndex, searchIndex);
+      updateMetadataOverlay();
+    }
+  });
 
-      if (this.activeIndex === this.slides.length - 1) {
-        isAppending = true;
-        this.allowSlideNext = false;
+  state.swiper.on("slideNextTransitionStart", function () {
+    if (isAppending) return;
 
-        // Use slideState to resolve next indices based on whether we are in album or search mode
-        const { globalIndex: nextGlobal, searchIndex: nextSearch } =
-          slideState.resolveOffset(+1);
+    if (this.activeIndex === this.slides.length - 1) {
+      isAppending = true;
+      this.allowSlideNext = false;
 
-        if (nextGlobal !== null) {
+      // Use slideState to resolve next indices based on whether we are in album or search mode
+      const { globalIndex: nextGlobal, searchIndex: nextSearch } =
+        slideState.resolveOffset(+1);
+
+      if (nextGlobal !== null) {
+        for (let i = 0; i < 3; i++) {
+          // Preload a few slides ahead
           addSlideByIndex(nextGlobal, nextSearch)
             .then(() => {
               isAppending = false;
@@ -163,49 +163,49 @@ function initializeSwiperHandlers() {
               isAppending = false;
               this.allowSlideNext = true;
             });
-        } else {
-          isAppending = false;
-          this.allowSlideNext = true;
+        }
+      } else {
+        isAppending = false;
+        this.allowSlideNext = true;
+      }
+    }
+  });
+
+  state.swiper.on("slidePrevTransitionEnd", function () {
+    if (isPrepending) return;
+
+    const [globalIndex] = getCurrentSlideIndex();
+    if (this.activeIndex === 0 && globalIndex > 0) {
+      const { globalIndex: prevGlobal, searchIndex: prevSearch } =
+        slideState.resolveOffset(-1);
+      if (prevGlobal !== null) {
+        const prevExists = Array.from(this.slides).some(
+          (el) => parseInt(el.dataset.index, 10) === prevGlobal
+        );
+        if (!prevExists) {
+          isPrepending = true;
+          this.allowSlidePrev = false;
+          addSlideByIndex(prevGlobal, prevSearch, true)
+            .then(() => {
+              this.slideTo(1, 0);
+              isPrepending = false;
+              this.allowSlidePrev = true;
+            })
+            .catch(() => {
+              isPrepending = false;
+              this.allowSlidePrev = true;
+            });
         }
       }
-    });
+    }
+  });
 
-    state.swiper.on("slidePrevTransitionEnd", function () {
-      if (isPrepending) return;
-
-      const [globalIndex] = getCurrentSlideIndex();
-      if (this.activeIndex === 0 && globalIndex > 0) {
-        const { globalIndex: prevGlobal, searchIndex: prevSearch } =
-          slideState.resolveOffset(-1);
-        if (prevGlobal !== null) {
-          const prevExists = Array.from(this.slides).some(
-            (el) => parseInt(el.dataset.index, 10) === prevGlobal
-          );
-          if (!prevExists) {
-            isPrepending = true;
-            this.allowSlidePrev = false;
-            addSlideByIndex(prevGlobal, prevSearch, true)
-              .then(() => {
-                this.slideTo(1, 0);
-                isPrepending = false;
-                this.allowSlidePrev = true;
-              })
-              .catch(() => {
-                isPrepending = false;
-                this.allowSlidePrev = true;
-              });
-          }
-        }
-      }
-    });
-
-    state.swiper.on("sliderFirstMove", function () {
-      pauseSlideshow();
-    });
-  }
+  state.swiper.on("sliderFirstMove", function () {
+    pauseSlideshow();
+  });
+}
 
 function initializeEventHandlers() {
-
   // Stop slideshow on next and prev button clicks -- necessary?
   document
     .querySelectorAll(".swiper-button-next, .swiper-button-prev")
@@ -251,7 +251,10 @@ function initializeEventHandlers() {
   );
 
   // Navigate to a slide
-  eventRegistry.install({ type: "swiper", event: "setSlideIndex" }, setSlideIndex);
+  eventRegistry.install(
+    { type: "swiper", event: "setSlideIndex" },
+    setSlideIndex
+  );
 }
 
 export function pauseSlideshow() {
@@ -314,7 +317,27 @@ export async function addSlideByIndex(
   prepend = false
 ) {
   if (!state.swiper) return;
-  console.log("Adding slide for globalIndex:", globalIndex, "searchIndex:", searchIndex, "prepend:", prepend);
+  console.log(
+    "Adding slide for globalIndex:",
+    globalIndex,
+    "searchIndex:",
+    searchIndex,
+    "prepend:",
+    prepend
+  );
+
+  // pick a random slide if settings.mode is random
+  if (state.mode === "random") {
+    if (slideState.isSearchMode && slideState.searchResults?.length > 0) {
+      const totalImages = slideState.searchResults.length;
+      searchIndex = Math.floor(Math.random() * totalImages);
+      globalIndex = slideState.indexToGlobal(searchIndex);
+    } else {
+      const totalImages = slideState.totalAlbumImages;
+      globalIndex = Math.floor(Math.random() * totalImages);
+    }
+    console.log("Random mode: selected globalIndex", globalIndex);
+  }
 
   // Prevent duplicates
   const exists = Array.from(state.swiper.slides).some(
@@ -429,7 +452,12 @@ export async function resetAllSlides() {
   state.swiper.removeAllSlides();
 
   const { globalIndex, searchIndex } = slideState.getCurrentSlide();
-  console.log("Resetting all slides, current global index:", globalIndex, "search index:", searchIndex);
+  console.log(
+    "Resetting all slides, current global index:",
+    globalIndex,
+    "search index:",
+    searchIndex
+  );
 
   // Add previous slide if available
   const { globalIndex: prevGlobal, searchIndex: prevSearch } =
