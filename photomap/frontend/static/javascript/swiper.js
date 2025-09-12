@@ -19,6 +19,7 @@ function isTouchDevice() {
 const hasTouchCapability = isTouchDevice();
 let isPrepending = false; // Place this at module scope
 let isAppending = false;
+let isInternalSlideChange = false; // To prevent recursion in slideChange handler
 
 export async function initializeSingleSwiper() {
   // The swiper shares part of the DOM with the grid view,
@@ -129,7 +130,8 @@ function initializeSwiperHandlers() {
   });
 
   state.swiper.on("slideChange", function () {
-    if (isAppending || isPrepending) return; // Prevent recursion
+    if (isAppending || isPrepending || isInternalSlideChange) return; // Prevent recursion
+    isInternalSlideChange = true;  // guard against recursion
     console.log("Swiper slideChange event, activeIndex:", this.activeIndex);
     const activeSlide = this.slides[this.activeIndex];
     if (activeSlide) {
@@ -138,6 +140,7 @@ function initializeSwiperHandlers() {
       slideState.updateFromExternal(globalIndex, searchIndex);
       updateMetadataOverlay();
     }
+    isInternalSlideChange = false;
   });
 
   state.swiper.on("slideNextTransitionStart", function () {
