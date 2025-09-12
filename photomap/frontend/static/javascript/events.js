@@ -348,8 +348,7 @@ export function toggleSlideshowWithIndicator() {
     pauseSlideshow();
     showPlayPauseIndicator(false); // Show pause indicator
   } else {
-    if (state.gridViewActive)
-      toggleGridSwiperView(false); // Switch to swiper mode if in grid mode
+    if (state.gridViewActive) toggleGridSwiperView(false); // Switch to swiper mode if in grid mode
     resumeSlideshow();
     showPlayPauseIndicator(true); // Show play indicator
   }
@@ -372,10 +371,22 @@ function initializeEvents() {
   checkAlbumIndex(); // Check if the album index exists before proceeding
 }
 
+function positionMetadataDrawer() {
+  const seekSlider = document.getElementById("scoreSliderRow");
+  const drawer = document.getElementById("bannerDrawerContainer");
+  if (seekSlider && drawer) {
+    const rect = seekSlider.getBoundingClientRect();
+    // Add window scrollY to get absolute position
+    const top = rect.bottom + window.scrollY;
+    drawer.style.top = `${top + 8}px`; // 8px gap, adjust as needed
+  }
+}
+
 // Initialize event listeners after the DOM is fully loaded
 document.addEventListener("DOMContentLoaded", function () {
   initializeEvents();
-
+  positionMetadataDrawer();
+  window.addEventListener("resize", positionMetadataDrawer);
   const aboutBtn = document.getElementById("aboutBtn");
   const aboutModal = document.getElementById("aboutModal");
   const closeAboutBtn = document.getElementById("closeAboutBtn");
@@ -390,7 +401,7 @@ document.addEventListener("DOMContentLoaded", function () {
       aboutModal.style.display = "none";
     });
   }
-  // Optional: close modal when clicking outside content
+  // Close modal when clicking outside content
   aboutModal.addEventListener("click", (e) => {
     if (e.target === aboutModal) {
       aboutModal.style.display = "none";

@@ -230,7 +230,9 @@ function addGridEventListeners() {
       "search index:",
       slideState.globalToSearch(globalIndex)
     );
-    slideState.setCurrentIndex(globalIndex, false);
+    //slideState.setCurrentIndex(globalIndex, false);
+    slideState.navigateToIndex(globalIndex, false);
+    
     // adjust the highlight
     updateCurrentSlideHighlight();
     updateCurrentImageScore(slideData[globalIndex] || null);
@@ -354,7 +356,7 @@ async function loadBatch(startIndex = null, append = true) {
       try {
         const data = await fetchImageByIndex(globalIndex);
         if (!data) break;
-
+        data.globalIndex = globalIndex; // Ensure globalIndex is set in data
         loadedImageIndices.add(globalIndex);
 
         // Note: slide creation should be its own function call.
@@ -379,6 +381,7 @@ async function loadBatch(startIndex = null, append = true) {
       try {
         const data = await fetchImageByIndex(globalIndex);
         if (!data) continue;
+        data.globalIndex = globalIndex; // Ensure globalIndex is set in data
 
         loadedImageIndices.add(globalIndex);
         slides.push(makeSlideHTML(data, globalIndex));

@@ -29,7 +29,11 @@ export function toggleMetadataOverlay() {
 }
 
 // Function to replace reference image filenames with clickable links
-export function replaceReferenceImagesWithLinks(description, referenceImages, albumKey) {
+export function replaceReferenceImagesWithLinks(
+  description,
+  referenceImages,
+  albumKey
+) {
   if (!description || !referenceImages || !albumKey) {
     return description || "";
   }
@@ -59,7 +63,9 @@ export function replaceReferenceImagesWithLinks(description, referenceImages, al
       );
       const link = `<a href="image_by_name/${encodeURIComponent(
         albumKey
-      )}/${encodeURIComponent(imageName)}" target="_blank" style="color: #faea0e;">${imageName}</a>`;
+      )}/${encodeURIComponent(
+        imageName
+      )}" target="_blank" style="color: #faea0e;">${imageName}</a>`;
       processedDescription = processedDescription.replace(regex, link);
     }
   });
@@ -86,7 +92,8 @@ export function updateMetadataOverlay() {
     slide.dataset.filename || "";
   document.getElementById("filepathText").textContent =
     slide.dataset.filepath || "";
-  document.getElementById("metadataLink").href = slide.dataset.metadata_url || "#";
+  document.getElementById("metadataLink").href =
+    slide.dataset.metadata_url || "#";
   updateCurrentImageScore(slide.dataset);
 }
 
@@ -95,7 +102,6 @@ export async function updateCurrentImageScore(metadata) {
     console.warn("No score data provided");
     return;
   }
-
   const globalIndex = parseInt(metadata.globalIndex, 10);
   const globalTotal = parseInt(metadata.total, 10);
   const searchIndex = parseInt(metadata.searchIndex, 10);
@@ -173,10 +179,13 @@ document.addEventListener("click", function (e) {
       if (iconClone) iconClone.remove();
       let text = clone.textContent.trim();
       if (text) {
-        navigator.clipboard.writeText(text)
+        navigator.clipboard
+          .writeText(text)
           .then(() => {
             icon.title = "Copied!";
-            setTimeout(() => { icon.title = "Copy"; }, 1000);
+            setTimeout(() => {
+              icon.title = "Copy";
+            }, 1000);
           })
           .catch((e) => {
             console.error("Failed to copy text:", e);
@@ -193,10 +202,13 @@ if (copyMetadataBtn && metadataTextArea) {
   copyMetadataBtn.addEventListener("click", function () {
     const text = metadataTextArea.value;
     if (text) {
-      navigator.clipboard.writeText(text)
+      navigator.clipboard
+        .writeText(text)
         .then(() => {
           copyMetadataBtn.title = "Copied!";
-          setTimeout(() => { copyMetadataBtn.title = "Copy metadata"; }, 1000);
+          setTimeout(() => {
+            copyMetadataBtn.title = "Copy metadata";
+          }, 1000);
         })
         .catch(() => {
           copyMetadataBtn.title = "Copy failed";
