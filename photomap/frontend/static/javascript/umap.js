@@ -1031,9 +1031,14 @@ async function handleClusterClick(clickedIndex) {
 // -------------------- Window Management --------------------
 
 // --- Show/Hide UMAP Window ---
-export async function toggleUmapWindow() {
+export async function toggleUmapWindow(show = null) {
   const umapWindow = document.getElementById("umapFloatingWindow");
-  if (umapWindow.style.display === "block") {
+
+  if (show === null)
+    show =
+      document.getElementById("umapFloatingWindow").style.display !== "block";
+
+  if (show === false) {
     umapWindow.style.display = "none";
   } else {
     umapWindow.style.display = "block";
@@ -1300,8 +1305,7 @@ function toggleFullscreen(turnOn = null) {
   if (turnOn === null) {
     turnOn = !isFullscreen;
   }
-  if (turnOn && isFullscreen)
-    return; // already in fullscreen
+  if (turnOn && isFullscreen) return; // already in fullscreen
 
   if (turnOn) {
     lastUnshadedSize = getCurrentWindowSize();

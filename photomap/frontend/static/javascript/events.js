@@ -427,6 +427,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   if (gridViewBtn)
     gridViewBtn.addEventListener("click", () => {
+      toggleUmapWindow(false); // Close umap if open
       toggleGridSwiperView();
     });
 

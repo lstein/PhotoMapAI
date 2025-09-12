@@ -459,6 +459,7 @@ export async function resetAllSlides() {
     searchIndex
   );
 
+  // First slides added should not be random if in random mode
   // Add previous slide if available
   const { globalIndex: prevGlobal, searchIndex: prevSearch } =
     slideState.resolveOffset(-1);
@@ -467,7 +468,10 @@ export async function resetAllSlides() {
   }
 
   // Add current slide
+  const previousMode = state.mode;
+  if (globalIndex > 0) state.mode = "chronological";
   await addSlideByIndex(globalIndex, searchIndex);
+  state.mode = previousMode; // Restore mode if it was changed
 
   // Add next slide if available
   const { globalIndex: nextGlobal, searchIndex: nextSearch } =
