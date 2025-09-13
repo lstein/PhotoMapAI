@@ -1164,11 +1164,14 @@ function setUmapWindowSize(sizeKey) {
   if (sizeKey === "shaded") {
     // Do not change landmarksVisible or checkbox
     if (contentDiv) contentDiv.style.display = "none";
-    win.style.width = "";
-    win.style.height = "";
+    // Preserve current width
+    const currentWidth =
+      win.style.width || win.getBoundingClientRect().width + "px";
+    win.style.width = currentWidth;
+    win.style.height = "48px"; // Just enough for titlebar (adjust as needed)
     win.style.minHeight = "0";
-    plotDiv.style.width = "";
-    plotDiv.style.height = "";
+    plotDiv.style.width = currentWidth;
+    plotDiv.style.height = "0px";
   } else if (sizeKey === "fullscreen") {
     if (contentDiv) contentDiv.style.display = "block";
     const controlsHeight = 180;
@@ -1210,25 +1213,6 @@ function setUmapWindowSize(sizeKey) {
     plotDiv.style.height = height + "px";
     Plotly.relayout(plotDiv, { width, height });
 
-    setTimeout(() => {
-      const rect = win.getBoundingClientRect();
-      let left = rect.left;
-      let top = rect.top;
-      const rightEdge = left + rect.width;
-      const bottomEdge = top + rect.height;
-      const maxLeft = window.innerWidth - rect.width;
-      const maxTop = window.innerHeight - rect.height;
-
-      if (rightEdge > window.innerWidth) {
-        left = Math.max(0, maxLeft);
-        win.style.left = left + "px";
-      }
-      if (bottomEdge > window.innerHeight) {
-        top = Math.max(0, maxTop);
-        win.style.top = top + "px";
-      }
-    }, 0);
-
     // Turn landmarks OFF in big, medium, small
     if (landmarkCheckbox) {
       landmarkCheckbox.checked = false;
@@ -1241,6 +1225,25 @@ function setUmapWindowSize(sizeKey) {
       hoverThumbnailsEnabled = true;
     }
   }
+
+  // Only update position if not shading
+  if (sizeKey !== "shaded") {
+    if (
+      lastUnshadedPosition.left === null ||
+      lastUnshadedPosition.top === null
+    ) {
+      // Place near top-right with 8px gap
+      const winRect = win.getBoundingClientRect();
+      const width = winRect.width || win.offsetWidth || 600;
+      win.style.top = "8px";
+      win.style.left = `${window.innerWidth - width - 8}px`;
+    } else {
+      win.style.left = lastUnshadedPosition.left;
+      win.style.top = lastUnshadedPosition.top;
+    }
+  }
+
+  if (sizeKey !== "fullscreen") saveCurrentPosition();
   setActiveResizeIcon(sizeKey);
   ensureUmapWindowInView();
   removeUmapThumbnail(); // just in case
@@ -1317,13 +1320,6 @@ function toggleFullscreen(turnOn = null) {
     isFullscreen = true;
   } else {
     setUmapWindowSize(lastUnshadedSize);
-    if (
-      lastUnshadedPosition.left !== null &&
-      lastUnshadedPosition.top !== null
-    ) {
-      win.style.left = lastUnshadedPosition.left;
-      win.style.top = lastUnshadedPosition.top;
-    }
     isFullscreen = false;
   }
   // if any hover thumbnail is visible, remove it
