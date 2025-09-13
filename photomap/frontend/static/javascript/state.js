@@ -22,6 +22,9 @@ document.addEventListener("DOMContentLoaded", async function () {
   await restoreFromLocalStorage();
   initializeFromServer();
   switchAlbum(state.album); // Initialize with the current album
+
+  // Notify that state is ready
+  window.dispatchEvent(new Event("stateReady"));
 });
 
 // Initialize the state from the initial URL.
@@ -74,6 +77,12 @@ export async function restoreFromLocalStorage() {
     if (!validAlbum) storedAlbum = null;
   }
   state.album = storedAlbum || albumList[0].key;
+
+  const storedGridViewActive = localStorage.getItem("gridViewActive");
+  if (storedGridViewActive !== null) {
+    state.gridViewActive = storedGridViewActive === "true";
+  }
+  console.log("Restored state from local storage:", state);
 }
 
 // Save state to local storage
@@ -86,6 +95,8 @@ export function saveSettingsToLocalStorage() {
     "showControlPanelText",
     state.showControlPanelText || ""
   );
+  localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
+  console.log("Saved state to local storage:", state);
 }
 
 export async function setAlbum(newAlbumKey, force = false) {

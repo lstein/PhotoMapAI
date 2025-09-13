@@ -99,7 +99,6 @@ export function updateMetadataOverlay() {
 
 export async function updateCurrentImageScore(metadata) {
   if (!metadata) {
-    console.warn("No score data provided");
     return;
   }
   const globalIndex = parseInt(metadata.globalIndex, 10);

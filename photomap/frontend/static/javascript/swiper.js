@@ -317,14 +317,6 @@ export async function addSlideByIndex(
   prepend = false
 ) {
   if (!state.swiper) return;
-  console.log(
-    "Adding slide for globalIndex:",
-    globalIndex,
-    "searchIndex:",
-    searchIndex,
-    "prepend:",
-    prepend
-  );
 
   // pick a random slide if settings.mode is random
   if (state.mode === "random") {

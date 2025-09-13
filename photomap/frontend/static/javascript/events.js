@@ -11,7 +11,7 @@ import {
   updateMetadataOverlay,
 } from "./metadata-drawer.js";
 import { getCurrentFilepath, getCurrentSlideIndex } from "./slide-state.js";
-import { state } from "./state.js";
+import { saveSettingsToLocalStorage, state } from "./state.js";
 import {
   addNewSlide,
   initializeSingleSwiper,
@@ -412,8 +412,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // Toggle grid/swiper views
 export async function toggleGridSwiperView(gridView = null) {
+  console.log("Toggling grid/swiper view. Current state:", state.gridViewActive);
+
   if (gridView === null) state.gridViewActive = !state.gridViewActive;
   else state.gridViewActive = gridView;
+  saveSettingsToLocalStorage();
 
   const swiperContainer = document.querySelector(".swiper");
   const gridViewBtn = document.getElementById("gridViewBtn");
@@ -449,6 +452,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       toggleGridSwiperView();
     });
 
-  // Initialize in swiper mode
-  toggleGridSwiperView(false);
+});
+
+window.addEventListener("stateReady", function () {
+  toggleGridSwiperView(state.gridViewActive);
 });
