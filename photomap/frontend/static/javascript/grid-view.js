@@ -135,14 +135,14 @@ function addGridEventListeners() {
   eventRegistry.install(
     { type: "grid", event: "swiperModeChanged" },
     async (e) => {
-      resetAllSlides();
+      await resetAllSlides();
     }
   );
 
   eventRegistry.install(
     { type: "grid", event: "searchResultsChanged" },
-    (e) => {
-      resetAllSlides(0);
+    async (e) => {
+      await resetAllSlides();
     }
   );
 
@@ -152,20 +152,20 @@ function addGridEventListeners() {
     function (e) {}
   );
 
-  eventRegistry.install({ type: "grid", event: "setSlideIndex" }, (e) => {
+  eventRegistry.install({ type: "grid", event: "setSlideIndex" }, async (e) => {
     const { targetIndex, isSearchMode } = e.detail;
     if (isSearchMode !== slideState.isSearchMode) {
       console.error("Mismatched search mode in setSlideIndex event");
       return;
     }
     slideState.navigateToIndex(targetIndex, isSearchMode);
-    resetAllSlides(targetIndex); // Pass the target index
+    await resetAllSlides(targetIndex); // Pass the target index
   });
 
   // Reset grid when search results or album changes
-  eventRegistry.install({ type: "grid", event: "albumChanged" }, () => {
+  eventRegistry.install({ type: "grid", event: "albumChanged" }, async () => {
     // slideState.handleAlbumChanged();
-    resetAllSlides();
+    await resetAllSlides();
   });
 
   if (state.swiper) {
