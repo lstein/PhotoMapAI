@@ -20,7 +20,7 @@ import {
   updateSlideshowIcon,
 } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
-import { toggleUmapWindow } from "./umap.js";
+import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
 // Constants
@@ -78,11 +78,13 @@ function handleFullscreenChange() {
   const isFullscreen = !!document.fullscreenElement;
 
   // Toggle visibility of UI panels
-  [elements.controlPanel, elements.searchPanel,elements.scoreDisplay].forEach((panel) => {
-    if (panel) {
-      panel.classList.toggle("hidden-fullscreen", isFullscreen);
+  [elements.controlPanel, elements.searchPanel, elements.scoreDisplay].forEach(
+    (panel) => {
+      if (panel) {
+        panel.classList.toggle("hidden-fullscreen", isFullscreen);
+      }
     }
-  });
+  );
 }
 
 // Toggle slideshow controls
@@ -413,7 +415,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // Toggle grid/swiper views
 export async function toggleGridSwiperView(gridView = null) {
-
   if (gridView === null) state.gridViewActive = !state.gridViewActive;
   else state.gridViewActive = gridView;
   saveSettingsToLocalStorage();
@@ -448,10 +449,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   if (gridViewBtn)
     gridViewBtn.addEventListener("click", () => {
-      toggleUmapWindow(false); // Close umap if open
+      if (isUmapFullscreen()) toggleUmapWindow(false); // Close umap if open
       toggleGridSwiperView();
     });
-
 });
 
 window.addEventListener("stateReady", function () {

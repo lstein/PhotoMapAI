@@ -1358,6 +1358,11 @@ function setSemanticMapTitle() {
   });
 }
 
+// Expose function to check if UMAP is in fullscreen mode.
+export function isUmapFullscreen() {
+  return isFullscreen;
+}
+
 // Set initial title on DOMContentLoaded
 document.addEventListener("DOMContentLoaded", initializeUmapWindow);
 window.addEventListener("albumChanged", initializeUmapWindow);

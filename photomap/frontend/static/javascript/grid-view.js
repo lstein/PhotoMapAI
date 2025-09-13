@@ -259,6 +259,7 @@ async function resetAllSlides(targetIndex = null) {
 
   // remove all slides and force Swiper internal state to a safe baseline
   try {
+    state.swiper.slideTo(0, 0); // jump to 0 instantly to avoid issues
     state.swiper.removeAllSlides();
   } catch (err) {
     console.warn("removeAllSlides failed:", err);
