@@ -23,7 +23,6 @@ class SlideStateManager {
 
     // Listen for album changes
     window.addEventListener("albumChanged", (e) => {
-      console.log("SlideStateManager detected album change:", e.detail);
       this.handleAlbumChanged(e.detail);
     });
   }
@@ -123,7 +122,6 @@ class SlideStateManager {
    * @param {number} startIndex - Optional starting position in search results
    */
   enterSearchMode(results, startIndex = 0) {
-    console.log("Entering search mode with results:", results);
     this.searchResults = results || [];
     this.isSearchMode = this.searchResults.length > 0;
 
@@ -157,16 +155,9 @@ class SlideStateManager {
    * @param {number} searchIndex - The search results index (optional)
    */
   updateFromExternal(globalIndex, searchIndex = null) {
-    console.log(
-      "Updating from navigation:",
-      { globalIndex, searchIndex },
-      "search mode=",
-      this.isSearchMode
-    );
     if (this.isSearchMode && searchIndex !== null) {
       this.currentGlobalIndex = this.searchResults[searchIndex].index;
       this.currentSearchIndex = searchIndex;
-      console.log("Updated globalIndex to:", this.currentGlobalIndex);
     } else {
       this.currentGlobalIndex = globalIndex;
       this.currentSearchIndex = searchIndex;

@@ -100,7 +100,6 @@ export async function initializeSingleSwiper() {
   // Remove grid-mode class from swiper container
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.remove("grid-mode");
-  console.log("Initialized single-image Swiper mode.");
 
   // resetAllSlides();
 }
@@ -132,7 +131,6 @@ function initializeSwiperHandlers() {
   state.swiper.on("slideChange", function () {
     if (isAppending || isPrepending || isInternalSlideChange) return; // Prevent recursion
     isInternalSlideChange = true; // guard against recursion
-    console.log("Swiper slideChange event, activeIndex:", this.activeIndex);
     const activeSlide = this.slides[this.activeIndex];
     if (activeSlide) {
       const globalIndex = parseInt(activeSlide.dataset.globalIndex, 10) || 0;
@@ -228,7 +226,6 @@ function initializeEventHandlers() {
 
   // Reset slide show when the album changes
   eventRegistry.install({ type: "swiper", event: "albumChanged" }, () => {
-    console.log("Swiper detected album change");
     initializeSingleSwiper();
     resetAllSlides();
   });
@@ -245,7 +242,6 @@ function initializeEventHandlers() {
   eventRegistry.install(
     { type: "swiper", event: "swiperModeChanged" },
     (event) => {
-      console.log("Swiper mode changed event:", event.detail);
       resetAllSlides();
     }
   );
@@ -289,7 +285,6 @@ export function updateSlideshowIcon() {
 // Add a new slide to Swiper with image and metadata
 export async function addNewSlide(offset = 0) {
   if (!state.album) return; // No album set, cannot add slide
-  console.log("swiper.addNewSlide with offset:", offset);
 
   let [globalIndex, totalImages, searchIndex] = getCurrentSlideIndex();
   // Search mode -- we identify the next image based on the search results array,
@@ -328,7 +323,6 @@ export async function addSlideByIndex(
       const totalImages = slideState.totalAlbumImages;
       globalIndex = Math.floor(Math.random() * totalImages);
     }
-    console.log("Random mode: selected globalIndex", globalIndex);
   }
 
   // Prevent duplicates
@@ -444,12 +438,6 @@ export async function resetAllSlides() {
   state.swiper.removeAllSlides();
 
   const { globalIndex, searchIndex } = slideState.getCurrentSlide();
-  console.log(
-    "Resetting all slides, current global index:",
-    globalIndex,
-    "search index:",
-    searchIndex
-  );
 
   // First slides added should not be random if in random mode
   // Add previous slide if available

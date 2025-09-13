@@ -412,7 +412,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // Toggle grid/swiper views
 export async function toggleGridSwiperView(gridView = null) {
-  console.log("Toggling grid/swiper view. Current state:", state.gridViewActive);
 
   if (gridView === null) state.gridViewActive = !state.gridViewActive;
   else state.gridViewActive = gridView;

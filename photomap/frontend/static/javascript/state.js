@@ -82,7 +82,6 @@ export async function restoreFromLocalStorage() {
   if (storedGridViewActive !== null) {
     state.gridViewActive = storedGridViewActive === "true";
   }
-  console.log("Restored state from local storage:", state);
 }
 
 // Save state to local storage
@@ -96,16 +95,13 @@ export function saveSettingsToLocalStorage() {
     state.showControlPanelText || ""
   );
   localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
-  console.log("Saved state to local storage:", state);
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
-  console.log("Setting album to", newAlbumKey, "force =", force);
   if (force || state.album !== newAlbumKey) {
     state.album = newAlbumKey;
     
     const metadata = await getIndexMetadata(state.album);
-    console.log("Album metadata:", metadata);
     
     state.dataChanged = true;
     saveSettingsToLocalStorage();

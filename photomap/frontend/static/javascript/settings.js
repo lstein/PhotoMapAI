@@ -92,7 +92,6 @@ function triggerSetupMode() {
 // Album switching logic
 export async function switchAlbum(newAlbum) {
   const album = await albumManager.getAlbum(newAlbum);
-  console.log("Exiting search mode - BUG HERE - fix")
   exitSearchMode("switchAlbum");
   setAlbum(newAlbum, true);
   updatePageTitle(album.name);

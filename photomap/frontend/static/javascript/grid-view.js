@@ -114,12 +114,6 @@ export async function initializeGridSwiper() {
     const slideEl = state.swiper.slides[state.swiper.activeIndex * currentRows];
     if (slideEl) {
       const globalIndex = parseInt(slideEl.dataset.globalIndex, 10);
-      console.log(
-        "Grid view slideChange event, global index:",
-        globalIndex,
-        "current global index:",
-        slideState.currentGlobalIndex
-      );
       if (globalIndex == slideState.globalIndex) return; // No change
       if (!isNaN(globalIndex)) {
         slideState.navigateToIndex(globalIndex, false);
@@ -181,14 +175,6 @@ function addGridEventListeners() {
       const slidesLeft =
         Math.floor(state.swiper.slides.length / currentRows) -
         state.swiper.activeIndex;
-      console.log(
-        "Slides left in grid view:",
-        slidesLeft,
-        "activeIndex:",
-        state.swiper.activeIndex,
-        "total slides:",
-        state.swiper.slides.length / currentRows
-      );
       if (slidesLeft <= currentColumns) {
         const lastSlideIndex =
           parseInt(
@@ -199,12 +185,6 @@ function addGridEventListeners() {
         const index = slideState.isSearchMode
           ? slideState.globalToSearch(lastSlideIndex) + 1
           : lastSlideIndex + 1;
-        console.log(
-          "lastSlideIndex:",
-          lastSlideIndex,
-          "loading from index:",
-          index
-        );
         loadBatch(index, true); // Append a batch at the end
       }
     });
@@ -227,12 +207,6 @@ function addGridEventListeners() {
 
   // Handle clicks on grid slides
   window.handleGridSlideClick = function (globalIndex) {
-    console.log(
-      "Grid slide clicked, global index:",
-      globalIndex,
-      "search index:",
-      slideState.globalToSearch(globalIndex)
-    );
     //slideState.setCurrentIndex(globalIndex, false);
     slideState.navigateToIndex(globalIndex, false);
 
@@ -243,15 +217,15 @@ function addGridEventListeners() {
   };
 
   // Handle double clicks on grid slides
-  window.handleGridSlideDblClick = function (globalIndex) {
-    console.log("Grid slide double clicked, global index:", globalIndex);
+  window.handleGridSlideDblClick = async function (globalIndex) {
     slideState.setCurrentIndex(globalIndex, false);
     updateCurrentSlideHighlight(globalIndex);
 
-    // add slight pause so that swiper settles down
-    setTimeout(() => {
-      toggleGridSwiperView(false); // Switch to swiper view
-    }, 100);
+    // Await the mode switch before proceeding
+    await toggleGridSwiperView(false); // Switch to swiper view
+
+    // Now, after the mode is switched, trigger slide loading if needed
+    // (e.g., resetAllSlides or similar)
   };
 }
 // Double tap for touch devices
@@ -337,7 +311,6 @@ async function loadBatch(startIndex = null, append = true) {
           ) + 1;
     }
   }
-  console.log("Loading batch, startIndex:", startIndex, "append:", append);
 
   // Round to closest multiple of slidesPerBatch
   startIndex = Math.floor(startIndex / slidesPerBatch) * slidesPerBatch;
@@ -492,16 +465,11 @@ function enforceHighWaterMark(trimFromEnd = false) {
     }
   }
 
-  console.log(
-    `Enforcing high water mark: removing ${removeCount} slides (${removeScreens} screens) from ${
-      trimFromEnd ? "end" : "start"
-    }`
-  );
   // Attempt to remove all at once
   try {
     state.swiper.removeSlide(removeIndices);
   } catch (err) {
-    console.log("Batch remove failed, falling back to one-by-one:", err);
+    console.warn("Batch remove failed, falling back to one-by-one:", err);
     // Fallback: remove one-by-one (should be rare)
     if (!trimFromEnd) {
       for (let i = 0; i < removeCount; i++) {
@@ -549,12 +517,6 @@ function enforceHighWaterMark(trimFromEnd = false) {
     // Trimmed the tail: clamp active index so it stays valid
     const maxActive = Math.max(0, state.swiper.slides.length - currentColumns);
     const targetActive = Math.min(prevActive, maxActive);
-    console.log(
-      "Trimmed end, adjusting active index:",
-      prevActive,
-      "->",
-      targetActive
-    );
     state.swiper.slideTo(targetActive, 0);
   }
 
