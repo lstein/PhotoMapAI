@@ -6,6 +6,7 @@ export class ScoreDisplay {
     this.scoreElement = document.getElementById("fixedScoreDisplay");
     this.scoreText = document.getElementById("scoreText");
     this.isVisible = false;
+    this.opacity = 0.85;
   }
 
   show(score, index = null, total = null) {
@@ -18,7 +19,7 @@ export class ScoreDisplay {
       this.scoreElement.style.display = "block";
       this.scoreElement.classList.add("visible");
       this.scoreElement.classList.remove("hidden");
-      this.scoreElement.style.backgroundColor = "rgba(0, 0, 0, 0.8)"; // Default background color
+      this.scoreElement.style.backgroundColor = `rgba(0, 0, 0, ${this.opacity})`; // Default background color
       this.scoreElement.style.color = "#fff"; // Default text color
       this.isVisible = true;
     }
@@ -30,7 +31,7 @@ export class ScoreDisplay {
       this.scoreElement.style.display = "block";
       this.scoreElement.classList.add("visible");
       this.scoreElement.classList.remove("hidden");
-      this.scoreElement.style.backgroundColor = "rgba(0, 0, 0, 0.8)"; // Default background color
+      this.scoreElement.style.backgroundColor = `rgba(0, 0, 0, ${this.opacity})`; // Default background color
       this.scoreElement.style.color = "#fff"; // Default text color
       this.isVisible = true;
     }
@@ -50,6 +51,7 @@ export class ScoreDisplay {
 
       if (color) {
         this.scoreElement.style.backgroundColor = color;
+        this.scoreElement.style.opacity = this.opacity;
         if (isColorLight(color)) {
           this.scoreElement.style.color = "#000"; // Dark text for light background
         } else {

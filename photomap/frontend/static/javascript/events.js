@@ -60,6 +60,7 @@ function cacheElements() {
     metadataOverlay: document.getElementById("metadataOverlay"),
     bannerDrawerContainer: document.getElementById("bannerDrawerContainer"),
     overlayDrawer: document.getElementById("overlayDrawer"),
+    scoreDisplay: document.getElementById("fixedScoreDisplay"),
   };
 }
 
@@ -77,7 +78,7 @@ function handleFullscreenChange() {
   const isFullscreen = !!document.fullscreenElement;
 
   // Toggle visibility of UI panels
-  [elements.controlPanel, elements.searchPanel].forEach((panel) => {
+  [elements.controlPanel, elements.searchPanel,elements.scoreDisplay].forEach((panel) => {
     if (panel) {
       panel.classList.toggle("hidden-fullscreen", isFullscreen);
     }
