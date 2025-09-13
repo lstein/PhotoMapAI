@@ -314,15 +314,9 @@ export async function addSlideByIndex(
   if (!state.swiper) return;
 
   // pick a random slide if settings.mode is random
-  if (state.mode === "random") {
-    if (slideState.isSearchMode && slideState.searchResults?.length > 0) {
-      const totalImages = slideState.searchResults.length;
-      searchIndex = Math.floor(Math.random() * totalImages);
-      globalIndex = slideState.indexToGlobal(searchIndex);
-    } else {
-      const totalImages = slideState.totalAlbumImages;
-      globalIndex = Math.floor(Math.random() * totalImages);
-    }
+  if (state.mode === "random" && !slideState.isSearchMode) {
+    const totalImages = slideState.totalAlbumImages;
+    globalIndex = Math.floor(Math.random() * totalImages);
   }
 
   // Prevent duplicates
