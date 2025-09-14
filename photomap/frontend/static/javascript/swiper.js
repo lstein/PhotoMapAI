@@ -25,6 +25,8 @@ export async function initializeSingleSwiper() {
   // The swiper shares part of the DOM with the grid view,
   // so we need to clean up any existing state.
   // Destroy previous Swiper instance if it exist s
+  console.trace("Initializing grid swiper");
+
   if (state.swiper) {
     state.swiper.destroy(true, true);
     state.swiper = null;
@@ -152,7 +154,12 @@ function initializeSwiperHandlers() {
       // Use slideState to resolve next indices based on whether we are in album or search mode
       const { globalIndex: nextGlobal, searchIndex: nextSearch } =
         slideState.resolveOffset(+1);
-      console.log("Next slide global index:", nextGlobal, "search index:", nextSearch);
+      console.log(
+        "Next slide global index:",
+        nextGlobal,
+        "search index:",
+        nextSearch
+      );
 
       if (nextGlobal !== null) {
         addSlideByIndex(nextGlobal, nextSearch)
