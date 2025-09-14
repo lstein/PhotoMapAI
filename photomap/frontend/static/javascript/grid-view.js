@@ -55,7 +55,7 @@ function calculateGridGeometry() {
 }
 
 export async function initializeGridSwiper() {
-  console.trace
+  console.trace;
   // Destroy previous Swiper instance if it exists
   if (state.swiper) {
     state.swiper.destroy(true, true);
@@ -207,12 +207,29 @@ function addGridEventListeners() {
         loadBatch(index - 1, false); // Prepend a batch at the start
       }
     });
+
+    // onChange event
+    state.swiper.on("slideChange", () => {
+      const globalIndex = parseInt(
+        state.swiper.slides[state.swiper.activeIndex * currentRows]?.dataset
+          ?.globalIndex,
+        10
+      );
+      console.log(
+        "Swiper slideChange event, activeIndex:",
+        state.swiper.activeIndex,
+        "Global index:",
+        globalIndex
+      );
+      const searchIndex = slideState.globalToSearch(globalIndex);
+      slideState.updateFromExternal(globalIndex, searchIndex);
+    });
   }
 
   // Handle clicks on grid slides
   window.handleGridSlideClick = function (globalIndex) {
     //slideState.setCurrentIndex(globalIndex, false);
-    slideState.navigateToIndex(globalIndex, false);
+    slideState.updateFromExternal(globalIndex, slideState.globalToSearch(globalIndex));
 
     // adjust the highlight
     updateCurrentSlideHighlight();
