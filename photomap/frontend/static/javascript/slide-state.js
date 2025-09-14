@@ -155,7 +155,7 @@ class SlideStateManager {
    * @param {number} searchIndex - The search results index (optional)
    */
   updateFromExternal(globalIndex, searchIndex = null) {
-    if (this.isSearchMode && searchIndex !== null) {
+    if (this.isSearchMode && searchIndex !== null && this.searchResults.length > 0) {
       this.currentGlobalIndex = this.searchResults[searchIndex].index;
       this.currentSearchIndex = searchIndex;
     } else {

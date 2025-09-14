@@ -26,6 +26,7 @@ export async function initializeSingleSwiper() {
   // so we need to clean up any existing state.
   // Destroy previous Swiper instance if it exist s
   console.trace("Initializing grid swiper");
+  eventRegistry.removeAll("swiper"); // Clear previous event handlers
 
   if (state.swiper) {
     state.swiper.destroy(true, true);

@@ -57,6 +57,8 @@ function calculateGridGeometry() {
 
 export async function initializeGridSwiper() {
   console.trace("Initializing grid swiper");
+  eventRegistry.removeAll("grid"); // Clear previous event handlers
+
   // Destroy previous Swiper instance if it exists
   if (state.swiper) {
     state.swiper.destroy(true, true);
@@ -284,9 +286,6 @@ function addGridEventListeners() {
 
     // Await the mode switch before proceeding
     await toggleGridSwiperView(false); // Switch to swiper view
-
-    // Now, after the mode is switched, trigger slide loading if needed
-    // (e.g., resetAllSlides or similar)
   };
 }
 // Double tap for touch devices
@@ -330,7 +329,16 @@ async function resetAllSlides() {
   } catch (err) {
     console.warn("removeAllSlides failed:", err);
   }
-  await state.swiper.update(); // ensure internal state is correct
+  try {
+    state.swiper.update(); // ensure internal state is correct
+  } catch (err) {
+    console.warn(
+      "swiper.update() failed:",
+      err,
+      "\ncontinuing anyway, slide length =",
+      state.swiper.slides.length
+    );
+  }
   await loadBatch(targetIndex, true);
   await loadBatch(targetIndex + slidesPerBatch, true); // Load two batches to start in order to enable forward navigation
   if (targetIndex > 0) {
