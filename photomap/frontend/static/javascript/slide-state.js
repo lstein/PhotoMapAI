@@ -54,7 +54,7 @@ class SlideStateManager {
       : this.currentGlobalIndex;
   }
 
-    /**
+  /**
    * Set the current slide to a specific index without navigating there
    * @param {number} index - The index to navigate to
    * @param {boolean} isSearchIndex - Whether the index is in search results or global album
@@ -99,7 +99,7 @@ class SlideStateManager {
    */
   navigateToIndex(index, isSearchIndex = null) {
     this.setCurrentIndex(index, isSearchIndex);
-    this.notifySlideChanged();
+    this.seekToSlideIndex();
   }
 
   /**
@@ -247,15 +247,24 @@ class SlideStateManager {
   }
 
   // --- Private Methods ---
-
   notifySlideChanged() {
     const slideInfo = this.getCurrentSlide();
+    console.log("Dispatching slideChanged event:", slideInfo),
+      window.dispatchEvent(
+        new CustomEvent("slideChanged", {
+          detail: slideInfo,
+        })
+      );
+  }
 
-    window.dispatchEvent(
-      new CustomEvent("slideChanged", {
-        detail: slideInfo,
-      })
-    );
+  seekToSlideIndex() {
+    const slideInfo = this.getCurrentSlide();
+    console.log("Dispatching seekToSlideIndex event:", slideInfo),
+      window.dispatchEvent(
+        new CustomEvent("seekToSlideIndex", {
+          detail: slideInfo,
+        })
+      );
   }
 }
 

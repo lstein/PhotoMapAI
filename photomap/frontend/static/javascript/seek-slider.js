@@ -81,6 +81,9 @@ class SeekSlider {
         "change",
         async () => await this.onSliderChange()
       );
+      this.slider.addEventListener("blur", () => {
+        if (this.infoPanel) this.infoPanel.style.display = "none";
+      });
     }
 
     window.addEventListener(
@@ -165,7 +168,7 @@ class SeekSlider {
           (value - this.slider.min) / (this.slider.max - this.slider.min);
         const sliderRect = this.slider.getBoundingClientRect();
         left = percent * sliderRect.width - this.infoPanel.offsetWidth / 2;
-        top = this.slider.offsetTop - this.infoPanel.offsetHeight - 8;
+        top = this.slider.offsetBottom + 8;
       }
       this.infoPanel.style.left = `${left}px`;
       this.infoPanel.style.top = `${top}px`;
@@ -216,14 +219,13 @@ class SeekSlider {
   }
 
   async onSlideChanged(event) {
+    console.log("slideChanged event received:", event.detail);
     this.searchResultsChanged = true;
-    if (this.slideChangedTimer) clearTimeout(this.slideChangedTimer);
-    this.slideChangedTimer = setTimeout(async () => {
-      if (this.isUserSeeking) return;
-      const currentIndex = slideState.getCurrentIndex();
-      this.slider_value = currentIndex + 1;
-      this.resetFadeOutTimer();
-    }, 200);
+    if (this.isUserSeeking) return;
+    const currentIndex = slideState.getCurrentIndex();
+    console.log("Updating slider to index:", currentIndex);
+    if (this.slider) this.slider.value = currentIndex + 1;
+    this.resetFadeOutTimer();
   }
 
   async showSlider() {
@@ -244,6 +246,8 @@ class SeekSlider {
     if (this.sliderVisible && this.sliderContainer) {
       this.sliderVisible = false;
       this.sliderContainer.classList.remove("visible");
+      this.slider.blur();
+      if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
     }
   }
 
@@ -253,6 +257,8 @@ class SeekSlider {
       this.fadeOutTimeoutId = setTimeout(() => {
         this.sliderContainer.classList.remove("visible");
         this.sliderVisible = false;
+        this.slider.blur();
+        if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
         this.fadeOutTimeoutId = null;
       }, 600);
     }
@@ -264,6 +270,7 @@ class SeekSlider {
       if (!this.sliderContainer.querySelector(":hover")) {
         this.sliderContainer.classList.remove("visible");
         this.sliderVisible = false;
+        if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
         this.fadeOutTimeoutId = null;
       }
     }, this.FADE_OUT_DELAY);

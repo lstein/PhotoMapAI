@@ -142,6 +142,7 @@ function initializeSwiperHandlers() {
   });
 
   state.swiper.on("slideNextTransitionStart", function () {
+    console.log("slideNextTransitionStart event");
     if (isAppending) return;
 
     if (this.activeIndex === this.slides.length - 1) {
@@ -151,6 +152,7 @@ function initializeSwiperHandlers() {
       // Use slideState to resolve next indices based on whether we are in album or search mode
       const { globalIndex: nextGlobal, searchIndex: nextSearch } =
         slideState.resolveOffset(+1);
+      console.log("Next slide global index:", nextGlobal, "search index:", nextSearch);
 
       if (nextGlobal !== null) {
         addSlideByIndex(nextGlobal, nextSearch)
@@ -170,7 +172,7 @@ function initializeSwiperHandlers() {
   });
 
   state.swiper.on("slidePrevTransitionEnd", function () {
-    if (isPrepending) return;
+    // if (isPrepending) return;
 
     const [globalIndex] = getCurrentSlideIndex();
     if (this.activeIndex === 0 && globalIndex > 0) {
@@ -248,8 +250,8 @@ function initializeEventHandlers() {
 
   // Navigate to a slide
   eventRegistry.install(
-    { type: "swiper", event: "setSlideIndex" },
-    setSlideIndex
+    { type: "swiper", event: "seekToSlideIndex" },
+    seekToSlideIndex
   );
 }
 
@@ -489,16 +491,31 @@ export function enforceHighWaterMark(backward = false) {
 }
 
 // Navigate to a slide based on its index
-async function setSlideIndex(event) {
-  const { targetIndex, isSearchMode } = event.detail;
+async function seekToSlideIndex(event) {
+  console.trace("seekToSlideIndex event received:", event.detail);
+  let { globalIndex, searchIndex, totalSlides, isSearchMode } = event.detail;
 
-  let globalIndex;
-  let [, totalSlides] = getCurrentSlideIndex();
+  if (isSearchMode) {
+    globalIndex = slideState.searchToGlobal(searchIndex);
+  }
 
-  if (isSearchMode && slideState.searchResults?.length > 0) {
-    globalIndex = slideState.searchResults[targetIndex]?.index;
-  } else {
-    globalIndex = targetIndex;
+  // Find the slide with the correct globalIndex
+  let slideEls = state.swiper.slides;
+  const exists = Array.from(slideEls).some(
+    (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
+  );
+  if (exists) {
+    // Slide exists, navigate to it
+    const targetSlideIdx = Array.from(slideEls).findIndex(
+      (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
+    );
+    if (targetSlideIdx !== -1) {
+      isInternalSlideChange = true; // guard against recursion
+      state.swiper.slideTo(targetSlideIdx, 300);
+      isInternalSlideChange = false;
+      updateMetadataOverlay();
+      return;
+    }
   }
 
   state.swiper.removeAllSlides();
@@ -513,13 +530,12 @@ async function setSlideIndex(event) {
   swiperContainer.style.visibility = "hidden";
 
   for (let i = origin; i < slides_to_add; i++) {
-    if (targetIndex + i >= totalSlides) break;
-    let seekIndex = globalIndex + i;
-    await addSlideByIndex(seekIndex, targetIndex + i);
+    if (searchIndex + i >= totalSlides) break;
+    await addSlideByIndex(globalIndex + i, searchIndex + i);
   }
 
   // Find the slide with the correct globalIndex and slide to it
-  const slideEls = state.swiper.slides;
+  slideEls = state.swiper.slides;
   let targetSlideIdx = Array.from(slideEls).findIndex(
     (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
   );
