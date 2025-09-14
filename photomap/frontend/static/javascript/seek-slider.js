@@ -206,6 +206,7 @@ class SeekSlider {
     this.infoPanel.textContent = "";
     const targetIndex = parseInt(this.slider.value, 10) - 1;
     this.isUserSeeking = true;
+    console.log("Slider navigating to index:", targetIndex);
     slideState.navigateToIndex(targetIndex, slideState.isSearchMode);
     // window.dispatchEvent(
     //   new CustomEvent("setSlideIndex", {

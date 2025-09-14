@@ -11,6 +11,7 @@ import { hideSpinner, showSpinner } from "./utils.js";
 
 let loadedImageIndices = new Set(); // Track which images we've already loaded
 let batchLoading = false; // Prevent concurrent batch loads
+let resetInProgress = false; // Prevent actions during reset
 let slidesPerBatch = 0; // Number of slides to load per batch
 let slideHeight = 140; // Default slide height (reduced from 200)
 let currentRows = 0; // Track current grid dimensions
@@ -110,6 +111,7 @@ export async function initializeGridSwiper() {
   swiperContainer.classList.add("grid-mode");
 
   state.swiper.on("slideChange", () => {
+    return;
     // Get the top-left visible slide's global index
     if (batchLoading) return; // Prevent unwanted updates
     const slideEl = state.swiper.slides[state.swiper.activeIndex * currentRows];
@@ -156,15 +158,35 @@ function addGridEventListeners() {
     }
   );
 
-  eventRegistry.install({ type: "grid", event: "setSlideIndex" }, async (e) => {
-    const { targetIndex, isSearchMode } = e.detail;
-    if (isSearchMode !== slideState.isSearchMode) {
-      console.error("Mismatched search mode in setSlideIndex event");
-      return;
+  eventRegistry.install(
+    { type: "grid", event: "seekToSlideIndex" },
+    async (e) => {
+      console.trace("grid seekToSlideIndex event", e);
+      const { globalIndex, searchIndex, totalSlides, isSearchMode } = e.detail;
+      console.log("seekToSlideIndex detail:", e.detail);
+      if (isSearchMode !== slideState.isSearchMode) {
+        console.error("Mismatched search mode in setSlideIndex event");
+        return;
+      }
+      // If the globalIndex is already visible, just highlight it
+      const slideEl = document.querySelector(
+        `.swiper-slide[data-global-index='${globalIndex}']`
+      );
+      if (slideEl) {
+        updateCurrentSlideHighlight(globalIndex);
+        // Also ensure it's on the currently visible screen
+        const slideIndex = Array.from(state.swiper.slides).indexOf(slideEl);
+        const screenIndex = Math.floor(
+          slideIndex / (currentRows * currentColumns)
+        );
+        console.log("screenIndex:", screenIndex, "slideIndex:", slideIndex);
+        state.swiper.slideTo(screenIndex * currentColumns);
+        return;
+      }
+      // Otherwise, load the screen that contains the globalIndex slide
+      await resetAllSlides(); // Pass the target index
     }
-    slideState.navigateToIndex(targetIndex, isSearchMode);
-    await resetAllSlides(targetIndex); // Pass the target index
-  });
+  );
 
   // Reset grid when search results or album changes
   eventRegistry.install({ type: "grid", event: "albumChanged" }, async () => {
@@ -210,26 +232,54 @@ function addGridEventListeners() {
 
     // onChange event
     state.swiper.on("slideChange", () => {
-      const globalIndex = parseInt(
-        state.swiper.slides[state.swiper.activeIndex * currentRows]?.dataset
-          ?.globalIndex,
-        10
+      // If the currently highlighted slide is not visible, move the highlight to the top-left slide
+      const currentSlide = slideState.getCurrentSlide();
+      const currentGlobal = currentSlide.globalIndex;
+      const slideEl = document.querySelector(
+        `.swiper-slide[data-global-index='${currentGlobal}']`
       );
-      console.log(
-        "Swiper slideChange event, activeIndex:",
-        state.swiper.activeIndex,
-        "Global index:",
-        globalIndex
-      );
-      const searchIndex = slideState.globalToSearch(globalIndex);
-      slideState.updateFromExternal(globalIndex, searchIndex);
+      if (slideEl) {
+        const slideIndex = Array.from(state.swiper.slides).indexOf(slideEl);
+        console.log(
+          "Current slide is globalIndx",
+          currentGlobal,
+          "at slideIndex",
+          slideIndex
+        );
+        const slideColumn = Math.floor(slideIndex / currentRows);
+        const screenColumn = Math.floor(state.swiper.activeIndex);
+        if (
+          slideColumn < screenColumn ||
+          slideColumn >= screenColumn + currentColumns 
+        ) {
+          console.log("Moving highlight to top-left slide");
+          // Move highlight to top-left slide
+          const topLeftSlideEl = state.swiper.slides[screenColumn * currentRows];
+          if (topLeftSlideEl) {
+            const topLeftGlobal = parseInt(
+              topLeftSlideEl.dataset.globalIndex,
+              10
+            );
+            slideState.updateFromExternal(
+              topLeftGlobal,
+              slideState.globalToSearch(topLeftGlobal)
+            );
+            updateCurrentSlideHighlight(topLeftGlobal);
+            updateCurrentImageScore(slideData[topLeftGlobal] || null);
+            updateMetadataOverlay();
+          }
+        }
+      }
     });
   }
 
   // Handle clicks on grid slides
   window.handleGridSlideClick = function (globalIndex) {
     //slideState.setCurrentIndex(globalIndex, false);
-    slideState.updateFromExternal(globalIndex, slideState.globalToSearch(globalIndex));
+    slideState.updateFromExternal(
+      globalIndex,
+      slideState.globalToSearch(globalIndex)
+    );
 
     // adjust the highlight
     updateCurrentSlideHighlight();
@@ -270,9 +320,14 @@ function addDoubleTapHandler(slideEl, globalIndex) {
 // Reset batch to include the current slide in the first screen.
 // @param {number|null} targetIndex - Optional index to include in first screen.
 // If null, use current slide index.
-async function resetAllSlides(targetIndex = null) {
+async function resetAllSlides() {
+  resetInProgress = true;
   showSpinner();
-  if (targetIndex === null) targetIndex = slideState.getCurrentIndex() || 0;
+  const targetIndex = slideState.getCurrentIndex();
+  console.log(
+    "I am supposed to be setting the slides to in include:",
+    targetIndex
+  );
 
   loadedImageIndices.clear();
 
@@ -280,21 +335,15 @@ async function resetAllSlides(targetIndex = null) {
 
   // remove all slides and force Swiper internal state to a safe baseline
   try {
-    state.swiper.slideTo(0, 0); // jump to 0 instantly to avoid issues
-    state.swiper.removeAllSlides();
+    console.log("Swiper destroyed state is:", state.swiper.destroyed);
+    console.log("Slides in swiper currently:", state.swiper.slides.length);
+    // state.swiper.slideTo(0, 0); // jump to 0 instantly to avoid issues
+    if (!state.swiper.destroyed) state.swiper.removeAllSlides();
   } catch (err) {
     console.warn("removeAllSlides failed:", err);
   }
 
-  // Ensure internal structures are recalculated and activeIndex is valid (0)
-  try {
-    state.swiper.update();
-    // jump to 0 instantly to avoid Swiper trying to reference stale slide elements
-    state.swiper.slideTo(0, 0);
-  } catch (err) {
-    console.warn("Swiper reset/update failed:", err);
-  }
-
+  console.log("Slides in swiper now:", state.swiper.slides.length);
   const currentSlide = slideState.getCurrentSlide();
   const currentPosition = slideState.isSearchMode
     ? currentSlide.searchIndex
@@ -309,6 +358,7 @@ async function resetAllSlides(targetIndex = null) {
   updateMetadataOverlay();
   updateCurrentImageScore(slideData[slideState.searchToGlobal(0)] || null);
   hideSpinner();
+  resetInProgress = false;
 }
 
 // Load a batch of slides starting at startIndex
