@@ -55,6 +55,7 @@ function calculateGridGeometry() {
 }
 
 export async function initializeGridSwiper() {
+  console.trace
   // Destroy previous Swiper instance if it exists
   if (state.swiper) {
     state.swiper.destroy(true, true);
@@ -149,7 +150,10 @@ function addGridEventListeners() {
   // we don't do anything with this event, yet
   eventRegistry.install(
     { type: "grid", event: "slideChanged" },
-    function (e) {}
+    async function (e) {
+      console.log("grid slideChanged event", e);
+      // nothing for now
+    }
   );
 
   eventRegistry.install({ type: "grid", event: "setSlideIndex" }, async (e) => {

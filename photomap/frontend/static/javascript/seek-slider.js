@@ -1,5 +1,5 @@
 import { ScoreDisplay } from "./score-display.js";
-import { getCurrentSlideIndex } from "./slide-state.js";
+import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 
 class SeekSlider {
@@ -202,14 +202,14 @@ class SeekSlider {
   async onSliderChange() {
     this.infoPanel.textContent = "";
     const targetIndex = parseInt(this.slider.value, 10) - 1;
-    const isSearchMode = state.searchResults?.length > 0;
     this.isUserSeeking = true;
-    window.dispatchEvent(
-      new CustomEvent("setSlideIndex", {
-        detail: { targetIndex, isSearchMode },
-      })
-    );
-    this.slider.blur();
+    slideState.navigateToIndex(targetIndex, slideState.isSearchMode);
+    // window.dispatchEvent(
+    //   new CustomEvent("setSlideIndex", {
+    //     detail: { targetIndex, isSearchMode },
+    //   })
+    // );
+    // this.slider.blur();
     setTimeout(() => {
       this.isUserSeeking = false;
     }, 1500);
@@ -220,9 +220,8 @@ class SeekSlider {
     if (this.slideChangedTimer) clearTimeout(this.slideChangedTimer);
     this.slideChangedTimer = setTimeout(async () => {
       if (this.isUserSeeking) return;
-      const [globalIndex, total, searchIndex] = getCurrentSlideIndex();
-      this.slider.value =
-        state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
+      const currentIndex = slideState.getCurrentIndex();
+      this.slider_value = currentIndex + 1;
       this.resetFadeOutTimer();
     }, 200);
   }
