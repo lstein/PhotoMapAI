@@ -10,7 +10,11 @@ import {
   toggleMetadataOverlay,
   updateMetadataOverlay,
 } from "./metadata-drawer.js";
-import { getCurrentFilepath, getCurrentSlideIndex } from "./slide-state.js";
+import {
+  getCurrentFilepath,
+  getCurrentSlideIndex,
+  slideState,
+} from "./slide-state.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import {
   addNewSlide,
@@ -105,10 +109,26 @@ function handleSpacebarToggle(e) {
 }
 
 // Copy text to clipboard
+// Note: this is legacy code and is awkwardly copying the filepath information
+// from the slide dataset. This should be replaced with a more flexible system.
+// See metadata-drawer.js for a more robust implementation.
 function handleCopyText() {
-  const activeSlide = state.swiper.slides[state.swiper.activeIndex];
-  if (activeSlide) {
-    const filepath = activeSlide.dataset.filepath || "";
+  const globalIndex = slideState.getCurrentSlide().globalIndex;
+  if (globalIndex === -1) {
+    alert("No image selected to copy.");
+    return;
+  }
+  console.log("Copying filepath for global index:", globalIndex);
+  // Get the element of the current slide
+  const slideEl = document.querySelector(
+    `.swiper-slide[data-global-index='${globalIndex}']`
+  );
+  if (!slideEl) {
+    alert("Current slide element not found.");
+    return;
+  }
+  if (slideEl) {
+    const filepath = slideEl.dataset.filepath || "";
     if (
       navigator.clipboard &&
       typeof navigator.clipboard.writeText === "function"

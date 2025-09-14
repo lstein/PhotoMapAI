@@ -200,6 +200,7 @@ const copyMetadataBtn = document.getElementById("copyMetadataBtn");
 if (copyMetadataBtn && metadataTextArea) {
   copyMetadataBtn.addEventListener("click", function () {
     const text = metadataTextArea.value;
+    console.log("Copying metadata text:", text);
     if (text) {
       navigator.clipboard
         .writeText(text)

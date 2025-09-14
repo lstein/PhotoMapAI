@@ -759,6 +759,7 @@ function makeSlideHTML(data, globalIndex) {
   return `
     <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
         data-global-index="${globalIndex}"
+        data-filepath="${data.filepath || ''}"
         onclick="handleGridSlideClick(${globalIndex})"
         ondblclick="handleGridSlideDblClick(${globalIndex})">
       <img src="${data.image_url}" alt="${data.filename}" 
