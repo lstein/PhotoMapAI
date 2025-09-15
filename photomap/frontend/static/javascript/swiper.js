@@ -6,6 +6,7 @@ import { fetchImageByIndex } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
+import { setBatchLoading, waitForBatchLoadingToFinish } from "./utils.js";
 
 // Check if the device is mobile
 function isTouchDevice() {
@@ -100,8 +101,6 @@ export async function initializeSingleSwiper() {
   // Remove grid-mode class from swiper container
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.remove("grid-mode");
-
-  // resetAllSlides();
 }
 
 function initializeSwiperHandlers() {
@@ -423,6 +422,9 @@ export function removeSlidesAfterCurrent() {
 // TO DO - the keep_current_slide logic is no longer needed.
 export async function resetAllSlides() {
   if (!state.swiper) return;
+  await waitForBatchLoadingToFinish();
+  setBatchLoading(true);
+
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow();
 
@@ -468,7 +470,9 @@ export async function resetAllSlides() {
     resumeSlideshow();
   }
   setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
+  setBatchLoading(false);
 }
+
 
 // Enforce the high water mark by removing excess slides
 export function enforceHighWaterMark(backward = false) {

@@ -8,10 +8,14 @@ import { fetchImageByIndex } from "./search.js"; // Use individual image fetchin
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { updateSlideshowIcon } from "./swiper.js";
-import { hideSpinner, showSpinner } from "./utils.js";
+import {
+  hideSpinner,
+  setBatchLoading,
+  showSpinner,
+  waitForBatchLoadingToFinish,
+} from "./utils.js";
 
 let loadedImageIndices = new Set(); // Track which images we've already loaded
-let batchLoading = false; // Prevent concurrent batch loads
 let gridInitialized = false; // Track if grid has been initialized
 let slidesPerBatch = 0; // Number of slides to load per batch
 let slideHeight = 140; // Default slide height (reduced from 200)
@@ -193,7 +197,7 @@ function addGridEventListeners() {
   if (state.swiper) {
     // Load more when reaching the end
     state.swiper.on("slideNextTransitionStart", async () => {
-      if (batchLoading) return; // Prevent concurrent loads
+      await waitForBatchLoadingToFinish();
       const slidesLeft =
         Math.floor(state.swiper.slides.length / currentRows) -
         state.swiper.activeIndex;
@@ -213,7 +217,7 @@ function addGridEventListeners() {
 
     // Load more when reaching the start
     state.swiper.on("slidePrevTransitionStart", async () => {
-      if (batchLoading) return; // Prevent concurrent loads
+      await waitForBatchLoadingToFinish();
       const firstSlide = parseInt(
         state.swiper.slides[0].dataset.globalIndex,
         10
@@ -310,8 +314,8 @@ async function resetAllSlides() {
   if (!gridInitialized) return;
   if (!state.swiper) return;
 
-  if (batchLoading) await waitForBatchLoadingToFinish();  
-  batchLoading = true;
+  await waitForBatchLoadingToFinish();
+  setBatchLoading(true);
   showSpinner();
 
   const targetIndex = slideState.getCurrentIndex();
@@ -323,6 +327,7 @@ async function resetAllSlides() {
     // state.swiper.slideTo(0, 0); // jump to 0 instantly to avoid issues
     if (!state.swiper.destroyed) state.swiper.removeAllSlides();
   } catch (err) {
+    true;
     console.warn("removeAllSlides failed:", err);
   }
   try {
@@ -346,30 +351,7 @@ async function resetAllSlides() {
     slideData[slideState.getCurrentSlide().globalIndex] || null
   );
   hideSpinner();
-  batchLoading = false;
-}
-
-// Wait helper: poll until batchLoading becomes false (with timeout)
-async function waitForBatchLoadingToFinish(timeoutMs = 10000, intervalMs = 50) {
-  const start =
-    typeof performance !== "undefined" && performance.now
-      ? performance.now()
-      : Date.now();
-  while (batchLoading) {
-    const now =
-      typeof performance !== "undefined" && performance.now
-        ? performance.now()
-        : Date.now();
-    if (now - start > timeoutMs) {
-      console.warn(
-        "waitForBatchLoadingToFinish: timeout after",
-        timeoutMs,
-        "ms"
-      );
-      break;
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
+  setBatchLoading(false);
 }
 
 // Load a batch of slides starting at startIndex
