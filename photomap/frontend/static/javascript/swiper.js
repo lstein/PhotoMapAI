@@ -24,8 +24,7 @@ let isInternalSlideChange = false; // To prevent recursion in slideChange handle
 export async function initializeSingleSwiper() {
   // The swiper shares part of the DOM with the grid view,
   // so we need to clean up any existing state.
-  // Destroy previous Swiper instance if it exist s
-  console.trace("Initializing grid swiper");
+  console.trace("== Initializing SINGLE swiper ==");
   eventRegistry.removeAll("swiper"); // Clear previous event handlers
 
   if (state.swiper) {
@@ -33,12 +32,11 @@ export async function initializeSingleSwiper() {
     state.swiper = null;
   }
 
-  // Clear the swiper wrapper completely
+  // To prevent unwanted visual effects during destruction and re-initialization,
   const swiperWrapper = document.querySelector(".swiper .swiper-wrapper");
   if (swiperWrapper) {
     swiperWrapper.innerHTML = "";
   }
-
   // Reset any grid-specific state
   state.gridViewActive = false;
 
@@ -91,7 +89,7 @@ export async function initializeSingleSwiper() {
   state.swiper = new Swiper(".swiper", swiperConfig);
 
   // Wait for Swiper to be fully initialized
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  // await new Promise((resolve) => setTimeout(resolve, 100));
 
   initializeSwiperHandlers();
   initializeEventHandlers();
@@ -145,7 +143,6 @@ function initializeSwiperHandlers() {
   });
 
   state.swiper.on("slideNextTransitionStart", function () {
-    console.log("slideNextTransitionStart event");
     if (isAppending) return;
 
     if (this.activeIndex === this.slides.length - 1) {
@@ -155,12 +152,6 @@ function initializeSwiperHandlers() {
       // Use slideState to resolve next indices based on whether we are in album or search mode
       const { globalIndex: nextGlobal, searchIndex: nextSearch } =
         slideState.resolveOffset(+1);
-      console.log(
-        "Next slide global index:",
-        nextGlobal,
-        "search index:",
-        nextSearch
-      );
 
       if (nextGlobal !== null) {
         addSlideByIndex(nextGlobal, nextSearch)
@@ -180,8 +171,6 @@ function initializeSwiperHandlers() {
   });
 
   state.swiper.on("slidePrevTransitionEnd", function () {
-    // if (isPrepending) return;
-
     const [globalIndex] = getCurrentSlideIndex();
     if (this.activeIndex === 0 && globalIndex > 0) {
       const { globalIndex: prevGlobal, searchIndex: prevSearch } =
@@ -384,13 +373,13 @@ export async function addSlideByIndex(
     );
     if (prepend) {
       state.swiper.prependSlide(slide);
-      setTimeout(() => enforceHighWaterMark(true), 500); // true = remove from end
+      // setTimeout(() => enforceHighWaterMark(true), 500); // true = remove from end
     } else {
       state.swiper.appendSlide(slide);
-      setTimeout(() => enforceHighWaterMark(false), 500); // false = remove from beginning
+      // setTimeout(() => enforceHighWaterMark(false), 500); // false = remove from beginning
     }
     // Delay high water mark enforcement to allow transition to finish
-    setTimeout(() => enforceHighWaterMark(), 500);
+    // setTimeout(() => enforceHighWaterMark(), 500);
   } catch (error) {
     console.error("Failed to add new slide:", error);
     alert(`Failed to add new slide: ${error.message}`);
@@ -442,6 +431,10 @@ export async function resetAllSlides() {
 
   const { globalIndex, searchIndex } = slideState.getCurrentSlide();
 
+  // Prevent intermediate rendering while we add slides
+  const swiperContainer = document.querySelector(".swiper");
+  if (swiperContainer) swiperContainer.style.visibility = "hidden";
+
   // First slides added should not be random if in random mode
   // Add previous slide if available
   const { globalIndex: prevGlobal, searchIndex: prevSearch } =
@@ -466,6 +459,10 @@ export async function resetAllSlides() {
   // Navigate to the current slide (will be at index 0 or 1 depending on whether prev exists)
   const slideIndex = prevGlobal !== null ? 1 : 0;
   state.swiper.slideTo(slideIndex, 0);
+
+  // Let the browser paint the final state, then reveal the container
+  await new Promise(requestAnimationFrame);
+  if (swiperContainer) swiperContainer.style.visibility = "";
 
   updateMetadataOverlay();
   if (slideShowRunning) {

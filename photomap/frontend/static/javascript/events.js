@@ -442,9 +442,9 @@ export async function toggleGridSwiperView(gridView = null) {
   const swiperContainer = document.querySelector(".swiper");
   const gridViewBtn = document.getElementById("gridViewBtn");
   const gridViewIcon = gridViewBtn.querySelector("svg");
-  swiperContainer.style.display = ""; // Always show the swiper container
   eventRegistry.removeAll("swiper");
   eventRegistry.removeAll("grid");
+  swiperContainer.style.display = ""; // Always show the swiper container
 
   const pagination = document.querySelector(".swiper-pagination");
   if (pagination) {
@@ -456,6 +456,7 @@ export async function toggleGridSwiperView(gridView = null) {
   } else {
     await initializeSingleSwiper();
   }
+
   const event = new CustomEvent("swiperModeChanged", {
     detail: { isGridMode: state.gridViewActive },
   });

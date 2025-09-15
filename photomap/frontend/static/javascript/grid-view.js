@@ -56,7 +56,7 @@ function calculateGridGeometry() {
 }
 
 export async function initializeGridSwiper() {
-  console.trace("Initializing grid swiper");
+  console.trace("== Initializing GRID swiper ==");
   eventRegistry.removeAll("grid"); // Clear previous event handlers
 
   // Destroy previous Swiper instance if it exists
@@ -313,10 +313,6 @@ async function resetAllSlides() {
   resetInProgress = true;
   showSpinner();
   const targetIndex = slideState.getCurrentIndex();
-  console.trace(
-    "I am supposed to be setting the slides to include:",
-    targetIndex
-  );
 
   loadedImageIndices.clear();
 
@@ -346,7 +342,6 @@ async function resetAllSlides() {
   }
   updateCurrentSlideHighlight();
   updateMetadataOverlay();
-  console.log("Grid reset complete, updating score to",slideState.getCurrentSlide().globalIndex);
   updateCurrentImageScore(slideData[slideState.getCurrentSlide().globalIndex] || null);
   hideSpinner();
   resetInProgress = false;
