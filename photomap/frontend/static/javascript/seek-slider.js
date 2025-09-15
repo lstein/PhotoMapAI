@@ -206,25 +206,16 @@ class SeekSlider {
     this.infoPanel.textContent = "";
     const targetIndex = parseInt(this.slider.value, 10) - 1;
     this.isUserSeeking = true;
-    console.log("Slider navigating to index:", targetIndex);
     slideState.navigateToIndex(targetIndex, slideState.isSearchMode);
-    // window.dispatchEvent(
-    //   new CustomEvent("setSlideIndex", {
-    //     detail: { targetIndex, isSearchMode },
-    //   })
-    // );
-    // this.slider.blur();
     setTimeout(() => {
       this.isUserSeeking = false;
     }, 1500);
   }
 
   async onSlideChanged(event) {
-    console.log("slideChanged event received:", event.detail);
     this.searchResultsChanged = true;
     if (this.isUserSeeking) return;
     const currentIndex = slideState.getCurrentIndex();
-    console.log("Updating slider to index:", currentIndex);
     if (this.slider) this.slider.value = currentIndex + 1;
     this.resetFadeOutTimer();
   }
@@ -373,7 +364,6 @@ class SeekSlider {
 
   async toggleSlider() {
     this.sliderVisible = !this.sliderVisible;
-    console.log("Toggling slider. Now visible:", this.sliderVisible);
     if (this.sliderVisible) {
       this.sliderContainer.classList.add("visible");
       await this.updateSliderRange();

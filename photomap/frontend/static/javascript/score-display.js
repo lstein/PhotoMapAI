@@ -10,7 +10,6 @@ export class ScoreDisplay {
   }
 
   show(score, index = null, total = null) {
-    console.trace("Showing score:", score, index, total);
     if (score !== undefined && score !== null) {
       let text = `score=${score.toFixed(3)}`;
       if (index !== null && total !== null) {

@@ -24,7 +24,6 @@ let isInternalSlideChange = false; // To prevent recursion in slideChange handle
 export async function initializeSingleSwiper() {
   // The swiper shares part of the DOM with the grid view,
   // so we need to clean up any existing state.
-  console.trace("== Initializing SINGLE swiper ==");
   eventRegistry.removeAll("swiper"); // Clear previous event handlers
 
   if (state.swiper) {
@@ -496,7 +495,6 @@ export function enforceHighWaterMark(backward = false) {
 
 // Navigate to a slide based on its index
 async function seekToSlideIndex(event) {
-  console.trace("seekToSlideIndex event received:", event.detail);
   let { globalIndex, searchIndex, totalSlides, isSearchMode } = event.detail;
 
   if (isSearchMode) {

@@ -156,7 +156,7 @@ class SlideStateManager {
    */
   updateFromExternal(globalIndex, searchIndex = null) {
     if (this.isSearchMode && searchIndex !== null && this.searchResults.length > 0) {
-      this.currentGlobalIndex = this.searchResults[searchIndex].index;
+      this.currentGlobalIndex = this.searchResults[searchIndex]?.index;
       this.currentSearchIndex = searchIndex;
     } else {
       this.currentGlobalIndex = globalIndex;
@@ -185,7 +185,7 @@ class SlideStateManager {
     }
   }
 
-  /**
+  /**Reset
    * Given a current index and an offset, return the correct global and search indices.
    * @param {number} offset - The offset to apply (e.g., +1 for next, -1 for prev)
    * @returns {{globalIndex: number, searchIndex: number|null}}
@@ -249,7 +249,7 @@ class SlideStateManager {
   // --- Private Methods ---
   notifySlideChanged() {
     const slideInfo = this.getCurrentSlide();
-    console.log("Dispatching slideChanged event:", slideInfo),
+    console.log("Dispatching slideChanged event:", slideInfo);
       window.dispatchEvent(
         new CustomEvent("slideChanged", {
           detail: slideInfo,
@@ -259,7 +259,7 @@ class SlideStateManager {
 
   seekToSlideIndex() {
     const slideInfo = this.getCurrentSlide();
-    console.log("Dispatching seekToSlideIndex event:", slideInfo),
+    console.log("Dispatching seekToSlideIndex event:", slideInfo);
       window.dispatchEvent(
         new CustomEvent("seekToSlideIndex", {
           detail: slideInfo,

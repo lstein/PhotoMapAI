@@ -11,7 +11,7 @@ import { hideSpinner, showSpinner } from "./utils.js";
 
 let loadedImageIndices = new Set(); // Track which images we've already loaded
 let batchLoading = false; // Prevent concurrent batch loads
-let resetInProgress = false; // Prevent actions during reset
+let gridInitialized = false; // Track if grid has been initialized
 let slidesPerBatch = 0; // Number of slides to load per batch
 let slideHeight = 140; // Default slide height (reduced from 200)
 let currentRows = 0; // Track current grid dimensions
@@ -55,8 +55,10 @@ function calculateGridGeometry() {
   };
 }
 
+// Initialization code
 export async function initializeGridSwiper() {
-  console.trace("== Initializing GRID swiper ==");
+  gridInitialized = false;
+  showSpinner();
   eventRegistry.removeAll("grid"); // Clear previous event handlers
 
   // Destroy previous Swiper instance if it exists
@@ -113,23 +115,17 @@ export async function initializeGridSwiper() {
   swiperContainer.classList.add("grid-mode");
 
   state.swiper.on("slideChange", () => {
+    // do nothing with this.
     return;
-    // Get the top-left visible slide's global index
-    if (batchLoading) return; // Prevent unwanted updates
-    const slideEl = state.swiper.slides[state.swiper.activeIndex * currentRows];
-    if (slideEl) {
-      const globalIndex = parseInt(slideEl.dataset.globalIndex, 10);
-      if (globalIndex == slideState.globalIndex) return; // No change
-      if (!isNaN(globalIndex)) {
-        slideState.navigateToIndex(globalIndex, false);
-      }
-    }
   });
 
   addGridEventListeners();
   updateCurrentSlideHighlight();
   setupContinuousNavigation();
   setupGridResizeHandler();
+
+  gridInitialized = true;
+  hideSpinner();
 
   // For console debugging
   window.gridSwiper = state.swiper;
@@ -162,7 +158,6 @@ function addGridEventListeners() {
   eventRegistry.install(
     { type: "grid", event: "seekToSlideIndex" },
     async (e) => {
-      console.trace("grid seekToSlideIndex event", e);
       const { globalIndex, searchIndex, totalSlides, isSearchMode } = e.detail;
       if (isSearchMode !== slideState.isSearchMode) {
         console.error("Mismatched search mode in setSlideIndex event");
@@ -310,13 +305,16 @@ function addDoubleTapHandler(slideEl, globalIndex) {
 // @param {number|null} targetIndex - Optional index to include in first screen.
 // If null, use current slide index.
 async function resetAllSlides() {
-  resetInProgress = true;
+  if (!gridInitialized) return;
+  if (!state.swiper) return;
+
+  if (batchLoading) await waitForBatchLoadingToFinish();  
+  batchLoading = true;
   showSpinner();
+
   const targetIndex = slideState.getCurrentIndex();
 
   loadedImageIndices.clear();
-
-  if (!state.swiper) return;
 
   // remove all slides and force Swiper internal state to a safe baseline
   try {
@@ -342,9 +340,34 @@ async function resetAllSlides() {
   }
   updateCurrentSlideHighlight();
   updateMetadataOverlay();
-  updateCurrentImageScore(slideData[slideState.getCurrentSlide().globalIndex] || null);
+  updateCurrentImageScore(
+    slideData[slideState.getCurrentSlide().globalIndex] || null
+  );
   hideSpinner();
-  resetInProgress = false;
+  batchLoading = false;
+}
+
+// Wait helper: poll until batchLoading becomes false (with timeout)
+async function waitForBatchLoadingToFinish(timeoutMs = 10000, intervalMs = 50) {
+  const start =
+    typeof performance !== "undefined" && performance.now
+      ? performance.now()
+      : Date.now();
+  while (batchLoading) {
+    const now =
+      typeof performance !== "undefined" && performance.now
+        ? performance.now()
+        : Date.now();
+    if (now - start > timeoutMs) {
+      console.warn(
+        "waitForBatchLoadingToFinish: timeout after",
+        timeoutMs,
+        "ms"
+      );
+      break;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
 }
 
 // Load a batch of slides starting at startIndex
@@ -352,9 +375,6 @@ async function resetAllSlides() {
 // The startIndex will be adjusted to be an even multiple of the screen size.
 // If startIndex is null, load the next batch after the last loaded slide.
 async function loadBatch(startIndex = null, append = true) {
-  if (batchLoading) return; // Prevent concurrent loads
-  batchLoading = true;
-
   if (startIndex === null) {
     // Load after the last loaded slide
     if (!state.swiper.slides?.length) {
@@ -377,13 +397,6 @@ async function loadBatch(startIndex = null, append = true) {
   // So if the number of columns is 4, then the activeIndexes will be 0, 4, 8, 12, ...
   const prepend_screen =
     state.swiper.activeIndex == 0 && startIndex >= slidesPerBatch;
-
-  // Get the currentPosition for highlighting. This does not
-  // affect the number or order of slides loaded.
-  const currentSlide = slideState.getCurrentSlide();
-  const currentPosition = slideState.isSearchMode
-    ? currentSlide.searchIndex
-    : currentSlide.globalIndex;
 
   const slides = [];
   let actuallyLoaded = 0;
@@ -470,13 +483,7 @@ async function loadBatch(startIndex = null, append = true) {
     }
   }
 
-  batchLoading = false;
-  // const screenContainingCurrent = Math.floor(currentPosition / slidesPerBatch);
-  // state.swiper.slideTo(screenContainingCurrent * currentColumns);
   updateCurrentSlideHighlight();
-  // updateCurrentImageScore(
-  //   slideData[slideState.indexToGlobal(currentPosition)] || null
-  // );
   updateMetadataOverlay();
   return actuallyLoaded > 0;
 }
