@@ -443,7 +443,7 @@ window.addEventListener("searchResultsChanged", function (e) {
   setUmapColorMode();
   // deactivate fullscreen mode when search results have come in
   if (state.searchResults.length > 0 && isFullscreen) {
-    toggleFullscreen(false);
+    setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
   }
 });
 
