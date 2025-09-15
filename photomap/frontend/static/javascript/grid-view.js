@@ -7,6 +7,7 @@ import {
 import { fetchImageByIndex } from "./search.js"; // Use individual image fetching
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
+import { updateSlideshowIcon } from "./swiper.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
 let loadedImageIndices = new Set(); // Track which images we've already loaded
@@ -123,6 +124,7 @@ export async function initializeGridSwiper() {
   updateCurrentSlideHighlight();
   setupContinuousNavigation();
   setupGridResizeHandler();
+  updateSlideshowIcon();
 
   gridInitialized = true;
   hideSpinner();

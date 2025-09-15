@@ -365,14 +365,14 @@ export function showHidePanelText(hide) {
   }
 }
 
-export function toggleSlideshowWithIndicator() {
+export async function toggleSlideshowWithIndicator() {
   const isRunning = state.swiper?.autoplay?.running;
 
   if (isRunning) {
     pauseSlideshow();
     showPlayPauseIndicator(false); // Show pause indicator
   } else {
-    if (state.gridViewActive) toggleGridSwiperView(false); // Switch to swiper mode if in grid mode
+    if (state.gridViewActive) await toggleGridSwiperView(false); // Switch to swiper mode if in grid mode
     resumeSlideshow();
     showPlayPauseIndicator(true); // Show play indicator
   }
