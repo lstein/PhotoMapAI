@@ -116,9 +116,9 @@ export async function updateCurrentImageScore(metadata) {
     return;
   }
 
-  if (metadata.cluster) {
+  if (metadata.cluster !== null && metadata.cluster !== undefined) {
     scoreDisplay.showCluster(
-      metadata.cluster,
+      metadata.cluster || 0,
       metadata.color,
       searchIndex + 1,
       state.searchResults.length

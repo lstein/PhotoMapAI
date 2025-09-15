@@ -299,11 +299,8 @@ export async function addNewSlide(offset = 0) {
   let [globalIndex, totalImages, searchIndex] = getCurrentSlideIndex();
   // Search mode -- we identify the next image based on the search results array,
   // then translate this into a global index for retrieval.
-  if (slideState.searchResults?.length > 0) {
-    const searchImageCnt = slideState.searchResults.length || 1;
-    searchIndex = searchIndex + offset;
-    searchIndex = (searchIndex + searchImageCnt) % searchImageCnt; // wrap around
-    globalIndex = slideState.searchResults[searchIndex].index || 0;
+  if (slideState.isSearchMode) {
+    globalIndex = slideState.resolveOffset(offset).globalIndex;
   } else {
     // Album mode -- navigate relative to the current slide's index
     if (state.mode === "random") {
@@ -336,10 +333,11 @@ export async function addSlideByIndex(
   if (exists) return;
 
   let currentScore, currentCluster, currentColor;
-  if (searchIndex !== null && slideState.searchResults?.length > 0) {
-    currentScore = slideState.searchResults[searchIndex]?.score || "";
-    currentCluster = slideState.searchResults[searchIndex]?.cluster || "";
-    currentColor = slideState.searchResults[searchIndex]?.color || "#000000"; // Default
+  if (slideState.isSearchMode && searchIndex !== null) {
+    const results = slideState.searchResults[searchIndex];
+    currentScore = results?.score || "";
+    currentCluster = results?.cluster || "";
+    currentColor = results?.color || "#000000"; // Default
   }
 
   try {
@@ -370,6 +368,7 @@ export async function addSlideByIndex(
       `;
     }
 
+    // replace this with assignments to a module variable
     slide.dataset.filename = data.filename || "";
     slide.dataset.description = data.description || "";
     slide.dataset.filepath = path || "";

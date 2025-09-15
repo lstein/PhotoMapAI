@@ -735,14 +735,15 @@ function updateCurrentSlideHighlight(globalIndex = null) {
 }
 
 // Make the slide and record its metadata prior to inserting into the grid
-//this should be harmonized with swiper.js
+// this should be harmonized with swiper.js
 // Data is the image metadata retrieved from the server side
 function makeSlideHTML(data, globalIndex) {
   const searchIndex = slideState.globalToSearch(globalIndex);
-  if (searchIndex !== null && slideState.searchResults?.length > 0) {
-    data.score = slideState.searchResults[searchIndex]?.score || "";
-    data.cluster = slideState.searchResults[searchIndex]?.cluster || "";
-    data.color = slideState.searchResults[searchIndex]?.color || "#000000"; // Default
+  if (searchIndex !== null && slideState.isSearchMode) {
+    const results = slideState.searchResults[searchIndex];
+    data.score = results?.score || "";
+    data.cluster = results?.cluster || "";
+    data.color = results?.color || "#000000"; // Default
   }
   data.searchIndex = slideState.globalToSearch(globalIndex);
   slideData[globalIndex] = data; // Cache the data
