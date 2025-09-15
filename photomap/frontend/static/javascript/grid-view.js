@@ -346,7 +346,8 @@ async function resetAllSlides() {
   }
   updateCurrentSlideHighlight();
   updateMetadataOverlay();
-  updateCurrentImageScore(slideData[slideState.searchToGlobal(0)] || null);
+  console.log("Grid reset complete, updating score to",slideState.getCurrentSlide().globalIndex);
+  updateCurrentImageScore(slideData[slideState.getCurrentSlide().globalIndex] || null);
   hideSpinner();
   resetInProgress = false;
 }
@@ -478,9 +479,9 @@ async function loadBatch(startIndex = null, append = true) {
   // const screenContainingCurrent = Math.floor(currentPosition / slidesPerBatch);
   // state.swiper.slideTo(screenContainingCurrent * currentColumns);
   updateCurrentSlideHighlight();
-  updateCurrentImageScore(
-    slideData[slideState.indexToGlobal(currentPosition)] || null
-  );
+  // updateCurrentImageScore(
+  //   slideData[slideState.indexToGlobal(currentPosition)] || null
+  // );
   updateMetadataOverlay();
   return actuallyLoaded > 0;
 }
