@@ -79,7 +79,7 @@ _ The *Previous slide* and *Next slide* buttons advance the images in the album 
 - The *Magnifier* button opens up a search dialogue that lets you search by image similarity and/or a text description of image content.
 - The "Clear search* button clears any search that is currently active and returns to album browsing mode.
 
-Finally, the inconspicuous tab with the yellow arrow on the left margin of the window opens a drawer that displays the image's EXIF date, including the date the photo was taken, GPS information (if available), and camera information.
+Finally, the yellow tab with the black arrow on the left margin of the window opens a drawer that displays the image's EXIF date, including the date the photo was taken, GPS information (if available), and camera information. Once you open the drawer up, you can drag it around by clicking on any of its edges. Click the black arrow again to return it to its home location and close it.
 
 ### Jumping Forward and Back
 

@@ -7,8 +7,7 @@ import { deleteImage } from "./index.js";
 import {
   hideMetadataOverlay,
   showMetadataOverlay,
-  toggleMetadataOverlay,
-  updateMetadataOverlay,
+  toggleMetadataOverlay
 } from "./metadata-drawer.js";
 import {
   getCurrentFilepath,
@@ -17,11 +16,10 @@ import {
 } from "./slide-state.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import {
-  addNewSlide,
   initializeSingleSwiper,
   pauseSlideshow,
   resumeSlideshow,
-  updateSlideshowIcon,
+  updateSlideshowIcon
 } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
@@ -145,16 +143,15 @@ function handleCopyText() {
 // Delete the current file
 async function handleDeleteCurrentFile() {
   const [globalIndex, totalImages, searchIndex] = getCurrentSlideIndex();
-  const currentFilepath = getCurrentFilepath();
+  const currentFilepath = await getCurrentFilepath();
 
   if (globalIndex === -1 || !currentFilepath) {
     alert("No image selected for deletion.");
     return;
   }
 
-  if (!confirmDelete(currentFilepath, globalIndex)) {
-    return;
-  }
+  const confirmed = await confirmDelete(currentFilepath, globalIndex);
+  if (!confirmed) return;
 
   try {
     showSpinner();
@@ -169,45 +166,69 @@ async function handleDeleteCurrentFile() {
   }
 }
 
-function confirmDelete(filepath, globalIndex) {
-  return confirm(
-    `Are you sure you want to delete this image?\n\n${filepath} (Index ${globalIndex})\n\nThis action cannot be undone.`
-  );
+function showDeleteConfirmModal(filepath, globalIndex) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("deleteConfirmModal");
+    const text = document.getElementById("deleteConfirmText");
+    const dontAsk = document.getElementById("deleteDontAskAgain");
+    const cancelBtn = document.getElementById("deleteCancelBtn");
+    const confirmBtn = document.getElementById("deleteConfirmBtn");
+
+    text.textContent = `Are you sure you want to delete this image?\n\n${filepath} (Index ${globalIndex})\n\nThis action cannot be undone.`;
+    dontAsk.checked = false;
+    modal.style.display = "flex";
+
+    function cleanup(result) {
+      modal.style.display = "none";
+      cancelBtn.removeEventListener("click", onCancel);
+      confirmBtn.removeEventListener("click", onConfirm);
+    }
+
+    function onCancel() {
+      cleanup(false);
+      resolve(false);
+    }
+    function onConfirm() {
+      if (dontAsk.checked) {
+        state.suppressDeleteConfirm = true;
+        saveSettingsToLocalStorage();
+      }
+      cleanup(true);
+      resolve(true);
+    }
+
+    cancelBtn.addEventListener("click", onCancel);
+    confirmBtn.addEventListener("click", onConfirm);
+  });
+}
+
+async function confirmDelete(filepath, globalIndex) {
+  if (state.suppressDeleteConfirm) return true;
+  return await showDeleteConfirmModal(filepath, globalIndex);
 }
 
 async function handleSuccessfulDelete(globalIndex, searchIndex) {
   // remove from search results, and adjust subsequent global indices downward by 1
-  if (state.searchResults?.length > 0) {
-    state.searchResults.splice(searchIndex, 1);
-    for (let i = 0; i < state.searchResults.length; i++) {
-      if (state.searchResults[i].index > globalIndex) {
-        state.searchResults[i].index -= 1;
+  if (slideState.isSearchMode && slideState.searchResults?.length > 0) {
+    slideState.searchResults.splice(searchIndex, 1);
+    for (let i = 0; i < slideState.searchResults.length; i++) {
+      if (slideState.searchResults[i].index > globalIndex) {
+        slideState.searchResults[i].index -= 1;
       }
     }
   }
-
-  // Remove the current slide from the swiper
-  if (state.swiper?.slides?.length > 0) {
-    // find index of the currentFilePath
-    const currentIndex = state.swiper.slides.findIndex(
-      (slide) => slide.dataset.globalIndex === globalIndex.toString()
-    );
-    if (currentIndex === -1) {
-      console.warn(
-        "Current file with global index not found in swiper slides:",
-        globalIndex
-      );
-      return;
-    }
-    state.swiper.removeSlide(currentIndex);
-
-    // If no slides left, add a new one
-    if (state.swiper.slides.length <= 1) {
-      await addNewSlide();
-    }
-
-    updateMetadataOverlay();
+  // find the swiper index of the removed slide.
+  const removedSlideIndex = state.swiper.slides.findIndex((slide) => {
+    return parseInt(slide.dataset.globalIndex, 10) === globalIndex;
+  });
+  if (removedSlideIndex === -1) {
+    console.warn("Deleted slide not found in swiper slides.");
+    return;
   }
+  // Remove the slide from Swiper
+  await state.swiper.removeSlide(removedSlideIndex);
+  await checkAlbumIndex(); // Update album index and UI
+  slideState.navigateByOffset(0); // Stay on the same index, which is now the next image
 }
 
 // Toggle visibility of the fullscreen indicator

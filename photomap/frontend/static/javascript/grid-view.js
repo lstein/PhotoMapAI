@@ -131,8 +131,6 @@ export async function initializeGridSwiper() {
   updateCurrentSlide();
 
   gridInitialized = true;
-  hideSpinner();
-
   // For console debugging
   window.gridSwiper = state.swiper;
 }
@@ -308,10 +306,9 @@ function addDoubleTapHandler(slideEl, globalIndex) {
 async function resetAllSlides() {
   if (!gridInitialized) return;
   if (!state.swiper) return;
-
+  showSpinner();
   await waitForBatchLoadingToFinish();
   setBatchLoading(true);
-  showSpinner();
 
   const targetIndex = slideState.getCurrentIndex();
 
@@ -341,8 +338,8 @@ async function resetAllSlides() {
     await loadBatch(targetIndex, false); // Prepend a screen if not at start
   }
   updateCurrentSlide();
-  hideSpinner();
   setBatchLoading(false);
+  hideSpinner();
 }
 
 // Load a batch of slides starting at startIndex

@@ -25,7 +25,6 @@ function cacheElements() {
     settingsBtn: document.getElementById("settingsBtn"),
     settingsOverlay: document.getElementById("settingsOverlay"),
     closeSettingsBtn: document.getElementById("closeSettingsBtn"),
-    highWaterMarkInput: document.getElementById("highWaterMarkInput"),
     delayValueSpan: document.getElementById("delayValue"),
     modeRandom: document.getElementById("modeRandom"),
     modeChronological: document.getElementById("modeChronological"),
@@ -37,6 +36,7 @@ function cacheElements() {
     showControlPanelTextCheckbox: document.getElementById(
       "showControlPanelTextCheckbox"
     ),
+    confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
   };
 }
 
@@ -149,7 +149,6 @@ function toggleSettingsModal() {
 }
 
 async function populateModalFields() {
-  elements.highWaterMarkInput.value = state.highWaterMark;
   elements.delayValueSpan.textContent = state.currentDelay;
   if (elements.albumSelect)
     elements.albumSelect.value = state.album;
@@ -157,20 +156,11 @@ async function populateModalFields() {
   elements.modeChronological.checked = state.mode === "chronological";
   elements.showControlPanelTextCheckbox.checked = state.showControlPanelText;
 
-  await loadLocationIQApiKey();
-}
+  // Set the confirm delete checkbox state
+  if (elements.confirmDeleteCheckbox)
+    elements.confirmDeleteCheckbox.checked = !state.suppressDeleteConfirm;
 
-// Function to validate the high water mark
-function validateAndSetHighWaterMark(value) {
-  let newHighWaterMark = parseInt(value, 10);
-  if (isNaN(newHighWaterMark) || newHighWaterMark < WATERMARK_CONFIG.min) {
-    newHighWaterMark = WATERMARK_CONFIG.min;
-  }
-  if (newHighWaterMark > WATERMARK_CONFIG.max) {
-    newHighWaterMark = WATERMARK_CONFIG.max;
-  }
-  state.highWaterMark = newHighWaterMark;
-  saveSettingsToLocalStorage();
+  await loadLocationIQApiKey();
 }
 
 // Event listener setup
@@ -234,9 +224,11 @@ function setupAlbumSelector() {
   });
 }
 
-function setupHighWaterMarkControl() {
-  elements.highWaterMarkInput.addEventListener("input", function () {
-    validateAndSetHighWaterMark(this.value);
+function setupConfirmDeleteControl() {
+  if (!elements.confirmDeleteCheckbox) return;
+  elements.confirmDeleteCheckbox.addEventListener("change", function () {
+    state.suppressDeleteConfirm = !this.checked;
+    saveSettingsToLocalStorage();
   });
 }
 
@@ -308,10 +300,53 @@ async function initializeSettings() {
   setupModeControls();
   setupModalControls();
   setupAlbumSelector();
-  setupHighWaterMarkControl();
   setupLocationIQApiKeyControl();
+  setupConfirmDeleteControl();
 }
 
 // Initialize settings from the server and local storage
 document.addEventListener("DOMContentLoaded", initializeSettings);
 document.addEventListener("settingsUpdated", initializeSettings);
+
+// CSS styles
+const styles = `
+.setting-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  align-items: center;
+  gap: 1em;
+  margin-top: 1em;
+}
+
+.setting-row label {
+  font-size: 16px;
+  color: #faea0e;
+  text-align: right;
+  justify-self: end;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.setting-row input[type="checkbox"],
+.setting-row input[type="password"],
+.setting-row select,
+.setting-row .album-selector-group {
+  justify-self: start;
+}
+
+.setting-row .album-selector-group {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.setting-row small {
+  grid-column: 2 / 3;
+}
+`;
+
+// Append styles to the document
+const styleSheet = document.createElement("style");
+styleSheet.type = "text/css";
+styleSheet.innerText = styles;
+document.head.appendChild(styleSheet);
