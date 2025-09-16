@@ -307,3 +307,46 @@ async function initializeSettings() {
 // Initialize settings from the server and local storage
 document.addEventListener("DOMContentLoaded", initializeSettings);
 document.addEventListener("settingsUpdated", initializeSettings);
+
+// CSS styles
+const styles = `
+.setting-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  align-items: center;
+  gap: 1em;
+  margin-top: 1em;
+}
+
+.setting-row label {
+  font-size: 16px;
+  color: #faea0e;
+  text-align: right;
+  justify-self: end;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.setting-row input[type="checkbox"],
+.setting-row input[type="password"],
+.setting-row select,
+.setting-row .album-selector-group {
+  justify-self: start;
+}
+
+.setting-row .album-selector-group {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}
+
+.setting-row small {
+  grid-column: 2 / 3;
+}
+`;
+
+// Append styles to the document
+const styleSheet = document.createElement("style");
+styleSheet.type = "text/css";
+styleSheet.innerText = styles;
+document.head.appendChild(styleSheet);

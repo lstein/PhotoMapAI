@@ -56,48 +56,41 @@
     <!-- Row for control panel text visibility -->
     <div class="setting-row">
       <label for="showControlPanelTextCheckbox">Show Button Labels:</label>
-      <div class="setting-input-container">
-        <input type="checkbox" id="showControlPanelTextCheckbox" />
-      </div>
+      <input type="checkbox" id="showControlPanelTextCheckbox" />
     </div>
 
     <div class="setting-row">
       <label for="confirmDeleteCheckbox">Confirm before deleting images:</label>
-      <div class="setting-input-container">
-        <input type="checkbox" id="confirmDeleteCheckbox" />
-      </div>
+      <input type="checkbox" id="confirmDeleteCheckbox" />
     </div>
 
     <!-- Input for the LocationIQ API Key -->
     {% if not album_locked %}
     <div class="setting-row">
       <label for="locationiqApiKeyInput">LocationIQ Map API Key:</label>
-      <div class="setting-input-container">
-        <form id="locationiqApiKeyForm" autocomplete="off" style="margin: 0">
-          <input
-            type="password"
-            id="locationiqApiKeyInput"
-            placeholder="Enter your LocationIQ API key (optional)"
-            autocomplete="pk-xxxxxxxx"
-          />
-        </form>
-        <small
-          style="
-            color: #666;
-            font-size: 0.85em;
-            display: block;
-            margin-top: 4px;
-          "
+      <input
+        type="password"
+        id="locationiqApiKeyInput"
+        placeholder="Enter your LocationIQ API key (optional)"
+        autocomplete="pk-xxxxxxxx"
+      />
+      <small
+        style="
+          color: #666;
+          font-size: 0.85em;
+          display: block;
+          margin-top: 4px;
+          grid-column: 2 / 3;
+        "
+      >
+        Optional: Enables location names and maps in EXIF data.
+        <a
+          href="https://locationiq.com"
+          target="_blank"
+          style="color: #007bff"
+          >Get a free key</a
         >
-          Optional: Enables location names and maps in EXIF data.
-          <a
-            href="https://locationiq.com"
-            target="_blank"
-            style="color: #007bff"
-            >Get a free key</a
-          >
-        </small>
-      </div>
+      </small>
     </div>
     {% endif %}
 
