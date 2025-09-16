@@ -16,6 +16,7 @@ export const state = {
   album: null, // Default album to use
   availableAlbums: [], // List of available albums
   dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
+  suppressDeleteConfirm: false,
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -82,6 +83,11 @@ export async function restoreFromLocalStorage() {
   if (storedGridViewActive !== null) {
     state.gridViewActive = storedGridViewActive === "true";
   }
+
+  const storedSuppressDeleteConfirm = localStorage.getItem("suppressDeleteConfirm");
+  if (storedSuppressDeleteConfirm !== null) {
+    state.suppressDeleteConfirm = storedSuppressDeleteConfirm === "true";
+  }
 }
 
 // Save state to local storage
@@ -95,6 +101,7 @@ export function saveSettingsToLocalStorage() {
     state.showControlPanelText || ""
   );
   localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
+  localStorage.setItem("suppressDeleteConfirm", state.suppressDeleteConfirm ? "true" : "false");
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
