@@ -105,7 +105,8 @@ The Gear icon opens the settings dialogue, which allows you to adjust the appear
 
 - **Image Change Interval** -- When the slideshow is running, this controls how long each image will be displayed, in seconds.
 - **Image Browse Order** -- When the slideshow is running, or when you are browsing the album without an active search, this controls the order in which photos are displayed. "Random" will present the images in shuffled order, while "Chronological" will show them in order from oldest to newest.
-- **Max Images in History** -- PhotoMapAI keeps a small number of recently-viewed photos in memory. The others are swapped in and out to disk. This value controls how many images are kept in memory at once. Reduce the size if you are having memory problems or the application seems to be slowing down.
+- **Show Button Labels** -- Disabling this checkbox allows you to turn off the labels on the row of clickable icons at the bottom of the screen for a more minimalist experience.
+- **Confirm before deleting images** -- Disabling this checkbox stops the Trash Can icon from asking for confirmation before permanently deleting the current image from disk.
 - **LocationIQ Map API Key** -- This optional API key lets PhotoMapAI display thumbnail maps and named locations for photos that contain GPS geolocation information. If you wish to enable this feature, get a key for free from [LocationIQ](http://locationiq.com/) and paste it into the field. If not present, PhotoMapAI will display the longitude and latitude of the photo, but not the map or place name.
 - **Album** -- This pulldown menu lists all the albums you have configured and allows you to switch among them. Note that when you switch albums, the settings dialogue will close immediately and the window will display the first photo from the selected albums.
 - **Manage Albums** -- This green button will open the [Album Manager](albums.md), where you can create, edit and delete albums.
