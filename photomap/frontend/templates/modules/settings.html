@@ -53,25 +53,18 @@
     </div>
 
     <!-- Settings rows -->
-    <div class="setting-row">
-      <label for="highWaterMarkInput">Max Images in History:</label>
-      <div class="setting-input-container">
-        <input
-          id="highWaterMarkInput"
-          type="number"
-          min="2"
-          max="100"
-          value="10"
-          autocomplete="nope"
-        />
-      </div>
-    </div>
-
     <!-- Row for control panel text visibility -->
     <div class="setting-row">
       <label for="showControlPanelTextCheckbox">Show Button Labels:</label>
       <div class="setting-input-container">
         <input type="checkbox" id="showControlPanelTextCheckbox" />
+      </div>
+    </div>
+
+    <div class="setting-row">
+      <label for="confirmDeleteCheckbox">Confirm before deleting images:</label>
+      <div class="setting-input-container">
+        <input type="checkbox" id="confirmDeleteCheckbox" />
       </div>
     </div>
 
@@ -108,7 +101,6 @@
     </div>
     {% endif %}
 
-        
     <!-- Album selection row -->
     {% if not album_locked %}
     <div class="setting-row">

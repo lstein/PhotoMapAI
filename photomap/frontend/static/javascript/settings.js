@@ -25,7 +25,6 @@ function cacheElements() {
     settingsBtn: document.getElementById("settingsBtn"),
     settingsOverlay: document.getElementById("settingsOverlay"),
     closeSettingsBtn: document.getElementById("closeSettingsBtn"),
-    highWaterMarkInput: document.getElementById("highWaterMarkInput"),
     delayValueSpan: document.getElementById("delayValue"),
     modeRandom: document.getElementById("modeRandom"),
     modeChronological: document.getElementById("modeChronological"),
@@ -37,6 +36,7 @@ function cacheElements() {
     showControlPanelTextCheckbox: document.getElementById(
       "showControlPanelTextCheckbox"
     ),
+    confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
   };
 }
 
@@ -149,7 +149,6 @@ function toggleSettingsModal() {
 }
 
 async function populateModalFields() {
-  elements.highWaterMarkInput.value = state.highWaterMark;
   elements.delayValueSpan.textContent = state.currentDelay;
   if (elements.albumSelect)
     elements.albumSelect.value = state.album;
@@ -157,20 +156,11 @@ async function populateModalFields() {
   elements.modeChronological.checked = state.mode === "chronological";
   elements.showControlPanelTextCheckbox.checked = state.showControlPanelText;
 
-  await loadLocationIQApiKey();
-}
+  // Set the confirm delete checkbox state
+  if (elements.confirmDeleteCheckbox)
+    elements.confirmDeleteCheckbox.checked = !state.suppressDeleteConfirm;
 
-// Function to validate the high water mark
-function validateAndSetHighWaterMark(value) {
-  let newHighWaterMark = parseInt(value, 10);
-  if (isNaN(newHighWaterMark) || newHighWaterMark < WATERMARK_CONFIG.min) {
-    newHighWaterMark = WATERMARK_CONFIG.min;
-  }
-  if (newHighWaterMark > WATERMARK_CONFIG.max) {
-    newHighWaterMark = WATERMARK_CONFIG.max;
-  }
-  state.highWaterMark = newHighWaterMark;
-  saveSettingsToLocalStorage();
+  await loadLocationIQApiKey();
 }
 
 // Event listener setup
@@ -234,9 +224,11 @@ function setupAlbumSelector() {
   });
 }
 
-function setupHighWaterMarkControl() {
-  elements.highWaterMarkInput.addEventListener("input", function () {
-    validateAndSetHighWaterMark(this.value);
+function setupConfirmDeleteControl() {
+  if (!elements.confirmDeleteCheckbox) return;
+  elements.confirmDeleteCheckbox.addEventListener("change", function () {
+    state.suppressDeleteConfirm = !this.checked;
+    saveSettingsToLocalStorage();
   });
 }
 
@@ -308,8 +300,8 @@ async function initializeSettings() {
   setupModeControls();
   setupModalControls();
   setupAlbumSelector();
-  setupHighWaterMarkControl();
   setupLocationIQApiKeyControl();
+  setupConfirmDeleteControl();
 }
 
 // Initialize settings from the server and local storage
