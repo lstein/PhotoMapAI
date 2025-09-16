@@ -125,10 +125,10 @@ export async function initializeGridSwiper() {
   });
 
   addGridEventListeners();
-  updateCurrentSlideHighlight();
   setupContinuousNavigation();
   setupGridResizeHandler();
   updateSlideshowIcon();
+  updateCurrentSlide();
 
   gridInitialized = true;
   hideSpinner();
@@ -257,9 +257,7 @@ function addGridEventListeners() {
               topLeftGlobal,
               slideState.globalToSearch(topLeftGlobal)
             );
-            updateCurrentSlideHighlight(topLeftGlobal);
-            updateCurrentImageScore(slideData[topLeftGlobal] || null);
-            updateMetadataOverlay();
+            updateCurrentSlide();
           }
         }
       }
@@ -274,10 +272,7 @@ function addGridEventListeners() {
       slideState.globalToSearch(globalIndex)
     );
 
-    // adjust the highlight
-    updateCurrentSlideHighlight();
-    updateCurrentImageScore(slideData[globalIndex] || null);
-    updateMetadataOverlay();
+    updateCurrentSlide();
   };
 
   // Handle double clicks on grid slides
@@ -345,11 +340,7 @@ async function resetAllSlides() {
   if (targetIndex > 0) {
     await loadBatch(targetIndex, false); // Prepend a screen if not at start
   }
-  updateCurrentSlideHighlight();
-  updateMetadataOverlay();
-  updateCurrentImageScore(
-    slideData[slideState.getCurrentSlide().globalIndex] || null
-  );
+  updateCurrentSlide();
   hideSpinner();
   setBatchLoading(false);
 }
@@ -467,8 +458,7 @@ async function loadBatch(startIndex = null, append = true) {
     }
   }
 
-  updateCurrentSlideHighlight();
-  updateMetadataOverlay();
+  updateCurrentSlide();
   return actuallyLoaded > 0;
 }
 
@@ -718,6 +708,15 @@ function updateCurrentSlideHighlight(globalIndex = null) {
   if (currentSlide) {
     currentSlide.classList.add("current-slide");
   }
+}
+
+// After a slide change, call this to update the metadata overlay, slide score, and highlight
+function updateCurrentSlide() {
+  updateCurrentSlideHighlight();
+  updateMetadataOverlay();
+  updateCurrentImageScore(
+    slideData[slideState.getCurrentSlide().globalIndex] || null
+  );
 }
 
 // Make the slide and record its metadata prior to inserting into the grid
