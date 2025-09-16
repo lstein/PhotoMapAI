@@ -45,6 +45,7 @@ def format_exif_metadata(
     """
 
     # Left column: GPS/location info (if available)
+    error_msg = ""
     if gps_lat is not None and gps_lon is not None:
         google_maps_link = f"https://www.google.com/maps?q={gps_lat},{gps_lon}"
 
@@ -52,9 +53,14 @@ def format_exif_metadata(
         api_key_valid = False
 
         if locationiq_api_key:  # Only try if API key is provided
-            coord_str = get_locationiq_place_name(gps_lat, gps_lon, locationiq_api_key)
+            (coord_str, error_msg) = get_locationiq_place_name(
+                gps_lat, gps_lon, locationiq_api_key
+            )
             # Check if the API key worked
             api_key_valid = coord_str is not None
+            logger.info(
+                f"API key: key={locationiq_api_key} valid={api_key_valid}, place name={coord_str}"
+            )
 
         coord_str = coord_str if coord_str else f"{gps_lat:.6f}, {gps_lon:.6f}"
 
@@ -70,7 +76,7 @@ def format_exif_metadata(
             </div>
             """
         elif locationiq_api_key and not api_key_valid:
-            map_html = '<div style="font-size:0.9em; color:#888; font-style:italic;">Map unavailable (invalid API key)</div>'
+            map_html = f'<div style="font-size:0.9em; color:#888; font-style:italic;">Map unavailable ({error_msg})</div>'
         else:
             map_html = '<div style="font-size:0.9em; color:#888; font-style:italic;">Map unavailable (no API key)</div>'
 
@@ -207,27 +213,35 @@ def get_locationiq_place_name(latitude, longitude, api_key):
 
         if response.status_code == 200:
             data = response.json()
-            return data.get("display_name")
+            return (data.get("display_name"), "ok")
         elif response.status_code == 401:
             # Unauthorized - invalid API key
-            print(f"LocationIQ API key is invalid (401 Unauthorized)")
-            return None
+            logger.warning(f"LocationIQ API key is invalid (401 Unauthorized)")
+            return (None, "unauthorized")
         elif response.status_code == 403:
             # Forbidden - API key might be expired or quota exceeded
-            print(f"LocationIQ API access forbidden (403) - check API key and quota")
-            return None
+            logger.warning(
+                f"LocationIQ API access forbidden (403) - check API key and quota"
+            )
+            return (None, "access forbidden")
+        elif response.status_code == 429:
+            # Too Many Requests - rate limit exceeded
+            logger.warning(
+                f"LocationIQ API rate limit exceeded (429 Too Many Requests)"
+            )
+            return (None, "rate limit exceeded")
         else:
-            print(
+            logger.warning(
                 f"LocationIQ reverse geocoding failed with status {response.status_code}"
             )
-            return None
+            return (None, f"Error {response.status_code}")
 
     except requests.exceptions.Timeout:
-        print("LocationIQ reverse geocoding timed out")
-        return None
+        logger.warning("LocationIQ reverse geocoding timed out")
+        return (None, "timeout while fetching")
     except requests.exceptions.RequestException as e:
-        print(f"LocationIQ reverse geocoding failed: {e}")
-        return None
+        logger.warning(f"LocationIQ reverse geocoding failed: {e}")
+        return (None, f"fetch error {e}")
     except Exception as e:
-        print(f"LocationIQ reverse geocoding failed: {e}")
-        return None
+        logger.warning(f"LocationIQ reverse geocoding failed: {e}")
+        return (None, f"misc error {e}")
