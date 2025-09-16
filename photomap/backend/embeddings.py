@@ -312,6 +312,7 @@ class Embeddings(BaseModel):
     def _save_embeddings(self, index_result: IndexResult) -> None:
         """Save embeddings to disk and clear cache."""
         # Ensure directory exists
+        logger.info(f"Saving embeddings to {self.embeddings_path}")
         self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
         np.savez(
             self.embeddings_path,
@@ -417,6 +418,7 @@ class Embeddings(BaseModel):
         total_images = len(image_paths)
         progress_callback = tqdm_progress_callback(total_images)
 
+        logger.info(f"Creating index {self.embeddings_path}...")
         self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
         result = self._process_images_batch(
             image_paths, progress_callback=progress_callback
