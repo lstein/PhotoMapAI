@@ -1,6 +1,6 @@
 import { ScoreDisplay } from "./score-display.js";
+import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
-import { getCurrentSlideIndex } from "./swiper.js";
 
 class SeekSlider {
   constructor() {
@@ -81,6 +81,9 @@ class SeekSlider {
         "change",
         async () => await this.onSliderChange()
       );
+      this.slider.addEventListener("blur", () => {
+        if (this.infoPanel) this.infoPanel.style.display = "none";
+      });
     }
 
     window.addEventListener(
@@ -165,7 +168,7 @@ class SeekSlider {
           (value - this.slider.min) / (this.slider.max - this.slider.min);
         const sliderRect = this.slider.getBoundingClientRect();
         left = percent * sliderRect.width - this.infoPanel.offsetWidth / 2;
-        top = this.slider.offsetTop - this.infoPanel.offsetHeight - 8;
+        top = this.slider.offsetBottom + 8;
       }
       this.infoPanel.style.left = `${left}px`;
       this.infoPanel.style.top = `${top}px`;
@@ -202,14 +205,8 @@ class SeekSlider {
   async onSliderChange() {
     this.infoPanel.textContent = "";
     const targetIndex = parseInt(this.slider.value, 10) - 1;
-    const isSearchMode = state.searchResults?.length > 0;
     this.isUserSeeking = true;
-    window.dispatchEvent(
-      new CustomEvent("setSlideIndex", {
-        detail: { targetIndex, isSearchMode },
-      })
-    );
-    this.slider.blur();
+    slideState.navigateToIndex(targetIndex, slideState.isSearchMode);
     setTimeout(() => {
       this.isUserSeeking = false;
     }, 1500);
@@ -217,33 +214,23 @@ class SeekSlider {
 
   async onSlideChanged(event) {
     this.searchResultsChanged = true;
-    if (this.slideChangedTimer) clearTimeout(this.slideChangedTimer);
-    this.slideChangedTimer = setTimeout(async () => {
-      if (this.isUserSeeking) return;
-      const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
-      this.slider.value =
-        state.searchResults?.length > 0 ? searchIndex + 1 : globalIndex + 1;
-      this.resetFadeOutTimer();
-    }, 200);
+    if (this.isUserSeeking) return;
+    const currentIndex = slideState.getCurrentIndex();
+    if (this.slider) this.slider.value = currentIndex + 1;
+    this.resetFadeOutTimer();
   }
 
   async showSlider() {
     if (!this.sliderVisible && this.sliderContainer) {
       this.sliderVisible = true;
       this.sliderContainer.classList.add("visible");
-      let [, total] = await getCurrentSlideIndex();
+      let [globalIndex, total, searchIndex] = getCurrentSlideIndex();
       if (total > 0 && this.searchResultsChanged)
         this.updateSliderRange().then(() => {
           this.renderSliderTicks();
           this.searchResultsChanged = false;
         });
       this.resetFadeOutTimer();
-      if (window.thumbnailGallery) {
-        getCurrentSlideIndex().then(([globalIndex, total, searchIndex]) => {
-          const slideDetail = { globalIndex, total, searchIndex };
-          window.thumbnailGallery.updateGallery(slideDetail);
-        });
-      }
     }
   }
 
@@ -251,6 +238,8 @@ class SeekSlider {
     if (this.sliderVisible && this.sliderContainer) {
       this.sliderVisible = false;
       this.sliderContainer.classList.remove("visible");
+      this.slider.blur();
+      if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
     }
   }
 
@@ -260,6 +249,8 @@ class SeekSlider {
       this.fadeOutTimeoutId = setTimeout(() => {
         this.sliderContainer.classList.remove("visible");
         this.sliderVisible = false;
+        this.slider.blur();
+        if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
         this.fadeOutTimeoutId = null;
       }, 600);
     }
@@ -271,6 +262,7 @@ class SeekSlider {
       if (!this.sliderContainer.querySelector(":hover")) {
         this.sliderContainer.classList.remove("visible");
         this.sliderVisible = false;
+        if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
         this.fadeOutTimeoutId = null;
       }
     }, this.FADE_OUT_DELAY);
@@ -372,7 +364,6 @@ class SeekSlider {
 
   async toggleSlider() {
     this.sliderVisible = !this.sliderVisible;
-    console.log("Toggling slider. Now visible:", this.sliderVisible);
     if (this.sliderVisible) {
       this.sliderContainer.classList.add("visible");
       await this.updateSliderRange();
@@ -386,7 +377,7 @@ class SeekSlider {
   }
 
   async updateSliderRange() {
-    const [, totalSlides] = await getCurrentSlideIndex();
+    const [, totalSlides] = getCurrentSlideIndex();
     if (state.searchResults?.length > 0) {
       this.slider.min = 1;
       this.slider.max = state.searchResults.length;

@@ -61,6 +61,7 @@ export async function deleteImage(albumKey, index) {
   }
 }
 
+// Given an album key, returns metadata about the index, including number of images
 export async function getIndexMetadata(albumKey) {
   try {
     const response = await fetch(`index_metadata/${albumKey}`, {

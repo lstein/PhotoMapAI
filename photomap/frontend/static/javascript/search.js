@@ -6,8 +6,8 @@ import { hideSpinner, showSpinner } from "./utils.js";
 const IMAGE_SCORE_CUTOFF = 0.75; // Default image score cutoff
 const TEXT_SCORE_CUTOFF = 0.2; // Default text score cutoff
 
-// Call the server to fetch the next image based on the current mode (random or chronological).
-export async function fetchNextImage(index) {
+// Call the server to fetch the image indicated by the index
+export async function fetchImageByIndex(index) {
   let response;
   if (!state.album) return null; // No album set, cannot fetch image
 
@@ -45,6 +45,8 @@ export async function fetchNextImage(index) {
 export function setSearchResults(results, searchType) {
   state.searchType = searchType;
   state.searchResults = results;
+  if (searchType === "switchAlbum")
+    return; // Don't trigger event on album change
   window.dispatchEvent(
     new CustomEvent("searchResultsChanged", {
       detail: {

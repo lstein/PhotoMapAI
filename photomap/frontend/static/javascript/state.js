@@ -1,26 +1,30 @@
 // state.js
 // This file manages the state of the application, including slide management and metadata handling.
 import { albumManager } from "./album.js";
+import { getIndexMetadata } from "./index.js";
 import { switchAlbum } from "./settings.js";
 
 
 // TO DO - CONVERT THIS INTO A CLASS
 export const state = {
   swiper: null, // Will be initialized in swiper.js
+  gridViewActive: false, // Whether the grid view is active
   currentDelay: 5, // Delay in seconds for slide transitions
   showControlPanelText: true, // Whether to show text in control panels
   mode: "chronological", // next slide selection when no search is active ("random", "chronological")
   highWaterMark: 20, // Maximum number of slides to load at once
-  searchResults: [], // List of file paths matching the current search query
   album: null, // Default album to use
   availableAlbums: [], // List of available albums
-  dataChanged: true, // Flag to indicate if umap data has changed
+  dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
   await restoreFromLocalStorage();
   initializeFromServer();
   switchAlbum(state.album); // Initialize with the current album
+
+  // Notify that state is ready
+  window.dispatchEvent(new Event("stateReady"));
 });
 
 // Initialize the state from the initial URL.
@@ -73,6 +77,11 @@ export async function restoreFromLocalStorage() {
     if (!validAlbum) storedAlbum = null;
   }
   state.album = storedAlbum || albumList[0].key;
+
+  const storedGridViewActive = localStorage.getItem("gridViewActive");
+  if (storedGridViewActive !== null) {
+    state.gridViewActive = storedGridViewActive === "true";
+  }
 }
 
 // Save state to local storage
@@ -85,15 +94,26 @@ export function saveSettingsToLocalStorage() {
     "showControlPanelText",
     state.showControlPanelText || ""
   );
+  localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
   if (force || state.album !== newAlbumKey) {
     state.album = newAlbumKey;
+    
+    const metadata = await getIndexMetadata(state.album);
+    
     state.dataChanged = true;
     saveSettingsToLocalStorage();
+    
+    // Update the event to include the metadata for SlideStateManager
     window.dispatchEvent(
-      new CustomEvent("albumChanged", { detail: { album: newAlbumKey } })
+      new CustomEvent("albumChanged", { 
+        detail: { 
+          album: newAlbumKey,
+          totalImages: metadata.filename_count || 0  // Pass this to SlideStateManager
+        } 
+      })
     );
   }
 }

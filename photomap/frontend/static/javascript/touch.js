@@ -2,7 +2,6 @@
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
 import { toggleSlideshowWithIndicator } from "./events.js";
-import { toggleMetadataOverlay } from "./metadata-drawer.js";
 import { pauseSlideshow } from "./swiper.js";
 
 // Touch events
@@ -73,11 +72,13 @@ function handleTouchEnd(e) {
 
   if (textSearchPanel && textSearchPanel.style.display === "block") {
     // If panel is open, check if tap was outside it
-    if (
+    const tapTarget = e.target;
+    const tapOutsidePanel =
       isTap &&
-      !textSearchPanel.contains(e.target) &&
-      !textSearchBtn.contains(e.target)
-    ) {
+      !textSearchPanel.contains(tapTarget) &&
+      !(textSearchBtn && textSearchBtn.contains(tapTarget));
+
+    if (tapOutsidePanel) {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
@@ -102,13 +103,17 @@ function handleTouchEnd(e) {
     }
   }
 
-  if (isTap) {
-    const container = document.getElementById("bannerDrawerContainer");
-    if (container.classList.contains("visible")) {
-      toggleMetadataOverlay();
-    } else {
-      toggleSlideshowWithIndicator();
-    }
+  // Detect fullscreen using standard and vendor-prefixed properties.
+  // document.fullScreenElement is incorrect (wrong capitalization) and returns undefined,
+  // which made the tap check always fail.
+  const isFullscreen =
+    !!(document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement);
+
+  if (isTap && isFullscreen) {
+    toggleSlideshowWithIndicator();
   } else {
     // Only detect horizontal swipe (left/right) for pausing slideshow
     if (

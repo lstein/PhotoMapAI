@@ -1,6 +1,8 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
 import { checkAlbumIndex } from "./album.js";
+import { eventRegistry } from "./event-registry.js";
+import { initializeGridSwiper } from "./grid-view.js";
 import { deleteImage } from "./index.js";
 import {
   hideMetadataOverlay,
@@ -8,18 +10,22 @@ import {
   toggleMetadataOverlay,
   updateMetadataOverlay,
 } from "./metadata-drawer.js";
-import { state } from "./state.js";
 import {
-  addNewSlide,
   getCurrentFilepath,
   getCurrentSlideIndex,
+  slideState,
+} from "./slide-state.js";
+import { saveSettingsToLocalStorage, state } from "./state.js";
+import {
+  addNewSlide,
+  initializeSingleSwiper,
   pauseSlideshow,
   resumeSlideshow,
-  updateSlideshowIcon
+  updateSlideshowIcon,
 } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
-import { toggleUmapWindow } from "./umap.js";
-import { hideSpinner, showSpinner } from "./utils.js";
+import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
+import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
 // Constants
 const FULLSCREEN_INDICATOR_CONFIG = {
@@ -37,6 +43,7 @@ const KEYBOARD_SHORTCUTS = {
   i: () => toggleMetadataOverlay(),
   Escape: () => hideMetadataOverlay(),
   f: () => toggleFullscreen(),
+  g: () => toggleGridSwiperView(),
   m: () => toggleUmapWindow(),
   " ": (e) => handleSpacebarToggle(e),
 };
@@ -57,6 +64,7 @@ function cacheElements() {
     metadataOverlay: document.getElementById("metadataOverlay"),
     bannerDrawerContainer: document.getElementById("bannerDrawerContainer"),
     overlayDrawer: document.getElementById("overlayDrawer"),
+    scoreDisplay: document.getElementById("fixedScoreDisplay"),
   };
 }
 
@@ -74,11 +82,13 @@ function handleFullscreenChange() {
   const isFullscreen = !!document.fullscreenElement;
 
   // Toggle visibility of UI panels
-  [elements.controlPanel, elements.searchPanel].forEach((panel) => {
-    if (panel) {
-      panel.classList.toggle("hidden-fullscreen", isFullscreen);
+  [elements.controlPanel, elements.searchPanel, elements.scoreDisplay].forEach(
+    (panel) => {
+      if (panel) {
+        panel.classList.toggle("hidden-fullscreen", isFullscreen);
+      }
     }
-  });
+  );
 }
 
 // Toggle slideshow controls
@@ -91,15 +101,6 @@ function toggleSlideshow() {
   updateSlideshowIcon();
 }
 
-function navigateSlide(direction) {
-  pauseSlideshow(); // Pause on navigation
-  if (direction === "next") {
-    state.swiper.slideNext();
-  } else {
-    state.swiper.slidePrev();
-  }
-}
-
 // Toggle the play/pause state using the spacebar
 function handleSpacebarToggle(e) {
   e.preventDefault();
@@ -108,15 +109,33 @@ function handleSpacebarToggle(e) {
 }
 
 // Copy text to clipboard
+// Note: this is legacy code and is awkwardly copying the filepath information
+// from the slide dataset. This should be replaced with a more flexible system.
+// See metadata-drawer.js for a more robust implementation.
 function handleCopyText() {
-  const activeSlide = state.swiper.slides[state.swiper.activeIndex];
-  if (activeSlide) {
-    const filepath = activeSlide.dataset.filepath || "";
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-      navigator.clipboard.writeText(filepath)
-        .catch((err) => {
-          alert("Failed to copy text: " + err);
-        });
+  const globalIndex = slideState.getCurrentSlide().globalIndex;
+  if (globalIndex === -1) {
+    alert("No image selected to copy.");
+    return;
+  }
+  console.log("Copying filepath for global index:", globalIndex);
+  // Get the element of the current slide
+  const slideEl = document.querySelector(
+    `.swiper-slide[data-global-index='${globalIndex}']`
+  );
+  if (!slideEl) {
+    alert("Current slide element not found.");
+    return;
+  }
+  if (slideEl) {
+    const filepath = slideEl.dataset.filepath || "";
+    if (
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === "function"
+    ) {
+      navigator.clipboard.writeText(filepath).catch((err) => {
+        alert("Failed to copy text: " + err);
+      });
     } else {
       alert("Clipboard API not available. Please copy manually.");
     }
@@ -125,8 +144,8 @@ function handleCopyText() {
 
 // Delete the current file
 async function handleDeleteCurrentFile() {
-  const [globalIndex, totalImages, searchIndex] = await getCurrentSlideIndex();
-  const currentFilepath = await getCurrentFilepath();
+  const [globalIndex, totalImages, searchIndex] = getCurrentSlideIndex();
+  const currentFilepath = getCurrentFilepath();
 
   if (globalIndex === -1 || !currentFilepath) {
     alert("No image selected for deletion.");
@@ -159,11 +178,11 @@ function confirmDelete(filepath, globalIndex) {
 async function handleSuccessfulDelete(globalIndex, searchIndex) {
   // remove from search results, and adjust subsequent global indices downward by 1
   if (state.searchResults?.length > 0) {
-      state.searchResults.splice(searchIndex, 1);
-      for (let i = 0; i < state.searchResults.length; i++) {
-        if (state.searchResults[i].index > globalIndex) {
-          state.searchResults[i].index -= 1;
-        } 
+    state.searchResults.splice(searchIndex, 1);
+    for (let i = 0; i < state.searchResults.length; i++) {
+      if (state.searchResults[i].index > globalIndex) {
+        state.searchResults[i].index -= 1;
+      }
     }
   }
 
@@ -171,10 +190,13 @@ async function handleSuccessfulDelete(globalIndex, searchIndex) {
   if (state.swiper?.slides?.length > 0) {
     // find index of the currentFilePath
     const currentIndex = state.swiper.slides.findIndex(
-      (slide) => slide.dataset.index === globalIndex.toString()
+      (slide) => slide.dataset.globalIndex === globalIndex.toString()
     );
     if (currentIndex === -1) {
-      console.warn("Current file with global index not found in swiper slides:", globalIndex);
+      console.warn(
+        "Current file with global index not found in swiper slides:",
+        globalIndex
+      );
       return;
     }
     state.swiper.removeSlide(currentIndex);
@@ -269,7 +291,10 @@ function setupButtonEventListeners() {
 
   // Start/stop slideshow button
   if (elements.startStopBtn) {
-    elements.startStopBtn.addEventListener("click", toggleSlideshowWithIndicator);
+    elements.startStopBtn.addEventListener(
+      "click",
+      toggleSlideshowWithIndicator
+    );
   }
 
   // Close overlay button
@@ -340,17 +365,25 @@ export function showHidePanelText(hide) {
   }
 }
 
-export function toggleSlideshowWithIndicator() {
+export async function toggleSlideshowWithIndicator() {
   const isRunning = state.swiper?.autoplay?.running;
 
   if (isRunning) {
     pauseSlideshow();
     showPlayPauseIndicator(false); // Show pause indicator
   } else {
+    if (state.gridViewActive) await toggleGridSwiperView(false); // Switch to swiper mode if in grid mode
     resumeSlideshow();
     showPlayPauseIndicator(true); // Show play indicator
   }
 }
+
+// Listen for slide changes to update UI
+window.addEventListener("slideChanged", (e) => {
+  const { globalIndex, searchIndex, totalCount, isSearchMode } = e.detail;
+  // Update any UI elements that need to reflect current position
+  // updateUIForSlideChange(e.detail); // TO COME
+});
 
 // MAIN INITIALIZATION FUNCTION
 function initializeEvents() {
@@ -362,10 +395,22 @@ function initializeEvents() {
   checkAlbumIndex(); // Check if the album index exists before proceeding
 }
 
-// Initialize event listeners after the DOM is fully loaded
-document.addEventListener("DOMContentLoaded", function() {
-  initializeEvents();
+function positionMetadataDrawer() {
+  const seekSlider = document.getElementById("scoreSliderRow");
+  const drawer = document.getElementById("bannerDrawerContainer");
+  if (seekSlider && drawer) {
+    const rect = seekSlider.getBoundingClientRect();
+    // Add window scrollY to get absolute position
+    const top = rect.bottom + window.scrollY;
+    drawer.style.top = `${top + 8}px`; // 8px gap, adjust as needed
+  }
+}
 
+// Initialize event listeners after the DOM is fully loaded
+document.addEventListener("DOMContentLoaded", function () {
+  initializeEvents();
+  positionMetadataDrawer();
+  window.addEventListener("resize", positionMetadataDrawer);
   const aboutBtn = document.getElementById("aboutBtn");
   const aboutModal = document.getElementById("aboutModal");
   const closeAboutBtn = document.getElementById("closeAboutBtn");
@@ -380,10 +425,56 @@ document.addEventListener("DOMContentLoaded", function() {
       aboutModal.style.display = "none";
     });
   }
-  // Optional: close modal when clicking outside content
+  // Close modal when clicking outside content
   aboutModal.addEventListener("click", (e) => {
     if (e.target === aboutModal) {
       aboutModal.style.display = "none";
     }
   });
+});
+
+// Toggle grid/swiper views
+export async function toggleGridSwiperView(gridView = null) {
+  if (gridView === null) state.gridViewActive = !state.gridViewActive;
+  else state.gridViewActive = gridView;
+  saveSettingsToLocalStorage();
+
+  const swiperContainer = document.querySelector(".swiper");
+  const gridViewBtn = document.getElementById("gridViewBtn");
+  const gridViewIcon = gridViewBtn.querySelector("svg");
+  eventRegistry.removeAll("swiper");
+  eventRegistry.removeAll("grid");
+  swiperContainer.style.display = ""; // Always show the swiper container
+
+  const pagination = document.querySelector(".swiper-pagination");
+  if (pagination) {
+    pagination.style.display = state.gridViewActive ? "none" : "";
+  }
+
+  if (state.gridViewActive) {
+    await initializeGridSwiper();
+  } else {
+    await initializeSingleSwiper();
+  }
+
+  const event = new CustomEvent("swiperModeChanged", {
+    detail: { isGridMode: state.gridViewActive },
+  });
+  window.dispatchEvent(event);
+  setCheckmarkOnIcon(gridViewIcon, state.gridViewActive);
+}
+
+// Show/hide grid button
+document.addEventListener("DOMContentLoaded", async function () {
+  const gridViewBtn = document.getElementById("gridViewBtn");
+
+  if (gridViewBtn)
+    gridViewBtn.addEventListener("click", () => {
+      if (isUmapFullscreen()) toggleUmapWindow(false); // Close umap if open
+      toggleGridSwiperView();
+    });
+});
+
+window.addEventListener("stateReady", function () {
+  toggleGridSwiperView(state.gridViewActive);
 });

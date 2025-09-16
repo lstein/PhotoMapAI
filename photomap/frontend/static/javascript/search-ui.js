@@ -2,6 +2,7 @@
 // This file handles the search functionality for the Clipslide application.
 // Swiper initialization
 import { calculate_search_score_cutoff, searchImage, searchTextAndImage, setSearchResults } from "./search.js";
+import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { pauseSlideshow, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
@@ -134,7 +135,14 @@ document.addEventListener("DOMContentLoaded", async function () {
   imageSearchBtn.addEventListener("click", async function () {
     searchInput.value = "";
     negativeSearchInput.value = "";
-    const slide = state.swiper.slides[state.swiper.activeIndex];
+    let slide;
+    const currentSlide = slideState.getCurrentSlide();
+    if (currentSlide) {
+      const globalIndex = currentSlide.globalIndex.toString();
+      slide = state.swiper.slides.find((s) => s.dataset.globalIndex === globalIndex);
+    } else {
+      slide = state.swiper.slides[state.swiper.activeIndex];  
+    }
     if (!slide) return;
     const imgUrl = slide.querySelector("img")?.src;
     const filename = slide.dataset.filename || "image.jpg";
@@ -332,7 +340,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       panel.insertBefore(noResultsMsg, panel.firstChild);
     }
 
-    if (e.detail.results.length === 0 && e.detail.searchType !== "clear") {
+    if (e.detail.results?.length === 0 && e.detail.searchType !== "clear") {
       noResultsMsg.textContent = "No images match your search.";
       noResultsMsg.style.display = "block";
       return;

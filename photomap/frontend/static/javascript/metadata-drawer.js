@@ -29,7 +29,11 @@ export function toggleMetadataOverlay() {
 }
 
 // Function to replace reference image filenames with clickable links
-function replaceReferenceImagesWithLinks(description, referenceImages, albumKey) {
+export function replaceReferenceImagesWithLinks(
+  description,
+  referenceImages,
+  albumKey
+) {
   if (!description || !referenceImages || !albumKey) {
     return description || "";
   }
@@ -59,7 +63,9 @@ function replaceReferenceImagesWithLinks(description, referenceImages, albumKey)
       );
       const link = `<a href="image_by_name/${encodeURIComponent(
         albumKey
-      )}/${encodeURIComponent(imageName)}" target="_blank" style="color: #faea0e;">${imageName}</a>`;
+      )}/${encodeURIComponent(
+        imageName
+      )}" target="_blank" style="color: #faea0e;">${imageName}</a>`;
       processedDescription = processedDescription.replace(regex, link);
     }
   });
@@ -86,35 +92,34 @@ export function updateMetadataOverlay() {
     slide.dataset.filename || "";
   document.getElementById("filepathText").textContent =
     slide.dataset.filepath || "";
-  document.getElementById("metadataLink").href = slide.dataset.metadata_url || "#";
-  updateCurrentImageScore(slide);
+  document.getElementById("metadataLink").href =
+    slide.dataset.metadata_url || "#";
+  updateCurrentImageScore(slide.dataset);
 }
 
-async function updateCurrentImageScore(activeSlide) {
-  if (!activeSlide) {
-    console.warn("No active slide found");
+export async function updateCurrentImageScore(metadata) {
+  if (!metadata) {
     return;
   }
-
-  const globalIndex = parseInt(activeSlide.dataset.index, 10);
-  const globalTotal = parseInt(activeSlide.dataset.total, 10);
-  const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10);
+  const globalIndex = parseInt(metadata.globalIndex, 10);
+  const globalTotal = parseInt(metadata.total, 10);
+  const searchIndex = parseInt(metadata.searchIndex, 10);
 
   if (state.searchResults.length === 0) {
     scoreDisplay.showIndex(globalIndex, globalTotal);
     return;
   }
 
-  if (activeSlide?.dataset?.score) {
-    const score = parseFloat(activeSlide.dataset.score);
+  if (metadata.score) {
+    const score = parseFloat(metadata.score);
     scoreDisplay.show(score, searchIndex + 1, state.searchResults.length);
     return;
   }
 
-  if (activeSlide?.dataset?.cluster) {
+  if (metadata.cluster !== null && metadata.cluster !== undefined) {
     scoreDisplay.showCluster(
-      activeSlide.dataset.cluster,
-      activeSlide.dataset.color,
+      metadata.cluster || 0,
+      metadata.color,
       searchIndex + 1,
       state.searchResults.length
     );
@@ -173,10 +178,13 @@ document.addEventListener("click", function (e) {
       if (iconClone) iconClone.remove();
       let text = clone.textContent.trim();
       if (text) {
-        navigator.clipboard.writeText(text)
+        navigator.clipboard
+          .writeText(text)
           .then(() => {
             icon.title = "Copied!";
-            setTimeout(() => { icon.title = "Copy"; }, 1000);
+            setTimeout(() => {
+              icon.title = "Copy";
+            }, 1000);
           })
           .catch((e) => {
             console.error("Failed to copy text:", e);
@@ -192,11 +200,15 @@ const copyMetadataBtn = document.getElementById("copyMetadataBtn");
 if (copyMetadataBtn && metadataTextArea) {
   copyMetadataBtn.addEventListener("click", function () {
     const text = metadataTextArea.value;
+    console.log("Copying metadata text:", text);
     if (text) {
-      navigator.clipboard.writeText(text)
+      navigator.clipboard
+        .writeText(text)
         .then(() => {
           copyMetadataBtn.title = "Copied!";
-          setTimeout(() => { copyMetadataBtn.title = "Copy metadata"; }, 1000);
+          setTimeout(() => {
+            copyMetadataBtn.title = "Copy metadata";
+          }, 1000);
         })
         .catch(() => {
           copyMetadataBtn.title = "Copy failed";
