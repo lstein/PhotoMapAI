@@ -95,7 +95,9 @@ At any time you can click on the *Grid* icon to shift from single-slide mode to 
 
 <img src="../../img/photomap_basic_usage_gridmode.png" width="480" alt="Seek Slider" class="img-hover-zoom">
 
-In grid mode, the arrow buttons move forward and back one screen's worth of thumbnails. Click on a thumbnail to select its image. When selected, the image's metadata will be displayed in the metadata drawer, and the semantic map will update to show the position of the current image. You may also advance the grid using the slider control that appears when you hover near the top of the window. 
+In grid mode, the arrow buttons move forward and back one screen's worth of thumbnails. Click on a thumbnail to select its image. When selected, the image's metadata will be displayed in the metadata drawer, and the semantic map will update to show the position of the current image. Double-click on a thumbnail in order to open the image at full resolution in browse mode.
+
+You may also advance the grid using the slider control that appears when you hover near the top of the window. 
 
 ## Changing Settings
 
