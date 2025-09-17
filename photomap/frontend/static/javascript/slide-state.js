@@ -155,7 +155,11 @@ class SlideStateManager {
    * @param {number} searchIndex - The search results index (optional)
    */
   updateFromExternal(globalIndex, searchIndex = null) {
-    if (this.isSearchMode && searchIndex !== null && this.searchResults.length > 0) {
+    if (
+      this.isSearchMode &&
+      searchIndex !== null &&
+      this.searchResults.length > 0
+    ) {
       this.currentGlobalIndex = this.searchResults[searchIndex]?.index;
       this.currentSearchIndex = searchIndex;
     } else {
@@ -196,6 +200,7 @@ class SlideStateManager {
       if (searchIndex < 0 || searchIndex >= this.searchResults.length) {
         return { globalIndex: null, searchIndex: null }; // Out of bounds
       }
+
       let globalIndex = this.searchResults[searchIndex]?.index;
       return { globalIndex, searchIndex };
     } else {
@@ -230,7 +235,6 @@ class SlideStateManager {
   }
 
   // --- Event Handlers ---
-
   handleSearchResultsChanged({ results, searchType }) {
     if (searchType === "clear" || results.length === 0) {
       this.exitSearchMode();
@@ -243,28 +247,31 @@ class SlideStateManager {
     this.currentGlobalIndex = 0;
     this.currentSearchIndex = 0;
     this.exitSearchMode();
+    console.log(
+      "Album changed, setting totalAlbumImages to",
+      detail.totalImages
+    );
     this.totalAlbumImages = detail.totalImages; // Update from state
   }
 
   // --- Private Methods ---
   notifySlideChanged() {
     const slideInfo = this.getCurrentSlide();
-    console.log("Dispatching slideChanged event:", slideInfo);
-      window.dispatchEvent(
-        new CustomEvent("slideChanged", {
-          detail: slideInfo,
-        })
-      );
+    window.dispatchEvent(
+      new CustomEvent("slideChanged", {
+        detail: slideInfo,
+      })
+    );
   }
 
   seekToSlideIndex() {
     const slideInfo = this.getCurrentSlide();
     console.log("Dispatching seekToSlideIndex event:", slideInfo);
-      window.dispatchEvent(
-        new CustomEvent("seekToSlideIndex", {
-          detail: slideInfo,
-        })
-      );
+    window.dispatchEvent(
+      new CustomEvent("seekToSlideIndex", {
+        detail: slideInfo,
+      })
+    );
   }
 }
 
