@@ -919,7 +919,7 @@ export class AlbumManager {
       setTimeout(async () => {
         const album = await this.getCurrentAlbum(albumKey);
         this.updateAlbumCardIndexStatus(cardElement, album);
-      }, 5000);
+      }, 2000);
     }
 
     // If in setup mode, set the album and exit setup mode
@@ -929,11 +929,18 @@ export class AlbumManager {
       this.enableClosing();
       this.removeSetupMessage();
       // Now close the album manager window after a short delay
-      setTimeout(() => {
+      setTimeout(async () => {
         this.completeSetupMode();
         this.hide();
         // send the albumChanged message
-        window.dispatchEvent(new Event("albumChanged"));
+        const album = await getIndexMetadata(albumKey);
+        window.dispatchEvent(
+          new CustomEvent("albumChanged", {
+            detail: {
+              totalImages: album ? album.filename_count : 0,
+            },
+          })
+        );
       }, AlbumManager.AUTO_INDEX_DELAY);
     }
 
@@ -954,6 +961,16 @@ export class AlbumManager {
       if (errorDiv) {
         errorDiv.remove();
       }
+    }
+    if (albumKey === state.album) {
+      const album = await getIndexMetadata(albumKey);
+      window.dispatchEvent(
+        new CustomEvent("albumChanged", {
+          detail: {
+            totalImages: album ? album.filename_count : 0,
+          },
+        })
+      );
     }
   }
 
