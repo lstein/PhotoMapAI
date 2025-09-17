@@ -3,11 +3,11 @@
 import { checkAlbumIndex } from "./album.js";
 import { eventRegistry } from "./event-registry.js";
 import { initializeGridSwiper } from "./grid-view.js";
-import { deleteImage } from "./index.js";
+import { deleteImage, getIndexMetadata } from "./index.js";
 import {
   hideMetadataOverlay,
   showMetadataOverlay,
-  toggleMetadataOverlay
+  toggleMetadataOverlay,
 } from "./metadata-drawer.js";
 import {
   getCurrentFilepath,
@@ -19,7 +19,7 @@ import {
   initializeSingleSwiper,
   pauseSlideshow,
   resumeSlideshow,
-  updateSlideshowIcon
+  updateSlideshowIcon,
 } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
@@ -158,10 +158,9 @@ async function handleDeleteCurrentFile() {
     await deleteImage(state.album, globalIndex);
     await handleSuccessfulDelete(globalIndex, searchIndex);
     hideSpinner();
-    console.log("Image deleted successfully");
   } catch (error) {
     hideSpinner();
-    alert(`Failed to delete image: ${error.message}`);
+    alert(`Failed to delete: ${error.message}`);
     console.error("Delete failed:", error);
   }
 }
@@ -208,6 +207,9 @@ async function confirmDelete(filepath, globalIndex) {
 }
 
 async function handleSuccessfulDelete(globalIndex, searchIndex) {
+  // synchronize the album information
+  const metadata = await getIndexMetadata(state.album);
+
   // remove from search results, and adjust subsequent global indices downward by 1
   if (slideState.isSearchMode && slideState.searchResults?.length > 0) {
     slideState.searchResults.splice(searchIndex, 1);
@@ -217,7 +219,18 @@ async function handleSuccessfulDelete(globalIndex, searchIndex) {
       }
     }
   }
-  // find the swiper index of the removed slide.
+
+  // If the current globalIndex is after the deleted index, decrement it
+  if (slideState.currentGlobalIndex > globalIndex) {
+    slideState.currentGlobalIndex -= 1;
+  }
+
+  // Update total images
+  slideState.totalAlbumImages = metadata.filename_count || 0;
+
+  // TO DO: What happens when the last image is removed?!
+
+  // Update the current swiper.
   const removedSlideIndex = state.swiper.slides.findIndex((slide) => {
     return parseInt(slide.dataset.globalIndex, 10) === globalIndex;
   });
@@ -225,9 +238,7 @@ async function handleSuccessfulDelete(globalIndex, searchIndex) {
     console.warn("Deleted slide not found in swiper slides.");
     return;
   }
-  // Remove the slide from Swiper
   await state.swiper.removeSlide(removedSlideIndex);
-  await checkAlbumIndex(); // Update album index and UI
   slideState.navigateByOffset(0); // Stay on the same index, which is now the next image
 }
 
@@ -473,6 +484,7 @@ export async function toggleGridSwiperView(gridView = null) {
   }
 
   if (state.gridViewActive) {
+    console.log("Switching to grid view");
     await initializeGridSwiper();
   } else {
     await initializeSingleSwiper();
