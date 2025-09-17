@@ -43,10 +43,10 @@ class Album(BaseModel):
     @classmethod
     def validate_index_path(cls, v: str) -> str:
         """Validate index path format."""
-        index_path = Path(v)
+        index_path = Path(v).expanduser()
         if not index_path.suffix == ".npz":
             raise ValueError("Index file must have .npz extension")
-        return v
+        return index_path.as_posix()
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert album to dictionary format for YAML."""
