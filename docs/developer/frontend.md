@@ -8,8 +8,14 @@ The PhotoMapAI frontend is a modular, responsive web application built with HTML
 
 The frontend code is organized into the following main components:
 
-- **Slideshow & Gallery (`swiper.js`, `seek-slider.js`)**  
+- **Image Browsing (`swiper.js`)**  
   Handles image navigation, transitions, and keyboard/touch controls.
+
+- **Image Grid (`grid-view.js`)**
+  The image grid display.
+
+- **Random Seeking (`seekslider.js`)**
+  Slider control that allows the user to seek to arbitrary positions within album or search results.
 
 - **Metadata Overlay (`overlay.js`)**  
   Displays image metadata, prompts, and reference images as overlays.
@@ -31,6 +37,9 @@ The frontend code is organized into the following main components:
 
 - **Stylesheets (`slides.css`)**  
   Provides base styles, responsive layouts, and theme customization.
+
+- **State Tracking (`state.js`, `slide-state.js`)**
+  Tracking of the current image and search results (`slide-state.js`), and all other stateful variables (`state.js`)
 
 ---
 
@@ -55,6 +64,15 @@ The frontend code is organized into the following main components:
 3. **Rendering**  
    The UI updates dynamically based on backend responses, displaying images, overlays, search results, and visualizations.
 
+4. **Event Passing**
+  A series of custom events couple user actions to changes in the user interface. Major events are:
+  - `albumChanged` -- The current album has changed.
+  - `slideChanged` -- The currently selected slide (image) has changed.
+  - `searchResultsChanged` -- The list of search results (including the selected umap cluster) has changed.
+  - `seekToSlideIndex` -- The user wishes to jump to an arbitrary slide in the album or search results.
+  - `swiperModeChanged` -- The user wishes to change from browse mode to grid mode or vice-versa.
+  - `settingsUpdated` -- One or more settings has been changed.
+
 ---
 
 ## Extending the Frontend
@@ -69,8 +87,9 @@ The frontend code is organized into the following main components:
 ## File Locations
 
 - **JavaScript:** `photomap/frontend/static/javascript/`
-- **CSS:** `photomap/frontend/static/`
-- **HTML Templates:** `photomap/frontend/templates/`
+- **CSS:** `photomap/frontend/static/css`
+- **HTML Templates:** `photomap/frontend/static/templates/`
+  - Note that most of the HTML templates are in a subdirectory called `modules`.
 - **Documentation:** `docs/developer/frontend.md`
 
 ---
