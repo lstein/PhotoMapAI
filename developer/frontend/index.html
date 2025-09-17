@@ -902,8 +902,16 @@
 <p>The frontend code is organized into the following main components:</p>
 <ul>
 <li>
-<p><strong>Slideshow &amp; Gallery (<code>swiper.js</code>, <code>seek-slider.js</code>)</strong><br />
+<p><strong>Image Browsing (<code>swiper.js</code>)</strong><br />
   Handles image navigation, transitions, and keyboard/touch controls.</p>
+</li>
+<li>
+<p><strong>Image Grid (<code>grid-view.js</code>)</strong>
+  The image grid display.</p>
+</li>
+<li>
+<p><strong>Random Seeking (<code>seekslider.js</code>)</strong>
+  Slider control that allows the user to seek to arbitrary positions within album or search results.</p>
 </li>
 <li>
 <p><strong>Metadata Overlay (<code>overlay.js</code>)</strong><br />
@@ -933,6 +941,10 @@
 <p><strong>Stylesheets (<code>slides.css</code>)</strong><br />
   Provides base styles, responsive layouts, and theme customization.</p>
 </li>
+<li>
+<p><strong>State Tracking (<code>state.js</code>, <code>slide-state.js</code>)</strong>
+  Tracking of the current image and search results (<code>slide-state.js</code>), and all other stateful variables (<code>state.js</code>)</p>
+</li>
 </ul>
 <hr />
 <h2 id="key-technologies">Key Technologies</h2>
@@ -958,6 +970,16 @@
 <p><strong>Rendering</strong><br />
    The UI updates dynamically based on backend responses, displaying images, overlays, search results, and visualizations.</p>
 </li>
+<li>
+<p><strong>Event Passing</strong>
+  A series of custom events couple user actions to changes in the user interface. Major events are:</p>
+</li>
+<li><code>albumChanged</code> -- The current album has changed.</li>
+<li><code>slideChanged</code> -- The currently selected slide (image) has changed.</li>
+<li><code>searchResultsChanged</code> -- The list of search results (including the selected umap cluster) has changed.</li>
+<li><code>seekToSlideIndex</code> -- The user wishes to jump to an arbitrary slide in the album or search results.</li>
+<li><code>swiperModeChanged</code> -- The user wishes to change from browse mode to grid mode or vice-versa.</li>
+<li><code>settingsUpdated</code> -- One or more settings has been changed.</li>
 </ol>
 <hr />
 <h2 id="extending-the-frontend">Extending the Frontend</h2>
@@ -971,8 +993,9 @@
 <h2 id="file-locations">File Locations</h2>
 <ul>
 <li><strong>JavaScript:</strong> <code>photomap/frontend/static/javascript/</code></li>
-<li><strong>CSS:</strong> <code>photomap/frontend/static/</code></li>
-<li><strong>HTML Templates:</strong> <code>photomap/frontend/templates/</code></li>
+<li><strong>CSS:</strong> <code>photomap/frontend/static/css</code></li>
+<li><strong>HTML Templates:</strong> <code>photomap/frontend/static/templates/</code></li>
+<li>Note that most of the HTML templates are in a subdirectory called <code>modules</code>.</li>
 <li><strong>Documentation:</strong> <code>docs/developer/frontend.md</code></li>
 </ul>
 <hr />

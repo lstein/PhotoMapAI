@@ -463,18 +463,42 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#browsing-your-collection" class="md-nav__link">
+  <a href="#the-semantic-map" class="md-nav__link">
     <span class="md-ellipsis">
-      Browsing your Collection
+      The Semantic Map
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#displaying-the-semantic-map" class="md-nav__link">
+  <a href="#the-album-browsing-display" class="md-nav__link">
     <span class="md-ellipsis">
-      Displaying the Semantic Map
+      The Album Browsing Display
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Album Browsing Display">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#jumping-forward-and-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      Jumping Forward and Back
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#viewing-a-thumbnail-grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      Viewing a Thumbnail Grid
     </span>
   </a>
   
@@ -814,18 +838,42 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#browsing-your-collection" class="md-nav__link">
+  <a href="#the-semantic-map" class="md-nav__link">
     <span class="md-ellipsis">
-      Browsing your Collection
+      The Semantic Map
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#displaying-the-semantic-map" class="md-nav__link">
+  <a href="#the-album-browsing-display" class="md-nav__link">
     <span class="md-ellipsis">
-      Displaying the Semantic Map
+      The Album Browsing Display
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Album Browsing Display">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#jumping-forward-and-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      Jumping Forward and Back
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#viewing-a-thumbnail-grid" class="md-nav__link">
+    <span class="md-ellipsis">
+      Viewing a Thumbnail Grid
     </span>
   </a>
   
@@ -874,8 +922,23 @@
 <p>Indexing can take some time. On a system equipped with an NVidia GPU, indexing a collection of ~50,000 images will take about two hours. On a system with CPU only, the process will take overnight. Mac users with hardware accelerated M1/2/3 chips will see performance somewhere in between the two. It is suggested to start with a small collection of photos (1000-2000 images) for your first album in order to test PhotoMapAI and get comfortable with its features.</p>
 <p>Once indexing is complete, the dialogue will close and you can start exploring your collection.</p>
 <p>For more information on adding and modifying albums see <a href="../albums/">Albums</a>.</p>
-<h2 id="browsing-your-collection">Browsing your Collection</h2>
-<p>The album browsing interface is shown below. Hover over the image to see the key to the various buttons and controls for album browsing:</p>
+<h2 id="the-semantic-map">The Semantic Map</h2>
+<p>When you open an album for the first time, it will show the <a href="../semantic-map/">Semantic Map</a> view, a scatterplot of all the photos in your album, clustered and colored by similarity.</p>
+<p><img src="../../img/photomap_semantic_map_1.png" width="480" alt="Semantic Map" class="img-hover-zoom"></p>
+<p>The initial view shows the entire collection, with a yellow target (far left side of the screenshot) marking the current photo on display. Use the mouse and scrollwheel to zoom in and out of the map and pan around. If you zoom in enough, you will see individual dots for each photo. The largest clusters are labeled with landmark images shown in the screenshot above as map markers pointing to major clusters. Hover the mouse over areas of interest to see larger thumbnail previews of the corresponding images. You can control whether landmarks and/or hover thumbnails are displayed by selecting those options in the checkboxes at the bottom of the screen. </p>
+<p>Click on a dot to load that photo into the <a href="#the-album-browsing-display">album browsing display</a>. This will also highlight the cluster that you clicked in and load the contents of the cluster into the search results. You can then use the navigation buttons or the <a href="#viewing-a-thumbnail-grid">grid view</a> to scroll through the images in the selected cluster.</p>
+<p>If you don't see anything, or if the colors are very faint, this means that there were insufficient images in the album to cluster well. You can fix this by increasing the cluster strength. Go to the <em>Cluster Strength</em> field and increase its value until you are satisfied with the cluster number and size.</p>
+<p>If you hover over the top of the map, additional navigation controls appear for zooming in and out, panning, resetting to the default scale, and downloading the map as a PNG image.</p>
+<p><img src="../../img/photomap_semantic_map_2.png" width="480" alt="Semantic Map Nav Controls" class="img-hover-zoom"></p>
+<p>You can control the size and position of the semantic map. You can have it appear in fullscreen mode that covers the full size image display beneath it, or you can set it to be a semi-transparent window that floats on top of the full size image. See <a href="../semantic-map/">Semantic Map</a> for more details.</p>
+<p>You can completely close the semantic map at any time by clicking its close box or the <em>Target</em> (⊙) icon at the bottom of the screen (see the screenshot below). To reopen the map, click the <em>Target</em> icon again.</p>
+<div class="photomap-overlay-container">
+  <img src="../../img/photomap_basic_usage_3_base.png" style="width: 320px" class="photomap-base" alt="Base image">
+  <img src="../../img/photomap_basic_usage_3_overlay.png" style="width: 320px" class="photomap-overlay" alt="Overlay image">
+</div>
+
+<h2 id="the-album-browsing-display">The Album Browsing Display</h2>
+<p>If you click on an image in the semantic map, or just close the window, you will see the album browsing display shown below. Hover over the screenshot to see the key to the various buttons and controls for album browsing:</p>
 <div class="photomap-overlay-container">
   <img src="../../img/photomap_basic_usage_1_base.png" width="480" class="photomap-base" alt="Base image">
   <img src="../../img/photomap_basic_usage_1_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
@@ -883,41 +946,41 @@
 
 <p>Going from left to right:</p>
 <ul>
-<li>The <em>Next Image</em> and <em>Previous Image</em> buttons advance to the next or previous photographs in the album.</li>
+<li>The <em>About</em> button shows the current version of the software and links to its  home page.
+_ The <em>Previous slide</em> and <em>Next slide</em> buttons advance the images in the album or current search.</li>
 <li>The <em>Gear</em> button opens up a dialogue that lets you adjust the behavior and appearance of PhotoMapAI.</li>
 <li>The <em>Trash</em> icon permanently deletes the current photo from the album and removes the disk file (after confirmation).</li>
 <li>The <em>Fullscreen</em> button puts PhotoMapAI into fullscreen mode and hides most of the control elements.</li>
+<li>The <em>Grid</em> icon toggles between showing one image at a time to showing a screen of thumbnails.</li>
 <li>The <em>Play/Pause</em> button starts and stops a slideshow in which the photos autoadvance after a user-adjustable interval.</li>
 <li>The <em>Target</em> icon opens and closes the <a href="../semantic-map/">semantic map</a>.</li>
 <li>The <em>Landscape</em> icon initiates a search for images similar to the one currently displayed.</li>
-<li>The <em>Magnifier</em> icon opens up a search dialogue that lets you search by image similarity and/or a text description of image content.</li>
+<li>The <em>Magnifier</em> button opens up a search dialogue that lets you search by image similarity and/or a text description of image content.</li>
+<li>The "Clear search* button clears any search that is currently active and returns to album browsing mode.</li>
 </ul>
-<p>Finally, the inconspicuous tab with the yellow arrow on the left margin of the window opens a drawer that displays the image's EXIF date, including the date the photo was taken, GPS information (if available), and camera information.</p>
-<p>Hover the mouse near the top of the window to reveal a gallery view and a slider control that will let you seek forward and backward among the images. If no search is active, the slider shows the images sorted by their date. If an image or text similarity search is active, the slider changes to indicate the match score (higher numbers are better matches). If a cluster was selected with the semantic map, then the slider and gallery change to indicate the contents of the cluster.</p>
+<p>Finally, the yellow tab with the black arrow on the left margin of the window opens a drawer that displays the image's EXIF date, including the date the photo was taken, GPS information (if available), and camera information. Once you open the drawer up, you can drag it around by clicking on any of its edges. Click the black arrow again to return it to its home location and close it.</p>
+<h3 id="jumping-forward-and-back">Jumping Forward and Back</h3>
+<p>Hover the mouse near the top of the window to reveal a slider control that will let you seek forward and backward among the images. If no search is active, the slider shows the images sorted by their date. If an image or text similarity search is active, the slider changes to indicate the match score (higher numbers are better matches). If a cluster was selected with the semantic map, then the slider changes to indicate the slide numbers within the cluster.</p>
 <p><img src="../../img/photomap_basic_usage_2.png" width="480" alt="Seek Slider" class="img-hover-zoom"></p>
 <p>You can navigate through your album, enter and exit fullscreen, and start and stop the slideshow with a variety of keystrokes and gestures on touch-enabled devices. See <a href="../keyboard-shortcuts/">Keyboard Shortcuts</a> for details.</p>
-<h2 id="displaying-the-semantic-map">Displaying the Semantic Map</h2>
-<p>Click the ⊙ (target) icon in the search panel on the bottom right to open the <a href="../semantic-map/">Semantic Map</a>:</p>
-<div class="photomap-overlay-container">
-  <img src="../../img/photomap_basic_usage_3_base.png" style="width: 320px" class="photomap-base" alt="Base image">
-  <img src="../../img/photomap_basic_usage_3_overlay.png" style="width: 320px" class="photomap-overlay" alt="Overlay image">
-</div>
-
-<p>This will open up a scatterplot showing all the photos in your album, clustered and colored by similarity.</p>
-<p><img src="../../img/photomap_semantic_map_1.png" width="480" alt="Semantic Map" class="img-hover-zoom"></p>
-<p>The initial view shows the entire collection, with a yellow target (far left side of the screenshot) marking the current photo on display. Use the mouse and scrollwheel to zoom in and out of the map and pan around. If you zoom in enough, you will see individual dots for each photo. The largest clusters are labeled with landmark images shown in the screenshot above as map markers pointing to major clusters. Hover the mouse over areas of interest to see larger thumbnail previews of the corresponding images. You can control whether landmarks and/or hover thumbnails are displayed by selecting those options in the checkboxes at the bottom of the screen. </p>
-<p>Click on a dot to load that photo into the main display, highlight the cluster that you clicked in, and load the contents of the cluster into the search results. You can then use the navigation buttons (or the slideshow) to scroll through the images in the selected cluster.</p>
-<p>If you don't see anything, or if the colors are very faint, this means that there were insufficient images in the album to cluster well. You can fix this by increasing the cluster strength. Go to the <em>Cluster Strength</em> field and increase its value until you are satisfied with the cluster number and size.</p>
-<p>If you hover over the top of the map, additional navigation controls appear for zooming in and out, panning, resetting to the default scale, and downloading the map as a PNG image.</p>
-<p><img src="../../img/photomap_semantic_map_2.png" width="480" alt="Semantic Map Nav Controls" class="img-hover-zoom"></p>
-<p>You can control the size and position of the semantic map. You can have it appear in fullscreen mode that covers the full size image display beneath it, or you can set it to be a semi-transparent window that floats on top of the full size image. See <a href="../semantic-map/">Semantic Map</a> for more details.</p>
+<h2 id="viewing-a-thumbnail-grid">Viewing a Thumbnail Grid</h2>
+<p>At any time you can click on the <em>Grid</em> icon to shift from single-slide mode to grid mode:</p>
+<p><img src="../../img/photomap_basic_usage_gridmode.png" width="480" alt="Seek Slider" class="img-hover-zoom"></p>
+<p>In grid mode, the arrow buttons move forward and back one screen's worth of thumbnails. Click on a thumbnail to select its image. When selected, the image's metadata will be displayed in the metadata drawer, and the semantic map will update to show the position of the current image. Double-click on a thumbnail in order to open the image at full resolution in browse mode.</p>
+<p>You may also advance the grid using the slider control that appears when you hover near the top of the window. </p>
 <h2 id="changing-settings">Changing Settings</h2>
 <p>The Gear icon opens the settings dialogue, which allows you to adjust the appearance and behavior of PhotoMapAI:</p>
 <p><img src="../../img/photomap_settings.png" width="480" alt="PhotoMapAI Settings Dialogue" class="img-hover-zoom"></p>
 <ul>
-<li><strong>Image Change Interval</strong> -- When the slideshow is running, this controls how long each image will be displayed, in seconds.</li>
-<li><strong>Image Browse Order</strong> -- When the slideshow is running, or when you are browsing the album without an active search, this controls the order in which photos are displayed. "Random" will present the images in shuffled order, while "Chronological" will show them in order from oldest to newest.</li>
-<li><strong>Max Images in History</strong> -- PhotoMapAI keeps a small number of recently-viewed photos in memory. The others are swapped in and out to disk. This value controls how many images are kept in memory at once. Reduce the size if you are having memory problems or the application seems to be slowing down.</li>
+<li>
+<p><strong>Image Change Interval</strong> -- When the slideshow is running, this controls how long each image will be displayed, in seconds.</p>
+</li>
+<li>
+<p><strong>Image Browse Order</strong> -- When the slideshow is running, or when you are browsing the album without an active search, this controls the order in which photos are displayed. "Random" will present the images in shuffled order, while "Chronological" will show them in order from oldest to newest.</p>
+</li>
+<li><strong>Grid thumbnail size factor</strong> -- This allows you to change the size of the image thumbnails by scaling them from a maximum of 2.0 (double default size) to a minimum of 0.5 (half default size). Be aware that the grid takes longer to load with small thumbnails.</li>
+<li><strong>Show Button Labels</strong> -- Disabling this checkbox allows you to turn off the labels on the row of clickable icons at the bottom of the screen for a more minimalist experience.</li>
+<li><strong>Confirm before deleting images</strong> -- Disabling this checkbox stops the Trash Can icon from asking for confirmation before permanently deleting the current image from disk.</li>
 <li><strong>LocationIQ Map API Key</strong> -- This optional API key lets PhotoMapAI display thumbnail maps and named locations for photos that contain GPS geolocation information. If you wish to enable this feature, get a key for free from <a href="http://locationiq.com/">LocationIQ</a> and paste it into the field. If not present, PhotoMapAI will display the longitude and latitude of the photo, but not the map or place name.</li>
 <li><strong>Album</strong> -- This pulldown menu lists all the albums you have configured and allows you to switch among them. Note that when you switch albums, the settings dialogue will close immediately and the window will display the first photo from the selected albums.</li>
 <li><strong>Manage Albums</strong> -- This green button will open the <a href="../albums/">Album Manager</a>, where you can create, edit and delete albums.</li>
