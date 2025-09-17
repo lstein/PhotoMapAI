@@ -1,6 +1,5 @@
 // overlay.js
 // This file manages the overlay functionality, including showing and hiding overlays during slide transitions.
-// TO DO: Change the name of the element from 'pauseOverlay' to 'overlay' to make it more generic.
 import { scoreDisplay } from "./score-display.js";
 import { state } from "./state.js";
 

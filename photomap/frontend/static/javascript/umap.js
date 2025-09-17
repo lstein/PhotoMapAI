@@ -251,7 +251,7 @@ export async function fetchUmapData() {
       let isHovering = false;
 
       gd.on("plotly_hover", function (eventData) {
-        if (!hoverThumbnailsEnabled) return; // <-- Only show if enabled
+        if (!hoverThumbnailsEnabled) return;
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
         if (pt.curveNumber !== 0) return;
@@ -532,7 +532,7 @@ function ensureUmapWindowInView() {
     win.style.top = "0px";
   }
 
-  // Optionally, ensure right/bottom are not off-screen
+  // Ensure top/left are not off-screen
   const maxLeft = window.innerWidth - rect.width;
   const maxTop = window.innerHeight - rect.height;
   if (left > maxLeft) {
@@ -679,7 +679,7 @@ function updateUmapColorModeAvailability(searchResults = []) {
 
 // ------------- Handling Landmark Thumbnails -------------
 
-// Improved landmark placement algorithm
+// Landmark placement algorithm
 function getLandmarkForCluster(pts) {
   // 1. Find X center
   const centerX = pts.reduce((sum, p) => sum + p.x, 0) / pts.length;
