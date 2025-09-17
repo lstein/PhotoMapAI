@@ -178,17 +178,26 @@ document.addEventListener("click", function (e) {
       if (iconClone) iconClone.remove();
       let text = clone.textContent.trim();
       if (text) {
+        // Save the original SVG/icon HTML
+        const originalIconHTML = icon.innerHTML;
+        // SVG for a checkbox with a checkmark
+        const checkSVG = `
+          <svg width="18" height="18" viewBox="0 0 18 18">
+            <rect x="2" y="2" width="14" height="14" rx="3" fill="#faea0e" stroke="#222" stroke-width="2"/>
+            <polyline points="5,10 8,13 13,6" fill="none" stroke="#222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        `;
         navigator.clipboard
           .writeText(text)
           .then(() => {
-            icon.title = "Copied!";
+            icon.innerHTML = checkSVG;
             setTimeout(() => {
-              icon.title = "Copy";
+              icon.innerHTML = originalIconHTML;
             }, 1000);
           })
           .catch((e) => {
             console.error("Failed to copy text:", e);
-            icon.title = "Copy failed";
+            // Optionally show an error icon or message here
           });
       }
     }
@@ -200,7 +209,6 @@ const copyMetadataBtn = document.getElementById("copyMetadataBtn");
 if (copyMetadataBtn && metadataTextArea) {
   copyMetadataBtn.addEventListener("click", function () {
     const text = metadataTextArea.value;
-    console.log("Copying metadata text:", text);
     if (text) {
       navigator.clipboard
         .writeText(text)
