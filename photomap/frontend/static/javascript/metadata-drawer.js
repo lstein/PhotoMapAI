@@ -1,7 +1,7 @@
 // overlay.js
 // This file manages the overlay functionality, including showing and hiding overlays during slide transitions.
-// TO DO: Change the name of the element from 'pauseOverlay' to 'overlay' to make it more generic.
 import { scoreDisplay } from "./score-display.js";
+import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 
 // Show the banner by moving container up
@@ -105,7 +105,7 @@ export async function updateCurrentImageScore(metadata) {
   const globalTotal = parseInt(metadata.total, 10);
   const searchIndex = parseInt(metadata.searchIndex, 10);
 
-  if (state.searchResults.length === 0) {
+  if (slideState.searchResults.length === 0) {
     scoreDisplay.showIndex(globalIndex, globalTotal);
     return;
   }

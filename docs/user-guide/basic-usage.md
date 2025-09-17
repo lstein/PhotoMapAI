@@ -95,7 +95,9 @@ At any time you can click on the *Grid* icon to shift from single-slide mode to 
 
 <img src="../../img/photomap_basic_usage_gridmode.png" width="480" alt="Seek Slider" class="img-hover-zoom">
 
-In grid mode, the arrow buttons move forward and back one screen's worth of thumbnails. Click on a thumbnail to select its image. When selected, the image's metadata will be displayed in the metadata drawer, and the semantic map will update to show the position of the current image. You may also advance the grid using the slider control that appears when you hover near the top of the window. 
+In grid mode, the arrow buttons move forward and back one screen's worth of thumbnails. Click on a thumbnail to select its image. When selected, the image's metadata will be displayed in the metadata drawer, and the semantic map will update to show the position of the current image. Double-click on a thumbnail in order to open the image at full resolution in browse mode.
+
+You may also advance the grid using the slider control that appears when you hover near the top of the window. 
 
 ## Changing Settings
 
@@ -104,9 +106,11 @@ The Gear icon opens the settings dialogue, which allows you to adjust the appear
 <img src="../../img/photomap_settings.png" width="480" alt="PhotoMapAI Settings Dialogue" class="img-hover-zoom">
 
 - **Image Change Interval** -- When the slideshow is running, this controls how long each image will be displayed, in seconds.
-- **Image Browse Order** -- When the slideshow is running, or when you are browsing the album without an active search, this controls the order in which images are displayed. "Random" will present the images in shuffled order, while "Chronological" will show them in order from oldest to newest.
+
+- **Image Browse Order** -- When the slideshow is running, or when you are browsing the album without an active search, this controls the order in which photos are displayed. "Random" will present the images in shuffled order, while "Chronological" will show them in order from oldest to newest.
 - **Grid thumbnail size factor** -- This allows you to change the size of the image thumbnails by scaling them from a maximum of 2.0 (double default size) to a minimum of 0.5 (half default size). Be aware that the grid takes longer to load with small thumbnails.
-- **Max Images in History** -- PhotoMapAI keeps a small number of recently-viewed photos in memory. The others are swapped in and out to disk. This value controls how many images are kept in memory at once. Reduce the size if you are having memory problems or the application seems to be slowing down.
+- **Show Button Labels** -- Disabling this checkbox allows you to turn off the labels on the row of clickable icons at the bottom of the screen for a more minimalist experience.
+- **Confirm before deleting images** -- Disabling this checkbox stops the Trash Can icon from asking for confirmation before permanently deleting the current image from disk.
 - **LocationIQ Map API Key** -- This optional API key lets PhotoMapAI display thumbnail maps and named locations for photos that contain GPS geolocation information. If you wish to enable this feature, get a key for free from [LocationIQ](http://locationiq.com/) and paste it into the field. If not present, PhotoMapAI will display the longitude and latitude of the photo, but not the map or place name.
 - **Album** -- This pulldown menu lists all the albums you have configured and allows you to switch among them. Note that when you switch albums, the settings dialogue will close immediately and the window will display the first photo from the selected albums.
 - **Manage Albums** -- This green button will open the [Album Manager](albums.md), where you can create, edit and delete albums.
