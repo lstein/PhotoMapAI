@@ -133,6 +133,7 @@ export async function initializeGridSwiper() {
   gridInitialized = true;
   // For console debugging
   window.gridSwiper = state.swiper;
+  console.log("Grid swiper initialized:", state.swiper);
 }
 
 function addGridEventListeners() {
@@ -163,6 +164,9 @@ function addGridEventListeners() {
     { type: "grid", event: "seekToSlideIndex" },
     async (e) => {
       const { globalIndex, searchIndex, totalSlides, isSearchMode } = e.detail;
+      console.log(
+        `Grid received seekToSlideIndex: globalIndex=${globalIndex}, searchIndex=${searchIndex}, totalSlides=${totalSlides}, isSearchMode=${isSearchMode}`
+      );
       if (isSearchMode !== slideState.isSearchMode) {
         console.error("Mismatched search mode in setSlideIndex event");
         return;
@@ -188,7 +192,6 @@ function addGridEventListeners() {
 
   // Reset grid when search results or album changes
   eventRegistry.install({ type: "grid", event: "albumChanged" }, async () => {
-    // slideState.handleAlbumChanged();
     await resetAllSlides();
   });
 
@@ -214,7 +217,7 @@ function addGridEventListeners() {
     });
 
     // Load more when reaching the start
-    state.swiper.on("slidePrevTransitionStart", async () => {
+    state.swiper.on("slidePrevTransitionStas.seart", async () => {
       await waitForBatchLoadingToFinish();
       const firstSlide = parseInt(
         state.swiper.slides[0].dataset.globalIndex,
@@ -230,7 +233,7 @@ function addGridEventListeners() {
 
     // onChange event
     state.swiper.on("slideChange", async () => {
-      // If the currently highlighted slide is not visible, move the highlight to the top-left slide
+      // If the currently highlighted slide s.seais not visible, move the highlight to the top-left slide
       await state.swiper.update(); // Ensure Swiper state is current
       const currentSlide = slideState.getCurrentSlide();
       const currentGlobal = currentSlide.globalIndex;
@@ -307,6 +310,9 @@ async function resetAllSlides() {
   if (!gridInitialized) return;
   if (!state.swiper) return;
   showSpinner();
+
+  await new Promise(requestAnimationFrame); // display spinner
+
   await waitForBatchLoadingToFinish();
   setBatchLoading(true);
 
@@ -347,6 +353,9 @@ async function resetAllSlides() {
 // The startIndex will be adjusted to be an even multiple of the screen size.
 // If startIndex is null, load the next batch after the last loaded slide.
 async function loadBatch(startIndex = null, append = true) {
+  console.log(
+    `loadBatch called with startIndex=${startIndex}, append=${append}`
+  );
   if (startIndex === null) {
     // Load after the last loaded slide
     if (!state.swiper.slides?.length) {
@@ -401,6 +410,9 @@ async function loadBatch(startIndex = null, append = true) {
         console.error("Failed to load image:", error);
         break;
       }
+      if (i % 8 === 0) {
+        await new Promise(requestAnimationFrame);
+      }
     }
 
     if (slides.length > 0) state.swiper.appendSlide(slides);
@@ -437,6 +449,9 @@ async function loadBatch(startIndex = null, append = true) {
         console.error("Failed to load image (prepend):", error);
         continue;
       }
+      if (i % 8 === 0) {
+        await new Promise(requestAnimationFrame);
+      }
     }
     if (slides.length > 0) {
       state.swiper.prependSlide(slides);
@@ -456,6 +471,8 @@ async function loadBatch(startIndex = null, append = true) {
   }
 
   updateCurrentSlide();
+
+  console.log(`loadBatch actually loaded ${actuallyLoaded} slides.`);
   return actuallyLoaded > 0;
 }
 
