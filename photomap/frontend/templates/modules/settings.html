@@ -53,6 +53,18 @@
     </div>
 
     <!-- Settings rows -->
+    <div class="setting-row">
+      <label for="gridThumbSizeFactor">Grid thumbnail size factor:</label>
+      <input
+        type="number"
+        id="gridThumbSizeFactor"
+        min="0.5"
+        max="2.0"
+        step="0.05"
+        value="1.0"
+        style="width: 70px"
+      />
+    </div>
     <!-- Row for control panel text visibility -->
     <div class="setting-row">
       <label for="showControlPanelTextCheckbox">Show Button Labels:</label>
@@ -84,10 +96,7 @@
         "
       >
         Optional: Enables location names and maps in EXIF data.
-        <a
-          href="https://locationiq.com"
-          target="_blank"
-          style="color: #007bff"
+        <a href="https://locationiq.com" target="_blank" style="color: #007bff"
           >Get a free key</a
         >
       </small>

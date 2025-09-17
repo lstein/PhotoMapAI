@@ -28,13 +28,14 @@ const GRID_MAX_SCREENS = 6; // Keep up to this many screens in memory (tweakable
 // Consolidated geometry calculation function
 function calculateGridGeometry() {
   const gridContainer = document.querySelector(".swiper");
-  const availableWidth = gridContainer.offsetWidth - 24; // Account for padding
-  const availableHeight = window.innerHeight - 120; // Account for header/footer
+  const availableWidth = gridContainer.offsetWidth - 24;
+  const availableHeight = window.innerHeight - 120;
 
-  // Target square tile size (reduced)
-  const targetTileSize = 140; // Base tile size (was 200)
-  const minTileSize = 100; // allow smaller tiles
-  const maxTileSize = 200; // cap max size lower than before
+  // Use the factor from state
+  const factor = state.gridThumbSizeFactor || 1.0;
+  const targetTileSize = 150 * factor;
+  const minTileSize = 75; // allow smaller tiles
+  const maxTileSize = 300; // cap max size lower than before
 
   // Calculate columns and rows to fit available space with square tiles
   const columns = Math.max(2, Math.floor(availableWidth / targetTileSize));
@@ -156,6 +157,16 @@ function addGridEventListeners() {
     { type: "grid", event: "slideChanged" },
     async function (e) {
       // nothing for now
+    }
+  );
+
+  // Handle changes to tile size factor
+  // Listen for gridThumbSizeFactorChanged event to reinitialize grid
+  eventRegistry.install(
+    { type: "grid", event: "gridThumbSizeFactorChanged" },
+    async function () {
+      await initializeGridSwiper();
+      await resetAllSlides();
     }
   );
 

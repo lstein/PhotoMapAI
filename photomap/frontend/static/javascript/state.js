@@ -17,6 +17,7 @@ export const state = {
   availableAlbums: [], // List of available albums
   dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
   suppressDeleteConfirm: false,
+  gridThumbSizeFactor: 1.0,
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -88,6 +89,11 @@ export async function restoreFromLocalStorage() {
   if (storedSuppressDeleteConfirm !== null) {
     state.suppressDeleteConfirm = storedSuppressDeleteConfirm === "true";
   }
+
+  const storedGridThumbSizeFactor = localStorage.getItem("gridThumbSizeFactor");
+  if (storedGridThumbSizeFactor !== null) {
+    state.gridThumbSizeFactor = parseFloat(storedGridThumbSizeFactor);
+  }
 }
 
 // Save state to local storage
@@ -102,6 +108,7 @@ export function saveSettingsToLocalStorage() {
   );
   localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
   localStorage.setItem("suppressDeleteConfirm", state.suppressDeleteConfirm ? "true" : "false");
+  localStorage.setItem("gridThumbSizeFactor", state.gridThumbSizeFactor);
 }
 
 export async function setAlbum(newAlbumKey, force = false) {

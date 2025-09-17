@@ -37,6 +37,7 @@ function cacheElements() {
       "showControlPanelTextCheckbox"
     ),
     confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
+    gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
   };
 }
 
@@ -159,6 +160,10 @@ async function populateModalFields() {
   // Set the confirm delete checkbox state
   if (elements.confirmDeleteCheckbox)
     elements.confirmDeleteCheckbox.checked = !state.suppressDeleteConfirm;
+
+  // Set the grid thumbnail size factor spinner value
+  if (elements.gridThumbSizeFactor)
+    elements.gridThumbSizeFactor.value = state.gridThumbSizeFactor;
 
   await loadLocationIQApiKey();
 }
@@ -288,6 +293,25 @@ function setupLocationIQApiKeyControl() {
   });
 }
 
+function setupGridThumbSizeFactorControl() {
+  if (!elements.gridThumbSizeFactor) return;
+  let debounceTimeout = null;
+  elements.gridThumbSizeFactor.addEventListener("input", function () {
+    clearTimeout(debounceTimeout);
+    debounceTimeout = setTimeout(() => {
+      let val = parseFloat(this.value);
+      if (isNaN(val) || val < 0.5) val = 0.5;
+      if (val > 2.0) val = 2.0;
+      state.gridThumbSizeFactor = val;
+      saveSettingsToLocalStorage();
+      // Notify grid to reinitialize
+      window.dispatchEvent(
+        new CustomEvent("gridThumbSizeFactorChanged", { detail: { factor: val } })
+      );
+    }, 300); // 300ms debounce
+  });
+}
+
 // MAIN INITIALIZATION FUNCTION
 async function initializeSettings() {
   cacheElements();
@@ -302,6 +326,7 @@ async function initializeSettings() {
   setupAlbumSelector();
   setupLocationIQApiKeyControl();
   setupConfirmDeleteControl();
+  setupGridThumbSizeFactorControl();
 }
 
 // Initialize settings from the server and local storage
