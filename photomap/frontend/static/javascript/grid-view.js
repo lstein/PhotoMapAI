@@ -410,6 +410,9 @@ async function loadBatch(startIndex = null, append = true) {
         console.error("Failed to load image:", error);
         break;
       }
+      if (i % 8 === 0) {
+        await new Promise(requestAnimationFrame);
+      }
     }
 
     if (slides.length > 0) state.swiper.appendSlide(slides);
@@ -445,6 +448,9 @@ async function loadBatch(startIndex = null, append = true) {
       } catch (error) {
         console.error("Failed to load image (prepend):", error);
         continue;
+      }
+      if (i % 8 === 0) {
+        await new Promise(requestAnimationFrame);
       }
     }
     if (slides.length > 0) {
