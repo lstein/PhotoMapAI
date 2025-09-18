@@ -70,8 +70,10 @@
     {% include "modules/seek_slider.html" %} 
     {% include "modules/swiper.html" %} 
     {% include "modules/metadata-drawer.html" %} 
-    {% include "modules/control-panel.html" %}
-    {% include "modules/search-panel.html" %} 
+    <div id="panelStackContainer">
+      {% include "modules/search-panel.html" %} 
+      {% include "modules/control-panel.html" %}
+    </div>
     {% include "modules/search.html" %} 
     {% include "modules/umap-floating-window.html" %} 
     {% include "modules/settings.html" %}
