@@ -247,10 +247,6 @@ class SlideStateManager {
     this.currentGlobalIndex = 0;
     this.currentSearchIndex = 0;
     this.exitSearchMode();
-    console.log(
-      "Album changed, setting totalAlbumImages to",
-      detail.totalImages
-    );
     this.totalAlbumImages = detail.totalImages; // Update from state
   }
 
@@ -266,7 +262,6 @@ class SlideStateManager {
 
   seekToSlideIndex() {
     const slideInfo = this.getCurrentSlide();
-    console.log("Dispatching seekToSlideIndex event:", slideInfo);
     window.dispatchEvent(
       new CustomEvent("seekToSlideIndex", {
         detail: slideInfo,
