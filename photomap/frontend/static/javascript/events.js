@@ -18,8 +18,7 @@ import { saveSettingsToLocalStorage, state } from "./state.js";
 import {
   initializeSingleSwiper,
   pauseSlideshow,
-  resumeSlideshow,
-  updateSlideshowIcon,
+  resumeSlideshow
 } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
@@ -89,16 +88,6 @@ function handleFullscreenChange() {
   );
 }
 
-// Toggle slideshow controls
-function toggleSlideshow() {
-  if (state.swiper?.autoplay?.running) {
-    state.swiper.autoplay.stop();
-  } else if (state.swiper?.autoplay) {
-    state.swiper.autoplay.start();
-  }
-  updateSlideshowIcon();
-}
-
 // Toggle the play/pause state using the spacebar
 function handleSpacebarToggle(e) {
   e.preventDefault();
@@ -131,28 +120,31 @@ function handleCopyText() {
     navigator.clipboard &&
     typeof navigator.clipboard.writeText === "function"
   ) {
-    navigator.clipboard.writeText(filepath).then(() => {
-      // Find the icon inside the copyTextBtn
-      const btn = document.getElementById("copyTextBtn");
-      if (btn) {
-        // Try to find an SVG or icon inside the button
-        const icon = btn.querySelector("svg, .icon, i") || btn;
-        const originalIconHTML = icon.innerHTML;
-        // SVG for a checkbox with a checkmark
-        const checkSVG = `
+    navigator.clipboard
+      .writeText(filepath)
+      .then(() => {
+        // Find the icon inside the copyTextBtn
+        const btn = document.getElementById("copyTextBtn");
+        if (btn) {
+          // Try to find an SVG or icon inside the button
+          const icon = btn.querySelector("svg, .icon, i") || btn;
+          const originalIconHTML = icon.innerHTML;
+          // SVG for a checkbox with a checkmark
+          const checkSVG = `
           <svg width="18" height="18" viewBox="0 0 18 18">
             <rect x="2" y="2" width="14" height="14" rx="3" fill="#faea0e" stroke="#222" stroke-width="2"/>
             <polyline points="5,10 8,13 13,6" fill="none" stroke="#222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         `;
-        icon.innerHTML = checkSVG;
-        setTimeout(() => {
-          icon.innerHTML = originalIconHTML;
-        }, 1000);
-      }
-    }).catch((err) => {
-      alert("Failed to copy text: " + err);
-    });
+          icon.innerHTML = checkSVG;
+          setTimeout(() => {
+            icon.innerHTML = originalIconHTML;
+          }, 1000);
+        }
+      })
+      .catch((err) => {
+        alert("Failed to copy text: " + err);
+      });
   } else {
     alert("Clipboard API not available. Please copy manually.");
   }
@@ -423,6 +415,7 @@ export async function toggleSlideshowWithIndicator() {
     showPlayPauseIndicator(false); // Show pause indicator
   } else {
     if (state.gridViewActive) await toggleGridSwiperView(false); // Switch to swiper mode if in grid mode
+    if (isUmapFullscreen()) toggleUmapWindow(false); // Close umap if open
     resumeSlideshow();
     showPlayPauseIndicator(true); // Show play indicator
   }

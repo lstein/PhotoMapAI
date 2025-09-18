@@ -111,3 +111,57 @@
   display: none !important;
 }
 
+@media (max-width: 600px) {
+  #panelStackContainer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    z-index: 4000;
+    pointer-events: none;
+  }
+
+  #searchPanel,
+  #controlPanel {
+    position: static !important;
+    width: 100vw;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+    pointer-events: auto;
+    /* Remove any max-width if present */
+  }
+
+  #searchPanel {
+    order: 0;
+    border-bottom: 1px solid #222;
+  }
+
+  #controlPanel {
+    order: 1;
+    border-top: 1px solid #222;
+  }
+
+  /* Keep icons in a horizontal row */
+  .control-icons-row,
+  .search-icons-row {
+    flex-direction: row !important;
+    align-items: center;
+    justify-content: center;
+    gap: 1em;
+    width: 100%;
+  }
+
+  #controlPanel button,
+  #searchPanel button {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    font-size: 2em;
+  }
+}
