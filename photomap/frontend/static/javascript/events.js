@@ -502,7 +502,6 @@ export async function toggleGridSwiperView(gridView = null) {
   }
 
   if (state.gridViewActive) {
-    console.log("Switching to grid view");
     await initializeGridSwiper();
   } else {
     await initializeSingleSwiper();
