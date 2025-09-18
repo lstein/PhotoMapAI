@@ -50,6 +50,7 @@
       </button>
       <div class="button-label">Settings</div>
     </div>
+    {% if not album_locked %}
     <div class="control-icon-container">
       <button id="deleteCurrentFileBtn" title="Delete image">
         <svg
@@ -72,6 +73,7 @@
       </button>
       <div class="button-label">Delete</div>
     </div>
+    {% endif %}
     <div class="control-icon-container">
       <button id="fullscreenBtn" title="Fullscreen">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="#fff">
