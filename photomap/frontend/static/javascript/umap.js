@@ -1158,8 +1158,13 @@ function setUmapWindowSize(sizeKey) {
   const contentDiv = document.getElementById("umapContent");
   const landmarkCheckbox = document.getElementById("umapShowLandmarks");
   const hoverThumbCheckbox = document.getElementById("umapShowHoverThumbnails");
+  const controlsDiv = document.getElementById("umapControls");
 
   win.style.opacity = "0.75"; // default opacity for all sizes
+  contentDiv.style.position = "relative";
+  controlsDiv.style.position = "";
+  controlsDiv.style.bottom = "";
+  controlsDiv.style.height = "";
 
   if (sizeKey === "shaded") {
     // Do not change landmarksVisible or checkbox
@@ -1173,18 +1178,27 @@ function setUmapWindowSize(sizeKey) {
     plotDiv.style.width = currentWidth;
     plotDiv.style.height = "0px";
   } else if (sizeKey === "fullscreen") {
+    const narrowScreen = window.innerWidth <= 600;
     if (contentDiv) contentDiv.style.display = "block";
     const controlsHeight = 180;
     win.style.left = "0px";
     win.style.top = "0px";
     win.style.width = window.innerWidth + "px";
-    win.style.height = window.innerHeight + "px";
+    win.style.height =
+      (narrowScreen ? window.innerHeight - 120 : window.innerHeight) + "px";
     win.style.minHeight = "200px";
     win.style.maxWidth = "100vw";
     win.style.maxHeight = "100vh";
     win.style.opacity = "1";
     plotDiv.style.width = window.innerWidth - 32 + "px";
     plotDiv.style.height = window.innerHeight - controlsHeight + "px";
+    if (narrowScreen) {
+      // Change positioning of the controls
+      contentDiv.style.position = "relative";
+      controlsDiv.style.position = "absolute";
+      controlsDiv.style.bottom = "60px";
+      controlsDiv.style.height = "60px";
+    }
 
     Plotly.relayout(plotDiv, {
       width: window.innerWidth - 32,

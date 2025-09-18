@@ -128,61 +128,68 @@
     <!-- Plotly Plot -->
     <div id="umapPlot"></div>
 
-    <!-- Controls Row: EPS spinner and Color Mode -->
-    <div
-      style="
-        display: flex;
-        flex-direction: row;
-        gap: 24px;
-        justify-content: center;
-        align-items: flex-start;
-        margin-top: 12px;
-      "
-    >
-      <!-- EPS Spinner Container -->
-      <div id="umapEpsContainer" style="display: none; padding: 8px">
-        <label for="umapEpsSpinner">Cluster Strength</label>
-        <input
-          type="number"
-          id="umapEpsSpinner"
-          min="0.01"
-          max="1.0"
-          step="0.01"
-          value="0.1"
-          style="width: 60px"
-        />
-      </div>
-
-      <!-- Colorization Mode Controls (vertical column) -->
+    <div id="umapControls">
+      <!-- Controls Row: EPS spinner and Color Mode -->
       <div
-        id="umapColorModeContainer"
-        style="display: flex; flex-direction: column; margin-bottom: 12px; padding-bottom:20px"
+        style="
+          display: flex;
+          flex-direction: row;
+          gap: 24px;
+          justify-content: center;
+          align-items: flex-start;
+          margin-top: 12px;
+        "
       >
-        <label style="display: flex; align-items: center; gap: 8px">
+        <!-- EPS Spinner Container -->
+        <div id="umapEpsContainer" style="display: none; padding: 8px">
+          <label for="umapEpsSpinner">Cluster Strength</label>
           <input
-            type="checkbox"
-            id="umapShowLandmarks"
-            style="margin-right: 6px"
+            type="number"
+            id="umapEpsSpinner"
+            min="0.01"
+            max="1.0"
+            step="0.01"
+            value="0.1"
+            style="width: 60px"
           />
-          Show landmarks
-        </label>
-        <label style="display: flex; align-items: center; gap: 8px">
-          <input
-            type="checkbox"
-            id="umapShowHoverThumbnails"
-            checked
-            style="margin-right: 6px"
-          />
-          Show hover thumbnails
-        </label>
-        <label style="display: flex; align-items: center; gap: 8px">
-          <input
-            type="checkbox"
-            id="umapHighlightSelection"
-            style="margin-right: 6px"
-          />
-          Highlight selection
-        </label>
+        </div>
+
+        <!-- Colorization Mode Controls (vertical column) -->
+        <div
+          id="umapColorModeContainer"
+          style="
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 12px;
+            padding-bottom: 20px;
+          "
+        >
+          <label style="display: flex; align-items: center; gap: 8px">
+            <input
+              type="checkbox"
+              id="umapShowLandmarks"
+              style="margin-right: 6px"
+            />
+            Show landmarks
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px">
+            <input
+              type="checkbox"
+              id="umapShowHoverThumbnails"
+              checked
+              style="margin-right: 6px"
+            />
+            Show hover thumbnails
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px">
+            <input
+              type="checkbox"
+              id="umapHighlightSelection"
+              style="margin-right: 6px"
+            />
+            Highlight selection
+          </label>
+        </div>
       </div>
     </div>
   </div>
