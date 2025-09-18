@@ -39,10 +39,6 @@ export function initializeFromServer() {
     setMode(window.slideshowConfig.mode);
   }
 
-  if (window.slideshowConfig?.highWaterMark !== null) {
-    setHighWaterMark(window.slideshowConfig.highWaterMark);
-  }
-
   if (window.slideshowConfig?.album !== null) {
     setAlbum(window.slideshowConfig.album);
   }
@@ -50,10 +46,6 @@ export function initializeFromServer() {
 
 // Restore state from local storage
 export async function restoreFromLocalStorage() {
-  const storedHighWaterMark = localStorage.getItem("highWaterMark");
-  if (storedHighWaterMark !== null)
-    state.highWaterMark = parseInt(storedHighWaterMark, 10);
-
   const storedCurrentDelay = localStorage.getItem("currentDelay");
   if (storedCurrentDelay !== null)
     state.currentDelay = parseInt(storedCurrentDelay, 10);
@@ -98,7 +90,6 @@ export async function restoreFromLocalStorage() {
 
 // Save state to local storage
 export function saveSettingsToLocalStorage() {
-  localStorage.setItem("highWaterMark", state.highWaterMark);
   localStorage.setItem("currentDelay", state.currentDelay);
   localStorage.setItem("mode", state.mode);
   localStorage.setItem("album", state.album);
@@ -149,18 +140,6 @@ export function setShowControlPanelText(showText) {
     window.dispatchEvent(
       new CustomEvent("settingsUpdated", {
         detail: { showControlPanelText: showText },
-      })
-    );
-  }
-}
-
-export function setHighWaterMark(newHighWaterMark) {
-  if (state.highWaterMark !== newHighWaterMark) {
-    state.highWaterMark = newHighWaterMark;
-    localStorage.setItem("highWaterMark", newHighWaterMark);
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", {
-        detail: { highWaterMark: newHighWaterMark },
       })
     );
   }

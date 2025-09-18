@@ -371,13 +371,9 @@ export async function addSlideByIndex(
     );
     if (prepend) {
       state.swiper.prependSlide(slide);
-      // setTimeout(() => enforceHighWaterMark(true), 500); // true = remove from end
     } else {
       state.swiper.appendSlide(slide);
-      // setTimeout(() => enforceHighWaterMark(false), 500); // false = remove from beginning
     }
-    // Delay high water mark enforcement to allow transition to finish
-    // setTimeout(() => enforceHighWaterMark(), 500);
   } catch (error) {
     console.error("Failed to add new slide:", error);
     alert(`Failed to add new slide: ${error.message}`);
