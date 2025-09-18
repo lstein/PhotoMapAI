@@ -71,10 +71,13 @@
       <input type="checkbox" id="showControlPanelTextCheckbox" />
     </div>
 
+    {% if not album_locked %}
     <div class="setting-row">
       <label for="confirmDeleteCheckbox">Confirm before deleting images:</label>
       <input type="checkbox" id="confirmDeleteCheckbox" />
     </div>
+    {% endif %}
+
 
     <!-- Input for the LocationIQ API Key -->
     {% if not album_locked %}
