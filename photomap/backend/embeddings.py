@@ -478,7 +478,7 @@ class Embeddings(BaseModel):
             progress_tracker.set_error(album_key, str(e))
             raise
 
-        progress_tracker.start_operation(album_key, total_images, "umapping")
+        progress_tracker.start_operation(album_key, total_images, "mapping")
         try:
             umap_embeddings = await asyncio.to_thread(
                 self.create_umap_index, result.embeddings
@@ -669,7 +669,7 @@ class Embeddings(BaseModel):
             self._save_embeddings(combined_result)
 
             # Rebuild the umap index
-            progress_tracker.start_operation(album_key, total_new_images, "umapping")
+            progress_tracker.start_operation(album_key, total_new_images, "mapping")
             new_result.umap_embeddings = await asyncio.to_thread(
                 lambda: self.umap_embeddings
             )

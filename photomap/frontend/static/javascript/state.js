@@ -1,6 +1,6 @@
 // state.js
 // This file manages the state of the application, including slide management and metadata handling.
-import { albumManager } from "./album.js";
+import { albumManager } from "./album-manager.js";
 import { getIndexMetadata } from "./index.js";
 import { switchAlbum } from "./settings.js";
 

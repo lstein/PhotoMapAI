@@ -1,6 +1,6 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
-import { checkAlbumIndex } from "./album.js";
+import { checkAlbumIndex } from "./album-manager.js";
 import { eventRegistry } from "./event-registry.js";
 import { initializeGridSwiper } from "./grid-view.js";
 import { deleteImage, getIndexMetadata } from "./index.js";

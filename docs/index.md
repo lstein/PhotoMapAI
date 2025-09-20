@@ -34,7 +34,7 @@ PhotoMapAI's unique feature is its ability to identify thematically similar imag
 
 In this map, each image in the photo collection is represented as a dot. The colors distinguish different clusters of related images. You can zoom in and out of the map and pan around it. Hover the mouse over a dot in order to see a preview thumbnail of its image, or click on a cluster to view its contents at full resolution.
 
-You can move the semantic map around, shrink it down in size, or hide it altogether. As you browser your photo collection, a yellow dot marker will highlight the location of the current image in the map.
+You can move the semantic map around, shrink it down in size, or hide it altogether. As you browse your photo collection, a yellow dot marker will highlight the location of the current image in the map.
 
 ## Text and Image Similarity Search
 

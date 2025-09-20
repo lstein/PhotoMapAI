@@ -1,6 +1,6 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
-import { albumManager } from "./album.js";
+import { albumManager } from "./album-manager.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex } from "./slide-state.js";
 import { state } from "./state.js";
