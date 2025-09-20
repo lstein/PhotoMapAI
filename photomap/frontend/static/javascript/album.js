@@ -679,36 +679,10 @@ export class AlbumManager {
 
     // Populate edit form
     editForm.querySelector(".edit-album-name").value = album.name;
-    editForm.querySelector(".edit-album-description").value =
-      album.description || "";
-    const pathsField = editForm.querySelector(".edit-album-paths");
-    pathsField.value = (album.image_paths || []).join("\n");
-
-    // Enable drag-and-drop for file/folder paths
-    pathsField.addEventListener("dragover", function (e) {
-      e.preventDefault();
-    });
-    pathsField.addEventListener("drop", function (e) {
-      e.preventDefault();
-      if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-        for (let i = 0; i < e.dataTransfer.items.length; i++) {
-          const item = e.dataTransfer.items[i];
-          if (item.kind === "file") {
-            const file = item.getAsFile();
-            // Unfortunately most browsers disable file.path for security reasons
-            const path = file.path || file.name;
-            // Append to textarea, with newline
-            if (
-              pathsField.value.length > 0 &&
-              !pathsField.value.endsWith("\n")
-            ) {
-              pathsField.value += "\n";
-            }
-            pathsField.value += path + "\n";
-          }
-        }
-      }
-    });
+    editForm.querySelector(".edit-album-description").value = album.description || "";
+    
+    // Initialize the dynamic path fields for THIS specific card
+    this.initializePathFields(album.image_paths || [], cardElement);
 
     // Show edit form
     albumInfo.style.display = "none";
@@ -725,20 +699,134 @@ export class AlbumManager {
     };
   }
 
+  // Path field methods
+  createPathField(path = "", cardElement) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "album-path-row";
+    wrapper.style.cssText = `
+      display: flex;
+      align-items: center;
+      margin-bottom: 0.5em;
+      gap: 0.5em;
+    `;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "album-path-input";
+    input.value = path;
+    input.placeholder = "Enter directory path or use folder icon";
+    input.style.cssText = `
+      flex: 1;
+      background: #222;
+      color: #faea0e;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 8px;
+    `;
+
+    console.log("Creating path field with path:", path);
+
+    const folderBtn = document.createElement("button");
+    folderBtn.type = "button";
+    folderBtn.className = "open-folder-btn";
+    folderBtn.title = "Select folder";
+    folderBtn.innerHTML = "📁";
+    folderBtn.style.cssText = `
+      background: none;
+      border: none;
+      font-size: 1.2em;
+      cursor: pointer;
+      padding: 4px;
+    `;
+
+    const trashBtn = document.createElement("button");
+    trashBtn.type = "button";
+    trashBtn.className = "remove-path-btn";
+    trashBtn.title = "Remove path";
+    trashBtn.innerHTML = "🗑️";
+    trashBtn.style.cssText = `
+      background: none;
+      border: none;
+      font-size: 1.2em;
+      cursor: pointer;
+      padding: 4px;
+      display: ${path ? "inline-block" : "none"};
+    `;
+
+    // Open directory picker on folder button click
+    folderBtn.onclick = () => {
+      // Get the current path from the input field (in case user typed something)
+      const currentPath = input.value.trim();
+      
+      this.openSimpleDirectoryPicker((selectedPath) => {
+        input.value = selectedPath;
+        trashBtn.style.display = "inline-block";
+        // If this is the last row, add a new empty row
+        if (wrapper.nextElementSibling === null) {
+          this.addPathField("", cardElement);
+        }
+      }, currentPath); // Pass the current path as starting location
+    };
+
+    // Remove path row on trash button click
+    trashBtn.onclick = () => {
+      wrapper.remove();
+      // Ensure there's always at least one empty field for THIS card
+      const container = cardElement.querySelector(".edit-album-paths-container");
+      if (container && container.children.length === 0) {
+        this.addPathField("", cardElement);
+      }
+    };
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(folderBtn);
+    wrapper.appendChild(trashBtn);
+
+    return wrapper;
+  }
+
+  addPathField(path = "", cardElement) {
+    const container = cardElement.querySelector(".edit-album-paths-container");
+    if (container) {
+      console.log("Adding path field with path:", path);
+      const row = this.createPathField(path, cardElement);
+      container.appendChild(row);
+    }
+  }
+
+  initializePathFields(paths, cardElement) {
+    const container = cardElement.querySelector(".edit-album-paths-container");
+    if (container) {
+      container.innerHTML = "";
+      // Add existing paths
+      if (paths && paths.length > 0) {
+        console.log("Initializing path fields with:", paths);
+        paths.forEach((path) => this.addPathField(path, cardElement));
+      }
+      // Always ensure there's at least one empty field at the end
+      this.addPathField("", cardElement);
+    }
+  }
+
+  collectPathFields(cardElement) {
+    const inputs = cardElement.querySelectorAll(
+      ".edit-album-paths-container .album-path-input"
+    );
+    return Array.from(inputs)
+      .map((input) => input.value.trim())
+      .filter((path) => path.length > 0);
+  }
+
   async saveAlbumChanges(cardElement, album) {
     const editForm = cardElement.querySelector(".edit-form");
 
-    const updatedPaths = editForm
-      .querySelector(".edit-album-paths")
-      .value.split("\n")
-      .map((path) => path.trim())
-      .filter((path) => path.length > 0);
+    // Collect paths from dynamic fields for THIS specific card
+    const updatedPaths = this.collectPathFields(cardElement);
 
     // Always set index path based on first path
-    const indexPath =
-      updatedPaths.length > 0
-        ? `${updatedPaths[0]}/photomap_index/embeddings.npz`
-        : "";
+    const indexPath = updatedPaths.length > 0 
+      ? `${updatedPaths[0]}/photomap_index/embeddings.npz` 
+      : "";
 
     const updatedAlbum = {
       key: album.key,
@@ -1201,6 +1289,216 @@ export class AlbumManager {
     // Find the album with the matching key
     const album = albums.find((a) => a.key === albumKey);
     return album || null;
+  }
+
+  // Directory picker methods
+  async getHomeDirectory() {
+    try {
+      const response = await fetch('filetree/home');
+      const data = await response.json();
+      return data.homePath || "";
+    } catch (error) {
+      console.error("Error getting home directory:", error);
+      return "";
+    }
+  }
+
+  async createSimpleDirectoryPicker(callback, startingPath = "") {
+    // If no starting path provided, use home directory
+    if (!startingPath) {
+      startingPath = await this.getHomeDirectory();
+    }
+    
+    const modal = document.createElement("div");
+    modal.className = "directory-picker-modal";
+    modal.innerHTML = `
+      <div class="directory-picker-content">
+        <h3>Select Directory</h3>
+        
+        <!-- Current path display -->
+        <div class="current-path-display">
+          <label>Current directory to add:</label>
+          <input type="text" id="currentPathField" readonly />
+        </div>
+        
+        <!-- Hidden files checkbox -->
+        <div class="show-hidden-container">
+          <label>
+            <input type="checkbox" id="showHiddenCheckbox" />
+            Show hidden directories (starting with .)
+          </label>
+        </div>
+        
+        <div class="directory-tree" id="directoryTree"></div>
+        <div class="directory-picker-buttons">
+          <button id="addDirBtn">Add</button>
+          <button id="cancelDirBtn">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Initialize with the starting path (now defaults to home)
+    let currentPath = startingPath || "";
+    let selectedPath = null;
+    let showHidden = false;
+    
+    const addBtn = modal.querySelector("#addDirBtn");
+    const cancelBtn = modal.querySelector("#cancelDirBtn");
+    const treeDiv = modal.querySelector("#directoryTree");
+    const currentPathField = modal.querySelector("#currentPathField");
+    const showHiddenCheckbox = modal.querySelector("#showHiddenCheckbox");
+
+    // Update current path display
+    const updateCurrentPathDisplay = () => {
+      const pathToShow = selectedPath !== null ? selectedPath : currentPath;
+      currentPathField.value = pathToShow || "/";
+    };
+
+    // Define the navigation handler function
+    const handleNavigation = (path, isDoubleClick) => {
+      console.log("handleNavigation called:", { path, isDoubleClick, currentPath, selectedPath });
+      
+      if (isDoubleClick) {
+        // Double-click enters directory
+        currentPath = path;
+        selectedPath = null;
+        console.log("Entering directory:", path);
+        // Clear any previous selection highlighting
+        treeDiv.querySelectorAll('.directory-item').forEach(item => {
+          item.classList.remove('selected');
+        });
+        this.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
+      } else {
+        // Single-click selects directory
+        selectedPath = path;
+        console.log("Selected directory:", path);
+      }
+      updateCurrentPathDisplay();
+    };
+
+    // Handle hidden files checkbox
+    showHiddenCheckbox.onchange = () => {
+      showHidden = showHiddenCheckbox.checked;
+      selectedPath = null; // Clear selection when refreshing view
+      this.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
+      updateCurrentPathDisplay();
+    };
+
+    // Load initial directory - start at the provided path
+    console.log("Starting directory picker at path:", currentPath);
+    this.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
+    updateCurrentPathDisplay();
+
+    addBtn.onclick = () => {
+      const pathToAdd = selectedPath !== null ? selectedPath : currentPath;
+      callback(pathToAdd);
+      modal.remove();
+    };
+
+    cancelBtn.onclick = () => {
+      modal.remove();
+    };
+  }
+
+  async loadDirectories(path, container, showHidden, onSelect) {
+    try {
+      const response = await fetch(
+        `filetree/directories?path=${encodeURIComponent(path)}&show_hidden=${showHidden}`
+      );
+      const data = await response.json();
+
+      container.innerHTML = "";
+
+      // Add directories
+      data.directories.forEach((dir) => {
+        const dirElement = document.createElement("div");
+        dirElement.className = "directory-item";
+
+        // Use different icons for drives vs folders
+        const icon = dir.name.includes("Drive")
+          ? "💽"
+          : dir.hasChildren
+          ? "📂"
+          : "📁";
+
+        dirElement.innerHTML = `
+          <span class="dir-icon">${icon}</span>
+          <span class="dir-name">${dir.name}</span>
+        `;
+
+        // Handle single and double clicks
+        let clickTimeout = null;
+        
+        dirElement.onclick = (e) => {
+          e.preventDefault();
+          
+          // Clear any existing timeout
+          if (clickTimeout) {
+            clearTimeout(clickTimeout);
+            clickTimeout = null;
+            
+            // This is a double-click - call onSelect immediately
+            console.log("Double-click detected on:", dir.name);
+            onSelect(dir.path, true);
+            return;
+          }
+          
+          // Set timeout for single-click
+          clickTimeout = setTimeout(() => {
+            clickTimeout = null;
+            // This is a single-click
+            console.log("Single-click detected on:", dir.name);
+            onSelect(dir.path, false);
+            
+            // Update visual selection
+            container.querySelectorAll('.directory-item').forEach(item => {
+              item.classList.remove('selected');
+            });
+            dirElement.classList.add('selected');
+          }, 250); // Increased delay slightly to make double-click easier
+        };
+
+        container.appendChild(dirElement);
+      });
+
+      // Add "Up" button if not at root
+      if (data.currentPath && !data.isRoot) {
+        const upBtn = document.createElement("div");
+        upBtn.className = "directory-item up-button";
+        upBtn.innerHTML = `<span class="dir-icon">⬆️</span><span class="dir-name">.. (Up)</span>`;
+
+        upBtn.onclick = () => {
+          console.log("Up button clicked");
+          // Handle going up differently on Windows vs Unix
+          if (data.currentPath.match(/^[A-Z]:\\?$/)) {
+            // Going up from drive root shows all drives
+            onSelect("", true);
+          } else {
+            // Normal up navigation
+            const isWindows = data.currentPath.includes(":\\");
+            const separator = isWindows ? "\\" : "/";
+            const parentPath = data.currentPath
+              .split(separator)
+              .slice(0, -1)
+              .join(separator);
+            onSelect(parentPath, true);
+          }
+        };
+        
+        // Insert at the beginning
+        container.insertBefore(upBtn, container.firstChild);
+      }
+
+    } catch (error) {
+      console.error("Error loading directories:", error);
+      container.innerHTML = "<div class='error'>Error loading directories</div>";
+    }
+  }
+
+  openSimpleDirectoryPicker(callback, startingPath = "") {
+    this.createSimpleDirectoryPicker(callback, startingPath);
   }
 }
 

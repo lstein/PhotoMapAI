@@ -118,19 +118,3 @@
   font-size: 0.85em;
 }
 
-/* @media (max-width: 700px) {
-  #umapContent {
-    position: relative; /* Make sure the plot container is positioned */
-  }
-  /* #umapControls {
-    position: fixed;
-    height: 60px;
-    bottom: 128px;
-    z-index: 10;
-    background: rgba(24,24,32,0.92);
-    border-radius: 8px;
-    padding: 10px 14px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-    max-width: 90vw;
-  }
-} */ */
