@@ -293,7 +293,7 @@ export class AlbumManager {
     input.type = "text";
     input.className = "album-path-input";
     input.value = path;
-    input.placeholder = "Enter directory path or use folder icon";
+    input.placeholder = "Enter the path to a folder of images, or click the folder icon";
     input.style.cssText = `
       flex: 1;
       background: #222;
