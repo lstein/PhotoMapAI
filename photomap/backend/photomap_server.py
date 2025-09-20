@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from .config import get_config_manager
 from .constants import get_package_resource_path
 from .routers.album import album_router
+from .routers.filetree import filetree_router
 from .routers.index import index_router
 from .routers.search import search_router
 from .routers.umap import umap_router
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="PhotoMapAI")
 
 # Include routers
-for router in [umap_router, search_router, index_router, album_router]:
+for router in [umap_router, search_router, index_router, album_router, filetree_router]:
     app.include_router(router)
 
 # Mount static files and templates

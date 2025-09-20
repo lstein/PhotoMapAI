@@ -137,6 +137,37 @@
   margin-bottom: 0.5em;
 }
 
+.album-path-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5em;
+  gap: 0.5em;
+}
+
+.album-path-input {
+  flex: 1;
+  background: #222;
+  color: #faea0e;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.open-folder-btn,
+.remove-path-btn {
+  background: none;
+  border: none;
+  font-size: 1.2em;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.open-folder-btn:hover,
+.remove-path-btn:hover {
+  background: rgba(250, 234, 14, 0.1);
+  border-radius: 4px;
+}
+
 .indexing-section {
   display: flex;
   flex-direction: column;
@@ -192,6 +223,13 @@
   width: auto;
   min-width: 80px;
   align-self: flex-end;
+}
+
+.album-card.editing {
+  /* background: #353535 !important; */
+  background: #505050 !important;
+  box-shadow: 0 0 8px #222;
+  transition: background 0.2s;
 }
 
 .edit-form {
@@ -352,4 +390,19 @@
   .form-grid {
     grid-template-columns: 1fr;
   }
+}
+
+#addDirBtn {
+  background: #0a6a0a;
+  color: white;
+}
+
+#addDirBtn:hover {
+  background: #0a8a0a;
+}
+
+.edit-album-paths-container.input-error {
+  border: 2px solid #b00020;
+  border-radius: 4px;
+  padding: 4px;
 }

@@ -78,32 +78,36 @@
     </div>
     {% endif %}
 
-
     <!-- Input for the LocationIQ API Key -->
     {% if not album_locked %}
-    <div class="setting-row">
-      <label for="locationiqApiKeyInput">LocationIQ Map API Key:</label>
-      <input
-        type="password"
-        id="locationiqApiKeyInput"
-        placeholder="Enter your LocationIQ API key (optional)"
-        autocomplete="pk-xxxxxxxx"
-      />
-      <small
-        style="
-          color: #666;
-          font-size: 0.85em;
-          display: block;
-          margin-top: 4px;
-          grid-column: 2 / 3;
-        "
-      >
-        Optional: Enables location names and maps in EXIF data.
-        <a href="https://locationiq.com" target="_blank" style="color: #007bff"
-          >Get a free key</a
+    <form>
+      <div class="setting-row">
+        <label for="locationiqApiKeyInput">LocationIQ Map API Key:</label>
+        <input
+          type="password"
+          id="locationiqApiKeyInput"
+          placeholder="Enter your LocationIQ API key (optional)"
+          autocomplete="pk-xxxxxxxx"
+        />
+        <small
+          style="
+            color: #666;
+            font-size: 0.85em;
+            display: block;
+            margin-top: 4px;
+            grid-column: 2 / 3;
+          "
         >
-      </small>
-    </div>
+          Optional: Enables location names and maps in EXIF data.
+          <a
+            href="https://locationiq.com"
+            target="_blank"
+            style="color: #007bff"
+            >Get a free key</a
+          >
+        </small>
+      </div>
+    </form>
     {% endif %}
 
     <!-- Album selection row -->

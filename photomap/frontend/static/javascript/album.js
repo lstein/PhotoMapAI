@@ -1,7 +1,7 @@
 // album-management.js
-import { exitSearchMode } from "./search-ui.js";
-
+import { createSimpleDirectoryPicker } from "./filetree.js"; // Add this import
 import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
+import { exitSearchMode } from "./search-ui.js";
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
 import { setAlbum, state } from "./state.js";
 import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
@@ -11,7 +11,7 @@ export class AlbumManager {
   // Constants
   static POLL_INTERVAL = 1000;
   static PROGRESS_HIDE_DELAY = 3000;
-  static AUTO_INDEX_DELAY = 500;
+  static AUTO_INDEXING_DELAY = 500;
   static SETUP_EXIT_DELAY = 10000;
   static FORM_ANIMATION_DELAY = 300;
   static SCROLL_DELAY = 100;
@@ -36,7 +36,7 @@ export class AlbumManager {
       newAlbumKey: document.getElementById("newAlbumKey"),
       newAlbumName: document.getElementById("newAlbumName"),
       newAlbumDescription: document.getElementById("newAlbumDescription"),
-      newAlbumPaths: document.getElementById("newAlbumPaths"),
+      newAlbumPathsContainer: document.getElementById("newAlbumPathsContainer"), // Changed this line
       albumSelect: document.getElementById("albumSelect"),
       slideshowTitle: document.getElementById("slideshow_title"),
       albumManagementContent: document.querySelector("#albumManagementContent"),
@@ -163,6 +163,9 @@ export class AlbumManager {
           } else if (errorType === "corrupted") {
             errorDiv.textContent =
               "This album's index is corrupted. Indexing will start automatically.";
+          } else if (errorType === "outOfDate") {
+            errorDiv.textContent =
+              "This album's index is out of date. Re-indexing will start automatically.";
           } else {
             errorDiv.textContent =
               "This album's index is corrupted or unreadable. Indexing will start automatically.";
@@ -219,7 +222,7 @@ export class AlbumManager {
       key: this.elements.newAlbumKey.value.trim(),
       name: this.elements.newAlbumName.value.trim(),
       description: this.elements.newAlbumDescription.value.trim(),
-      pathsText: this.elements.newAlbumPaths.value.trim(),
+      paths: this.collectNewAlbumPathFields(), // Changed this line
     };
   }
 
@@ -227,7 +230,11 @@ export class AlbumManager {
     this.elements.newAlbumKey.value = "";
     this.elements.newAlbumName.value = "";
     this.elements.newAlbumDescription.value = "";
-    this.elements.newAlbumPaths.value = "";
+
+    // Clear path fields container
+    if (this.elements.newAlbumPathsContainer) {
+      this.elements.newAlbumPathsContainer.innerHTML = "";
+    }
   }
 
   // Form management
@@ -235,6 +242,9 @@ export class AlbumManager {
     this.addAlbumSection.style.display = "block";
     this.addAlbumSection.classList.remove("slide-up");
     this.addAlbumSection.classList.add("slide-down");
+
+    // Initialize path fields for the add album form
+    this.initializeNewAlbumPathFields();
 
     // Focus on the first input field
     this.elements.newAlbumKey.focus();
@@ -249,6 +259,175 @@ export class AlbumManager {
       this.addAlbumSection.style.display = "none";
       this.clearAddAlbumForm();
     }, AlbumManager.FORM_ANIMATION_DELAY);
+  }
+
+  // New methods for add album form
+  initializeNewAlbumPathFields() {
+    const container = this.elements.newAlbumPathsContainer;
+    if (container) {
+      container.innerHTML = "";
+      // Add one empty field to start
+      this.addNewAlbumPathField("");
+    }
+  }
+
+  addNewAlbumPathField(path = "") {
+    const container = this.elements.newAlbumPathsContainer;
+    if (container) {
+      const row = this.createNewAlbumPathField(path);
+      container.appendChild(row);
+    }
+  }
+
+  _createAlbumPathRow({
+    path = "",
+    onAddRow,
+    onRemoveRow,
+    onFolderPick,
+    container,
+  } = {}) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "album-path-row";
+    wrapper.style.cssText = `
+      display: flex;
+      align-items: center;
+      margin-bottom: 0.5em;
+      gap: 0.5em;
+    `;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "album-path-input";
+    input.value = path;
+    input.placeholder =
+      "Enter the path to a folder of images, or click the folder icon";
+    input.style.cssText = `
+      flex: 1;
+      background: #222;
+      color: #faea0e;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 8px;
+    `;
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        // Show the trash icon when Enter is pressed
+        trashBtn.style.display = "inline-block";
+        // Only add a new row if this is the last row
+        if (
+          wrapper.nextElementSibling === null &&
+          typeof onAddRow === "function"
+        ) {
+          onAddRow();
+        }
+      }
+    });
+
+    const folderBtn = document.createElement("button");
+    folderBtn.type = "button";
+    folderBtn.className = "open-folder-btn";
+    folderBtn.title = "Select folder";
+    folderBtn.innerHTML = "📁";
+    folderBtn.style.cssText = `
+      background: none;
+      border: none;
+      font-size: 1.2em;
+      cursor: pointer;
+      padding: 4px;
+    `;
+
+    folderBtn.onclick = () => {
+      const currentPath = input.value.trim();
+      if (typeof onFolderPick === "function") {
+        onFolderPick(currentPath, (selectedPath) => {
+          input.value = selectedPath;
+          trashBtn.style.display = "inline-block";
+          if (
+            wrapper.nextElementSibling === null &&
+            typeof onAddRow === "function"
+          ) {
+            onAddRow();
+          }
+        });
+      }
+    };
+
+    const trashBtn = document.createElement("button");
+    trashBtn.type = "button";
+    trashBtn.className = "remove-path-btn";
+    trashBtn.title = "Remove path";
+    trashBtn.innerHTML = "🗑️";
+    trashBtn.style.cssText = `
+      background: none;
+      border: none;
+      font-size: 1.2em;
+      cursor: pointer;
+      padding: 4px;
+      display: ${path ? "inline-block" : "none"};
+    `;
+
+    trashBtn.onclick = () => {
+      wrapper.remove();
+      if (typeof onRemoveRow === "function") {
+        onRemoveRow();
+      }
+    };
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(folderBtn);
+    wrapper.appendChild(trashBtn);
+
+    return wrapper;
+  }
+
+  createNewAlbumPathField(path = "") {
+    const container = this.elements.newAlbumPathsContainer;
+    return this._createAlbumPathRow({
+      path,
+      container,
+      onAddRow: () => this.addNewAlbumPathField(""),
+      onRemoveRow: () => {
+        if (container && container.children.length === 0) {
+          this.addNewAlbumPathField("");
+        }
+      },
+      onFolderPick: (currentPath, setPath) => {
+        createSimpleDirectoryPicker((selectedPath) => {
+          setPath(selectedPath);
+        }, currentPath);
+      },
+    });
+  }
+
+  createPathField(path = "", cardElement) {
+    const container = cardElement.querySelector(".edit-album-paths-container");
+    return this._createAlbumPathRow({
+      path,
+      container,
+      onAddRow: () => this.addPathField("", cardElement),
+      onRemoveRow: () => {
+        if (container && container.children.length === 0) {
+          this.addPathField("", cardElement);
+        }
+      },
+      onFolderPick: (currentPath, setPath) => {
+        createSimpleDirectoryPicker((selectedPath) => {
+          setPath(selectedPath);
+        }, currentPath);
+      },
+    });
+  }
+
+  collectNewAlbumPathFields() {
+    const inputs =
+      this.elements.newAlbumPathsContainer.querySelectorAll(
+        ".album-path-input"
+      );
+    return Array.from(inputs)
+      .map((input) => input.value.trim())
+      .filter((path) => path.length > 0);
   }
 
   // Main show/hide methods
@@ -521,7 +700,10 @@ export class AlbumManager {
     const requiredFields = [
       { value: formData.key, element: this.elements.newAlbumKey },
       { value: formData.name, element: this.elements.newAlbumName },
-      { value: formData.pathsText, element: this.elements.newAlbumPaths },
+      {
+        value: formData.paths.length > 0 ? "has paths" : "",
+        element: this.elements.newAlbumPathsContainer,
+      },
     ];
 
     let hasError = false;
@@ -551,10 +733,8 @@ export class AlbumManager {
       return;
     }
 
-    const paths = formData.pathsText
-      .split("\n")
-      .map((path) => path.trim())
-      .filter((path) => path.length > 0);
+    // Use the collected paths directly
+    const paths = formData.paths;
 
     // Always set index path based on first path
     const indexPath =
@@ -596,11 +776,20 @@ export class AlbumManager {
       state.album = albumKey;
     }
 
+    await this.startAutoIndexing(albumKey);
     if (this.isSetupMode) {
       await this.setupModeIndexingInProgress();
+      // force reindexing
+      this.send_update_index_event(albumKey);
     }
+  }
 
-    await this.startAutoIndexing(albumKey);
+  send_update_index_event(albumKey = state.album) {
+    window.dispatchEvent(
+      new CustomEvent("albumIndexError", {
+        detail: { albumKey, errorType: "outOfDate" },
+      })
+    );
   }
 
   async startAutoIndexing(albumKey) {
@@ -677,38 +866,27 @@ export class AlbumManager {
     const editForm = cardElement.querySelector(".edit-form");
     const albumInfo = cardElement.querySelector(".album-info");
 
+    // Remove 'editing' class from all cards first
+    document.querySelectorAll('.album-card.editing').forEach(card => {
+      card.classList.remove('editing');
+    });
+
+    // Add 'editing' class to this card
+    cardElement.classList.add('editing');
+
+    // Set the edit form title to include the album name
+    const editTitle = editForm.querySelector(".edit-album-title");
+    if (editTitle) {
+      editTitle.innerHTML = `Editing Album <i>${album.name || "</i>"}`;
+    }
+
     // Populate edit form
     editForm.querySelector(".edit-album-name").value = album.name;
     editForm.querySelector(".edit-album-description").value =
       album.description || "";
-    const pathsField = editForm.querySelector(".edit-album-paths");
-    pathsField.value = (album.image_paths || []).join("\n");
 
-    // Enable drag-and-drop for file/folder paths
-    pathsField.addEventListener("dragover", function (e) {
-      e.preventDefault();
-    });
-    pathsField.addEventListener("drop", function (e) {
-      e.preventDefault();
-      if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-        for (let i = 0; i < e.dataTransfer.items.length; i++) {
-          const item = e.dataTransfer.items[i];
-          if (item.kind === "file") {
-            const file = item.getAsFile();
-            // Unfortunately most browsers disable file.path for security reasons
-            const path = file.path || file.name;
-            // Append to textarea, with newline
-            if (
-              pathsField.value.length > 0 &&
-              !pathsField.value.endsWith("\n")
-            ) {
-              pathsField.value += "\n";
-            }
-            pathsField.value += path + "\n";
-          }
-        }
-      }
-    });
+    // Initialize the dynamic path fields for THIS specific card
+    this.initializePathFields(album.image_paths || [], cardElement);
 
     // Show edit form
     albumInfo.style.display = "none";
@@ -717,22 +895,74 @@ export class AlbumManager {
     // Attach event listeners
     editForm.querySelector(".save-album-btn").onclick = () => {
       this.saveAlbumChanges(cardElement, album);
+      cardElement.classList.remove('editing');
     };
 
     editForm.querySelector(".cancel-edit-btn").onclick = () => {
       albumInfo.style.display = "block";
       editForm.style.display = "none";
+      cardElement.classList.remove('editing');
     };
+
+    // --- Scroll the card so its bottom is visible ---
+    cardElement.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  // Path field methods
+  createPathField(path = "", cardElement) {
+    const container = cardElement.querySelector(".edit-album-paths-container");
+    return this._createAlbumPathRow({
+      path,
+      container,
+      onAddRow: () => this.addPathField("", cardElement),
+      onRemoveRow: () => {
+        if (container && container.children.length === 0) {
+          this.addPathField("", cardElement);
+        }
+      },
+      onFolderPick: (currentPath, setPath) => {
+        createSimpleDirectoryPicker((selectedPath) => {
+          setPath(selectedPath);
+        }, currentPath);
+      },
+    });
+  }
+
+  addPathField(path = "", cardElement) {
+    const container = cardElement.querySelector(".edit-album-paths-container");
+    if (container) {
+      const row = this.createPathField(path, cardElement);
+      container.appendChild(row);
+    }
+  }
+
+  initializePathFields(paths, cardElement) {
+    const container = cardElement.querySelector(".edit-album-paths-container");
+    if (container) {
+      container.innerHTML = "";
+      // Add existing paths
+      if (paths && paths.length > 0) {
+        paths.forEach((path) => this.addPathField(path, cardElement));
+      }
+      // Always ensure there's at least one empty field at the end
+      this.addPathField("", cardElement);
+    }
+  }
+
+  collectPathFields(cardElement) {
+    const inputs = cardElement.querySelectorAll(
+      ".edit-album-paths-container .album-path-input"
+    );
+    return Array.from(inputs)
+      .map((input) => input.value.trim())
+      .filter((path) => path.length > 0);
   }
 
   async saveAlbumChanges(cardElement, album) {
     const editForm = cardElement.querySelector(".edit-form");
 
-    const updatedPaths = editForm
-      .querySelector(".edit-album-paths")
-      .value.split("\n")
-      .map((path) => path.trim())
-      .filter((path) => path.length > 0);
+    // Collect paths from dynamic fields for THIS specific card
+    const updatedPaths = this.collectPathFields(cardElement);
 
     // Always set index path based on first path
     const indexPath =
@@ -748,7 +978,11 @@ export class AlbumManager {
       index: indexPath,
     };
 
-    console.log("Setting index path to:", indexPath);
+    // Compare old and new paths (order and content)
+    const oldPaths = Array.isArray(album.image_paths) ? album.image_paths : [];
+    const pathsChanged =
+      oldPaths.length !== updatedPaths.length ||
+      oldPaths.some((p, i) => p !== updatedPaths[i]);
 
     try {
       const response = await fetch("update_album/", {
@@ -759,6 +993,11 @@ export class AlbumManager {
 
       if (response.ok) {
         await this.refreshAlbumsAndDropdown();
+        // --- Begin new code ---
+        if (pathsChanged) {
+          this.send_update_index_event(updatedAlbum.key);
+        }
+        // --- End new code ---
       } else {
         alert("Failed to update album");
       }
