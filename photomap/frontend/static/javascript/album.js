@@ -11,7 +11,7 @@ export class AlbumManager {
   // Constants
   static POLL_INTERVAL = 1000;
   static PROGRESS_HIDE_DELAY = 3000;
-  static AUTO_INDEX_DELAY = 500;
+  static AUTO_INDEXING_DELAY = 500;
   static SETUP_EXIT_DELAY = 10000;
   static FORM_ANIMATION_DELAY = 300;
   static SCROLL_DELAY = 100;
@@ -279,7 +279,13 @@ export class AlbumManager {
     }
   }
 
-  createNewAlbumPathField(path = "") {
+  _createAlbumPathRow({ 
+    path = "", 
+    onAddRow, 
+    onRemoveRow, 
+    onFolderPick, 
+    container 
+  } = {}) {
     const wrapper = document.createElement("div");
     wrapper.className = "album-path-row";
     wrapper.style.cssText = `
@@ -303,6 +309,18 @@ export class AlbumManager {
       padding: 8px;
     `;
 
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        // Show the trash icon when Enter is pressed
+        trashBtn.style.display = "inline-block";
+        // Only add a new row if this is the last row
+        if (wrapper.nextElementSibling === null && typeof onAddRow === "function") {
+          onAddRow();
+        }
+      }
+    });
+
     const folderBtn = document.createElement("button");
     folderBtn.type = "button";
     folderBtn.className = "open-folder-btn";
@@ -315,6 +333,19 @@ export class AlbumManager {
       cursor: pointer;
       padding: 4px;
     `;
+
+    folderBtn.onclick = () => {
+      const currentPath = input.value.trim();
+      if (typeof onFolderPick === "function") {
+        onFolderPick(currentPath, (selectedPath) => {
+          input.value = selectedPath;
+          trashBtn.style.display = "inline-block";
+          if (wrapper.nextElementSibling === null && typeof onAddRow === "function") {
+            onAddRow();
+          }
+        });
+      }
+    };
 
     const trashBtn = document.createElement("button");
     trashBtn.type = "button";
@@ -330,27 +361,10 @@ export class AlbumManager {
       display: ${path ? "inline-block" : "none"};
     `;
 
-    // Open directory picker on folder button click
-    folderBtn.onclick = () => {
-      const currentPath = input.value.trim();
-
-      createSimpleDirectoryPicker((selectedPath) => {
-        input.value = selectedPath;
-        trashBtn.style.display = "inline-block";
-        // If this is the last row, add a new empty row
-        if (wrapper.nextElementSibling === null) {
-          this.addNewAlbumPathField("");
-        }
-      }, currentPath);
-    };
-
-    // Remove path row on trash button click
     trashBtn.onclick = () => {
       wrapper.remove();
-      // Ensure there's always at least one empty field
-      const container = this.elements.newAlbumPathsContainer;
-      if (container && container.children.length === 0) {
-        this.addNewAlbumPathField("");
+      if (typeof onRemoveRow === "function") {
+        onRemoveRow();
       }
     };
 
@@ -359,6 +373,44 @@ export class AlbumManager {
     wrapper.appendChild(trashBtn);
 
     return wrapper;
+  }
+
+  createNewAlbumPathField(path = "") {
+    const container = this.elements.newAlbumPathsContainer;
+    return this._createAlbumPathRow({
+      path,
+      container,
+      onAddRow: () => this.addNewAlbumPathField(""),
+      onRemoveRow: () => {
+        if (container && container.children.length === 0) {
+          this.addNewAlbumPathField("");
+        }
+      },
+      onFolderPick: (currentPath, setPath) => {
+        createSimpleDirectoryPicker((selectedPath) => {
+          setPath(selectedPath);
+        }, currentPath);
+      }
+    });
+  }
+
+  createPathField(path = "", cardElement) {
+    const container = cardElement.querySelector(".edit-album-paths-container");
+    return this._createAlbumPathRow({
+      path,
+      container,
+      onAddRow: () => this.addPathField("", cardElement),
+      onRemoveRow: () => {
+        if (container && container.children.length === 0) {
+          this.addPathField("", cardElement);
+        }
+      },
+      onFolderPick: (currentPath, setPath) => {
+        createSimpleDirectoryPicker((selectedPath) => {
+          setPath(selectedPath);
+        }, currentPath);
+      }
+    });
   }
 
   collectNewAlbumPathFields() {
@@ -832,88 +884,22 @@ export class AlbumManager {
 
   // Path field methods
   createPathField(path = "", cardElement) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "album-path-row";
-    wrapper.style.cssText = `
-      display: flex;
-      align-items: center;
-      margin-bottom: 0.5em;
-      gap: 0.5em;
-    `;
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "album-path-input";
-    input.value = path;
-    input.placeholder = "Enter directory path or use folder icon";
-    input.style.cssText = `
-      flex: 1;
-      background: #222;
-      color: #faea0e;
-      border: 1px solid #444;
-      border-radius: 4px;
-      padding: 8px;
-    `;
-
-    const folderBtn = document.createElement("button");
-    folderBtn.type = "button";
-    folderBtn.className = "open-folder-btn";
-    folderBtn.title = "Select folder";
-    folderBtn.innerHTML = "📁";
-    folderBtn.style.cssText = `
-      background: none;
-      border: none;
-      font-size: 1.2em;
-      cursor: pointer;
-      padding: 4px;
-    `;
-
-    const trashBtn = document.createElement("button");
-    trashBtn.type = "button";
-    trashBtn.className = "remove-path-btn";
-    trashBtn.title = "Remove path";
-    trashBtn.innerHTML = "🗑️";
-    trashBtn.style.cssText = `
-      background: none;
-      border: none;
-      font-size: 1.2em;
-      cursor: pointer;
-      padding: 4px;
-      display: ${path ? "inline-block" : "none"};
-    `;
-
-    // Open directory picker on folder button click
-    folderBtn.onclick = () => {
-      // Get the current path from the input field (in case user typed something)
-      const currentPath = input.value.trim();
-
-      createSimpleDirectoryPicker((selectedPath) => {
-        input.value = selectedPath;
-        trashBtn.style.display = "inline-block";
-        // If this is the last row, add a new empty row
-        if (wrapper.nextElementSibling === null) {
+    const container = cardElement.querySelector(".edit-album-paths-container");
+    return this._createAlbumPathRow({
+      path,
+      container,
+      onAddRow: () => this.addPathField("", cardElement),
+      onRemoveRow: () => {
+        if (container && container.children.length === 0) {
           this.addPathField("", cardElement);
         }
-      }, currentPath); // Pass the current path as starting location
-    };
-
-    // Remove path row on trash button click
-    trashBtn.onclick = () => {
-      wrapper.remove();
-      // Ensure there's always at least one empty field for THIS card
-      const container = cardElement.querySelector(
-        ".edit-album-paths-container"
-      );
-      if (container && container.children.length === 0) {
-        this.addPathField("", cardElement);
+      },
+      onFolderPick: (currentPath, setPath) => {
+        createSimpleDirectoryPicker((selectedPath) => {
+          setPath(selectedPath);
+        }, currentPath);
       }
-    };
-
-    wrapper.appendChild(input);
-    wrapper.appendChild(folderBtn);
-    wrapper.appendChild(trashBtn);
-
-    return wrapper;
+    });
   }
 
   addPathField(path = "", cardElement) {

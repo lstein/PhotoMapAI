@@ -1,3 +1,5 @@
+import { hideSpinner, showSpinner } from "./utils.js";
+
 /**
  * Simple directory tree browser for selecting directories
  */
@@ -68,9 +70,9 @@ export class DirectoryPicker {
     };
 
     // Define the navigation handler function
-    const handleNavigation = (path, isDoubleClick) => {
+    const handleNavigation = async (path, isDoubleClick) => {
       console.log("handleNavigation called:", { path, isDoubleClick, currentPath, selectedPath });
-      
+
       if (isDoubleClick) {
         // Double-click enters directory
         currentPath = path;
@@ -80,7 +82,12 @@ export class DirectoryPicker {
         treeDiv.querySelectorAll('.directory-item').forEach(item => {
           item.classList.remove('selected');
         });
-        DirectoryPicker.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
+        showSpinner();
+        try {
+          await DirectoryPicker.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
+        } finally {
+          hideSpinner();
+        }
       } else {
         // Single-click selects directory
         selectedPath = path;

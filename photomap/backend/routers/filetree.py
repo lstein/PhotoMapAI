@@ -74,10 +74,11 @@ def is_path_safe(path_str: str) -> bool:
 async def get_directories(path: str = "", show_hidden: bool = False):
     """Get directories in the specified path"""
     check_album_lock()  # May raise a 403 exception
+
+    # --- Path parsing and validation ---
     try:
         # Handle Windows drives
         if platform.system() == "Windows" and not path:
-            # Show available drives
             drives = get_windows_drives()
             return JSONResponse(
                 content={"currentPath": "", "directories": drives, "isRoot": True}
@@ -86,17 +87,14 @@ async def get_directories(path: str = "", show_hidden: bool = False):
         # Handle regular directory browsing
         if platform.system() == "Windows":
             if path.endswith(":"):
-                # Drive root (e.g., "C:")
                 dir_path = Path(f"{path}\\")
             else:
                 dir_path = Path(path)
         else:
-            # Unix-like systems
             assert ROOT_DIR is not None
             if not path:
                 dir_path = Path(ROOT_DIR)
             else:
-                # If path is already absolute, use it directly; otherwise make it relative to ROOT_DIR
                 if Path(path).is_absolute():
                     dir_path = Path(path)
                 else:
@@ -106,9 +104,16 @@ async def get_directories(path: str = "", show_hidden: bool = False):
         if not is_path_safe(str(dir_path)):
             raise HTTPException(status_code=403, detail="Access denied")
 
+        # If the path doesn't exist or isn't a directory, return 404
         if not dir_path.exists() or not dir_path.is_dir():
             raise HTTPException(status_code=404, detail="Directory not found")
 
+    except Exception as e:
+        logger.error(f"Invalid path or path error: {e}")
+        raise HTTPException(status_code=404, detail="Invalid or non-existent directory")
+
+    # --- Directory listing logic ---
+    try:
         # Try to trigger automount for autofs directories
         try:
             os.listdir(str(dir_path))
@@ -118,33 +123,26 @@ async def get_directories(path: str = "", show_hidden: bool = False):
         directories = []
         for entry in sorted(dir_path.iterdir()):
             if entry.is_dir():
-                # Skip hidden directories if show_hidden is False
                 if not show_hidden and entry.name.startswith("."):
                     continue
-
                 try:
-                    # Always return absolute path
                     abs_path = str(entry.resolve())
-
                     has_children = False
                     try:
                         has_children = any(child.is_dir() for child in entry.iterdir())
                     except (OSError, PermissionError):
                         pass
-
                     directories.append(
                         {
                             "name": entry.name,
-                            "path": abs_path,  # Return absolute path
+                            "path": abs_path,
                             "hasChildren": has_children,
                         }
                     )
                 except (OSError, PermissionError):
                     continue
 
-        # Calculate current path for display (absolute)
         current_display = str(dir_path.resolve())
-
         return JSONResponse(
             content={
                 "currentPath": current_display,
@@ -152,7 +150,6 @@ async def get_directories(path: str = "", show_hidden: bool = False):
                 "isRoot": not path,
             }
         )
-
     except Exception as e:
         logger.error(f"FileTree error: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
