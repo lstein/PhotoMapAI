@@ -109,6 +109,12 @@ async def get_directories(path: str = "", show_hidden: bool = False):
         if not dir_path.exists() or not dir_path.is_dir():
             raise HTTPException(status_code=404, detail="Directory not found")
 
+        # Try to trigger automount for autofs directories
+        try:
+            os.listdir(str(dir_path))
+        except Exception:
+            pass
+
         directories = []
         for entry in sorted(dir_path.iterdir()):
             if entry.is_dir():
