@@ -1,6 +1,6 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
-import { albumManager } from "./album.js";
+import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
 import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
 import { addNewSlide, removeSlidesAfterCurrent } from "./swiper.js";

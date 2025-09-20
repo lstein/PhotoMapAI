@@ -11,7 +11,7 @@ authors = [
 ]
 readme = { content-type = "text/markdown", file = "README.md" }
 license = "MIT"
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.10, <3.14"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",

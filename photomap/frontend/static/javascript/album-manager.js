@@ -19,7 +19,7 @@ export class AlbumManager {
   static STATUS_CLASSES = {
     SCANNING: "index-status scanning",
     INDEXING: "index-status indexing",
-    UMAPPING: "index-status umapping",
+    UMAPPING: "index-status mapping",
     COMPLETED: "index-status completed",
     ERROR: "index-status error",
     DEFAULT: "index-status",
@@ -802,7 +802,7 @@ export class AlbumManager {
       // Just show the progress UI and let the existing polling handle updates
       setTimeout(() => {
         this.showProgressUI(albumCard); // This will scroll into view
-      }, AlbumManager.AUTO_INDEX_DELAY);
+      }, AlbumManager.AUTO_INDEXING_DELAY);
     }
   }
 
@@ -1023,7 +1023,7 @@ export class AlbumManager {
         if (
           progress.status === "indexing" ||
           progress.status === "scanning" ||
-          progress.status === "umapping"
+          progress.status === "mapping"
         ) {
           console.log(
             `Backend reports indexing already in progress for album: ${albumKey}`
@@ -1274,9 +1274,9 @@ export class AlbumManager {
       status.textContent = progress.current_step || "Scanning for images...";
       status.style.color = "#ff9800"; // Orange for scanning
       estimatedTime.textContent = "";
-    } else if (progress.status === "umapping") {
+    } else if (progress.status === "mapping") {
       status.className = AlbumManager.STATUS_CLASSES.UMAPPING;
-      status.textContent = progress.current_step || "Generating image umap...";
+      status.textContent = progress.current_step || "Generating image map...";
       status.style.color = "#2196f3"; // Blue for umapping
       estimatedTime.textContent = "";
     } else {

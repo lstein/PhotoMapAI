@@ -27,7 +27,7 @@ PhotoMap's unique feature is its ability to identify thematically similar images
 
 In this map, each image in the photo collection is represented as a dot. The colors distinguish different clusters of related images. You can zoom in and out of the map and pan around it. Hover the mouse over a dot in order to see a preview thumbnail of its image, or click on a cluster to view its contents at full resolution.
 
-You can move the semantic map around, shrink it down in size, or hide it altogether. As you browser your photo collection, a yellow dot marker will highlight the location of the current image in the map.
+You can move the semantic map around, shrink it down in size, or hide it altogether. As you browse your photo collection, a yellow dot marker will highlight the location of the current image in the map.
 
 ## Text and Image Similarity Search
 
@@ -118,7 +118,7 @@ Follow these instructions if you are comfortable with installing Python packages
 
 #### Mac/Linux
 
-Make sure that your version of Python is between 3.10 and 3.12. Not all required libraries are available in 3.13.
+Make sure that your version of Python is between 3.10 and 3.13. Other versions are not guaranteed to work.
 
 python3 -m venv ~/photomap --prompt photomap
 source ~/photomap/bin/activate
@@ -130,7 +130,7 @@ Then open your web browser and point it to [http://127.0.0.1:8050](http://128.0.
 
 #### Windows
 
-Make sure that your version of Python is between 3.10 and 3.12. Not all required libraries are available in 3.13. Also make sure that Python is on your PATH.
+Make sure that your version of Python is between 3.10 and 3.13. Other versions are not guaranteed to work. Also make sure that Python is on your PATH.
 
 python3 -m venv C:\Users\<your name>\Documents\photomap --prompt photomap
 C:\Users\<your name>\Documents\photomap\Scripts\activate
