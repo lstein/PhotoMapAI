@@ -261,7 +261,7 @@ async function saveLocationIQApiKey(apiKey) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ api_key: apiKey }),
+      body: JSON.stringify({ key: apiKey }),
     });
 
     const result = await response.json();

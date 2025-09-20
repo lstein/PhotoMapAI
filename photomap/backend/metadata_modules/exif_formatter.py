@@ -30,7 +30,6 @@ def format_exif_metadata(
     Returns:
         SlideSummary: structured metadata appropriate for an image with EXIF data.
     """
-    logger.info(f"locationiq_api_key: {locationiq_api_key}")
     if not metadata:
         slide_data.description = "<i>No EXIF metadata available.</i>"
         return slide_data
@@ -58,9 +57,6 @@ def format_exif_metadata(
             )
             # Check if the API key worked
             api_key_valid = coord_str is not None
-            logger.info(
-                f"API key: key={locationiq_api_key} valid={api_key_valid}, place name={coord_str}"
-            )
 
         coord_str = coord_str if coord_str else f"{gps_lat:.6f}, {gps_lon:.6f}"
 

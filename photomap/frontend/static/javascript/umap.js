@@ -1047,6 +1047,9 @@ export async function toggleUmapWindow(show = null) {
       umapWindowHasBeenShown = true;
       setUmapWindowSize("fullscreen");
     }
+
+    if (state.album === null) return;
+    
     // Fetch configured eps value from server
     const result = await fetch("get_umap_eps/", {
       method: "POST",
@@ -1200,11 +1203,13 @@ function setUmapWindowSize(sizeKey) {
       controlsDiv.style.height = "60px";
     }
 
-    Plotly.relayout(plotDiv, {
-      width: window.innerWidth - 32,
-      height: window.innerHeight - controlsHeight,
-      "xaxis.scaleanchor": "y",
-    });
+    if (plotDiv.data && plotDiv.data.length > 0) {
+      Plotly.relayout(plotDiv, {
+        width: window.innerWidth - 32,
+        height: window.innerHeight - controlsHeight,
+        "xaxis.scaleanchor": "y",
+      });
+    }
 
     // Turn landmarks ON in fullscreen
     if (landmarkCheckbox) {
