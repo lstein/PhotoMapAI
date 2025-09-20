@@ -1,0 +1,145 @@
+
+/* Directory picker modal styles */
+.directory-picker-modal {
+  position: fixed;
+  top: 10vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100001;
+  /* Optional: set a max-width and max-height to prevent overflow */
+  max-width: 75vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.directory-picker-content {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 20px;
+  width: 500px;
+  max-height: 600px;
+  color: #faea0e;
+  border: 1px solid #444;
+}
+
+.directory-picker-content h3 {
+  margin: 0 0 15px 0;
+  color: #faea0e;
+}
+
+.directory-tree {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #444;
+  padding: 10px;
+  margin: 10px 0;
+  background: #1a1a1a;
+}
+
+.directory-item {
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.directory-item:hover {
+  background: #3a3a3a;
+}
+
+.directory-item.select-current {
+  background: #0a4a0a;
+  font-weight: bold;
+}
+
+.directory-item.up-button {
+  background: #4a4a0a;
+  font-weight: bold;
+}
+
+.directory-picker-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 15px;
+}
+
+.directory-picker-buttons button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+#selectDirBtn {
+  background: #0a6a0a;
+  color: white;
+}
+
+#selectDirBtn:disabled {
+  background: #666;
+  cursor: not-allowed;
+}
+
+#cancelDirBtn {
+  background: #666;
+  color: white;
+}
+
+.error {
+  color: #b00020;
+  text-align: center;
+  padding: 20px;
+}
+
+.current-path-display {
+  margin-bottom: 15px;
+}
+
+.current-path-display label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  color: #faea0e;
+}
+
+.current-path-display input {
+  width: 100%;
+  background: #1a1a1a;
+  color: #faea0e;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 8px;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.show-hidden-container {
+  margin-bottom: 15px;
+}
+
+.show-hidden-container label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #faea0e;
+  cursor: pointer;
+}
+
+.show-hidden-container input[type="checkbox"] {
+  margin: 0;
+}
+
+.directory-item.selected {
+  background: #0a4a0a !important;
+  border: 1px solid #0a6a0a;
+}
+
+.directory-item.up-button {
+  background: #4a4a0a;
+  font-weight: bold;
+}

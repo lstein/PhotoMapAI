@@ -4,10 +4,9 @@ import { hideSpinner, showSpinner } from "./utils.js";
  * Simple directory tree browser for selecting directories
  */
 export class DirectoryPicker {
-  
   static async getHomeDirectory() {
     try {
-      const response = await fetch('filetree/home');
+      const response = await fetch("filetree/home");
       const data = await response.json();
       return data.homePath || "";
     } catch (error) {
@@ -21,7 +20,7 @@ export class DirectoryPicker {
     if (!startingPath) {
       startingPath = await DirectoryPicker.getHomeDirectory();
     }
-    
+
     const modal = document.createElement("div");
     modal.className = "directory-picker-modal";
     modal.innerHTML = `
@@ -56,7 +55,7 @@ export class DirectoryPicker {
     let currentPath = startingPath || "";
     let selectedPath = null;
     let showHidden = false;
-    
+
     const addBtn = modal.querySelector("#addDirBtn");
     const cancelBtn = modal.querySelector("#cancelDirBtn");
     const treeDiv = modal.querySelector("#directoryTree");
@@ -71,27 +70,27 @@ export class DirectoryPicker {
 
     // Define the navigation handler function
     const handleNavigation = async (path, isDoubleClick) => {
-      console.log("handleNavigation called:", { path, isDoubleClick, currentPath, selectedPath });
-
       if (isDoubleClick) {
         // Double-click enters directory
         currentPath = path;
         selectedPath = null;
-        console.log("Entering directory:", path);
         // Clear any previous selection highlighting
-        treeDiv.querySelectorAll('.directory-item').forEach(item => {
-          item.classList.remove('selected');
+        treeDiv.querySelectorAll(".directory-item").forEach((item) => {
+          item.classList.remove("selected");
         });
-        showSpinner();
         try {
-          await DirectoryPicker.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
+          await DirectoryPicker.loadDirectories(
+            currentPath,
+            treeDiv,
+            showHidden,
+            handleNavigation
+          );
         } finally {
           hideSpinner();
         }
       } else {
         // Single-click selects directory
         selectedPath = path;
-        console.log("Selected directory:", path);
       }
       updateCurrentPathDisplay();
     };
@@ -100,13 +99,22 @@ export class DirectoryPicker {
     showHiddenCheckbox.onchange = () => {
       showHidden = showHiddenCheckbox.checked;
       selectedPath = null; // Clear selection when refreshing view
-      DirectoryPicker.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
+      DirectoryPicker.loadDirectories(
+        currentPath,
+        treeDiv,
+        showHidden,
+        handleNavigation
+      );
       updateCurrentPathDisplay();
     };
 
     // Load initial directory - start at the provided path
-    console.log("Starting directory picker at path:", currentPath);
-    DirectoryPicker.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
+    DirectoryPicker.loadDirectories(
+      currentPath,
+      treeDiv,
+      showHidden,
+      handleNavigation
+    );
     updateCurrentPathDisplay();
 
     addBtn.onclick = () => {
@@ -121,9 +129,12 @@ export class DirectoryPicker {
   }
 
   static async loadDirectories(path, container, showHidden, onSelect) {
+    showSpinner();
     try {
       const response = await fetch(
-        `filetree/directories?path=${encodeURIComponent(path)}&show_hidden=${showHidden}`
+        `filetree/directories?path=${encodeURIComponent(
+          path
+        )}&show_hidden=${showHidden}`
       );
       const data = await response.json();
 
@@ -148,33 +159,31 @@ export class DirectoryPicker {
 
         // Handle single and double clicks
         let clickTimeout = null;
-        
+
         dirElement.onclick = (e) => {
           e.preventDefault();
-          
+
           // Clear any existing timeout
           if (clickTimeout) {
             clearTimeout(clickTimeout);
             clickTimeout = null;
-            
+
             // This is a double-click - call onSelect immediately
-            console.log("Double-click detected on:", dir.name);
             onSelect(dir.path, true);
             return;
           }
-          
+
           // Set timeout for single-click
           clickTimeout = setTimeout(() => {
             clickTimeout = null;
             // This is a single-click
-            console.log("Single-click detected on:", dir.name);
             onSelect(dir.path, false);
-            
+
             // Update visual selection
-            container.querySelectorAll('.directory-item').forEach(item => {
-              item.classList.remove('selected');
+            container.querySelectorAll(".directory-item").forEach((item) => {
+              item.classList.remove("selected");
             });
-            dirElement.classList.add('selected');
+            dirElement.classList.add("selected");
           }, 250); // Increased delay slightly to make double-click easier
         };
 
@@ -185,10 +194,9 @@ export class DirectoryPicker {
       if (data.currentPath && !data.isRoot) {
         const upBtn = document.createElement("div");
         upBtn.className = "directory-item up-button";
-        upBtn.innerHTML = `<span class="dir-icon">⬆️</span><span class="dir-name">.. (Up)</span>`;
+        upBtn.innerHTML = `<span class="dir-icon">⬆️</span><span class="dir-name">..</span>`;
 
         upBtn.onclick = () => {
-          console.log("Up button clicked");
           // Handle going up differently on Windows vs Unix
           if (data.currentPath.match(/^[A-Z]:\\?$/)) {
             // Going up from drive root shows all drives
@@ -204,15 +212,16 @@ export class DirectoryPicker {
             onSelect(parentPath, true);
           }
         };
-        
+
         // Insert at the beginning
         container.insertBefore(upBtn, container.firstChild);
       }
-
     } catch (error) {
       console.error("Error loading directories:", error);
-      container.innerHTML = "<div class='error'>Error loading directories</div>";
+      container.innerHTML =
+        "<div class='error'>Error loading directories</div>";
     }
+    hideSpinner();
   }
 }
 

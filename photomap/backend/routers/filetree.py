@@ -115,12 +115,14 @@ async def get_directories(path: str = "", show_hidden: bool = False):
     # --- Directory listing logic ---
     try:
         # Try to trigger automount for autofs directories
+        logger.info("calling os.listdir to trigger automount if needed")
         try:
             os.listdir(str(dir_path))
         except Exception:
             pass
 
         directories = []
+        logger.info("Listing directories in: %s", dir_path)
         for entry in sorted(dir_path.iterdir()):
             if entry.is_dir():
                 if not show_hidden and entry.name.startswith("."):
@@ -143,6 +145,9 @@ async def get_directories(path: str = "", show_hidden: bool = False):
                     continue
 
         current_display = str(dir_path.resolve())
+        logger.info(
+            f"Current directory: {current_display}, found {len(directories)} subdirectories"
+        )
         return JSONResponse(
             content={
                 "currentPath": current_display,
