@@ -279,12 +279,12 @@ export class AlbumManager {
     }
   }
 
-  _createAlbumPathRow({ 
-    path = "", 
-    onAddRow, 
-    onRemoveRow, 
-    onFolderPick, 
-    container 
+  _createAlbumPathRow({
+    path = "",
+    onAddRow,
+    onRemoveRow,
+    onFolderPick,
+    container,
   } = {}) {
     const wrapper = document.createElement("div");
     wrapper.className = "album-path-row";
@@ -299,7 +299,8 @@ export class AlbumManager {
     input.type = "text";
     input.className = "album-path-input";
     input.value = path;
-    input.placeholder = "Enter the path to a folder of images, or click the folder icon";
+    input.placeholder =
+      "Enter the path to a folder of images, or click the folder icon";
     input.style.cssText = `
       flex: 1;
       background: #222;
@@ -315,7 +316,10 @@ export class AlbumManager {
         // Show the trash icon when Enter is pressed
         trashBtn.style.display = "inline-block";
         // Only add a new row if this is the last row
-        if (wrapper.nextElementSibling === null && typeof onAddRow === "function") {
+        if (
+          wrapper.nextElementSibling === null &&
+          typeof onAddRow === "function"
+        ) {
           onAddRow();
         }
       }
@@ -340,7 +344,10 @@ export class AlbumManager {
         onFolderPick(currentPath, (selectedPath) => {
           input.value = selectedPath;
           trashBtn.style.display = "inline-block";
-          if (wrapper.nextElementSibling === null && typeof onAddRow === "function") {
+          if (
+            wrapper.nextElementSibling === null &&
+            typeof onAddRow === "function"
+          ) {
             onAddRow();
           }
         });
@@ -390,7 +397,7 @@ export class AlbumManager {
         createSimpleDirectoryPicker((selectedPath) => {
           setPath(selectedPath);
         }, currentPath);
-      }
+      },
     });
   }
 
@@ -409,7 +416,7 @@ export class AlbumManager {
         createSimpleDirectoryPicker((selectedPath) => {
           setPath(selectedPath);
         }, currentPath);
-      }
+      },
     });
   }
 
@@ -859,6 +866,20 @@ export class AlbumManager {
     const editForm = cardElement.querySelector(".edit-form");
     const albumInfo = cardElement.querySelector(".album-info");
 
+    // Remove 'editing' class from all cards first
+    document.querySelectorAll('.album-card.editing').forEach(card => {
+      card.classList.remove('editing');
+    });
+
+    // Add 'editing' class to this card
+    cardElement.classList.add('editing');
+
+    // Set the edit form title to include the album name
+    const editTitle = editForm.querySelector(".edit-album-title");
+    if (editTitle) {
+      editTitle.innerHTML = `Editing Album <i>${album.name || "</i>"}`;
+    }
+
     // Populate edit form
     editForm.querySelector(".edit-album-name").value = album.name;
     editForm.querySelector(".edit-album-description").value =
@@ -874,12 +895,17 @@ export class AlbumManager {
     // Attach event listeners
     editForm.querySelector(".save-album-btn").onclick = () => {
       this.saveAlbumChanges(cardElement, album);
+      cardElement.classList.remove('editing');
     };
 
     editForm.querySelector(".cancel-edit-btn").onclick = () => {
       albumInfo.style.display = "block";
       editForm.style.display = "none";
+      cardElement.classList.remove('editing');
     };
+
+    // --- Scroll the card so its bottom is visible ---
+    cardElement.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 
   // Path field methods
@@ -898,7 +924,7 @@ export class AlbumManager {
         createSimpleDirectoryPicker((selectedPath) => {
           setPath(selectedPath);
         }, currentPath);
-      }
+      },
     });
   }
 

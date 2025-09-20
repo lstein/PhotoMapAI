@@ -225,6 +225,13 @@
   align-self: flex-end;
 }
 
+.album-card.editing {
+  /* background: #353535 !important; */
+  background: #505050 !important;
+  box-shadow: 0 0 8px #222;
+  transition: background 0.2s;
+}
+
 .edit-form {
   display: none;
 }
