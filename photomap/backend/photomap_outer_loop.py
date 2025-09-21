@@ -16,7 +16,7 @@ def start_photomap():
             running = False
         except subprocess.CalledProcessError as e:
             print(f"Server exited with error: {e.returncode}")
-            running = e.returncode == -signal.SIGTERM.value
+            running = abs(e.returncode) == signal.SIGTERM.value
 
 
 if __name__ == "__main__":
