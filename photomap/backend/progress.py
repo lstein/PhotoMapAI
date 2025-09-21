@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
