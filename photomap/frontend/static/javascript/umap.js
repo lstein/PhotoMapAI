@@ -342,6 +342,18 @@ export async function fetchUmapData() {
           Plotly.relayout(gd, { images });
         }, 500);
       }
+
+      // After adding traces (e.g., landmarks), move the marker trace to the end
+      const plotDiv = document.getElementById("umapPlot");
+      const markerTraceIndex = plotDiv.data.findIndex(
+        (trace) => trace.name === "Current Image"
+      );
+      if (
+        markerTraceIndex !== -1 &&
+        markerTraceIndex !== plotDiv.data.length - 1
+      ) {
+        Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
+      }
     });
 
     // Ensure the current image marker is visible after plot initialization
@@ -457,21 +469,28 @@ window.addEventListener("slideChanged", async () => {
 export async function updateCurrentImageMarker() {
   if (!points.length) return;
   const plotDiv = document.getElementById("umapPlot");
-  if (!plotDiv || !plotDiv.data || plotDiv.data.length < 2) return;
+  if (!plotDiv || !plotDiv.data) return;
+
+  // Find the trace index for the current image marker
+  const markerTraceIndex = plotDiv.data.findIndex(
+    (trace) => trace.name === "Current Image"
+  );
+  if (markerTraceIndex === -1) return;
+
   const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
   if (globalIndex === -1) return; // No current image
   const currentPoint = points.find((p) => p.index === globalIndex);
   if (!currentPoint) return;
+
   Plotly.restyle(
     "umapPlot",
     {
       x: [[currentPoint.x]],
       y: [[currentPoint.y]],
-      // text: [["Current Slide"]],
     },
-    1 // current image marker trace is always index 1
+    markerTraceIndex // Use the found index
   );
-  ensureCurrentMarkerInView(0.1); // Ensure it's in view with 10% padding
+  ensureCurrentMarkerInView(0.1);
 }
 
 // --- Ensure Current Marker in View ---
