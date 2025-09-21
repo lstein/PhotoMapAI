@@ -27,6 +27,7 @@ classifiers = [
 dependencies = [
     "Pillow",
     "clip-anytorch",
+    "colorama",
     "dash",
     "fastapi",
     "jinja2",
@@ -45,6 +46,8 @@ dependencies = [
     "tqdm",
     "umap-learn",
     "uvicorn",
+    "psutil",  # Add this for process management
+    "packaging",  # Add this for version checking
 ]
 
 [project.urls]
@@ -79,4 +82,5 @@ update_images = "photomap.backend.imagetool:main"
 search_images = "photomap.backend.imagetool:main"
 search_text = "photomap.backend.imagetool:main"
 find_duplicate_images = "photomap.backend.imagetool:main"
-start_photomap = "photomap.backend.photomap_server:main"
+photomap_server = "photomap.backend.photomap_server:main"
+start_photomap = "photomap.backend.photomap_outer_loop:start_photomap"

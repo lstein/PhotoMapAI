@@ -1,5 +1,6 @@
 // events.js
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
+import { aboutManager } from "./about.js";
 import { checkAlbumIndex } from "./album-manager.js";
 import { eventRegistry } from "./event-registry.js";
 import { initializeGridSwiper } from "./grid-view.js";
@@ -460,18 +461,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (aboutBtn && aboutModal) {
     aboutBtn.addEventListener("click", () => {
-      aboutModal.style.display = "flex";
+      aboutManager.showModal();
     });
   }
   if (closeAboutBtn && aboutModal) {
     closeAboutBtn.addEventListener("click", () => {
-      aboutModal.style.display = "none";
+      aboutManager.hideModal();
     });
   }
   // Close modal when clicking outside content
   aboutModal.addEventListener("click", (e) => {
     if (e.target === aboutModal) {
-      aboutModal.style.display = "none";
+      aboutManager.hideModal();
     }
   });
 });

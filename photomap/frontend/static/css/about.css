@@ -62,3 +62,71 @@
   vertical-align: middle;
   fill: #FFD600;
 }
+
+/* Update status styles */
+.update-notification {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 8px 12px;  /* Reduced padding from 16px to 8px/12px */
+  margin: 16px 0 0 0;  /* Only top margin, no bottom margin */
+  text-align: center;
+}
+
+.update-notification.up-to-date {
+  background: #1a2f1a;
+  border: 1px solid #28a745;
+}
+
+.update-message {
+  color: #faea0e;
+  margin: 0;  /* Removed all margins from the message */
+  font-weight: 500;
+}
+
+.update-notification.up-to-date .update-message {
+  color: #28a745;
+  font-weight: normal;
+}
+
+.update-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.update-btn:hover:not(:disabled) {
+  background: #218838;
+}
+
+.update-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.update-status {
+  margin-top: 12px;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.update-status.updating {
+  background: #17a2b8;
+  color: white;
+}
+
+.update-status.success {
+  background: #28a745;
+  color: white;
+}
+
+.update-status.error {
+  background: #dc3545;
+  color: white;
+}
