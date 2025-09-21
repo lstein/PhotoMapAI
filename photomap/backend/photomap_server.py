@@ -2,6 +2,9 @@
 print("Loading, please wait...")
 import logging
 import os
+import signal
+import subprocess
+import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Optional
@@ -19,6 +22,7 @@ from .routers.filetree import filetree_router
 from .routers.index import index_router
 from .routers.search import search_router
 from .routers.umap import umap_router
+from .routers.upgrade import upgrade_router
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -27,7 +31,14 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="PhotoMapAI")
 
 # Include routers
-for router in [umap_router, search_router, index_router, album_router, filetree_router]:
+for router in [
+    umap_router,
+    search_router,
+    index_router,
+    album_router,
+    filetree_router,
+    upgrade_router,
+]:
     app.include_router(router)
 
 # Mount static files and templates
@@ -146,8 +157,10 @@ def main():
         os.environ["PHOTOMAP_ALBUM_LOCKED"] = args.album_locked
 
     config = get_config_manager()
+    logger.info(f"Using configuration file: {config.config_path}")
+    logger.info(f"Backend root directory: {repo_root}")
     logger.info(
-        f"Starting PhotoMapAI server on port {port} with backend root `{repo_root}` and configuration file `{config.config_path}`"
+        f"Please open your browser to http://{host}:{port} to access the PhotoMapAI application"
     )
 
     uvicorn.run(
