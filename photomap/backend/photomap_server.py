@@ -23,6 +23,7 @@ from .routers.index import index_router
 from .routers.search import search_router
 from .routers.umap import umap_router
 from .routers.upgrade import upgrade_router
+from .util import get_app_url
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -156,11 +157,13 @@ def main():
     if args.album_locked:
         os.environ["PHOTOMAP_ALBUM_LOCKED"] = args.album_locked
 
+    app_url = get_app_url(host, port)
+
     config = get_config_manager()
     logger.info(f"Using configuration file: {config.config_path}")
     logger.info(f"Backend root directory: {repo_root}")
     logger.info(
-        f"Please open your browser to http://{host}:{port} to access the PhotoMapAI application"
+        f"Please open your browser to \033[1m{app_url}\033[0m to access the PhotoMapAI application"
     )
 
     uvicorn.run(

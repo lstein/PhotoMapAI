@@ -1046,11 +1046,9 @@ def tqdm_progress_callback(total_images):
 def print_cuda_message():
     """Print a message about CUDA availability."""
     if torch.cuda.is_available():
-        logger.info("CUDA is available. Using GPU acceleration for indexing.")
+        logger.info("CUDA detected. Using GPU acceleration for indexing.")
     else:
-        logger.info(
-            "CUDA is not available. Using CPU for indexing. Performance may be slower."
-        )
+        logger.info("CUDA not detected. Using CPU for indexing.")
 
 
 print_cuda_message()

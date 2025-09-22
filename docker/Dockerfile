@@ -18,4 +18,5 @@ RUN rm -rf ./photomap ./build ./dist ./demo_images/photomap_index/
 EXPOSE 8050
 
 # Start the server
-CMD ["python3", "-mphotomap.backend.photomap_server", "--host", "0.0.0.0", "--port", "8050"]
+ENTRYPOINT ["python3", "-mphotomap.backend.photomap_server"]
+CMD ["--host", "0.0.0.0", "--port", "8050"]

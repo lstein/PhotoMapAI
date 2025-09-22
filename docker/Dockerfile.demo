@@ -20,4 +20,5 @@ RUN index_images --embeddings ./demo_images/photomap_index/embeddings.npz ./demo
 EXPOSE 8050
 
 # Start the server
-CMD ["python3", "-mphotomap.backend.photomap_server", "--host", "0.0.0.0", "--port", "8050", "--album-lock", "demo"]
+ENTRYPOINT ["python3", "-mphotomap.backend.photomap_server"]
+CMD ["--host", "0.0.0.0", "--port", "8050", "--album-lock", "demo"]
