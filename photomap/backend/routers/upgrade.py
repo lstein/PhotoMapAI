@@ -26,7 +26,6 @@ async def check_version():
 
         # Get the current version
         current_version = version("photomapai")
-        current_version = "0.9.0"
 
         # Compare versions
         current_ver = pversion.parse(current_version)
