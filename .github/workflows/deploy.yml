@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
 
 jobs:
+  show-name:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Starting Deploy to PyPI and DockerHub workflow"
+
   pypi-deploy:
     uses: ./.github/workflows/pypi.yml
 
   dockerhub-deploy:
-    needs: pypi
+    needs: pypi-deploy
     uses: ./.github/workflows/dockerhub.yml

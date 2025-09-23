@@ -1,4 +1,4 @@
-name: Release to PyPi
+name: Deploy to PyPi
 
 on:
   workflow_call:
