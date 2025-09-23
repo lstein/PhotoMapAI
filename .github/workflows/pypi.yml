@@ -1,10 +1,11 @@
-name: Release to PyPi & DockerHub
+name: Release to PyPi
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 jobs:
-  release:
+  pypi-deploy:
     runs-on: ubuntu-latest
     environment: pypi
 
@@ -24,7 +25,16 @@ jobs:
       - name: Extract version from pyproject.toml
         id: get_version
         run: |
-          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          VERSION=$(python -c "
+          try:
+              import tomllib
+              with open('pyproject.toml', 'rb') as f:
+                  data = tomllib.load(f)
+              print(data['project']['version'])
+          except Exception as e:
+              print(f'Error reading version: {e}', file=sys.stderr)
+              exit(1)
+          ")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Tag the release
@@ -51,26 +61,3 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://upload.pypi.org/legacy/
-        # env:
-        #   TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-
-      - name: Log in to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build Docker image
-        run: |
-          VERSION=${{ steps.get_version.outputs.version }}
-          docker build -f docker/Dockerfile -t ${{ secrets.DOCKERHUB_USERNAME }}/photomapai:${VERSION} .
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/photomapai:${VERSION} ${{ secrets.DOCKERHUB_USERNAME }}/photomapai:latest
-
-      - name: Push Docker image (versioned)
-        run: |
-          VERSION=${{ steps.get_version.outputs.version }}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/photomapai:${VERSION}
-
-      - name: Push Docker image (latest)
-        run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/photomapai:latest
