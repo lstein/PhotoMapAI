@@ -9,7 +9,6 @@ jobs:
     steps:
       - run: echo "Starting Deploy to PyPI and DockerHub workflow"
 
-jobs:
   pypi-deploy:
     uses: ./.github/workflows/pypi.yml
 
