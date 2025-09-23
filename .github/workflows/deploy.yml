@@ -13,5 +13,5 @@ jobs:
     uses: ./.github/workflows/pypi.yml
 
   dockerhub-deploy:
-    needs: pypi
+    needs: pypi-deploy
     uses: ./.github/workflows/dockerhub.yml
