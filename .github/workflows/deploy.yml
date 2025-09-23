@@ -1,0 +1,12 @@
+name: Deploy to PyPI and DockerHub
+
+on:
+  workflow_dispatch:
+
+jobs:
+  pypi-deploy:
+    uses: ./.github/workflows/pypi.yml
+
+  dockerhub-deploy:
+    needs: pypi
+    uses: ./.github/workflows/dockerhub.yml
