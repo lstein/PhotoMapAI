@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../albums/">
+        <link rel="prev" href="../semantic-map/">
       
       
-        <link rel="next" href="../semantic-map/">
+        <link rel="next" href="../keyboard-shortcuts/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>Configuration - PhotoMapAI</title>
+        <title>Updating PhotoMapAI - PhotoMapAI</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#configuration" class="md-skip">
+        <a href="#upgrading" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Configuration
+              Updating PhotoMapAI
             
           </span>
         </div>
@@ -470,32 +470,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Configuration
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
         
   
   
@@ -506,86 +484,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#changing-the-web-host-and-port" class="md-nav__link">
-    <span class="md-ellipsis">
-      Changing the Web Host and Port
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#running-photomapai-under-https" class="md-nav__link">
-    <span class="md-ellipsis">
-      Running PhotoMapAI Under HTTPS
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Running PhotoMapAI Under HTTPS">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#install-a-self-signed-ssl-certificate" class="md-nav__link">
-    <span class="md-ellipsis">
-      Install a Self-Signed SSL Certificate
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#use-certbot" class="md-nav__link">
-    <span class="md-ellipsis">
-      Use Certbot
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#use-a-reverse-proxy" class="md-nav__link">
-    <span class="md-ellipsis">
-      Use a Reverse Proxy
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pointing-to-an-alternative-configuration-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      Pointing to an Alternative Configuration File
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -618,10 +516,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../upgrading/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Updating PhotoMapAI
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -632,6 +552,113 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-find-the-current-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      How to find the current version
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updating-online" class="md-nav__link">
+    <span class="md-ellipsis">
+      Updating online
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updating-on-the-command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      Updating on the command line
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Updating on the command line">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-activate-the-photomapai-virtual-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Activate the PhotoMapAI virtual environment.
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-run-pip-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Run PIP --upgrade
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-restart-the-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Restart the server
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-reload-the-browser-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Reload the browser window
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#via-docker" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via docker
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#via-a-reinstall" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via a reinstall
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -852,46 +879,64 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#changing-the-web-host-and-port" class="md-nav__link">
+  <a href="#how-to-find-the-current-version" class="md-nav__link">
     <span class="md-ellipsis">
-      Changing the Web Host and Port
+      How to find the current version
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#running-photomapai-under-https" class="md-nav__link">
+  <a href="#updating-online" class="md-nav__link">
     <span class="md-ellipsis">
-      Running PhotoMapAI Under HTTPS
+      Updating online
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Running PhotoMapAI Under HTTPS">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updating-on-the-command-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      Updating on the command line
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Updating on the command line">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#install-a-self-signed-ssl-certificate" class="md-nav__link">
+  <a href="#1-activate-the-photomapai-virtual-environment" class="md-nav__link">
     <span class="md-ellipsis">
-      Install a Self-Signed SSL Certificate
+      1. Activate the PhotoMapAI virtual environment.
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#use-certbot" class="md-nav__link">
+  <a href="#2-run-pip-upgrade" class="md-nav__link">
     <span class="md-ellipsis">
-      Use Certbot
+      2. Run PIP --upgrade
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#use-a-reverse-proxy" class="md-nav__link">
+  <a href="#3-restart-the-server" class="md-nav__link">
     <span class="md-ellipsis">
-      Use a Reverse Proxy
+      3. Restart the server
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-reload-the-browser-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Reload the browser window
     </span>
   </a>
   
@@ -903,9 +948,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pointing-to-an-alternative-configuration-file" class="md-nav__link">
+  <a href="#via-docker" class="md-nav__link">
     <span class="md-ellipsis">
-      Pointing to an Alternative Configuration File
+      Via docker
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#via-a-reinstall" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via a reinstall
     </span>
   </a>
   
@@ -930,110 +984,49 @@
   
 
 
-<h1 id="configuration">Configuration</h1>
-<p>PhotoMapAI is primarily configured through the web interface as described in <a href="../basic-usage/#changing-settings">Basic Usage</a> and <a href="../albums/">Albums</a>. However, there are a number of runtime parameters that control how the web service behaves.</p>
-<h2 id="changing-the-web-host-and-port">Changing the Web Host and Port</h2>
-<p>By default, PhotoMapAI runs its web service on port 8050 and only accepts connections on the local machine (<code>localhost</code>). These can be changed on the command line used to launch the application using the <code>--port</code> and <code>--host</code> options:</p>
-<pre><code>start_photomap --port 8000 --host 0.0.0.0
+<h1 id="upgrading">Upgrading</h1>
+<p>There are several ways to upgrade an installed version of PhotoMapAI to the latest and greatest version:</p>
+<ol>
+<li>Using <a href="#upgrading-online">online upgrading</a> from the application itself.</li>
+<li>On the <a href="#updating-on-the-command-line">command line</a>, using the Python package installer, pip.</li>
+<li><a href="#via-docker">Via docker</a></li>
+<li><a href="#via-a-reinstall">By reinstalling</a></li>
+</ol>
+<h2 id="how-to-find-the-current-version">How to find the current version</h2>
+<p>From within the web application, click on the "?" icon at the bottom left of the screen. This will bring up an about box window within information about the application, including the current version number. If you are running the most current release, there will also be a green box confirming that you are up to date.</p>
+<p><img src="../../img/photomap_about_no_update_needed.png" width="480" class="img-hover-zoom"></p>
+<h2 id="updating-online">Updating online</h2>
+<p>If the currently installed version of PhotoMapAI is out of date, you will be offered the option of upgrading online. Click the green button in the about box window to begin the update process.</p>
+<p><img src="../../img/photomap_about_update_needed.png" width="480" class="img-hover-zoom"></p>
+<p>This will download the latest version, install it, restart the backend, and finally reload the web front end. It should be a relatively quick process taking less than a minute. If the install is interrupted for some reason, the browser window may never reload. In this case, go to the window in which the backend is running, interrupt it with the ^C key if it is running, and relaunch the server.</p>
+<hr />
+<h2 id="updating-on-the-command-line">Updating on the command line</h2>
+<p>If you are comfortable with installing python packages using <code>pip</code>, you can easily upgrade from the command line. Follow these steps:</p>
+<h3 id="1-activate-the-photomapai-virtual-environment">1. <strong>Activate the PhotoMapAI virtual environment.</strong></h3>
+<p>Locate the PhotoMapAI install directory, and run this command:</p>
+<p><em>Linux/Macintosh</em></p>
+<pre><code class="language-bash">source &lt;path_to_photomap&gt;/bin/activate
 </code></pre>
-<p>This command changes the port to port 8000, and allows PhotoMapAI to listen for connections on the wildcard IP address <code>0.0.0.0</code>, meaning that it will accept connections for any network-accessible location.</p>
-<p>If you are using a launcher script to start PhotoMapAI (e.g. <code>start_photomap.bat</code>) you can change these values by opening the script in a text editor (<code>Notepad</code> on Windows), finding the line containing <code>start_photomap</code>, and adding the options as shown above.</p>
-<p>Alternatively, you can change the port and host interface by setting two environment variables prior to launching PhotoMapAI. These are:</p>
-<ul>
-<li><code>PHOTOMAP_HOST</code> - the host interface to accept connections from</li>
-<li><code>PHOTOMAP_PORT</code> - the listen port</li>
-</ul>
-<p>On Linux and Macintosh systems, you can set these environment variables on the command line like so:</p>
-<pre><code class="language-bash">PHOTOMAP_HOST=&quot;0.0.0.0&quot; PHOTOMAP_PORT=&quot;8000&quot; start_photomap
+<p><em>Windows</em></p>
+<pre><code class="language-bash">&lt;path_to_photomap&gt;\Scripts\activate
 </code></pre>
-<p>Or you can permanently fix these environment variables by setting them in your shell's profile, e.g. <code>.bashrc</code>.</p>
-<p>On Windows systems, setting environment variables can be done through the GUI as well as on the command line. See <a href="https://phoenixnap.com/kb/windows-set-environment-variable">How to Set Environment Variables in Windows</a> for a good walkthrough.</p>
-<h2 id="running-photomapai-under-https">Running PhotoMapAI Under HTTPS</h2>
-<p>By default, PhotoMapAI runs as a non-secure <code>HTTP</code> service. This generates a warning icon in some browsers, but more seriously prevents cut and paste between the PhotoMapAI tab and browser tabs and desktop applications. </p>
-<p>There are several ways to enable HTTP for PhotoMapAI:</p>
-<h3 id="install-a-self-signed-ssl-certificate">Install a Self-Signed SSL Certificate</h3>
-<p>In this method, you generate self-signed encryption certificate and
-private key files and point PhotoMapAI to them using its <code>--cert</code> and
-<code>--key</code> command-line options.</p>
-<p>Guides to generating and installing self-signed certificates:</p>
-<ul>
-<li>
-<p><a href="https://learn.microsoft.com/en-us/entra/identity-platform/howto-create-self-signed-certificate">Creating Self-Signed Certificates with Windows PowerShell</a>. Please apply the arguments to create .crt and .pem files.</p>
-</li>
-<li>
-<p><a href="https://gist.github.com/elklein96/a15090f35a41e16bdc8574a7fb81e119">Creating Self-Signed Certificates with OpenSSL (Mac/Linux)</a></p>
-</li>
-</ul>
-<p>These methods will leave you with two files, a .crt certificate file,
-and a .pem key file. Relaunch the PhotoMapAI server using <code>--cert
-/path/to/.crt file</code> and <code>--key /path/to/.pem file</code>. If you are using
-the desktop launcher to start the server, simply open the launcher
-file with a text editor, and add the <code>--cert</code> and <code>--key</code> options to
-the end of the line that ends with <code>start_photomap</code>.</p>
-<p>After installing the certificate/key pair and relaunching the server,
-you will be able to access the PhotoMapAI server using the https://
-URL. Your browser will complain about an unknown certificate authority
-when you first load the URL and ask you to confirm that you trust the site.</p>
-<h3 id="use-certbot">Use Certbot</h3>
-<p>The <a href="https://certbot.eff.org/">Certbot</a> tool provides public certificates that
-browsers automatically trust. It is very easy to use, but it requires that you
-have a web running on port 80 that accepts incoming HTTP connections.</p>
-<p>Once the Certbot certificate and keyfile are generated, follow the
-directions in the previous section to configure PhotoMapAI to use them.</p>
-<h3 id="use-a-reverse-proxy">Use a Reverse Proxy</h3>
-<p>A final option is to keep PhotoMapAI running on HTTP, but use a reverse
-proxy from a running web server to translate HTTPS requests on the
-reverse proxy into HTTP requests to PhotoMapAI. The main advantage of this
-is that you get the additional benefit of all the web server's configuration
-controls, such as the ability to add password protection.</p>
-<p>Here are some guides for setting up reverse proxies. The first is a
-general guide for configuring a reverse proxy with the popular Nginx
-web server. The second features a Windows-specific walkthrough.</p>
-<ul>
-<li><a href="https://docs.nginx.com/nginx/admin-guide/web-server/reverse-proxy/">NGINX Reverse Proxy</a></li>
-<li><a href="https://virendra.dev/blog/setting-up-nginx-as-a-reverse-proxy-on-windows">NGINX Reverse Proxy on Windows</a></li>
-</ul>
-<p>You will need to install encryption certificates for the Nginx server using <a href="https://certbot.eff.org/">Certbot</a>. The final configuration of the proxy server will look something like this:</p>
-<pre><code>    location /photomap/ {
-    proxy_pass http://localhost:8050/;
+<p>Depending on permissions, Windows users may need to use the Command shell and run <code>activate.bat</code> instead of <code>activate</code>. When the virtual environment is active, the command prompt will change to <code>(photomap)</code>.</p>
+<h3 id="2-run-pip-upgrade">2. <strong>Run PIP --upgrade</strong></h3>
+<p>Next issue this command:</p>
+<pre><code class="language-bash">pip install photomapai --upgrade
 </code></pre>
-<p>This is saying that when a request comes in for
-<code>https://your.host/photomap/</code> it will be translated into a request to
-<code>http://localhost:8050/</code> where PhotoMapAI is running. It is possible to
-run the proxy server and the PhotoMapAI server on separate machines as well.</p>
-<h2 id="pointing-to-an-alternative-configuration-file">Pointing to an Alternative Configuration File</h2>
-<p>PhotoMapAI stores its album definitions and other configuration information in a configuration file. It is not usually necessary to manipulate it directly, but if you wish you can point to an alternative config file in order to have multiple PhotoMapAI servers each hosting separate album collections.</p>
-<p>The config file is stored in different places depending on the platform:</p>
-<table>
-<thead>
-<tr>
-<th>Platform</th>
-<th>Config File Path</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Linux</td>
-<td>~/.config/photomap/config.yaml</td>
-</tr>
-<tr>
-<td>MacOS</td>
-<td>~/Library/Application Support/photomap/config.yaml</td>
-</tr>
-<tr>
-<td>Windows</td>
-<td>C:\Users\<user>\AppData\Roaming\photomap\config.yaml</td>
-</tr>
-</tbody>
-</table>
-<p>To run PhotoMapAI off a different config file, you may launch it with the <code>--config</code> option on the command line, similar to setting the port and host. In the below example we specify an alternative config file named <code>photomap_2.yaml</code></p>
-<pre><code>start_photomap --config ~/photomap_2.yaml
+<h3 id="3-restart-the-server">3. <strong>Restart the server</strong></h3>
+<p>Interrupt the currently running server with ^C and relaunch it.</p>
+<h3 id="4-reload-the-browser-window">4. <strong>Reload the browser window</strong></h3>
+<p>And you're done!</p>
+<hr />
+<h2 id="via-docker">Via docker</h2>
+<p>New docker images are generated for each release. To get the latest version, simply kill the currently running version and docker run <code>lstein/photomapai:latest</code>:</p>
+<pre><code class="language-bash">docker run -p 5080:5080 lstein/photomapai:latest
 </code></pre>
-<p>If the indicated config file doesn't exist when you launch PhotoMapAI, it will be created automatically.</p>
-<p>You may also point to an alternative configuration file by setting the environment variable <code>PHOTOMAP_CONFIG</code>, as described in the previous section:</p>
-<pre><code class="language-bash">PHOTOMAP_CONFIG=~/photomap_2.yaml start_photomap
-</code></pre>
-<p>It is also possible, but not recommended, to edit the configuration file directly using a text editor. The format is straightforward to understand, but liable to change in the future.</p>
+<hr />
+<h2 id="via-a-reinstall">Via a reinstall</h2>
+<p>Finally, you can simply reinstall the whole package from the GitHub zip file, as described in <a href="../../installation/">Installation</a>. Because its configuration and index files are kept separately, you can reinstall on top of the existing PhotoMapAI directory, or even delete this directory and start over again.</p>
 
 
 
