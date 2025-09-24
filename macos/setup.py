@@ -14,6 +14,7 @@ OPTIONS = {
         "networkx",
         "pillow_heif",
         "platformdirs",
+        "psutil",
         "pydantic",
         "python_multipart",
         "PyYAML",
