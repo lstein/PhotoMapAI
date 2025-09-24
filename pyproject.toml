@@ -9,7 +9,7 @@ description = "AI-based image clustering and exploration tool"
 authors = [
     { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
 ]
-readme = { content-type = "text/markdown", file = "README.md" }
+readme = { "content-type" = "text/markdown", file = "README.md" }
 license = { text = "MIT" }
 requires-python = ">=3.10, <3.14"
 classifiers = [
@@ -88,11 +88,8 @@ start_photomap = "photomap.backend.photomap_outer_loop:start_photomap"
 # py2app configuration
 [tool.py2app]
 # The script to bundle (path is relative to the repository root)
-app = [
-  { script = "photomap/backend/photomap_outer_loop.py",
-    plist = { "CFBundleName" = "PhotoMapAI" }
-  }
-]
+# This must be one line to avoid TOML parsing errors
+app = [ { script = "photomap/backend/photomap_outer_loop.py", plist = { "CFBundleName" = "PhotoMapAI" }} ]
 
 # Modules/packages to include in the frozen bundle (module names, not pip project names)
 packages = ["photomap"]
