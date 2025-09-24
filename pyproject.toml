@@ -87,39 +87,5 @@ start_photomap = "photomap.backend.photomap_outer_loop:start_photomap"
 
 # py2app configuration
 [tool.py2app]
-# The script to bundle (path is relative to the repository root)
-# This must be one line to avoid TOML parsing errors
-app = [ { script = "photomap/backend/photomap_outer_loop.py", plist = { "CFBundleName" = "PhotoMapAI" }} ]
-
-# Modules/packages to include in the frozen bundle (module names, not pip project names)
-packages = ["photomap"]
-includes = [
-  "fastapi",
-  "uvicorn",
-  "jinja2",
-  "numpy",
-  "pandas",
-  "networkx",
-  "pillow_heif",   # import name for pillow-heif
-  "platformdirs",
-  "psutil",
-  "pydantic",
-  "python_multipart",
-  "yaml",          # PyYAML provides 'yaml'
-  "sklearn",       # scikit-learn import name
-  "torch",
-  "tqdm",
-  "umap",          # umap-learn import name
-  "packaging",
-  "dash",
-  "clip_anytorch", # verify actual import name in your env
-  "colorama"
-]
-
-# Icon and resources
-iconfile = "photomap/frontend/static/icons/icon.icns"
-resources = []
-
-# Behavioural options
-argv_emulation = true
-dist_dir = "dist"
+app = [ "photomap/backend/photomap_outer_loop.py" ]
+options = { iconfile = "photomap/frontend/static/icons/icon.icns", standalone = true, argv_emulation = true}

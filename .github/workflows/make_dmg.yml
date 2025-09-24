@@ -27,22 +27,9 @@ jobs:
 
       - name: Build .app bundle (with debugging info)
         run: |
-          set -euo pipefail
-          # ensure py2app is installed into this Python env
           python -m pip install --upgrade py2app
-          SCRIPTDIR=$(python -c "import sysconfig, os; print(sysconfig.get_path('scripts'))")
-          echo "Python scripts dir: $SCRIPTDIR"
-          if [ -x "$SCRIPTDIR/py2app" ]; then
-            "$SCRIPTDIR/py2app"
-          elif [ -x "$SCRIPTDIR/py2applet" ]; then
-            # older py2app installs 'py2applet' entrypoint
-            "$SCRIPTDIR/py2applet" -v
-          else
-            echo "py2app script not found in $SCRIPTDIR"
-            ls -la "$SCRIPTDIR" || true
-            python -m pip show py2app
-            exit 1
-          fi
+          python -m pip install build
+          python -m build
 
       - name: Create .dmg
         run: |
