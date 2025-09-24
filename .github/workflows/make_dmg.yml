@@ -27,7 +27,8 @@ jobs:
 
       - name: Build .app bundle (py2app reads pyproject.toml)
         run: |
-          python -m py2app
+          # run the py2app CLI script installed by pip
+          py2app
 
       - name: Create .dmg
         run: |
