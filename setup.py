@@ -1,0 +1,77 @@
+# for packaging .dmg on macOS only
+# Run as python setup.py py2app
+# Then create a .dmg with:
+# hdiutil create -volname "PhotoMapAI" -srcfolder dist/PhotoMapAI.app -ov -format UDZO PhotoMapAI.dmg
+
+from setuptools import find_packages, setup
+
+APP = ["photomap/backend/photomap_outer_loop.py"]  # Entry point for your app
+DATA_FILES = []
+OPTIONS = {
+    "argv_emulation": True,
+    "packages": ["photomap"],
+    "includes": [
+        "fastapi",
+        "uvicorn",
+        "jinja2",
+        "numpy",
+        "pandas",
+        "networkx",
+        "pillow_heif",
+        "platformdirs",
+        "pydantic",
+        "python_multipart",
+        "PyYAML",
+        "requests",
+        "scikit_learn",
+        "torch",
+        "tqdm",
+        "umap_learn",
+        "psutil",
+        "packaging",
+        "dash",
+        "clip_anytorch",
+        "colorama",
+    ],
+    "iconfile": "photomap/frontend/static/icons/icon.icns",  # Uncomment and set if you have a macOS icon
+}
+
+setup(
+    app=APP,
+    name="PhotoMapAI",
+    version="0.9.3",
+    description="AI-based image clustering and exploration tool",
+    author="Lincoln Stein",
+    author_email="lincoln.stein@gmail.com",
+    url="https://github.com/lstein/PhotoMapAI",
+    python_requires=">=3.10, <3.14",
+    packages=find_packages(include=["photomap", "photomap.*"]),
+    include_package_data=True,
+    install_requires=[
+        "Pillow",
+        "clip-anytorch",
+        "colorama",
+        "dash",
+        "fastapi",
+        "jinja2",
+        "networkx",
+        "numpy",
+        "pandas",
+        "pillow-heif",
+        "platformdirs",
+        "pydantic",
+        "python-multipart",
+        "PyYAML",
+        "requests",
+        "scikit-learn",
+        "setuptools<67",
+        "torch",
+        "tqdm",
+        "umap-learn",
+        "uvicorn",
+        "psutil",
+        "packaging",
+    ],
+    options={"py2app": OPTIONS},
+    setup_requires=["py2app"],
+)

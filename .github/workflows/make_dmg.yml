@@ -1,0 +1,20 @@
+jobs:
+  build-macos-dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install py2app
+        run: pip install py2app
+      - name: Build .app bundle
+        run: python setup.py py2app
+      - name: Create .dmg
+        run: hdiutil create -volname "PhotoMapAI" -srcfolder dist/PhotoMapAI.app -ov -format UDZO PhotoMapAI.dmg
+      - name: Upload .dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhotoMapAI.dmg
+          path: PhotoMapAI.dmg
