@@ -1,3 +1,7 @@
+name: Build macOS .dmg
+on:
+  workflow_call:
+  workflow_dispatch:
 jobs:
   build-macos-dmg:
     runs-on: macos-latest
