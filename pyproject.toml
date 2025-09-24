@@ -88,4 +88,4 @@ start_photomap = "photomap.backend.photomap_outer_loop:start_photomap"
 # py2app configuration
 [tool.py2app]
 app = [ "photomap/backend/photomap_outer_loop.py" ]
-options = { iconfile = "photomap/frontend/static/icons/icon.icns", standalone = true, argv_emulation = true}
+options = { iconfile = "photomap/frontend/static/icons/icon.icns", argv_emulation = true}
