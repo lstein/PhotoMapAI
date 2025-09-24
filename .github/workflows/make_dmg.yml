@@ -25,10 +25,24 @@ jobs:
       - name: Install py2app
         run: python -m pip install py2app
 
-      - name: Build .app bundle (py2app reads pyproject.toml)
+      - name: Build .app bundle (with debugging info)
         run: |
-          # run the py2app CLI script installed by pip
-          py2app
+          set -euo pipefail
+          # ensure py2app is installed into this Python env
+          python -m pip install --upgrade py2app
+          SCRIPTDIR=$(python -c "import sysconfig, os; print(sysconfig.get_path('scripts'))")
+          echo "Python scripts dir: $SCRIPTDIR"
+          if [ -x "$SCRIPTDIR/py2app" ]; then
+            "$SCRIPTDIR/py2app"
+          elif [ -x "$SCRIPTDIR/py2applet" ]; then
+            # older py2app installs 'py2applet' entrypoint
+            "$SCRIPTDIR/py2applet" -v
+          else
+            echo "py2app script not found in $SCRIPTDIR"
+            ls -la "$SCRIPTDIR" || true
+            python -m pip show py2app
+            exit 1
+          fi
 
       - name: Create .dmg
         run: |
