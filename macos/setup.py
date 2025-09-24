@@ -1,11 +1,6 @@
-# for packaging .dmg on macOS only
-# Run as python setup.py py2app
-# Then create a .dmg with:
-# hdiutil create -volname "PhotoMapAI" -srcfolder dist/PhotoMapAI.app -ov -format UDZO PhotoMapAI.dmg
-
 from setuptools import find_packages, setup
 
-APP = ["photomap/backend/photomap_outer_loop.py"]  # Entry point for your app
+APP = ["../photomap/backend/photomap_outer_loop.py"]
 DATA_FILES = []
 OPTIONS = {
     "argv_emulation": True,
@@ -33,7 +28,7 @@ OPTIONS = {
         "clip_anytorch",
         "colorama",
     ],
-    "iconfile": "photomap/frontend/static/icons/icon.icns",  # Uncomment and set if you have a macOS icon
+    "iconfile": "../photomap/frontend/static/icons/icon.icns",
 }
 
 setup(

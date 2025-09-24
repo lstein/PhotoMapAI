@@ -14,11 +14,15 @@ jobs:
       - name: Install py2app
         run: pip install py2app
       - name: Build .app bundle
-        run: python setup.py py2app
+        run: |
+          cd macos
+          python setup.py py2app
       - name: Create .dmg
-        run: hdiutil create -volname "PhotoMapAI" -srcfolder dist/PhotoMapAI.app -ov -format UDZO PhotoMapAI.dmg
+        run: |
+          hdiutil create -volname "PhotoMapAI" -srcfolder macos/dist/PhotoMapAI.app -ov -format UDZO PhotoMapAI.dmg
       - name: Upload .dmg
         uses: actions/upload-artifact@v4
         with:
           name: PhotoMapAI.dmg
           path: PhotoMapAI.dmg
+          
