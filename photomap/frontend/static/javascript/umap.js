@@ -171,7 +171,7 @@ export async function fetchUmapData() {
                 .pop(),
           ],
           mode: "markers",
-          type: "scattergl",
+          type: "scattergl", // Keep as scattergl
           marker: {
             color: "#FFD700",
             size: 18,
@@ -186,7 +186,7 @@ export async function fetchUmapData() {
           y: [],
           text: [],
           mode: "markers",
-          type: "scattergl",
+          type: "scattergl", // Keep as scattergl
           marker: {
             color: "#FFD700",
             size: 18,
@@ -302,6 +302,7 @@ export async function fetchUmapData() {
       });
 
       gd.on("plotly_relayout", (eventData) => {
+        console.trace("relayout event:", eventData);
         if (suppressRelayoutEvent) return; // Prevent feedback loop
 
         // Only update landmarks for actual user pan/zoom events, not our programmatic changes
@@ -321,7 +322,8 @@ export async function fetchUmapData() {
         }
       });
 
-      gd.on("plotly_redraw", () => {
+      gd.on("plotly_redraw", (eventData) => {
+        console.trace("redraw event:", eventData);
         if (suppressRelayoutEvent) return;
         debouncedUpdateLandmarkTrace();
       });
@@ -353,6 +355,9 @@ export async function fetchUmapData() {
         markerTraceIndex !== plotDiv.data.length - 1
       ) {
         Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
+      }
+      if (markerTraceIndex === -1) {
+        console.error("markerTraceIndex is missing!:", markerTraceIndex);
       }
     });
 
@@ -864,7 +869,7 @@ function updateLandmarkTrace() {
       x,
       y,
       mode: "markers",
-      type: "scatter",
+      type: "scattergl", // Change from "scatter" to "scattergl"
       marker: {
         size: triangleSize,
         color: markerColors,
@@ -879,16 +884,16 @@ function updateLandmarkTrace() {
     // Invisible clickable points over thumbnails
     const clickableTrace = {
       x: clustersInView.map((c, i) => x[i]),
-      y: clustersInView.map((c, i) => y[i] + imageSize / 2), // center of image
+      y: clustersInView.map((c, i) => y[i] + imageSize / 2),
       mode: "markers",
-      type: "scatter",
+      type: "scattergl", // Change from "scatter" to "scattergl"
       marker: {
         color: "rgba(0, 0, 0, 0)",
         symbol: "square",
         size: thumbSize,
         line: { width: 0 },
       },
-      customdata: clustersInView.map((c) => c.cluster), // <-- store cluster ID, not representative index
+      customdata: clustersInView.map((c) => c.cluster),
       hoverinfo: "none",
       showlegend: false,
       name: "LandmarkClickTargets",
