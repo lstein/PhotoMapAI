@@ -346,20 +346,6 @@ export async function fetchUmapData() {
         }, 500);
       }
 
-      // After adding traces (e.g., landmarks), move the marker trace to the end
-      const plotDiv = document.getElementById("umapPlot");
-      const markerTraceIndex = plotDiv.data.findIndex(
-        (trace) => trace.name === "Current Image"
-      );
-      if (
-        markerTraceIndex !== -1 &&
-        markerTraceIndex !== plotDiv.data.length - 1
-      ) {
-        Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
-      }
-      if (markerTraceIndex === -1) {
-        console.error("markerTraceIndex is missing!:", markerTraceIndex);
-      }
     });
 
     // Ensure the current image marker is visible after plot initialization
