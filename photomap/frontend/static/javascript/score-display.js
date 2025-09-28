@@ -38,7 +38,6 @@ export class ScoreDisplay {
   }
 
   showCluster(cluster, color, index = null, total = null) {
-      console.log("Showing cluster:", cluster, color, index, total);
     if (cluster !== undefined && cluster !== null) {
       let text = (cluster === "unclustered") ? "unclustered images" : `cluster ${cluster}`;
       if (index !== null && total !== null) {
