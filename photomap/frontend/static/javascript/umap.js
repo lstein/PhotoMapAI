@@ -279,6 +279,29 @@ export async function fetchUmapData() {
         removeUmapThumbnail();
       });
 
+      gd.on("plotly_selected", function (eventData) {
+	console.log("plotly_selected:", eventData);
+        if (!eventData || !eventData.points || !eventData.points.length) return;
+        const selectedIndexes = eventData.points
+          .filter((pt) => pt.curveNumber === 0)
+          .map((pt) => pt.customdata);
+
+        const selectedResults = selectedIndexes.map((index) => {
+          const point = points.find((p) => p.index === index);
+          return {
+            index: index,
+            color: getClusterColor(point?.cluster ?? -1),
+            score: point?.score ?? 1.0,
+          };
+        });
+
+        window.dispatchEvent(
+          new CustomEvent("searchResultsChanged", {
+            detail: { results: selectedResults, searchType: "cluster" },
+          })
+        );
+      });
+
       gd.on("plotly_relayout", (eventData) => {
         console.log("relayout event:", eventData);
         if (suppressRelayoutEvent) return; // Prevent feedback loop
