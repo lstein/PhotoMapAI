@@ -43,20 +43,6 @@ jobs:
       - name: Create virtual environment
         run: |
           python -m venv .venv
-          
-      - name: Activate virtual environment (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          echo "source .venv/bin/activate" >> $GITHUB_ENV
-          source .venv/bin/activate
-          echo "PATH=$VIRTUAL_ENV/bin:$PATH" >> $GITHUB_ENV
-
-      - name: Activate virtual environment (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          echo "source .venv/bin/activate" >> $GITHUB_ENV
-          source .venv/bin/activate
-          echo "PATH=$VIRTUAL_ENV/bin:$PATH" >> $GITHUB_ENV
 
       - name: Install dependencies and build
         run: |
