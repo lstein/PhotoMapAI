@@ -66,6 +66,7 @@ development = [
     "mkdocs-material",
     "twine",
     "pymdown-extensions",
+    "pyinstaller",
 ]
 
 [tool.setuptools.packages.find]
@@ -83,4 +84,4 @@ search_images = "photomap.backend.imagetool:main"
 search_text = "photomap.backend.imagetool:main"
 find_duplicate_images = "photomap.backend.imagetool:main"
 photomap_server = "photomap.backend.photomap_server:main"
-start_photomap = "photomap.backend.photomap_outer_loop:start_photomap"
+start_photomap = "photomap.backend.main_wrapper:start_photomap_loop"

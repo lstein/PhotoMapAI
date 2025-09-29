@@ -1,3 +1,6 @@
+import os
+import threading
+import time
 import signal
 import subprocess
 import sys
@@ -97,11 +100,6 @@ async def update_version():
 @upgrade_router.post("/version/restart", tags=["Upgrade"])
 async def restart_server():
     """Restart the server after update"""
-    import os
-    import subprocess
-    import sys
-    import threading
-    import time
 
     def delayed_restart():
         time.sleep(2)  # Give time for response to be sent

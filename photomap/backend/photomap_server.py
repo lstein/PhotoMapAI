@@ -1,11 +1,6 @@
 # slideshow_server.py
-print("Loading, please wait...")
 import logging
 import os
-import signal
-import subprocess
-import sys
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Optional
 
@@ -15,15 +10,16 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .config import get_config_manager
-from .constants import get_package_resource_path
-from .routers.album import album_router
-from .routers.filetree import filetree_router
-from .routers.index import index_router
-from .routers.search import search_router
-from .routers.umap import umap_router
-from .routers.upgrade import upgrade_router
-from .util import get_app_url
+from photomap.backend.args import get_version, get_args
+from photomap.backend.config import get_config_manager
+from photomap.backend.constants import get_package_resource_path
+from photomap.backend.routers.album import album_router
+from photomap.backend.routers.filetree import filetree_router
+from photomap.backend.routers.index import index_router
+from photomap.backend.routers.search import search_router
+from photomap.backend.routers.umap import umap_router
+from photomap.backend.routers.upgrade import upgrade_router
+from photomap.backend.util import get_app_url
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -86,65 +82,11 @@ async def get_root(
         },
     )
 
-
-def get_version():
-    """Get the current version of the PhotoMapAI package."""
-    try:
-        return version("photomapai")
-    except PackageNotFoundError:
-        return "unknown"
-
-
 # Main Entry Point
 def main():
     """Main entry point for the slideshow server."""
-    import argparse
-
     import uvicorn
-
-    parser = argparse.ArgumentParser(description="Run the PhotoMap slideshow server.")
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=None,
-        help="Path to the configuration file (default: ~/.config/photomap/config.yaml, uses environment variable PHOTOMAP_CONFIG)",
-    )
-    parser.add_argument(
-        "--host",
-        type=str,
-        default=None,
-        help="Network interface to run the server on (default: 127.0.0.1), uses environment variable PHOTOMAP_HOST",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=None,
-        help="Port to run the server on (default: 8050), uses environment variable PHOTOMAP_PORT",
-    )
-    parser.add_argument(
-        "--cert",
-        type=Path,
-        default=None,
-        help="Path to SSL certificate file (optional, for HTTPS)",
-    )
-    parser.add_argument(
-        "--key",
-        type=Path,
-        default=None,
-        help="Path to SSL key file (optional, for HTTPS)",
-    )
-    parser.add_argument(
-        "--album-locked",
-        type=str,
-        default=None,
-        help="Start with a specific locked in album and disable album management (default: None)",
-    )
-    parser.add_argument(
-        "--reload",
-        action="store_true",
-        help="Enable auto-reload when source files change for development (default: False)",
-    )
-    args = parser.parse_args()
+    args = get_args()
 
     repo_root = Path(get_package_resource_path("photomap"), "../..").resolve()
 
