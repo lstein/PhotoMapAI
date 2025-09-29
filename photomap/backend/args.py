@@ -60,7 +60,12 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"PhotoMapAI {get_version()}",
+        version=f"%(prog)s {get_version()}",
         help="Show the version number and exit",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run server once; do not respawn"
     )
     return parser.parse_args()

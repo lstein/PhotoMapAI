@@ -84,4 +84,4 @@ pyinstaller \
     --argv-emulation \
     --name photomap \
     -y \
-    photomap/backend/main_wrapper.py
+    photomap/backend/photomap_server.py

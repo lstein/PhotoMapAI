@@ -1,6 +1,9 @@
 # slideshow_server.py
 import logging
 import os
+import signal
+import sys
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -82,12 +85,36 @@ async def get_root(
         },
     )
 
+def start_photomap_loop():
+    """Start the PhotoMapAI server loop."""
+    running = True
+    exe_dir = os.path.dirname(sys.executable)
+    photomap_server_exe = os.path.join(exe_dir, Path(sys.argv[0]).name)
+    args = [photomap_server_exe] + sys.argv[1:] + ["--once"]
+
+    while running:
+        try:
+            logger.info("Loading...")
+            subprocess.run(args, check=True)
+        except KeyboardInterrupt:
+            logger.warning("Shutting down server...")
+            running = False
+        except subprocess.CalledProcessError as e:
+            running = abs(e.returncode) == signal.SIGTERM.value
+            if running:
+                logger.info("Restarting server.")
+            else:
+                logger.error(f"Server exited with error code {e.returncode}")
+
 # Main Entry Point
 def main():
     """Main entry point for the slideshow server."""
-    import uvicorn
     args = get_args()
+    if not args.once:
+        start_photomap_loop()
+        return
 
+    import uvicorn
     repo_root = Path(get_package_resource_path("photomap"), "../..").resolve()
 
     port = args.port or int(os.environ.get("PHOTOMAP_PORT", "8050"))
