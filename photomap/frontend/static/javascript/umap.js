@@ -279,28 +279,6 @@ export async function fetchUmapData() {
         removeUmapThumbnail();
       });
 
-      gd.on("plotly_selected", function (eventData) {
-        if (!eventData || !eventData.points || !eventData.points.length) return;
-        const selectedIndexes = eventData.points
-          .filter((pt) => pt.curveNumber === 0)
-          .map((pt) => pt.customdata);
-
-        const selectedResults = selectedIndexes.map((index) => {
-          const point = points.find((p) => p.index === index);
-          return {
-            index: index,
-            color: getClusterColor(point?.cluster ?? -1),
-            score: point?.score ?? 1.0,
-          };
-        });
-
-        window.dispatchEvent(
-          new CustomEvent("searchResultsChanged", {
-            detail: { results: selectedResults, searchType: "cluster" },
-          })
-        );
-      });
-
       gd.on("plotly_relayout", (eventData) => {
         if (suppressRelayoutEvent) return; // Prevent feedback loop
 
@@ -321,7 +299,7 @@ export async function fetchUmapData() {
         }
       });
 
-      gd.on("plotly_redraw", () => {
+      gd.on("plotly_redraw", (eventData) => {
         if (suppressRelayoutEvent) return;
         debouncedUpdateLandmarkTrace();
       });
@@ -400,11 +378,11 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
     const searchSet = new Set(searchResults.map((r) => r.index));
     markerColors = points.map((p) => getClusterColor(p.cluster));
     markerAlphas = points.map((p) =>
-      p.cluster === -1 ? 0.1 : searchSet.has(p.index) ? 1.0 : 0.2
+      searchSet.has(p.index) ? 1.0 : 0.2
     );
   } else {
     markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.1 : 0.5));
+    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.25 : 0.5));
   }
   Plotly.restyle(
     "umapPlot",
@@ -1018,8 +996,7 @@ async function handleClusterClick(clickedIndex) {
   if (!clickedPoint) return;
 
   const clickedCluster = clickedPoint.cluster;
-  const clusterIndex = clusters.indexOf(clickedCluster);
-  const clusterColor = colors[clusterIndex % colors.length];
+  const clusterColor = getClusterColor(clickedCluster);
   let clusterIndices = points
     .filter((p) => p.cluster === clickedCluster)
     .map((p) => p.index);
@@ -1040,7 +1017,7 @@ async function handleClusterClick(clickedIndex) {
 
   const clusterMembers = sortedClusterIndices.map((index) => ({
     index: index,
-    cluster: clickedCluster === -1 ? "Unclustered" : clickedCluster,
+    cluster: clickedCluster === -1 ? "unclustered" : clickedCluster,
     color: clusterColor,
   }));
 
