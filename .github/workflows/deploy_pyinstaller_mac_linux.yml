@@ -14,10 +14,10 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: photomap-linux-x64
-            executable_path: dist/photomap/photomap
+            executable_path: dist/photomap
           - os: macos-latest
             artifact_name: photomap-macos-x64
-            executable_path: dist/photomap/photomap
+            executable_path: dist/photomap
 
     runs-on: ${{ matrix.os }}
 
