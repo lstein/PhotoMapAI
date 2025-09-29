@@ -80,7 +80,7 @@ pyinstaller \
     --add-data "photomap/frontend/static:photomap/frontend/static" \
     --add-data "photomap/frontend/templates:photomap/frontend/templates" \
     --paths . \
-    --onedir \
+    --onefile \
     --argv-emulation \
     --name photomap \
     -y \
