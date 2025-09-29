@@ -2,6 +2,7 @@ name: Deploy PyInstaller Executables (macOS + Linux)
 
 on:
   workflow_dispatch:
+  pull request:
   release:
     types: [published]
 
