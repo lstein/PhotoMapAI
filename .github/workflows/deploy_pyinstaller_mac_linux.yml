@@ -65,7 +65,7 @@ jobs:
         run: |
           cd dist
           ARCHIVE_NAME="${{ matrix.artifact_name }}-v${{ steps.get_version.outputs.version }}.zip"
-          zip -r "$ARCHIVE_NAME" photomap/
+          zip -r "$ARCHIVE_NAME" photomap
           ls -la *.zip
 
       - name: Upload artifact
