@@ -306,6 +306,7 @@ export async function addSlideByIndex(
   prepend = false
 ) {
   if (!state.swiper) return;
+  if (state.isTransitioning) return; // Prevent adding slides during transitions
 
   // pick a random slide if settings.mode is random
   if (state.mode === "random" && !slideState.isSearchMode) {
@@ -475,6 +476,7 @@ export function enforceHighWaterMark(backward = false) {
   const maxSlides = state.highWaterMark || 50;
   const swiper = state.swiper;
   const slides = swiper.slides.length;
+  if (state.isTransitioning) return; // don't trim while transitioning
 
   if (slides > maxSlides) {
     let slideShowRunning = swiper.autoplay.running;
