@@ -73,6 +73,6 @@ pyinstaller \
     --paths . \
     --onefile \
     --argv-emulation \
-    --name "photomap-$TORCH_VARIANT" \
+    --name photomap \
     -y \
     photomap/backend/photomap_server.py

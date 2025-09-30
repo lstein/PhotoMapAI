@@ -81,6 +81,6 @@ pyinstaller `
     --add-data "photomap/frontend/templates${sep}photomap/frontend/templates" `
     --paths . `
     --onefile `
-    --name "photomap-$TorchVariant" `
+    --name photomap `
     -y `
     photomap/backend/photomap_server.py
