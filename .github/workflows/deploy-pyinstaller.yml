@@ -129,30 +129,6 @@ jobs:
           ls -la *.zip
         shell: bash
 
-      - name: Create .dmg from .app bundle (macOS only)
-        if: runner.os == 'macOS'
-        run: |
-          cd dist
-          VERSION="${{ steps.get_version_unix.outputs.version }}"
-          DMG_NAME="photomap-macos-x64-${{ matrix.torch_variant }}-v$VERSION.dmg"
-          # Find the .app bundle (PyInstaller one-dir mode)
-          APP_BUNDLE=$(find . -maxdepth 1 -type d -name "*.app" | head -n 1)
-          if [ -z "$APP_BUNDLE" ]; then
-            echo "No .app bundle found in dist/"
-            exit 1
-          fi
-          hdiutil create -volname "PhotoMap" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$DMG_NAME"
-          ls -lh *.dmg
-        shell: bash
-
-      - name: Upload macOS .dmg artifact
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
-        with:
-          name: photomap-macos-x64-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version }}
-          path: dist/photomap-macos-x64-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version }}.dmg
-          retention-days: 30
-
       - name: Debug - List dist contents
         run: ls -la dist/
         shell: bash
