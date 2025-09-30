@@ -123,6 +123,9 @@ jobs:
           if [ -f "photomap$EXT" ]; then
             mv "photomap$EXT" "$BASE$EXT"
             zip "$ARCHIVE_NAME" "$BASE$EXT"
+          elif [ -d "photomap.app" ]; then
+            mv "photomap.app" "$BASE.app"
+            zip -r "$ARCHIVE_NAME" "$BASE.app"
           elif [ -d "photomap" ]; then
             mv "photomap" "$BASE"
             zip -r "$ARCHIVE_NAME" "$BASE"
@@ -169,4 +172,5 @@ jobs:
         with:
           name: photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}
           path: dist/photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}.zip
+          compression-level: 0
           retention-days: 30
