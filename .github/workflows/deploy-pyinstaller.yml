@@ -38,6 +38,16 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Free up disk space
+        if: matrix.torch_variant != 'cpu'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h
+        shell: bash
+
       - name: Install tomli for version extraction (Linux/macOS)
         if: runner.os != 'Windows'
         run: python -m pip install tomli

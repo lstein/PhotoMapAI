@@ -58,6 +58,13 @@ if ($IsWindows) {
     $sep = ":"
 }
 
+# After installing PyTorch
+pip cache purge
+
+# Before running PyInstaller
+Write-Host "Disk space before PyInstaller:"
+Get-PSDrive C
+
 # Run PyInstaller
 pyinstaller `
     --hidden-import clip `
@@ -91,3 +98,6 @@ pyinstaller `
     --name photomap `
     -y `
     photomap/backend/photomap_server.py
+
+# After PyInstaller
+Remove-Item -Recurse -Force build/ -ErrorAction SilentlyContinue

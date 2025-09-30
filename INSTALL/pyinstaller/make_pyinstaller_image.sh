@@ -36,6 +36,10 @@ case "$TORCH_VARIANT" in
         ;;
 esac
 
+# After installing PyTorch
+pip cache purge
+python -c "import torch; print(f'PyTorch cache cleared')"
+
 # Make sure build tools and hooks are up to date
 python -m pip install -U pip wheel setuptools
 python -m pip install -U pyinstaller pyinstaller-hooks-contrib
@@ -83,3 +87,10 @@ pyinstaller \
     --name photomap \
     -y \
     photomap/backend/photomap_server.py
+
+# Before running PyInstaller
+echo "Disk space before PyInstaller:"
+df -h
+
+# After PyInstaller
+rm -rf build/  # Remove PyInstaller temp files
