@@ -1,42 +1,33 @@
 #!/bin/bash
 # filepath: /home/lstein/Projects/PhotoMap/INSTALL/pyinstaller/make_pyinstaller_image.sh
 
-# Function to detect CUDA version
-detect_cuda() {
-    if command -v nvidia-smi &> /dev/null; then
-        local nvidia_output=$(nvidia-smi 2>/dev/null)
-        if [[ $nvidia_output ]]; then
-            if [[ $nvidia_output =~ CUDA\ Version:\ ([0-9]+\.[0-9]+) ]]; then
-                echo "${BASH_REMATCH[1]}"
-                return 0
-            fi
-        fi
-    fi
-    return 1
+set -e
+
+# Usage info
+usage() {
+    echo "Usage: $0 [cpu|cu121|cu118|cu124|cu129|...]"
+    echo "  cpu      - Install CPU-only PyTorch (default)"
+    echo "  cuXXX    - Install CUDA-enabled PyTorch (e.g., cu121 for CUDA 12.1)"
+    exit 1
 }
 
-# Check for CUDA and install appropriate PyTorch
-echo "Checking for CUDA..."
-cuda_version=$(detect_cuda)
-if [[ $? -eq 0 ]]; then
-    echo "CUDA Version $cuda_version detected."
-    
-    # Only support known CUDA versions for PyTorch wheels
-    case "$cuda_version" in
-        "12.9"|"12.8"|"12.6"|"12.5"|"12.4"|"12.1"|"11.8")
-            cuda_suffix="cu${cuda_version//./}"
-            echo "Using PyTorch wheel: $cuda_suffix"
-            pip install torch torchvision --index-url https://download.pytorch.org/whl/$cuda_suffix
-            ;;
-        *)
-            echo "CUDA version $cuda_version may not be fully supported. Installing CPU-only PyTorch..."
-            pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-            ;;
-    esac
-else
-    echo "No CUDA detected. Installing CPU-only PyTorch..."
-    pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-fi
+# Parse argument, default to "cpu" if not provided
+TORCH_VARIANT="${1:-cpu}"
+
+# Install appropriate PyTorch
+echo "Requested PyTorch variant: $TORCH_VARIANT"
+case "$TORCH_VARIANT" in
+    cpu)
+        pip install torch torchvision -U --index-url https://download.pytorch.org/whl/cpu
+        ;;
+    cu129|cu128|cu126|cu125|cu124|cu121|cu118)
+        pip install torch torchvision -U --index-url https://download.pytorch.org/whl/$TORCH_VARIANT
+        ;;
+    *)
+        echo "Unknown or unsupported variant: $TORCH_VARIANT"
+        usage
+        ;;
+esac
 
 # Make sure build tools and hooks are up to date
 python -m pip install -U pip wheel setuptools
@@ -82,6 +73,6 @@ pyinstaller \
     --paths . \
     --onefile \
     --argv-emulation \
-    --name photomap \
+    --name "photomap-$TORCH_VARIANT" \
     -y \
     photomap/backend/photomap_server.py
