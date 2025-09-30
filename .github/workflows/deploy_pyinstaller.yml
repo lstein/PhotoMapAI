@@ -25,7 +25,9 @@ jobs:
             platform: windows-x64
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.ps1
             executable_ext: ".exe"
-
+        exclude:
+          - os: macos-latest
+            torch_variant: cu128
     runs-on: ${{ matrix.os }}
 
     steps:
