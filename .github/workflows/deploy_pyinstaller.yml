@@ -15,17 +15,14 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux-x64
-            shell: bash
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.sh
             executable_ext: ""
           - os: macos-latest
             platform: macos-x64
-            shell: bash
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.sh
             executable_ext: ""
           - os: windows-latest
             platform: windows-x64
-            shell: pwsh
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.ps1
             executable_ext: ".exe"
 
@@ -40,47 +37,85 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install tomli for version extraction
+      - name: Install tomli for version extraction (Linux/macOS)
+        if: runner.os != 'Windows'
         run: python -m pip install tomli
-        shell: ${{ matrix.shell }}
+        shell: bash
 
-      - name: Extract version from pyproject.toml
+      - name: Install tomli for version extraction (Windows)
+        if: runner.os == 'Windows'
+        run: python -m pip install tomli
+        shell: pwsh
+
+      - name: Extract version from pyproject.toml (Linux/macOS)
+        if: runner.os != 'Windows'
         id: get_version
         run: |
-          python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])"
-        shell: ${{ matrix.shell }}
+          VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
 
-      - name: Create virtual environment
+      - name: Extract version from pyproject.toml (Windows)
+        if: runner.os == 'Windows'
+        id: get_version
         run: |
-          python -m venv .venv
-        shell: ${{ matrix.shell }}
+          $VERSION = python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])"
+          echo "version=$VERSION" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        shell: pwsh
 
-      - name: Install dependencies and build
+      - name: Create virtual environment (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: python -m venv .venv
+        shell: bash
+
+      - name: Create virtual environment (Windows)
+        if: runner.os == 'Windows'
+        run: python -m venv .venv
+        shell: pwsh
+
+      - name: Install dependencies and build (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
+          source .venv/bin/activate
           ${{ matrix.build_script }} ${{ matrix.torch_variant }}
-        shell: ${{ matrix.shell }}
+        shell: bash
 
-      - name: Verify build
+      - name: Install dependencies and build (Windows)
+        if: runner.os == 'Windows'
         run: |
-          ls -la dist/
-          EXECUTABLE="dist/photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}"
-          if [ -f "$EXECUTABLE" ]; then
-            echo "Build successful: $EXECUTABLE"
-            file "$EXECUTABLE"
-          else
-            echo "Build failed: executable not found"
-            exit 1
-          fi
-        shell: ${{ matrix.shell }}
+          .\.venv\Scripts\Activate.ps1
+          & ${{ matrix.build_script }} ${{ matrix.torch_variant }}
+        shell: pwsh
 
-      - name: Create zip archive with version
+      - name: Rename executable
+        run: |
+          mv dist/photomap${{ matrix.executable_ext }} dist/photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}
+        shell: bash
+        if: runner.os != 'Windows'
+
+      - name: Rename executable (Windows)
+        run: |
+          Rename-Item -Path dist\photomap${{ matrix.executable_ext }} -NewName photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}
+        shell: pwsh
+        if: runner.os == 'Windows'
+
+      - name: Create zip archive with version (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           cd dist
-          EXECUTABLE="photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}"
           ARCHIVE_NAME="photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version.outputs.version }}.zip"
-          zip -j "$ARCHIVE_NAME" "$EXECUTABLE"
+          zip -j "$ARCHIVE_NAME" "photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}"
           ls -la *.zip
-        shell: ${{ matrix.shell }}
+        shell: bash
+
+      - name: Create zip archive with version (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd dist
+          $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version.outputs.version }}.zip"
+          Compress-Archive -Path "photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}" -DestinationPath $archiveName
+          Get-ChildItem *.zip
+        shell: pwsh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
