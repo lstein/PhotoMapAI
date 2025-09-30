@@ -3,6 +3,7 @@ name: Deploy PyInstaller Executables
 on:
   workflow_call:
   workflow_dispatch:
+  pull_request:
 
 jobs:
   build:
@@ -128,26 +129,29 @@ jobs:
           ls -la *.zip
         shell: bash
 
-      - name: Rename and zip executable or directory (Windows)
-        if: runner.os == 'Windows'
+      - name: Create .dmg from .app bundle (macOS only)
+        if: runner.os == 'macOS'
         run: |
           cd dist
-          $base = "photomap-${{ matrix.torch_variant }}"
-          $ext = "${{ matrix.executable_ext }}"
-          $version = "${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}"
-          $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$version.zip"
-          if (Test-Path "photomap$ext") {
-            Rename-Item -Path "photomap$ext" -NewName "$base$ext"
-            & "C:\Program Files\7-Zip\7z.exe" a "$archiveName" "$base$ext"
-          } elseif (Test-Path "photomap") {
-            Rename-Item -Path "photomap" -NewName "$base"
-            & "C:\Program Files\7-Zip\7z.exe" a "$archiveName" "$base"
-          } else {
-            Write-Error "Neither photomap$ext nor photomap directory found!"
+          VERSION="${{ steps.get_version_unix.outputs.version }}"
+          DMG_NAME="photomap-macos-x64-${{ matrix.torch_variant }}-v$VERSION.dmg"
+          # Find the .app bundle (PyInstaller one-dir mode)
+          APP_BUNDLE=$(find . -maxdepth 1 -type d -name "*.app" | head -n 1)
+          if [ -z "$APP_BUNDLE" ]; then
+            echo "No .app bundle found in dist/"
             exit 1
-          }
-          Get-ChildItem *.zip
-        shell: pwsh
+          fi
+          hdiutil create -volname "PhotoMap" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$DMG_NAME"
+          ls -lh *.dmg
+        shell: bash
+
+      - name: Upload macOS .dmg artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: photomap-macos-x64-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version }}
+          path: dist/photomap-macos-x64-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version }}.dmg
+          retention-days: 30
 
       - name: Debug - List dist contents
         run: ls -la dist/
