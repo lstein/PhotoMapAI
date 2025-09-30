@@ -3,6 +3,7 @@ name: Deploy PyInstaller Executables
 on:
   workflow_call:
   workflow_dispatch:
+  pull_request:
 
 jobs:
   build:
@@ -77,6 +78,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           source .venv/bin/activate
+          chmod +x ${{ matrix.build_script }}
           ${{ matrix.build_script }} ${{ matrix.torch_variant }}
         shell: bash
 
@@ -87,35 +89,57 @@ jobs:
           & ${{ matrix.build_script }} ${{ matrix.torch_variant }}
         shell: pwsh
 
-      - name: Rename executable
-        run: |
-          mv dist/photomap${{ matrix.executable_ext }} dist/photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}
-        shell: bash
-        if: runner.os != 'Windows'
-
-      - name: Rename executable (Windows)
-        run: |
-          Rename-Item -Path dist\photomap${{ matrix.executable_ext }} -NewName photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}
-        shell: pwsh
-        if: runner.os == 'Windows'
-
-      - name: Create zip archive with version (Linux/macOS)
+      - name: Rename and zip executable or directory (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           cd dist
-          ARCHIVE_NAME="photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}.zip"
-          zip -j "$ARCHIVE_NAME" "photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}"
+          BASE="photomap-${{ matrix.torch_variant }}"
+          EXT="${{ matrix.executable_ext }}"
+          VERSION="${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}"
+          ARCHIVE_NAME="photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$VERSION.zip"
+          if [ -f "photomap$EXT" ]; then
+            mv "photomap$EXT" "$BASE$EXT"
+            zip "$ARCHIVE_NAME" "$BASE$EXT"
+          elif [ -d "photomap" ]; then
+            mv "photomap" "$BASE"
+            zip -r "$ARCHIVE_NAME" "$BASE"
+          else
+            echo "Neither photomap$EXT nor photomap directory found!"
+            exit 1
+          fi
           ls -la *.zip
         shell: bash
 
-      - name: Create zip archive with version (Windows)
+      - name: Rename and zip executable or directory (Windows)
         if: runner.os == 'Windows'
         run: |
           cd dist
-          $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}.zip"
-          Compress-Archive -Path "photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}" -DestinationPath $archiveName
+          $base = "photomap-${{ matrix.torch_variant }}"
+          $ext = "${{ matrix.executable_ext }}"
+          $version = "${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}"
+          $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$version.zip"
+          if (Test-Path "photomap$ext") {
+            Rename-Item -Path "photomap$ext" -NewName "$base$ext"
+            Compress-Archive -Path "$base$ext" -DestinationPath $archiveName
+          } elseif (Test-Path "photomap") {
+            Rename-Item -Path "photomap" -NewName "$base"
+            Compress-Archive -Path "$base" -DestinationPath $archiveName
+          } else {
+            Write-Error "Neither photomap$ext nor photomap directory found!"
+            exit 1
+          }
           Get-ChildItem *.zip
         shell: pwsh
+
+      - name: Debug - List dist contents
+        run: ls -la dist/
+        shell: bash
+        if: runner.os != 'Windows'
+
+      - name: Debug - List dist contents (Windows)
+        run: Get-ChildItem dist/
+        shell: pwsh
+        if: runner.os == 'Windows'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
