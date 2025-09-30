@@ -119,13 +119,13 @@ jobs:
           BASE="photomap-${{ matrix.torch_variant }}"
           EXT="${{ matrix.executable_ext }}"
           VERSION="${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}"
-          ARCHIVE_NAME="photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$VERSION.zip"
+          ARCHIVE_NAME="photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$VERSION"
           if [ -f "photomap$EXT" ]; then
-            mv "photomap$EXT" "$BASE$EXT"
+            mv "photomap$EXT" "$ARCHIVE_NAME$EXT"
           elif [ -d "photomap.app" ]; then
-            mv "photomap.app" "$BASE.app"
+            mv "photomap.app" "$ARCHIVE_NAME.app"
           elif [ -d "photomap" ]; then
-            mv "photomap" "$BASE"
+            mv "photomap" "$ARCHIVE_NAME"
           else
             echo "Neither photomap$EXT nor photomap directory found!"
             exit 1
@@ -133,18 +133,18 @@ jobs:
           ls -la
         shell: bash
 
-      - name: Rename and zip executable or directory (Windows)
+      - name: Rename executable or directory (Windows)
         if: runner.os == 'Windows'
         run: |
           cd dist
           $base = "photomap-${{ matrix.torch_variant }}"
           $ext = "${{ matrix.executable_ext }}"
           $version = "${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}"
-          $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$version.zip"
+          $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$version"
           if (Test-Path "photomap$ext") {
-            Rename-Item -Path "photomap$ext" -NewName "$base$ext"
+            Rename-Item -Path "photomap$ext" -NewName "$archiveName$ext"
           } elseif (Test-Path "photomap") {
-            Rename-Item -Path "photomap" -NewName "$base"
+            Rename-Item -Path "photomap" -NewName "$archiveName"
           } else {
             Write-Error "Neither photomap$ext nor photomap directory found!"
             exit 1
@@ -166,5 +166,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}
-          path: dist/photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}.zip
+          path: dist/photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}
           retention-days: 30
