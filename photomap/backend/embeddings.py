@@ -11,6 +11,7 @@ import asyncio
 import functools
 import logging
 import os
+import sys
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -46,7 +47,6 @@ SUPPORTED_EXTENSIONS = {
     ".heif",
     ".heic",
 }
-
 
 class IndexResult(BaseModel):
     """
@@ -211,6 +211,19 @@ class Embeddings(BaseModel):
         except Exception as e:
             logger.error(f"Error processing {image_path}: {e}")
             return None, None, None
+        
+    def _clip_root(self) -> Optional[str]:
+        """
+        Determine the root directory for CLIP model caching.
+        This is important for PyInstaller compatibility.
+        """
+        if getattr(sys, 'frozen', False):
+            # If running in a PyInstaller bundle, use the bundled cache directory
+            bundle_dir = sys._MEIPASS
+            return os.path.join(bundle_dir, "clip_models")
+        else:
+            # Otherwise, use the default cache directory
+            return None
 
     def _process_images_batch(
         self, image_paths: list[Path], progress_callback: Optional[Callable] = None
@@ -223,7 +236,7 @@ class Embeddings(BaseModel):
             progress_callback: Optional callback function(index, total, message) for progress updates
         """
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model, preprocess = clip.load("ViT-B/32", device=device)
+        model, preprocess = clip.load("ViT-B/32", device=device, download_root=self._clip_root())
 
         embeddings = []
         filenames = []
@@ -269,7 +282,7 @@ class Embeddings(BaseModel):
         Async version of _process_images_batch with progress tracking.
         """
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model, preprocess = clip.load("ViT-B/32", device=device)
+        model, preprocess = clip.load("ViT-B/32", device=device, download_root=self._clip_root())
 
         embeddings = []
         filenames = []
@@ -782,7 +795,7 @@ class Embeddings(BaseModel):
         filename_map = data["filename_map"]
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model, preprocess = clip.load("ViT-B/32", device=device)
+        model, preprocess = clip.load("ViT-B/32", device=device, download_root=self._clip_root())
 
         # Handle None queries: set weight to zero and skip embedding
         if query_image_data is None:
@@ -1045,10 +1058,12 @@ def tqdm_progress_callback(total_images):
 
 def print_cuda_message():
     """Print a message about CUDA availability."""
+    if os.environ.get("PHOTOMAP_CUDA_GRIPE"):
+       return
     if torch.cuda.is_available():
         logger.info("CUDA detected. Using GPU acceleration for indexing.")
     else:
         logger.info("CUDA not detected. Using CPU for indexing.")
-
+    os.environ["PHOTOMAP_CUDA_GRIPE"] = "true"
 
 print_cuda_message()
