@@ -18,6 +18,7 @@ export const state = {
   dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
   suppressDeleteConfirm: false,
   gridThumbSizeFactor: 1.0,
+  isTransitioning: false, // Flag set when transitioning from grid->swiper view
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
