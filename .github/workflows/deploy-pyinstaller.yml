@@ -1,10 +1,8 @@
 name: Deploy PyInstaller Executables
 
 on:
+  workflow_call:
   workflow_dispatch:
-  pull_request:
-  release:
-    types: [published]
 
 jobs:
   build:
@@ -125,22 +123,3 @@ jobs:
           name: photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}
           path: dist/photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}.zip
           retention-days: 30
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            artifacts/**/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -30,6 +30,13 @@ switch ($TorchVariant) {
     Default { Show-Usage }
 }
 
+# Set PyInstaller mode based on torch variant
+if ($TorchVariant -eq "cpu") {
+    $pyinstallerMode = "--onefile"
+} else {
+    $pyinstallerMode = "--onedir"
+}
+
 # Upgrade build tools and hooks
 python -m pip install -U pip wheel setuptools
 python -m pip install -U pyinstaller pyinstaller-hooks-contrib
@@ -80,7 +87,7 @@ pyinstaller `
     --add-data "photomap/frontend/static${sep}photomap/frontend/static" `
     --add-data "photomap/frontend/templates${sep}photomap/frontend/templates" `
     --paths . `
-    --onefile `
+    $pyinstallerMode `
     --name photomap `
     -y `
     photomap/backend/photomap_server.py

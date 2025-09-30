@@ -1,17 +1,72 @@
-name: Deploy to PyPI and DockerHub
+name: Deploy Release
 
 on:
   workflow_dispatch:
-
+  release:
+    types: [published]
 jobs:
-  show-name:
+  tag-release:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Starting Deploy to PyPI and DockerHub workflow"
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  pypi-deploy:
-    uses: ./.github/workflows/pypi.yml
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-  dockerhub-deploy:
-    needs: pypi-deploy
-    uses: ./.github/workflows/dockerhub.yml
+      - name: Extract version from pyproject.toml
+        id: get_version
+        run: |
+          VERSION=$(python -c "
+          try:
+              import tomllib
+              with open('pyproject.toml', 'rb') as f:
+                  data = tomllib.load(f)
+              print(data['project']['version'])
+          except Exception as e:
+              print(f'Error reading version: {e}', file=sys.stderr)
+              exit(1)
+          ")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Tag the release
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag v${{ steps.get_version.outputs.version }}
+          git push origin v${{ steps.get_version.outputs.version }}
+
+  deploy-pypi:
+    needs: tag-release
+    uses: ./.github/workflows/deploy-pypi.yml
+
+  deploy-dockerhub:
+    needs: deploy-pypi
+    uses: ./.github/workflows/deploy-dockerhub.yml
+
+  deploy-pyinstaller:
+    needs: deploy-dockerhub
+    uses: ./.github/workflows/deploy-pyinstaller.yml
+
+  deploy-make-dmg:
+    needs: deploy-pyinstaller
+    uses: ./.github/workflows/deploy-dmg.yml
+
+  upload-release:
+    needs: [deploy-pypi, deploy-dockerhub, deploy-pyinstaller, deploy-make-dmg]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.{zip,tar.gz,dmg}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -14,6 +14,13 @@ usage() {
 # Parse argument, default to "cpu" if not provided
 TORCH_VARIANT="${1:-cpu}"
 
+# Set PyInstaller mode based on torch variant
+if [[ "$TORCH_VARIANT" == cpu ]]; then
+    PYINSTALLER_MODE="--onefile"
+else
+    PYINSTALLER_MODE="--onedir"
+fi
+
 # Install appropriate PyTorch
 echo "Requested PyTorch variant: $TORCH_VARIANT"
 case "$TORCH_VARIANT" in
@@ -71,7 +78,7 @@ pyinstaller \
     --add-data "photomap/frontend/static:photomap/frontend/static" \
     --add-data "photomap/frontend/templates:photomap/frontend/templates" \
     --paths . \
-    --onefile \
+    $PYINSTALLER_MODE \
     --argv-emulation \
     --name photomap \
     -y \
