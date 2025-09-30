@@ -34,7 +34,11 @@ jobs:
           source .venv/bin/activate
           pip install -U pip wheel setuptools
           pip install py2app
-          # Install your package and all its dependencies
+          # Install PyTorch CPU version (lighter for macOS)
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          # Install other dependencies
+          pip install clip-anytorch numpy scikit-learn pillow
+          # Install your package
           pip install .
 
       - name: Build .app bundle
