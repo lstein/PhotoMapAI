@@ -1,28 +1,55 @@
 name: Deploy macOS .dmg
+
 on:
   workflow_call:
   workflow_dispatch:
+  pull_request:
+
 jobs:
   build-macos-dmg:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install py2app
-        run: pip install py2app
+
+      - name: Install tomli for version extraction
+        run: python -m pip install tomli
+
+      - name: Extract version from pyproject.toml
+        id: get_version
+        run: |
+          VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Create virtual environment
+        run: python -m venv .venv
+
+      - name: Install dependencies and package
+        run: |
+          source .venv/bin/activate
+          pip install -U pip wheel setuptools
+          pip install py2app
+          # Install your package and all its dependencies
+          pip install .
+
       - name: Build .app bundle
         run: |
+          source .venv/bin/activate
           cd macos
           python setup.py py2app
-      - name: Create .dmg
+
+      - name: Create .dmg with version
         run: |
-          hdiutil create -volname "PhotoMapAI" -srcfolder macos/dist/PhotoMapAI.app -ov -format UDZO PhotoMapAI.dmg
+          DMG_NAME="PhotoMapAI-v${{ steps.get_version.outputs.version }}.dmg"
+          hdiutil create -volname "PhotoMapAI" -srcfolder macos/dist/PhotoMapAI.app -ov -format UDZO "$DMG_NAME"
+
       - name: Upload .dmg
         uses: actions/upload-artifact@v4
         with:
-          name: PhotoMapAI.dmg
-          path: PhotoMapAI.dmg
-          
+          name: PhotoMapAI-v${{ steps.get_version.outputs.version }}
+          path: PhotoMapAI-v${{ steps.get_version.outputs.version }}.dmg
