@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-APP = ["../photomap/backend/photomap_outer_loop.py"]
+APP = ["../photomap/backend/photomap_server.py"]
 DATA_FILES = []
 OPTIONS = {
     "argv_emulation": True,
