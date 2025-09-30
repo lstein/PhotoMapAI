@@ -205,7 +205,10 @@ function addGridEventListeners() {
   if (state.swiper) {
     // Load more when reaching the end
     state.swiper.on("slideNextTransitionStart", async () => {
+      if (state.isTransitioning) return; // Don't load more during transitions
+      state.isTransitioning = true;
       await waitForBatchLoadingToFinish();
+      state.isTransitioning = false;
       const slidesLeft =
         Math.floor(state.swiper.slides.length / currentRows) -
         state.swiper.activeIndex;
@@ -219,13 +222,16 @@ function addGridEventListeners() {
         const index = slideState.isSearchMode
           ? slideState.globalToSearch(lastSlideIndex) + 1
           : lastSlideIndex + 1;
-        loadBatch(index, true); // Append a batch at the end
+        await loadBatch(index, true); // Append a batch at the end
       }
     });
 
     // Load more when reaching the start
-    state.swiper.on("slidePrevTransitionStas.seart", async () => {
+    state.swiper.on("slidePrevTransitionStart", async () => {
+      if (state.isTransitioning) return; // Don't load more during transitions
+      state.isTransitioning = true;
       await waitForBatchLoadingToFinish();
+      state.isTransitioning = false;
       const firstSlide = parseInt(
         state.swiper.slides[0].dataset.globalIndex,
         10
@@ -234,7 +240,7 @@ function addGridEventListeners() {
         ? slideState.globalToSearch(firstSlide)
         : firstSlide;
       if (firstSlide > 0 && state.swiper.activeIndex === 0) {
-        loadBatch(index - 1, false); // Prepend a batch at the start
+        await loadBatch(index - 1, false); // Prepend a batch at the start
       }
     });
 
@@ -285,6 +291,9 @@ function addGridEventListeners() {
 
   // Handle double clicks on grid slides
   window.handleGridSlideDblClick = async function (globalIndex) {
+    // Prevent navigation if we're already transitioning
+    if (state.isTransitioning) return;
+    
     slideState.setCurrentIndex(globalIndex, false);
     updateCurrentSlideHighlight(globalIndex);
 
@@ -314,6 +323,7 @@ function addDoubleTapHandler(slideEl, globalIndex) {
 // @param {number|null} targetIndex - Optional index to include in first screen.
 // If null, use current slide index.
 async function resetAllSlides() {
+
   if (!gridInitialized) return;
   if (!state.swiper) return;
   showSpinner();
@@ -380,9 +390,6 @@ async function loadBatch(startIndex = null, append = true) {
 
   // Subtle gotcha here. The swiper activeIndex is the index of the first visible column.
   // So if the number of columns is 4, then the activeIndexes will be 0, 4, 8, 12, ...
-  const prepend_screen =
-    state.swiper.activeIndex == 0 && startIndex >= slidesPerBatch;
-
   const slides = [];
   let actuallyLoaded = 0;
 
@@ -416,6 +423,7 @@ async function loadBatch(startIndex = null, append = true) {
       }
       if (i % 8 === 0) {
         await new Promise(requestAnimationFrame);
+        if (state.isTransitioning) return;
       }
     }
 
@@ -455,6 +463,7 @@ async function loadBatch(startIndex = null, append = true) {
       }
       if (i % 8 === 0) {
         await new Promise(requestAnimationFrame);
+        if (state.isTransitioning) return;
       }
     }
     if (slides.length > 0) {
@@ -484,6 +493,7 @@ async function loadBatch(startIndex = null, append = true) {
 //
 function enforceHighWaterMark(trimFromEnd = false) {
   if (!state.swiper || !slidesPerBatch || slidesPerBatch <= 0) return;
+  if (state.isTransitioning) return; // don't trim while transitioning
 
   const maxScreens = GRID_MAX_SCREENS;
   const highWaterSlides = slidesPerBatch * maxScreens;

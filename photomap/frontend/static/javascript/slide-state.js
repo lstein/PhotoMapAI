@@ -261,6 +261,7 @@ class SlideStateManager {
   }
 
   seekToSlideIndex() {
+    console.log("Sending seekToSlideIndex event")
     const slideInfo = this.getCurrentSlide();
     window.dispatchEvent(
       new CustomEvent("seekToSlideIndex", {

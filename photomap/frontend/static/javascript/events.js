@@ -23,7 +23,7 @@ import {
 } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
-import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
+import { hideSpinner, setCheckmarkOnIcon, showSpinner, waitForBatchLoadingToFinish } from "./utils.js";
 
 // Constants
 const FULLSCREEN_INDICATOR_CONFIG = {
@@ -479,15 +479,24 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // Toggle grid/swiper views
 export async function toggleGridSwiperView(gridView = null) {
+  // Flag to prevent slide navigation during transition
+  state.isTransitioning = true;
+
+  await waitForBatchLoadingToFinish();
+  
   if (gridView === null) state.gridViewActive = !state.gridViewActive;
   else state.gridViewActive = gridView;
   saveSettingsToLocalStorage();
 
+
   const swiperContainer = document.querySelector(".swiper");
   const gridViewBtn = document.getElementById("gridViewBtn");
   const gridViewIcon = gridViewBtn.querySelector("svg");
+  
+  // Clear ALL event handlers first to prevent race conditions
   eventRegistry.removeAll("swiper");
   eventRegistry.removeAll("grid");
+  
   swiperContainer.style.display = ""; // Always show the swiper container
 
   const pagination = document.querySelector(".swiper-pagination");
@@ -495,10 +504,17 @@ export async function toggleGridSwiperView(gridView = null) {
     pagination.style.display = state.gridViewActive ? "none" : "";
   }
 
-  if (state.gridViewActive) {
-    await initializeGridSwiper();
-  } else {
-    await initializeSingleSwiper();
+  try {
+    if (state.gridViewActive) {
+      await initializeGridSwiper();
+    } else {
+      await initializeSingleSwiper();
+      // Wait for swiper to be fully ready before allowing navigation
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+  } finally {
+    // Always clear the transition flag
+    state.isTransitioning = false;
   }
 
   const event = new CustomEvent("swiperModeChanged", {
@@ -513,12 +529,12 @@ document.addEventListener("DOMContentLoaded", async function () {
   const gridViewBtn = document.getElementById("gridViewBtn");
 
   if (gridViewBtn)
-    gridViewBtn.addEventListener("click", () => {
+    gridViewBtn.addEventListener("click", async () => {
       if (isUmapFullscreen()) toggleUmapWindow(false); // Close umap if open
-      toggleGridSwiperView();
+      await toggleGridSwiperView();
     });
 });
 
-window.addEventListener("stateReady", function () {
-  toggleGridSwiperView(state.gridViewActive);
+window.addEventListener("stateReady", async function () {
+  await toggleGridSwiperView(state.gridViewActive);
 });
