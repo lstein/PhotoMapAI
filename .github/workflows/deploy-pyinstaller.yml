@@ -141,10 +141,10 @@ jobs:
           $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$version.zip"
           if (Test-Path "photomap$ext") {
             Rename-Item -Path "photomap$ext" -NewName "$base$ext"
-            Compress-Archive -Path "$base$ext" -DestinationPath $archiveName
+            & "C:\Program Files\7-Zip\7z.exe" a "$archiveName" "$base$ext"
           } elseif (Test-Path "photomap") {
             Rename-Item -Path "photomap" -NewName "$base"
-            Compress-Archive -Path "$base" -DestinationPath $archiveName
+            & "C:\Program Files\7-Zip\7z.exe" a "$archiveName" "$base"
           } else {
             Write-Error "Neither photomap$ext nor photomap directory found!"
             exit 1

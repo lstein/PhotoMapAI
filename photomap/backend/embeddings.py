@@ -236,7 +236,7 @@ class Embeddings(BaseModel):
             progress_callback: Optional callback function(index, total, message) for progress updates
         """
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model, preprocess = clip.load("ViT-B/32", device=device, download_root=self._clip_root())
+        model, preprocess = clip.load("ViT-B/32", device=device, download_root=self._clip_root())  # type: ignore
 
         embeddings = []
         filenames = []
