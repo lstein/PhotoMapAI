@@ -39,7 +39,7 @@ jobs:
           python-version: '3.12'
 
       - name: Free up disk space
-        if: matrix.torch_variant != 'cpu'
+        if: matrix.torch_variant != 'cpu' && runner.os != 'Windows'
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
@@ -47,6 +47,17 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           df -h
         shell: bash
+
+      - name: Free up disk space (Windows)
+        if: matrix.torch_variant != 'cpu' && runner.os == 'Windows'
+        run: |
+          # Windows doesn't have as many large pre-installed packages to remove
+          # But we can clear some temp directories
+          Get-PSDrive C
+          Remove-Item -Recurse -Force $env:TEMP\* -ErrorAction SilentlyContinue
+          pip cache purge
+          Get-PSDrive C
+        shell: pwsh
 
       - name: Install tomli for version extraction (Linux/macOS)
         if: runner.os != 'Windows'
