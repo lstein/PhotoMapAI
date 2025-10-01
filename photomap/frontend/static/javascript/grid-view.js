@@ -206,6 +206,7 @@ function addGridEventListeners() {
     // Load more when reaching the end
     state.swiper.on("slideNextTransitionStart", async () => {
       if (state.isTransitioning) return; // Don't load more during transitions
+      showSpinner();
       state.isTransitioning = true;
       await waitForBatchLoadingToFinish();
       state.isTransitioning = false;
@@ -224,6 +225,7 @@ function addGridEventListeners() {
           : lastSlideIndex + 1;
         await loadBatch(index, true); // Append a batch at the end
       }
+      hideSpinner();
     });
 
     // Load more when reaching the start
@@ -393,7 +395,6 @@ async function loadBatch(startIndex = null, append = true) {
       const globalIndex = slideState.indexToGlobal(offset);
 
       // In the event that the slide is already loaded, skip it.
-      // I'm not sure this logic is necessary if load tracking is done correctly.
       if (loadedImageIndices.has(globalIndex)) {
         continue;
       }
@@ -437,7 +438,6 @@ async function loadBatch(startIndex = null, append = true) {
     // --- PREPEND LOGIC: Add a full screen's worth of slides before startIndex ---
     for (let i = 0; i < slidesPerBatch; i++) {
       const globalIndex = slideState.indexToGlobal(startIndex - i - 1); // reverse order
-      // not sure this is wanted here
       if (loadedImageIndices.has(globalIndex)) continue;
 
       try {
@@ -746,13 +746,15 @@ function makeSlideHTML(data, globalIndex) {
   data.searchIndex = slideState.globalToSearch(globalIndex);
   slideData[globalIndex] = data; // Cache the data
 
+  // replace image_url with thumbnail_url
+  const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${slideHeight}`;
   return `
     <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
         data-global-index="${globalIndex}"
         data-filepath="${data.filepath || ""}"
         onclick="handleGridSlideClick(${globalIndex})"
         ondblclick="handleGridSlideDblClick(${globalIndex})">
-      <img src="${data.image_url}" alt="${data.filename}" 
+      <img src="${thumbnail_url}" alt="${data.filename}" 
           style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
     </div>
   `;
