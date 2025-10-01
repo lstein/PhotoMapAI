@@ -422,12 +422,15 @@ export async function resetAllSlides() {
   await waitForBatchLoadingToFinish();
   setBatchLoading(true);
 
+  console.log("Resetting all slides in swiper");
+
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow();
 
   state.swiper.removeAllSlides();
 
   const { globalIndex, searchIndex } = slideState.getCurrentSlide();
+  console.log("Current slide index:", globalIndex, searchIndex);
 
   // Prevent intermediate rendering while we add slides
   const swiperContainer = document.querySelector(".swiper");
