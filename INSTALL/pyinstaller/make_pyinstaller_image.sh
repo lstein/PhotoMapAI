@@ -34,7 +34,7 @@ fi
 
 # Set PyInstaller mode based on torch variant and platform
 if [[ "$MACOS_APP" == true ]]; then
-    PYINSTALLER_MODE=""
+    PYINSTALLER_MODE="--windowed"
 elif [[ "$TORCH_VARIANT" == cpu ]]; then
     PYINSTALLER_MODE="--onefile"
 else
@@ -129,13 +129,26 @@ df -h
 # After PyInstaller
 rm -rf build/  # Remove PyInstaller temp files
 
-# Remove unpacked directory if building macOS app bundle
+# Post-process macOS .app bundle to launch in Terminal
 if [[ "$MACOS_APP" == true ]]; then
-    if [ -d dist/photomap ]; then
-        rm -rf dist/photomap
-    fi
+    APP_BUNDLE="dist/photomap.app"
+    MACOS_DIR="$APP_BUNDLE/Contents/MacOS"
+    BIN_NAME="photomap"
+
+    # Create a launcher script
+    LAUNCHER="$MACOS_DIR/run_in_terminal.sh"
+    cat > "$LAUNCHER" <<EOF
+#!/bin/bash
+exec osascript -e 'tell application "Terminal" to do script "'"$MACOS_DIR/$BIN_NAME"'"'
+EOF
+    chmod +x "$LAUNCHER"
+
+    # Update Info.plist to use the launcher script
+    PLIST="$APP_BUNDLE/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable run_in_terminal.sh" "$PLIST"
+
     echo "✅ macOS app bundle created: dist/photomap.app"
-    echo "Users can double-click photomap.app to launch PhotoMap"
+    echo "Users can double-click photomap.app to launch PhotoMap in Terminal"
 else
     echo "✅ Executable created in dist/ directory"
 fi
