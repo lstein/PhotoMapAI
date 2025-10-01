@@ -129,8 +129,11 @@ df -h
 # After PyInstaller
 rm -rf build/  # Remove PyInstaller temp files
 
-# Print success message
+# Remove unpacked directory if building macOS app bundle
 if [[ "$MACOS_APP" == true ]]; then
+    if [ -d dist/photomap ]; then
+        rm -rf dist/photomap
+    fi
     echo "✅ macOS app bundle created: dist/photomap.app"
     echo "Users can double-click photomap.app to launch PhotoMap"
 else
