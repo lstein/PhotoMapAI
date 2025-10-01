@@ -247,7 +247,6 @@ function addGridEventListeners() {
     // onChange event
     state.swiper.on("slideChange", async () => {
       // If the currently highlighted slide s.seais not visible, move the highlight to the top-left slide
-      await state.swiper.update(); // Ensure Swiper state is current
       const currentSlide = slideState.getCurrentSlide();
       const currentGlobal = currentSlide.globalIndex;
       const slideEl = document.querySelector(
@@ -345,16 +344,7 @@ async function resetAllSlides() {
     true;
     console.warn("removeAllSlides failed:", err);
   }
-  try {
-    state.swiper.update(); // ensure internal state is correct
-  } catch (err) {
-    console.warn(
-      "swiper.update() failed:",
-      err,
-      "\ncontinuing anyway, slide length =",
-      state.swiper.slides.length
-    );
-  }
+
   await loadBatch(targetIndex, true);
   await loadBatch(targetIndex + slidesPerBatch, true); // Load two batches to start in order to enable forward navigation
   if (targetIndex > 0) {
@@ -569,9 +559,6 @@ function enforceHighWaterMark(trimFromEnd = false) {
     delete slideData[g];
   }
 
-  // Update Swiper internals
-  state.swiper.update();
-
   // Adjust active index once to avoid a jump:
   if (!trimFromEnd) {
     // We removed removeScreens full screens from the start.
@@ -586,7 +573,6 @@ function enforceHighWaterMark(trimFromEnd = false) {
     state.swiper.slideTo(targetActive, 0);
   }
 
-  state.swiper.update();
 }
 
 function setupContinuousNavigation() {
