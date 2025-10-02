@@ -101,6 +101,7 @@ PYINSTALLER_ARGS=(
     --add-data "$HOME/.cache/clip:clip_models"
     --add-data "photomap/frontend/static:photomap/frontend/static"
     --add-data "photomap/frontend/templates:photomap/frontend/templates"
+    --add-data "THIRD_PARTY_LICENSES.txt:THIRD_PARTY_LICENSES"
     --paths .
     $PYINSTALLER_MODE
     --argv-emulation

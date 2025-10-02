@@ -93,6 +93,7 @@ pyinstaller `
     --add-data "$env:USERPROFILE/.cache/clip${sep}clip_models" `
     --add-data "photomap/frontend/static${sep}photomap/frontend/static" `
     --add-data "photomap/frontend/templates${sep}photomap/frontend/templates" `
+    --add-data "THIRD_PARTY_LICENSES.txt${sep}.THIRD_PARTY_LICENSES" `
     --paths . `
     $pyinstallerMode `
     --name photomap `
