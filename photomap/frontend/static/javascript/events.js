@@ -488,7 +488,6 @@ export async function toggleGridSwiperView(gridView = null) {
   else state.gridViewActive = gridView;
   saveSettingsToLocalStorage();
 
-
   const swiperContainer = document.querySelector(".swiper");
   const gridViewBtn = document.getElementById("gridViewBtn");
   const gridViewIcon = gridViewBtn.querySelector("svg");

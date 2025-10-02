@@ -21,6 +21,7 @@ let slidesPerBatch = 0; // Number of slides to load per batch
 let slideHeight = 140; // Default slide height (reduced from 200)
 let currentRows = 0; // Track current grid dimensions
 let currentColumns = 0;
+let suppressSlideChange = false;
 let slideData = {}; // Store data for each slide
 
 const GRID_MAX_SCREENS = 6; // Keep up to this many screens in memory (tweakable)
@@ -63,6 +64,7 @@ function calculateGridGeometry() {
 
 // Initialization code
 export async function initializeGridSwiper() {
+  console.log("Initializing grid swiper...");
   gridInitialized = false;
   showSpinner();
   eventRegistry.removeAll("grid"); // Clear previous event handlers
@@ -119,11 +121,6 @@ export async function initializeGridSwiper() {
   // Add grid-mode class to the swiper container
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.classList.add("grid-mode");
-
-  state.swiper.on("slideChange", () => {
-    // do nothing with this.
-    return;
-  });
 
   addGridEventListeners();
   setupContinuousNavigation();
@@ -206,6 +203,7 @@ function addGridEventListeners() {
     // Load more when reaching the end
     state.swiper.on("slideNextTransitionStart", async () => {
       if (state.isTransitioning) return; // Don't load more during transitions
+      showSpinner();
       state.isTransitioning = true;
       await waitForBatchLoadingToFinish();
       state.isTransitioning = false;
@@ -222,8 +220,17 @@ function addGridEventListeners() {
         const index = slideState.isSearchMode
           ? slideState.globalToSearch(lastSlideIndex) + 1
           : lastSlideIndex + 1;
-        await loadBatch(index, true); // Append a batch at the end
+        await waitForBatchLoadingToFinish();
+        setBatchLoading(true);
+        try {
+          await loadBatch(index, true); // Append a batch at the end
+        } catch (error) {
+          console.log(error);
+        } finally {
+          setBatchLoading(false);
+        }
       }
+      hideSpinner();
     });
 
     // Load more when reaching the start
@@ -231,6 +238,7 @@ function addGridEventListeners() {
       if (state.isTransitioning) return; // Don't load more during transitions
       state.isTransitioning = true;
       await waitForBatchLoadingToFinish();
+      setBatchLoading(true);
       state.isTransitioning = false;
       const firstSlide = parseInt(
         state.swiper.slides[0].dataset.globalIndex,
@@ -242,12 +250,19 @@ function addGridEventListeners() {
       if (firstSlide > 0 && state.swiper.activeIndex === 0) {
         await loadBatch(index - 1, false); // Prepend a batch at the start
       }
+      setBatchLoading(false);
+    });
+
+    // transitionEnd event
+    state.swiper.on("transitionEnd", () => {
+      suppressSlideChange = false;
     });
 
     // onChange event
     state.swiper.on("slideChange", async () => {
-      // If the currently highlighted slide s.seais not visible, move the highlight to the top-left slide
-      await state.swiper.update(); // Ensure Swiper state is current
+      if (suppressSlideChange) return;
+
+      // If the currently highlighted slide is not visible, move the highlight to the top-left slide
       const currentSlide = slideState.getCurrentSlide();
       const currentGlobal = currentSlide.globalIndex;
       const slideEl = document.querySelector(
@@ -293,7 +308,7 @@ function addGridEventListeners() {
   window.handleGridSlideDblClick = async function (globalIndex) {
     // Prevent navigation if we're already transitioning
     if (state.isTransitioning) return;
-    
+
     slideState.setCurrentIndex(globalIndex, false);
     updateCurrentSlideHighlight(globalIndex);
 
@@ -323,15 +338,12 @@ function addDoubleTapHandler(slideEl, globalIndex) {
 // @param {number|null} targetIndex - Optional index to include in first screen.
 // If null, use current slide index.
 async function resetAllSlides() {
-
   if (!gridInitialized) return;
   if (!state.swiper) return;
   showSpinner();
 
   await new Promise(requestAnimationFrame); // display spinner
 
-  await waitForBatchLoadingToFinish();
-  setBatchLoading(true);
 
   const targetIndex = slideState.getCurrentIndex();
 
@@ -346,19 +358,15 @@ async function resetAllSlides() {
     console.warn("removeAllSlides failed:", err);
   }
   try {
-    state.swiper.update(); // ensure internal state is correct
+    await waitForBatchLoadingToFinish();
+    setBatchLoading(true);
+    await loadBatch(targetIndex, true);
+    await loadBatch(targetIndex + slidesPerBatch, true); // Load two batches to start in order to enable forward navigation
+    if (targetIndex > 0) {
+      await loadBatch(targetIndex, false); // Prepend a screen if not at start
+    }
   } catch (err) {
-    console.warn(
-      "swiper.update() failed:",
-      err,
-      "\ncontinuing anyway, slide length =",
-      state.swiper.slides.length
-    );
-  }
-  await loadBatch(targetIndex, true);
-  await loadBatch(targetIndex + slidesPerBatch, true); // Load two batches to start in order to enable forward navigation
-  if (targetIndex > 0) {
-    await loadBatch(targetIndex, false); // Prepend a screen if not at start
+    console.log(err);
   }
   updateCurrentSlide();
   setBatchLoading(false);
@@ -370,8 +378,9 @@ async function resetAllSlides() {
 // The startIndex will be adjusted to be an even multiple of the screen size.
 // If startIndex is null, load the next batch after the last loaded slide.
 async function loadBatch(startIndex = null, append = true) {
+
+  // Calculate the next batch to load
   if (startIndex === null) {
-    // Load after the last loaded slide
     if (!state.swiper.slides?.length) {
       startIndex = 0;
     } else {
@@ -396,14 +405,21 @@ async function loadBatch(startIndex = null, append = true) {
   // --- NORMAL BATCH LOAD ---
   if (append) {
     for (let i = 0; i < slidesPerBatch; i++) {
+      if (i % 4 === 0) {
+        await new Promise(requestAnimationFrame); // yield to UI thread every 4 images
+        if (state.isTransitioning) {
+          throw new Error("Aborted loadBatch due to transition");
+        }
+      }
+
       // Calculate offset from current slide position
       const offset = startIndex + i;
 
       // Use slideState.resolveOffset to get the correct indices for this position
       const globalIndex = slideState.indexToGlobal(offset);
+      if (globalIndex === null) continue; // Out of bounds
 
       // In the event that the slide is already loaded, skip it.
-      // I'm not sure this logic is necessary if load tracking is done correctly.
       if (loadedImageIndices.has(globalIndex)) {
         continue;
       }
@@ -420,10 +436,6 @@ async function loadBatch(startIndex = null, append = true) {
       } catch (error) {
         console.error("Failed to load image:", error);
         break;
-      }
-      if (i % 8 === 0) {
-        await new Promise(requestAnimationFrame);
-        if (state.isTransitioning) return;
       }
     }
 
@@ -446,8 +458,14 @@ async function loadBatch(startIndex = null, append = true) {
   } else {
     // --- PREPEND LOGIC: Add a full screen's worth of slides before startIndex ---
     for (let i = 0; i < slidesPerBatch; i++) {
+      if (i % 4 === 0) {
+        await new Promise(requestAnimationFrame); // yield to UI thread every 4 images
+        if (state.isTransitioning) {
+          throw new Error("Aborted loadBatch due to transition");
+        }
+      }
+
       const globalIndex = slideState.indexToGlobal(startIndex - i - 1); // reverse order
-      // not sure this is wanted here
       if (loadedImageIndices.has(globalIndex)) continue;
 
       try {
@@ -461,12 +479,10 @@ async function loadBatch(startIndex = null, append = true) {
         console.error("Failed to load image (prepend):", error);
         continue;
       }
-      if (i % 8 === 0) {
-        await new Promise(requestAnimationFrame);
-        if (state.isTransitioning) return;
-      }
     }
     if (slides.length > 0) {
+      suppressSlideChange = true;
+
       state.swiper.prependSlide(slides);
 
       // After prepending slides, add double-tap handlers to all the new ones.
@@ -478,7 +494,6 @@ async function loadBatch(startIndex = null, append = true) {
         }
       }
       state.swiper.slideTo(currentColumns, 0); // maintain current view
-      // enforce high water mark after prepending (trim the other side)
       enforceHighWaterMark(true);
     }
   }
@@ -569,9 +584,6 @@ function enforceHighWaterMark(trimFromEnd = false) {
     delete slideData[g];
   }
 
-  // Update Swiper internals
-  state.swiper.update();
-
   // Adjust active index once to avoid a jump:
   if (!trimFromEnd) {
     // We removed removeScreens full screens from the start.
@@ -585,8 +597,6 @@ function enforceHighWaterMark(trimFromEnd = false) {
     const targetActive = Math.min(prevActive, maxActive);
     state.swiper.slideTo(targetActive, 0);
   }
-
-  state.swiper.update();
 }
 
 function setupContinuousNavigation() {
@@ -703,10 +713,17 @@ function setupGridResizeHandler() {
         newGeometry.columns !== currentColumns ||
         Math.abs(newGeometry.tileSize - slideHeight) > 10
       ) {
+        // Current global index
+        const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
         // Reinitialize the grid completely
         await initializeGridSwiper();
-        await loadBatch();
-        await loadBatch(); // Load two batches to start
+
+        // Do not allow concurrent execution!
+        await waitForBatchLoadingToFinish();
+        setBatchLoading(true);
+        await loadBatch(currentGlobalIndex);
+        await loadBatch(currentGlobalIndex + slidesPerBatch); // Load two batches to start
+        setBatchLoading(false);
       }
     }, 300); // 300ms debounce delay
   }
@@ -760,13 +777,15 @@ function makeSlideHTML(data, globalIndex) {
   data.searchIndex = slideState.globalToSearch(globalIndex);
   slideData[globalIndex] = data; // Cache the data
 
+  // replace image_url with thumbnail_url
+  const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${slideHeight}`;
   return `
     <div class="swiper-slide" style="width:${slideHeight}px; height:${slideHeight}px;" 
         data-global-index="${globalIndex}"
         data-filepath="${data.filepath || ""}"
         onclick="handleGridSlideClick(${globalIndex})"
         ondblclick="handleGridSlideDblClick(${globalIndex})">
-      <img src="${data.image_url}" alt="${data.filename}" 
+      <img src="${thumbnail_url}" alt="${data.filename}" 
           style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
     </div>
   `;

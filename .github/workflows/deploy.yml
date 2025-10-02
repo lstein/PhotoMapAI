@@ -50,12 +50,8 @@ jobs:
     needs: deploy-dockerhub
     uses: ./.github/workflows/deploy-pyinstaller.yml
 
-  deploy-make-dmg:
-    needs: deploy-pyinstaller
-    uses: ./.github/workflows/deploy-dmg.yml
-
   upload-release:
-    needs: [deploy-pypi, deploy-dockerhub, deploy-pyinstaller, deploy-make-dmg]
+    needs: [deploy-pypi, deploy-dockerhub, deploy-pyinstaller]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -67,6 +63,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/**/*.{zip,tar.gz,dmg}
+            artifacts/**/*.{zip,tar.gz,app}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

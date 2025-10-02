@@ -23,6 +23,8 @@ let isAppending = false;
 let isInternalSlideChange = false; // To prevent recursion in slideChange handler
 
 export async function initializeSingleSwiper() {
+    console.log("Initializing single swiper...");
+
   // The swiper shares part of the DOM with the grid view,
   // so we need to clean up any existing state.
   eventRegistry.removeAll("swiper"); // Clear previous event handlers
@@ -422,12 +424,15 @@ export async function resetAllSlides() {
   await waitForBatchLoadingToFinish();
   setBatchLoading(true);
 
+  console.log("Resetting all slides in swiper");
+
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow();
 
   state.swiper.removeAllSlides();
 
   const { globalIndex, searchIndex } = slideState.getCurrentSlide();
+  console.log("Current slide index:", globalIndex, searchIndex);
 
   // Prevent intermediate rendering while we add slides
   const swiperContainer = document.querySelector(".swiper");
