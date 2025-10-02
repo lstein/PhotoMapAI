@@ -369,6 +369,12 @@ export async function fetchUmapData() {
   mapExists = true;
 }
 
+// Add this after your Plotly event handlers in fetchUmapData()
+const plotDiv = document.getElementById("umapPlot");
+plotDiv.addEventListener("mouseleave", () => {
+  removeUmapThumbnail();
+});
+
 // --- Dynamic Colorization ---
 export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
   if (!points.length) return;
