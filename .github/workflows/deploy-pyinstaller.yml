@@ -3,29 +3,33 @@ name: Deploy PyInstaller Executables
 on:
   workflow_call:
   workflow_dispatch:
+  pull_request:
 
 jobs:
   build:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        torch_variant: [cpu, cu128]
+        torch_variant: [cpu, cu129]
         include:
           - os: ubuntu-latest
             platform: linux-x64
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.sh
             executable_ext: ""
+            macos_app_flag: ""
           - os: macos-latest
             platform: macos-x64
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.sh
             executable_ext: ""
+            macos_app_flag: "--macos-app"
           - os: windows-latest
             platform: windows-x64
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.ps1
             executable_ext: ".exe"
+            macos_app_flag: ""
         exclude:
           - os: macos-latest
-            torch_variant: cu128
+            torch_variant: cu129
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -36,6 +40,25 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Free up disk space (Linux/macOS)
+        if: matrix.torch_variant != 'cpu' && runner.os != 'Windows'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h
+        shell: bash
+
+      - name: Free up disk space (Windows)
+        if: matrix.torch_variant != 'cpu' && runner.os == 'Windows'
+        run: |
+          Get-PSDrive C
+          Remove-Item -Recurse -Force $env:TEMP\* -ErrorAction SilentlyContinue
+          pip cache purge
+          Get-PSDrive C
+        shell: pwsh
 
       - name: Install tomli for version extraction (Linux/macOS)
         if: runner.os != 'Windows'
@@ -77,7 +100,8 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           source .venv/bin/activate
-          ${{ matrix.build_script }} ${{ matrix.torch_variant }}
+          chmod +x ${{ matrix.build_script }}
+          ${{ matrix.build_script }} ${{ matrix.torch_variant }} ${{ matrix.macos_app_flag }}
         shell: bash
 
       - name: Install dependencies and build (Windows)
@@ -87,39 +111,60 @@ jobs:
           & ${{ matrix.build_script }} ${{ matrix.torch_variant }}
         shell: pwsh
 
-      - name: Rename executable
-        run: |
-          mv dist/photomap${{ matrix.executable_ext }} dist/photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}
-        shell: bash
-        if: runner.os != 'Windows'
-
-      - name: Rename executable (Windows)
-        run: |
-          Rename-Item -Path dist\photomap${{ matrix.executable_ext }} -NewName photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}
-        shell: pwsh
-        if: runner.os == 'Windows'
-
-      - name: Create zip archive with version (Linux/macOS)
+      - name: Rename executable or directory (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           cd dist
-          ARCHIVE_NAME="photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}.zip"
-          zip -j "$ARCHIVE_NAME" "photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}"
-          ls -la *.zip
+          ls -la
+          BASE="photomap-${{ matrix.torch_variant }}"
+          EXT="${{ matrix.executable_ext }}"
+          VERSION="${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}"
+          ARCHIVE_NAME="photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$VERSION"
+          if [ -f "photomap$EXT" ]; then
+            mv "photomap$EXT" "$ARCHIVE_NAME$EXT"
+          elif [ -d "photomap.app" ]; then
+            mv "photomap.app" "$ARCHIVE_NAME.app"
+          elif [ -d "photomap" ]; then
+            mv "photomap" "$ARCHIVE_NAME"
+          else
+            echo "Neither photomap$EXT nor photomap directory found!"
+            exit 1
+          fi
+          ls -la
         shell: bash
 
-      - name: Create zip archive with version (Windows)
+      - name: Rename executable or directory (Windows)
         if: runner.os == 'Windows'
         run: |
           cd dist
-          $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}.zip"
-          Compress-Archive -Path "photomap-${{ matrix.torch_variant }}${{ matrix.executable_ext }}" -DestinationPath $archiveName
-          Get-ChildItem *.zip
+          $base = "photomap-${{ matrix.torch_variant }}"
+          $ext = "${{ matrix.executable_ext }}"
+          $version = "${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}"
+          $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$version"
+          if (Test-Path "photomap$ext") {
+            Rename-Item -Path "photomap$ext" -NewName "$archiveName$ext"
+          } elseif (Test-Path "photomap") {
+            Rename-Item -Path "photomap" -NewName "$archiveName"
+          } else {
+            Write-Error "Neither photomap$ext nor photomap directory found!"
+            exit 1
+          }
+          Get-ChildItem *
         shell: pwsh
+
+      - name: Debug - List dist contents
+        run: ls -la dist/
+        shell: bash
+        if: runner.os != 'Windows'
+
+      - name: Debug - List dist contents (Windows)
+        run: Get-ChildItem dist/
+        shell: pwsh
+        if: runner.os == 'Windows'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}
-          path: dist/photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}.zip
+          path: dist/photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}*
           retention-days: 30

@@ -1,4 +1,4 @@
-name: Build macOS .dmg
+name: Deploy macOS .dmg
 on:
   workflow_call:
   workflow_dispatch:
