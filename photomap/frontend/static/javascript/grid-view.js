@@ -64,6 +64,7 @@ function calculateGridGeometry() {
 
 // Initialization code
 export async function initializeGridSwiper() {
+  console.log("Initializing grid swiper...");
   gridInitialized = false;
   showSpinner();
   eventRegistry.removeAll("grid"); // Clear previous event handlers
@@ -219,7 +220,15 @@ function addGridEventListeners() {
         const index = slideState.isSearchMode
           ? slideState.globalToSearch(lastSlideIndex) + 1
           : lastSlideIndex + 1;
-        await loadBatch(index, true); // Append a batch at the end
+        await waitForBatchLoadingToFinish();
+        setBatchLoading(true);
+        try {
+          await loadBatch(index, true); // Append a batch at the end
+        } catch (error) {
+          console.log(error);
+        } finally {
+          setBatchLoading(false);
+        }
       }
       hideSpinner();
     });
@@ -229,6 +238,7 @@ function addGridEventListeners() {
       if (state.isTransitioning) return; // Don't load more during transitions
       state.isTransitioning = true;
       await waitForBatchLoadingToFinish();
+      setBatchLoading(true);
       state.isTransitioning = false;
       const firstSlide = parseInt(
         state.swiper.slides[0].dataset.globalIndex,
@@ -240,6 +250,7 @@ function addGridEventListeners() {
       if (firstSlide > 0 && state.swiper.activeIndex === 0) {
         await loadBatch(index - 1, false); // Prepend a batch at the start
       }
+      setBatchLoading(false);
     });
 
     // transitionEnd event
@@ -333,8 +344,6 @@ async function resetAllSlides() {
 
   await new Promise(requestAnimationFrame); // display spinner
 
-  await waitForBatchLoadingToFinish();
-  setBatchLoading(true);
 
   const targetIndex = slideState.getCurrentIndex();
 
@@ -348,11 +357,16 @@ async function resetAllSlides() {
     true;
     console.warn("removeAllSlides failed:", err);
   }
-
-  await loadBatch(targetIndex, true);
-  await loadBatch(targetIndex + slidesPerBatch, true); // Load two batches to start in order to enable forward navigation
-  if (targetIndex > 0) {
-    await loadBatch(targetIndex, false); // Prepend a screen if not at start
+  try {
+    await waitForBatchLoadingToFinish();
+    setBatchLoading(true);
+    await loadBatch(targetIndex, true);
+    await loadBatch(targetIndex + slidesPerBatch, true); // Load two batches to start in order to enable forward navigation
+    if (targetIndex > 0) {
+      await loadBatch(targetIndex, false); // Prepend a screen if not at start
+    }
+  } catch (err) {
+    console.log(err);
   }
   updateCurrentSlide();
   setBatchLoading(false);
@@ -364,8 +378,9 @@ async function resetAllSlides() {
 // The startIndex will be adjusted to be an even multiple of the screen size.
 // If startIndex is null, load the next batch after the last loaded slide.
 async function loadBatch(startIndex = null, append = true) {
+
+  // Calculate the next batch to load
   if (startIndex === null) {
-    // Load after the last loaded slide
     if (!state.swiper.slides?.length) {
       startIndex = 0;
     } else {
@@ -390,11 +405,19 @@ async function loadBatch(startIndex = null, append = true) {
   // --- NORMAL BATCH LOAD ---
   if (append) {
     for (let i = 0; i < slidesPerBatch; i++) {
+      if (i % 4 === 0) {
+        await new Promise(requestAnimationFrame); // yield to UI thread every 4 images
+        if (state.isTransitioning) {
+          throw new Error("Aborted loadBatch due to transition");
+        }
+      }
+
       // Calculate offset from current slide position
       const offset = startIndex + i;
 
       // Use slideState.resolveOffset to get the correct indices for this position
       const globalIndex = slideState.indexToGlobal(offset);
+      if (globalIndex === null) continue; // Out of bounds
 
       // In the event that the slide is already loaded, skip it.
       if (loadedImageIndices.has(globalIndex)) {
@@ -435,6 +458,13 @@ async function loadBatch(startIndex = null, append = true) {
   } else {
     // --- PREPEND LOGIC: Add a full screen's worth of slides before startIndex ---
     for (let i = 0; i < slidesPerBatch; i++) {
+      if (i % 4 === 0) {
+        await new Promise(requestAnimationFrame); // yield to UI thread every 4 images
+        if (state.isTransitioning) {
+          throw new Error("Aborted loadBatch due to transition");
+        }
+      }
+
       const globalIndex = slideState.indexToGlobal(startIndex - i - 1); // reverse order
       if (loadedImageIndices.has(globalIndex)) continue;
 
@@ -687,8 +717,13 @@ function setupGridResizeHandler() {
         const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
         // Reinitialize the grid completely
         await initializeGridSwiper();
+
+        // Do not allow concurrent execution!
+        await waitForBatchLoadingToFinish();
+        setBatchLoading(true);
         await loadBatch(currentGlobalIndex);
         await loadBatch(currentGlobalIndex + slidesPerBatch); // Load two batches to start
+        setBatchLoading(false);
       }
     }, 300); // 300ms debounce delay
   }
