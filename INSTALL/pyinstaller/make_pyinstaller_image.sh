@@ -140,7 +140,8 @@ if [[ "$MACOS_APP" == true ]]; then
     LAUNCHER="$MACOS_DIR/run_in_terminal.sh"
     cat > "$LAUNCHER" <<EOF
 #!/bin/bash
-exec osascript -e 'tell application "Terminal" to do script "'"$MACOS_DIR/$BIN_NAME"'"'
+PWD=$(dirname "$0")
+exec osascript -e 'tell application "Terminal" to do script "'"$PWD/$BIN_NAME"'"'
 EOF
     chmod +x "$LAUNCHER"
 
