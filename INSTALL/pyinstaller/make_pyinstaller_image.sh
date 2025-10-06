@@ -35,8 +35,9 @@ fi
 # Set PyInstaller mode based on torch variant and platform
 if [[ "$MACOS_APP" == true ]]; then
     PYINSTALLER_MODE="--windowed"
-elif [[ "$TORCH_VARIANT" == cpu ]]; then
-    PYINSTALLER_MODE="--onefile"
+# always use --onedir for CPU builds to avoid startup issues
+# elif [[ "$TORCH_VARIANT" == cpu ]]; then
+#     PYINSTALLER_MODE="--onefile"
 else
     PYINSTALLER_MODE="--onedir"
 fi
