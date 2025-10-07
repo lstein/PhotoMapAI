@@ -35,8 +35,9 @@ fi
 # Set PyInstaller mode based on torch variant and platform
 if [[ "$MACOS_APP" == true ]]; then
     PYINSTALLER_MODE="--windowed"
-elif [[ "$TORCH_VARIANT" == cpu ]]; then
-    PYINSTALLER_MODE="--onefile"
+# always use --onedir for CPU builds to avoid startup issues
+# elif [[ "$TORCH_VARIANT" == cpu ]]; then
+#     PYINSTALLER_MODE="--onefile"
 else
     PYINSTALLER_MODE="--onedir"
 fi
@@ -160,7 +161,8 @@ if [[ "$MACOS_APP" == true ]]; then
     LAUNCHER="$MACOS_DIR/run_in_terminal.sh"
     cat > "$LAUNCHER" <<EOF
 #!/bin/bash
-exec osascript -e 'tell application "Terminal" to do script "'"$MACOS_DIR/$BIN_NAME"'"'
+PWD=$(dirname "$0")
+exec osascript -e 'tell application "Terminal" to do script "'"$PWD/$BIN_NAME"'"'
 EOF
     chmod +x "$LAUNCHER"
 

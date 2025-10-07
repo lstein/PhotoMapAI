@@ -31,11 +31,14 @@ switch ($TorchVariant) {
 }
 
 # Set PyInstaller mode based on torch variant
-if ($TorchVariant -eq "cpu") {
-    $pyinstallerMode = "--onefile"
-} else {
-    $pyinstallerMode = "--onedir"
-}
+# if ($TorchVariant -eq "cpu") {
+#     $pyinstallerMode = "--onefile"
+# } else {
+#     $pyinstallerMode = "--onedir"
+# }
+
+# --onefile has too many problems with large packages like torch!
+$pyinstallerMode = "--onedir"
 
 # Upgrade build tools and hooks
 python -m pip install -U pip wheel setuptools
