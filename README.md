@@ -140,6 +140,10 @@ start_photomap
 
 Then open your web browser and point it to [http://127.0.0.1:8050](http://128.0.0.1:8050). Follow the prompts to create your first album.
 
+## Other Installation Methods
+
+In addition to the above, PhotoMapAI can be installed via [Docker](https://lstein.github.io/PhotoMapAI/installation/#docker-install), [PyPi](https://lstein.github.io/PhotoMapAI/installation/#pypi-installation), or a [double-click desktop executable](https://lstein.github.io/PhotoMapAI/installation/#executable-install).
+
 ## Detailed Guides
 
 - [Installation](https://lstein.github.io/PhotoMapAI/installation/)

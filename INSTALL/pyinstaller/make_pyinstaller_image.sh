@@ -145,7 +145,7 @@ elif command -v konsole &> /dev/null; then
 elif command -v xterm &> /dev/null; then
     TERMINAL_CMD="xterm -e"
 fi
-exec $TERMINAL_CMD '$(dirname "$0")/photomap'
+exec $TERMINAL_CMD \$(dirname "\$0")/photomap/photomap
 EOF
     chmod +x "$LAUNCHER"
     echo "✅ Linux launcher script created: dist/photomap"
