@@ -52,17 +52,4 @@ jobs:
 
   upload-release:
     needs: [deploy-pypi, deploy-dockerhub, deploy-pyinstaller]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            artifacts/**/*.{zip,tar.gz,app}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    uses: ./.github/workflows/upload-artifacts.yml
