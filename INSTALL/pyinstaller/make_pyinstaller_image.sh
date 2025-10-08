@@ -131,6 +131,26 @@ df -h
 # After PyInstaller
 rm -rf build/  # Remove PyInstaller temp files
 
+# Add a Linux launcher script to run in terminal
+if [[ "$(uname)" == "Linux" && "$MACOS_APP" == false ]]; then
+    LAUNCHER="dist/run_photomap"
+    cat > "$LAUNCHER" <<EOF
+#!/bin/bash
+# Launcher script to run PhotoMap in a new terminal window
+TERMINAL_CMD="x-terminal-emulator -e"
+if command -v gnome-terminal &> /dev/null; then
+    TERMINAL_CMD="gnome-terminal --"
+elif command -v konsole &> /dev/null; then
+    TERMINAL_CMD="konsole -e"
+elif command -v xterm &> /dev/null; then
+    TERMINAL_CMD="xterm -e"
+fi
+exec $TERMINAL_CMD \$(dirname "\$0")/photomap/photomap
+EOF
+    chmod +x "$LAUNCHER"
+    echo "✅ Linux launcher script created: dist/photomap"
+fi
+
 # Post-process macOS .app bundle to launch in Terminal
 if [[ "$MACOS_APP" == true ]]; then
     APP_BUNDLE="dist/photomap.app"

@@ -21,7 +21,9 @@ Before installing PhotoMapAI, you'll need to install Python and optionally CUDA.
 - [Python](installation/python.md)
 - [CUDA](installation/cuda.md) (*Only if you need NVidia GPU card support*)
 
-After the preqrequisites are installed, follow the installation directions for [Linux & MacOS](#linux-macos) or [Windows](#windows). For those who are comfortable with the command shell, there are also instructions for [Manual Installs](#manual-installation)
+After the preqrequisites are installed, follow the installation directions for [Linux & MacOS](#linux-macos) or [Windows](#windows). For those who are comfortable with the command shell, there are also instructions for [Manual Install](#manual-installation) and [Docker Install](#docker-install).
+
+Finally, there are a series of experimental double-click executables for all three platforms. See [Executable Install](#executable-install) for details.
 
 ---
 
@@ -172,3 +174,53 @@ bash
 ```
 
 You can also just use the file browser to navigate to the `start_photomap` executable and double-click it.
+
+---
+
+### Docker Install
+
+If you have Docker installed on your system, here is a one-liner to get PhotoMapAI up and running:
+
+```bash
+docker -p 8050:8050 -v /path/to/a/picture_folder:/Pictures lstein/photomapai:latest
+```
+Change `/path/to/a/picture_folder` to a path on your desktop that contains the images/photos you wish to add to an album. After the startup messages, point your browser to http://localhost:8050 and follow the prompts. Your images will be found in the container directory `/Pictures`.
+
+---
+
+## Executable Install
+
+As of version 0.9.4, there is also an option to install a prebuilt executable package. This package does not require you to install Python, CUDA, or any other PhotoMapAI dependencies. However, the executable is not yet code-signed, meaning that Windows and Mac users will have to bypass code safety checks.
+
+Go to the latest [release page](https://github.com/lstein/PhotoMapAI/releases) and look under **assets**. There you will find the following files, where X.X.X is replaced by the current released version number:
+
+| Name                              | Platform            | GPU Acceleration |
+|-----------------------------------|---------------------|--------------|
+| photomap-linux-x64-cpu-vX.X.X.zip | Linux | none |
+| photomap-linux-x64-cu129-vX.X.X.zip | Linux | CUDA 12.9 |
+| photomap-macos-x64-cpu-vX.X.X.zip | Macintosh | built-in acceleration|
+| photomap-windows-x64-cpu-vX.X.X.zip | Windows | none|
+| photomap-windows-x64-cu129-vX.X.X.zip | Windows | CUDA 12.9|
+
+If you have an Nvidia card and any of the CUDA 12.X libraries installed, you can take advantage of accelerated image indexing by choosing one of the `cu129` packages. Download the zip file for your platform and unpack it. Then follow these instructions to bypass the operating system's code-checking:
+
+#### Mac
+
+Using the command-line terminal, navigate to the unpacked folder `photomap-macos-x64-cpu-vX.X.X` and run this command:
+
+```bash
+xattr -d com.apple.quarantine ./photomap-macos-x64-cpu-vX.X.X`
+```
+(Use the actual version number, not X.X.X). This step only has to be done once.
+
+Now you can double-click on the package and the PhotoMapAI server will launch in a terminal window after a brief delay.
+
+#### Windows
+
+After unpacking, navigate into the folder and double-click on `photomap.exe`. You will be warned that you are trying to run untrusted code. Click on the `More info` link, and choose `Run anyway`. After a short delay, a new terminal window will open up with the output from the PhotoMapAI server.
+
+You'll need to override the untrusted code check each time you launch PhotoMapAI. 
+
+#### Linux
+
+Using the terminal/command-line shell, navigate to the unpacked folder and run `./photomap`. No trusted code workarounds are needed. If you prefer to double-click an icon, there is a `run_photomap.sh` script in the folder that will launch a terminal for you and run PhotoMapAI inside it.
