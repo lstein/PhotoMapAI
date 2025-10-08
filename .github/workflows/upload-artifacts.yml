@@ -2,8 +2,6 @@ name: Upload Release Artifacts
 
 on:
     workflow_call:
-    workflow_dispatch:
-
 jobs:
   upload-release:
     runs-on: ubuntu-latest
