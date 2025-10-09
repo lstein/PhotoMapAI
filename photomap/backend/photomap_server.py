@@ -2,8 +2,8 @@
 import logging
 import os
 import signal
-import sys
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from photomap.backend.args import get_version, get_args
+from photomap.backend.args import get_args, get_version
 from photomap.backend.config import get_config_manager
 from photomap.backend.constants import get_package_resource_path
 from photomap.backend.routers.album import album_router
@@ -72,6 +72,9 @@ async def get_root(
             elif albums:
                 album = list(albums.keys())[0]
 
+    inline_upgrades_allowed = os.environ.get("PHOTOMAP_INLINE_UPGRADE", "1") == "1"
+    logger.info(f"Inline upgrades allowed: {inline_upgrades_allowed}")
+
     return templates.TemplateResponse(
         request,
         "main.html",
@@ -82,8 +85,10 @@ async def get_root(
             "highWaterMark": high_water_mark,
             "version": get_version(),
             "album_locked": album_locked,
+            "inline_upgrades_allowed": inline_upgrades_allowed,
         },
     )
+
 
 def start_photomap_loop():
     """Start the PhotoMapAI server loop."""
@@ -106,6 +111,7 @@ def start_photomap_loop():
             else:
                 logger.error(f"Server exited with error code {e.returncode}")
 
+
 # Main Entry Point
 def main():
     """Main entry point for the slideshow server."""
@@ -115,6 +121,7 @@ def main():
         return
 
     import uvicorn
+
     repo_root = Path(get_package_resource_path("photomap"), "../..").resolve()
 
     port = args.port or int(os.environ.get("PHOTOMAP_PORT", "8050"))
@@ -125,6 +132,8 @@ def main():
 
     if args.album_locked:
         os.environ["PHOTOMAP_ALBUM_LOCKED"] = args.album_locked
+
+    os.environ["PHOTOMAP_INLINE_UPGRADE"] = "1" if args.inline_upgrade else "0"
 
     app_url = get_app_url(host, port)
 

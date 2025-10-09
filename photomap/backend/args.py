@@ -3,8 +3,8 @@ Return parsed command-line arguments
 """
 
 import argparse
-from pathlib import Path
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 
 
 def get_version():
@@ -13,6 +13,7 @@ def get_version():
         return version("photomapai")
     except PackageNotFoundError:
         return "unknown"
+
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the PhotoMap slideshow server.")
@@ -64,8 +65,12 @@ def get_args() -> argparse.Namespace:
         help="Show the version number and exit",
     )
     parser.add_argument(
-        "--once",
-        action="store_true",
-        help="Run server once; do not respawn"
+        "--once", action="store_true", help="Run server once; do not respawn"
+    )
+    parser.add_argument(
+        "--inline-upgrade",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Perform inline database upgrades",
     )
     return parser.parse_args()

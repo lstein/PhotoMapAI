@@ -19,4 +19,5 @@ EXPOSE 8050
 
 # Start the server
 ENTRYPOINT ["python3", "-mphotomap.backend.photomap_server"]
-CMD ["--host", "0.0.0.0", "--port", "8050"]
+# Do not respawn the server after it exits. Do not allow inline upgrades into the docker image.
+CMD ["--host", "0.0.0.0", "--port", "8050", "--once", "--no-inline-upgrade"]
