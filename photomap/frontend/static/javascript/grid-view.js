@@ -44,11 +44,12 @@ class GridViewManager {
 
   // Consolidated geometry calculation function
   calculateGridGeometry() {
-    const gridContainer = document.querySelector(".swiper");
+    const gridContainer = document.querySelector(".swiper.grid-mode");
     const availableWidth = gridContainer.offsetWidth - 24;
     const availableHeight = window.innerHeight - 120;
 
     const factor = state.gridThumbSizeFactor || 1.0;
+    console.log("Calculating grid geometry with factor:", factor);
     const targetTileSize = 150 * factor;
     const minTileSize = 75;
     const maxTileSize = 300;
@@ -95,6 +96,7 @@ class GridViewManager {
     this.slideData = {};
 
     const geometry = this.calculateGridGeometry();
+    console.log("Calculated grid geometry:", geometry);
     this.currentRows = geometry.rows;
     this.currentColumns = geometry.columns;
     this.slideHeight = geometry.tileSize;
@@ -329,9 +331,7 @@ class GridViewManager {
     showSpinner();
 
     await new Promise(requestAnimationFrame);
-
     const targetIndex = slideState.getCurrentIndex();
-
     this.loadedImageIndices.clear();
 
     try {
@@ -563,6 +563,7 @@ class GridViewManager {
         if (!state.gridViewActive) return;
 
         const newGeometry = this.calculateGridGeometry();
+        console.log("Grid resize detected:", newGeometry);
 
         if (
           newGeometry.rows !== this.currentRows ||

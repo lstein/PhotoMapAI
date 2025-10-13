@@ -9,6 +9,7 @@ import {
   showMetadataOverlay,
   toggleMetadataOverlay,
 } from "./metadata-drawer.js";
+import { switchAlbum } from "./settings.js";
 import {
   getCurrentFilepath,
   getCurrentSlideIndex,
@@ -446,9 +447,11 @@ function positionMetadataDrawer() {
 }
 
 // Initialize event listeners after the DOM is fully loaded
-document.addEventListener("DOMContentLoaded", function () {
+window.addEventListener("stateReady", async function () {
+  console.log("State ready, initializing events...");
   initializeEvents();
   positionMetadataDrawer();
+
   window.addEventListener("resize", positionMetadataDrawer);
   const aboutBtn = document.getElementById("aboutBtn");
   const aboutModal = document.getElementById("aboutModal");
@@ -470,6 +473,10 @@ document.addEventListener("DOMContentLoaded", function () {
       aboutManager.hideModal();
     }
   });
+  await initializeSwipers();
+  await toggleGridSwiperView(state.gridViewActive);
+  // do we need to do this?
+  switchAlbum(state.album); // Initialize with the current album
 });
 
 // Toggle grid/swiper views
@@ -552,7 +559,7 @@ function setupNavigationButtons() {
 }
 
 // Show/hide grid button
-document.addEventListener("DOMContentLoaded", async function () {
+ async function initializeSwipers() {
   const gridViewBtn = document.getElementById("gridViewBtn");
   state.single_swiper = await initializeSingleSwiper();
   state.grid_swiper = await initializeGridSwiper();
@@ -563,8 +570,4 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (isUmapFullscreen()) toggleUmapWindow(false); // Close umap if open
       await toggleGridSwiperView();
     });
-});
-
-window.addEventListener("stateReady", async function () {
-  await toggleGridSwiperView(state.gridViewActive);
-});
+}

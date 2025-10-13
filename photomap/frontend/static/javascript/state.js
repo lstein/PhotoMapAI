@@ -2,7 +2,6 @@
 // This file manages the state of the application, including slide management and metadata handling.
 import { albumManager } from "./album-manager.js";
 import { getIndexMetadata } from "./index.js";
-import { switchAlbum } from "./settings.js";
 
 
 // TO DO - CONVERT THIS INTO A CLASS
@@ -25,9 +24,6 @@ export const state = {
 document.addEventListener("DOMContentLoaded", async function () {
   await restoreFromLocalStorage();
   initializeFromServer();
-  switchAlbum(state.album); // Initialize with the current album
-
-  // Notify that state is ready
   window.dispatchEvent(new Event("stateReady"));
 });
 
@@ -48,6 +44,7 @@ export function initializeFromServer() {
 
 // Restore state from local storage
 export async function restoreFromLocalStorage() {
+  console.log("Restoring settings from local storage");
   const storedCurrentDelay = localStorage.getItem("currentDelay");
   if (storedCurrentDelay !== null)
     state.currentDelay = parseInt(storedCurrentDelay, 10);
@@ -85,6 +82,7 @@ export async function restoreFromLocalStorage() {
   }
 
   const storedGridThumbSizeFactor = localStorage.getItem("gridThumbSizeFactor");
+  console.log("Restored gridThumbSizeFactor:", storedGridThumbSizeFactor);
   if (storedGridThumbSizeFactor !== null) {
     state.gridThumbSizeFactor = parseFloat(storedGridThumbSizeFactor);
   }
