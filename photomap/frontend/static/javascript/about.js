@@ -8,7 +8,7 @@ class AboutManager {
 
   init() {
     this.closeBtn.addEventListener("click", () => this.hideModal());
-    
+
     // Close modal when clicking outside
     this.modal.addEventListener("click", (e) => {
       if (e.target === this.modal) {
@@ -52,19 +52,34 @@ class AboutManager {
     // Create update notification
     this.updateContainer = document.createElement("div");
     this.updateContainer.className = "update-notification";
-    this.updateContainer.innerHTML = `
-      <p class="update-message">A newer version of PhotoMapAI is available</p>
-      <button id="updateBtn" class="update-btn">Update to ${latestVersion}</button>
-      <div id="updateStatus" class="update-status" style="display:none;"></div>
-    `;
+
+    // Check whether inline updates are enabled by looking for the presence
+    // of a named div set by the Jinja2 templater
+    const inlineUpdateDiv = document.getElementById("inline-upgrades-allowed");
+    if (inlineUpdateDiv) {
+      this.updateContainer.innerHTML = `
+        <p class="update-message">A newer version of PhotoMapAI is available.</p>
+        <button id="updateBtn" class="update-btn">Update to ${latestVersion}</button>
+        <div id="updateStatus" class="update-status" style="display:none;"></div>
+      `;
+    } else {
+      this.updateContainer.innerHTML = `
+        <p class="update-message">A newer version of PhotoMapAI is available.</p>
+        <p class="update-message">Please visit the <a href="https://github.com/lstein/PhotoMapAI" style="color: yellow" target="_blank">PhotoMapAI Home Page</a> to download the latest version.</p>
+      `;
+    }
 
     // Insert at the bottom of the modal content, after the links row
     const linksRow = this.modal.querySelector(".about-links-row");
-    linksRow.parentNode.insertBefore(this.updateContainer, linksRow.nextSibling);
+    linksRow.parentNode.insertBefore(
+      this.updateContainer,
+      linksRow.nextSibling
+    );
 
     // Add click handler for update button
     const updateBtn = document.getElementById("updateBtn");
-    updateBtn.addEventListener("click", () => this.performUpdate());
+    if (updateBtn)
+      updateBtn.addEventListener("click", () => this.performUpdate());
   }
 
   hideUpdateNotification() {
@@ -87,13 +102,16 @@ class AboutManager {
 
     // Insert at the bottom of the modal content, after the links row
     const linksRow = this.modal.querySelector(".about-links-row");
-    linksRow.parentNode.insertBefore(this.updateContainer, linksRow.nextSibling);
+    linksRow.parentNode.insertBefore(
+      this.updateContainer,
+      linksRow.nextSibling
+    );
   }
 
   async performUpdate() {
     const updateBtn = document.getElementById("updateBtn");
     const updateStatus = document.getElementById("updateStatus");
-    
+
     updateBtn.disabled = true;
     updateBtn.textContent = "Updating...";
     updateStatus.style.display = "block";
@@ -102,7 +120,7 @@ class AboutManager {
 
     try {
       const response = await fetch("version/update", {
-        method: "POST"
+        method: "POST",
       });
       const data = await response.json();
 
@@ -110,19 +128,22 @@ class AboutManager {
         updateStatus.textContent = "Update completed! Restarting server...";
         updateStatus.className = "update-status success";
         updateBtn.textContent = "Update Complete";
-        
+
         // If restart is available, trigger it
         if (data.restart_available) {
           setTimeout(async () => {
             try {
               await fetch("version/restart", { method: "POST" });
-              updateStatus.textContent = "Server restarting... Waiting for server to come back online...";
-              
+              updateStatus.textContent =
+                "Server restarting... Waiting for server to come back online...";
+
               // Wait 5 seconds before starting to poll
               setTimeout(function pollForServer() {
                 (async () => {
                   try {
-                    const resp = await fetch("version/check", { cache: "no-store" });
+                    const resp = await fetch("version/check", {
+                      cache: "no-store",
+                    });
                     if (resp.ok) {
                       updateStatus.textContent = "Server is back! Reloading...";
                       setTimeout(() => window.location.reload(), 1000);
@@ -135,7 +156,8 @@ class AboutManager {
                 })();
               }, 5000);
             } catch (e) {
-              updateStatus.textContent = "Update complete. Please refresh manually.";
+              updateStatus.textContent =
+                "Update complete. Please refresh manually.";
             }
           }, 1000);
         }
