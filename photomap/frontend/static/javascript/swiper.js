@@ -6,7 +6,7 @@ import { fetchImageByIndex } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
-import { setBatchLoading, waitForBatchLoadingToFinish } from "./utils.js";
+import { setBatchLoading } from "./utils.js";
 
 // Check if the device is mobile
 function isTouchDevice() {
@@ -18,29 +18,12 @@ function isTouchDevice() {
 }
 
 const hasTouchCapability = isTouchDevice();
-let isPrepending = false; // Place this at module scope
+let isPrepending = false;
 let isAppending = false;
-let isInternalSlideChange = false; // To prevent recursion in slideChange handler
+let isInternalSlideChange = false;
 
 export async function initializeSingleSwiper() {
-    console.log("Initializing single swiper...");
-
-  // The swiper shares part of the DOM with the grid view,
-  // so we need to clean up any existing state.
-  eventRegistry.removeAll("swiper"); // Clear previous event handlers
-
-  if (state.swiper) {
-    state.swiper.destroy(true, true);
-    state.swiper = null;
-  }
-
-  // To prevent unwanted visual effects during destruction and re-initialization,
-  const swiperWrapper = document.querySelector(".swiper .swiper-wrapper");
-  if (swiperWrapper) {
-    swiperWrapper.innerHTML = "";
-  }
-  // Reset any grid-specific state
-  state.gridViewActive = false;
+  console.trace("Initializing single swiper...");
 
   // Swiper config for single-image mode
   const swiperConfig = {
@@ -48,8 +31,8 @@ export async function initializeSingleSwiper() {
     slidesPerView: 1, // Single slide view
     spaceBetween: 0, // No space between slides in single view
     navigation: {
-      nextEl: ".swiper-button-next",
       prevEl: ".swiper-button-prev",
+      nextEl: ".swiper-button-next",
     },
     autoplay: {
       delay: state.currentDelay * 1000,
@@ -86,9 +69,8 @@ export async function initializeSingleSwiper() {
       zoomedSlideClass: "swiper-slide-zoomed",
     };
   }
-
   // Initialize Swiper
-  state.swiper = new Swiper(".swiper", swiperConfig);
+  state.swiper = new Swiper("#singleSwiper", swiperConfig);
 
   // Wait for Swiper to be fully initialized
   // await new Promise((resolve) => setTimeout(resolve, 100));
@@ -99,10 +81,6 @@ export async function initializeSingleSwiper() {
   // Initial icon state and overlay
   updateSlideshowIcon();
   updateMetadataOverlay();
-
-  // Remove grid-mode class from swiper container
-  const swiperContainer = document.querySelector(".swiper");
-  swiperContainer.classList.remove("grid-mode");
 }
 
 function initializeSwiperHandlers() {
@@ -225,7 +203,6 @@ function initializeEventHandlers() {
 
   // Reset slide show when the album changes
   eventRegistry.install({ type: "swiper", event: "albumChanged" }, () => {
-    initializeSingleSwiper();
     resetAllSlides();
   });
 
@@ -421,10 +398,8 @@ export function removeSlidesAfterCurrent() {
 // TO DO - the keep_current_slide logic is no longer needed.
 export async function resetAllSlides() {
   if (!state.swiper) return;
-  await waitForBatchLoadingToFinish();
-  setBatchLoading(true);
 
-  console.log("Resetting all slides in swiper");
+  console.log("Resetting all slides in single swiper");
 
   const slideShowRunning = state.swiper?.autoplay?.running;
   pauseSlideshow();
@@ -435,7 +410,7 @@ export async function resetAllSlides() {
   console.log("Current slide index:", globalIndex, searchIndex);
 
   // Prevent intermediate rendering while we add slides
-  const swiperContainer = document.querySelector(".swiper");
+  const swiperContainer = document.getElementById("singleSwiper");
   if (swiperContainer) swiperContainer.style.visibility = "hidden";
 
   // First slides added should not be random if in random mode
@@ -468,13 +443,12 @@ export async function resetAllSlides() {
   if (swiperContainer) swiperContainer.style.visibility = "";
 
   updateMetadataOverlay();
-  if (slideShowRunning) {
+  if (slideShowRunning)
     resumeSlideshow();
-  }
+  
   setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
   setBatchLoading(false);
 }
-
 
 // Enforce the high water mark by removing excess slides
 export function enforceHighWaterMark(backward = false) {
@@ -535,7 +509,7 @@ async function seekToSlideIndex(event) {
     origin = 0;
   }
 
-  const swiperContainer = document.querySelector(".swiper");
+  const swiperContainer = document.getElementById("singleSwiper");
   swiperContainer.style.visibility = "hidden";
 
   for (let i = origin; i < slides_to_add; i++) {

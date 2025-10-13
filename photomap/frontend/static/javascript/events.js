@@ -479,6 +479,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // Toggle grid/swiper views
 export async function toggleGridSwiperView(gridView = null) {
+  // for testing, just initialize the single swiper
+  // await initializeSingleSwiper();
+  return;
+
+
   // Flag to prevent slide navigation during transition
   state.isTransitioning = true;
 
@@ -526,6 +531,8 @@ export async function toggleGridSwiperView(gridView = null) {
 // Show/hide grid button
 document.addEventListener("DOMContentLoaded", async function () {
   const gridViewBtn = document.getElementById("gridViewBtn");
+  initializeSingleSwiper(); // Temporary until grid view is working again
+  return;
 
   if (gridViewBtn)
     gridViewBtn.addEventListener("click", async () => {
