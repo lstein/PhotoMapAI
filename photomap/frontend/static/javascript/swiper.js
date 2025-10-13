@@ -8,17 +8,24 @@ import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
 import { setBatchLoading } from "./utils.js";
 
+export const initializeSingleSwiper = () => {
+  const swiperManager = new SwiperManager();
+  swiperManager.initializeSingleSwiper();
+  return swiperManager;
+};
+
 class SwiperManager {
   constructor() {
     if (SwiperManager.instance) {
       return SwiperManager.instance;
     }
-    
+
+    this.swiper = null;
     this.hasTouchCapability = this.isTouchDevice();
     this.isPrepending = false;
     this.isAppending = false;
     this.isInternalSlideChange = false;
-    
+
     SwiperManager.instance = this;
   }
 
@@ -80,7 +87,8 @@ class SwiperManager {
     }
 
     // Initialize Swiper
-    state.swiper = new Swiper("#singleSwiper", swiperConfig);
+    this.swiper = new Swiper("#singleSwiper", swiperConfig);
+    state.swiper = this.swiper; // Keep state.swiper in sync for backward compatibility
 
     this.initializeSwiperHandlers();
     this.initializeEventHandlers();
@@ -91,32 +99,33 @@ class SwiperManager {
   }
 
   initializeSwiperHandlers() {
-    if (!state.swiper) return;
+    if (!this.swiper) return;
 
-    state.swiper.on("autoplayStart", () => {
+    this.swiper.on("autoplayStart", () => {
       if (!state.gridViewActive) this.updateSlideshowIcon();
     });
 
-    state.swiper.on("autoplayResume", () => {
+    this.swiper.on("autoplayResume", () => {
       if (!state.gridViewActive) this.updateSlideshowIcon();
     });
 
-    state.swiper.on("autoplayStop", () => {
+    this.swiper.on("autoplayStop", () => {
       if (!state.gridViewActive) this.updateSlideshowIcon();
     });
 
-    state.swiper.on("autoplayPause", () => {
+    this.swiper.on("autoplayPause", () => {
       if (!state.gridViewActive) this.updateSlideshowIcon();
     });
 
-    state.swiper.on("scrollbarDragStart", () => {
+    this.swiper.on("scrollbarDragStart", () => {
       if (!state.gridViewActive) this.pauseSlideshow();
     });
 
-    state.swiper.on("slideChange", () => {
-      if (this.isAppending || this.isPrepending || this.isInternalSlideChange) return;
+    this.swiper.on("slideChange", () => {
+      if (this.isAppending || this.isPrepending || this.isInternalSlideChange)
+        return;
       this.isInternalSlideChange = true;
-      const activeSlide = state.swiper.slides[state.swiper.activeIndex];
+      const activeSlide = this.swiper.slides[this.swiper.activeIndex];
       if (activeSlide) {
         const globalIndex = parseInt(activeSlide.dataset.globalIndex, 10) || 0;
         const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10) || 0;
@@ -126,12 +135,12 @@ class SwiperManager {
       this.isInternalSlideChange = false;
     });
 
-    state.swiper.on("slideNextTransitionStart", () => {
+    this.swiper.on("slideNextTransitionStart", () => {
       if (this.isAppending) return;
 
-      if (state.swiper.activeIndex === state.swiper.slides.length - 1) {
+      if (this.swiper.activeIndex === this.swiper.slides.length - 1) {
         this.isAppending = true;
-        state.swiper.allowSlideNext = false;
+        this.swiper.allowSlideNext = false;
 
         const { globalIndex: nextGlobal, searchIndex: nextSearch } =
           slideState.resolveOffset(+1);
@@ -140,47 +149,47 @@ class SwiperManager {
           this.addSlideByIndex(nextGlobal, nextSearch)
             .then(() => {
               this.isAppending = false;
-              state.swiper.allowSlideNext = true;
+              this.swiper.allowSlideNext = true;
             })
             .catch(() => {
               this.isAppending = false;
-              state.swiper.allowSlideNext = true;
+              this.swiper.allowSlideNext = true;
             });
         } else {
           this.isAppending = false;
-          state.swiper.allowSlideNext = true;
+          this.swiper.allowSlideNext = true;
         }
       }
     });
 
-    state.swiper.on("slidePrevTransitionEnd", () => {
+    this.swiper.on("slidePrevTransitionEnd", () => {
       const [globalIndex] = getCurrentSlideIndex();
-      if (state.swiper.activeIndex === 0 && globalIndex > 0) {
+      if (this.swiper.activeIndex === 0 && globalIndex > 0) {
         const { globalIndex: prevGlobal, searchIndex: prevSearch } =
           slideState.resolveOffset(-1);
         if (prevGlobal !== null) {
-          const prevExists = Array.from(state.swiper.slides).some(
+          const prevExists = Array.from(this.swiper.slides).some(
             (el) => parseInt(el.dataset.globalIndex, 10) === prevGlobal
           );
           if (!prevExists) {
             this.isPrepending = true;
-            state.swiper.allowSlidePrev = false;
+            this.swiper.allowSlidePrev = false;
             this.addSlideByIndex(prevGlobal, prevSearch, true)
               .then(() => {
-                state.swiper.slideTo(1, 0);
+                this.swiper.slideTo(1, 0);
                 this.isPrepending = false;
-                state.swiper.allowSlidePrev = true;
+                this.swiper.allowSlidePrev = true;
               })
               .catch(() => {
                 this.isPrepending = false;
-                state.swiper.allowSlidePrev = true;
+                this.swiper.allowSlidePrev = true;
               });
           }
         }
       }
     });
 
-    state.swiper.on("sliderFirstMove", () => {
+    this.swiper.on("sliderFirstMove", () => {
       this.pauseSlideshow();
     });
   }
@@ -193,7 +202,7 @@ class SwiperManager {
         eventRegistry.install(
           { type: "swiper", event: "click", object: btn },
           function (event) {
-            swiperManager.pauseSlideshow();
+            state.single_swiper.pauseSlideshow();
             event.stopPropagation();
             this.blur();
           }
@@ -235,16 +244,16 @@ class SwiperManager {
   }
 
   pauseSlideshow() {
-    if (state.swiper && state.swiper.autoplay?.running) {
-      state.swiper.autoplay.stop();
+    if (this.swiper && this.swiper.autoplay?.running) {
+      this.swiper.autoplay.stop();
     }
   }
 
   resumeSlideshow() {
-    if (state.swiper) {
-      state.swiper.autoplay.stop();
+    if (this.swiper) {
+      this.swiper.autoplay.stop();
       setTimeout(() => {
-        state.swiper.autoplay.start();
+        this.swiper.autoplay.start();
       }, 50);
     }
   }
@@ -253,7 +262,7 @@ class SwiperManager {
     const playIcon = document.getElementById("playIcon");
     const pauseIcon = document.getElementById("pauseIcon");
 
-    if (state.swiper?.autoplay?.running) {
+    if (this.swiper?.autoplay?.running) {
       playIcon.style.display = "none";
       pauseIcon.style.display = "inline";
     } else {
@@ -281,7 +290,7 @@ class SwiperManager {
   }
 
   async addSlideByIndex(globalIndex, searchIndex = null, prepend = false) {
-    if (!state.swiper) return;
+    if (!this.swiper) return;
     if (state.isTransitioning) return;
 
     if (state.mode === "random" && !slideState.isSearchMode) {
@@ -289,7 +298,7 @@ class SwiperManager {
       globalIndex = Math.floor(Math.random() * totalImages);
     }
 
-    const exists = Array.from(state.swiper.slides).some(
+    const exists = Array.from(this.swiper.slides).some(
       (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
     );
     if (exists) return;
@@ -342,9 +351,9 @@ class SwiperManager {
       );
 
       if (prepend) {
-        state.swiper.prependSlide(slide);
+        this.swiper.prependSlide(slide);
       } else {
-        state.swiper.appendSlide(slide);
+        this.swiper.appendSlide(slide);
       }
     } catch (error) {
       console.error("Failed to add new slide:", error);
@@ -355,7 +364,7 @@ class SwiperManager {
 
   async handleSlideChange() {
     const { globalIndex } = slideState.getCurrentSlide();
-    const slideEls = state.swiper.slides;
+    const slideEls = this.swiper.slides;
     let activeIndex = Array.from(slideEls).findIndex(
       (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
     );
@@ -370,29 +379,29 @@ class SwiperManager {
   }
 
   removeSlidesAfterCurrent() {
-    if (!state.swiper) return;
+    if (!this.swiper) return;
     const { globalIndex } = slideState.getCurrentSlide();
-    const slideEls = state.swiper.slides;
+    const slideEls = this.swiper.slides;
     let activeIndex = Array.from(slideEls).findIndex(
       (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
     );
     if (activeIndex === -1) activeIndex = 0;
     const slidesToRemove = slideEls.length - activeIndex - 1;
     if (slidesToRemove > 0) {
-      state.swiper.removeSlide(activeIndex + 1, slidesToRemove);
+      this.swiper.removeSlide(activeIndex + 1, slidesToRemove);
     }
     setTimeout(() => this.enforceHighWaterMark(), 500);
   }
 
   async resetAllSlides() {
-    if (!state.swiper) return;
+    if (!this.swiper) return;
 
     console.log("Resetting all slides in single swiper");
 
-    const slideShowRunning = state.swiper?.autoplay?.running;
+    const slideShowRunning = this.swiper?.autoplay?.running;
     this.pauseSlideshow();
 
-    state.swiper.removeAllSlides();
+    this.swiper.removeAllSlides();
 
     const { globalIndex, searchIndex } = slideState.getCurrentSlide();
     console.log("Current slide index:", globalIndex, searchIndex);
@@ -422,7 +431,7 @@ class SwiperManager {
 
     // Navigate to the current slide
     const slideIndex = prevGlobal !== null ? 1 : 0;
-    state.swiper.slideTo(slideIndex, 0);
+    this.swiper.slideTo(slideIndex, 0);
 
     await new Promise(requestAnimationFrame);
     if (swiperContainer) swiperContainer.style.visibility = "";
@@ -436,7 +445,7 @@ class SwiperManager {
 
   enforceHighWaterMark(backward = false) {
     const maxSlides = state.highWaterMark || 50;
-    const swiper = state.swiper;
+    const swiper = this.swiper;
     const slides = swiper.slides.length;
     if (state.isTransitioning) return;
 
@@ -461,7 +470,7 @@ class SwiperManager {
       globalIndex = slideState.searchToGlobal(searchIndex);
     }
 
-    let slideEls = state.swiper.slides;
+    let slideEls = this.swiper.slides;
     const exists = Array.from(slideEls).some(
       (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
     );
@@ -471,14 +480,14 @@ class SwiperManager {
       );
       if (targetSlideIdx !== -1) {
         this.isInternalSlideChange = true;
-        state.swiper.slideTo(targetSlideIdx, 300);
+        this.swiper.slideTo(targetSlideIdx, 300);
         this.isInternalSlideChange = false;
         updateMetadataOverlay();
         return;
       }
     }
 
-    state.swiper.removeAllSlides();
+    this.swiper.removeAllSlides();
 
     let origin = -2;
     const slides_to_add = 5;
@@ -494,33 +503,14 @@ class SwiperManager {
       await this.addSlideByIndex(globalIndex + i, searchIndex + i);
     }
 
-    slideEls = state.swiper.slides;
+    slideEls = this.swiper.slides;
     let targetSlideIdx = Array.from(slideEls).findIndex(
       (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
     );
     if (targetSlideIdx === -1) targetSlideIdx = 0;
-    state.swiper.slideTo(targetSlideIdx, 0);
+    this.swiper.slideTo(targetSlideIdx, 0);
 
     swiperContainer.style.visibility = "visible";
     updateMetadataOverlay();
   }
 }
-
-// Create and export singleton instance
-const swiperManager = new SwiperManager();
-
-// Export methods for backward compatibility
-export const initializeSingleSwiper = () => swiperManager.initializeSingleSwiper();
-export const pauseSlideshow = () => swiperManager.pauseSlideshow();
-export const resumeSlideshow = () => swiperManager.resumeSlideshow();
-export const updateSlideshowIcon = () => swiperManager.updateSlideshowIcon();
-export const addNewSlide = (offset) => swiperManager.addNewSlide(offset);
-export const addSlideByIndex = (globalIndex, searchIndex, prepend) => 
-  swiperManager.addSlideByIndex(globalIndex, searchIndex, prepend);
-export const handleSlideChange = () => swiperManager.handleSlideChange();
-export const removeSlidesAfterCurrent = () => swiperManager.removeSlidesAfterCurrent();
-export const resetAllSlides = () => swiperManager.resetAllSlides();
-export const enforceHighWaterMark = (backward) => swiperManager.enforceHighWaterMark(backward);
-
-// Export the singleton instance itself if needed
-export { swiperManager };

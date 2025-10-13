@@ -7,7 +7,8 @@ import { switchAlbum } from "./settings.js";
 
 // TO DO - CONVERT THIS INTO A CLASS
 export const state = {
-  swiper: null, // Will be initialized in swiper.js
+  single_swiper: null, // Will be initialized in swiper.js
+  grid_swiper: null, // Will be initialized in grid-view.js
   gridViewActive: false, // Whether the grid view is active
   currentDelay: 5, // Delay in seconds for slide transitions
   showControlPanelText: true, // Whether to show text in control panels

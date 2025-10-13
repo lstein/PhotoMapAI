@@ -18,8 +18,6 @@ import {
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import {
   initializeSingleSwiper,
-  pauseSlideshow,
-  resumeSlideshow
 } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
@@ -412,12 +410,12 @@ export async function toggleSlideshowWithIndicator() {
   const isRunning = state.swiper?.autoplay?.running;
 
   if (isRunning) {
-    pauseSlideshow();
+    state.single_swiper.pauseSlideshow();
     showPlayPauseIndicator(false); // Show pause indicator
   } else {
     if (state.gridViewActive) await toggleGridSwiperView(false); // Switch to swiper mode if in grid mode
     if (isUmapFullscreen()) toggleUmapWindow(false); // Close umap if open
-    resumeSlideshow();
+    state.single_swiper.resumeSlideshow();
     showPlayPauseIndicator(true); // Show play indicator
   }
 }
@@ -531,7 +529,7 @@ export async function toggleGridSwiperView(gridView = null) {
 // Show/hide grid button
 document.addEventListener("DOMContentLoaded", async function () {
   const gridViewBtn = document.getElementById("gridViewBtn");
-  initializeSingleSwiper(); // Temporary until grid view is working again
+  state.single_swiper = initializeSingleSwiper(); // Temporary until grid view is working again
   return;
 
   if (gridViewBtn)

@@ -4,7 +4,6 @@
 import { calculate_search_score_cutoff, searchImage, searchTextAndImage, setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
-import { pauseSlideshow, resumeSlideshow } from "./swiper.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 import { WeightSlider } from "./weight-slider.js";
 
@@ -92,7 +91,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (!positiveQuery && !negativeQuery && !imageFile) return;
 
     const slideShowRunning = state.swiper?.autoplay?.running;
-    pauseSlideshow();
+    state.single_swiper.pauseSlideshow();
 
     try {
       showSpinner();
@@ -126,7 +125,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       console.error("Search request failed:", err);
     } finally {
       hideSpinner();
-      if (slideShowRunning) resumeSlideshow();
+      if (slideShowRunning) state.single_swiper.resumeSlideshow();
     }
   }
 
@@ -150,7 +149,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     try {
       const slideShowRunning = state.swiper?.autoplay?.running;
-      pauseSlideshow();
+      state.single_swiper.pauseSlideshow();
       showSpinner();
       const imgResponse = await fetch(imgUrl);
       const blob = await imgResponse.blob();
@@ -160,7 +159,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       let querySlide = createQuerySlide(imgUrl, `Search slide ${filename}`);
       await searchWithTextAndImage("image");
       hideSpinner();
-      if (slideShowRunning) resumeSlideshow();
+      if (slideShowRunning) state.single_swiper.resumeSlideshow();
     } catch (err) {
       hideSpinner();
       console.error("Image similarity search failed:", err);
