@@ -1,12 +1,13 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
 import { eventRegistry } from "./event-registry.js";
+import { toggleGridSwiperView } from "./events.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
-import { setBatchLoading, isBatchLoading } from "./utils.js";
+import { setBatchLoading } from "./utils.js";
 
 export const initializeSingleSwiper = async () => {
   const swiperManager = new SwiperManager();
@@ -98,6 +99,7 @@ class SwiperManager {
 
     this.initializeSwiperHandlers();
     this.initializeEventHandlers();
+    this.addDoubleTapHandlersToSlides();
 
     // Initial icon state and overlay
     this.updateSlideshowIcon();
@@ -249,6 +251,43 @@ class SwiperManager {
     );
   }
 
+  addDoubleTapHandlersToSlides() {
+    if (!this.swiper) return;
+    // Attach handlers to all current slides
+    this.swiper.slides.forEach((slideEl) => {
+      this.attachDoubleTapHandler(slideEl);
+    });
+    // Attach handler to future slides (if slides are added dynamically)
+    this.swiper.on("slideChange", () => {
+      this.swiper.slides.forEach((slideEl) => {
+        this.attachDoubleTapHandler(slideEl);
+      });
+    });
+  }
+
+  attachDoubleTapHandler(slideEl) {
+    if (slideEl.dataset.doubleTapHandlerAttached) return;
+
+    // Double-click (desktop)
+    slideEl.addEventListener("dblclick", async () => {
+      await toggleGridSwiperView(true);
+    });
+
+    // Double-tap (touch devices)
+    let lastTap = 0;
+    slideEl.addEventListener("touchend", async () => {
+      const now = Date.now();
+      if (now - lastTap < 350) {
+        await toggleGridSwiperView(true);
+        lastTap = 0;
+      } else {
+        lastTap = now;
+      }
+    });
+
+    slideEl.dataset.doubleTapHandlerAttached = "true";
+  }
+
   pauseSlideshow() {
     if (this.swiper && this.swiper.autoplay?.running) {
       this.swiper.autoplay.stop();
@@ -355,6 +394,9 @@ class SwiperManager {
       slide.dataset.reference_images = JSON.stringify(
         data.reference_images || []
       );
+
+      // Attach double-tap/double-click handler immediately
+      this.attachDoubleTapHandler(slide);
 
       if (prepend) {
         this.swiper.prependSlide(slide);

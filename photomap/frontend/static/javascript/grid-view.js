@@ -263,12 +263,21 @@ class GridViewManager {
 
         const currentSlide = slideState.getCurrentSlide();
         const currentGlobal = currentSlide.globalIndex;
-        const slideEl = document.querySelector(
+        const gridContainer = document.getElementById("gridViewContainer");
+        const slideEl = gridContainer.querySelector(
           `.swiper-slide[data-global-index='${currentGlobal}']`
         );
         if (slideEl) {
           const slideIndex = Array.from(this.swiper.slides).indexOf(slideEl);
           const activeIndex = this.swiper.activeIndex * this.currentRows;
+          console.log(
+            "Grid slideChange: currentGlobal=",
+            currentGlobal,
+            "slideIndex=",
+            slideIndex,
+            "activeIndex=",
+            activeIndex
+          );
           if (
             slideIndex < activeIndex ||
             slideIndex >= activeIndex + this.currentRows * this.currentColumns
@@ -326,7 +335,7 @@ class GridViewManager {
     if (!this.gridInitialized) return;
     if (!this.swiper) return;
     if (!this.isVisible()) return;
-    console.trace("Resetting all slides in grid view...");
+    console.log("Resetting all slides in grid view...");
 
     showSpinner();
 
@@ -612,7 +621,7 @@ class GridViewManager {
   }
 
   updateCurrentSlide() {
-    console.trace("UpdateCurrentSlide called");
+    console.log("UpdateCurrentSlide called");
     this.updateCurrentSlideHighlight();
     this.updateMetadataOverlay();
     updateCurrentImageScore(

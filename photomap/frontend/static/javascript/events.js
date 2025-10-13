@@ -21,6 +21,27 @@ import { } from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
+// MAIN INITIALIZATION FUNCTIONS
+// Initialize event listeners after the DOM is fully loaded
+window.addEventListener("stateReady", async function () {
+  console.log("State ready, initializing events...");
+  await initializeEvents();
+});
+
+async function initializeEvents() {
+  cacheElements();
+  initializeTitle();
+  setupButtonEventListeners();
+  setupGlobalEventListeners();
+  setupAccessibility();
+  checkAlbumIndex(); // Check if the album index exists before proceeding
+  positionMetadataDrawer();
+
+  await initializeSwipers();
+  await toggleGridSwiperView(state.gridViewActive);
+  switchAlbum(state.album); // Initialize with the current album
+}
+
 // Constants
 const FULLSCREEN_INDICATOR_CONFIG = {
   showDuration: 800, // How long to show the indicator
@@ -364,6 +385,31 @@ function setupGlobalEventListeners() {
 
   // Keyboard navigation
   window.addEventListener("keydown", handleKeydown);
+
+  // Window resize event  
+  window.addEventListener("resize", positionMetadataDrawer);
+  const aboutBtn = document.getElementById("aboutBtn");
+  const aboutModal = document.getElementById("aboutModal");
+  const closeAboutBtn = document.getElementById("closeAboutBtn");
+
+  // About button and modal
+  if (aboutBtn && aboutModal) {
+    aboutBtn.addEventListener("click", () => {
+      aboutManager.showModal();
+    });
+  }
+  if (closeAboutBtn && aboutModal) {
+    closeAboutBtn.addEventListener("click", () => {
+      aboutManager.hideModal();
+    });
+  }
+  // Close modal when clicking outside content
+  aboutModal.addEventListener("click", (e) => {
+    if (e.target === aboutModal) {
+      aboutManager.hideModal();
+    }
+  });
+
 }
 
 function setupAccessibility() {
@@ -425,15 +471,6 @@ window.addEventListener("slideChanged", (e) => {
   // updateUIForSlideChange(e.detail); // TO COME
 });
 
-// MAIN INITIALIZATION FUNCTION
-function initializeEvents() {
-  cacheElements();
-  initializeTitle();
-  setupButtonEventListeners();
-  setupGlobalEventListeners();
-  setupAccessibility();
-  checkAlbumIndex(); // Check if the album index exists before proceeding
-}
 
 function positionMetadataDrawer() {
   const seekSlider = document.getElementById("scoreSliderRow");
@@ -445,39 +482,6 @@ function positionMetadataDrawer() {
     drawer.style.top = `${top + 8}px`; // 8px gap, adjust as needed
   }
 }
-
-// Initialize event listeners after the DOM is fully loaded
-window.addEventListener("stateReady", async function () {
-  console.log("State ready, initializing events...");
-  initializeEvents();
-  positionMetadataDrawer();
-
-  window.addEventListener("resize", positionMetadataDrawer);
-  const aboutBtn = document.getElementById("aboutBtn");
-  const aboutModal = document.getElementById("aboutModal");
-  const closeAboutBtn = document.getElementById("closeAboutBtn");
-
-  if (aboutBtn && aboutModal) {
-    aboutBtn.addEventListener("click", () => {
-      aboutManager.showModal();
-    });
-  }
-  if (closeAboutBtn && aboutModal) {
-    closeAboutBtn.addEventListener("click", () => {
-      aboutManager.hideModal();
-    });
-  }
-  // Close modal when clicking outside content
-  aboutModal.addEventListener("click", (e) => {
-    if (e.target === aboutModal) {
-      aboutManager.hideModal();
-    }
-  });
-  await initializeSwipers();
-  await toggleGridSwiperView(state.gridViewActive);
-  // do we need to do this?
-  switchAlbum(state.album); // Initialize with the current album
-});
 
 // Toggle grid/swiper views
 export async function toggleGridSwiperView(gridView = null) {
