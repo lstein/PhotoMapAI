@@ -204,11 +204,8 @@ class GridViewManager {
 
     if (this.swiper) {
       this.swiper.on("slideNextTransitionStart", async () => {
-        if (state.isTransitioning) return;
         showSpinner();
-        state.isTransitioning = true;
         await waitForBatchLoadingToFinish();
-        state.isTransitioning = false;
         const slidesLeft =
           Math.floor(this.swiper.slides.length / this.currentRows) -
           this.swiper.activeIndex;
@@ -236,11 +233,8 @@ class GridViewManager {
       });
 
       this.swiper.on("slidePrevTransitionStart", async () => {
-        if (state.isTransitioning) return;
-        state.isTransitioning = true;
         await waitForBatchLoadingToFinish();
         setBatchLoading(true);
-        state.isTransitioning = false;
         const firstSlide = parseInt(
           this.swiper.slides[0].dataset.globalIndex,
           10
@@ -309,7 +303,6 @@ class GridViewManager {
     };
 
     window.handleGridSlideDblClick = async (globalIndex) => {
-      if (state.isTransitioning) return;
       slideState.setCurrentIndex(globalIndex, false);
       this.updateCurrentSlideHighlight(globalIndex);
       await toggleGridSwiperView(false);
@@ -397,9 +390,6 @@ class GridViewManager {
       for (let i = 0; i < this.slidesPerBatch; i++) {
         if (i % 4 === 0) {
           await new Promise(requestAnimationFrame);
-          if (state.isTransitioning) {
-            throw new Error("Aborted loadBatch due to transition");
-          }
         }
 
         const offset = topLeftIndex + i;
@@ -441,9 +431,6 @@ class GridViewManager {
       for (let i = 0; i < this.slidesPerBatch; i++) {
         if (i % 4 === 0) {
           await new Promise(requestAnimationFrame);
-          if (state.isTransitioning) {
-            throw new Error("Aborted loadBatch due to transition");
-          }
         }
 
         const globalIndex = slideState.indexToGlobal(topLeftIndex - i - 1);
@@ -483,7 +470,6 @@ class GridViewManager {
   enforceHighWaterMark(trimFromEnd = false) {
     if (!this.swiper || !this.slidesPerBatch || this.slidesPerBatch <= 0)
       return;
-    if (state.isTransitioning) return;
 
     const maxScreens = this.GRID_MAX_SCREENS;
     const highWaterSlides = this.slidesPerBatch * maxScreens;

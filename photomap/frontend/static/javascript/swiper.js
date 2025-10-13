@@ -336,7 +336,6 @@ class SwiperManager {
 
   async addSlideByIndex(globalIndex, searchIndex = null, prepend = false) {
     if (!this.swiper) return;
-    if (state.isTransitioning) return;
 
     if (state.mode === "random" && !slideState.isSearchMode) {
       const totalImages = slideState.totalAlbumImages;
@@ -500,7 +499,6 @@ class SwiperManager {
     const maxSlides = state.highWaterMark || 50;
     const swiper = this.swiper;
     const slides = swiper.slides.length;
-    if (state.isTransitioning) return;
 
     if (slides > maxSlides) {
       let slideShowRunning = swiper.autoplay.running;
