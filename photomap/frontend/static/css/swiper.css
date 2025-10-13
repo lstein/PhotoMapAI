@@ -184,3 +184,14 @@
   box-shadow: 0 0 8px 2px #ffe06680; /* Soft yellow glow */
   z-index: 2;
 }
+
+/* Add fade transitions for view switching */
+#singleSwiperContainer,
+#gridViewContainer {
+  transition: opacity 0.3s ease-in-out;
+}
+
+#singleSwiperContainer.fade-out,
+#gridViewContainer.fade-out {
+  opacity: 0;
+}

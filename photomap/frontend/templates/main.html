@@ -84,12 +84,17 @@
   <body>
     {% include "modules/spinner.html" %} 
     {% include "modules/seek_slider.html" %} 
-    <div id="singleSwiperContainer">
+
+<div id="singleSwiperContainer">
      {% include "modules/swiper.html" %} 
-    </div>
-    <div id="gridViewContainer">
+</div>
+
+<div id="gridViewContainer">
       {% include "modules/grid-view.html" %}
-    </div>
+</div>
+<div class="swiper-button-prev" id="swiperPrevButton"></div>
+<div class="swiper-button-next" id="swiperNextButton"></div>
+
     {% include "modules/metadata-drawer.html" %}
     <div id="panelStackContainer">
       {% include "modules/search-panel.html" %} 

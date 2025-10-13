@@ -8,7 +8,7 @@ import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
 import { setBatchLoading } from "./utils.js";
 
-export const initializeSingleSwiper = () => {
+export const initializeSingleSwiper = async () => {
   const swiperManager = new SwiperManager();
   swiperManager.initializeSingleSwiper();
   return swiperManager;
@@ -38,6 +38,12 @@ class SwiperManager {
     );
   }
 
+  isVisible() {
+    const singleContainer = document.getElementById("singleSwiperContainer");
+    console.log("Single swiper container display:", singleContainer?.style.display);
+    return singleContainer && singleContainer.style.display !== "none";
+  }
+
   async initializeSingleSwiper() {
     console.trace("Initializing single swiper...");
 
@@ -46,10 +52,10 @@ class SwiperManager {
       direction: "horizontal",
       slidesPerView: 1,
       spaceBetween: 0,
-      navigation: {
-        prevEl: ".swiper-button-prev",
-        nextEl: ".swiper-button-next",
-      },
+      // navigation: {
+      //   prevEl: ".swiper-button-prev",
+      //   nextEl: ".swiper-button-next",
+      // },
       autoplay: {
         delay: state.currentDelay * 1000,
         disableOnInteraction: false,
@@ -95,7 +101,7 @@ class SwiperManager {
 
     // Initial icon state and overlay
     this.updateSlideshowIcon();
-    updateMetadataOverlay();
+    updateMetadataOverlay(this.currentSlide());
   }
 
   initializeSwiperHandlers() {
@@ -130,7 +136,7 @@ class SwiperManager {
         const globalIndex = parseInt(activeSlide.dataset.globalIndex, 10) || 0;
         const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10) || 0;
         slideState.updateFromExternal(globalIndex, searchIndex);
-        updateMetadataOverlay();
+        updateMetadataOverlay(this.currentSlide());
       }
       this.isInternalSlideChange = false;
     });
@@ -375,7 +381,7 @@ class SwiperManager {
       const searchIndex = parseInt(activeSlide.dataset.searchIndex, 10) || 0;
       slideState.updateFromExternal(globalIndex, searchIndex);
     }
-    updateMetadataOverlay();
+    updateMetadataOverlay(this.currentSlide());
   }
 
   removeSlidesAfterCurrent() {
@@ -393,10 +399,15 @@ class SwiperManager {
     setTimeout(() => this.enforceHighWaterMark(), 500);
   }
 
+  currentSlide() {
+    if (!this.swiper) return null;
+    return this.swiper.slides[this.swiper.activeIndex] || null;
+  }
+
   async resetAllSlides() {
     if (!this.swiper) return;
 
-    console.log("Resetting all slides in single swiper");
+    console.trace("Resetting all slides in single swiper");
 
     const slideShowRunning = this.swiper?.autoplay?.running;
     this.pauseSlideshow();
@@ -436,7 +447,7 @@ class SwiperManager {
     await new Promise(requestAnimationFrame);
     if (swiperContainer) swiperContainer.style.visibility = "";
 
-    updateMetadataOverlay();
+    updateMetadataOverlay(this.currentSlide());
     if (slideShowRunning) this.resumeSlideshow();
 
     setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
@@ -482,7 +493,7 @@ class SwiperManager {
         this.isInternalSlideChange = true;
         this.swiper.slideTo(targetSlideIdx, 300);
         this.isInternalSlideChange = false;
-        updateMetadataOverlay();
+        updateMetadataOverlay(this.currentSlide());
         return;
       }
     }
@@ -511,6 +522,6 @@ class SwiperManager {
     this.swiper.slideTo(targetSlideIdx, 0);
 
     swiperContainer.style.visibility = "visible";
-    updateMetadataOverlay();
+    updateMetadataOverlay(this.currentSlide());
   }
 }

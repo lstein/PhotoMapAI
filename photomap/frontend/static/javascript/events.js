@@ -2,7 +2,6 @@
 // This file manages event listeners for the application, including slide transitions and slideshow controls.
 import { aboutManager } from "./about.js";
 import { checkAlbumIndex } from "./album-manager.js";
-import { eventRegistry } from "./event-registry.js";
 import { initializeGridSwiper } from "./grid-view.js";
 import { deleteImage, getIndexMetadata } from "./index.js";
 import {
@@ -16,12 +15,10 @@ import {
   slideState,
 } from "./slide-state.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
-import {
-  initializeSingleSwiper,
-} from "./swiper.js";
+import { initializeSingleSwiper } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
-import { hideSpinner, setCheckmarkOnIcon, showSpinner, waitForBatchLoadingToFinish } from "./utils.js";
+import { hideSpinner, showSpinner } from "./utils.js";
 
 // Constants
 const FULLSCREEN_INDICATOR_CONFIG = {
@@ -477,60 +474,79 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // Toggle grid/swiper views
 export async function toggleGridSwiperView(gridView = null) {
-  // for testing, just initialize the single swiper
-  // await initializeSingleSwiper();
-  return;
-
-
-  // Flag to prevent slide navigation during transition
-  state.isTransitioning = true;
-
-  await waitForBatchLoadingToFinish();
+  if (state.single_swiper === null || state.grid_swiper === null) {
+    console.error("Swipers not initialized yet.");
+    return;
+  }
   
   if (gridView === null) state.gridViewActive = !state.gridViewActive;
   else state.gridViewActive = gridView;
+  
   saveSettingsToLocalStorage();
-
-  const swiperContainer = document.querySelector(".swiper");
-  const gridViewBtn = document.getElementById("gridViewBtn");
-  const gridViewIcon = gridViewBtn.querySelector("svg");
   
-  // Clear ALL event handlers first to prevent race conditions
-  eventRegistry.removeAll("swiper");
-  eventRegistry.removeAll("grid");
+  const singleContainer = document.getElementById("singleSwiperContainer");
+  const gridContainer = document.getElementById("gridViewContainer");
   
-  swiperContainer.style.display = ""; // Always show the swiper container
-
-  const pagination = document.querySelector(".swiper-pagination");
-  if (pagination) {
-    pagination.style.display = state.gridViewActive ? "none" : "";
+  if (state.gridViewActive) {
+    // Fade out single view
+    singleContainer.classList.add("fade-out");
+    await new Promise(resolve => setTimeout(resolve, 300)); // Wait for fade
+    singleContainer.style.display = "none";
+    singleContainer.classList.remove("fade-out");
+    
+    // Fade in grid view
+    gridContainer.style.display = "";
+    gridContainer.style.opacity = "0";
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    gridContainer.style.opacity = "1";
+  } else {
+    // Fade out grid view
+    gridContainer.classList.add("fade-out");
+    await new Promise(resolve => setTimeout(resolve, 300)); // Wait for fade
+    gridContainer.style.display = "none";
+    gridContainer.classList.remove("fade-out");
+    
+    // Fade in single view
+    singleContainer.style.display = "";
+    singleContainer.style.opacity = "0";
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    singleContainer.style.opacity = "1";
   }
-
-  try {
-    if (state.gridViewActive) {
-      await initializeGridSwiper();
-    } else {
-      await initializeSingleSwiper();
-      // Wait for swiper to be fully ready before allowing navigation
-      await new Promise(resolve => setTimeout(resolve, 150));
-    }
-  } finally {
-    // Always clear the transition flag
-    state.isTransitioning = false;
-  }
-
-  const event = new CustomEvent("swiperModeChanged", {
-    detail: { isGridMode: state.gridViewActive },
-  });
-  window.dispatchEvent(event);
-  setCheckmarkOnIcon(gridViewIcon, state.gridViewActive);
 }
+
+// Handle clicks on the slide navigation buttons
+function setupNavigationButtons() {
+  const prevBtn = document.getElementById("swiperPrevButton");
+  const nextBtn = document.getElementById("swiperNextButton");
+
+  if (prevBtn) {
+    prevBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("Prev button clicked, gridViewActive:", state.gridViewActive);
+      const swiperMgr = state.gridViewActive ? state.grid_swiper : state.single_swiper;
+      swiperMgr.swiper.slidePrev();
+    };
+  }
+
+  if (nextBtn) {
+    nextBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log("Next button clicked, gridViewActive:", state.gridViewActive);
+      const swiperMgr = state.gridViewActive ? state.grid_swiper : state.single_swiper;
+        swiperMgr.swiper.slideNext();
+    };
+  }
+}
+
 
 // Show/hide grid button
 document.addEventListener("DOMContentLoaded", async function () {
   const gridViewBtn = document.getElementById("gridViewBtn");
-  state.single_swiper = initializeSingleSwiper(); // Temporary until grid view is working again
-  return;
+  state.single_swiper = await initializeSingleSwiper();
+  state.grid_swiper = await initializeGridSwiper();
+  setupNavigationButtons();
 
   if (gridViewBtn)
     gridViewBtn.addEventListener("click", async () => {

@@ -113,7 +113,8 @@ export async function setAlbum(newAlbumKey, force = false) {
     state.dataChanged = true;
     saveSettingsToLocalStorage();
     
-    // Update the event to include the metadata for SlideStateManager
+    console.trace("Album changed to", newAlbumKey, metadata);
+    // dispatch an album changed event to system
     window.dispatchEvent(
       new CustomEvent("albumChanged", { 
         detail: { 
