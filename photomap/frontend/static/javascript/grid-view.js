@@ -9,6 +9,7 @@ import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import {
   hideSpinner,
+  isBatchLoading,
   setBatchLoading,
   showSpinner,
   waitForBatchLoadingToFinish,
@@ -175,7 +176,8 @@ class GridViewManager {
           return;
         }
 
-        const slideEl = document.querySelector(
+        const gridContainer = document.getElementById("gridViewContainer");
+        const slideEl = gridContainer.querySelector(
           `.swiper-slide[data-global-index='${globalIndex}']`
         );
         if (slideEl) {
@@ -193,7 +195,7 @@ class GridViewManager {
     );
 
     eventRegistry.install({ type: "grid", event: "albumChanged" }, async () => {
-      console.trace("Album changed - resetting grid view");
+      console.log("Album changed - resetting grid view");
       await this.resetAllSlides();
     });
     console.log("Installed albumChanged event listener");
@@ -279,7 +281,8 @@ class GridViewManager {
                 topLeftGlobal,
                 slideState.globalToSearch(topLeftGlobal)
               );
-              this.updateCurrentSlide();
+              // Skip if batch loading is in progress
+              if (!isBatchLoading()) this.updateCurrentSlide();
             }
           }
         }
@@ -318,11 +321,11 @@ class GridViewManager {
   }
 
   async resetAllSlides() {
-    console.log("Resetting all slides in grid view...");
     if (!this.gridInitialized) return;
     if (!this.swiper) return;
+    if (!this.isVisible()) return;
+    console.trace("Resetting all slides in grid view...");
 
-    console.log("(2) Resetting all slides in grid view...");
     showSpinner();
 
     await new Promise(requestAnimationFrame);
@@ -340,7 +343,13 @@ class GridViewManager {
     try {
       await waitForBatchLoadingToFinish();
       setBatchLoading(true);
+
       await this.loadBatch(targetIndex, true);
+      console.log("setting current slide to:", targetIndex);
+      slideState.setCurrentIndex(targetIndex);
+      this.updateCurrentSlide();
+
+      // add some context slides before and after
       await this.loadBatch(targetIndex + this.slidesPerBatch, true);
       if (targetIndex > 0) {
         await this.loadBatch(targetIndex, false);
@@ -349,12 +358,12 @@ class GridViewManager {
       console.log(err);
     }
 
-    this.updateCurrentSlide();
     setBatchLoading(false);
     hideSpinner();
   }
 
   async loadBatch(startIndex = null, append = true) {
+    console.log("Loading batch, startIndex:", startIndex, "append:", append);
     if (startIndex === null) {
       if (!this.swiper.slides?.length) {
         startIndex = 0;
@@ -369,7 +378,7 @@ class GridViewManager {
       }
     }
 
-    startIndex =
+    const topLeftIndex =
       Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
 
     const slides = [];
@@ -384,7 +393,7 @@ class GridViewManager {
           }
         }
 
-        const offset = startIndex + i;
+        const offset = topLeftIndex + i;
         const globalIndex = slideState.indexToGlobal(offset);
         if (globalIndex === null) continue;
 
@@ -428,7 +437,7 @@ class GridViewManager {
           }
         }
 
-        const globalIndex = slideState.indexToGlobal(startIndex - i - 1);
+        const globalIndex = slideState.indexToGlobal(topLeftIndex - i - 1);
         if (this.loadedImageIndices.has(globalIndex)) continue;
 
         try {
@@ -459,8 +468,6 @@ class GridViewManager {
         this.enforceHighWaterMark(true);
       }
     }
-
-    this.updateCurrentSlide();
     return actuallyLoaded > 0;
   }
 
@@ -563,7 +570,7 @@ class GridViewManager {
           Math.abs(newGeometry.tileSize - this.slideHeight) > 10
         ) {
           const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
-          await this.initializeGridSwiper();
+          this.initializeGridSwiper();
 
           await waitForBatchLoadingToFinish();
           setBatchLoading(true);
@@ -580,26 +587,31 @@ class GridViewManager {
   updateCurrentSlideHighlight(globalIndex = null) {
     if (!state.gridViewActive) return;
 
+    const gridSwiperContainer = document.getElementById("gridViewContainer");
+    if (!gridSwiperContainer) return;
+
     const currentGlobalIndex =
       globalIndex === null
         ? slideState.getCurrentSlide().globalIndex
         : globalIndex;
 
-    document
+    gridSwiperContainer
       .querySelectorAll(".swiper-slide.current-slide")
       .forEach((slide) => {
         slide.classList.remove("current-slide");
       });
 
-    const currentSlide = document.querySelector(
+    const currentSlide = gridSwiperContainer.querySelector(
       `.swiper-slide[data-global-index="${currentGlobalIndex}"]`
     );
     if (currentSlide) {
+      console.log("Highlighting current slide:", currentGlobalIndex);
       currentSlide.classList.add("current-slide");
     }
   }
 
   updateCurrentSlide() {
+    console.trace("UpdateCurrentSlide called");
     this.updateCurrentSlideHighlight();
     this.updateMetadataOverlay();
     updateCurrentImageScore(

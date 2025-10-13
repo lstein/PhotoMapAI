@@ -113,7 +113,7 @@ export async function setAlbum(newAlbumKey, force = false) {
     state.dataChanged = true;
     saveSettingsToLocalStorage();
     
-    console.trace("Album changed to", newAlbumKey, metadata);
+    console.log("Album changed to", newAlbumKey, metadata);
     // dispatch an album changed event to system
     window.dispatchEvent(
       new CustomEvent("albumChanged", { 

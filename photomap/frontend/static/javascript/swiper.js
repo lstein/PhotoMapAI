@@ -6,7 +6,7 @@ import { fetchImageByIndex } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
-import { setBatchLoading } from "./utils.js";
+import { setBatchLoading, isBatchLoading } from "./utils.js";
 
 export const initializeSingleSwiper = async () => {
   const swiperManager = new SwiperManager();
@@ -407,7 +407,7 @@ class SwiperManager {
   async resetAllSlides() {
     if (!this.swiper) return;
 
-    console.trace("Resetting all slides in single swiper");
+    console.log("Resetting all slides in single swiper");
 
     const slideShowRunning = this.swiper?.autoplay?.running;
     this.pauseSlideshow();

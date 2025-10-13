@@ -82,6 +82,9 @@ let batchLoading = false;
 export function setBatchLoading(isLoading) {
   batchLoading = isLoading;
 }
+export function isBatchLoading() {
+  return batchLoading;
+}
 export async function waitForBatchLoadingToFinish(timeoutMs = 10000, intervalMs = 50) {
   const start =
     typeof performance !== "undefined" && performance.now
