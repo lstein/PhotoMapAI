@@ -76,33 +76,3 @@ export function debounce(fn, delay) {
   };
 }
 
-// Used by swiper and grid-view as a semaphore for loading state
-// Wait helper: poll until batchLoading becomes false (with timeout)
-let batchLoading = false;
-export function setBatchLoading(isLoading) {
-  batchLoading = isLoading;
-}
-export function isBatchLoading() {
-  return batchLoading;
-}
-export async function waitForBatchLoadingToFinish(timeoutMs = 10000, intervalMs = 50) {
-  const start =
-    typeof performance !== "undefined" && performance.now
-      ? performance.now()
-      : Date.now();
-  while (batchLoading) {
-    const now =
-      typeof performance !== "undefined" && performance.now
-        ? performance.now()
-        : Date.now();
-    if (now - start > timeoutMs) {
-      console.warn(
-        "waitForBatchLoadingToFinish: timeout after",
-        timeoutMs,
-        "ms"
-      );
-      break;
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-}

@@ -7,7 +7,6 @@ import { fetchImageByIndex } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
-import { setBatchLoading } from "./utils.js";
 
 export const initializeSingleSwiper = async () => {
   const swiperManager = new SwiperManager();
@@ -492,7 +491,6 @@ class SwiperManager {
     if (slideShowRunning) this.resumeSlideshow();
 
     setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
-    setBatchLoading(false);
   }
 
   enforceHighWaterMark(backward = false) {

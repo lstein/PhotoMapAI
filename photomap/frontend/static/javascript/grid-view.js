@@ -7,13 +7,7 @@ import {
 import { fetchImageByIndex } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
-import {
-  hideSpinner,
-  isBatchLoading,
-  setBatchLoading,
-  showSpinner,
-  waitForBatchLoadingToFinish,
-} from "./utils.js";
+import { hideSpinner, showSpinner } from "./utils.js";
 
 // Create and export singleton instance
 export const initializeGridSwiper = async () => {
@@ -36,6 +30,7 @@ class GridViewManager {
     this.currentRows = 0;
     this.currentColumns = 0;
     this.suppressSlideChange = false;
+    this.batchLoading = false;
     this.slideData = {};
     this.GRID_MAX_SCREENS = 6;
 
@@ -205,7 +200,7 @@ class GridViewManager {
     if (this.swiper) {
       this.swiper.on("slideNextTransitionStart", async () => {
         showSpinner();
-        await waitForBatchLoadingToFinish();
+        await this.waitForBatchLoadingToFinish();
         const slidesLeft =
           Math.floor(this.swiper.slides.length / this.currentRows) -
           this.swiper.activeIndex;
@@ -219,22 +214,22 @@ class GridViewManager {
           const index = slideState.isSearchMode
             ? slideState.globalToSearch(lastSlideIndex) + 1
             : lastSlideIndex + 1;
-          await waitForBatchLoadingToFinish();
-          setBatchLoading(true);
+          await this.waitForBatchLoadingToFinish();
+          this.setBatchLoading(true);
           try {
             await this.loadBatch(index, true);
           } catch (error) {
             console.log(error);
           } finally {
-            setBatchLoading(false);
+            this.setBatchLoading(false);
           }
         }
         hideSpinner();
       });
 
       this.swiper.on("slidePrevTransitionStart", async () => {
-        await waitForBatchLoadingToFinish();
-        setBatchLoading(true);
+        await this.waitForBatchLoadingToFinish();
+        this.setBatchLoading(true);
         const firstSlide = parseInt(
           this.swiper.slides[0].dataset.globalIndex,
           10
@@ -245,7 +240,7 @@ class GridViewManager {
         if (firstSlide > 0 && this.swiper.activeIndex === 0) {
           await this.loadBatch(index - 1, false);
         }
-        setBatchLoading(false);
+        this.setBatchLoading(false);
       });
 
       this.swiper.on("transitionEnd", () => {
@@ -287,7 +282,7 @@ class GridViewManager {
                 slideState.globalToSearch(topLeftGlobal)
               );
               // Skip if batch loading is in progress
-              if (!isBatchLoading()) this.updateCurrentSlide();
+              if (!this.isBatchLoading()) this.updateCurrentSlide();
             }
           }
         }
@@ -343,8 +338,8 @@ class GridViewManager {
     }
 
     try {
-      await waitForBatchLoadingToFinish();
-      setBatchLoading(true);
+      await this.waitForBatchLoadingToFinish();
+      this.setBatchLoading(true);
 
       await this.loadBatch(targetIndex, true);
       console.log("setting current slide to:", targetIndex);
@@ -360,12 +355,13 @@ class GridViewManager {
       console.log(err);
     }
 
-    setBatchLoading(false);
+    this.setBatchLoading(false);
     hideSpinner();
   }
 
   async loadBatch(startIndex = null, append = true) {
     console.log("Loading batch, startIndex:", startIndex, "append:", append);
+
     if (startIndex === null) {
       if (!this.swiper.slides?.length) {
         startIndex = 0;
@@ -568,11 +564,11 @@ class GridViewManager {
           const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
           this.initializeGridSwiper();
 
-          await waitForBatchLoadingToFinish();
-          setBatchLoading(true);
+          await this.waitForBatchLoadingToFinish();
+          this.setBatchLoading(true);
           await this.loadBatch(currentGlobalIndex);
           await this.loadBatch(currentGlobalIndex + this.slidesPerBatch);
-          setBatchLoading(false);
+          this.setBatchLoading(false);
         }
       }, 300);
     };
@@ -660,5 +656,36 @@ class GridViewManager {
     document.getElementById("filepathText").textContent =
       data["filepath"] || "";
     document.getElementById("metadataLink").href = data["metadata_url"] || "#";
+  }
+
+  // These functions act as a semaphore to prevent overlapping batch loads
+  setBatchLoading(isLoading) {
+    this.batchLoading = isLoading;
+  }
+
+  isBatchLoading() {
+    return this.batchLoading;
+  }
+
+  async waitForBatchLoadingToFinish(timeoutMs = 10000, intervalMs = 50) {
+    const start =
+      typeof performance !== "undefined" && performance.now
+        ? performance.now()
+        : Date.now();
+    while (this.batchLoading) {
+      const now =
+        typeof performance !== "undefined" && performance.now
+          ? performance.now()
+          : Date.now();
+      if (now - start > timeoutMs) {
+        console.warn(
+          "waitForBatchLoadingToFinish: timeout after",
+          timeoutMs,
+          "ms"
+        );
+        break;
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
   }
 }
