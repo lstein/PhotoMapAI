@@ -158,7 +158,7 @@ export async function fetchUmapData() {
     };
 
     // Current image marker trace
-    const [globalIndex, total, searchIndex] = await getCurrentSlideIndex();
+    const [globalIndex, total, searchIndex] = getCurrentSlideIndex();
     const currentPoint = points.find((p) => p.index === globalIndex);
     const currentImageTrace = currentPoint
       ? {
@@ -255,11 +255,23 @@ export async function fetchUmapData() {
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
         if (pt.curveNumber !== 0) return;
-        const index = pt.customdata;
-        const cluster = points[pt.pointIndex]?.cluster ?? -1;
+        const hoverCluster = points[pt.pointIndex]?.cluster ?? -1;
         isHovering = true;
         hoverTimer = setTimeout(() => {
           if (isHovering) {
+            const landmarkCluster = findLandmarkCluster(pt);
+            let index, cluster;
+            if (landmarkCluster !== null) {
+              const clusterPoints = points.filter(
+                (p) => p.cluster === landmarkCluster
+              );
+              const landmarkPoint = getLandmarkForCluster(clusterPoints);
+              index = landmarkPoint.index;
+              cluster = landmarkCluster;
+            } else {
+              index = pt.customdata;
+              cluster = hoverCluster;
+            }
             createUmapThumbnail({
               x: eventData.event.clientX,
               y: eventData.event.clientY,
@@ -341,12 +353,13 @@ export async function fetchUmapData() {
     document
       .getElementById("umapPlot")
       .on("plotly_click", async function (data) {
-        const traceName = data.points[0].fullData.name;
-        if (traceName === "LandmarkClickTargets") {
-          // Get cluster ID from customdata
-          const clusterId = data.points[0].customdata;
+        const clickedLandmarkCluster = findLandmarkCluster(data.points[0]);
+
+        if (clickedLandmarkCluster !== null) {
           // Get all points in this cluster
-          const clusterPoints = points.filter((p) => p.cluster === clusterId);
+          const clusterPoints = points.filter(
+            (p) => p.cluster === clickedLandmarkCluster
+          );
           // Use the landmark placement algorithm to get the landmark point
           const landmarkPoint = getLandmarkForCluster(clusterPoints);
           if (landmarkPoint) {
@@ -369,7 +382,42 @@ export async function fetchUmapData() {
   mapExists = true;
 }
 
-// Add this after your Plotly event handlers in fetchUmapData()
+function findLandmarkCluster(point) {
+  const plotDiv = document.getElementById("umapPlot");
+  const landmarkTraceIndex = plotDiv.data.findIndex(
+    (trace) => trace.name === "LandmarkClickTargets"
+  );
+  if (landmarkTraceIndex == -1) return null;
+
+  const landmarkTrace = plotDiv.data[landmarkTraceIndex];
+  const squareSize = Array.isArray(landmarkTrace.marker.size)
+    ? landmarkTrace.marker.size[0]
+    : landmarkTrace.marker.size;
+
+  const plotWidthPx = plotDiv.offsetWidth || 800;
+  const plotHeightPx = plotDiv.offsetHeight || 560;
+  const xRange = plotDiv.layout.xaxis.range[1] - plotDiv.layout.xaxis.range[0];
+  const yRange = plotDiv.layout.yaxis.range[1] - plotDiv.layout.yaxis.range[0];
+  const halfSizeX = (squareSize / 2) * (xRange / plotWidthPx);
+  const halfSizeY = (squareSize / 2) * (yRange / plotHeightPx);
+
+  let landmarkXs = landmarkTrace.x;
+  let landmarkYs = landmarkTrace.y;
+  let landmarkClusters = landmarkTrace.customdata || [];
+
+  let foundLandmark = null;
+  for (let i = 0; i < landmarkXs.length; i++) {
+    if (
+      Math.abs(point.x - landmarkXs[i]) <= halfSizeX &&
+      Math.abs(point.y - landmarkYs[i]) <= halfSizeY
+    ) {
+      foundLandmark = landmarkClusters[i] || null;
+      break;
+    }
+  }
+  return foundLandmark;
+}
+
 const plotDiv = document.getElementById("umapPlot");
 plotDiv.addEventListener("mouseleave", () => {
   removeUmapThumbnail();
@@ -383,9 +431,7 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
   if (highlight && searchResults.length > 0) {
     const searchSet = new Set(searchResults.map((r) => r.index));
     markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerAlphas = points.map((p) =>
-      searchSet.has(p.index) ? 1.0 : 0.2
-    );
+    markerAlphas = points.map((p) => (searchSet.has(p.index) ? 1.0 : 0.2));
   } else {
     markerColors = points.map((p) => getClusterColor(p.cluster));
     markerAlphas = points.map((p) => (p.cluster === -1 ? 0.25 : 0.5));
@@ -848,7 +894,7 @@ function updateLandmarkTrace() {
       x,
       y,
       mode: "markers",
-      type: "scatter",
+      type: "scattergl",
       marker: {
         size: triangleSize,
         color: markerColors,
@@ -865,9 +911,9 @@ function updateLandmarkTrace() {
       x: clustersInView.map((c, i) => x[i]),
       y: clustersInView.map((c, i) => y[i] + imageSize / 2), // center of image
       mode: "markers",
-      type: "scatter",
+      type: "scattergl",
       marker: {
-        color: "rgba(0, 0, 0, 0)",
+        color: "rgba(0, 0, 0, 0.0)", // invisible but clickable
         symbol: "square",
         size: thumbSize,
         line: { width: 0 },
@@ -915,6 +961,19 @@ function updateLandmarkTrace() {
   } finally {
     isRenderingLandmarks = false;
   }
+
+  // Move the clickableTrace to the top to ensure it captures clicks
+  const plotDiv = document.getElementById("umapPlot");
+  const clickableTraceIndex = plotDiv.data.findIndex(
+    (trace) => trace.name === "LandmarkClickTargets"
+  );
+  if (
+    clickableTraceIndex !== -1 &&
+    clickableTraceIndex !== plotDiv.data.length - 1
+  ) {
+    Plotly.moveTraces(plotDiv, clickableTraceIndex, plotDiv.data.length - 1);
+  }
+
 }
 
 // Debounced version for event handlers
@@ -1051,7 +1110,7 @@ export async function toggleUmapWindow(show = null) {
     }
 
     if (state.album === null) return;
-    
+
     // Fetch configured eps value from server
     const result = await fetch("get_umap_eps/", {
       method: "POST",
