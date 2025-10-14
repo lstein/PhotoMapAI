@@ -254,7 +254,6 @@ export async function fetchUmapData() {
         if (!hoverThumbnailsEnabled) return;
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
-        if (pt.curveNumber !== 0) return;
         const hoverCluster = points[pt.pointIndex]?.cluster ?? -1;
         isHovering = true;
         hoverTimer = setTimeout(() => {
@@ -894,7 +893,7 @@ function updateLandmarkTrace() {
       x,
       y,
       mode: "markers",
-      type: "scattergl",
+      type: "scatter",
       marker: {
         size: triangleSize,
         color: markerColors,
@@ -911,7 +910,7 @@ function updateLandmarkTrace() {
       x: clustersInView.map((c, i) => x[i]),
       y: clustersInView.map((c, i) => y[i] + imageSize / 2), // center of image
       mode: "markers",
-      type: "scattergl",
+      type: "scatter",
       marker: {
         color: "rgba(0, 0, 0, 0.0)", // invisible but clickable
         symbol: "square",
