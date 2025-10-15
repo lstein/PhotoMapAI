@@ -137,7 +137,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     let slide;
     const currentSlide = slideState.getCurrentSlide();
     const swiper = state.gridViewActive ? state.grid_swiper.swiper : state.single_swiper.swiper;
-    console.log("swiper:", swiper);
     if (currentSlide) {
       const globalIndex = currentSlide.globalIndex.toString();
       slide = swiper.slides.find((s) => s.dataset.globalIndex === globalIndex);

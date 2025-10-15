@@ -45,7 +45,6 @@ class GridViewManager {
     const availableHeight = window.innerHeight - 120;
 
     const factor = state.gridThumbSizeFactor || 1.0;
-    console.log("Calculating grid geometry with factor:", factor);
     const targetTileSize = 150 * factor;
     const minTileSize = 75;
     const maxTileSize = 300;
@@ -153,11 +152,9 @@ class GridViewManager {
     eventRegistry.install(
       { type: "grid", event: "gridThumbSizeFactorChanged" },
       async () => {
-        console.log("Grid thumb size factor changed - reinitializing grid");
         this.initializeGridSwiper();
         await this.resetAllSlides();
         const currentSlide = slideState.getCurrentSlide();
-        console.log("After resize, current slide is", currentSlide);
         updateCurrentImageScore(this.slideData[currentSlide.globalIndex] || null)
       }
     );
@@ -191,7 +188,6 @@ class GridViewManager {
     );
 
     eventRegistry.install({ type: "grid", event: "albumChanged" }, async () => {
-      console.log("Album changed - resetting grid view");
       await this.resetAllSlides();
     });
 
@@ -257,14 +253,6 @@ class GridViewManager {
         if (slideEl) {
           const slideIndex = Array.from(this.swiper.slides).indexOf(slideEl);
           const activeIndex = this.swiper.activeIndex * this.currentRows;
-          console.log(
-            "Grid slideChange: currentGlobal=",
-            currentGlobal,
-            "slideIndex=",
-            slideIndex,
-            "activeIndex=",
-            activeIndex
-          );
           if (
             slideIndex < activeIndex ||
             slideIndex >= activeIndex + this.currentRows * this.currentColumns
@@ -348,13 +336,11 @@ class GridViewManager {
       await this.waitForBatchLoadingToFinish();
       this.setBatchLoading(true);
 
-      console.log("setting current slide to:", targetIndex);
       await this.loadBatch(targetIndex, true);
       slideState.setCurrentIndex(targetIndex);
       this.updateCurrentSlide();
 
       // add some context slides before and after
-      console.log("SlidesPerBatch:", this.slidesPerBatch);
       await this.loadBatch(targetIndex + this.slidesPerBatch, true);
       if (targetIndex > 0) {
         await this.loadBatch(targetIndex, false);
@@ -368,7 +354,6 @@ class GridViewManager {
   }
 
   async loadBatch(startIndex = null, append = true) {
-    console.log("Loading batch, startIndex:", startIndex, "append:", append);
 
     if (startIndex === null) {
       if (!this.swiper.slides?.length) {
@@ -387,8 +372,6 @@ class GridViewManager {
     const topLeftIndex =
       Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
 
-    console.log("Calculated topLeftIndex:", topLeftIndex, "slidesPerBatch:", this.slidesPerBatch);
-
     const slides = [];
     let actuallyLoaded = 0;
 
@@ -405,7 +388,6 @@ class GridViewManager {
         if (this.loadedImageIndices.has(globalIndex)) {
           continue;
         }
-        console.log("Loading image at global index:", globalIndex);
 
         try {
           const data = await fetchImageByIndex(globalIndex);
@@ -442,7 +424,6 @@ class GridViewManager {
 
         const globalIndex = slideState.indexToGlobal(topLeftIndex - i - 1);
         if (this.loadedImageIndices.has(globalIndex)) continue;
-        console.log("Prepending image at global index:", globalIndex);
 
         try {
           const data = await fetchImageByIndex(globalIndex);
@@ -576,7 +557,6 @@ class GridViewManager {
         const newGeometry = this.calculateGridGeometry();
 
         if (this.gridGeometryChanged(newGeometry)) {
-          console.log("Grid resize detected:", newGeometry);
           const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
 
           this.resetAllSlides();
@@ -613,14 +593,12 @@ class GridViewManager {
       `.swiper-slide[data-global-index="${currentGlobalIndex}"]`
     );
     if (currentSlide) {
-      console.log("Highlighting current slide:", currentGlobalIndex);
       currentSlide.classList.add("current-slide");
     }
   }
 
   updateCurrentSlide() {
     const currentSlide = slideState.getCurrentSlide()
-    console.log("UpdateCurrentSlide called with", currentSlide, "globalIndex:", currentSlide.globalIndex);
     this.updateCurrentSlideHighlight();
     this.updateMetadataOverlay();
     updateCurrentImageScore(

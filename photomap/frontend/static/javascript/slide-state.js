@@ -60,7 +60,6 @@ class SlideStateManager {
    * @param {boolean} isSearchIndex - Whether the index is in search results or global album
    */
   setCurrentIndex(index, isSearchIndex = null) {
-    console.log("setCurrentIndex", index, isSearchIndex);
     // Auto-detect mode if not specified
     if (isSearchIndex === null) {
       isSearchIndex = this.isSearchMode;
