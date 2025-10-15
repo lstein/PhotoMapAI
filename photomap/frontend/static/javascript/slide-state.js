@@ -60,6 +60,7 @@ class SlideStateManager {
    * @param {boolean} isSearchIndex - Whether the index is in search results or global album
    */
   setCurrentIndex(index, isSearchIndex = null) {
+    console.log("setCurrentIndex", index, isSearchIndex);
     // Auto-detect mode if not specified
     if (isSearchIndex === null) {
       isSearchIndex = this.isSearchMode;
@@ -155,6 +156,7 @@ class SlideStateManager {
    * @param {number} searchIndex - The search results index (optional)
    */
   updateFromExternal(globalIndex, searchIndex = null) {
+    console.trace("updateFromExternal", globalIndex, searchIndex);
     if (
       this.isSearchMode &&
       searchIndex !== null &&

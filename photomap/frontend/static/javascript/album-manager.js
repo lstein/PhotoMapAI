@@ -4,7 +4,6 @@ import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
 import { exitSearchMode } from "./search-ui.js";
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
 import { setAlbum, state } from "./state.js";
-import { removeSlidesAfterCurrent, resetAllSlides } from "./swiper.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
 export class AlbumManager {
@@ -849,7 +848,7 @@ export class AlbumManager {
 
         // Clear and reset slideshow (specific to deletion)
         exitSearchMode();
-        removeSlidesAfterCurrent();
+        this.single_swiper.removeSlidesAfterCurrent();
 
         this.showAlbumSwitchNotification(firstAlbum.name);
       } else {
@@ -1150,7 +1149,7 @@ export class AlbumManager {
       console.log(
         `Refreshing slideshow for completed indexing of current album: ${albumKey}`
       );
-      resetAllSlides();
+      this.single_swiper.resetAllSlides();
     }
 
     // After a delay set the status

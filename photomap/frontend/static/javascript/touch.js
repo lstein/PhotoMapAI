@@ -2,7 +2,7 @@
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
 import { toggleSlideshowWithIndicator } from "./events.js";
-import { pauseSlideshow } from "./swiper.js";
+import { state } from "./state.js";
 
 // Touch events
 let touchStartY = null;
@@ -120,7 +120,7 @@ function handleTouchEnd(e) {
       Math.abs(deltaX) > Math.abs(deltaY) &&
       Math.abs(deltaX) > swipeThreshold
     ) {
-      pauseSlideshow();
+      state.single_swiper.pauseSlideshow();
     }
   }
 

@@ -82,17 +82,30 @@
   </head>
 
   <body>
-    {% include "modules/spinner.html" %} {% include "modules/seek_slider.html"
-    %} {% include "modules/swiper.html" %} {% include
-    "modules/metadata-drawer.html" %}
+    {% include "modules/spinner.html" %} 
+    {% include "modules/seek_slider.html" %} 
+
+<div id="singleSwiperContainer">
+     {% include "modules/swiper.html" %} 
+</div>
+
+<div id="gridViewContainer">
+      {% include "modules/grid-view.html" %}
+</div>
+<div class="swiper-button-prev" id="swiperPrevButton"></div>
+<div class="swiper-button-next" id="swiperNextButton"></div>
+
+    {% include "modules/metadata-drawer.html" %}
     <div id="panelStackContainer">
-      {% include "modules/search-panel.html" %} {% include
-      "modules/control-panel.html" %}
+      {% include "modules/search-panel.html" %} 
+      {% include  "modules/control-panel.html" %}
     </div>
-    {% include "modules/search.html" %} {% include
-    "modules/umap-floating-window.html" %} {% include "modules/settings.html" %}
-    {% include "modules/album-manager.html" %} {% include
-    "modules/metadata-modal.html" %} {% include "modules/delete-modal.html" %}
+    {% include "modules/search.html" %} 
+    {% include "modules/umap-floating-window.html" %} 
+    {% include "modules/settings.html" %}
+    {% include "modules/album-manager.html" %} 
+    {% include "modules/metadata-modal.html" %} 
+    {% include "modules/delete-modal.html" %}
     {% include "modules/about.html" %}
   </body>
 </html>

@@ -2,12 +2,12 @@
 // This file manages the state of the application, including slide management and metadata handling.
 import { albumManager } from "./album-manager.js";
 import { getIndexMetadata } from "./index.js";
-import { switchAlbum } from "./settings.js";
 
 
 // TO DO - CONVERT THIS INTO A CLASS
 export const state = {
-  swiper: null, // Will be initialized in swiper.js
+  single_swiper: null, // Will be initialized in swiper.js
+  grid_swiper: null, // Will be initialized in grid-view.js
   gridViewActive: false, // Whether the grid view is active
   currentDelay: 5, // Delay in seconds for slide transitions
   showControlPanelText: true, // Whether to show text in control panels
@@ -18,15 +18,11 @@ export const state = {
   dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
   suppressDeleteConfirm: false,
   gridThumbSizeFactor: 1.0,
-  isTransitioning: false, // Flag set when transitioning from grid->swiper view
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
   await restoreFromLocalStorage();
   initializeFromServer();
-  switchAlbum(state.album); // Initialize with the current album
-
-  // Notify that state is ready
   window.dispatchEvent(new Event("stateReady"));
 });
 
@@ -47,6 +43,7 @@ export function initializeFromServer() {
 
 // Restore state from local storage
 export async function restoreFromLocalStorage() {
+  console.log("Restoring settings from local storage");
   const storedCurrentDelay = localStorage.getItem("currentDelay");
   if (storedCurrentDelay !== null)
     state.currentDelay = parseInt(storedCurrentDelay, 10);
@@ -84,6 +81,7 @@ export async function restoreFromLocalStorage() {
   }
 
   const storedGridThumbSizeFactor = localStorage.getItem("gridThumbSizeFactor");
+  console.log("Restored gridThumbSizeFactor:", storedGridThumbSizeFactor);
   if (storedGridThumbSizeFactor !== null) {
     state.gridThumbSizeFactor = parseFloat(storedGridThumbSizeFactor);
   }
@@ -112,7 +110,8 @@ export async function setAlbum(newAlbumKey, force = false) {
     state.dataChanged = true;
     saveSettingsToLocalStorage();
     
-    // Update the event to include the metadata for SlideStateManager
+    console.log("Album changed to", newAlbumKey, metadata);
+    // dispatch an album changed event to system
     window.dispatchEvent(
       new CustomEvent("albumChanged", { 
         detail: { 

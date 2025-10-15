@@ -74,8 +74,7 @@ export function replaceReferenceImagesWithLinks(
 }
 
 // Update banner with current slide's metadata
-export function updateMetadataOverlay() {
-  const slide = state.swiper.slides[state.swiper.activeIndex];
+export function updateMetadataOverlay(slide) {
   if (!slide) return;
 
   // Process description with reference image links

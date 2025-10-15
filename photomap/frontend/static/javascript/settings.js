@@ -3,7 +3,6 @@
 import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
 import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
-import { addNewSlide, removeSlidesAfterCurrent } from "./swiper.js";
 
 // Constants
 const DELAY_CONFIG = {
@@ -186,8 +185,8 @@ function setupModeControls() {
       if (this.checked) {
         state.mode = this.value;
         saveSettingsToLocalStorage();
-        removeSlidesAfterCurrent();
-        addNewSlide();
+        state.single_swiper.removeSlidesAfterCurrent();
+        state.single_swiper.addNewSlide();
       }
     });
   });
