@@ -73,7 +73,6 @@ class GridViewManager {
 
   isVisible() {
     const gridContainer = document.getElementById("gridViewContainer");
-    console.log("Grid container display:", gridContainer?.style.display);
     return gridContainer && gridContainer.style.display !== "none";
   }
 
@@ -92,7 +91,6 @@ class GridViewManager {
     this.slideData = {};
 
     const geometry = this.calculateGridGeometry();
-    console.log("Calculated grid geometry:", geometry);
     this.currentRows = geometry.rows;
     this.currentColumns = geometry.columns;
     this.slideHeight = geometry.tileSize;
@@ -155,8 +153,12 @@ class GridViewManager {
     eventRegistry.install(
       { type: "grid", event: "gridThumbSizeFactorChanged" },
       async () => {
-        await this.initializeGridSwiper();
+        console.log("Grid thumb size factor changed - reinitializing grid");
+        this.initializeGridSwiper();
         await this.resetAllSlides();
+        const currentSlide = slideState.getCurrentSlide();
+        console.log("After resize, current slide is", currentSlide);
+        updateCurrentImageScore(this.slideData[currentSlide.globalIndex] || null)
       }
     );
 
@@ -192,7 +194,6 @@ class GridViewManager {
       console.log("Album changed - resetting grid view");
       await this.resetAllSlides();
     });
-    console.log("Installed albumChanged event listener");
 
     if (this.swiper) {
       this.swiper.on("slideNextTransitionStart", async () => {
@@ -235,7 +236,7 @@ class GridViewManager {
           ? slideState.globalToSearch(firstSlide)
           : firstSlide;
         if (firstSlide > 0 && this.swiper.activeIndex === 0) {
-          await this.loadBatch(index - 1, false);
+          await this.loadBatch(index, false);
         }
         this.setBatchLoading(false);
       });
@@ -347,8 +348,8 @@ class GridViewManager {
       await this.waitForBatchLoadingToFinish();
       this.setBatchLoading(true);
 
-      await this.loadBatch(targetIndex, true);
       console.log("setting current slide to:", targetIndex);
+      await this.loadBatch(targetIndex, true);
       slideState.setCurrentIndex(targetIndex);
       this.updateCurrentSlide();
 
@@ -386,6 +387,8 @@ class GridViewManager {
     const topLeftIndex =
       Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
 
+    console.log("Calculated topLeftIndex:", topLeftIndex, "slidesPerBatch:", this.slidesPerBatch);
+
     const slides = [];
     let actuallyLoaded = 0;
 
@@ -402,6 +405,7 @@ class GridViewManager {
         if (this.loadedImageIndices.has(globalIndex)) {
           continue;
         }
+        console.log("Loading image at global index:", globalIndex);
 
         try {
           const data = await fetchImageByIndex(globalIndex);
@@ -438,6 +442,7 @@ class GridViewManager {
 
         const globalIndex = slideState.indexToGlobal(topLeftIndex - i - 1);
         if (this.loadedImageIndices.has(globalIndex)) continue;
+        console.log("Prepending image at global index:", globalIndex);
 
         try {
           const data = await fetchImageByIndex(globalIndex);
@@ -614,11 +619,12 @@ class GridViewManager {
   }
 
   updateCurrentSlide() {
-    console.log("UpdateCurrentSlide called");
+    const currentSlide = slideState.getCurrentSlide()
+    console.log("UpdateCurrentSlide called with", currentSlide, "globalIndex:", currentSlide.globalIndex);
     this.updateCurrentSlideHighlight();
     this.updateMetadataOverlay();
     updateCurrentImageScore(
-      this.slideData[slideState.getCurrentSlide().globalIndex] || null
+      this.slideData[currentSlide.globalIndex] || null
     );
   }
 

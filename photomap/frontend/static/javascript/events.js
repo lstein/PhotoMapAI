@@ -541,7 +541,6 @@ function setupNavigationButtons() {
     prevBtn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log("Prev button clicked, gridViewActive:", state.gridViewActive);
       const swiperMgr = state.gridViewActive
         ? state.grid_swiper
         : state.single_swiper;
@@ -553,7 +552,6 @@ function setupNavigationButtons() {
     nextBtn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      console.log("Next button clicked, gridViewActive:", state.gridViewActive);
       const swiperMgr = state.gridViewActive
         ? state.grid_swiper
         : state.single_swiper;

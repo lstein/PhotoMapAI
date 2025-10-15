@@ -45,7 +45,7 @@ class SwiperManager {
   }
 
   async initializeSingleSwiper() {
-    console.trace("Initializing single swiper...");
+    console.log("Initializing single swiper...");
 
     // Swiper config for single-image mode
     const swiperConfig = {
