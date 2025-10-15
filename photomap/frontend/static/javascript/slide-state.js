@@ -156,7 +156,6 @@ class SlideStateManager {
    * @param {number} searchIndex - The search results index (optional)
    */
   updateFromExternal(globalIndex, searchIndex = null) {
-    console.trace("updateFromExternal", globalIndex, searchIndex);
     if (
       this.isSearchMode &&
       searchIndex !== null &&

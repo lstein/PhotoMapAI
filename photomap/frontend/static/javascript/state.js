@@ -43,7 +43,6 @@ export function initializeFromServer() {
 
 // Restore state from local storage
 export async function restoreFromLocalStorage() {
-  console.log("Restoring settings from local storage");
   const storedCurrentDelay = localStorage.getItem("currentDelay");
   if (storedCurrentDelay !== null)
     state.currentDelay = parseInt(storedCurrentDelay, 10);
@@ -81,7 +80,6 @@ export async function restoreFromLocalStorage() {
   }
 
   const storedGridThumbSizeFactor = localStorage.getItem("gridThumbSizeFactor");
-  console.log("Restored gridThumbSizeFactor:", storedGridThumbSizeFactor);
   if (storedGridThumbSizeFactor !== null) {
     state.gridThumbSizeFactor = parseFloat(storedGridThumbSizeFactor);
   }
