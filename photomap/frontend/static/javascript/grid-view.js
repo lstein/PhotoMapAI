@@ -16,6 +16,7 @@ export const initializeGridSwiper = async () => {
   return gridViewManager;
 };
 
+// GridViewManager class to handle grid view logic
 class GridViewManager {
   constructor() {
     if (GridViewManager.instance) {
@@ -117,10 +118,6 @@ class GridViewManager {
         thresholdTime: 100,
       },
       keyboard: true,
-      // navigation: {
-      //   prevEl: ".swiper-button-prev",
-      //   nextEl: ".swiper-button-next",
-      // },
     });
 
     // await new Promise((resolve) => setTimeout(resolve, 100));
@@ -319,6 +316,15 @@ class GridViewManager {
     slideEl.dataset.doubleTapHandlerAttached = "true";
   }
 
+  // This is similar to resetAllSlides(), but also re-initializes the swiper if geometry changed
+  async resetOrInitialize() {
+    if (this.gridGeometryChanged(this.calculateGridGeometry())) {
+      this.initializeGridSwiper();
+    } else {
+      await this.resetAllSlides();
+    }
+  }
+
   async resetAllSlides() {
     if (!this.gridInitialized) return;
     if (!this.swiper) return;
@@ -347,6 +353,7 @@ class GridViewManager {
       this.updateCurrentSlide();
 
       // add some context slides before and after
+      console.log("SlidesPerBatch:", this.slidesPerBatch);
       await this.loadBatch(targetIndex + this.slidesPerBatch, true);
       if (targetIndex > 0) {
         await this.loadBatch(targetIndex, false);
@@ -545,6 +552,14 @@ class GridViewManager {
     }
   }
 
+  gridGeometryChanged(newGeometry) {
+    return (
+      newGeometry.rows !== this.currentRows ||
+      newGeometry.columns !== this.currentColumns ||
+      Math.abs(newGeometry.tileSize - this.slideHeight) > 10
+    );
+  }
+
   setupGridResizeHandler() {
     let resizeTimeout;
 
@@ -554,17 +569,13 @@ class GridViewManager {
         if (!state.gridViewActive) return;
 
         const newGeometry = this.calculateGridGeometry();
-        console.log("Grid resize detected:", newGeometry);
 
-        if (
-          newGeometry.rows !== this.currentRows ||
-          newGeometry.columns !== this.currentColumns ||
-          Math.abs(newGeometry.tileSize - this.slideHeight) > 10
-        ) {
+        if (this.gridGeometryChanged(newGeometry)) {
+          console.log("Grid resize detected:", newGeometry);
           const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
-          this.initializeGridSwiper();
 
-          await this.waitForBatchLoadingToFinish();
+          this.resetAllSlides();
+          this.initializeGridSwiper();
           this.setBatchLoading(true);
           await this.loadBatch(currentGlobalIndex);
           await this.loadBatch(currentGlobalIndex + this.slidesPerBatch);

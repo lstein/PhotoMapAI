@@ -510,7 +510,7 @@ export async function toggleGridSwiperView(gridView = null) {
     gridContainer.style.opacity = "0";
     await new Promise((resolve) => requestAnimationFrame(resolve));
     gridContainer.style.opacity = "1";
-    state.grid_swiper.resetAllSlides();
+    state.grid_swiper.resetOrInitialize();
   } else {
     // Fade out grid view
     gridContainer.classList.add("fade-out");
