@@ -136,11 +136,12 @@ document.addEventListener("DOMContentLoaded", async function () {
     negativeSearchInput.value = "";
     let slide;
     const currentSlide = slideState.getCurrentSlide();
+    const swiper = state.gridViewActive ? state.grid_swiper.swiper : state.single_swiper.swiper;
     if (currentSlide) {
       const globalIndex = currentSlide.globalIndex.toString();
-      slide = state.swiper.slides.find((s) => s.dataset.globalIndex === globalIndex);
+      slide = swiper.slides.find((s) => s.dataset.globalIndex === globalIndex);
     } else {
-      slide = state.swiper.slides[state.swiper.activeIndex];  
+      slide = swiper.slides[state.swiper.activeIndex];  
     }
     if (!slide) return;
     const imgUrl = slide.querySelector("img")?.src;
@@ -156,7 +157,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       const file = new File([blob], filename, { type: blob.type });
       // Set the search image for the panel
       setSearchImage(imgUrl, file);
-      let querySlide = createQuerySlide(imgUrl, `Search slide ${filename}`);
       await searchWithTextAndImage("image");
       hideSpinner();
       if (slideShowRunning) state.single_swiper.resumeSlideshow();
@@ -422,6 +422,7 @@ window.addEventListener("paste", async function (e) {
   if (!e.clipboardData) return;
   const items = e.clipboardData.items;
   if (!items) return;
+  const swiper = state.gridViewActive ? state.grid_swiper.swiper : state.single_swiper.swiper;
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (item.kind === "file" && item.type.startsWith("image/")) {
@@ -445,7 +446,7 @@ window.addEventListener("paste", async function (e) {
             slide.dataset.textToCopy = "";
             slide.dataset.filepath = "";
             await searchWithImage(file, slide);
-            state.swiper.slideTo(0);
+            swiper.slideTo(0);
             hideSpinner();
           };
           reader.readAsDataURL(file);

@@ -455,7 +455,6 @@ class SwiperManager {
     this.swiper.removeAllSlides();
 
     const { globalIndex, searchIndex } = slideState.getCurrentSlide();
-    console.log("Current slide index:", globalIndex, searchIndex);
 
     const swiperContainer = document.getElementById("singleSwiper");
     if (swiperContainer) swiperContainer.style.visibility = "hidden";

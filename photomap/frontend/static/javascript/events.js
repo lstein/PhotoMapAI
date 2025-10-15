@@ -270,7 +270,7 @@ async function handleSuccessfulDelete(globalIndex, searchIndex) {
   slideState.navigateByOffset(0); // Stay on the same index, which is now the next image
 }
 
-// Toggle visibility of the fullscreen indicator
+// Toggle visibility of the slideshow fullscreen indicator
 function showPlayPauseIndicator(isPlaying) {
   removeExistingIndicator();
   const indicator = createIndicator(isPlaying);
@@ -467,8 +467,7 @@ export async function toggleSlideshowWithIndicator() {
 // Listen for slide changes to update UI
 window.addEventListener("slideChanged", (e) => {
   const { globalIndex, searchIndex, totalCount, isSearchMode } = e.detail;
-  // Update any UI elements that need to reflect current position
-  // updateUIForSlideChange(e.detail); // TO COME
+  // nothing to do here yet, but could be used to update UI elements
 });
 
 
@@ -511,6 +510,8 @@ export async function toggleGridSwiperView(gridView = null) {
     await new Promise((resolve) => requestAnimationFrame(resolve));
     gridContainer.style.opacity = "1";
     state.grid_swiper.resetOrInitialize();
+    state.single_swiper.pauseSlideshow();
+    state.single_swiper.updateSlideshowIcon(); // Show pause indicator
   } else {
     // Fade out grid view
     gridContainer.classList.add("fade-out");
