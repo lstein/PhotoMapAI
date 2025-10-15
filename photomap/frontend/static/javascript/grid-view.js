@@ -236,7 +236,7 @@ class GridViewManager {
           ? slideState.globalToSearch(firstSlide)
           : firstSlide;
         if (firstSlide > 0 && this.swiper.activeIndex === 0) {
-          await this.loadBatch(index - 1, false);
+          await this.loadBatch(index, false);
         }
         this.setBatchLoading(false);
       });
@@ -386,6 +386,8 @@ class GridViewManager {
 
     const topLeftIndex =
       Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
+
+    console.log("Calculated topLeftIndex:", topLeftIndex, "slidesPerBatch:", this.slidesPerBatch);
 
     const slides = [];
     let actuallyLoaded = 0;
