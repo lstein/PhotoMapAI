@@ -74,7 +74,7 @@ export async function searchTextAndImage({
   image_weight = 0.5,
   positive_weight = 0.5,
   negative_weight = 0.5,
-  top_k = 100,
+  top_k = 500,
 }) {
   let image_data = null;
   if (image_file) {

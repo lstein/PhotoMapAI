@@ -16,8 +16,9 @@ export const state = {
   album: null, // Default album to use
   availableAlbums: [], // List of available albums
   dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
-  suppressDeleteConfirm: false,
-  gridThumbSizeFactor: 1.0,
+  suppressDeleteConfirm: false, // Flag to suppress delete confirmation dialogs
+  gridThumbSizeFactor: 1.0,  // Scaling factor for grid thumbnails
+  swiper: null,  // backwards compatibility hack; contains the single_swiper.swiper instance
 };
 
 document.addEventListener("DOMContentLoaded", async function () {

@@ -104,7 +104,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         positive_weight: posWeight,
         negative_weight: negWeight,
         album: state.album,
-        top_k: 100,
+        top_k: 500,
       });
 
       // calculate score cutoffs based on weights
