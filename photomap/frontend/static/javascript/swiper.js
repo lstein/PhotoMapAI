@@ -40,7 +40,10 @@ class SwiperManager {
 
   isVisible() {
     const singleContainer = document.getElementById("singleSwiperContainer");
-    console.log("Single swiper container display:", singleContainer?.style.display);
+    console.log(
+      "Single swiper container display:",
+      singleContainer?.style.display
+    );
     return singleContainer && singleContainer.style.display !== "none";
   }
 
@@ -52,10 +55,6 @@ class SwiperManager {
       direction: "horizontal",
       slidesPerView: 1,
       spaceBetween: 0,
-      // navigation: {
-      //   prevEl: ".swiper-button-prev",
-      //   nextEl: ".swiper-button-next",
-      // },
       autoplay: {
         delay: state.currentDelay * 1000,
         disableOnInteraction: false,
@@ -86,7 +85,7 @@ class SwiperManager {
       swiperConfig.zoom = {
         maxRatio: 3,
         minRatio: 1,
-        toggle: true,
+        toggle: false,
         containerClass: "swiper-zoom-container",
         zoomedSlideClass: "swiper-slide-zoomed",
       };
@@ -274,9 +273,37 @@ class SwiperManager {
 
     // Double-tap (touch devices)
     let lastTap = 0;
-    slideEl.addEventListener("touchend", async () => {
+    let tapCount = 0;
+
+    // Prevent default on touchstart when it's a potential double-tap
+    slideEl.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length === 1) {
+          tapCount++;
+          if (tapCount === 2) {
+            e.preventDefault(); // Prevent zoom on second tap
+          }
+          setTimeout(() => {
+            tapCount = 0;
+          }, 350);
+        }
+      },
+      { passive: false }
+    ); // passive: false allows preventDefault
+
+    slideEl.addEventListener("touchend", async (e) => {
+      // Only trigger on single-finger touch
+      if (
+        e.touches.length > 0 ||
+        (e.changedTouches && e.changedTouches.length > 1)
+      ) {
+        return;
+      }
+
       const now = Date.now();
       if (now - lastTap < 350) {
+        e.preventDefault();
         await toggleGridSwiperView(true);
         lastTap = 0;
       } else {
