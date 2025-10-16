@@ -360,10 +360,10 @@ class SwiperManager {
     await this.addSlideByIndex(globalIndex, searchIndex);
   }
 
-  async addSlideByIndex(globalIndex, searchIndex = null, prepend = false) {
+  async addSlideByIndex(globalIndex, searchIndex = null, prepend = false, notRandom = null) {
     if (!this.swiper) return;
 
-    if (state.mode === "random" && !slideState.isSearchMode) {
+    if (state.mode === "random" && !slideState.isSearchMode && notRandom === null) {
       const totalImages = slideState.totalAlbumImages;
       globalIndex = Math.floor(Math.random() * totalImages);
     }
@@ -539,7 +539,8 @@ class SwiperManager {
   }
 
   async seekToSlideIndex(event) {
-    let { globalIndex, searchIndex, totalSlides, isSearchMode } = event.detail;
+    let { globalIndex, searchIndex, totalCount, isSearchMode } = event.detail;
+    console.log("event.detail:", event.detail);
 
     if (isSearchMode) {
       globalIndex = slideState.searchToGlobal(searchIndex);
@@ -574,8 +575,10 @@ class SwiperManager {
     swiperContainer.style.visibility = "hidden";
 
     for (let i = origin; i < slides_to_add; i++) {
-      if (searchIndex + i >= totalSlides) break;
-      await this.addSlideByIndex(globalIndex + i, searchIndex + i);
+      if (searchIndex + i >= totalCount) break;
+      if (globalIndex + i < 0) continue;
+      if (globalIndex + i >= slideState.totalAlbumImages) break;
+      await this.addSlideByIndex(globalIndex + i, searchIndex + i, false, true);
     }
 
     slideEls = this.swiper.slides;
