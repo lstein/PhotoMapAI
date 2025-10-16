@@ -540,7 +540,6 @@ class SwiperManager {
 
   async seekToSlideIndex(event) {
     let { globalIndex, searchIndex, totalCount, isSearchMode } = event.detail;
-    console.log("event.detail:", event.detail);
 
     if (isSearchMode) {
       globalIndex = slideState.searchToGlobal(searchIndex);
