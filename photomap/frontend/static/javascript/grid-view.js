@@ -155,7 +155,9 @@ class GridViewManager {
         this.initializeGridSwiper();
         await this.resetAllSlides();
         const currentSlide = slideState.getCurrentSlide();
-        updateCurrentImageScore(this.slideData[currentSlide.globalIndex] || null)
+        updateCurrentImageScore(
+          this.slideData[currentSlide.globalIndex] || null
+        );
       }
     );
 
@@ -327,7 +329,10 @@ class GridViewManager {
     this.loadedImageIndices.clear();
 
     try {
-      if (!this.swiper.destroyed) this.swiper.removeAllSlides();
+      if (!this.swiper.destroyed) {
+        this.swiper.slideTo(0, 0, false);  // prevents a TypeError warning
+        this.swiper.removeAllSlides();
+      }
     } catch (err) {
       console.warn("removeAllSlides failed:", err);
     }
@@ -354,7 +359,6 @@ class GridViewManager {
   }
 
   async loadBatch(startIndex = null, append = true) {
-
     if (startIndex === null) {
       if (!this.swiper.slides?.length) {
         startIndex = 0;
@@ -598,12 +602,10 @@ class GridViewManager {
   }
 
   updateCurrentSlide() {
-    const currentSlide = slideState.getCurrentSlide()
+    const currentSlide = slideState.getCurrentSlide();
     this.updateCurrentSlideHighlight();
     this.updateMetadataOverlay();
-    updateCurrentImageScore(
-      this.slideData[currentSlide.globalIndex] || null
-    );
+    updateCurrentImageScore(this.slideData[currentSlide.globalIndex] || null);
   }
 
   makeSlideHTML(data, globalIndex) {
