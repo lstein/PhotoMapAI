@@ -36,7 +36,7 @@ class Album(BaseModel):
         expanded = [str(Path(path).expanduser()) for path in v]
         for path in expanded:
             if not Path(path).exists():
-                print(f"Warning: Image path does not exist: {path}")
+                logger.warn(f"Image path does not exist: {path}")
         return expanded
 
     @field_validator("index")
