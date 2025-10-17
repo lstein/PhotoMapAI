@@ -470,8 +470,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Landmarks checkbox
   const landmarkCheckbox = document.getElementById("umapShowLandmarks");
   if (landmarkCheckbox) {
-    landmarkCheckbox.checked = false;
-    landmarksVisible = false;
+    landmarkCheckbox.checked = true;
+    landmarksVisible = true;
     landmarkCheckbox.addEventListener("change", (e) => {
       landmarksVisible = e.target.checked;
       updateLandmarkTrace();
@@ -972,7 +972,6 @@ function updateLandmarkTrace() {
   ) {
     Plotly.moveTraces(plotDiv, clickableTraceIndex, plotDiv.data.length - 1);
   }
-
 }
 
 // Debounced version for event handlers
@@ -1270,18 +1269,6 @@ function setUmapWindowSize(sizeKey) {
         "xaxis.scaleanchor": "y",
       });
     }
-
-    // Turn landmarks ON in fullscreen
-    if (landmarkCheckbox) {
-      landmarkCheckbox.checked = true;
-      landmarksVisible = true;
-      updateLandmarkTrace();
-    }
-    // Turn hover thumbnails OFF in fullscreen
-    if (hoverThumbCheckbox) {
-      hoverThumbCheckbox.checked = false;
-      hoverThumbnailsEnabled = false;
-    }
   } else {
     if (contentDiv) contentDiv.style.display = "block";
     const { width, height } = UMAP_SIZES[sizeKey];
@@ -1292,16 +1279,11 @@ function setUmapWindowSize(sizeKey) {
     plotDiv.style.height = height + "px";
     Plotly.relayout(plotDiv, { width, height });
 
-    // Turn landmarks OFF in big, medium, small
-    if (landmarkCheckbox) {
+    // Turn landmarks OFF in small
+    if (sizeKey === "small" && landmarkCheckbox) {
       landmarkCheckbox.checked = false;
       landmarksVisible = false;
       updateLandmarkTrace();
-    }
-    // Turn hover thumbnails ON in big, medium, small
-    if (hoverThumbCheckbox) {
-      hoverThumbCheckbox.checked = true;
-      hoverThumbnailsEnabled = true;
     }
   }
 
