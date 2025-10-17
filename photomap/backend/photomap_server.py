@@ -112,6 +112,41 @@ def start_photomap_loop():
                 logger.error(f"Server exited with error code {e.returncode}")
 
 
+# Set up Uvicorn Logging
+def uvicorn_logging():
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "default": {
+                "()": "photomap.backend.UvicornStyleFormatter",
+                "fmt": "%(asctime)s %(levelname)s:%(uvicorn_pad)s%(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+        },
+        "handlers": {
+            "default": {
+                "formatter": "default",
+                "class": "logging.StreamHandler",
+                "stream": "ext://sys.stderr",
+            },
+        },
+        "loggers": {
+            "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
+            "uvicorn.error": {
+                "handlers": ["default"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "uvicorn.access": {
+                "handlers": ["default"],
+                "level": "INFO",
+                "propagate": False,
+            },
+        },
+    }
+
+
 # Main Entry Point
 def main():
     """Main entry point for the slideshow server."""
@@ -153,6 +188,7 @@ def main():
         ssl_keyfile=str(args.key) if args.key else None,
         ssl_certfile=str(args.cert) if args.cert else None,
         log_level="info",
+        log_config=uvicorn_logging(),
     )
 
 

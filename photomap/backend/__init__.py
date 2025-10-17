@@ -24,7 +24,9 @@ class UvicornStyleFormatter(logging.Formatter):
         return super().format(record)
 
 
-formatter = UvicornStyleFormatter("%(levelname)s:%(uvicorn_pad)s%(message)s")
+formatter = UvicornStyleFormatter(
+    "%(asctime)s %(levelname)s:%(uvicorn_pad)s%(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+)
 
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
