@@ -55,6 +55,10 @@ class SwiperManager {
       direction: "horizontal",
       slidesPerView: 1,
       spaceBetween: 0,
+      navigation: {
+        prevEl: ".swiper-button-prev",
+        nextEl: ".swiper-button-next",
+      },
       autoplay: {
         delay: state.currentDelay * 1000,
         disableOnInteraction: false,

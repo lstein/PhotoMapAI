@@ -107,6 +107,10 @@ class GridViewManager {
         enabled: false,
       },
       spaceBetween: 6,
+      navigation: {
+        prevEl: ".swiper-button-prev",
+        nextEl: ".swiper-button-next",
+      },
       mousewheel: {
         enabled: true,
         sensitivity: 10,
@@ -437,7 +441,7 @@ class GridViewManager {
     const len = this.swiper.slides.length;
     if (len <= highWaterSlides) return;
 
-    console.log("Enforcing high water mark, trimFromEnd=",trimFromEnd);
+    console.log("Enforcing high water mark, trimFromEnd=", trimFromEnd);
 
     let excessSlides = len - highWaterSlides;
     const removeScreens = Math.ceil(excessSlides / this.slidesPerBatch);
