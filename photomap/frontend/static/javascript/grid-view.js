@@ -224,6 +224,8 @@ class GridViewManager {
       });
 
       this.swiper.on("slidePrevTransitionStart", async () => {
+        if (this.suppressSlideChange) return;
+        console.log("slidePrevTransitionStart");
         await this.waitForBatchLoadingToFinish();
         this.setBatchLoading(true);
         const firstSlide = parseInt(
@@ -234,7 +236,7 @@ class GridViewManager {
           ? slideState.globalToSearch(firstSlide)
           : firstSlide;
         if (firstSlide > 0 && this.swiper.activeIndex === 0) {
-          await this.loadBatch(index, false);
+          await this.loadBatch(index - this.slidesPerBatch, false);
         }
         this.setBatchLoading(false);
       });
@@ -245,6 +247,8 @@ class GridViewManager {
 
       this.swiper.on("slideChange", async () => {
         if (this.suppressSlideChange) return;
+
+        console.log("slideChange");
 
         const currentSlide = slideState.getCurrentSlide();
         const currentGlobal = currentSlide.globalIndex;
@@ -330,7 +334,7 @@ class GridViewManager {
 
     try {
       if (!this.swiper.destroyed) {
-        this.swiper.slideTo(0, 0, false);  // prevents a TypeError warning
+        this.swiper.slideTo(0, 0, false); // prevents a TypeError warning
         this.swiper.removeAllSlides();
       }
     } catch (err) {
@@ -348,7 +352,7 @@ class GridViewManager {
       // add some context slides before and after
       await this.loadBatch(targetIndex + this.slidesPerBatch, true);
       if (targetIndex > 0) {
-        await this.loadBatch(targetIndex, false);
+        await this.loadBatch(targetIndex - this.slidesPerBatch, false);
       }
     } catch (err) {
       console.log(err);
@@ -359,107 +363,70 @@ class GridViewManager {
   }
 
   async loadBatch(startIndex = null, append = true) {
-    if (startIndex === null) {
-      if (!this.swiper.slides?.length) {
-        startIndex = 0;
-      } else {
-        let lastSlideIndex = this.swiper.slides.length - 1;
-        startIndex = slideState.isSearchMode
-          ? lastSlideIndex + 1
-          : parseInt(
-              this.swiper.slides[lastSlideIndex].dataset.globalIndex,
-              10
-            ) + 1;
-      }
-    }
+    if (this.swiper.slides.length > 0)
+      console.log(
+        "Current slide 0 global index:",
+        this.swiper.slides[0].dataset.globalIndex
+      );
 
-    const topLeftIndex =
+    let topLeftIndex =
       Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
+
+    console.log(`Loading batch at index ${topLeftIndex} (append=${append})`);
 
     const slides = [];
     let actuallyLoaded = 0;
 
-    if (append) {
-      for (let i = 0; i < this.slidesPerBatch; i++) {
-        if (i % 4 === 0) {
-          await new Promise(requestAnimationFrame);
-        }
-
-        const offset = topLeftIndex + i;
-        const globalIndex = slideState.indexToGlobal(offset);
-        if (globalIndex === null) continue;
-
-        if (this.loadedImageIndices.has(globalIndex)) {
-          continue;
-        }
-
-        try {
-          const data = await fetchImageByIndex(globalIndex);
-          if (!data) break;
-          data.globalIndex = globalIndex;
-          this.loadedImageIndices.add(globalIndex);
-
-          slides.push(this.makeSlideHTML(data, globalIndex));
-          actuallyLoaded++;
-        } catch (error) {
-          console.error("Failed to load image:", error);
-          break;
-        }
+    for (let i = 0; i < this.slidesPerBatch; i++) {
+      if (i % 4 === 0) {
+        await new Promise(requestAnimationFrame);
       }
 
-      if (slides.length > 0) this.swiper.appendSlide(slides);
+      const offset = topLeftIndex + i;
+      const globalIndex = slideState.indexToGlobal(offset);
+      if (globalIndex === null) continue;
 
-      const allSlides = this.swiper.slides;
-      const numNew = slides.length;
-      for (let i = allSlides.length - numNew; i < allSlides.length; i++) {
-        const slideEl = allSlides[i];
+      if (this.loadedImageIndices.has(globalIndex)) {
+        continue;
+      }
+
+      try {
+        const data = await fetchImageByIndex(globalIndex);
+        if (!data) break;
+        data.globalIndex = globalIndex;
+        this.loadedImageIndices.add(globalIndex);
+
+        slides.push(this.makeSlideHTML(data, globalIndex));
+        actuallyLoaded++;
+      } catch (error) {
+        console.error("Failed to load image:", error);
+        break;
+      }
+    }
+
+    if (slides.length > 0) {
+      if (append) {
+        this.swiper.appendSlide(slides);
+      } else {
+        this.suppressSlideChange = true;
+        this.swiper.prependSlide(slides.reverse());
+        this.swiper.slideTo(this.currentColumns, 0);
+      }
+
+      for (let i = 0; i < slides.length; i++) {
+        const slideEl = this.swiper.slides[i];
         if (slideEl) {
           const globalIndex = slideEl.dataset.globalIndex;
           this.addDoubleTapHandler(slideEl, globalIndex);
         }
       }
-
-      this.enforceHighWaterMark(false);
-    } else {
-      for (let i = 0; i < this.slidesPerBatch; i++) {
-        if (i % 4 === 0) {
-          await new Promise(requestAnimationFrame);
-        }
-
-        const globalIndex = slideState.indexToGlobal(topLeftIndex - i - 1);
-        if (this.loadedImageIndices.has(globalIndex)) continue;
-
-        try {
-          const data = await fetchImageByIndex(globalIndex);
-          if (!data) continue;
-          data.globalIndex = globalIndex;
-
-          this.loadedImageIndices.add(globalIndex);
-          slides.push(this.makeSlideHTML(data, globalIndex));
-        } catch (error) {
-          console.error("Failed to load image (prepend):", error);
-          continue;
-        }
-      }
-
-      if (slides.length > 0) {
-        this.suppressSlideChange = true;
-        this.swiper.prependSlide(slides);
-
-        for (let i = 0; i < slides.length; i++) {
-          const slideEl = this.swiper.slides[i];
-          if (slideEl) {
-            const globalIndex = slideEl.dataset.globalIndex;
-            this.addDoubleTapHandler(slideEl, globalIndex);
-          }
-        }
-        this.swiper.slideTo(this.currentColumns, 0);
-        this.enforceHighWaterMark(true);
-      }
+      this.enforceHighWaterMark(!append);
     }
+
     return actuallyLoaded > 0;
   }
 
+  // NOTE: Refactor this call
   enforceHighWaterMark(trimFromEnd = false) {
     if (!this.swiper || !this.slidesPerBatch || this.slidesPerBatch <= 0)
       return;
@@ -469,6 +436,8 @@ class GridViewManager {
 
     const len = this.swiper.slides.length;
     if (len <= highWaterSlides) return;
+
+    console.log("Enforcing high water mark, trimFromEnd=",trimFromEnd);
 
     let excessSlides = len - highWaterSlides;
     const removeScreens = Math.ceil(excessSlides / this.slidesPerBatch);
@@ -493,35 +462,7 @@ class GridViewManager {
       }
     }
 
-    try {
-      this.swiper.removeSlide(removeIndices);
-    } catch (err) {
-      console.warn("Batch remove failed, falling back to one-by-one:", err);
-      if (!trimFromEnd) {
-        for (let i = 0; i < removeCount; i++) {
-          const slideEl = this.swiper.slides[0];
-          if (slideEl) {
-            const g = slideEl.dataset?.globalIndex ?? slideEl.dataset?.index;
-            if (g !== undefined && g !== null && g !== "") {
-              removedGlobalIndices.push(parseInt(g, 10));
-            }
-          }
-          this.swiper.removeSlide(0);
-        }
-      } else {
-        for (let i = 0; i < removeCount; i++) {
-          const idx = this.swiper.slides.length - 1;
-          const slideEl = this.swiper.slides[idx];
-          if (slideEl) {
-            const g = slideEl.dataset?.globalIndex ?? slideEl.dataset?.index;
-            if (g !== undefined && g !== null && g !== "") {
-              removedGlobalIndices.push(parseInt(g, 10));
-            }
-          }
-          this.swiper.removeSlide(idx);
-        }
-      }
-    }
+    this.swiper.removeSlide(removeIndices);
 
     for (const g of removedGlobalIndices) {
       this.loadedImageIndices.delete(g);
