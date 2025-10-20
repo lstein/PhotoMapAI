@@ -327,10 +327,13 @@ class GridViewManager {
     if (!this.isVisible()) return;
 
     showSpinner();
+    await this.waitForBatchLoadingToFinish();
 
     await new Promise(requestAnimationFrame);
     const targetIndex = slideState.getCurrentIndex();
     this.loadedImageIndices.clear();
+
+    console.log("Resetting all slides to index", targetIndex);
 
     try {
       if (!this.swiper.destroyed) {
@@ -365,6 +368,9 @@ class GridViewManager {
   async loadBatch(startIndex = null, append = true) {
     let topLeftIndex =
       Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
+
+    console.log(`Loading batch at index ${topLeftIndex} (${append ? "append" : "prepend"
+      })`); 
 
     const slides = [];
     let actuallyLoaded = 0;
