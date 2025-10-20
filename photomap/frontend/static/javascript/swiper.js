@@ -40,21 +40,20 @@ class SwiperManager {
 
   isVisible() {
     const singleContainer = document.getElementById("singleSwiperContainer");
-    console.log(
-      "Single swiper container display:",
-      singleContainer?.style.display
-    );
     return singleContainer && singleContainer.style.display !== "none";
   }
 
   async initializeSingleSwiper() {
-    console.log("Initializing single swiper...");
 
     // Swiper config for single-image mode
     const swiperConfig = {
       direction: "horizontal",
       slidesPerView: 1,
       spaceBetween: 0,
+      navigation: {
+        prevEl: ".swiper-button-prev",
+        nextEl: ".swiper-button-next",
+      },
       autoplay: {
         delay: state.currentDelay * 1000,
         disableOnInteraction: false,
@@ -482,8 +481,6 @@ class SwiperManager {
 
   async resetAllSlides() {
     if (!this.swiper) return;
-
-    console.log("Resetting all slides in single swiper");
 
     const slideShowRunning = this.swiper?.autoplay?.running;
     this.pauseSlideshow();
