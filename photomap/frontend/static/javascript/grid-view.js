@@ -45,7 +45,7 @@ class GridViewManager {
     const availableHeight = window.innerHeight - 120;
 
     const factor = state.gridThumbSizeFactor || 1.0;
-    const targetTileSize = 150 * factor;
+    const targetTileSize = 200 * factor;
     const minTileSize = 75;
     const maxTileSize = 300;
 
@@ -76,7 +76,7 @@ class GridViewManager {
   }
 
   initializeGridSwiper() {
-    console.log("Initializing grid swiper...");
+
     this.gridInitialized = false;
     showSpinner();
     eventRegistry.removeAll("grid");
@@ -219,7 +219,7 @@ class GridViewManager {
           try {
             await this.loadBatch(index, true);
           } catch (error) {
-            console.log(error);
+            console.warn(error);
           } finally {
             this.setBatchLoading(false);
           }
@@ -229,7 +229,6 @@ class GridViewManager {
 
       this.swiper.on("slidePrevTransitionStart", async () => {
         if (this.suppressSlideChange) return;
-        console.log("slidePrevTransitionStart");
         await this.waitForBatchLoadingToFinish();
         this.setBatchLoading(true);
         const firstSlide = parseInt(
@@ -251,8 +250,6 @@ class GridViewManager {
 
       this.swiper.on("slideChange", async () => {
         if (this.suppressSlideChange) return;
-
-        console.log("slideChange");
 
         const currentSlide = slideState.getCurrentSlide();
         const currentGlobal = currentSlide.globalIndex;
@@ -328,7 +325,6 @@ class GridViewManager {
     if (!this.gridInitialized) return;
     if (!this.swiper) return;
     if (!this.isVisible()) return;
-    console.log("Resetting all slides in grid view...");
 
     showSpinner();
 
@@ -339,7 +335,7 @@ class GridViewManager {
     try {
       if (!this.swiper.destroyed) {
         this.swiper.slideTo(0, 0, false); // prevents a TypeError warning
-        this.swiper.removeAllSlides();
+        await this.swiper.removeAllSlides();
       }
     } catch (err) {
       console.warn("removeAllSlides failed:", err);
@@ -359,7 +355,7 @@ class GridViewManager {
         await this.loadBatch(targetIndex - this.slidesPerBatch, false);
       }
     } catch (err) {
-      console.log(err);
+      console.warn(err);
     }
 
     this.setBatchLoading(false);
@@ -367,16 +363,8 @@ class GridViewManager {
   }
 
   async loadBatch(startIndex = null, append = true) {
-    if (this.swiper.slides.length > 0)
-      console.log(
-        "Current slide 0 global index:",
-        this.swiper.slides[0].dataset.globalIndex
-      );
-
     let topLeftIndex =
       Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
-
-    console.log(`Loading batch at index ${topLeftIndex} (append=${append})`);
 
     const slides = [];
     let actuallyLoaded = 0;
@@ -417,11 +405,13 @@ class GridViewManager {
         this.swiper.slideTo(this.currentColumns, 0);
       }
 
-      for (let i = 0; i < slides.length; i++) {
+      for (let i = 0; i < this.swiper.slides.length; i++) {
         const slideEl = this.swiper.slides[i];
         if (slideEl) {
           const globalIndex = slideEl.dataset.globalIndex;
           this.addDoubleTapHandler(slideEl, globalIndex);
+        } else {
+          console.warn("Slide element not found for double-tap handler");
         }
       }
       this.enforceHighWaterMark(!append);
@@ -440,8 +430,6 @@ class GridViewManager {
 
     const len = this.swiper.slides.length;
     if (len <= highWaterSlides) return;
-
-    console.log("Enforcing high water mark, trimFromEnd=", trimFromEnd);
 
     let excessSlides = len - highWaterSlides;
     const removeScreens = Math.ceil(excessSlides / this.slidesPerBatch);

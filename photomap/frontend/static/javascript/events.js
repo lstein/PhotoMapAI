@@ -24,7 +24,6 @@ import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 // MAIN INITIALIZATION FUNCTIONS
 // Initialize event listeners after the DOM is fully loaded
 window.addEventListener("stateReady", async function () {
-  console.log("State ready, initializing events...");
   await initializeEvents();
 });
 
