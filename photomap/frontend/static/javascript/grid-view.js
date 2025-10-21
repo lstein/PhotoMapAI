@@ -108,8 +108,8 @@ class GridViewManager {
       },
       spaceBetween: 6,
       navigation: {
-        prevEl: ".swiper-button-prev",
-        nextEl: ".swiper-button-next",
+        prevEl: "#gridSwiperPrevButton",
+        nextEl: "#gridSwiperNextButton",
       },
       mousewheel: {
         enabled: true,
