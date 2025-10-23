@@ -137,7 +137,7 @@ class SlideStateManager {
 
     this.notifySlideChanged();
   }
-
+  
   /**
    * Exit search mode and return to album browsing
    */
