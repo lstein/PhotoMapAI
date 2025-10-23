@@ -76,7 +76,6 @@ class GridViewManager {
   }
 
   initializeGridSwiper() {
-
     this.gridInitialized = false;
     showSpinner();
     eventRegistry.removeAll("grid");
@@ -129,6 +128,12 @@ class GridViewManager {
 
     this.gridInitialized = true;
     window.swiper = this.swiper; // for debugging
+  }
+
+  getIndexForSlideElement(slideEl) {
+    const globalIndex = parseInt(slideEl.dataset.globalIndex, 10);
+    if (isNaN(globalIndex)) return null;
+    return globalIndex;
   }
 
   addGridEventListeners() {
@@ -199,17 +204,15 @@ class GridViewManager {
 
     if (this.swiper) {
       this.swiper.on("slideNextTransitionStart", async () => {
-        showSpinner();
-        await this.waitForBatchLoadingToFinish();
+        if (this.suppressSlideChange) return;
         const slidesLeft =
           Math.floor(this.swiper.slides.length / this.currentRows) -
           this.swiper.activeIndex;
         if (slidesLeft <= this.currentColumns) {
+          showSpinner();
           const lastSlideIndex =
-            parseInt(
-              this.swiper.slides[this.swiper.slides.length - 1].dataset
-                .globalIndex,
-              10
+            this.getIndexForSlideElement(
+              this.swiper.slides[this.swiper.slides.length - 1]
             ) || 0;
           const index = slideState.isSearchMode
             ? slideState.globalToSearch(lastSlideIndex) + 1
@@ -229,16 +232,13 @@ class GridViewManager {
 
       this.swiper.on("slidePrevTransitionStart", async () => {
         if (this.suppressSlideChange) return;
-        await this.waitForBatchLoadingToFinish();
-        this.setBatchLoading(true);
-        const firstSlide = parseInt(
-          this.swiper.slides[0].dataset.globalIndex,
-          10
-        );
+        const firstSlide = this.getIndexForSlideElement(this.swiper.slides[0]);
         const index = slideState.isSearchMode
           ? slideState.globalToSearch(firstSlide)
           : firstSlide;
         if (firstSlide > 0 && this.swiper.activeIndex === 0) {
+          await this.waitForBatchLoadingToFinish();
+          this.setBatchLoading(true);
           await this.loadBatch(index - this.slidesPerBatch, false);
         }
         this.setBatchLoading(false);
@@ -266,10 +266,8 @@ class GridViewManager {
           ) {
             const topLeftSlideEl = this.swiper.slides[activeIndex];
             if (topLeftSlideEl) {
-              const topLeftGlobal = parseInt(
-                topLeftSlideEl.dataset.globalIndex,
-                10
-              );
+              const topLeftGlobal =
+                this.getIndexForSlideElement(topLeftSlideEl);
               slideState.updateFromExternal(
                 topLeftGlobal,
                 slideState.globalToSearch(topLeftGlobal)
@@ -369,8 +367,11 @@ class GridViewManager {
     let topLeftIndex =
       Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
 
-    console.log(`Loading batch at index ${topLeftIndex} (${append ? "append" : "prepend"
-      })`); 
+    console.log(
+      `Loading batch at index ${topLeftIndex} (${
+        append ? "append" : "prepend"
+      })`
+    );
 
     const slides = [];
     let actuallyLoaded = 0;
