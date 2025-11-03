@@ -14,20 +14,24 @@ const SHUFFLE_SVG = `<svg id="shuffleIcon" width="32" height="32" viewBox="0 0 2
 // public: update the icon displayed on the start/stop button according to state
 export function updateSlideshowButtonIcon() {
   const container = document.getElementById("slideshowIcon");
+  const btn = document.getElementById("startStopSlideshowBtn");
   if (!container) return;
 
   const isRunning = state.single_swiper?.swiper?.autoplay?.running;
+  const mode = state.mode || "chronological";
+  const modeLabel = mode === "random" ? "shuffle mode" : "chronological mode";
 
   if (isRunning) {
     container.innerHTML = PAUSE_SVG;
+    if (btn) btn.title = `Pause Slideshow (${modeLabel})`;
   } else {
-    const mode = state.mode || "chronological";
     if (mode === "random") {
-        console.log("setting shuffle icon");
+      console.log("setting shuffle icon");
       container.innerHTML = SHUFFLE_SVG;
     } else {
       container.innerHTML = PLAY_SVG;
     }
+    if (btn) btn.title = `Start Slideshow (${modeLabel})`;
   }
 }
 
