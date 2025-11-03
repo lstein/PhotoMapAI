@@ -460,7 +460,7 @@ export async function toggleGridSwiperView(gridView = null) {
     gridContainer.style.opacity = "1";
     state.grid_swiper.resetOrInitialize();
     state.single_swiper.pauseSlideshow();
-    state.single_swiper.updateSlideshowIcon(); // Show pause indicator
+    updateSlideshowButtonIcon(); // Show pause indicator
   } else {
     // Fade out grid view
     gridContainer.classList.add("fade-out");

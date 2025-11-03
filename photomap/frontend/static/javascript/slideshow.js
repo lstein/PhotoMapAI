@@ -1,4 +1,3 @@
-// ...new file...
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 
@@ -6,9 +5,9 @@ import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 const PLAY_SVG = `<svg id="playIcon" width="32" height="32" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21"/></svg>`;
 const PAUSE_SVG = `<svg id="pauseIcon" width="32" height="32" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
 const SHUFFLE_SVG = `<svg id="shuffleIcon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M4 7h3c2 0 4 1 5 3s3 5 5 6c2 1 3 1 4 1"/>
+  <path d="M4 7h3c2 0 3 1 4 3s2 5 4 6c2 1 3 1 4 1"/>
   <path d="M18 13l3 3-3 3"/>
-  <path d="M4 17h3c2 0 4-1 5-3s3-5 5-6c2-1 3-1 4-1"/>
+  <path d="M4 17h3c2 0 3-1 4-3s2-5 4-6c2-1 3-1 4-1"/>
   <path d="M18 11l3-3-3-3"/>
 </svg>`;
 
@@ -137,10 +136,18 @@ function createModeMenu(x, y) {
     b.style.cursor = "pointer";
     b.onclick = (ev) => {
       ev.stopPropagation();
+      const previousMode = state.mode;
       state.mode = modeVal;
       saveSettingsToLocalStorage();
       updateSlideshowButtonIcon();
       removeModeMenu();
+      
+      // Reset slides when switching modes
+      if (previousMode !== modeVal) {
+        if (state.single_swiper?.resetAllSlides) {
+          state.single_swiper.resetAllSlides();
+        }
+      }
     };
     return b;
   };
@@ -186,6 +193,11 @@ function removeModeMenu() {
     if (existing._cleanup) existing._cleanup();
     existing.remove();
   }
+}
+
+// Export for use by touch.js
+export function showSlideshowModeMenu(x, y) {
+  createModeMenu(x, y);
 }
 
 // initialize click and contextmenu for the start/stop button

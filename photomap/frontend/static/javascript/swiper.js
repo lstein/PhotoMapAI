@@ -220,6 +220,13 @@ class SwiperManager {
         );
       });
 
+    // Pause slideshow on arrow key navigation
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        this.pauseSlideshow();
+      }
+    });
+
     // Reset slide show when the album changes
     eventRegistry.install({ type: "swiper", event: "albumChanged" }, () => {
       this.resetAllSlides();
@@ -328,39 +335,28 @@ class SwiperManager {
     }
   }
 
-  async addNewSlide(offset = 0) {
-    if (!state.album) return;
-
-    let [globalIndex, totalImages, searchIndex] = getCurrentSlideIndex();
-
-    if (slideState.isSearchMode) {
-      globalIndex = slideState.resolveOffset(offset).globalIndex;
-    } else {
-      if (state.mode === "random") {
-        globalIndex = Math.floor(Math.random() * totalImages);
-      } else {
-        globalIndex = globalIndex + offset;
-        globalIndex = (globalIndex + totalImages) % totalImages;
-      }
-    }
-    await this.addSlideByIndex(globalIndex, searchIndex);
-  }
-
   async addSlideByIndex(
     globalIndex,
     searchIndex = null,
     prepend = false,
-    notRandom = null
+    random = null
   ) {
     if (!this.swiper) return;
 
-    if (
-      state.mode === "random" &&
-      !slideState.isSearchMode &&
-      notRandom === null
-    ) {
-      const totalImages = slideState.totalAlbumImages;
-      globalIndex = Math.floor(Math.random() * totalImages);
+    // only use random mode when the slideshow is running or when explicitly specified
+    const is_random =
+      random !== null
+        ? random
+        : state.mode === "random" && this.swiper?.autoplay?.running;
+
+    if (is_random) {
+      if (slideState.isSearchMode && searchIndex !== null) {
+        const totalResults = slideState.searchResults.length;
+        searchIndex = Math.floor(Math.random() * totalResults);
+      } else {
+        const totalImages = slideState.totalAlbumImages;
+        globalIndex = Math.floor(Math.random() * totalImages);
+      }
     }
 
     const exists = Array.from(this.swiper.slides).some(
@@ -470,8 +466,9 @@ class SwiperManager {
     if (!this.swiper) return;
 
     const slideShowRunning = this.swiper?.autoplay?.running;
-    this.pauseSlideshow();
+    const random_nextslide = state.mode === "random" && slideShowRunning;
 
+    this.pauseSlideshow();
     this.swiper.removeAllSlides();
 
     const { globalIndex, searchIndex } = slideState.getCurrentSlide();
@@ -483,20 +480,27 @@ class SwiperManager {
     const { globalIndex: prevGlobal, searchIndex: prevSearch } =
       slideState.resolveOffset(-1);
     if (prevGlobal !== null) {
-      await this.addSlideByIndex(prevGlobal, prevSearch);
+      await this.addSlideByIndex(
+        prevGlobal,
+        prevSearch,
+        false,
+        random_nextslide
+      );
     }
 
     // Add current slide
-    const previousMode = state.mode;
-    if (globalIndex > 0) state.mode = "chronological";
     await this.addSlideByIndex(globalIndex, searchIndex);
-    state.mode = previousMode;
 
     // Add next slide if available
     const { globalIndex: nextGlobal, searchIndex: nextSearch } =
       slideState.resolveOffset(1);
     if (nextGlobal !== null) {
-      await this.addSlideByIndex(nextGlobal, nextSearch);
+      await this.addSlideByIndex(
+        nextGlobal,
+        nextSearch,
+        false,
+        random_nextslide
+      );
     }
 
     // Navigate to the current slide

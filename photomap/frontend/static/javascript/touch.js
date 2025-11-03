@@ -1,7 +1,7 @@
 // touch.js
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
-import { toggleSlideshowWithIndicator } from "./slideshow.js";
+import { showSlideshowModeMenu, toggleSlideshowWithIndicator } from "./slideshow.js";
 import { state } from "./state.js";
 
 // Touch events
@@ -128,6 +128,50 @@ function handleTouchEnd(e) {
   touchStartY = null;
   touchStartX = null;
   touchStartTime = null;
+}
+
+// Long-touch handler for slideshow button
+const slideshowBtn = document.getElementById("startStopSlideshowBtn");
+if (slideshowBtn) {
+  let longTouchTimer = null;
+  let touchStartPos = null;
+
+  slideshowBtn.addEventListener("touchstart", (e) => {
+    touchStartPos = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+
+    longTouchTimer = setTimeout(() => {
+      if (touchStartPos) {
+        e.preventDefault();
+        showSlideshowModeMenu(touchStartPos.x + 6, touchStartPos.y + 6);
+        touchStartPos = null;
+      }
+    }, 500); // 500ms for long touch
+  });
+
+  slideshowBtn.addEventListener("touchmove", (e) => {
+    // Cancel long touch if finger moves too much
+    if (touchStartPos) {
+      const dx = e.touches[0].clientX - touchStartPos.x;
+      const dy = e.touches[0].clientY - touchStartPos.y;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        clearTimeout(longTouchTimer);
+        touchStartPos = null;
+      }
+    }
+  });
+
+  slideshowBtn.addEventListener("touchend", () => {
+    clearTimeout(longTouchTimer);
+    touchStartPos = null;
+  });
+
+  slideshowBtn.addEventListener("touchcancel", () => {
+    clearTimeout(longTouchTimer);
+    touchStartPos = null;
+  });
 }
 
 document.addEventListener("DOMContentLoaded", async function () {
