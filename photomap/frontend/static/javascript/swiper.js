@@ -5,6 +5,7 @@ import { toggleGridSwiperView } from "./events.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
+import { updateSlideshowButtonIcon } from "./slideshow.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
 
@@ -44,7 +45,6 @@ class SwiperManager {
   }
 
   async initializeSingleSwiper() {
-
     // Swiper config for single-image mode
     const swiperConfig = {
       direction: "horizontal",
@@ -99,7 +99,7 @@ class SwiperManager {
     this.addDoubleTapHandlersToSlides();
 
     // Initial icon state and overlay
-    this.updateSlideshowIcon();
+    updateSlideshowButtonIcon();
     updateMetadataOverlay(this.currentSlide());
   }
 
@@ -107,19 +107,19 @@ class SwiperManager {
     if (!this.swiper) return;
 
     this.swiper.on("autoplayStart", () => {
-      if (!state.gridViewActive) this.updateSlideshowIcon();
+      if (!state.gridViewActive) updateSlideshowButtonIcon();
     });
 
     this.swiper.on("autoplayResume", () => {
-      if (!state.gridViewActive) this.updateSlideshowIcon();
+      if (!state.gridViewActive) updateSlideshowButtonIcon();
     });
 
     this.swiper.on("autoplayStop", () => {
-      if (!state.gridViewActive) this.updateSlideshowIcon();
+      if (!state.gridViewActive) updateSlideshowButtonIcon();
     });
 
     this.swiper.on("autoplayPause", () => {
-      if (!state.gridViewActive) this.updateSlideshowIcon();
+      if (!state.gridViewActive) updateSlideshowButtonIcon();
     });
 
     this.swiper.on("scrollbarDragStart", () => {
@@ -325,19 +325,6 @@ class SwiperManager {
       setTimeout(() => {
         this.swiper.autoplay.start();
       }, 50);
-    }
-  }
-
-  updateSlideshowIcon() {
-    const playIcon = document.getElementById("playIcon");
-    const pauseIcon = document.getElementById("pauseIcon");
-
-    if (this.swiper?.autoplay?.running) {
-      playIcon.style.display = "none";
-      pauseIcon.style.display = "inline";
-    } else {
-      playIcon.style.display = "inline";
-      pauseIcon.style.display = "none";
     }
   }
 

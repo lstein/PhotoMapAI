@@ -2,6 +2,9 @@ name: Deploy to PyPi
 
 on:
   workflow_call:
+    secrets:
+      PYPI_API_TOKEN:
+        required: true
   workflow_dispatch:
 
 jobs:

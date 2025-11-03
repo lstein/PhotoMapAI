@@ -15,6 +15,11 @@ import {
   getCurrentSlideIndex,
   slideState,
 } from "./slide-state.js";
+import {
+  initializeSlideshowControls,
+  toggleSlideshowWithIndicator,
+  updateSlideshowButtonIcon
+} from "./slideshow.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import { initializeSingleSwiper } from "./swiper.js";
 import { } from "./touch.js"; // Import touch event handlers
@@ -42,13 +47,6 @@ async function initializeEvents() {
 }
 
 // Constants
-const FULLSCREEN_INDICATOR_CONFIG = {
-  showDuration: 800, // How long to show the indicator
-  fadeOutDuration: 300, // Fade out animation duration
-  playSymbol: "▶", // Play symbol
-  pauseSymbol: "⏸", // Pause symbol
-};
-
 const KEYBOARD_SHORTCUTS = {
   // ArrowRight: () => navigateSlide('next'),
   // ArrowLeft: () => navigateSlide('prev'),
@@ -269,49 +267,6 @@ async function handleSuccessfulDelete(globalIndex, searchIndex) {
   slideState.navigateByOffset(0); // Stay on the same index, which is now the next image
 }
 
-// Toggle visibility of the slideshow fullscreen indicator
-function showPlayPauseIndicator(isPlaying) {
-  removeExistingIndicator();
-  const indicator = createIndicator(isPlaying);
-  showIndicatorWithAnimation(indicator);
-}
-
-function removeExistingIndicator() {
-  const existingIndicator = document.getElementById("fullscreen-indicator");
-  if (existingIndicator) {
-    existingIndicator.remove();
-  }
-}
-
-function createIndicator(isPlaying) {
-  const indicator = document.createElement("div");
-  indicator.id = "fullscreen-indicator";
-  indicator.className = "fullscreen-playback-indicator";
-  indicator.innerHTML = isPlaying
-    ? FULLSCREEN_INDICATOR_CONFIG.playSymbol
-    : FULLSCREEN_INDICATOR_CONFIG.pauseSymbol;
-
-  document.body.appendChild(indicator);
-  return indicator;
-}
-
-function showIndicatorWithAnimation(indicator) {
-  // Trigger animation
-  requestAnimationFrame(() => {
-    indicator.classList.add("show");
-  });
-
-  // Remove after animation completes
-  setTimeout(() => {
-    indicator.classList.remove("show");
-    setTimeout(() => {
-      if (indicator.parentNode) {
-        indicator.parentNode.removeChild(indicator);
-      }
-    }, FULLSCREEN_INDICATOR_CONFIG.fadeOutDuration);
-  }, FULLSCREEN_INDICATOR_CONFIG.showDuration);
-}
-
 // Keyboard event handling
 function handleKeydown(e) {
   // Prevent global shortcuts when typing in input fields
@@ -348,13 +303,8 @@ function setupButtonEventListeners() {
     elements.copyTextBtn.addEventListener("click", handleCopyText);
   }
 
-  // Start/stop slideshow button
-  if (elements.startStopBtn) {
-    elements.startStopBtn.addEventListener(
-      "click",
-      toggleSlideshowWithIndicator
-    );
-  }
+  // Start/stop slideshow button - initialize slideshow controls (click + right-click menu)
+  initializeSlideshowControls();
 
   // Close overlay button
   if (elements.closeOverlayBtn) {
@@ -411,6 +361,20 @@ function setupGlobalEventListeners() {
 
 }
 
+// After both swipers are initialized (e.g. at end of initializeSwipers or in initializeEvents)
+window.addEventListener("slideshowStartRequested", async () => {
+  // ensure we are in single swiper view before starting
+  if (state.gridViewActive) await toggleGridSwiperView(false);
+  if (isUmapFullscreen()) toggleUmapWindow(false);
+  try {
+    state.single_swiper.resumeSlideshow();
+  } catch (err) {
+    console.warn("Failed to resume slideshow:", err);
+  }
+  // update icon in case slideshow started
+  updateSlideshowButtonIcon();
+});
+
 function setupAccessibility() {
   // Disable tabbing on buttons to prevent focus issues
   document.querySelectorAll("button").forEach((btn) => (btn.tabIndex = -1));
@@ -446,20 +410,6 @@ export function showHidePanelText(hide) {
     elements.controlPanel.classList.remove(className);
     elements.searchPanel.classList.remove(className);
     state.showControlPanelText = true;
-  }
-}
-
-export async function toggleSlideshowWithIndicator() {
-  const isRunning = state.swiper?.autoplay?.running;
-
-  if (isRunning) {
-    state.single_swiper.pauseSlideshow();
-    showPlayPauseIndicator(false); // Show pause indicator
-  } else {
-    if (state.gridViewActive) await toggleGridSwiperView(false); // Switch to swiper mode if in grid mode
-    if (isUmapFullscreen()) toggleUmapWindow(false); // Close umap if open
-    state.single_swiper.resumeSlideshow();
-    showPlayPauseIndicator(true); // Show play indicator
   }
 }
 

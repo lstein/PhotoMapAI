@@ -1,7 +1,7 @@
 // touch.js
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
-import { toggleSlideshowWithIndicator } from "./events.js";
+import { toggleSlideshowWithIndicator } from "./slideshow.js";
 import { state } from "./state.js";
 
 // Touch events
