@@ -1,3 +1,4 @@
+import { eventRegistry } from "./event-registry.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 
@@ -26,7 +27,6 @@ export function updateSlideshowButtonIcon() {
     if (btn) btn.title = `Pause Slideshow (${modeLabel})`;
   } else {
     if (mode === "random") {
-      console.log("setting shuffle icon");
       container.innerHTML = SHUFFLE_SVG;
     } else {
       container.innerHTML = PLAY_SVG;
@@ -139,24 +139,29 @@ function createModeMenu(x, y) {
     b.style.border = "none";
     b.style.cursor = "pointer";
     b.onclick = (ev) => {
+      // NOTE: This code should be moved to state.js.
       ev.stopPropagation();
       const previousMode = state.mode;
       state.mode = modeVal;
       saveSettingsToLocalStorage();
       updateSlideshowButtonIcon();
       removeModeMenu();
-      
+
       // Reset slides when switching modes
       if (previousMode !== modeVal) {
         if (state.single_swiper?.resetAllSlides) {
-          state.single_swiper.resetAllSlides();
+          state.single_swiper.resetAllSlides(state.mode == "random");
         }
       }
+
+      toggleSlideshowWithIndicator(ev);
     };
     return b;
   };
 
-  menu.appendChild(makeButton(PLAY_SVG, "Play (chronological)", "chronological"));
+  menu.appendChild(
+    makeButton(PLAY_SVG, "Play (chronological)", "chronological")
+  );
   menu.appendChild(makeButton(SHUFFLE_SVG, "Shuffle (random)", "random"));
 
   document.body.appendChild(menu);
@@ -164,13 +169,13 @@ function createModeMenu(x, y) {
   // Position after appending so we can measure the menu height
   const menuHeight = menu.offsetHeight;
   const windowHeight = window.innerHeight;
-  
+
   // If menu would go off bottom of screen, position it above the click
   let finalY = y;
   if (y + menuHeight > windowHeight) {
     finalY = windowHeight - menuHeight - 6; // 6px padding from bottom
   }
-  
+
   menu.style.left = `${x}px`;
   menu.style.top = `${finalY}px`;
 
@@ -221,7 +226,14 @@ export function initializeSlideshowControls() {
 
   // ensure icon reflects current state on init
   updateSlideshowButtonIcon();
+
+  // install event listeners
+  eventRegistry.install(
+    { type: "slideshow", event: "seekToSlideIndex" },
+    () => {
+        state.single_swiper.pauseSlideshow();
+        updateSlideshowButtonIcon()
+    }
+  );
 }
 
-// Ensure the button updates when autoplay state changes elsewhere
-// (other modules can call updateSlideshowButtonIcon when they start/pause)

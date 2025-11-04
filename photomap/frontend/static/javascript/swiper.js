@@ -462,12 +462,12 @@ class SwiperManager {
     return this.swiper.slides[this.swiper.activeIndex] || null;
   }
 
-  async resetAllSlides() {
+  // The random_nextslide parameter is a hack that will make the preloaded next slide a random one
+  // It is a hack that should be fixed.
+  async resetAllSlides(random_nextslide = false) {
     if (!this.swiper) return;
 
-    const slideShowRunning = this.swiper?.autoplay?.running;
-    const random_nextslide = state.mode === "random" && slideShowRunning;
-
+    const slideShowRunning = this.swiper.autoplay?.running;
     this.pauseSlideshow();
     this.swiper.removeAllSlides();
 
@@ -574,7 +574,12 @@ class SwiperManager {
       if (searchIndex + i >= totalCount) break;
       if (globalIndex + i < 0) continue;
       if (globalIndex + i >= slideState.totalAlbumImages) break;
-      await this.addSlideByIndex(globalIndex + i, searchIndex + i, false, true);
+      await this.addSlideByIndex(
+        globalIndex + i,
+        searchIndex + i,
+        false,
+        false
+      );
     }
 
     slideEls = this.swiper.slides;
