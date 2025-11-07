@@ -45,6 +45,9 @@ function cacheElements() {
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
     minSearchScore: document.getElementById("minSearchScore"),
     maxSearchResults: document.getElementById("maxSearchResults"),
+    gridThumbSizeFactorReset: document.getElementById("gridThumbSizeFactorReset"),
+    minSearchScoreReset: document.getElementById("minSearchScoreReset"),
+    maxSearchResultsReset: document.getElementById("maxSearchResultsReset"),
   };
 }
 
@@ -370,6 +373,46 @@ function setupSearchSettingsControls() {
   }
 }
 
+// NEW: reset-to-default handlers for three spinners
+function setupResetDefaultsControls() {
+  // Grid thumb size factor -> 1.0
+  if (elements.gridThumbSizeFactorReset && elements.gridThumbSizeFactor) {
+    elements.gridThumbSizeFactorReset.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      elements.gridThumbSizeFactor.value = "1.0";
+      // Trigger existing input handlers so state/localStorage update
+      elements.gridThumbSizeFactor.dispatchEvent(new Event("input", { bubbles: true }));
+      elements.gridThumbSizeFactor.dispatchEvent(new Event("blur", { bubbles: true }));
+    });
+  }
+
+  // Minimum search score -> 0.20
+  if (elements.minSearchScoreReset && elements.minSearchScore) {
+    elements.minSearchScoreReset.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const defVal = 0.2;
+      elements.minSearchScore.value = defVal.toString();
+      // Update state via setter and normalize display on blur behavior
+      setMinSearchScore(defVal);
+      elements.minSearchScore.dispatchEvent(new Event("blur", { bubbles: true }));
+    });
+  }
+
+  // Maximum # search results -> 100
+  if (elements.maxSearchResultsReset && elements.maxSearchResults) {
+    elements.maxSearchResultsReset.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const defVal = 100;
+      elements.maxSearchResults.value = String(defVal);
+      setMaxSearchResults(defVal);
+      elements.maxSearchResults.dispatchEvent(new Event("blur", { bubbles: true }));
+    });
+  }
+}
+
 // MAIN INITIALIZATION FUNCTION
 async function initializeSettings() {
   cacheElements();
@@ -386,6 +429,7 @@ async function initializeSettings() {
   setupConfirmDeleteControl();
   setupGridThumbSizeFactorControl();
   setupSearchSettingsControls();
+  setupResetDefaultsControls();
 }
 
 // Initialize settings from the server and local storage
