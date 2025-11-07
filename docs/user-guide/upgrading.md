@@ -2,14 +2,14 @@
 
 There are several ways to upgrade an installed version of PhotoMapAI to the latest and greatest version:
 
-1. Using [online upgrading](#upgrading-online) from the application itself.
+1. Using [online updating](#updating-online) from the application itself.
 2. On the [command line](#updating-on-the-command-line), using the Python package installer, pip.
 3. [Via docker](#via-docker)
 4. [By reinstalling](#via-a-reinstall)
 
 ##How to find the current version
 
-From within the web application, click on the "?" icon at the bottom left of the screen. This will bring up an about box window within information about the application, including the current version number. If you are running the most current release, there will also be a green box confirming that you are up to date.
+From within the web application, click on the "?" icon at the bottom left of the screen. This will bring up an about box window within information about the application, including the current version number. If you are running the most current release, there will also be a green box confirming that you are up to date. 
 
 <img src="../../img/photomap_about_no_update_needed.png" width="480" class="img-hover-zoom">
 

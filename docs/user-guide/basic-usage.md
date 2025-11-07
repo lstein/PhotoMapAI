@@ -99,6 +99,16 @@ In grid mode, the arrow buttons move forward and back one screen's worth of thum
 
 You may also advance the grid using the slider control that appears when you hover near the top of the window. 
 
+## Starting and Stopping the Slideshow
+
+The slideshow button will start a slideshow. The current image will advance every five seconds. The interval can be changed in the [settings dialog](#changing-settings).
+
+You can switch between sequential mode and shuffle mode by right clicking on the slideshow button or with a long press on a tablet or other touch-enabled device. Sequential mode displays the images in order of recentness, while shuffle mode randomizes the order. Please be aware that sequential mode relies on the image file creation date, which is not necessarily the date the image or photograph was originally taken.
+
+<img src="../../img/photomap_slideshow_mode.png" width="480" alt="Seek Slider" class="img-hover-zoom">
+
+The slideshow mode can also be set in the settings dialogue.
+
 ## Changing Settings
 
 The Gear icon opens the settings dialogue, which allows you to adjust the appearance and behavior of PhotoMapAI:
