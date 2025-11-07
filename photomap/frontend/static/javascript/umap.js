@@ -1404,6 +1404,10 @@ window.addEventListener("resize", () => {
   }
 });
 
+window.addEventListener("slideshowStartRequested", () => {
+  toggleUmapWindow(false);
+});
+
 // Helper to set the semantic map window title to the album display name
 function setSemanticMapTitle() {
   const titleSpan = document.getElementById("semanticMapTitle");

@@ -5,6 +5,7 @@ import { toggleGridSwiperView } from "./events.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
+import { slideShowRunning, updateSlideshowButtonIcon } from "./slideshow.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
 
@@ -44,7 +45,6 @@ class SwiperManager {
   }
 
   async initializeSingleSwiper() {
-
     // Swiper config for single-image mode
     const swiperConfig = {
       direction: "horizontal",
@@ -56,7 +56,7 @@ class SwiperManager {
       },
       autoplay: {
         delay: state.currentDelay * 1000,
-        disableOnInteraction: false,
+        disableOnInteraction: true,
         enabled: false,
       },
       pagination: {
@@ -98,8 +98,6 @@ class SwiperManager {
     this.initializeEventHandlers();
     this.addDoubleTapHandlersToSlides();
 
-    // Initial icon state and overlay
-    this.updateSlideshowIcon();
     updateMetadataOverlay(this.currentSlide());
   }
 
@@ -107,19 +105,19 @@ class SwiperManager {
     if (!this.swiper) return;
 
     this.swiper.on("autoplayStart", () => {
-      if (!state.gridViewActive) this.updateSlideshowIcon();
+      if (!state.gridViewActive) updateSlideshowButtonIcon();
     });
 
     this.swiper.on("autoplayResume", () => {
-      if (!state.gridViewActive) this.updateSlideshowIcon();
+      if (!state.gridViewActive) updateSlideshowButtonIcon();
     });
 
     this.swiper.on("autoplayStop", () => {
-      if (!state.gridViewActive) this.updateSlideshowIcon();
+      if (!state.gridViewActive) updateSlideshowButtonIcon();
     });
 
     this.swiper.on("autoplayPause", () => {
-      if (!state.gridViewActive) this.updateSlideshowIcon();
+      if (!state.gridViewActive) updateSlideshowButtonIcon();
     });
 
     this.swiper.on("scrollbarDragStart", () => {
@@ -219,6 +217,13 @@ class SwiperManager {
           }
         );
       });
+
+    // Pause slideshow on arrow key navigation
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        this.pauseSlideshow();
+      }
+    });
 
     // Reset slide show when the album changes
     eventRegistry.install({ type: "swiper", event: "albumChanged" }, () => {
@@ -328,52 +333,29 @@ class SwiperManager {
     }
   }
 
-  updateSlideshowIcon() {
-    const playIcon = document.getElementById("playIcon");
-    const pauseIcon = document.getElementById("pauseIcon");
-
-    if (this.swiper?.autoplay?.running) {
-      playIcon.style.display = "none";
-      pauseIcon.style.display = "inline";
-    } else {
-      playIcon.style.display = "inline";
-      pauseIcon.style.display = "none";
-    }
-  }
-
-  async addNewSlide(offset = 0) {
-    if (!state.album) return;
-
-    let [globalIndex, totalImages, searchIndex] = getCurrentSlideIndex();
-
-    if (slideState.isSearchMode) {
-      globalIndex = slideState.resolveOffset(offset).globalIndex;
-    } else {
-      if (state.mode === "random") {
-        globalIndex = Math.floor(Math.random() * totalImages);
-      } else {
-        globalIndex = globalIndex + offset;
-        globalIndex = (globalIndex + totalImages) % totalImages;
-      }
-    }
-    await this.addSlideByIndex(globalIndex, searchIndex);
-  }
-
   async addSlideByIndex(
     globalIndex,
     searchIndex = null,
     prepend = false,
-    notRandom = null
+    random = null
   ) {
     if (!this.swiper) return;
 
-    if (
-      state.mode === "random" &&
-      !slideState.isSearchMode &&
-      notRandom === null
-    ) {
-      const totalImages = slideState.totalAlbumImages;
-      globalIndex = Math.floor(Math.random() * totalImages);
+    // only use random mode when the slideshow is running or when explicitly specified
+    const is_random =
+      random !== null
+        ? random
+        : state.mode === "random" && slideShowRunning();
+
+    if (is_random) {
+      if (slideState.isSearchMode && searchIndex !== null) {
+        const totalResults = slideState.searchResults.length;
+        searchIndex = Math.floor(Math.random() * totalResults);
+        globalIndex = slideState.searchToGlobal(searchIndex);
+      } else {
+        const totalImages = slideState.totalAlbumImages;
+        globalIndex = Math.floor(Math.random() * totalImages);
+      }
     }
 
     const exists = Array.from(this.swiper.slides).some(
@@ -479,12 +461,13 @@ class SwiperManager {
     return this.swiper.slides[this.swiper.activeIndex] || null;
   }
 
-  async resetAllSlides() {
+  // The random_nextslide parameter is a hack that will make the preloaded next slide a random one
+  // It is a hack that should be fixed.
+  async resetAllSlides(random_nextslide = false) {
     if (!this.swiper) return;
 
-    const slideShowRunning = this.swiper?.autoplay?.running;
+    const slideShowRunning = this.swiper.autoplay?.running;
     this.pauseSlideshow();
-
     this.swiper.removeAllSlides();
 
     const { globalIndex, searchIndex } = slideState.getCurrentSlide();
@@ -496,20 +479,27 @@ class SwiperManager {
     const { globalIndex: prevGlobal, searchIndex: prevSearch } =
       slideState.resolveOffset(-1);
     if (prevGlobal !== null) {
-      await this.addSlideByIndex(prevGlobal, prevSearch);
+      await this.addSlideByIndex(
+        prevGlobal,
+        prevSearch,
+        false,
+        random_nextslide
+      );
     }
 
     // Add current slide
-    const previousMode = state.mode;
-    if (globalIndex > 0) state.mode = "chronological";
     await this.addSlideByIndex(globalIndex, searchIndex);
-    state.mode = previousMode;
 
     // Add next slide if available
     const { globalIndex: nextGlobal, searchIndex: nextSearch } =
       slideState.resolveOffset(1);
     if (nextGlobal !== null) {
-      await this.addSlideByIndex(nextGlobal, nextSearch);
+      await this.addSlideByIndex(
+        nextGlobal,
+        nextSearch,
+        false,
+        random_nextslide
+      );
     }
 
     // Navigate to the current slide
@@ -583,7 +573,12 @@ class SwiperManager {
       if (searchIndex + i >= totalCount) break;
       if (globalIndex + i < 0) continue;
       if (globalIndex + i >= slideState.totalAlbumImages) break;
-      await this.addSlideByIndex(globalIndex + i, searchIndex + i, false, true);
+      await this.addSlideByIndex(
+        globalIndex + i,
+        searchIndex + i,
+        false,
+        false
+      );
     }
 
     slideEls = this.swiper.slides;
