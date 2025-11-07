@@ -24,7 +24,7 @@ export function updateSlideshowButtonIcon() {
 
   const isRunning = slideShowRunning();
   const mode = state.mode || "chronological";
-  const modeLabel = mode === "random" ? "shuffle mode" : "chronological mode";
+  const modeLabel = mode === "random" ? "shuffle mode" : "sequential mode";
 
   if (isRunning) {
     container.innerHTML = PAUSE_SVG;
@@ -148,9 +148,9 @@ function createModeMenu(x, y) {
   };
 
   menu.appendChild(
-    makeButton(PLAY_SVG, "Play (chronological)", "chronological")
+    makeButton(PLAY_SVG, "Sequential", "chronological")
   );
-  menu.appendChild(makeButton(SHUFFLE_SVG, "Shuffle (random)", "random"));
+  menu.appendChild(makeButton(SHUFFLE_SVG, "Shuffled", "random"));
 
   document.body.appendChild(menu);
 
