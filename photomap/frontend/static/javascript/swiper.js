@@ -56,7 +56,7 @@ class SwiperManager {
       },
       autoplay: {
         delay: state.currentDelay * 1000,
-        disableOnInteraction: false,
+        disableOnInteraction: true,
         enabled: false,
       },
       pagination: {
@@ -98,8 +98,6 @@ class SwiperManager {
     this.initializeEventHandlers();
     this.addDoubleTapHandlersToSlides();
 
-    // Initial icon state and overlay
-    updateSlideshowButtonIcon();
     updateMetadataOverlay(this.currentSlide());
   }
 
@@ -465,6 +463,7 @@ class SwiperManager {
   // The random_nextslide parameter is a hack that will make the preloaded next slide a random one
   // It is a hack that should be fixed.
   async resetAllSlides(random_nextslide = false) {
+    console.log("resetAllSlides called with random_nextslide =", random_nextslide);
     if (!this.swiper) return;
 
     const slideShowRunning = this.swiper.autoplay?.running;
@@ -514,6 +513,8 @@ class SwiperManager {
     if (slideShowRunning) this.resumeSlideshow();
 
     setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
+
+    console.log("Swiper slides reset completed.");
   }
 
   enforceHighWaterMark(backward = false) {

@@ -365,8 +365,10 @@ function setupGlobalEventListeners() {
 window.addEventListener("slideshowStartRequested", async () => {
   // ensure we are in single swiper view before starting
   if (state.gridViewActive) await toggleGridSwiperView(false);
+  await state.single_swiper.resetAllSlides(state.mode == "random")
   if (isUmapFullscreen()) toggleUmapWindow(false);
   try {
+    console.log("Resuming slideshow after request...");
     state.single_swiper.resumeSlideshow();
   } catch (err) {
     console.warn("Failed to resume slideshow:", err);
@@ -445,6 +447,7 @@ export async function toggleGridSwiperView(gridView = null) {
 
   const singleContainer = document.getElementById("singleSwiperContainer");
   const gridContainer = document.getElementById("gridViewContainer");
+  const slideShowRunning = state.single_swiper.swiper.autoplay.running;
 
   if (state.gridViewActive) {
     // Fade out single view
@@ -458,7 +461,7 @@ export async function toggleGridSwiperView(gridView = null) {
     gridContainer.style.opacity = "0";
     await new Promise((resolve) => requestAnimationFrame(resolve));
     gridContainer.style.opacity = "1";
-    state.grid_swiper.resetOrInitialize();
+    await state.grid_swiper.resetOrInitialize();
     state.single_swiper.pauseSlideshow();
     updateSlideshowButtonIcon(); // Show pause indicator
   } else {
@@ -468,8 +471,9 @@ export async function toggleGridSwiperView(gridView = null) {
     gridContainer.style.display = "none";
     gridContainer.classList.remove("fade-out");
 
+    console.log("singleContainer display style:", singleContainer.style.display);
     if (singleContainer.style.display == "none") // if previous hidden, then reset
-      state.single_swiper.resetAllSlides();
+      await state.single_swiper.resetAllSlides(slideShowRunning && state.mode == "random");
 
     // Fade in single view
     singleContainer.style.display = "";
@@ -480,6 +484,7 @@ export async function toggleGridSwiperView(gridView = null) {
   // Update the grid icon with a checkmark if in grid view
   const gridViewBtn = document.getElementById("gridViewBtn");
   setCheckmarkOnIcon(gridViewBtn, state.gridViewActive);
+
 }
 
 // Handle clicks on the slide navigation buttons

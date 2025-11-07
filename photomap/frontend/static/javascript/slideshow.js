@@ -12,13 +12,17 @@ const SHUFFLE_SVG = `<svg id="shuffleIcon" width="32" height="32" viewBox="0 0 2
   <path d="M18 11l3-3-3-3"/>
 </svg>`;
 
+export function slideShowRunning() {
+  return !!state.single_swiper?.swiper?.autoplay?.running;
+}
+
 // public: update the icon displayed on the start/stop button according to state
 export function updateSlideshowButtonIcon() {
   const container = document.getElementById("slideshowIcon");
   const btn = document.getElementById("startStopSlideshowBtn");
   if (!container) return;
 
-  const isRunning = state.single_swiper?.swiper?.autoplay?.running;
+  const isRunning = slideShowRunning();
   const mode = state.mode || "chronological";
   const modeLabel = mode === "random" ? "shuffle mode" : "chronological mode";
 
@@ -79,9 +83,7 @@ export async function toggleSlideshowWithIndicator(e) {
     e.stopPropagation();
   }
 
-  const isRunning = !!state.single_swiper?.swiper?.autoplay?.running;
-
-  if (isRunning) {
+  if (slideShowRunning()) {
     // pause
     try {
       state.single_swiper.pauseSlideshow();
@@ -93,13 +95,8 @@ export async function toggleSlideshowWithIndicator(e) {
     return;
   }
 
-  // start/resume
-  // If grid view is active, request that the app switch to single view first.
-  if (state.gridViewActive) {
-    // dispatch an event that events.js listens for to perform the view switch and then resume
-    window.dispatchEvent(new Event("slideshowStartRequested"));
-    return;
-  }
+  window.dispatchEvent(new Event("slideshowStartRequested"));
+
 
   // Ensure UMAP closed if necessary
   if (isUmapFullscreen()) toggleUmapWindow(false);
@@ -146,15 +143,6 @@ function createModeMenu(x, y) {
       saveSettingsToLocalStorage();
       updateSlideshowButtonIcon();
       removeModeMenu();
-
-      // Reset slides when switching modes
-      if (previousMode !== modeVal) {
-        if (state.single_swiper?.resetAllSlides) {
-          state.single_swiper.resetAllSlides(state.mode == "random");
-        }
-      }
-
-      toggleSlideshowWithIndicator(ev);
     };
     return b;
   };
@@ -231,9 +219,8 @@ export function initializeSlideshowControls() {
   eventRegistry.install(
     { type: "slideshow", event: "seekToSlideIndex" },
     () => {
-        state.single_swiper.pauseSlideshow();
-        updateSlideshowButtonIcon()
+      state.single_swiper.pauseSlideshow();
+      updateSlideshowButtonIcon();
     }
   );
 }
-

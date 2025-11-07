@@ -6,7 +6,6 @@ import {
 } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
 import { slideState } from "./slide-state.js";
-import { updateSlideshowButtonIcon } from "./slideshow.js";
 import { state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
@@ -125,7 +124,6 @@ class GridViewManager {
     this.addGridEventListeners();
     this.setupGridResizeHandler();
     this.updateCurrentSlide();
-    updateSlideshowButtonIcon();
 
     this.gridInitialized = true;
     window.swiper = this.swiper; // for debugging
