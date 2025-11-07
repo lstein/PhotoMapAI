@@ -368,7 +368,6 @@ window.addEventListener("slideshowStartRequested", async () => {
   await state.single_swiper.resetAllSlides(state.mode == "random")
   if (isUmapFullscreen()) toggleUmapWindow(false);
   try {
-    console.log("Resuming slideshow after request...");
     state.single_swiper.resumeSlideshow();
   } catch (err) {
     console.warn("Failed to resume slideshow:", err);
@@ -471,7 +470,6 @@ export async function toggleGridSwiperView(gridView = null) {
     gridContainer.style.display = "none";
     gridContainer.classList.remove("fade-out");
 
-    console.log("singleContainer display style:", singleContainer.style.display);
     if (singleContainer.style.display == "none") // if previous hidden, then reset
       await state.single_swiper.resetAllSlides(slideShowRunning && state.mode == "random");
 

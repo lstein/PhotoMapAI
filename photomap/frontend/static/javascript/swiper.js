@@ -5,7 +5,7 @@ import { toggleGridSwiperView } from "./events.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
-import { updateSlideshowButtonIcon } from "./slideshow.js";
+import { slideShowRunning, updateSlideshowButtonIcon } from "./slideshow.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
 
@@ -345,12 +345,13 @@ class SwiperManager {
     const is_random =
       random !== null
         ? random
-        : state.mode === "random" && this.swiper?.autoplay?.running;
+        : state.mode === "random" && slideShowRunning();
 
     if (is_random) {
       if (slideState.isSearchMode && searchIndex !== null) {
         const totalResults = slideState.searchResults.length;
         searchIndex = Math.floor(Math.random() * totalResults);
+        globalIndex = slideState.searchToGlobal(searchIndex);
       } else {
         const totalImages = slideState.totalAlbumImages;
         globalIndex = Math.floor(Math.random() * totalImages);
@@ -463,7 +464,6 @@ class SwiperManager {
   // The random_nextslide parameter is a hack that will make the preloaded next slide a random one
   // It is a hack that should be fixed.
   async resetAllSlides(random_nextslide = false) {
-    console.log("resetAllSlides called with random_nextslide =", random_nextslide);
     if (!this.swiper) return;
 
     const slideShowRunning = this.swiper.autoplay?.running;
@@ -513,8 +513,6 @@ class SwiperManager {
     if (slideShowRunning) this.resumeSlideshow();
 
     setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
-
-    console.log("Swiper slides reset completed.");
   }
 
   enforceHighWaterMark(backward = false) {
