@@ -57,7 +57,8 @@ class SearchWithTextAndImageRequest(BaseModel):
     image_weight: float = 0.5
     positive_weight: float = 0.5
     negative_weight: float = 0.5
-    top_k: int = DEFAULT_TOP_K
+    min_search_score: float = 0.2
+    max_search_results: int = 100
 
 
 @search_router.post(
@@ -81,6 +82,9 @@ async def search_with_text_and_image(
             query_image_data = Image.open(BytesIO(image_bytes))
 
         embeddings = get_embeddings_for_album(album_key)
+        logger.info(
+            f"Search request: {req.min_search_score=}, {req.max_search_results=}"
+        )
         results, scores = embeddings.search_images_by_text_and_image(
             query_image_data=query_image_data,
             positive_query=req.positive_query,
@@ -88,7 +92,8 @@ async def search_with_text_and_image(
             image_weight=req.image_weight,
             positive_weight=req.positive_weight,
             negative_weight=req.negative_weight,
-            top_k=req.top_k,
+            minimum_score=req.min_search_score,
+            top_k=req.max_search_results,
         )
         return create_search_results(results, scores, album_key)
     finally:

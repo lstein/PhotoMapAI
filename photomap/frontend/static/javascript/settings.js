@@ -2,7 +2,13 @@
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
-import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
+import {
+  saveSettingsToLocalStorage,
+  setAlbum,
+  setMaxSearchResults,
+  setMinSearchScore,
+  state,
+} from "./state.js";
 
 // Constants
 const DELAY_CONFIG = {
@@ -37,6 +43,8 @@ function cacheElements() {
     ),
     confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
+    minSearchScore: document.getElementById("minSearchScore"),
+    maxSearchResults: document.getElementById("maxSearchResults"),
   };
 }
 
@@ -163,6 +171,12 @@ async function populateModalFields() {
   // Set the grid thumbnail size factor spinner value
   if (elements.gridThumbSizeFactor)
     elements.gridThumbSizeFactor.value = state.gridThumbSizeFactor;
+
+  // search settings initial values
+  if (elements.minSearchScore)
+    elements.minSearchScore.value = state.minSearchScore.toFixed(2);
+  if (elements.maxSearchResults)
+    elements.maxSearchResults.value = state.maxSearchResults;
 
   await loadLocationIQApiKey();
 }
@@ -311,6 +325,51 @@ function setupGridThumbSizeFactorControl() {
   });
 }
 
+// wire search settings controls to state with clamping and persistence
+function setupSearchSettingsControls() {
+  // Minimum search score [0.00, 1.00]
+  if (elements.minSearchScore) {
+    elements.minSearchScore.addEventListener("input", function () {
+      const val = this.value.trim();
+      if (val === "") return; // let user type
+      const num = Number(val);
+      if (!Number.isFinite(num)) return;
+      const clamped = Math.max(0.0, Math.min(1.0, num));
+      setMinSearchScore(clamped);
+    });
+
+    elements.minSearchScore.addEventListener("blur", function () {
+      const num = Number(this.value);
+      const clamped = Number.isFinite(num)
+        ? Math.max(0.0, Math.min(1.0, num))
+        : state.minSearchScore;
+      setMinSearchScore(clamped);
+      this.value = clamped.toFixed(2); // normalize on commit
+    });
+  }
+
+  // Maximum results [50, 500]
+  if (elements.maxSearchResults) {
+    elements.maxSearchResults.addEventListener("input", function () {
+      const val = this.value.trim();
+      if (val === "") return;
+      const num = parseInt(val, 10);
+      if (!Number.isFinite(num)) return;
+      const clamped = Math.max(50, Math.min(500, num));
+      setMaxSearchResults(clamped);
+    });
+
+    elements.maxSearchResults.addEventListener("blur", function () {
+      const num = parseInt(this.value, 10);
+      const clamped = Number.isFinite(num)
+        ? Math.max(50, Math.min(500, num))
+        : state.maxSearchResults;
+      setMaxSearchResults(clamped);
+      this.value = String(clamped); // normalize on commit
+    });
+  }
+}
+
 // MAIN INITIALIZATION FUNCTION
 async function initializeSettings() {
   cacheElements();
@@ -326,6 +385,7 @@ async function initializeSettings() {
   setupLocationIQApiKeyControl();
   setupConfirmDeleteControl();
   setupGridThumbSizeFactorControl();
+  setupSearchSettingsControls();
 }
 
 // Initialize settings from the server and local storage

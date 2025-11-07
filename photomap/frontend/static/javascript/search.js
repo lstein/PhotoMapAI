@@ -74,7 +74,6 @@ export async function searchTextAndImage({
   image_weight = 0.5,
   positive_weight = 0.5,
   negative_weight = 0.5,
-  top_k = 500,
 }) {
   let image_data = null;
   if (image_file) {
@@ -93,9 +92,11 @@ export async function searchTextAndImage({
     image_weight,
     positive_weight,
     negative_weight,
-    top_k,
+    min_search_score: state.minSearchScore,
+    max_search_results: state.maxSearchResults,
   };
 
+  console.log("searchTextAndImage payload:", payload);
   try {
     const response = await fetch(
       `search_with_text_and_image/${encodeURIComponent(state.album)}`,

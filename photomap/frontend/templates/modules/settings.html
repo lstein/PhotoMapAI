@@ -31,7 +31,7 @@
 
       <!-- Right column: Mode controls -->
       <div id="modeControls">
-        <div id="modeLabel">Image Browse Order:</div>
+        <div id="modeLabel">Image Slideshow Mode:</div>
 
         <div id="modeRadioGroup">
           <label
@@ -42,11 +42,11 @@
               value="chronological"
               checked
             />
-            Chronological</label
+            Sequential</label
           >
           <label
             ><input type="radio" id="modeRandom" name="mode" value="random" />
-            Random</label
+            Shuffle</label
           >
         </div>
       </div>
@@ -65,6 +65,35 @@
         style="width: 70px"
       />
     </div>
+
+
+    <div class="setting-row">
+      <label for="minSearchScore">Minimum search score:</label>
+      <input
+        type="number"
+        id="minSearchScore"
+        min="0.0"
+        max="1.0"
+        step="0.01"
+        value="0.2"
+        style="width: 70px"
+      />
+    </div>
+
+    <!-- Maximum number of search results -->
+    <div class="setting-row">
+      <label for="maxSearchResults">Maximum # of search results:</label>
+      <input
+        type="number"
+        id="maxSearchResults"
+        min="50"
+        max="500"
+        step="10"
+        value="100"
+        style="width: 70px"
+      />
+    </div>
+
     <!-- Row for control panel text visibility -->
     <div class="setting-row">
       <label for="showControlPanelTextCheckbox">Show Button Labels:</label>
