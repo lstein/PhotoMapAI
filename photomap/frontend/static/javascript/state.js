@@ -19,6 +19,9 @@ export const state = {
   suppressDeleteConfirm: false, // Flag to suppress delete confirmation dialogs
   gridThumbSizeFactor: 1.0,  // Scaling factor for grid thumbnails
   swiper: null,  // backwards compatibility hack; contains the single_swiper.swiper instance
+  // persisted search settings
+  minSearchScore: 0.2,       // [0.0, 1.0]
+  maxSearchResults: 100,     // [50, 500]
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -84,6 +87,17 @@ export async function restoreFromLocalStorage() {
   if (storedGridThumbSizeFactor !== null) {
     state.gridThumbSizeFactor = parseFloat(storedGridThumbSizeFactor);
   }
+
+  const storedMinSearchScore = localStorage.getItem("minSearchScore");
+  if (storedMinSearchScore !== null) {
+    const v = Math.max(0.0, Math.min(1.0, parseFloat(storedMinSearchScore)));
+    if (!Number.isNaN(v)) state.minSearchScore = v;
+  }
+  const storedMaxSearchResults = localStorage.getItem("maxSearchResults");
+  if (storedMaxSearchResults !== null) {
+    const v = Math.max(50, Math.min(500, parseInt(storedMaxSearchResults, 10)));
+    if (!Number.isNaN(v)) state.maxSearchResults = v;
+  }
 }
 
 // Save state to local storage
@@ -98,6 +112,8 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
   localStorage.setItem("suppressDeleteConfirm", state.suppressDeleteConfirm ? "true" : "false");
   localStorage.setItem("gridThumbSizeFactor", state.gridThumbSizeFactor);
+  localStorage.setItem("minSearchScore", state.minSearchScore);
+  localStorage.setItem("maxSearchResults", state.maxSearchResults);
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
@@ -149,6 +165,29 @@ export function setDelay(newDelay) {
     saveSettingsToLocalStorage();
     window.dispatchEvent(
       new CustomEvent("settingsUpdated", { detail: { delay: newDelay } })
+    );
+  }
+}
+
+// NEW: setters for search settings (persist + notify)
+export function setMinSearchScore(newScore) {
+  const clamped = Math.max(0.0, Math.min(1.0, parseFloat(newScore)));
+  if (!Number.isNaN(clamped) && state.minSearchScore !== clamped) {
+    state.minSearchScore = clamped;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { minSearchScore: clamped } })
+    );
+  }
+}
+
+export function setMaxSearchResults(newMax) {
+  const clamped = Math.max(50, Math.min(500, parseInt(newMax, 10)));
+  if (!Number.isNaN(clamped) && state.maxSearchResults !== clamped) {
+    state.maxSearchResults = clamped;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { maxSearchResults: clamped } })
     );
   }
 }
