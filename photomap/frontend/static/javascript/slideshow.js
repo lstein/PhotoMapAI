@@ -97,7 +97,6 @@ export async function toggleSlideshowWithIndicator(e) {
 
   window.dispatchEvent(new Event("slideshowStartRequested"));
 
-
   // Ensure UMAP closed if necessary
   if (isUmapFullscreen()) toggleUmapWindow(false);
 
@@ -135,21 +134,18 @@ function createModeMenu(x, y) {
     b.style.background = "transparent";
     b.style.border = "none";
     b.style.cursor = "pointer";
-    b.onclick = (ev) => {
-      // NOTE: This code should be moved to state.js.
+    b.onclick = async (ev) =>  {
       ev.stopPropagation();
-      const previousMode = state.mode;
       state.mode = modeVal;
-      saveSettingsToLocalStorage();
-      updateSlideshowButtonIcon();
       removeModeMenu();
+      saveSettingsToLocalStorage();
+      if (slideShowRunning()) await toggleSlideshowWithIndicator();
+      updateSlideshowButtonIcon();
     };
     return b;
   };
 
-  menu.appendChild(
-    makeButton(PLAY_SVG, "Sequential", "chronological")
-  );
+  menu.appendChild(makeButton(PLAY_SVG, "Sequential", "chronological"));
   menu.appendChild(makeButton(SHUFFLE_SVG, "Shuffled", "random"));
 
   document.body.appendChild(menu);
