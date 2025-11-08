@@ -278,23 +278,31 @@ class SwiperManager {
     // Double-tap (touch devices)
     let lastTap = 0;
     let tapCount = 0;
+    let tapTimer = null;
 
-    // Prevent default on touchstart when it's a potential double-tap
     slideEl.addEventListener(
       "touchstart",
       (e) => {
         if (e.touches.length === 1) {
           tapCount++;
+          
+          // Only prevent default on the second tap within the double-tap window
           if (tapCount === 2) {
-            e.preventDefault(); // Prevent zoom on second tap
+            const now = Date.now();
+            if (now - lastTap < 350) {
+              e.preventDefault(); // Prevent zoom only on actual double-tap
+            }
           }
-          setTimeout(() => {
+          
+          // Reset tap count after the double-tap window expires
+          clearTimeout(tapTimer);
+          tapTimer = setTimeout(() => {
             tapCount = 0;
           }, 350);
         }
       },
       { passive: false }
-    ); // passive: false allows preventDefault
+    );
 
     slideEl.addEventListener("touchend", async (e) => {
       // Only trigger on single-finger touch
@@ -310,6 +318,8 @@ class SwiperManager {
         e.preventDefault();
         await toggleGridSwiperView(true);
         lastTap = 0;
+        tapCount = 0;
+        clearTimeout(tapTimer);
       } else {
         lastTap = now;
       }
