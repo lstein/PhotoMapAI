@@ -96,7 +96,6 @@ export async function searchTextAndImage({
     max_search_results: state.maxSearchResults,
   };
 
-  console.log("searchTextAndImage payload:", payload);
   try {
     const response = await fetch(
       `search_with_text_and_image/${encodeURIComponent(state.album)}`,
