@@ -35,6 +35,7 @@ async function initializeEvents() {
   initializeTitle();
   initializeControlPanel(); // Initialize control panel buttons
   initializeMetadataDrawer(); // Initialize metadata drawer events
+  initializeSlideshowControls(); // Initialize slideshow controls
   setupGlobalEventListeners();
   setupAccessibility();
   checkAlbumIndex(); // Check if the album index exists before proceeding
