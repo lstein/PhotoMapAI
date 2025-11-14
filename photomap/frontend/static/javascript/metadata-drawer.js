@@ -328,3 +328,39 @@ if (handle) {
     // hideMetadataOverlay();
   });
 }
+
+// Setup overlay control buttons
+function setupOverlayButtons() {
+  const closeOverlayBtn = document.getElementById("closeOverlayBtn");
+  const overlayDrawer = document.getElementById("overlayDrawer");
+
+  // Close overlay button
+  if (closeOverlayBtn) {
+    closeOverlayBtn.onclick = hideMetadataOverlay;
+  }
+
+  // Overlay drawer button
+  if (overlayDrawer) {
+    overlayDrawer.addEventListener("click", function (e) {
+      e.stopPropagation();
+      toggleMetadataOverlay();
+    });
+  }
+}
+
+// Initialize metadata drawer - sets up all event listeners
+export function initializeMetadataDrawer() {
+  setupOverlayButtons();
+}
+
+// Position metadata drawer (called from events.js during initialization and on window resize)
+export function positionMetadataDrawer() {
+  const seekSlider = document.getElementById("scoreSliderRow");
+  const drawer = document.getElementById("bannerDrawerContainer");
+  if (seekSlider && drawer) {
+    const rect = seekSlider.getBoundingClientRect();
+    // Add window scrollY to get absolute position
+    const top = rect.bottom + window.scrollY;
+    drawer.style.top = `${top + 8}px`; // 8px gap, adjust as needed
+  }
+}
