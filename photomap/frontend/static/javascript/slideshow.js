@@ -194,7 +194,6 @@ export function showSlideshowModeMenu(x, y) {
 
 // initialize click and contextmenu for the start/stop button
 export function initializeSlideshowControls() {
-  console.log("Initializing slideshow controls");
   const btn = document.getElementById("startStopSlideshowBtn");
   if (!btn) return;
 
