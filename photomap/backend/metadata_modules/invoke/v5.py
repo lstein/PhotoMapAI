@@ -90,7 +90,6 @@ class Invoke5Metadata(InvokeMetadataABC):
         This is called to get the reference image when the metadata contains a ref_images field.
         """
         reference_images = self.raw_metadata.get("ref_images", [])
-        logger.info(f"Reference images found: {reference_images}")
         return [
             ReferenceImage(
                 model_name=image.get("config", {})
