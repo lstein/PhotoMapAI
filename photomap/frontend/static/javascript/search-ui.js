@@ -76,6 +76,31 @@ document.addEventListener("DOMContentLoaded", async function () {
   const searchInput = document.getElementById("searchInput");
   const negativeSearchInput = document.getElementById("negativeSearchInput");
 
+  // Initialize weight sliders before they're used in searchWithTextAndImage
+  const posPromptWeightSlider = new WeightSlider(
+    document.getElementById("posPromptWeightSlider"),
+    0.5,
+    (val) => {
+      posPromptWeight = val;
+    }
+  );
+
+  const negPromptWeightSlider = new WeightSlider(
+    document.getElementById("negPromptWeightSlider"),
+    0.25,
+    (val) => {
+      negPromptWeight = val;
+    }
+  );
+
+  const imgPromptWeightSlider = new WeightSlider(
+    document.getElementById("imgPromptWeightSlider"),
+    0.5,
+    (val) => {
+      imgPromptWeight = val;
+    }
+  );
+
   doSearchBtn.addEventListener("click", function () {
     searchWithTextAndImage("text");
   });
@@ -222,30 +247,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       doSearchBtn.click();
     }
   });
-
-  const posPromptWeightSlider = new WeightSlider(
-    document.getElementById("posPromptWeightSlider"),
-    0.5,
-    (val) => {
-      posPromptWeight = val;
-    }
-  );
-
-  const negPromptWeightSlider = new WeightSlider(
-    document.getElementById("negPromptWeightSlider"),
-    0.25,
-    (val) => {
-      negPromptWeight = val;
-    }
-  );
-
-  const imgPromptWeightSlider = new WeightSlider(
-    document.getElementById("imgPromptWeightSlider"),
-    0.5,
-    (val) => {
-      imgPromptWeight = val;
-    }
-  );
 
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   clearSearchBtn.addEventListener("click", function () {
