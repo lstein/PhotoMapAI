@@ -416,13 +416,19 @@ function updateSearchCheckmarks(searchType = null) {
   const element_to_highlight = searchTypeToIconMap[searchType] || null;
 
   for (const iconElement of Object.values(searchTypeToIconMap)) {
-    setCheckmarkOnIcon(iconElement, false);
+    if (iconElement) {
+      setCheckmarkOnIcon(iconElement, false);
+    }
   }
   if (element_to_highlight) {
     setCheckmarkOnIcon(element_to_highlight, true);
-    clearSearchBtn.style.display = "block";
+    if (clearSearchBtn) {
+      clearSearchBtn.style.display = "block";
+    }
   } else {
-    clearSearchBtn.style.display = "none";
+    if (clearSearchBtn) {
+      clearSearchBtn.style.display = "none";
+    }
   }
 }
 
