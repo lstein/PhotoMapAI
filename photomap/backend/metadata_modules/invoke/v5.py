@@ -6,6 +6,7 @@ Extract Invoke5 metadata from the raw metadata dictionary.
 Support for metadata extraction from images created with InvokeAI v3.
 """
 
+import logging
 from typing import List
 
 from .invoke_metadata_abc import (
@@ -15,6 +16,8 @@ from .invoke_metadata_abc import (
     Prompts,
     ReferenceImage,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class Invoke5Metadata(InvokeMetadataABC):
@@ -94,7 +97,12 @@ class Invoke5Metadata(InvokeMetadataABC):
                 .get("name", "Unknown Model"),
                 image_name=image.get("config", {})
                 .get("image", {})
-                .get("image_name", ""),
+                .get("image_name", "")
+                or image.get("config", {})
+                .get("image", {})
+                .get("original", {})
+                .get("image", {})
+                .get("image_name", "Unknown Image"),
                 weight=image.get("config", {}).get("weight", 1.0),
             )
             for image in reference_images
