@@ -1,4 +1,3 @@
-import { eventRegistry } from "./event-registry.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 
@@ -211,12 +210,9 @@ export function initializeSlideshowControls() {
   // ensure icon reflects current state on init
   updateSlideshowButtonIcon();
 
-  // install event listeners
-  eventRegistry.install(
-    { type: "slideshow", event: "seekToSlideIndex" },
-    () => {
-      state.single_swiper.pauseSlideshow();
-      updateSlideshowButtonIcon();
-    }
-  );
+  // Listen for seekToSlideIndex event
+  window.addEventListener("seekToSlideIndex", () => {
+    state.single_swiper.pauseSlideshow();
+    updateSlideshowButtonIcon();
+  });
 }

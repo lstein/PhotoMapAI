@@ -145,7 +145,3 @@ export function calculate_search_score_cutoff(
   const cutoff = numerator / denominator;
   return cutoff;
 }
-
-document.getElementById('closeTextSearchBtn').onclick = function() {
-  document.getElementById('textSearchPanel').style.display = 'none';
-};

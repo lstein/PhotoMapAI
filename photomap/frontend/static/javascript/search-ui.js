@@ -15,6 +15,14 @@ let currentSearchImageUrl = null; // Track the current image URL
 document.addEventListener("DOMContentLoaded", async function () {
   const textSearchPanel = document.getElementById("textSearchPanel");
   const textSearchBtn = document.getElementById("textSearchBtn");
+  const closeTextSearchBtn = document.getElementById("closeTextSearchBtn");
+
+  // Close text search panel button
+  if (closeTextSearchBtn) {
+    closeTextSearchBtn.onclick = function() {
+      textSearchPanel.style.display = 'none';
+    };
+  }
 
   textSearchBtn.addEventListener("click", function (e) {
     e.stopPropagation();

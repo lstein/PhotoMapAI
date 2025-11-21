@@ -1,4 +1,3 @@
-import { eventRegistry } from "./event-registry.js";
 import { toggleGridSwiperView } from "./events.js";
 import {
   replaceReferenceImagesWithLinks,
@@ -34,6 +33,9 @@ class GridViewManager {
     this.batchLoading = false;
     this.slideData = {};
     this.GRID_MAX_SCREENS = 6;
+    
+    // Store event listeners for cleanup
+    this.eventListeners = [];
 
     GridViewManager.instance = this;
   }
@@ -75,10 +77,23 @@ class GridViewManager {
     return gridContainer && gridContainer.style.display !== "none";
   }
 
+  // Helper to store and manage event listeners
+  addEventListener(target, event, handler) {
+    target.addEventListener(event, handler);
+    this.eventListeners.push({ target, event, handler });
+  }
+
+  removeAllEventListeners() {
+    this.eventListeners.forEach(({ target, event, handler }) => {
+      target.removeEventListener(event, handler);
+    });
+    this.eventListeners = [];
+  }
+
   initializeGridSwiper() {
     this.gridInitialized = false;
     showSpinner();
-    eventRegistry.removeAll("grid");
+    this.removeAllEventListeners();
 
     if (this.swiper) {
       this.swiper.destroy(true, true);
@@ -136,29 +151,33 @@ class GridViewManager {
   }
 
   addGridEventListeners() {
-    eventRegistry.install(
-      { type: "grid", event: "swiperModeChanged" },
+    this.addEventListener(
+      window,
+      "swiperModeChanged",
       async (e) => {
         await this.resetAllSlides();
       }
     );
 
-    eventRegistry.install(
-      { type: "grid", event: "searchResultsChanged" },
+    this.addEventListener(
+      window,
+      "searchResultsChanged",
       async (e) => {
         await this.resetAllSlides();
       }
     );
 
-    eventRegistry.install(
-      { type: "grid", event: "slideChanged" },
+    this.addEventListener(
+      window,
+      "slideChanged",
       async function (e) {
         // nothing for now
       }
     );
 
-    eventRegistry.install(
-      { type: "grid", event: "gridThumbSizeFactorChanged" },
+    this.addEventListener(
+      window,
+      "gridThumbSizeFactorChanged",
       async () => {
         this.initializeGridSwiper();
         await this.resetAllSlides();
@@ -169,8 +188,9 @@ class GridViewManager {
       }
     );
 
-    eventRegistry.install(
-      { type: "grid", event: "seekToSlideIndex" },
+    this.addEventListener(
+      window,
+      "seekToSlideIndex",
       async (e) => {
         const { globalIndex, searchIndex, totalSlides, isSearchMode } =
           e.detail;
@@ -197,7 +217,7 @@ class GridViewManager {
       }
     );
 
-    eventRegistry.install({ type: "grid", event: "albumChanged" }, async () => {
+    this.addEventListener(window, "albumChanged", async () => {
       await this.resetAllSlides();
     });
 
@@ -504,7 +524,7 @@ class GridViewManager {
       }, 300);
     };
 
-    eventRegistry.install({ type: "grid", event: "resize" }, handleResize);
+    this.addEventListener(window, "resize", handleResize);
   }
 
   updateCurrentSlideHighlight(globalIndex = null) {
