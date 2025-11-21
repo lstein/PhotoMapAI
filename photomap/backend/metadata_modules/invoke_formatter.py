@@ -34,7 +34,7 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     # pick the appropriate metadata class based on tags in the raw data
     extractor_class = (
         Invoke5Metadata
-        if "canvas_v2_metadata" in metadata
+        if "canvas_v2_metadata" in metadata or "ref_images" in metadata
         else (
             Invoke3Metadata
             if "generation_mode" in metadata
@@ -48,6 +48,8 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
         Path(slide_data.filepath).stat().st_mtime if slide_data.filepath else None
     ):
         modification_time = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+
+    logger.info(f"Using extractor {extractor_class} for file {slide_data.filename}")
 
     if not extractor_class:
         slide_data.description = "<i>Unknown invoke metadata format.</i>"
