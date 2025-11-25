@@ -12,6 +12,10 @@
 
 export class WeightSlider {
   constructor(container, initialValue = 0.5, onChange = null) {
+    if (!container) {
+      console.error("WeightSlider: container element is null or undefined");
+      return;
+    }
     this.value = initialValue;
     this.onChange = onChange;
     this.container = container;

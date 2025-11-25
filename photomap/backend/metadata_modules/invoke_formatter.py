@@ -49,8 +49,6 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     ):
         modification_time = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
 
-    logger.info(f"Using extractor {extractor_class} for file {slide_data.filename}")
-
     if not extractor_class:
         slide_data.description = "<i>Unknown invoke metadata format.</i>"
         return slide_data

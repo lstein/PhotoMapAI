@@ -1,6 +1,5 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
-import { eventRegistry } from "./event-registry.js";
 import { toggleGridSwiperView } from "./events.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
@@ -26,8 +25,24 @@ class SwiperManager {
     this.isPrepending = false;
     this.isAppending = false;
     this.isInternalSlideChange = false;
+    
+    // Store event listeners for cleanup
+    this.eventListeners = [];
 
     SwiperManager.instance = this;
+  }
+
+  // Helper to store and manage event listeners
+  addEventListener(target, event, handler) {
+    target.addEventListener(event, handler);
+    this.eventListeners.push({ target, event, handler });
+  }
+
+  removeAllEventListeners() {
+    this.eventListeners.forEach(({ target, event, handler }) => {
+      target.removeEventListener(event, handler);
+    });
+    this.eventListeners = [];
   }
 
   // Check if the device is mobile
@@ -202,16 +217,18 @@ class SwiperManager {
     document
       .querySelectorAll(".swiper-button-next, .swiper-button-prev")
       .forEach((btn) => {
-        eventRegistry.install(
-          { type: "swiper", event: "click", object: btn },
+        this.addEventListener(
+          btn,
+          "click",
           function (event) {
             state.single_swiper.pauseSlideshow();
             event.stopPropagation();
             this.blur();
           }
         );
-        eventRegistry.install(
-          { type: "swiper", event: "mousedown", object: btn },
+        this.addEventListener(
+          btn,
+          "mousedown",
           function (event) {
             this.blur();
           }
@@ -226,29 +243,32 @@ class SwiperManager {
     });
 
     // Reset slide show when the album changes
-    eventRegistry.install({ type: "swiper", event: "albumChanged" }, () => {
+    this.addEventListener(window, "albumChanged", () => {
       this.resetAllSlides();
     });
 
     // Reset slide show when the search results change
-    eventRegistry.install(
-      { type: "swiper", event: "searchResultsChanged" },
+    this.addEventListener(
+      window,
+      "searchResultsChanged",
       () => {
         this.resetAllSlides();
       }
     );
 
     // Handle slideshow mode changes
-    eventRegistry.install(
-      { type: "swiper", event: "swiperModeChanged" },
+    this.addEventListener(
+      window,
+      "swiperModeChanged",
       () => {
         this.resetAllSlides();
       }
     );
 
     // Navigate to a slide
-    eventRegistry.install(
-      { type: "swiper", event: "seekToSlideIndex" },
+    this.addEventListener(
+      window,
+      "seekToSlideIndex",
       (event) => this.seekToSlideIndex(event)
     );
   }
