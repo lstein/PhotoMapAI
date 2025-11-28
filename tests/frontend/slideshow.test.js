@@ -1,6 +1,11 @@
 // Unit tests for slideshow.js
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
+// Note: We use jest.unstable_mockModule because this is the current recommended approach
+// for mocking ES modules in Jest. The "unstable" prefix indicates the API may change,
+// but it's the only way to mock modules before they're imported in ESM.
+// See: https://jestjs.io/docs/ecmascript-modules#module-mocking-in-esm
+
 // Mock album-manager to prevent DOM errors (it has side effects on import)
 jest.unstable_mockModule('../../photomap/frontend/static/javascript/album-manager.js', () => ({
   albumManager: {

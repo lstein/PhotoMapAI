@@ -1,6 +1,11 @@
 // Unit tests for search.js
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
+// Note: We use jest.unstable_mockModule because this is the current recommended approach
+// for mocking ES modules in Jest. The "unstable" prefix indicates the API may change,
+// but it's the only way to mock modules before they're imported in ESM.
+// See: https://jestjs.io/docs/ecmascript-modules#module-mocking-in-esm
+
 // We need to mock these modules BEFORE importing search.js
 // because search.js imports state.js which imports album-manager.js
 // which has DOM side effects on load

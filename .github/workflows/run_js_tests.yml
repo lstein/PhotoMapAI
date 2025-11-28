@@ -9,6 +9,9 @@ on:
       - 'package.json'
       - 'jest.config.js'
 
+permissions:
+  contents: read
+
 jobs:
   test_frontend:
     runs-on: ubuntu-latest

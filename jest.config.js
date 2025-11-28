@@ -5,6 +5,5 @@ export default {
   setupFilesAfterEnv: ['./tests/frontend/setup.js'],
   moduleFileExtensions: ['js'],
   transform: {},
-  verbose: true,
-  injectGlobals: true
+  verbose: true
 };
