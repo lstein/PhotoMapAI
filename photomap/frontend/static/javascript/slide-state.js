@@ -196,15 +196,14 @@ class SlideStateManager {
    */
   resolveOffset(offset) {
     if (this.isSearchMode && this.searchResults.length > 0) {
-      let searchIndex = this.currentSearchIndex + offset;
+      let searchIndex = (this.currentSearchIndex + offset) % this.searchResults.length;
       if (searchIndex < 0 || searchIndex >= this.searchResults.length) {
         return { globalIndex: null, searchIndex: null }; // Out of bounds
       }
-
       let globalIndex = this.searchResults[searchIndex]?.index;
       return { globalIndex, searchIndex };
     } else {
-      let globalIndex = this.currentGlobalIndex + offset;
+      let globalIndex = (this.currentGlobalIndex + offset) % this.totalAlbumImages;
       if (globalIndex < 0 || globalIndex >= this.totalAlbumImages) {
         return { globalIndex: null, searchIndex: null }; // Out of bounds
       }
