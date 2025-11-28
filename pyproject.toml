@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "photomapai"
-version = "0.9.6"
+version = "0.9.7"
 description = "AI-based image clustering and exploration tool"
 authors = [
     { name = "Lincoln Stein", email = "lincoln.stein@gmail.com" }
