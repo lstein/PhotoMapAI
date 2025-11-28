@@ -333,9 +333,11 @@ class GridViewManager {
   async resetOrInitialize() {
     if (this.gridGeometryChanged(this.calculateGridGeometry())) {
       this.initializeGridSwiper();
-    } else {
-      await this.resetAllSlides();
     }
+    // Always call resetAllSlides() to load grid data and hide spinner
+    // This fixes a race condition where initializeGridSwiper() shows the spinner
+    // but doesn't load data, leaving the spinner spinning indefinitely
+    await this.resetAllSlides();
   }
 
   async resetAllSlides() {
