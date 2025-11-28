@@ -12,13 +12,13 @@
         </div>
         <div class="search-row">
           <label
-            for="imgPromptWeightSlider"
+            id="imgPromptWeightLabel"
             class="search-label"
             style="visibility: hidden"
             >Image Weight:</label
           >
           <div class="search-field-wrapper">
-            <div id="imgPromptWeightSlider"></div>
+            <div id="imgPromptWeightSlider" aria-labelledby="imgPromptWeightLabel"></div>
           </div>
         </div>
       </div>
@@ -34,10 +34,11 @@
           />
           <button id="clearTextSearchBtn" title="Clear search">&#10005;</button>
           <div class="weight-row">
-            <label for="posPromptWeightSlider" class="weight-label"
+            <label class="weight-label"
+            id="posPromptWeightLabel"
               >Weight:</label
             >
-            <div id="posPromptWeightSlider"></div>
+            <div id="posPromptWeightSlider" aria-labelledby="posPromptWeightLabel"></div>
           </div>
         </div>
         <!-- Row 2: Negative search -->
@@ -55,10 +56,10 @@
             &#10005;
           </button>
           <div class="weight-row">
-            <label for="negPromptWeightSlider" class="weight-label"
+            <label id="negPromptWeightLabel" class="weight-label"
               >Weight:</label
             >
-            <div id="negPromptWeightSlider"></div>
+            <div id="negPromptWeightSlider" aria-labelledby="negPromptWeightLabel"></div>
           </div>
         </div>
       </div>

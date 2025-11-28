@@ -34,7 +34,7 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     # pick the appropriate metadata class based on tags in the raw data
     extractor_class = (
         Invoke5Metadata
-        if "canvas_v2_metadata" in metadata
+        if "canvas_v2_metadata" in metadata or "ref_images" in metadata
         else (
             Invoke3Metadata
             if "generation_mode" in metadata
