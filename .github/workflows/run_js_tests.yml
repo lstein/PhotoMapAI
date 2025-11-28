@@ -1,0 +1,33 @@
+name: Run JavaScript Tests
+
+on:
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - 'photomap/frontend/static/javascript/**'
+      - 'tests/frontend/**'
+      - 'package.json'
+      - 'jest.config.js'
+
+permissions:
+  contents: read
+
+jobs:
+  test_frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run JavaScript tests
+        run: npm test

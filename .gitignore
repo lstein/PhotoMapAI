@@ -110,3 +110,6 @@ demo_images/photomap_index
 
 # pyinstaller spec files
 *.spec
+
+# Node.js
+node_modules/
