@@ -52,7 +52,10 @@ def test_index_update(client, new_album, monkeypatch):
     assert response.status_code == 200
     metadata = response.json()
     assert metadata["filename_count"] == len(embeddings["filenames"])
-    assert Path(metadata["embeddings_path"]).resolve().as_posix() == Path(embeddings_path).resolve().as_posix()
+    assert (
+        Path(metadata["embeddings_path"]).resolve().as_posix()
+        == Path(embeddings_path).resolve().as_posix()
+    )
     assert metadata["last_modified"] is not None
 
 
@@ -97,8 +100,8 @@ def test_image_search(client, new_album, monkeypatch):
     """Test the search functionality."""
     from photomap.backend.embeddings import Embeddings
 
-    TEST_IMAGE_FILE = "./tests/test_images/flower1.jpeg"
-    TEST_TEXT_FILE = "./tests/test_images/building1.jpeg"
+    TEST_IMAGE_FILE = "./tests/backend/test_images/flower1.jpeg"
+    TEST_TEXT_FILE = "./tests/backend/test_images/building1.jpeg"
 
     monkeypatch.setattr(
         Embeddings, "minimum_image_size", 10 * 1024
