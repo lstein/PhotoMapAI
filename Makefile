@@ -14,6 +14,8 @@ help:
 
 # Run the unit tests
 test:
+	npm install
+	npm test
 	pytest ./tests
 
 .PHONY: build
