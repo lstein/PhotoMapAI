@@ -161,12 +161,18 @@ describe('swiper.js shuffle mode', () => {
       ];
       mockSwiper.slides = existingSlides;
       
-      // Mock Math.random to return values that would initially pick existing slides
-      // then eventually pick a new one (index 5)
-      const randomValues = [0.05, 0.15, 0.25, 0.55]; // Would map to indices 0, 1, 2, 5 for 10 total
+      // Track which indices are requested via Math.random
+      // The algorithm uses Math.floor(Math.random() * totalPool) where totalPool = 10
+      // We return values that map to existing indices first, then a non-existing one
       let callCount = 0;
       const originalRandom = Math.random;
-      Math.random = jest.fn(() => randomValues[callCount++ % randomValues.length]);
+      Math.random = jest.fn(() => {
+        callCount++;
+        // Return 0.05 (maps to 0), 0.15 (maps to 1), 0.25 (maps to 2), then 0.55 (maps to 5)
+        // These values ensure: floor(0.05*10)=0, floor(0.15*10)=1, floor(0.25*10)=2, floor(0.55*10)=5
+        if (callCount <= 3) return (callCount - 1) * 0.1 + 0.05;
+        return 0.55;
+      });
       
       try {
         // Import the module (needs to be done after mocks are set up)
@@ -179,8 +185,9 @@ describe('swiper.js shuffle mode', () => {
         
         // Should have called Math.random multiple times to find a unique index
         expect(Math.random).toHaveBeenCalled();
+        expect(callCount).toBeGreaterThan(1);
         
-        // The slide that was added should be index 5 (the first non-existing one)
+        // The slide that was added should NOT be one of the existing indices (0, 1, 2)
         // Check that fetchImageByIndex was called with a non-existing index
         const lastCallArg = mockFetchImageByIndex.mock.calls[mockFetchImageByIndex.mock.calls.length - 1]?.[0];
         expect([3, 4, 5, 6, 7, 8, 9]).toContain(lastCallArg);

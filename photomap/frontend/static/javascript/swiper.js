@@ -389,7 +389,8 @@ class SwiperManager {
 
       // Try to find a random slide that doesn't already exist in the swiper
       // Limit attempts to avoid infinite loop when all slides are already loaded
-      const maxAttempts = Math.min(totalPool, 50);
+      const MAX_RANDOM_ATTEMPTS = 50;
+      const maxAttempts = Math.min(totalPool, MAX_RANDOM_ATTEMPTS);
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (slideState.isSearchMode) {
           searchIndex = Math.floor(Math.random() * totalPool);
@@ -397,7 +398,8 @@ class SwiperManager {
         } else {
           globalIndex = Math.floor(Math.random() * totalPool);
         }
-        if (!existingIndices.has(globalIndex)) {
+        // Check for valid globalIndex and that it doesn't already exist
+        if (globalIndex !== null && globalIndex !== undefined && !existingIndices.has(globalIndex)) {
           break;
         }
       }
