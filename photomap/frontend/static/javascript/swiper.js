@@ -378,13 +378,28 @@ class SwiperManager {
         : state.mode === "random" && slideShowRunning();
 
     if (is_random) {
-      if (slideState.isSearchMode && searchIndex !== null) {
-        const totalResults = slideState.searchResults.length;
-        searchIndex = Math.floor(Math.random() * totalResults);
-        globalIndex = slideState.searchToGlobal(searchIndex);
-      } else {
-        const totalImages = slideState.totalAlbumImages;
-        globalIndex = Math.floor(Math.random() * totalImages);
+      const totalPool = slideState.isSearchMode
+        ? slideState.searchResults.length
+        : slideState.totalAlbumImages;
+      const existingIndices = new Set(
+        Array.from(this.swiper.slides).map((el) =>
+          parseInt(el.dataset.globalIndex, 10)
+        )
+      );
+
+      // Try to find a random slide that doesn't already exist in the swiper
+      // Limit attempts to avoid infinite loop when all slides are already loaded
+      const maxAttempts = Math.min(totalPool, 50);
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (slideState.isSearchMode) {
+          searchIndex = Math.floor(Math.random() * totalPool);
+          globalIndex = slideState.searchToGlobal(searchIndex);
+        } else {
+          globalIndex = Math.floor(Math.random() * totalPool);
+        }
+        if (!existingIndices.has(globalIndex)) {
+          break;
+        }
       }
     }
 
