@@ -363,6 +363,47 @@ class SwiperManager {
     }
   }
 
+  /**
+   * Select a random slide index that doesn't already exist in the swiper.
+   * Tries multiple random selections to avoid duplicates.
+   * @returns {{globalIndex: number|null, searchIndex: number|null}} The selected indices
+   */
+  selectRandomSlideIndex() {
+    const totalPool = slideState.isSearchMode
+      ? slideState.searchResults.length
+      : slideState.totalAlbumImages;
+
+    const existingIndices = new Set(
+      Array.from(this.swiper.slides).map((el) =>
+        parseInt(el.dataset.globalIndex, 10)
+      )
+    );
+
+    // Try to find a random slide that doesn't already exist in the swiper
+    // Limit attempts to avoid infinite loop when all slides are already loaded
+    const MAX_RANDOM_ATTEMPTS = 50;
+    const maxAttempts = Math.min(totalPool, MAX_RANDOM_ATTEMPTS);
+
+    let globalIndex = null;
+    let searchIndex = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (slideState.isSearchMode) {
+        searchIndex = Math.floor(Math.random() * totalPool);
+        globalIndex = slideState.searchToGlobal(searchIndex);
+      } else {
+        globalIndex = Math.floor(Math.random() * totalPool);
+        searchIndex = null;
+      }
+      // Check for valid globalIndex and that it doesn't already exist
+      if (globalIndex != null && !existingIndices.has(globalIndex)) {
+        break;
+      }
+    }
+
+    return { globalIndex, searchIndex };
+  }
+
   async addSlideByIndex(
     globalIndex,
     searchIndex = null,
@@ -378,14 +419,9 @@ class SwiperManager {
         : state.mode === "random" && slideShowRunning();
 
     if (is_random) {
-      if (slideState.isSearchMode && searchIndex !== null) {
-        const totalResults = slideState.searchResults.length;
-        searchIndex = Math.floor(Math.random() * totalResults);
-        globalIndex = slideState.searchToGlobal(searchIndex);
-      } else {
-        const totalImages = slideState.totalAlbumImages;
-        globalIndex = Math.floor(Math.random() * totalImages);
-      }
+      const selected = this.selectRandomSlideIndex();
+      globalIndex = selected.globalIndex;
+      searchIndex = selected.searchIndex;
     }
 
     const exists = Array.from(this.swiper.slides).some(
