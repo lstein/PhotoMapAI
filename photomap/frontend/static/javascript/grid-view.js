@@ -259,8 +259,8 @@ class GridViewManager {
           await this.waitForBatchLoadingToFinish();
           this.setBatchLoading(true);
           await this.loadBatch(index - this.slidesPerBatch, false);
+          this.setBatchLoading(false);
         }
-        this.setBatchLoading(false);
       });
 
       this.swiper.on("transitionEnd", () => {
