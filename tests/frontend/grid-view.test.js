@@ -1,0 +1,253 @@
+// Unit tests for grid-view.js
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+
+// Note: We use jest.unstable_mockModule because this is the current recommended approach
+// for mocking ES modules in Jest. The "unstable" prefix indicates the API may change,
+// but it's the only way to mock modules before they're imported in ESM.
+// See: https://jestjs.io/docs/ecmascript-modules#module-mocking-in-esm
+
+// Mock album-manager to prevent DOM errors
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/album-manager.js', () => ({
+  albumManager: {
+    fetchAvailableAlbums: jest.fn(() => Promise.resolve([]))
+  },
+  checkAlbumIndex: jest.fn()
+}));
+
+// Mock index.js to prevent DOM errors  
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/index.js', () => ({
+  getIndexMetadata: jest.fn(() => Promise.resolve({ filename_count: 0 }))
+}));
+
+// Track calls to showSpinner and hideSpinner
+const mockShowSpinner = jest.fn();
+const mockHideSpinner = jest.fn();
+
+// Mock utils.js
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/utils.js', () => ({
+  showSpinner: mockShowSpinner,
+  hideSpinner: mockHideSpinner
+}));
+
+// Mock events.js to prevent DOM errors
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/events.js', () => ({
+  toggleGridSwiperView: jest.fn()
+}));
+
+// Mock search.js 
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/search.js', () => ({
+  fetchImageByIndex: jest.fn(() => Promise.resolve({
+    filename: 'test.jpg',
+    filepath: '/test/test.jpg',
+    index: 0,
+    total: 10
+  }))
+}));
+
+// Mock metadata-drawer.js
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/metadata-drawer.js', () => ({
+  replaceReferenceImagesWithLinks: jest.fn(() => ''),
+  updateCurrentImageScore: jest.fn()
+}));
+
+// Mock slide-state.js
+const mockSlideState = {
+  getCurrentSlide: jest.fn(() => ({ globalIndex: 0, searchIndex: null, totalCount: 10, isSearchMode: false })),
+  getCurrentIndex: jest.fn(() => 0),
+  setCurrentIndex: jest.fn(),
+  updateFromExternal: jest.fn(),
+  globalToSearch: jest.fn(() => null),
+  indexToGlobal: jest.fn((i) => i),
+  isSearchMode: false,
+  searchResults: []
+};
+
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/slide-state.js', () => ({
+  slideState: mockSlideState
+}));
+
+// Mock state.js
+const mockState = {
+  gridViewActive: true,
+  gridThumbSizeFactor: 1.0,
+  album: 'test-album'
+};
+
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/state.js', () => ({
+  state: mockState
+}));
+
+// Mock global Swiper constructor
+const mockSwiperInstance = {
+  destroy: jest.fn(),
+  removeAllSlides: jest.fn(() => Promise.resolve()),
+  appendSlide: jest.fn(),
+  prependSlide: jest.fn(),
+  slideTo: jest.fn(),
+  on: jest.fn(),
+  slides: [],
+  activeIndex: 0,
+  destroyed: false
+};
+
+global.Swiper = jest.fn(() => mockSwiperInstance);
+
+// Now import the module we want to test
+const { initializeGridSwiper } = await import('../../photomap/frontend/static/javascript/grid-view.js');
+
+describe('grid-view.js', () => {
+  let gridViewManager;
+
+  beforeEach(() => {
+    // Reset mocks
+    jest.clearAllMocks();
+    mockShowSpinner.mockClear();
+    mockHideSpinner.mockClear();
+    mockSwiperInstance.slides = [];
+    mockSwiperInstance.destroyed = false;
+    
+    // Set up DOM elements required by GridViewManager
+    document.body.innerHTML = `
+      <div id="gridViewContainer" style="display: block;">
+        <div class="swiper grid-mode" style="width: 800px;">
+          <div id="gridViewSwiper"></div>
+        </div>
+      </div>
+      <div id="descriptionText"></div>
+      <div id="filenameText"></div>
+      <div id="filepathText"></div>
+      <a id="metadataLink"></a>
+    `;
+
+    // Mock window dimensions
+    Object.defineProperty(window, 'innerHeight', { value: 600, writable: true });
+    
+    // Mock offsetWidth for the grid container
+    const gridModeElement = document.querySelector('.swiper.grid-mode');
+    Object.defineProperty(gridModeElement, 'offsetWidth', { value: 800, configurable: true });
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  describe('resetOrInitialize', () => {
+    it('should always call resetAllSlides after initializeGridSwiper when geometry changed', async () => {
+      // Initialize the grid view manager
+      gridViewManager = await initializeGridSwiper();
+      
+      // Clear mocks from initialization
+      mockShowSpinner.mockClear();
+      mockHideSpinner.mockClear();
+      
+      // Force geometry change by setting different values
+      gridViewManager.currentRows = 0;
+      gridViewManager.currentColumns = 0;
+      
+      // Call resetOrInitialize
+      await gridViewManager.resetOrInitialize();
+      
+      // Both showSpinner and hideSpinner should have been called
+      // showSpinner is called in initializeGridSwiper and resetAllSlides
+      // hideSpinner is called at the end of resetAllSlides
+      expect(mockShowSpinner).toHaveBeenCalled();
+      expect(mockHideSpinner).toHaveBeenCalled();
+    });
+
+    it('should call resetAllSlides even when geometry has not changed', async () => {
+      // Initialize the grid view manager
+      gridViewManager = await initializeGridSwiper();
+      
+      // Clear mocks from initialization
+      mockShowSpinner.mockClear();
+      mockHideSpinner.mockClear();
+      
+      // Call resetOrInitialize without changing geometry
+      await gridViewManager.resetOrInitialize();
+      
+      // resetAllSlides should be called (showSpinner and hideSpinner)
+      expect(mockShowSpinner).toHaveBeenCalled();
+      expect(mockHideSpinner).toHaveBeenCalled();
+    });
+
+    it('should not leave spinner spinning indefinitely on fresh load', async () => {
+      // Simulate fresh load where gridInitialized starts false
+      // but gets set to true during initializeGridSwiper
+      gridViewManager = await initializeGridSwiper();
+      
+      // Clear mocks from initialization  
+      mockShowSpinner.mockClear();
+      mockHideSpinner.mockClear();
+      
+      // Simulate the race condition scenario:
+      // currentRows and currentColumns are 0 before first initialization
+      gridViewManager.currentRows = 0;
+      gridViewManager.currentColumns = 0;
+      
+      // This should:
+      // 1. Call initializeGridSwiper() because geometry changed
+      // 2. Then call resetAllSlides() to load data and hide spinner
+      await gridViewManager.resetOrInitialize();
+      
+      // The key assertion: hideSpinner must be called to prevent infinite spinning
+      expect(mockHideSpinner).toHaveBeenCalled();
+    });
+  });
+
+  describe('gridGeometryChanged', () => {
+    it('should return true when rows differ', async () => {
+      gridViewManager = await initializeGridSwiper();
+      const geometry = gridViewManager.calculateGridGeometry();
+      gridViewManager.currentRows = geometry.rows + 1;
+      
+      expect(gridViewManager.gridGeometryChanged(geometry)).toBe(true);
+    });
+
+    it('should return true when columns differ', async () => {
+      gridViewManager = await initializeGridSwiper();
+      const geometry = gridViewManager.calculateGridGeometry();
+      gridViewManager.currentColumns = geometry.columns + 1;
+      
+      expect(gridViewManager.gridGeometryChanged(geometry)).toBe(true);
+    });
+
+    it('should return false when geometry is the same', async () => {
+      gridViewManager = await initializeGridSwiper();
+      const geometry = gridViewManager.calculateGridGeometry();
+      gridViewManager.currentRows = geometry.rows;
+      gridViewManager.currentColumns = geometry.columns;
+      gridViewManager.slideHeight = geometry.tileSize;
+      
+      expect(gridViewManager.gridGeometryChanged(geometry)).toBe(false);
+    });
+  });
+
+  describe('isVisible', () => {
+    it('should return true when grid container is visible', async () => {
+      gridViewManager = await initializeGridSwiper();
+      
+      expect(gridViewManager.isVisible()).toBe(true);
+    });
+
+    it('should return false when grid container is hidden', async () => {
+      gridViewManager = await initializeGridSwiper();
+      document.getElementById('gridViewContainer').style.display = 'none';
+      
+      expect(gridViewManager.isVisible()).toBe(false);
+    });
+  });
+
+  describe('batch loading semaphore', () => {
+    it('should track batch loading state', async () => {
+      gridViewManager = await initializeGridSwiper();
+      
+      expect(gridViewManager.isBatchLoading()).toBe(false);
+      
+      gridViewManager.setBatchLoading(true);
+      expect(gridViewManager.isBatchLoading()).toBe(true);
+      
+      gridViewManager.setBatchLoading(false);
+      expect(gridViewManager.isBatchLoading()).toBe(false);
+    });
+  });
+});
