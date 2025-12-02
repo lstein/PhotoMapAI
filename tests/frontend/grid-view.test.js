@@ -34,8 +34,7 @@ jest.unstable_mockModule('../../photomap/frontend/static/javascript/bookmarks.js
   updateAllBookmarkIcons: jest.fn(),
   bookmarkManager: {
     loadBookmarks: jest.fn(),
-    updateBookmarkButton: jest.fn(),
-    addBookmarkIconToSlide: jest.fn()
+    updateBookmarkButton: jest.fn()
   }
 }));
 
