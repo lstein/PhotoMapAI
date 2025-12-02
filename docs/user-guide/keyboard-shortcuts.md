@@ -9,7 +9,9 @@ On devices equipped with a keyboard, you can use the following key shortcuts:
 | ↑ (Up), i   | Show image info drawer       |
 | ↓ (Down), Esc | Hide image info drawer     |
 | f           | Toggle fullscreen            |
+| g           | Toggle grid view             |
 | m           | Toggle UMAP window           |
+| b           | Toggle bookmark on current image |
 | Space       | Play/Pause slideshow         |
 | Scrollwheel | Next/Previous image
 

@@ -75,6 +75,7 @@ _ The *Previous slide* and *Next slide* buttons advance the images in the album 
 - The *Grid* icon toggles between showing one image at a time to showing a screen of thumbnails.
 - The *Play/Pause* button starts and stops a slideshow in which the photos autoadvance after a user-adjustable interval.
 - The *Target* icon opens and closes the [semantic map](semantic-map.md).
+- The *Bookmark* icon opens a menu for managing [bookmarked images](bookmarks.md), including options to show, download, or delete bookmarked photos.
 - The *Landscape* icon initiates a search for images similar to the one currently displayed.
 - The *Magnifier* button opens up a search dialogue that lets you search by image similarity and/or a text description of image content.
 - The "Clear search* button clears any search that is currently active and returns to album browsing mode.

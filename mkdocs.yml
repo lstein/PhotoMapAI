@@ -10,6 +10,7 @@ nav:
   - User Guide:
       - Basic Usage: user-guide/basic-usage.md
       - Search: user-guide/search.md
+      - Bookmarks: user-guide/bookmarks.md
       - Albums: user-guide/albums.md
       - Configuration: user-guide/configuration.md
       - Semantic Map: user-guide/semantic-map.md

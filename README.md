@@ -12,6 +12,7 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 - AI-based text and image similarity search
 - Thematic image clustering and visualization
 - Flexible album management
+- Bookmark images for quick access, batch download, or deletion
 - Responsive UI for desktop and mobile
 - Support for wide range of image formats, including Apple's HEIC
 - Integration with the <a href="https://github.com/invoke-ai/InvokeAI">InvokeAI</a> AI image generation system
