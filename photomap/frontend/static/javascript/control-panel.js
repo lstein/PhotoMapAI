@@ -234,3 +234,6 @@ export function initializeControlPanel() {
 
 // Export for keyboard shortcuts
 export { toggleFullscreen };
+
+// Export for use by bookmarks.js
+export { showDeleteConfirmModal };

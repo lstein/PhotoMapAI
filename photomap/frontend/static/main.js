@@ -2,6 +2,7 @@
 // This file initializes the application by importing necessary modules and setting up event listeners.
 
 import './javascript/album-manager.js';
+import './javascript/bookmarks.js';
 import './javascript/events.js';
 import './javascript/metadata-drawer.js';
 import './javascript/search-ui.js';

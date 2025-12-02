@@ -11,7 +11,27 @@ jest.unstable_mockModule('../../photomap/frontend/static/javascript/album-manage
 
 // Mock index.js to prevent DOM errors
 jest.unstable_mockModule('../../photomap/frontend/static/javascript/index.js', () => ({
-  getIndexMetadata: jest.fn(() => Promise.resolve({ filename_count: 0 }))
+  getIndexMetadata: jest.fn(() => Promise.resolve({ filename_count: 0 })),
+  deleteImage: jest.fn(() => Promise.resolve())
+}));
+
+// Mock control-panel.js
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/control-panel.js', () => ({
+  initializeControlPanel: jest.fn(),
+  toggleFullscreen: jest.fn(),
+  showDeleteConfirmModal: jest.fn(() => Promise.resolve(true))
+}));
+
+// Mock bookmarks.js
+jest.unstable_mockModule('../../photomap/frontend/static/javascript/bookmarks.js', () => ({
+  addBookmarkIconToSlide: jest.fn(),
+  toggleCurrentBookmark: jest.fn(),
+  updateAllBookmarkIcons: jest.fn(),
+  bookmarkManager: {
+    loadBookmarks: jest.fn(),
+    updateBookmarkButton: jest.fn(),
+    addBookmarkIconToSlide: jest.fn()
+  }
 }));
 
 // Create mocked state
