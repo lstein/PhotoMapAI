@@ -40,6 +40,16 @@ const CLEAR_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" s
   <line x1="6" y1="6" x2="18" y2="18"/>
 </svg>`;
 
+const HIDE_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+  <line x1="1" y1="1" x2="23" y2="23"/>
+</svg>`;
+
+const SELECT_ALL_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+  <polyline points="9 11 12 14 15 8"/>
+</svg>`;
+
 class BookmarkManager {
   constructor() {
     if (BookmarkManager.instance) {
@@ -48,6 +58,8 @@ class BookmarkManager {
     
     this.bookmarks = new Set();
     this.isShowingBookmarks = false;
+    this.previousSearchResults = null; // Store previous search results before showing bookmarks
+    this.previousSearchType = null;    // Store previous search type
     
     BookmarkManager.instance = this;
     this.setupEventListeners();
@@ -58,6 +70,8 @@ class BookmarkManager {
     window.addEventListener("albumChanged", (e) => {
       this.loadBookmarks();
       this.isShowingBookmarks = false;
+      this.previousSearchResults = null;
+      this.previousSearchType = null;
       this.updateBookmarkButton();
       this.updateAllBookmarkIcons();
     });
@@ -72,6 +86,9 @@ class BookmarkManager {
       // If we were showing bookmarks and search changed, update state
       if (e.detail.searchType !== "bookmarks") {
         this.isShowingBookmarks = false;
+        // Discard previous search results when a new search is performed
+        this.previousSearchResults = null;
+        this.previousSearchType = null;
         this.updateBookmarkButton();
       }
     });
@@ -171,6 +188,8 @@ class BookmarkManager {
   clearBookmarks() {
     this.bookmarks.clear();
     this.isShowingBookmarks = false;
+    this.previousSearchResults = null;
+    this.previousSearchType = null;
     this.saveBookmarks();
     this.updateAllBookmarkIcons();
     this.updateBookmarkButton();
@@ -294,6 +313,17 @@ class BookmarkManager {
       return;
     }
 
+    // Save previous search results before showing bookmarks
+    // If we're in search mode, save current results; otherwise save null (chronological mode)
+    if (slideState.isSearchMode && !this.isShowingBookmarks) {
+      this.previousSearchResults = [...slideState.searchResults];
+      this.previousSearchType = state.searchType || "search";
+    } else if (!this.isShowingBookmarks) {
+      // We're in chronological mode
+      this.previousSearchResults = null;
+      this.previousSearchType = null;
+    }
+
     // Create search results from bookmarked indices
     const results = indices.map((index, i) => ({
       index: index,
@@ -305,6 +335,50 @@ class BookmarkManager {
     this.isShowingBookmarks = true;
     setSearchResults(results, "bookmarks");
     this.updateBookmarkButton();
+    this.removeBookmarkMenu();
+  }
+
+  /**
+   * Hide bookmarked images and restore previous search results
+   */
+  hideBookmarkedImages() {
+    this.isShowingBookmarks = false;
+    this.removeBookmarkMenu();
+
+    if (this.previousSearchResults !== null) {
+      // Restore previous search results
+      setSearchResults(this.previousSearchResults, this.previousSearchType || "search");
+    } else {
+      // Return to chronological mode (clear search)
+      setSearchResults([], "clear");
+    }
+
+    // Clear stored previous results
+    this.previousSearchResults = null;
+    this.previousSearchType = null;
+    this.updateBookmarkButton();
+  }
+
+  /**
+   * Bookmark all images in the current search results
+   */
+  selectAllFromSearch() {
+    if (!slideState.isSearchMode) {
+      alert("Select All is only available when viewing search results.");
+      return;
+    }
+    if (slideState.searchResults.length === 0) {
+      alert("No search results available to bookmark.");
+      return;
+    }
+
+    // Add all search result indices to bookmarks
+    for (const result of slideState.searchResults) {
+      this.bookmarks.add(result.index);
+    }
+
+    this.saveBookmarks();
+    this.updateAllBookmarkIcons();
     this.removeBookmarkMenu();
   }
 
@@ -444,6 +518,7 @@ class BookmarkManager {
     this.removeBookmarkMenu();
 
     const count = this.getCount();
+    const isInSearchMode = slideState.isSearchMode && !this.isShowingBookmarks;
     
     const menu = document.createElement("div");
     menu.id = "bookmarkActionsMenu";
@@ -499,13 +574,25 @@ class BookmarkManager {
 
     const hasBookmarks = count > 0;
 
-    menu.appendChild(makeButton(SHOW_SVG, "Show", () => this.showBookmarkedImages(), !hasBookmarks));
-    menu.appendChild(makeButton(DOWNLOAD_SVG, "Download", () => this.downloadBookmarkedImages(), !hasBookmarks));
-    menu.appendChild(makeButton(DELETE_SVG, "Delete", () => this.deleteBookmarkedImages(), !hasBookmarks));
+    // Show/Hide toggle - Show when not showing bookmarks, Hide when showing bookmarks
+    if (this.isShowingBookmarks) {
+      menu.appendChild(makeButton(HIDE_SVG, "Hide", () => this.hideBookmarkedImages()));
+    } else {
+      menu.appendChild(makeButton(SHOW_SVG, "Show", () => this.showBookmarkedImages(), !hasBookmarks));
+    }
+
+    // Clear bookmarks (under Show/Hide)
     menu.appendChild(makeButton(CLEAR_SVG, "Clear", () => {
       this.clearBookmarks();
       this.removeBookmarkMenu();
     }, !hasBookmarks));
+
+    // Select All - only active when a search is being displayed (and not showing bookmarks)
+    menu.appendChild(makeButton(SELECT_ALL_SVG, "Select All", () => this.selectAllFromSearch(), !isInSearchMode));
+
+    // Download and Delete
+    menu.appendChild(makeButton(DOWNLOAD_SVG, "Download", () => this.downloadBookmarkedImages(), !hasBookmarks));
+    menu.appendChild(makeButton(DELETE_SVG, "Delete", () => this.deleteBookmarkedImages(), !hasBookmarks));
 
     document.body.appendChild(menu);
 
