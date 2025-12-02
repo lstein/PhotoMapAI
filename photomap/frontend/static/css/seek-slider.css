@@ -36,7 +36,7 @@
 
 .score-slider-row {
   position: fixed;
-  top: 12px;
+  top: 48px;
   left: 12px;
   right: 12px;
   z-index: 500;
@@ -52,7 +52,7 @@
   left: 0;
   top: 0;
   width: 100%;
-  height: calc(100% + 32px); /* Extend 32px below the container to cover tick labels */;
+  height: calc(100% + 20px); /* Extend 32px below the container to cover tick labels */;
   z-index: 1;
   pointer-events: auto;
   background: transparent;

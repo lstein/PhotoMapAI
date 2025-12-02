@@ -7,6 +7,7 @@ and serving images and thumbnails.
 
 import base64
 import json
+import zipfile
 from io import BytesIO
 from logging import getLogger
 from pathlib import Path
@@ -59,6 +60,10 @@ class SearchWithTextAndImageRequest(BaseModel):
     negative_weight: float = 0.5
     min_search_score: float = 0.2
     max_search_results: int = 100
+
+
+class DownloadImagesZipRequest(BaseModel):
+    indices: List[int]
 
 
 @search_router.post(
@@ -270,6 +275,48 @@ async def serve_image(album_key: str, path: str):
         return serve_image_with_conversion(image_path)
     else:
         return FileResponse(image_path)
+
+
+@search_router.post(
+    "/download_images_zip/{album_key}",
+    tags=["Search"],
+)
+async def download_images_zip(
+    album_key: str,
+    req: DownloadImagesZipRequest,
+) -> StreamingResponse:
+    """
+    Download multiple images as a ZIP file.
+    """
+    embeddings = get_embeddings_for_album(album_key)
+    album_config = validate_album_exists(album_key)
+
+    # Create ZIP file in memory
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for index in req.indices:
+            try:
+                image_path = embeddings.get_image_path(index)
+                if not validate_image_access(album_config, image_path):
+                    logger.warning(f"Access denied for image at index {index}")
+                    continue
+                if not image_path.exists() or not image_path.is_file():
+                    logger.warning(f"Image not found at index {index}")
+                    continue
+                # Add file to ZIP with just the filename (not full path)
+                zip_file.write(image_path, image_path.name)
+            except Exception as e:
+                logger.warning(f"Error adding image at index {index} to ZIP: {e}")
+                continue
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename={album_key}_images.zip"
+        },
+    )
 
 
 @search_router.get(

@@ -1,3 +1,4 @@
+import { addBookmarkIconToSlide } from "./bookmarks.js";
 import { toggleGridSwiperView } from "./events.js";
 import {
   replaceReferenceImagesWithLinks,
@@ -428,8 +429,10 @@ class GridViewManager {
       for (let i = 0; i < this.swiper.slides.length; i++) {
         const slideEl = this.swiper.slides[i];
         if (slideEl) {
-          const globalIndex = slideEl.dataset.globalIndex;
+          const globalIndex = parseInt(slideEl.dataset.globalIndex, 10);
           this.addDoubleTapHandler(slideEl, globalIndex);
+          // Add bookmark icon to grid slide
+          addBookmarkIconToSlide(slideEl, globalIndex);
         } else {
           console.warn("Slide element not found for double-tap handler");
         }

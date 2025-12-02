@@ -3,6 +3,7 @@
 // including keyboard shortcuts and cross-component coordination.
 import { aboutManager } from "./about.js";
 import { checkAlbumIndex } from "./album-manager.js";
+import { toggleCurrentBookmark } from "./bookmarks.js";
 import { initializeControlPanel, toggleFullscreen } from "./control-panel.js";
 import { initializeGridSwiper } from "./grid-view.js";
 import {
@@ -66,6 +67,8 @@ const KEYBOARD_SHORTCUTS = {
   f: () => toggleFullscreen(),
   g: () => toggleGridSwiperView(),
   m: () => toggleUmapWindow(),
+  b: () => toggleCurrentBookmark(),
+  B: () => toggleCurrentBookmark(),
   " ": (e) => handleSpacebarToggle(e),
 };
 
