@@ -70,11 +70,11 @@ class SeekSlider {
   /**
    * Update the hover strip gradient to show current slide position
    * Everything to the left of the current position is yellow, right is white
+   * @param {number|null} sliderValue - Optional slider value (1-indexed). If not provided, uses slideState.
    */
-  updateHoverStripProgress() {
+  updateHoverStripProgress(sliderValue = null) {
     if (!this.hoverStrip) return;
     
-    const currentIndex = slideState.getCurrentIndex();
     let max = 1;
     
     if (state.searchResults?.length > 0) {
@@ -85,8 +85,8 @@ class SeekSlider {
     }
     
     // Calculate percentage using same formula as slider thumb positioning
-    // Slider uses 1-indexed values with min=1, so value = currentIndex + 1
-    const value = currentIndex + 1;
+    // Slider uses 1-indexed values with min=1
+    const value = sliderValue !== null ? sliderValue : slideState.getCurrentIndex() + 1;
     const percent = max > 1 ? ((value - 1) / (max - 1)) * 100 : 0;
     
     // Apply gradient: yellow up to current position, white after
@@ -162,6 +162,9 @@ class SeekSlider {
   async onSliderInput(e) {
     const now = Date.now();
     const value = parseInt(this.slider.value, 10);
+
+    // Update hover strip progress immediately as user drags
+    this.updateHoverStripProgress(value);
 
     this.infoPanel.style.display = "block";
 
@@ -274,6 +277,8 @@ class SeekSlider {
   async onSliderChange() {
     this.infoPanel.textContent = "";
     const targetIndex = parseInt(this.slider.value, 10) - 1;
+    // Update hover strip with final slider position
+    this.updateHoverStripProgress(targetIndex + 1);
     this.isUserSeeking = true;
     slideState.navigateToIndex(targetIndex, slideState.isSearchMode);
     setTimeout(() => {
