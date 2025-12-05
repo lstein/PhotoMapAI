@@ -1,3 +1,4 @@
+import { bookmarkManager } from "./bookmarks.js";
 import { ScoreDisplay } from "./score-display.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
@@ -10,6 +11,7 @@ class SeekSlider {
     this.scoreSliderRow = null;
     this.scoreDisplayObj = null;
     this.searchResultsChanged = true;
+    this.hoverStrip = null;
 
     this.scoreText = null;
     this.slider = null;
@@ -30,6 +32,7 @@ class SeekSlider {
     this.scoreDisplayElement = document.getElementById("fixedScoreDisplay");
     this.scoreSliderRow = document.getElementById("scoreSliderRow");
     this.scoreDisplayObj = new ScoreDisplay();
+    this.hoverStrip = document.getElementById("sliderHoverStrip");
 
     this.scoreText = document.getElementById("scoreText");
     this.slider = document.getElementById("slideSeekSlider");
@@ -49,6 +52,11 @@ class SeekSlider {
       this.scoreDisplayElement.addEventListener("mouseenter", () =>
         this.showSlider()
       );
+    }
+    // Yellow hover strip triggers slider appearance
+    if (this.hoverStrip) {
+      this.hoverStrip.addEventListener("mouseenter", () => this.showSlider());
+      this.hoverStrip.addEventListener("click", () => this.showSlider());
     }
     if (this.hoverZone) {
       this.hoverZone.addEventListener("mouseenter", () => this.showSlider());
@@ -180,6 +188,11 @@ class SeekSlider {
     const targetIndex = parseInt(this.slider.value, 10) - 1;
     let globalIndex;
     if (state.searchResults?.length > 0) {
+      globalIndex = state.searchResults[targetIndex]?.index;
+      // Update bookmark status for the star display
+      const isBookmarked = globalIndex !== undefined ? bookmarkManager.isBookmarked(globalIndex) : false;
+      this.scoreDisplayObj.setBookmarkStatus(globalIndex, isBookmarked);
+      
       if (state.searchResults[targetIndex]?.cluster !== undefined) {
         const cluster = state.searchResults[targetIndex]?.cluster;
         const color = state.searchResults[targetIndex]?.color;
@@ -190,7 +203,7 @@ class SeekSlider {
           state.searchResults.length
         );
       } else {
-        this.scoreDisplayObj.show(
+        this.scoreDisplayObj.showSearchScore(
           state.searchResults[targetIndex]?.score,
           targetIndex + 1,
           state.searchResults.length
@@ -198,6 +211,9 @@ class SeekSlider {
       }
     } else {
       globalIndex = targetIndex;
+      // Update bookmark status for the star display
+      const isBookmarked = bookmarkManager.isBookmarked(globalIndex);
+      this.scoreDisplayObj.setBookmarkStatus(globalIndex, isBookmarked);
       this.scoreDisplayObj.showIndex(globalIndex, this.slider.max);
     }
   }
@@ -223,6 +239,9 @@ class SeekSlider {
   async showSlider() {
     if (!this.sliderVisible && this.sliderContainer) {
       this.sliderVisible = true;
+      // Hide the yellow strip and show the slider row with animation
+      if (this.hoverStrip) this.hoverStrip.classList.add("hidden");
+      if (this.scoreSliderRow) this.scoreSliderRow.classList.add("visible");
       this.sliderContainer.classList.add("visible");
       let [globalIndex, total, searchIndex] = getCurrentSlideIndex();
       if (total > 0 && this.searchResultsChanged)
@@ -238,6 +257,9 @@ class SeekSlider {
     if (this.sliderVisible && this.sliderContainer) {
       this.sliderVisible = false;
       this.sliderContainer.classList.remove("visible");
+      // Show the yellow strip and hide the slider row with animation
+      if (this.scoreSliderRow) this.scoreSliderRow.classList.remove("visible");
+      if (this.hoverStrip) this.hoverStrip.classList.remove("hidden");
       this.slider.blur();
       if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
     }
@@ -249,6 +271,9 @@ class SeekSlider {
       this.fadeOutTimeoutId = setTimeout(() => {
         this.sliderContainer.classList.remove("visible");
         this.sliderVisible = false;
+        // Show the yellow strip and hide the slider row with animation
+        if (this.scoreSliderRow) this.scoreSliderRow.classList.remove("visible");
+        if (this.hoverStrip) this.hoverStrip.classList.remove("hidden");
         this.slider.blur();
         if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
         this.fadeOutTimeoutId = null;
@@ -262,6 +287,9 @@ class SeekSlider {
       if (!this.sliderContainer.querySelector(":hover")) {
         this.sliderContainer.classList.remove("visible");
         this.sliderVisible = false;
+        // Show the yellow strip and hide the slider row with animation
+        if (this.scoreSliderRow) this.scoreSliderRow.classList.remove("visible");
+        if (this.hoverStrip) this.hoverStrip.classList.remove("hidden");
         if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
         this.fadeOutTimeoutId = null;
       }
@@ -365,12 +393,18 @@ class SeekSlider {
   async toggleSlider() {
     this.sliderVisible = !this.sliderVisible;
     if (this.sliderVisible) {
+      // Hide the yellow strip and show the slider row with animation
+      if (this.hoverStrip) this.hoverStrip.classList.add("hidden");
+      if (this.scoreSliderRow) this.scoreSliderRow.classList.add("visible");
       this.sliderContainer.classList.add("visible");
       await this.updateSliderRange();
       await this.renderSliderTicks();
       this.resetFadeOutTimer();
     } else {
       this.sliderContainer.classList.remove("visible");
+      // Show the yellow strip and hide the slider row with animation
+      if (this.scoreSliderRow) this.scoreSliderRow.classList.remove("visible");
+      if (this.hoverStrip) this.hoverStrip.classList.remove("hidden");
       if (this.ticksContainer) this.ticksContainer.innerHTML = "";
       this.clearFadeOutTimer();
     }

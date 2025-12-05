@@ -1,7 +1,7 @@
 /* ===== SCORE DISPLAY & SLIDER ===== */
 .fixed-score-display {
   /* min-width: 140px; */
-  max-width: 220px;
+  max-width: 260px;
   /* width: 180px; */
   font-size: 1.05em;
   padding: 2px 18px;
@@ -15,6 +15,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  gap: 6px;
   white-space: nowrap;
   pointer-events: auto;
   margin-right: 16px;
@@ -24,8 +25,14 @@
   z-index: 1000;
 }
 
+/* Star icon styling within score display */
+.fixed-score-display .score-star {
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 .fixed-score-display.visible {
-  display: block;
+  display: flex;
   opacity: 0.5;
 }
 
@@ -34,9 +41,27 @@
   opacity: 0;
 }
 
+/* Yellow hover strip at top of window */
+.slider-hover-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #ffc107;
+  z-index: 499;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.slider-hover-strip.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .score-slider-row {
   position: fixed;
-  top: 48px;
+  top: -80px; /* Start hidden above viewport */
   left: 12px;
   right: 12px;
   z-index: 500;
@@ -45,6 +70,11 @@
   align-items: flex-start;
   min-height: 30px;
   gap: 16px;
+  transition: top 0.3s ease;
+}
+
+.score-slider-row.visible {
+  top: 12px; /* Slide down to visible position */
 }
 
 .slider-hover-zone {

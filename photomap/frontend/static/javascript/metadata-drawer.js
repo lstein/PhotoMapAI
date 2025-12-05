@@ -1,5 +1,6 @@
 // overlay.js
 // This file manages the overlay functionality, including showing and hiding overlays during slide transitions.
+import { bookmarkManager } from "./bookmarks.js";
 import { scoreDisplay } from "./score-display.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
@@ -104,6 +105,10 @@ export async function updateCurrentImageScore(metadata) {
   const globalTotal = parseInt(metadata.total, 10);
   const searchIndex = parseInt(metadata.searchIndex, 10);
 
+  // Update bookmark status for the star display
+  const isBookmarked = bookmarkManager.isBookmarked(globalIndex);
+  scoreDisplay.setBookmarkStatus(globalIndex, isBookmarked);
+
   if (slideState.searchResults.length === 0) {
     scoreDisplay.showIndex(globalIndex, globalTotal);
     return;
@@ -111,7 +116,7 @@ export async function updateCurrentImageScore(metadata) {
 
   if (metadata.score) {
     const score = parseFloat(metadata.score);
-    scoreDisplay.show(score, searchIndex + 1, state.searchResults.length);
+    scoreDisplay.showSearchScore(score, searchIndex + 1, state.searchResults.length);
     return;
   }
 
