@@ -2,6 +2,7 @@ import { bookmarkManager } from "./bookmarks.js";
 import { ScoreDisplay } from "./score-display.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
+import { debounce } from "./utils.js";
 
 class SeekSlider {
   constructor() {
@@ -42,16 +43,36 @@ class SeekSlider {
     this.infoPanel = document.getElementById("sliderInfoPanel");
 
     this.addEventListeners();
+    this.updateSliderPosition();
+    
+    // Update position when window resizes (debounced to avoid performance issues)
+    this.debouncedUpdatePosition = debounce(() => this.updateSliderPosition(), 100);
+    window.addEventListener("resize", this.debouncedUpdatePosition);
+  }
+
+  /**
+   * Update the left position of slider and yellow strip based on score display's right edge
+   */
+  updateSliderPosition() {
+    if (!this.scoreDisplayElement || !this.scoreSliderRow || !this.hoverStrip) return;
+    
+    const rect = this.scoreDisplayElement.getBoundingClientRect();
+    const leftPosition = rect.right + 8; // 8px gap after score display
+    
+    this.scoreSliderRow.style.left = `${leftPosition}px`;
+    this.hoverStrip.style.left = `${leftPosition}px`;
   }
 
   addEventListeners() {
     if (this.scoreDisplayElement) {
-      this.scoreDisplayElement.addEventListener("click", () =>
-        this.toggleSlider()
-      );
-      this.scoreDisplayElement.addEventListener("mouseenter", () =>
-        this.showSlider()
-      );
+      // Only toggle slider on click, not on hover
+      this.scoreDisplayElement.addEventListener("click", (e) => {
+        // Don't toggle slider if clicking on the star icon (for bookmark toggle)
+        if (e.target.closest(".score-star")) {
+          return;
+        }
+        this.toggleSlider();
+      });
     }
     // Yellow hover strip triggers slider appearance
     if (this.hoverStrip) {

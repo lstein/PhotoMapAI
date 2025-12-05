@@ -62,11 +62,11 @@
   display: none !important;
 }
 
-/* Yellow hover strip - fixed at top, collinear with slider */
+/* Yellow hover strip - fixed at top, position set dynamically by JS */
 .slider-hover-strip {
   position: fixed;
   top: 0;
-  left: 280px; /* Start after the score display area */
+  left: 280px; /* Default, overridden by JS based on score display width */
   right: 12px;
   height: 4px;
   background: #ffc107;
@@ -85,11 +85,11 @@
   display: none !important;
 }
 
-/* Slider row - animates in from top, positioned after score display */
+/* Slider row - animates in from top, position set dynamically by JS */
 .score-slider-row {
   position: fixed;
   top: -80px; /* Start hidden above viewport */
-  left: 280px; /* Start after the score display area */
+  left: 280px; /* Default, overridden by JS based on score display width */
   right: 12px;
   z-index: 500;
   display: flex;
@@ -115,11 +115,9 @@
     max-width: 180px;
   }
   .slider-hover-strip {
-    left: 200px;
     right: 8px;
   }
   .score-slider-row {
-    left: 200px;
     right: 8px;
   }
 }

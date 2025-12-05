@@ -89,7 +89,7 @@ describe('score-display.js', () => {
 
     it('should display score with index and total in new format', () => {
       scoreDisplayInstance.setBookmarkStatus(1, false);
-      scoreDisplayInstance.showSearchScore(0.5, 3, 10);
+      scoreDisplayInstance.showSearchScore(0.5, 2, 10);  // 0-based index 2 displays as 3
 
       expect(scoreDisplayInstance.scoreText.innerHTML).toContain('3/10 (score=0.500)');
     });
@@ -178,7 +178,7 @@ describe('score-display.js', () => {
 
     it('should display cluster with index and total in new format', () => {
       scoreDisplayInstance.setBookmarkStatus(1, false);
-      scoreDisplayInstance.showCluster(2, '#00ff00', 5, 15);
+      scoreDisplayInstance.showCluster(2, '#00ff00', 4, 15);  // 0-based index 4 displays as 5
 
       expect(scoreDisplayInstance.scoreText.innerHTML).toContain('5/15 (cluster=2)');
     });
@@ -222,7 +222,7 @@ describe('score-display.js', () => {
 
     it('should show filled star when bookmarked', () => {
       scoreDisplayInstance.setBookmarkStatus(1, true);
-      scoreDisplayInstance.showCluster(3, '#ff0000', 5, 15);
+      scoreDisplayInstance.showCluster(3, '#ff0000', 4, 15);  // 0-based index
 
       expect(scoreDisplayInstance.scoreText.innerHTML).toContain('fill="#ffc107"');
     });

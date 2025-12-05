@@ -123,9 +123,15 @@ export async function updateCurrentImageScore(metadata) {
     return;
   }
 
+  // For bookmarks, show index within bookmark results (no score)
+  if (state.searchType === "bookmarks") {
+    scoreDisplay.showIndex(searchIndex, state.searchResults.length);
+    return;
+  }
+
   if (metadata.score) {
     const score = parseFloat(metadata.score);
-    scoreDisplay.showSearchScore(score, searchIndex + 1, state.searchResults.length);
+    scoreDisplay.showSearchScore(score, searchIndex, state.searchResults.length);
     return;
   }
 
@@ -133,7 +139,7 @@ export async function updateCurrentImageScore(metadata) {
     scoreDisplay.showCluster(
       metadata.cluster || 0,
       metadata.color,
-      searchIndex + 1,
+      searchIndex,
       state.searchResults.length
     );
     return;

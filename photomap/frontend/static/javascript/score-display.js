@@ -84,14 +84,14 @@ export class ScoreDisplay {
   /**
    * Display search score with format: (star) index/total (score=X.XX)
    * @param {number} score - The search score
-   * @param {number} index - Current position in search results (1-based)
+   * @param {number} index - Current position in search results (0-based)
    * @param {number} total - Total search results
    */
   showSearchScore(score, index = null, total = null) {
     if (score !== undefined && score !== null) {
       let text = "";
       if (index !== null && total !== null) {
-        text = `${index}/${total} (score=${score.toFixed(3)})`;
+        text = `${index + 1}/${total} (score=${score.toFixed(3)})`;
       } else {
         text = `score=${score.toFixed(3)}`;
       }
@@ -129,7 +129,7 @@ export class ScoreDisplay {
    * Display cluster info with format: (star) index/total (cluster=XX)
    * @param {string|number} cluster - Cluster identifier
    * @param {string} color - Background color for cluster
-   * @param {number} index - Current position in search results (1-based)
+   * @param {number} index - Current position in search results (0-based)
    * @param {number} total - Total search results
    */
   showCluster(cluster, color, index = null, total = null) {
@@ -137,7 +137,7 @@ export class ScoreDisplay {
       let clusterText = (cluster === "unclustered") ? "unclustered" : `cluster=${cluster}`;
       let text = "";
       if (index !== null && total !== null) {
-        text = `${index}/${total} (${clusterText})`;
+        text = `${index + 1}/${total} (${clusterText})`;
       } else {
         text = clusterText === "unclustered" ? "unclustered images" : clusterText;
       }
