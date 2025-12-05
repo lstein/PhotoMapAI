@@ -48,6 +48,9 @@ class SeekSlider {
     // Update position when window resizes (debounced to avoid performance issues)
     this.debouncedUpdatePosition = debounce(() => this.updateSliderPosition(), 100);
     window.addEventListener("resize", this.debouncedUpdatePosition);
+    
+    // Update slider position when score display content changes
+    window.addEventListener("scoreDisplayContentChanged", () => this.updateSliderPosition());
   }
 
   /**

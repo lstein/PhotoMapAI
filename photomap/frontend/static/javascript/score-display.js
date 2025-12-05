@@ -54,6 +54,17 @@ export class ScoreDisplay {
   }
 
   /**
+   * Dispatch event to notify that score display content has changed
+   * This allows other components (like seek-slider) to reposition themselves
+   */
+  dispatchContentChangedEvent() {
+    // Use requestAnimationFrame to ensure DOM has updated before dispatching
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent("scoreDisplayContentChanged"));
+    });
+  }
+
+  /**
    * Set the current global index and bookmark status for star display
    * @param {number} globalIndex - The current image's global index
    * @param {boolean} isBookmarked - Whether the image is bookmarked/favorited
@@ -103,6 +114,7 @@ export class ScoreDisplay {
       this.scoreElement.style.backgroundColor = `rgba(0, 0, 0, ${this.opacity})`; // Default background color
       this.scoreElement.style.color = "#fff"; // Default text color
       this.isVisible = true;
+      this.dispatchContentChangedEvent();
     }
   }
 
@@ -122,6 +134,7 @@ export class ScoreDisplay {
       this.scoreElement.style.backgroundColor = `rgba(0, 0, 0, ${this.opacity})`; // Default background color
       this.scoreElement.style.color = "#fff"; // Default text color
       this.isVisible = true;
+      this.dispatchContentChangedEvent();
     }
   }
 
@@ -157,6 +170,7 @@ export class ScoreDisplay {
           this.scoreElement.style.color = "#fff"; // Light text for dark background
         }
       }
+      this.dispatchContentChangedEvent();
     }
   }
 

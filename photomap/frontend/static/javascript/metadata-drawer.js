@@ -375,12 +375,13 @@ export function initializeMetadataDrawer() {
 
 // Position metadata drawer (called from events.js during initialization and on window resize)
 export function positionMetadataDrawer() {
-  const seekSlider = document.getElementById("scoreSliderRow");
   const drawer = document.getElementById("bannerDrawerContainer");
-  if (seekSlider && drawer) {
-    const rect = seekSlider.getBoundingClientRect();
-    // Add window scrollY to get absolute position
-    const top = rect.bottom + window.scrollY;
-    drawer.style.top = `${top + 8}px`; // 8px gap, adjust as needed
+  if (drawer) {
+    // Position drawer below where the slider would be when visible (top: 12px + slider height ~30px + 8px gap)
+    // This is independent of the slider's current visibility state
+    const sliderVisibleTop = 12; // The slider's top position when visible
+    const sliderHeight = 30; // Approximate slider height
+    const gap = 8;
+    drawer.style.top = `${sliderVisibleTop + sliderHeight + gap}px`;
   }
 }
