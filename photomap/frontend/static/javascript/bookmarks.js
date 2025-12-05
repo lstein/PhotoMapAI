@@ -187,12 +187,27 @@ class BookmarkManager {
    */
   clearBookmarks() {
     this.bookmarks.clear();
-    this.isShowingBookmarks = false;
-    this.previousSearchResults = null;
-    this.previousSearchType = null;
     this.saveBookmarks();
     this.updateAllBookmarkIcons();
     this.updateBookmarkButton();
+    
+    // If we were showing bookmarks, restore previous search results (like hideBookmarkedImages)
+    if (this.isShowingBookmarks) {
+      this.isShowingBookmarks = false;
+      this.removeBookmarkMenu();
+      
+      if (this.previousSearchResults !== null) {
+        // Restore previous search results
+        setSearchResults(this.previousSearchResults, this.previousSearchType || "search");
+      } else {
+        // Return to chronological mode (clear search)
+        setSearchResults([], "clear");
+      }
+      
+      // Clear stored previous results
+      this.previousSearchResults = null;
+      this.previousSearchType = null;
+    }
   }
 
   /**
@@ -225,18 +240,10 @@ class BookmarkManager {
 
   /**
    * Update all bookmark icons in the current view
+   * Only updates grid view bookmark icons (swiper view uses ScoreDisplay star)
    */
   updateAllBookmarkIcons() {
-    // Update swiper bookmark icons
-    const swiperSlides = document.querySelectorAll("#singleSwiperWrapper .swiper-slide");
-    swiperSlides.forEach(slide => {
-      const globalIndex = parseInt(slide.dataset.globalIndex, 10);
-      if (!isNaN(globalIndex)) {
-        this.updateSlideBookmarkIcon(slide, globalIndex);
-      }
-    });
-
-    // Update grid bookmark icons
+    // Update grid bookmark icons only (swiper view uses the star in ScoreDisplay)
     const gridSlides = document.querySelectorAll("#gridViewSwiperWrapper .swiper-slide");
     gridSlides.forEach(slide => {
       const globalIndex = parseInt(slide.dataset.globalIndex, 10);

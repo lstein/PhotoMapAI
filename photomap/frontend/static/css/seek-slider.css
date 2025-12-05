@@ -1,8 +1,11 @@
 /* ===== SCORE DISPLAY & SLIDER ===== */
+
+/* Score display - fixed position, visible in swiper view only (except fullscreen) */
 .fixed-score-display {
-  /* min-width: 140px; */
-  max-width: 220px;
-  /* width: 180px; */
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  max-width: 260px;
   font-size: 1.05em;
   padding: 2px 18px;
   border-radius: 12px;
@@ -15,18 +18,30 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  gap: 6px;
   white-space: nowrap;
   pointer-events: auto;
-  margin-right: 16px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  display: none;
   z-index: 1000;
+  opacity: 0.7;
+}
+
+/* Star icon styling within score display */
+.fixed-score-display .score-star {
+  vertical-align: middle;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.fixed-score-display .score-star:hover {
+  transform: scale(1.2);
 }
 
 .fixed-score-display.visible {
-  display: block;
-  opacity: 0.5;
+  display: flex;
+  opacity: 0.7;
 }
 
 .fixed-score-display.hidden {
@@ -34,17 +49,67 @@
   opacity: 0;
 }
 
+/* Hide score display in fullscreen mode */
+:fullscreen .fixed-score-display,
+:-webkit-full-screen .fixed-score-display,
+:-moz-full-screen .fixed-score-display,
+:-ms-fullscreen .fixed-score-display {
+  display: none !important;
+}
+
+/* Hide the star in grid view (but keep the score display visible) */
+.grid-view-active .fixed-score-display .score-star {
+  display: none !important;
+}
+
+/* Yellow hover strip - fixed at top, position set dynamically by JS */
+.slider-hover-strip {
+  position: fixed;
+  top: 0;
+  left: 280px; /* Default, overridden by JS based on score display width */
+  right: 12px;
+  height: 4px;
+  background: #ffc107;
+  z-index: 501;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.slider-hover-strip.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Slider row - animates in from top, position set dynamically by JS */
 .score-slider-row {
   position: fixed;
-  top: 48px;
-  left: 12px;
+  top: -80px; /* Start hidden above viewport */
+  left: 280px; /* Default, overridden by JS based on score display width */
   right: 12px;
   z-index: 500;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
   min-height: 30px;
-  gap: 16px;
+  transition: top 0.3s ease;
+}
+
+.score-slider-row.visible {
+  top: 12px; /* Slide down to visible position */
+}
+
+@media (max-width: 480px) {
+  .fixed-score-display {
+    left: 8px;
+    top: 8px;
+    max-width: 180px;
+  }
+  .slider-hover-strip {
+    right: 8px;
+  }
+  .score-slider-row {
+    right: 8px;
+  }
 }
 
 .slider-hover-zone {
@@ -92,11 +157,6 @@
   .slider-with-ticks-container {
     min-width: 140px;
     margin-right: 12px;
-  }
-  .score-slider-row {
-    left: 8px;
-    right: 8px;
-    gap: 12px;
   }
 }
 

@@ -411,6 +411,7 @@ function updateSearchCheckmarks(searchType = null) {
     image: document.getElementById("imageSearchIcon"),
     text: document.getElementById("textSearchIcon"),
     text_and_image: document.getElementById("textSearchIcon"),
+    bookmarks: document.getElementById("bookmarkMenuBtn"),
   };
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   const element_to_highlight = searchTypeToIconMap[searchType] || null;

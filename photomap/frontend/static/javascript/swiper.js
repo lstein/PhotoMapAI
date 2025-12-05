@@ -1,6 +1,5 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
-import { addBookmarkIconToSlide } from "./bookmarks.js";
 import { toggleGridSwiperView } from "./events.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
@@ -479,9 +478,6 @@ class SwiperManager {
 
       // Attach double-tap/double-click handler immediately
       this.attachDoubleTapHandler(slide);
-      
-      // Add bookmark icon to slide
-      addBookmarkIconToSlide(slide, globalIndex);
 
       if (prepend) {
         this.swiper.prependSlide(slide);

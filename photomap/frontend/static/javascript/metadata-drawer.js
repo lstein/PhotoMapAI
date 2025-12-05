@@ -1,8 +1,18 @@
 // overlay.js
 // This file manages the overlay functionality, including showing and hiding overlays during slide transitions.
+import { bookmarkManager } from "./bookmarks.js";
 import { scoreDisplay } from "./score-display.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
+
+// Set up the bookmark toggle callback for the star icon
+scoreDisplay.setToggleBookmarkCallback((globalIndex) => {
+  bookmarkManager.toggleBookmark(globalIndex);
+  // Update the star display after toggling
+  const isBookmarked = bookmarkManager.isBookmarked(globalIndex);
+  scoreDisplay.setBookmarkStatus(globalIndex, isBookmarked);
+  scoreDisplay.refreshDisplay();
+});
 
 // Show the banner by moving container up
 export function showMetadataOverlay() {
@@ -104,14 +114,24 @@ export async function updateCurrentImageScore(metadata) {
   const globalTotal = parseInt(metadata.total, 10);
   const searchIndex = parseInt(metadata.searchIndex, 10);
 
+  // Update bookmark status for the star display
+  const isBookmarked = bookmarkManager.isBookmarked(globalIndex);
+  scoreDisplay.setBookmarkStatus(globalIndex, isBookmarked);
+
   if (slideState.searchResults.length === 0) {
     scoreDisplay.showIndex(globalIndex, globalTotal);
     return;
   }
 
+  // For bookmarks, show index within bookmark results (no score)
+  if (state.searchType === "bookmarks") {
+    scoreDisplay.showIndex(searchIndex, state.searchResults.length);
+    return;
+  }
+
   if (metadata.score) {
     const score = parseFloat(metadata.score);
-    scoreDisplay.show(score, searchIndex + 1, state.searchResults.length);
+    scoreDisplay.showSearchScore(score, searchIndex, state.searchResults.length);
     return;
   }
 
@@ -119,7 +139,7 @@ export async function updateCurrentImageScore(metadata) {
     scoreDisplay.showCluster(
       metadata.cluster || 0,
       metadata.color,
-      searchIndex + 1,
+      searchIndex,
       state.searchResults.length
     );
     return;
@@ -355,12 +375,13 @@ export function initializeMetadataDrawer() {
 
 // Position metadata drawer (called from events.js during initialization and on window resize)
 export function positionMetadataDrawer() {
-  const seekSlider = document.getElementById("scoreSliderRow");
   const drawer = document.getElementById("bannerDrawerContainer");
-  if (seekSlider && drawer) {
-    const rect = seekSlider.getBoundingClientRect();
-    // Add window scrollY to get absolute position
-    const top = rect.bottom + window.scrollY;
-    drawer.style.top = `${top + 8}px`; // 8px gap, adjust as needed
+  if (drawer) {
+    // Position drawer below where the slider would be when visible (top: 12px + slider height ~30px + 8px gap)
+    // This is independent of the slider's current visibility state
+    const sliderVisibleTop = 12; // The slider's top position when visible
+    const sliderHeight = 30; // Approximate slider height
+    const gap = 8;
+    drawer.style.top = `${sliderVisibleTop + sliderHeight + gap}px`;
   }
 }

@@ -1,6 +1,6 @@
 // Unit tests for score-display.js
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { ScoreDisplay, scoreDisplay } from '../../photomap/frontend/static/javascript/score-display.js';
+import { ScoreDisplay } from '../../photomap/frontend/static/javascript/score-display.js';
 
 // Mock the utils module
 jest.mock('../../photomap/frontend/static/javascript/utils.js', () => ({
@@ -39,56 +39,102 @@ describe('score-display.js', () => {
       expect(scoreDisplayInstance.scoreText).toBe(document.getElementById('scoreText'));
       expect(scoreDisplayInstance.isVisible).toBe(false);
       expect(scoreDisplayInstance.opacity).toBe(0.85);
+      expect(scoreDisplayInstance.currentGlobalIndex).toBe(null);
+      expect(scoreDisplayInstance.isBookmarked).toBe(false);
     });
   });
 
-  describe('show', () => {
-    it('should display score with correct format', () => {
-      scoreDisplayInstance.show(0.8567);
+  describe('setBookmarkStatus', () => {
+    it('should set the global index and bookmark status', () => {
+      scoreDisplayInstance.setBookmarkStatus(5, true);
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('score=0.857');
-      expect(scoreDisplayInstance.scoreElement.style.display).toBe('block');
+      expect(scoreDisplayInstance.currentGlobalIndex).toBe(5);
+      expect(scoreDisplayInstance.isBookmarked).toBe(true);
+    });
+
+    it('should update bookmark status to false', () => {
+      scoreDisplayInstance.setBookmarkStatus(10, false);
+
+      expect(scoreDisplayInstance.currentGlobalIndex).toBe(10);
+      expect(scoreDisplayInstance.isBookmarked).toBe(false);
+    });
+  });
+
+  describe('getStarHtml', () => {
+    it('should return filled star when bookmarked', () => {
+      scoreDisplayInstance.setBookmarkStatus(1, true);
+      
+      const starHtml = scoreDisplayInstance.getStarHtml();
+      expect(starHtml).toContain('fill="#ffc107"');
+    });
+
+    it('should return empty star when not bookmarked', () => {
+      scoreDisplayInstance.setBookmarkStatus(1, false);
+      
+      const starHtml = scoreDisplayInstance.getStarHtml();
+      expect(starHtml).toContain('fill="none"');
+    });
+  });
+
+  describe('showSearchScore', () => {
+    it('should display score with correct format including star', () => {
+      scoreDisplayInstance.setBookmarkStatus(1, false);
+      scoreDisplayInstance.showSearchScore(0.8567);
+
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score=0.857');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score-star');
+      expect(scoreDisplayInstance.scoreElement.style.display).toBe('flex');
       expect(scoreDisplayInstance.isVisible).toBe(true);
     });
 
-    it('should display score with index and total', () => {
-      scoreDisplayInstance.show(0.5, 3, 10);
+    it('should display score with index and total in new format', () => {
+      scoreDisplayInstance.setBookmarkStatus(1, false);
+      scoreDisplayInstance.showSearchScore(0.5, 2, 10);  // 0-based index 2 displays as 3
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('score=0.500 (3/10)');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('3/10 (score=0.500)');
     });
 
     it('should not display when score is undefined', () => {
-      scoreDisplayInstance.show(undefined);
+      scoreDisplayInstance.showSearchScore(undefined);
 
       expect(scoreDisplayInstance.isVisible).toBe(false);
     });
 
     it('should not display when score is null', () => {
-      scoreDisplayInstance.show(null);
+      scoreDisplayInstance.showSearchScore(null);
 
       expect(scoreDisplayInstance.isVisible).toBe(false);
     });
 
     it('should add visible class and remove hidden class', () => {
-      scoreDisplayInstance.show(0.5);
+      scoreDisplayInstance.showSearchScore(0.5);
 
       expect(scoreDisplayInstance.scoreElement.classList.contains('visible')).toBe(true);
       expect(scoreDisplayInstance.scoreElement.classList.contains('hidden')).toBe(false);
     });
 
     it('should set default background and text color', () => {
-      scoreDisplayInstance.show(0.5);
+      scoreDisplayInstance.showSearchScore(0.5);
 
       expect(scoreDisplayInstance.scoreElement.style.backgroundColor).toBe('rgba(0, 0, 0, 0.85)');
       expect(scoreDisplayInstance.scoreElement.style.color).toBe('rgb(255, 255, 255)');
     });
+
+    it('should show filled star when bookmarked', () => {
+      scoreDisplayInstance.setBookmarkStatus(1, true);
+      scoreDisplayInstance.showSearchScore(0.5, 3, 10);
+
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('fill="#ffc107"');
+    });
   });
 
   describe('showIndex', () => {
-    it('should display slide index correctly', () => {
+    it('should display slide index correctly with star', () => {
+      scoreDisplayInstance.setBookmarkStatus(5, false);
       scoreDisplayInstance.showIndex(5, 20);
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('Slide 6 / 20');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('6/20');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score-star');
       expect(scoreDisplayInstance.isVisible).toBe(true);
     });
 
@@ -105,31 +151,43 @@ describe('score-display.js', () => {
     });
 
     it('should display for zero index', () => {
+      scoreDisplayInstance.setBookmarkStatus(0, false);
       scoreDisplayInstance.showIndex(0, 10);
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('Slide 1 / 10');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('1/10');
       expect(scoreDisplayInstance.isVisible).toBe(true);
+    });
+
+    it('should show filled star when bookmarked', () => {
+      scoreDisplayInstance.setBookmarkStatus(5, true);
+      scoreDisplayInstance.showIndex(5, 20);
+
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('fill="#ffc107"');
     });
   });
 
   describe('showCluster', () => {
-    it('should display cluster information', () => {
+    it('should display cluster information with star', () => {
+      scoreDisplayInstance.setBookmarkStatus(1, false);
       scoreDisplayInstance.showCluster(3, '#ff0000');
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('cluster 3');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('cluster=3');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score-star');
       expect(scoreDisplayInstance.isVisible).toBe(true);
     });
 
-    it('should display cluster with index and total', () => {
-      scoreDisplayInstance.showCluster(2, '#00ff00', 5, 15);
+    it('should display cluster with index and total in new format', () => {
+      scoreDisplayInstance.setBookmarkStatus(1, false);
+      scoreDisplayInstance.showCluster(2, '#00ff00', 4, 15);  // 0-based index 4 displays as 5
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('cluster 2 (5/15)');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('5/15 (cluster=2)');
     });
 
     it('should display unclustered text for unclustered images', () => {
+      scoreDisplayInstance.setBookmarkStatus(1, false);
       scoreDisplayInstance.showCluster('unclustered', '#808080');
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('unclustered images');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('unclustered images');
     });
 
     it('should set background color from cluster color', () => {
@@ -161,6 +219,13 @@ describe('score-display.js', () => {
 
       expect(scoreDisplayInstance.isVisible).toBe(false);
     });
+
+    it('should show filled star when bookmarked', () => {
+      scoreDisplayInstance.setBookmarkStatus(1, true);
+      scoreDisplayInstance.showCluster(3, '#ff0000', 4, 15);  // 0-based index
+
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('fill="#ffc107"');
+    });
   });
 
   describe('hide', () => {
@@ -173,7 +238,7 @@ describe('score-display.js', () => {
     });
 
     it('should add hidden class and remove visible class', () => {
-      scoreDisplayInstance.show(0.5);
+      scoreDisplayInstance.showSearchScore(0.5);
       scoreDisplayInstance.hide();
 
       expect(scoreDisplayInstance.scoreElement.classList.contains('hidden')).toBe(true);
@@ -181,14 +246,14 @@ describe('score-display.js', () => {
     });
 
     it('should set isVisible to false', () => {
-      scoreDisplayInstance.show(0.5);
+      scoreDisplayInstance.showSearchScore(0.5);
       scoreDisplayInstance.hide();
 
       expect(scoreDisplayInstance.isVisible).toBe(false);
     });
 
     it('should hide display after transition timeout', () => {
-      scoreDisplayInstance.show(0.5);
+      scoreDisplayInstance.showSearchScore(0.5);
       scoreDisplayInstance.hide();
 
       jest.advanceTimersByTime(300);
@@ -197,24 +262,25 @@ describe('score-display.js', () => {
     });
 
     it('should not hide display if shown again before timeout', () => {
-      scoreDisplayInstance.show(0.5);
+      scoreDisplayInstance.showSearchScore(0.5);
       scoreDisplayInstance.hide();
 
       jest.advanceTimersByTime(100);
-      scoreDisplayInstance.show(0.6);
+      scoreDisplayInstance.showSearchScore(0.6);
 
       jest.advanceTimersByTime(200);
 
-      expect(scoreDisplayInstance.scoreElement.style.display).toBe('block');
+      expect(scoreDisplayInstance.scoreElement.style.display).toBe('flex');
     });
   });
 
   describe('update', () => {
     it('should update score text when visible', () => {
-      scoreDisplayInstance.show(0.5);
+      scoreDisplayInstance.setBookmarkStatus(1, false);
+      scoreDisplayInstance.showSearchScore(0.5);
       scoreDisplayInstance.update(0.75);
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('score=0.750');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score=0.750');
     });
 
     it('should not update when not visible', () => {
@@ -225,23 +291,26 @@ describe('score-display.js', () => {
     });
 
     it('should not update with undefined score', () => {
-      scoreDisplayInstance.show(0.5);
+      scoreDisplayInstance.setBookmarkStatus(1, false);
+      scoreDisplayInstance.showSearchScore(0.5);
       scoreDisplayInstance.update(undefined);
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('score=0.500');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score=0.500');
     });
 
     it('should not update with null score', () => {
-      scoreDisplayInstance.show(0.5);
+      scoreDisplayInstance.setBookmarkStatus(1, false);
+      scoreDisplayInstance.showSearchScore(0.5);
       scoreDisplayInstance.update(null);
 
-      expect(scoreDisplayInstance.scoreText.textContent).toBe('score=0.500');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score=0.500');
     });
   });
 
-  describe('global scoreDisplay instance', () => {
-    it('should export a global ScoreDisplay instance', () => {
-      expect(scoreDisplay).toBeInstanceOf(ScoreDisplay);
+  describe('ScoreDisplay class export', () => {
+    it('should be exportable as a class', () => {
+      const instance = new ScoreDisplay();
+      expect(instance).toBeInstanceOf(ScoreDisplay);
     });
   });
 });
