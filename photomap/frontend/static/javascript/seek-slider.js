@@ -20,8 +20,10 @@ class SeekSlider {
     this.contextLabel = null;
     this.hoverZone = null;
     this.fadeOutTimeoutId = null;
+    this.hideTimerId = null;
     this.TICK_COUNT = 10;
     this.FADE_OUT_DELAY = 10000;
+    this.HIDE_DELAY_MS = 150;  // Delay before hiding to prevent jitter from rapid mouse events
     this.isUserSeeking = false;
     this.lastFetchTime = 0;
     this.FETCH_THROTTLE_MS = 200;
@@ -90,7 +92,22 @@ class SeekSlider {
     const percent = max > 1 ? ((value - 1) / (max - 1)) * 100 : 0;
     
     // Apply gradient: yellow up to current position, white after
-    this.hoverStrip.style.background = `linear-gradient(to right, #ffc107 ${percent}%, #ffffff ${percent}%)`;
+    // Use CSS custom properties for colors (defined in seek-slider.css)
+    const progressColor = getComputedStyle(document.documentElement).getPropertyValue('--slider-progress-color').trim() || '#ffc107';
+    const remainingColor = getComputedStyle(document.documentElement).getPropertyValue('--slider-remaining-color').trim() || '#ffffff';
+    this.hoverStrip.style.background = `linear-gradient(to right, ${progressColor} ${percent}%, ${remainingColor} ${percent}%)`;
+    
+    // Also update the slider track to match
+    this.updateSliderTrack(percent);
+  }
+
+  /**
+   * Update the slider track gradient to show progress (yellow left, white right)
+   * @param {number} percent - The percentage of progress (0-100)
+   */
+  updateSliderTrack(percent) {
+    if (!this.slider) return;
+    this.slider.style.setProperty('--slider-progress', `${percent}%`);
   }
 
   addEventListeners() {
@@ -109,27 +126,22 @@ class SeekSlider {
       this.hoverStrip.addEventListener("mouseenter", () => this.showSlider());
       this.hoverStrip.addEventListener("click", () => this.showSlider());
     }
-    if (this.hoverZone) {
-      this.hoverZone.addEventListener("mouseenter", () => this.showSlider());
-      this.hoverZone.addEventListener("mouseleave", (e) =>
-        this.hideSliderWithDelay(e)
-      );
-    }
+    // Consolidated event handling on scoreSliderRow to prevent jitter.
+    // Previously, multiple overlapping elements (hoverZone, sliderContainer, scoreSliderRow)
+    // each had their own mouseenter/mouseleave handlers, causing rapid show/hide toggling
+    // when the mouse moved between them during the slider animation.
     if (this.scoreSliderRow) {
-      this.scoreSliderRow.addEventListener("mouseenter", () =>
-        this.showSlider()
-      );
-      this.scoreSliderRow.addEventListener("mouseleave", () =>
-        this.hideSlider()
-      );
-    }
-    if (this.sliderContainer) {
-      this.sliderContainer.addEventListener("mouseenter", () =>
-        this.showSlider()
-      );
-      this.sliderContainer.addEventListener("mouseleave", () =>
-        this.hideSlider()
-      );
+      this.scoreSliderRow.addEventListener("mouseenter", () => {
+        this.clearHideTimer();
+        this.showSlider();
+      });
+      this.scoreSliderRow.addEventListener("mouseleave", (e) => {
+        // Only hide if not moving to another slider-related element
+        if (!this.scoreSliderRow.contains(e.relatedTarget) && 
+            e.relatedTarget !== this.hoverStrip) {
+          this.scheduleHide();
+        }
+      });
     }
     if (this.slider) {
       this.slider.addEventListener(
@@ -157,6 +169,27 @@ class SeekSlider {
       this.searchResultsChanged = true;
       this.updateHoverStripProgress();
     });
+  }
+
+  /**
+   * Schedule hiding the slider with a short delay to prevent jitter
+   */
+  scheduleHide() {
+    this.clearHideTimer();
+    this.hideTimerId = setTimeout(() => {
+      this.hideSlider();
+      this.hideTimerId = null;
+    }, this.HIDE_DELAY_MS);
+  }
+
+  /**
+   * Clear any pending hide timer
+   */
+  clearHideTimer() {
+    if (this.hideTimerId) {
+      clearTimeout(this.hideTimerId);
+      this.hideTimerId = null;
+    }
   }
 
   async onSliderInput(e) {
@@ -296,6 +329,9 @@ class SeekSlider {
   }
 
   async showSlider() {
+    // Clear any pending hide timer to prevent jitter
+    this.clearHideTimer();
+    
     if (!this.sliderVisible && this.sliderContainer) {
       this.sliderVisible = true;
       // Hide the yellow strip and show the slider row with animation
