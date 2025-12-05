@@ -57,8 +57,8 @@
   display: none !important;
 }
 
-/* Hide score display in grid view */
-.grid-view-active .fixed-score-display {
+/* Hide the star in grid view (but keep the score display visible) */
+.grid-view-active .fixed-score-display .score-star {
   display: none !important;
 }
 
@@ -80,11 +80,6 @@
   pointer-events: none;
 }
 
-/* Hide yellow strip in grid view */
-.grid-view-active .slider-hover-strip {
-  display: none !important;
-}
-
 /* Slider row - animates in from top, position set dynamically by JS */
 .score-slider-row {
   position: fixed;
@@ -101,11 +96,6 @@
 
 .score-slider-row.visible {
   top: 12px; /* Slide down to visible position */
-}
-
-/* Hide slider in grid view */
-.grid-view-active .score-slider-row {
-  display: none !important;
 }
 
 @media (max-width: 480px) {

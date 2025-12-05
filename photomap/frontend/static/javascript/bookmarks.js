@@ -187,12 +187,27 @@ class BookmarkManager {
    */
   clearBookmarks() {
     this.bookmarks.clear();
-    this.isShowingBookmarks = false;
-    this.previousSearchResults = null;
-    this.previousSearchType = null;
     this.saveBookmarks();
     this.updateAllBookmarkIcons();
     this.updateBookmarkButton();
+    
+    // If we were showing bookmarks, restore previous search results (like hideBookmarkedImages)
+    if (this.isShowingBookmarks) {
+      this.isShowingBookmarks = false;
+      this.removeBookmarkMenu();
+      
+      if (this.previousSearchResults !== null) {
+        // Restore previous search results
+        setSearchResults(this.previousSearchResults, this.previousSearchType || "search");
+      } else {
+        // Return to chronological mode (clear search)
+        setSearchResults([], "clear");
+      }
+      
+      // Clear stored previous results
+      this.previousSearchResults = null;
+      this.previousSearchType = null;
+    }
   }
 
   /**
