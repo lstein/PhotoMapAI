@@ -1,6 +1,6 @@
 /* ===== SCORE DISPLAY & SLIDER ===== */
 
-/* Score display - fixed position, always visible (except fullscreen) */
+/* Score display - fixed position, visible in swiper view only (except fullscreen) */
 .fixed-score-display {
   position: fixed;
   top: 12px;
@@ -49,7 +49,7 @@
   opacity: 0;
 }
 
-/* Hide score display only in fullscreen mode */
+/* Hide score display in fullscreen mode */
 :fullscreen .fixed-score-display,
 :-webkit-full-screen .fixed-score-display,
 :-moz-full-screen .fixed-score-display,
@@ -57,15 +57,20 @@
   display: none !important;
 }
 
-/* Yellow hover strip - positioned at top of slider row, same width as slider */
+/* Hide score display in grid view */
+.grid-view-active .fixed-score-display {
+  display: none !important;
+}
+
+/* Yellow hover strip - fixed at top, collinear with slider */
 .slider-hover-strip {
-  position: absolute;
+  position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
+  left: 280px; /* Start after the score display area */
+  right: 12px;
   height: 4px;
   background: #ffc107;
-  z-index: 499;
+  z-index: 501;
   cursor: pointer;
   transition: opacity 0.3s ease;
 }
@@ -75,11 +80,16 @@
   pointer-events: none;
 }
 
-/* Slider row - animates in from top */
+/* Hide yellow strip in grid view */
+.grid-view-active .slider-hover-strip {
+  display: none !important;
+}
+
+/* Slider row - animates in from top, positioned after score display */
 .score-slider-row {
   position: fixed;
   top: -80px; /* Start hidden above viewport */
-  left: 12px;
+  left: 280px; /* Start after the score display area */
   right: 12px;
   z-index: 500;
   display: flex;
@@ -93,13 +103,23 @@
   top: 12px; /* Slide down to visible position */
 }
 
+/* Hide slider in grid view */
+.grid-view-active .score-slider-row {
+  display: none !important;
+}
+
 @media (max-width: 480px) {
   .fixed-score-display {
     left: 8px;
     top: 8px;
+    max-width: 180px;
+  }
+  .slider-hover-strip {
+    left: 200px;
+    right: 8px;
   }
   .score-slider-row {
-    left: 8px;
+    left: 200px;
     right: 8px;
   }
 }

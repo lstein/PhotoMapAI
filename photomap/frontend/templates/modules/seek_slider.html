@@ -1,13 +1,13 @@
-<!-- Score display - always visible, independent of slider -->
+<!-- Score display - always visible in swiper view, independent of slider -->
 <div id="fixedScoreDisplay" class="fixed-score-display" tabindex="0">
   <span id="scoreText">score=0.000</span>
 </div>
 
+<!-- Yellow hover strip at top - always visible when slider is hidden -->
+<div id="sliderHoverStrip" class="slider-hover-strip"></div>
+
 <!-- Slider row that animates in/out -->
 <div id="scoreSliderRow" class="score-slider-row">
-  <!-- Yellow hover strip at top - inside slider row to be colllinear -->
-  <div id="sliderHoverStrip" class="slider-hover-strip"></div>
-
   <!-- Invisible hover zone that covers slider + ticks area -->
   <div id="sliderHoverZone" class="slider-hover-zone"></div>
 

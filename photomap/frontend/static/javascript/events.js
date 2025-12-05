@@ -207,6 +207,13 @@ export async function toggleGridSwiperView(gridView = null) {
   const gridContainer = document.getElementById("gridViewContainer");
   const slideShowRunning = state.single_swiper.swiper.autoplay.running;
 
+  // Toggle body class for CSS-based hiding of score display
+  if (state.gridViewActive) {
+    document.body.classList.add("grid-view-active");
+  } else {
+    document.body.classList.remove("grid-view-active");
+  }
+
   if (state.gridViewActive) {
     // Fade out single view
     singleContainer.classList.add("fade-out");
