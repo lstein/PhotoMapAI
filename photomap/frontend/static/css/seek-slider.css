@@ -1,8 +1,11 @@
 /* ===== SCORE DISPLAY & SLIDER ===== */
+
+/* Score display - fixed position, always visible (except fullscreen) */
 .fixed-score-display {
-  /* min-width: 140px; */
+  position: fixed;
+  top: 12px;
+  left: 12px;
   max-width: 260px;
-  /* width: 180px; */
   font-size: 1.05em;
   padding: 2px 18px;
   border-radius: 12px;
@@ -18,7 +21,6 @@
   gap: 6px;
   white-space: nowrap;
   pointer-events: auto;
-  margin-right: 16px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   z-index: 1000;
@@ -55,12 +57,12 @@
   display: none !important;
 }
 
-/* Yellow hover strip at top of window - colinear with seek-slider */
+/* Yellow hover strip - positioned at top of slider row, same width as slider */
 .slider-hover-strip {
-  position: fixed;
+  position: absolute;
   top: 0;
-  left: 12px;
-  right: 12px;
+  left: 0;
+  right: 0;
   height: 4px;
   background: #ffc107;
   z-index: 499;
@@ -73,13 +75,7 @@
   pointer-events: none;
 }
 
-@media (max-width: 480px) {
-  .slider-hover-strip {
-    left: 8px;
-    right: 8px;
-  }
-}
-
+/* Slider row - animates in from top */
 .score-slider-row {
   position: fixed;
   top: -80px; /* Start hidden above viewport */
@@ -90,12 +86,22 @@
   flex-direction: row;
   align-items: flex-start;
   min-height: 30px;
-  gap: 16px;
   transition: top 0.3s ease;
 }
 
 .score-slider-row.visible {
   top: 12px; /* Slide down to visible position */
+}
+
+@media (max-width: 480px) {
+  .fixed-score-display {
+    left: 8px;
+    top: 8px;
+  }
+  .score-slider-row {
+    left: 8px;
+    right: 8px;
+  }
 }
 
 .slider-hover-zone {
@@ -143,11 +149,6 @@
   .slider-with-ticks-container {
     min-width: 140px;
     margin-right: 12px;
-  }
-  .score-slider-row {
-    left: 8px;
-    right: 8px;
-    gap: 12px;
   }
 }
 
