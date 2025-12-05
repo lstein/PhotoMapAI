@@ -83,7 +83,7 @@ describe('score-display.js', () => {
 
       expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score=0.857');
       expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score-star');
-      expect(scoreDisplayInstance.scoreElement.style.display).toBe('block');
+      expect(scoreDisplayInstance.scoreElement.style.display).toBe('flex');
       expect(scoreDisplayInstance.isVisible).toBe(true);
     });
 
@@ -270,7 +270,7 @@ describe('score-display.js', () => {
 
       jest.advanceTimersByTime(200);
 
-      expect(scoreDisplayInstance.scoreElement.style.display).toBe('block');
+      expect(scoreDisplayInstance.scoreElement.style.display).toBe('flex');
     });
   });
 

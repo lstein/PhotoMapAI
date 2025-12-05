@@ -14,6 +14,43 @@ export class ScoreDisplay {
     this.opacity = 0.85;
     this.currentGlobalIndex = null;
     this.isBookmarked = false;
+    this.onToggleBookmark = null; // Callback for toggling bookmark
+    this.lastDisplayedText = ""; // Track the text portion for refresh
+    
+    // Set up click listener for the star icon (deferred until DOM is ready)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => this.setupStarClickHandler());
+    } else {
+      this.setupStarClickHandler();
+    }
+  }
+
+  /**
+   * Set up click handler for the star icon to toggle bookmark
+   */
+  setupStarClickHandler() {
+    // Re-get the element in case it wasn't available during construction
+    if (!this.scoreText) {
+      this.scoreText = document.getElementById("scoreText");
+    }
+    if (this.scoreText) {
+      this.scoreText.addEventListener("click", (e) => {
+        // Check if the click was on the star icon
+        const target = e.target.closest(".score-star");
+        if (target && this.currentGlobalIndex !== null && this.onToggleBookmark) {
+          e.stopPropagation();
+          this.onToggleBookmark(this.currentGlobalIndex);
+        }
+      });
+    }
+  }
+
+  /**
+   * Set the callback for toggling bookmark
+   * @param {Function} callback - Function to call when star is clicked
+   */
+  setToggleBookmarkCallback(callback) {
+    this.onToggleBookmark = callback;
   }
 
   /**
@@ -35,6 +72,16 @@ export class ScoreDisplay {
   }
 
   /**
+   * Refresh the display with current bookmark status (call after bookmark toggle)
+   */
+  refreshDisplay() {
+    if (this.scoreText && this.isVisible && this.lastDisplayedText) {
+      // Update the entire content with current star state and stored text
+      this.scoreText.innerHTML = `${this.getStarHtml()} ${this.lastDisplayedText}`;
+    }
+  }
+
+  /**
    * Display search score with format: (star) index/total (score=X.XX)
    * @param {number} score - The search score
    * @param {number} index - Current position in search results (1-based)
@@ -48,8 +95,9 @@ export class ScoreDisplay {
       } else {
         text = `score=${score.toFixed(3)}`;
       }
+      this.lastDisplayedText = text;
       this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
-      this.scoreElement.style.display = "block";
+      this.scoreElement.style.display = "flex";
       this.scoreElement.classList.add("visible");
       this.scoreElement.classList.remove("hidden");
       this.scoreElement.style.backgroundColor = `rgba(0, 0, 0, ${this.opacity})`; // Default background color
@@ -65,8 +113,10 @@ export class ScoreDisplay {
    */
   showIndex(index, total) {
     if (index !== null && total !== null) {
-      this.scoreText.innerHTML = `${this.getStarHtml()} ${index + 1}/${total}`;
-      this.scoreElement.style.display = "block";
+      const text = `${index + 1}/${total}`;
+      this.lastDisplayedText = text;
+      this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
+      this.scoreElement.style.display = "flex";
       this.scoreElement.classList.add("visible");
       this.scoreElement.classList.remove("hidden");
       this.scoreElement.style.backgroundColor = `rgba(0, 0, 0, ${this.opacity})`; // Default background color
@@ -91,8 +141,9 @@ export class ScoreDisplay {
       } else {
         text = clusterText === "unclustered" ? "unclustered images" : clusterText;
       }
+      this.lastDisplayedText = text;
       this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
-      this.scoreElement.style.display = "block";
+      this.scoreElement.style.display = "flex";
       this.scoreElement.classList.add("visible");
       this.scoreElement.classList.remove("hidden");
       this.isVisible = true;
@@ -124,7 +175,9 @@ export class ScoreDisplay {
 
   update(score) {
     if (this.isVisible && score !== undefined && score !== null) {
-      this.scoreText.innerHTML = `${this.getStarHtml()} score=${score.toFixed(3)}`;
+      const text = `score=${score.toFixed(3)}`;
+      this.lastDisplayedText = text;
+      this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
     }
   }
 }

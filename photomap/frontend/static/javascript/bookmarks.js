@@ -225,18 +225,10 @@ class BookmarkManager {
 
   /**
    * Update all bookmark icons in the current view
+   * Only updates grid view bookmark icons (swiper view uses ScoreDisplay star)
    */
   updateAllBookmarkIcons() {
-    // Update swiper bookmark icons
-    const swiperSlides = document.querySelectorAll("#singleSwiperWrapper .swiper-slide");
-    swiperSlides.forEach(slide => {
-      const globalIndex = parseInt(slide.dataset.globalIndex, 10);
-      if (!isNaN(globalIndex)) {
-        this.updateSlideBookmarkIcon(slide, globalIndex);
-      }
-    });
-
-    // Update grid bookmark icons
+    // Update grid bookmark icons only (swiper view uses the star in ScoreDisplay)
     const gridSlides = document.querySelectorAll("#gridViewSwiperWrapper .swiper-slide");
     gridSlides.forEach(slide => {
       const globalIndex = parseInt(slide.dataset.globalIndex, 10);

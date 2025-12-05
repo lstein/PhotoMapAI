@@ -5,6 +5,15 @@ import { scoreDisplay } from "./score-display.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 
+// Set up the bookmark toggle callback for the star icon
+scoreDisplay.setToggleBookmarkCallback((globalIndex) => {
+  bookmarkManager.toggleBookmark(globalIndex);
+  // Update the star display after toggling
+  const isBookmarked = bookmarkManager.isBookmarked(globalIndex);
+  scoreDisplay.setBookmarkStatus(globalIndex, isBookmarked);
+  scoreDisplay.refreshDisplay();
+});
+
 // Show the banner by moving container up
 export function showMetadataOverlay() {
   const container = document.getElementById("bannerDrawerContainer");

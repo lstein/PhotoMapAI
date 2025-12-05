@@ -21,19 +21,25 @@
   margin-right: 16px;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  display: none;
   z-index: 1000;
+  opacity: 0.7;
 }
 
 /* Star icon styling within score display */
 .fixed-score-display .score-star {
   vertical-align: middle;
   flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.fixed-score-display .score-star:hover {
+  transform: scale(1.2);
 }
 
 .fixed-score-display.visible {
   display: flex;
-  opacity: 0.5;
+  opacity: 0.7;
 }
 
 .fixed-score-display.hidden {
@@ -41,12 +47,20 @@
   opacity: 0;
 }
 
-/* Yellow hover strip at top of window */
+/* Hide score display only in fullscreen mode */
+:fullscreen .fixed-score-display,
+:-webkit-full-screen .fixed-score-display,
+:-moz-full-screen .fixed-score-display,
+:-ms-fullscreen .fixed-score-display {
+  display: none !important;
+}
+
+/* Yellow hover strip at top of window - colinear with seek-slider */
 .slider-hover-strip {
   position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
+  left: 12px;
+  right: 12px;
   height: 4px;
   background: #ffc107;
   z-index: 499;
@@ -57,6 +71,13 @@
 .slider-hover-strip.hidden {
   opacity: 0;
   pointer-events: none;
+}
+
+@media (max-width: 480px) {
+  .slider-hover-strip {
+    left: 8px;
+    right: 8px;
+  }
 }
 
 .score-slider-row {
