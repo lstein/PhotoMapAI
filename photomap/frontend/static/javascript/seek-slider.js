@@ -44,6 +44,7 @@ class SeekSlider {
 
     this.addEventListeners();
     this.updateSliderPosition();
+    this.updateHoverStripProgress();
     
     // Update position when window resizes (debounced to avoid performance issues)
     this.debouncedUpdatePosition = debounce(() => this.updateSliderPosition(), 100);
@@ -64,6 +65,32 @@ class SeekSlider {
     
     this.scoreSliderRow.style.left = `${leftPosition}px`;
     this.hoverStrip.style.left = `${leftPosition}px`;
+  }
+
+  /**
+   * Update the hover strip gradient to show current slide position
+   * Everything to the left of the current position is yellow, right is white
+   */
+  updateHoverStripProgress() {
+    if (!this.hoverStrip) return;
+    
+    const currentIndex = slideState.getCurrentIndex();
+    let max = 1;
+    
+    if (state.searchResults?.length > 0) {
+      max = state.searchResults.length;
+    } else {
+      const [, totalSlides] = getCurrentSlideIndex();
+      max = totalSlides || 1;
+    }
+    
+    // Calculate percentage using same formula as slider thumb positioning
+    // Slider uses 1-indexed values with min=1, so value = currentIndex + 1
+    const value = currentIndex + 1;
+    const percent = max > 1 ? ((value - 1) / (max - 1)) * 100 : 0;
+    
+    // Apply gradient: yellow up to current position, white after
+    this.hoverStrip.style.background = `linear-gradient(to right, #ffc107 ${percent}%, #ffffff ${percent}%)`;
   }
 
   addEventListeners() {
@@ -124,9 +151,11 @@ class SeekSlider {
     );
     window.addEventListener("searchResultsChanged", () => {
       this.searchResultsChanged = true;
+      this.updateHoverStripProgress();
     });
     window.addEventListener("albumChanged", () => {
       this.searchResultsChanged = true;
+      this.updateHoverStripProgress();
     });
   }
 
@@ -257,6 +286,7 @@ class SeekSlider {
     if (this.isUserSeeking) return;
     const currentIndex = slideState.getCurrentIndex();
     if (this.slider) this.slider.value = currentIndex + 1;
+    this.updateHoverStripProgress();
     this.resetFadeOutTimer();
   }
 
