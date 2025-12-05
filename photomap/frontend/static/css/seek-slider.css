@@ -1,5 +1,11 @@
 /* ===== SCORE DISPLAY & SLIDER ===== */
 
+/* Color variables for slider styling */
+:root {
+  --slider-progress-color: #ffc107;
+  --slider-remaining-color: #ffffff;
+}
+
 /* Score display - fixed position, visible in swiper view only (except fullscreen) */
 .fixed-score-display {
   position: fixed;
@@ -69,7 +75,7 @@
   left: 280px; /* Default, overridden by JS based on score display width */
   right: 12px;
   height: 4px;
-  background: #ffc107;
+  background: var(--slider-progress-color);
   z-index: 501;
   cursor: pointer;
   transition: opacity 0.3s ease;
@@ -128,7 +134,6 @@
   flex: 1 1 auto;
   min-width: 220px;
   margin: 0;
-  margin-right: 20px;
   opacity: 0;
   pointer-events: auto;
   transition: opacity 0.3s;
@@ -144,19 +149,58 @@
   width: 100%;
   position: relative;
   height: 18px;
-  accent-color: #888;
+  accent-color: var(--slider-progress-color);
   background: transparent;
   border: none;
   margin: 0;
   transition: opacity 0.3s;
   display: block;
   z-index: 502;
+  -webkit-appearance: none;
+  appearance: none;
+  --slider-progress: 0%;
+}
+
+/* Custom slider track styling */
+.slide-seek-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--slider-progress-color) var(--slider-progress), var(--slider-remaining-color) var(--slider-progress));
+}
+
+.slide-seek-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--slider-progress-color) var(--slider-progress), var(--slider-remaining-color) var(--slider-progress));
+}
+
+/* Custom slider thumb styling */
+.slide-seek-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--slider-progress-color);
+  cursor: pointer;
+  margin-top: -5px;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.slide-seek-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--slider-progress-color);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 @media (max-width: 480px) {
   .slider-with-ticks-container {
     min-width: 140px;
-    margin-right: 12px;
   }
 }
 
