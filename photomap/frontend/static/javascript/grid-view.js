@@ -424,17 +424,16 @@ class GridViewManager {
       if (append) {
         this.swiper.appendSlide(placeholderSlides);
       } else {
-        // When prepending, Swiper needs to know we're about to change slides
-        // but we don't want slide change events to fire
         this.suppressSlideChange = true;
         this.swiper.prependSlide(placeholderSlides.reverse());
-        // After prepending, adjust active index to compensate for new slides at the beginning
-        // This maintains the user's visual position
-        const newActive = this.swiper.activeIndex + this.currentColumns;
-        this.swiper.activeIndex = newActive;
-        this.swiper.snapIndex = newActive;
-        // Reset flag immediately since we didn't use slideTo
-        this.suppressSlideChange = false;
+        // After prepending, we need to adjust position to compensate for new slides
+        // Use a microtask (Promise) to ensure prepend DOM changes are committed
+        Promise.resolve().then(() => {
+          if (this.swiper && !this.swiper.destroyed) {
+            this.swiper.slideTo(this.currentColumns, 0, false);
+            this.suppressSlideChange = false;
+          }
+        });
       }
 
       // Add event handlers to new slides
