@@ -524,6 +524,11 @@ class GridViewManager {
       const targetActive = Math.min(prevActive, maxActive);
       this.swiper.slideTo(targetActive, 0);
     }
+    
+    // Update Swiper to recalculate navigation bounds after removing slides
+    if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+      this.swiper.update();
+    }
   }
 
   gridGeometryChanged(newGeometry) {
