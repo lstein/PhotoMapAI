@@ -441,12 +441,19 @@ class GridViewManager {
           console.warn("Slide element not found for double-tap handler");
         }
       }
-      this.enforceHighWaterMark(!append);
       
       // Update Swiper to recalculate navigation bounds
       if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
         this.swiper.update();
       }
+      
+      // Defer enforceHighWaterMark to avoid interfering with navigation
+      // Run it after a short delay to allow current transitions to complete
+      setTimeout(() => {
+        if (this.swiper && !this.swiper.destroyed) {
+          this.enforceHighWaterMark(!append);
+        }
+      }, 100);
     }
 
     // Second pass: Load metadata in background (don't await)
@@ -512,45 +519,22 @@ class GridViewManager {
       delete this.slideData[g];
     }
 
-    // After removing slides, we need to update the active index to maintain position
-    // But we do this by directly updating Swiper's state rather than calling slideTo()
-    // which can interfere with ongoing transitions
     if (!trimFromEnd) {
-      // When removing from the beginning, shift the active index back
       const deltaColumns = this.currentColumns * removeScreens;
       const newActive = Math.max(0, prevActive - deltaColumns);
-      // Directly update the activeIndex without triggering a slide transition
-      if (this.swiper.activeIndex !== newActive) {
-        this.swiper.activeIndex = newActive;
-        this.swiper.snapIndex = newActive;
-        this.swiper.previousIndex = newActive;
-        this.swiper.realIndex = newActive;
-      }
+      this.swiper.slideTo(newActive, 0);
     } else {
-      // When removing from the end, ensure we're not beyond the new bounds
-      const maxActive = Math.max(0, this.swiper.slides.length - this.currentColumns);
-      if (prevActive > maxActive) {
-        this.swiper.activeIndex = maxActive;
-        this.swiper.snapIndex = maxActive;
-        this.swiper.previousIndex = maxActive;
-        this.swiper.realIndex = maxActive;
-      }
+      const maxActive = Math.max(
+        0,
+        this.swiper.slides.length - this.currentColumns
+      );
+      const targetActive = Math.min(prevActive, maxActive);
+      this.swiper.slideTo(targetActive, 0);
     }
     
-    // Update Swiper to recalculate internal state after modifying slides
-    if (this.swiper && !this.swiper.destroyed) {
-      if (typeof this.swiper.updateSize === 'function') {
-        this.swiper.updateSize();
-      }
-      if (typeof this.swiper.updateSlides === 'function') {
-        this.swiper.updateSlides();
-      }
-      if (typeof this.swiper.updateProgress === 'function') {
-        this.swiper.updateProgress();
-      }
-      if (typeof this.swiper.updateSlidesClasses === 'function') {
-        this.swiper.updateSlidesClasses();
-      }
+    // Update Swiper after modifying slides to recalculate navigation state
+    if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+      this.swiper.update();
     }
   }
 
