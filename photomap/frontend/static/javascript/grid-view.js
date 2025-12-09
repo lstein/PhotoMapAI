@@ -430,8 +430,12 @@ class GridViewManager {
         // Use a microtask (Promise) to ensure prepend DOM changes are committed
         Promise.resolve().then(() => {
           if (this.swiper && !this.swiper.destroyed) {
-            this.swiper.slideTo(this.currentColumns, 0, false);
-            this.suppressSlideChange = false;
+            // Use default speed (300ms) for smooth animation, but suppress slide change event
+            this.swiper.slideTo(this.currentColumns, 300, false);
+            // Reset suppressSlideChange after transition completes
+            setTimeout(() => {
+              this.suppressSlideChange = false;
+            }, 350); // Slightly longer than animation duration
           }
         });
       }
