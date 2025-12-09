@@ -225,6 +225,8 @@ class GridViewManager {
     if (this.swiper) {
       this.swiper.on("slideNextTransitionStart", async () => {
         if (this.suppressSlideChange) return;
+        if (this.isBatchLoading()) return; // Prevent overlapping batch loads
+        
         const slidesLeft =
           Math.floor(this.swiper.slides.length / this.currentRows) -
           this.swiper.activeIndex;
@@ -237,14 +239,25 @@ class GridViewManager {
             ? slideState.globalToSearch(lastSlideIndex) + 1
             : lastSlideIndex + 1;
           // Load batch without blocking - placeholders appear immediately
-          this.loadBatch(index, true).catch(error => {
-            console.warn(`Error loading next batch at index ${index}:`, error);
-          });
+          this.setBatchLoading(true);
+          this.loadBatch(index, true)
+            .catch(error => {
+              console.warn(`Error loading next batch at index ${index}:`, error);
+            })
+            .finally(() => {
+              this.setBatchLoading(false);
+              // Update Swiper to ensure it knows about new slides
+              if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+                this.swiper.update();
+              }
+            });
         }
       });
 
       this.swiper.on("slidePrevTransitionStart", async () => {
         if (this.suppressSlideChange) return;
+        if (this.isBatchLoading()) return; // Prevent overlapping batch loads
+        
         const firstSlide = this.getIndexForSlideElement(this.swiper.slides[0]);
         const index = slideState.isSearchMode
           ? slideState.globalToSearch(firstSlide)
@@ -252,9 +265,18 @@ class GridViewManager {
         if (firstSlide > 0 && this.swiper.activeIndex === 0) {
           const batchIndex = index - this.slidesPerBatch;
           // Load batch without blocking - placeholders appear immediately
-          this.loadBatch(batchIndex, false).catch(error => {
-            console.warn(`Error loading prev batch at index ${batchIndex}:`, error);
-          });
+          this.setBatchLoading(true);
+          this.loadBatch(batchIndex, false)
+            .catch(error => {
+              console.warn(`Error loading prev batch at index ${batchIndex}:`, error);
+            })
+            .finally(() => {
+              this.setBatchLoading(false);
+              // Update Swiper to ensure it knows about new slides
+              if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+                this.swiper.update();
+              }
+            });
         }
       });
 
@@ -420,6 +442,11 @@ class GridViewManager {
         }
       }
       this.enforceHighWaterMark(!append);
+      
+      // Update Swiper to recalculate navigation bounds
+      if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+        this.swiper.update();
+      }
     }
 
     // Second pass: Load metadata in background (don't await)

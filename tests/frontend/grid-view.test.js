@@ -104,6 +104,7 @@ const mockSwiperInstance = {
   prependSlide: jest.fn(),
   slideTo: jest.fn(),
   on: jest.fn(),
+  update: jest.fn(),
   slides: [],
   activeIndex: 0,
   destroyed: false
