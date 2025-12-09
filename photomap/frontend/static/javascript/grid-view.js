@@ -238,7 +238,7 @@ class GridViewManager {
             : lastSlideIndex + 1;
           // Load batch without blocking - placeholders appear immediately
           this.loadBatch(index, true).catch(error => {
-            console.warn("Error loading next batch:", error);
+            console.warn(`Error loading next batch at index ${index}:`, error);
           });
         }
       });
@@ -250,9 +250,10 @@ class GridViewManager {
           ? slideState.globalToSearch(firstSlide)
           : firstSlide;
         if (firstSlide > 0 && this.swiper.activeIndex === 0) {
+          const batchIndex = index - this.slidesPerBatch;
           // Load batch without blocking - placeholders appear immediately
-          this.loadBatch(index - this.slidesPerBatch, false).catch(error => {
-            console.warn("Error loading prev batch:", error);
+          this.loadBatch(batchIndex, false).catch(error => {
+            console.warn(`Error loading prev batch at index ${batchIndex}:`, error);
           });
         }
       });
