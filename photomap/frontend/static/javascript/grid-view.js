@@ -423,10 +423,24 @@ class GridViewManager {
     if (placeholderSlides.length > 0) {
       if (append) {
         this.swiper.appendSlide(placeholderSlides);
+        
+        // Update Swiper to recalculate navigation bounds
+        if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+          this.swiper.update();
+        }
       } else {
         this.suppressSlideChange = true;
         this.swiper.prependSlide(placeholderSlides.reverse());
         this.swiper.slideTo(this.currentColumns, 0);
+        
+        // Reset suppressSlideChange and update Swiper after prepend completes
+        // Use requestAnimationFrame to ensure DOM updates have completed
+        requestAnimationFrame(() => {
+          this.suppressSlideChange = false;
+          if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+            this.swiper.update();
+          }
+        });
       }
 
       // Add event handlers to new slides
@@ -440,11 +454,6 @@ class GridViewManager {
         } else {
           console.warn("Slide element not found for double-tap handler");
         }
-      }
-      
-      // Update Swiper to recalculate navigation bounds
-      if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
-        this.swiper.update();
       }
       
       // Defer enforceHighWaterMark to avoid interfering with navigation
