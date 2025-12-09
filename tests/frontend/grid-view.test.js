@@ -104,6 +104,7 @@ const mockSwiperInstance = {
   prependSlide: jest.fn(),
   slideTo: jest.fn(),
   on: jest.fn(),
+  update: jest.fn(),
   slides: [],
   activeIndex: 0,
   destroyed: false
@@ -293,6 +294,72 @@ describe('grid-view.js', () => {
       
       // Clean up
       gridViewManager.setBatchLoading(false);
+    });
+  });
+
+  describe('non-blocking navigation', () => {
+    it('should create placeholder slides immediately without awaiting metadata', async () => {
+      gridViewManager = await initializeGridSwiper();
+      
+      // Mock indexToGlobal to return valid indices
+      mockSlideState.indexToGlobal.mockImplementation(i => i < 10 ? i : null);
+      
+      // loadBatch should return immediately with placeholders
+      const startTime = Date.now();
+      const result = await gridViewManager.loadBatch(0, true);
+      const elapsed = Date.now() - startTime;
+      
+      // Should complete very quickly (under 100ms) since it doesn't await metadata
+      expect(elapsed).toBeLessThan(100);
+      expect(result).toBe(true);
+      
+      // Slides should be added to swiper immediately
+      expect(mockSwiperInstance.appendSlide).toHaveBeenCalled();
+    });
+
+    it('should generate placeholder HTML with minimal data', () => {
+      const html = gridViewManager.makePlaceholderSlideHTML(5);
+      
+      // Should contain the thumbnail URL
+      expect(html).toContain('thumbnails/test-album/5');
+      // Should have data-global-index
+      expect(html).toContain('data-global-index="5"');
+      // Should have empty filepath (will be filled later)
+      expect(html).toContain('data-filepath=""');
+      // Should have loading alt text
+      expect(html).toContain('alt="Loading..."');
+    });
+
+    it('should update slide metadata after placeholder is created', async () => {
+      gridViewManager = await initializeGridSwiper();
+      
+      // Create a placeholder slide in the DOM
+      document.querySelector('#gridViewContainer .swiper.grid-mode').innerHTML = `
+        <div class="swiper-slide" data-global-index="5" data-filepath="">
+          <img alt="Loading..." />
+        </div>
+      `;
+      
+      const mockData = {
+        filename: 'test-image.jpg',
+        filepath: '/path/to/test-image.jpg',
+        globalIndex: 5
+      };
+      
+      gridViewManager.updateSlideWithMetadata(5, mockData);
+      
+      // Check that slideData was updated
+      expect(gridViewManager.slideData[5]).toEqual(expect.objectContaining({
+        filename: 'test-image.jpg',
+        filepath: '/path/to/test-image.jpg'
+      }));
+      
+      // Check that DOM was updated
+      const slideEl = document.querySelector('[data-global-index="5"]');
+      expect(slideEl.dataset.filepath).toBe('/path/to/test-image.jpg');
+      
+      const img = slideEl.querySelector('img');
+      expect(img.alt).toBe('test-image.jpg');
     });
   });
 });

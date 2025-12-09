@@ -225,11 +225,12 @@ class GridViewManager {
     if (this.swiper) {
       this.swiper.on("slideNextTransitionStart", async () => {
         if (this.suppressSlideChange) return;
+        if (this.isBatchLoading()) return; // Prevent overlapping batch loads
+        
         const slidesLeft =
           Math.floor(this.swiper.slides.length / this.currentRows) -
           this.swiper.activeIndex;
         if (slidesLeft <= this.currentColumns) {
-          showSpinner();
           const lastSlideIndex =
             this.getIndexForSlideElement(
               this.swiper.slides[this.swiper.slides.length - 1]
@@ -237,30 +238,45 @@ class GridViewManager {
           const index = slideState.isSearchMode
             ? slideState.globalToSearch(lastSlideIndex) + 1
             : lastSlideIndex + 1;
-          await this.waitForBatchLoadingToFinish();
+          // Load batch without blocking - placeholders appear immediately
           this.setBatchLoading(true);
-          try {
-            await this.loadBatch(index, true);
-          } catch (error) {
-            console.warn(error);
-          } finally {
-            this.setBatchLoading(false);
-          }
+          this.loadBatch(index, true)
+            .catch(error => {
+              console.warn(`Error loading next batch at index ${index}:`, error);
+            })
+            .finally(() => {
+              this.setBatchLoading(false);
+              // Update Swiper to ensure it knows about new slides
+              if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+                this.swiper.update();
+              }
+            });
         }
-        hideSpinner();
       });
 
       this.swiper.on("slidePrevTransitionStart", async () => {
         if (this.suppressSlideChange) return;
+        if (this.isBatchLoading()) return; // Prevent overlapping batch loads
+        
         const firstSlide = this.getIndexForSlideElement(this.swiper.slides[0]);
         const index = slideState.isSearchMode
           ? slideState.globalToSearch(firstSlide)
           : firstSlide;
         if (firstSlide > 0 && this.swiper.activeIndex === 0) {
-          await this.waitForBatchLoadingToFinish();
+          const batchIndex = index - this.slidesPerBatch;
+          // Load batch without blocking - placeholders appear immediately
           this.setBatchLoading(true);
-          await this.loadBatch(index - this.slidesPerBatch, false);
-          this.setBatchLoading(false);
+          this.loadBatch(batchIndex, false)
+            .catch(error => {
+              console.warn(`Error loading prev batch at index ${batchIndex}:`, error);
+            })
+            .finally(() => {
+              this.setBatchLoading(false);
+              // Update Swiper to ensure it knows about new slides
+              if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+                this.swiper.update();
+              }
+            });
         }
       });
 
@@ -292,8 +308,7 @@ class GridViewManager {
                 topLeftGlobal,
                 slideState.globalToSearch(topLeftGlobal)
               );
-              // Skip if batch loading is in progress
-              if (!this.isBatchLoading()) this.updateCurrentSlide();
+              this.updateCurrentSlide();
             }
           }
         }
@@ -347,7 +362,6 @@ class GridViewManager {
     if (!this.isVisible()) return;
 
     showSpinner();
-    await this.waitForBatchLoadingToFinish();
 
     await new Promise(requestAnimationFrame);
     const targetIndex = slideState.getCurrentIndex();
@@ -363,9 +377,7 @@ class GridViewManager {
     }
 
     try {
-      await this.waitForBatchLoadingToFinish();
-      this.setBatchLoading(true);
-
+      // Load batches - placeholders appear immediately, metadata loads in background
       await this.loadBatch(targetIndex, true);
       slideState.setCurrentIndex(targetIndex);
       this.updateCurrentSlide();
@@ -379,7 +391,6 @@ class GridViewManager {
       console.warn(err);
     }
 
-    this.setBatchLoading(false);
     hideSpinner();
   }
 
@@ -387,14 +398,11 @@ class GridViewManager {
     let topLeftIndex =
       Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
 
-    const slides = [];
-    let actuallyLoaded = 0;
+    const placeholderSlides = [];
+    const indicesToLoad = [];
 
+    // First pass: Create placeholders for all valid indices
     for (let i = 0; i < this.slidesPerBatch; i++) {
-      if (i % 4 === 0) {
-        await new Promise(requestAnimationFrame);
-      }
-
       const offset = topLeftIndex + i;
       const globalIndex = slideState.indexToGlobal(offset);
       if (globalIndex === null) continue;
@@ -403,29 +411,36 @@ class GridViewManager {
         continue;
       }
 
-      try {
-        const data = await fetchImageByIndex(globalIndex);
-        if (!data) break;
-        data.globalIndex = globalIndex;
-        this.loadedImageIndices.add(globalIndex);
-
-        slides.push(this.makeSlideHTML(data, globalIndex));
-        actuallyLoaded++;
-      } catch (error) {
-        console.error("Failed to load image:", error);
-        break;
-      }
+      // Mark as loaded immediately to prevent duplicates
+      this.loadedImageIndices.add(globalIndex);
+      
+      // Create placeholder slide
+      placeholderSlides.push(this.makePlaceholderSlideHTML(globalIndex));
+      indicesToLoad.push(globalIndex);
     }
 
-    if (slides.length > 0) {
+    // Append/prepend placeholder slides immediately
+    if (placeholderSlides.length > 0) {
       if (append) {
-        this.swiper.appendSlide(slides);
+        this.swiper.appendSlide(placeholderSlides);
       } else {
         this.suppressSlideChange = true;
-        this.swiper.prependSlide(slides.reverse());
-        this.swiper.slideTo(this.currentColumns, 0);
+        this.swiper.prependSlide(placeholderSlides.reverse());
+        // After prepending, we need to adjust position to compensate for new slides
+        // Use a microtask (Promise) to ensure prepend DOM changes are committed
+        Promise.resolve().then(() => {
+          if (this.swiper && !this.swiper.destroyed) {
+            // Use default speed (300ms) for smooth animation, but suppress slide change event
+            this.swiper.slideTo(this.currentColumns, 300, false);
+            // Reset suppressSlideChange after transition completes
+            setTimeout(() => {
+              this.suppressSlideChange = false;
+            }, 350); // Slightly longer than animation duration
+          }
+        });
       }
 
+      // Add event handlers to new slides
       for (let i = 0; i < this.swiper.slides.length; i++) {
         const slideEl = this.swiper.slides[i];
         if (slideEl) {
@@ -437,10 +452,41 @@ class GridViewManager {
           console.warn("Slide element not found for double-tap handler");
         }
       }
-      this.enforceHighWaterMark(!append);
+      
+      // Update Swiper to recalculate navigation bounds after adding slides
+      if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+        this.swiper.update();
+      }
+      
+      // Defer enforceHighWaterMark to avoid interfering with navigation
+      // Run it after a short delay to allow current transitions to complete
+      setTimeout(() => {
+        if (this.swiper && !this.swiper.destroyed) {
+          this.enforceHighWaterMark(!append);
+        }
+      }, 100);
     }
 
-    return actuallyLoaded > 0;
+    // Second pass: Load metadata in background (don't await)
+    // Reverse the array if prepending to maintain visual order
+    const loadOrder = append ? indicesToLoad : [...indicesToLoad].reverse();
+    
+    loadOrder.forEach((globalIndex, idx) => {
+      // Stagger requests slightly to avoid overwhelming the server
+      setTimeout(async () => {
+        try {
+          const data = await fetchImageByIndex(globalIndex);
+          if (data) {
+            data.globalIndex = globalIndex;
+            this.updateSlideWithMetadata(globalIndex, data);
+          }
+        } catch (error) {
+          console.warn(`Failed to load metadata for image ${globalIndex}:`, error);
+        }
+      }, idx * 10); // 10ms stagger
+    });
+
+    return placeholderSlides.length > 0;
   }
 
   // NOTE: Refactor this call
@@ -495,6 +541,11 @@ class GridViewManager {
       );
       const targetActive = Math.min(prevActive, maxActive);
       this.swiper.slideTo(targetActive, 0);
+    }
+    
+    // Update Swiper after modifying slides to recalculate navigation state
+    if (this.swiper && !this.swiper.destroyed && typeof this.swiper.update === 'function') {
+      this.swiper.update();
     }
   }
 
@@ -564,6 +615,22 @@ class GridViewManager {
     updateCurrentImageScore(this.slideData[currentSlide.globalIndex] || null);
   }
 
+  makePlaceholderSlideHTML(globalIndex) {
+    const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${this.slideHeight}`;
+    return `
+    <div class="swiper-slide" style="width:${this.slideHeight}px; height:${
+      this.slideHeight
+    }px;" 
+        data-global-index="${globalIndex}"
+        data-filepath=""
+        onclick="handleGridSlideClick(${globalIndex})"
+        ondblclick="handleGridSlideDblClick(${globalIndex})">
+      <img src="${thumbnail_url}" alt="Loading..." 
+          style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
+    </div>
+  `;
+  }
+
   makeSlideHTML(data, globalIndex) {
     const searchIndex = slideState.globalToSearch(globalIndex);
     if (searchIndex !== null && slideState.isSearchMode) {
@@ -588,6 +655,33 @@ class GridViewManager {
           style="width:100%; height:100%; object-fit:contain; background:#222; border-radius:4px; display:block;" />
     </div>
   `;
+  }
+
+  updateSlideWithMetadata(globalIndex, data) {
+    const searchIndex = slideState.globalToSearch(globalIndex);
+    if (searchIndex !== null && slideState.isSearchMode) {
+      const results = slideState.searchResults[searchIndex];
+      data.score = results?.score || "";
+      data.cluster = results?.cluster || "";
+      data.color = results?.color || "#000000";
+    }
+    data.searchIndex = slideState.globalToSearch(globalIndex);
+    this.slideData[globalIndex] = data;
+
+    // Update the slide element if it still exists in the DOM
+    const gridContainer = document.getElementById("gridViewContainer");
+    if (!gridContainer) return;
+    
+    const slideEl = gridContainer.querySelector(
+      `.swiper-slide[data-global-index="${globalIndex}"]`
+    );
+    if (slideEl) {
+      slideEl.dataset.filepath = data.filepath || "";
+      const img = slideEl.querySelector("img");
+      if (img) {
+        img.alt = data.filename || "";
+      }
+    }
   }
 
   updateMetadataOverlay() {
