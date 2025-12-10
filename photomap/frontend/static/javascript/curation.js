@@ -1,8 +1,10 @@
 import { state } from './state.js';
 import { highlightCurationSelection } from './umap.js';
 
-let currentSelectionIndices = new Set();
+let currentSelectionIndices = new Set(); // Green
+let lockedIndices = new Set();           // Red (Excluded)
 let currentSelectionFiles = [];
+let analysisResults = []; // Store for CSV
 
 window.toggleCurationPanel = function() {
     const panel = document.getElementById('curationPanel');
@@ -14,65 +16,72 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-    const slider = document.getElementById('curationSlider');
-    const number = document.getElementById('curationNumber');
-    const seedInput = document.getElementById('curationSeed');
-    const runBtn = document.getElementById('curationRunBtn');
-    const exportBtn = document.getElementById('curationExportBtn');
-    const closeBtn = document.getElementById('curationCloseBtn');
-    const clearBtn = document.getElementById('curationClearBtn'); // NEW BUTTON
+    // ... (Keep existing var declarations) ...
+    const analysisBtn = document.getElementById('analysisBtn');
+    const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+    const lockBtn = document.getElementById('lockOutliersBtn');
+    const unlockBtn = document.getElementById('unlockOutliersBtn');
+    const lockdownControls = document.getElementById('lockdownControls');
     
-    // Toggle Buttons
-    const methodFps = document.getElementById('methodFps');
-    const methodKmeans = document.getElementById('methodKmeans');
+    // ... (Keep existing Sync logic) ...
 
-    if (!slider || !runBtn) return;
-
-    slider.oninput = () => number.value = slider.value;
-    number.oninput = () => slider.value = number.value;
-
-    closeBtn.onclick = window.toggleCurationPanel;
-
-    // Method Toggles
-    if (methodFps && methodKmeans) {
-        methodFps.onclick = () => {
-            methodFps.classList.add('active');
-            methodKmeans.classList.remove('active');
-        };
-        methodKmeans.onclick = () => {
-            methodKmeans.classList.add('active');
-            methodFps.classList.remove('active');
+    // CSV Download
+    if(downloadCsvBtn) {
+        downloadCsvBtn.onclick = () => {
+            if(!analysisResults.length) return;
+            
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Filename,Count,Frequency(%),Index\n"; // Header
+            
+            analysisResults.forEach(row => {
+                csvContent += `${row.filename},${row.count},${row.frequency},${row.index}\n`;
+            });
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `outlier_analysis_${state.album}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         };
     }
 
-    // CLEAR Logic
-    if (clearBtn) {
-        clearBtn.onclick = () => {
-            currentSelectionIndices.clear();
-            currentSelectionFiles = [];
+    // Lock Logic
+    if(lockBtn) {
+        lockBtn.onclick = () => {
+            // Move current HIGH STABILITY outliers to Locked Set
+            analysisResults.forEach(r => {
+                if (r.frequency >= 50) { // Lock items appearing > 50%
+                    lockedIndices.add(r.index);
+                }
+            });
+            // Clear current selection so we can see the locks clearly
+            currentSelectionIndices.clear(); 
             applyGridHighlights();
-            updateUmapVisuals(); // Will clear points
-            exportBtn.disabled = true;
-            setStatus("", "normal");
-        };
+            setStatus(`Locked ${lockedIndices.size} outliers. Run Preview again!`, "success");
+        }
     }
 
-    // Run Algorithm
-    runBtn.onclick = async () => {
-        const targetCount = parseInt(number.value);
-        const seedVal = parseInt(seedInput ? seedInput.value : 42) || 42;
-        // Determine Method
-        const isKmeans = methodKmeans && methodKmeans.classList.contains('active');
-        const method = isKmeans ? "kmeans" : "fps";
-
-        if(!targetCount) return;
-        const currentAlbum = state.album;
-        if (!currentAlbum) {
-            alert("No album loaded!");
-            return;
+    // Unlock Logic
+    if(unlockBtn) {
+        unlockBtn.onclick = () => {
+            lockedIndices.clear();
+            applyGridHighlights();
+            setStatus("All locks cleared.", "normal");
         }
+    }
 
-        setStatus(`Running ${method.toUpperCase()} Analysis...`, "loading");
+    // Run FPS / KMEANS (Updated to send Exclusions)
+    const runBtn = document.getElementById('curationRunBtn');
+    runBtn.onclick = async () => {
+        const targetCount = parseInt(document.getElementById('curationNumber').value);
+        const seedVal = parseInt(document.getElementById('curationSeed').value) || 42;
+        const method = document.getElementById('methodKmeans').classList.contains('active') ? "kmeans" : "fps";
+
+        if(!state.album) { alert("No album."); return; }
+
+        setStatus(`Running ${method.toUpperCase()} (Excluding ${lockedIndices.size} items)...`, "loading");
         
         try {
             const response = await fetch('/api/curation/fps', {
@@ -81,15 +90,13 @@ function setupEventListeners() {
                 body: JSON.stringify({ 
                     target_count: targetCount,
                     seed: seedVal,
-                    album: currentAlbum,
-                    method: method // Send Method
+                    album: state.album,
+                    method: method,
+                    excluded_indices: Array.from(lockedIndices) // <--- SEND LOCKS
                 })
             });
 
-            if(!response.ok) {
-                const err = await response.text();
-                throw new Error(err);
-            }
+            if(!response.ok) throw new Error(await response.text());
             
             const data = await response.json();
             
@@ -99,8 +106,8 @@ function setupEventListeners() {
             applyGridHighlights();
             updateUmapVisuals();
             
-            exportBtn.disabled = false;
-            setStatus(`Selected ${data.count} images via ${method.toUpperCase()}.`, "success");
+            document.getElementById('curationExportBtn').disabled = false;
+            setStatus(`Selected ${data.count} images.`, "success");
 
         } catch (e) {
             console.error(e);
@@ -108,42 +115,62 @@ function setupEventListeners() {
         }
     };
 
-    // Export (Same as before)
-    exportBtn.onclick = async () => {
-        const path = document.getElementById('curationExportPath').value;
-        if(!path) { alert("Please enter path."); return; }
-        setStatus("Exporting...", "loading");
-        try {
-            const response = await fetch('/api/curation/export', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ filenames: currentSelectionFiles, output_folder: path })
-            });
-            const data = await response.json();
-            alert(`Exported ${data.exported} files.`);
-            setStatus("Export Complete.", "success");
-        } catch (e) {
-            alert("Export failed.");
-        }
-    };
+    // Run Analysis (Populate CSV data)
+    if (analysisBtn) {
+        analysisBtn.onclick = async () => {
+            const percent = parseInt(document.getElementById('analysisPercent').value) || 10;
+            const runs = parseInt(document.getElementById('analysisRuns').value) || 20;
+            
+            setStatus(`Running ${runs} simulations...`, "loading");
+
+            try {
+                const response = await fetch('/api/curation/analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        album: state.album,
+                        sample_percent: percent,
+                        iterations: runs
+                    })
+                });
+
+                if(!response.ok) throw new Error(await response.text());
+                
+                const data = await response.json();
+                analysisResults = data.results; // Save for CSV
+                
+                // Highlight >50% visually immediately
+                currentSelectionIndices.clear();
+                data.results.forEach(r => {
+                    if (r.frequency >= 50) currentSelectionIndices.add(r.index);
+                });
+
+                applyGridHighlights();
+                updateUmapVisuals();
+                
+                // Show controls
+                downloadCsvBtn.disabled = false;
+                lockdownControls.classList.remove('hidden');
+                
+                setStatus(`Analysis Complete. Found ${currentSelectionIndices.size} robust outliers.`, "success");
+
+            } catch (e) {
+                console.error(e);
+                setStatus("Analysis failed.", "error");
+            }
+        };
+    }
     
     // Watchdog
     setInterval(() => {
-        if(currentSelectionIndices.size > 0) {
-            const gridContainer = document.getElementById('gridViewContainer');
-            if(gridContainer && gridContainer.style.display !== 'none') applyGridHighlights();
-            
-            // Check UMAP Trace
-            const umapPlot = document.getElementById('umapPlot');
-            if (umapPlot && umapPlot.data && !umapPlot.data.some(t => t.name === 'CurationSelection')) {
-                 updateUmapVisuals();
-            }
+        const gridContainer = document.getElementById('gridViewContainer');
+        if((currentSelectionIndices.size > 0 || lockedIndices.size > 0) && gridContainer && gridContainer.style.display !== 'none') {
+            applyGridHighlights();
         }
     }, 1000);
 }
 
 function updateUmapVisuals() {
-    // Pass empty array if size is 0 to clear
     const indices = currentSelectionIndices.size > 0 ? Array.from(currentSelectionIndices) : [];
     highlightCurationSelection(indices);
 }
@@ -157,19 +184,21 @@ function applyGridHighlights() {
         const img = slide.querySelector('img');
         if(!img) return;
 
-        // If selection is empty, remove all styling
-        if (currentSelectionIndices.size === 0) {
-            img.classList.remove('curation-selected-img');
-            img.classList.remove('curation-dimmed-img');
-            return;
-        }
+        // Reset
+        img.classList.remove('curation-selected-img');
+        img.classList.remove('curation-locked-img');
+        img.classList.remove('curation-dimmed-img');
 
-        if (currentSelectionIndices.has(globalIndex)) {
-            img.classList.add('curation-selected-img');
-            img.classList.remove('curation-dimmed-img');
-        } else {
+        // Logic: Locked overrides Selected
+        if (lockedIndices.has(globalIndex)) {
+            img.classList.add('curation-locked-img'); // RED
+        } 
+        else if (currentSelectionIndices.has(globalIndex)) {
+            img.classList.add('curation-selected-img'); // GREEN
+        } 
+        else if (currentSelectionIndices.size > 0 || lockedIndices.size > 0) {
+            // Only dim if we are in an active curation mode
             img.classList.add('curation-dimmed-img');
-            img.classList.remove('curation-selected-img');
         }
     });
 }

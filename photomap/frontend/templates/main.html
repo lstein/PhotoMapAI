@@ -80,7 +80,6 @@
       };
     </script>
     <script type="module" src="static/main.js"></script>
-    <!-- We load curation.js via module import in main.js, so no script tag needed here -->
   </head>
 
   <body>
@@ -156,8 +155,51 @@
                 <p class="help-text">Diversity = Edges/Outliers. Blocks = Representative/Centers.</p>
             </div>
 
-            <!-- Actions -->
-            <div class="action-row" style="display: flex; gap: 10px;">
+            <!-- Outlier Analysis Section -->
+            <div style="margin-top: 15px; border-top: 1px solid #444; padding-top: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label style="color: #aaa; font-weight: bold;">Outlier Analysis</label>
+                    <button id="toggleAnalysis" style="background:none; border:none; color:#777; cursor:pointer;">▼</button>
+                </div>
+                
+                <div id="analysisControls" class="hidden">
+                    <div class="control-group">
+                        <div style="display: flex; gap: 5px;">
+                            <div style="flex:1">
+                                <label style="font-size:9px;">Sample %</label>
+                                <input type="number" id="analysisPercent" value="10" min="1" max="100" style="width:100%">
+                            </div>
+                            <div style="flex:1">
+                                <label style="font-size:9px;">Runs</label>
+                                <input type="number" id="analysisRuns" value="20" min="5" max="100" style="width:100%">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display:flex; gap:5px; margin-bottom:5px;">
+                        <button id="analysisBtn" class="btn-primary" style="background: #6f42c1; flex:2;">
+                            Run Analysis
+                        </button>
+                        <button id="downloadCsvBtn" class="btn-secondary" style="flex:1; background:#28a745;" disabled title="Download Results">
+                            📥 CSV
+                        </button>
+                    </div>
+
+                    <!-- Lockdown Controls -->
+                    <div id="lockdownControls" class="hidden" style="background: #442222; padding: 5px; border-radius: 4px; margin-top: 5px;">
+                        <label style="color:#ff8888; font-size:10px;">Outliers (>50%):</label>
+                        <div style="display:flex; gap:5px;">
+                            <button id="lockOutliersBtn" class="btn-secondary" style="background: #d9534f; font-size:10px;">Lock (Exclude)</button>
+                            <button id="unlockOutliersBtn" class="btn-secondary" style="background: #555; font-size:10px;">Unlock All</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr style="border-color: #444; margin-top: 15px;">
+
+            <!-- Main Actions -->
+            <div class="action-row" style="display: flex; gap: 10px; margin-top: 15px;">
                 <button id="curationRunBtn" class="btn-primary" style="flex: 2;">
                     <span class="btn-text">Preview</span>
                 </button>
@@ -166,10 +208,8 @@
                 </button>
             </div>
 
-            <hr>
-
             <!-- Export -->
-            <div class="control-group">
+            <div class="control-group" style="margin-top: 15px;">
                 <label>Export Path:</label>
                 <input type="text" id="curationExportPath" placeholder="C:/Training/Dataset_Filtered">
             </div>
@@ -214,6 +254,7 @@
         }
         .curation-header h3 { margin: 0; font-size: 14px; font-weight: 600; }
         .curation-body { padding: 15px; }
+        
         .control-group { margin-bottom: 15px; }
         .control-group label { display: block; font-size: 11px; color: #aaa; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
         
@@ -264,6 +305,14 @@
         .curation-dimmed-img {
             opacity: 0.2 !important;
             filter: grayscale(100%);
+            transition: all 0.2s;
+        }
+        /* LOCKED (Red) Style */
+        .curation-locked-img {
+            border: 3px solid #ff0000 !important;
+            opacity: 0.4 !important;
+            filter: grayscale(100%);
+            transform: scale(0.9);
             transition: all 0.2s;
         }
     </style>

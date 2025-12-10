@@ -17,6 +17,13 @@ class FPSRequest(BaseModel):
     seed: int = 42
     album: str
     method: str = "fps"
+    excluded_indices: List[int] = []
+
+class AnalysisRequest(BaseModel):
+    album: str
+    sample_percent: int = 10
+    iterations: int = 20
+    min_stability: int = 0 # We want ALL results for the CSV, filtering happens in UI
 
 class ExportRequest(BaseModel):
     filenames: List[str]
@@ -25,41 +32,45 @@ class ExportRequest(BaseModel):
 @router.post("/fps")
 async def get_fps_selection(request: FPSRequest):
     try:
-        # ... (Validation code is same as before) ...
+        # ... (Config/Path checks same as before) ...
         config_manager = get_config_manager()
         album_config = config_manager.get_album(request.album)
         if not album_config: raise HTTPException(status_code=404, detail="Album not found")
         index_path = Path(album_config.index)
-        if not index_path.exists(): raise HTTPException(status_code=404, detail="Index missing")
-
-        # --- SWITCH ALGORITHM BASED ON METHOD ---
+        
+        # 1. Map UI Indices -> Internal .npz Indices
+        # The UI sends global indices (based on sorted file list). 
+        # The Algorithm needs indices relative to the unsorted arrays in .npz if unsorted, 
+        # but our _open_npz_file returns sorted filenames.
+        # However, to be safe, we rely on the filename map.
+        
+        data = _open_npz_file(index_path)
+        # We need to translate the integer ID from UI to the integer ID used in numpy
+        # Since _open_npz_file returns sorted filenames, and UI uses that order, 
+        # the indices should match 1:1 if we pass them into the exclude list.
+        
+        # Call Algorithm with Exclusion
         if request.method == "kmeans":
             selected_files = get_kmeans_indices_global(
-                embeddings_path=index_path, 
-                n_target=request.target_count, 
-                seed=request.seed
+                index_path, request.target_count, request.seed, request.excluded_indices
             )
         else:
-            # Default to FPS
             selected_files = get_fps_indices_global(
-                embeddings_path=index_path, 
-                n_target=request.target_count, 
-                seed=request.seed
+                index_path, request.target_count, request.seed, request.excluded_indices
             )
-        # ----------------------------------------
 
-        # ... (The mapping logic / return remains exactly the same) ...
-        data = _open_npz_file(index_path)
+        # Map back to UI indices
         filename_map = data["filename_map"]
         norm_map = {os.path.normpath(k).lower(): v for k, v in filename_map.items()}
         selected_indices = []
         final_file_list = []
+
         for f in selected_files:
             f_norm = os.path.normpath(f).lower()
             if f_norm in norm_map:
                 selected_indices.append(int(norm_map[f_norm]))
                 final_file_list.append(f)
-        
+
         return {
             "status": "success", 
             "count": len(selected_indices), 
@@ -67,9 +78,64 @@ async def get_fps_selection(request: FPSRequest):
             "selected_files": final_file_list
         }
     except Exception as e:
-        logger.error(f"Selection Error: {e}")
+        logger.error(f"Error: {e}")
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/analyze")
+async def analyze_outlier_stability(request: AnalysisRequest):
+    try:
+        # ... (Config checks) ...
+        config_manager = get_config_manager()
+        album_config = config_manager.get_album(request.album)
+        if not album_config: raise HTTPException(status_code=404, detail="Album not found")
+        index_path = Path(album_config.index)
+
+        data = _open_npz_file(index_path)
+        total_images = len(data["filenames"])
+        target_count = int(total_images * (request.sample_percent / 100.0))
+        target_count = max(5, target_count)
+
+        logger.info(f"Analysis: {request.iterations} runs, picking {target_count} images.")
+
+        vote_counter = Counter()
+        
+        for i in range(request.iterations):
+            run_seed = random.randint(0, 1000000)
+            # Important: Analysis ignores exclusions? Usually yes, to find TRUE global outliers.
+            selected_files = get_fps_indices_global(
+                embeddings_path=index_path, 
+                n_target=target_count, 
+                seed=run_seed
+            )
+            vote_counter.update(selected_files)
+
+        # Prepare CSV Data: List of {filename, count, index}
+        filename_map = data["filename_map"]
+        norm_map = {os.path.normpath(k).lower(): v for k, v in filename_map.items()}
+        
+        results = []
+        for filepath, count in vote_counter.most_common():
+            f_norm = os.path.normpath(filepath).lower()
+            if f_norm in norm_map:
+                idx = int(norm_map[f_norm])
+                results.append({
+                    "filename": os.path.basename(filepath),
+                    "filepath": filepath,
+                    "index": idx,
+                    "count": count,
+                    "frequency": round((count / request.iterations) * 100, 1)
+                })
+
+        return {
+            "status": "success",
+            "results": results, # Full list for CSV
+            "total_runs": request.iterations
+        }
+
+    except Exception as e:
+        logger.error(f"Analysis Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/export")

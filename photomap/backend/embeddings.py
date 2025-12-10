@@ -49,97 +49,103 @@ SUPPORTED_EXTENSIONS = {
     ".heic",
 }
 
-def get_kmeans_indices_global(embeddings_path: Path, n_target: int, seed: int = 42) -> list[str]:
-    """
-    Selects images by clustering them and picking the one closest to the center of each cluster.
-    Good for getting a 'Representative' spread of the common data.
-    """
+# =========================================================================
+# FPS with Exclusion Support
+# =========================================================================
+def get_fps_indices_global(embeddings_path: Path, n_target: int, seed: int = 42, ignore_indices: list[int] = None) -> list[str]:
     data = _open_npz_file(embeddings_path)
     embeddings = data["embeddings"]
     filenames = data["filenames"]
     
-    n_samples = len(embeddings)
-    if n_target >= n_samples:
-        return filenames.tolist()
-
-    logger.info(f"Running K-Means: Clustering {n_samples} images into {n_target} groups.")
-
-    # 1. Normalize
-    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-    vectors = embeddings / (norms + 1e-10)
-
-    # 2. Cluster
-    kmeans = KMeans(n_clusters=n_target, random_state=seed, n_init=10)
-    labels = kmeans.fit_predict(vectors)
+    n_total = len(embeddings)
     
-    selected_indices = []
+    # Create a mask of VALID indices (True = Keep, False = Ignore)
+    valid_mask = np.ones(n_total, dtype=bool)
+    if ignore_indices:
+        valid_mask[ignore_indices] = False
+        
+    # Get the indices that are actually available
+    valid_global_indices = np.where(valid_mask)[0]
     
-    # 3. Find closest to centroid for each cluster
-    # (Iterating clusters is cleaner than vectors for large N)
-    for i in range(n_target):
-        # Get indices of points in this cluster
-        cluster_indices = np.where(labels == i)[0]
-        if len(cluster_indices) == 0:
-            continue
-            
-        cluster_vectors = vectors[cluster_indices]
-        centroid = kmeans.cluster_centers_[i]
-        
-        # Calculate distances to centroid
-        # Simple Euclidean distance is fine here since vectors are normalized
-        dists = np.linalg.norm(cluster_vectors - centroid, axis=1)
-        
-        # Pick the one with minimum distance
-        best_local_idx = np.argmin(dists)
-        best_global_idx = cluster_indices[best_local_idx]
-        
-        selected_indices.append(best_global_idx)
-
-    selected_filenames = [filenames[i] for i in selected_indices]
-    return selected_filenames
-
-def get_fps_indices_global(embeddings_path: Path, n_target: int, seed: int = 42) -> list[str]:
-    """
-    Selects a diverse subset of images using Farthest Point Sampling (FPS).
-    Global function: Does not require an Embeddings class instance.
-    """
-    # 1. Load cached data using the global loader we made earlier
-    data = _open_npz_file(embeddings_path)
-    embeddings = data["embeddings"]  # Shape: (N, 512)
-    filenames = data["filenames"]    # Shape: (N,)
-
-    n_samples = len(embeddings)
+    # Filter embeddings to only valid ones
+    filtered_embeddings = embeddings[valid_global_indices]
     
-    # Edge case: If we want more than we have, return everything.
-    if n_target >= n_samples:
-        logger.info(f"Target {n_target} >= Total {n_samples}. Returning all images.")
-        return filenames.tolist()
+    n_samples = len(filtered_embeddings)
+    if n_samples == 0: return []
+    if n_target >= n_samples: return filenames[valid_global_indices].tolist()
 
-    logger.info(f"Running Farthest Point Sampling: Selecting {n_target} from {n_samples} images.")
+    # Normalize
+    norms = np.linalg.norm(filtered_embeddings, axis=1, keepdims=True)
+    vectors = filtered_embeddings / (norms + 1e-10)
 
-    # 2. Normalize embeddings
-    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
-    vectors = embeddings / (norms + 1e-10)
-
-    # 3. Initialization
+    # Standard FPS Logic on the FILTERED set
     np.random.seed(seed)
-    selected_indices = [np.random.randint(0, n_samples)]
+    # Pick random index relative to the FILTERED set
+    start_idx = np.random.randint(0, n_samples)
+    selected_local_indices = [start_idx]
     
-    first_vector = vectors[selected_indices[0]].reshape(1, -1)
+    first_vector = vectors[start_idx].reshape(1, -1)
     min_dists = 1.0 - np.dot(vectors, first_vector.T).flatten()
 
-    # 4. Iterative Selection
     for _ in range(n_target - 1):
         next_idx = np.argmax(min_dists)
-        selected_indices.append(next_idx)
-
+        selected_local_indices.append(next_idx)
+        
         new_vector = vectors[next_idx].reshape(1, -1)
         dists_to_new = 1.0 - np.dot(vectors, new_vector.T).flatten()
         min_dists = np.minimum(min_dists, dists_to_new)
 
-    # 5. Convert indices to filenames
-    selected_filenames = [filenames[i] for i in selected_indices]
-    return selected_filenames
+    # Map LOCAL filtered indices back to GLOBAL indices
+    final_global_indices = valid_global_indices[selected_local_indices]
+    
+    return [filenames[i] for i in final_global_indices]
+
+# =========================================================================
+# K-Means with Exclusion Support
+# =========================================================================
+def get_kmeans_indices_global(embeddings_path: Path, n_target: int, seed: int = 42, ignore_indices: list[int] = None) -> list[str]:
+    data = _open_npz_file(embeddings_path)
+    embeddings = data["embeddings"]
+    filenames = data["filenames"]
+    
+    n_total = len(embeddings)
+    
+    valid_mask = np.ones(n_total, dtype=bool)
+    if ignore_indices:
+        valid_mask[ignore_indices] = False
+        
+    valid_global_indices = np.where(valid_mask)[0]
+    filtered_embeddings = embeddings[valid_global_indices]
+    
+    n_samples = len(filtered_embeddings)
+    if n_samples == 0: return []
+    if n_target >= n_samples: return filenames[valid_global_indices].tolist()
+
+    # Normalize
+    norms = np.linalg.norm(filtered_embeddings, axis=1, keepdims=True)
+    vectors = filtered_embeddings / (norms + 1e-10)
+
+    # Cluster
+    kmeans = KMeans(n_clusters=n_target, random_state=seed, n_init=10)
+    labels = kmeans.fit_predict(vectors)
+    
+    selected_local_indices = []
+    
+    for i in range(n_target):
+        cluster_indices = np.where(labels == i)[0]
+        if len(cluster_indices) == 0: continue
+            
+        cluster_vectors = vectors[cluster_indices]
+        centroid = kmeans.cluster_centers_[i]
+        
+        dists = np.linalg.norm(cluster_vectors - centroid, axis=1)
+        best_local_sub_idx = np.argmin(dists)
+        best_local_idx = cluster_indices[best_local_sub_idx]
+        selected_local_indices.append(best_local_idx)
+
+    # Map back to global
+    final_global_indices = valid_global_indices[selected_local_indices]
+    return [filenames[i] for i in final_global_indices]
 
 @functools.lru_cache(maxsize=3)
 def _open_npz_file(embeddings_path: Path) -> Dict[str, Any]:
