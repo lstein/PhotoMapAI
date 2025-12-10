@@ -232,7 +232,7 @@ export async function fetchUmapData() {
     };
 
     const config = {
-      modeBarButtonsToRemove: ["select2d", "lasso2d"],
+      modeBarButtonsToRemove: ["select2d", "lasso2d", "toImage"],
       scrollZoom: true,
     };
 
