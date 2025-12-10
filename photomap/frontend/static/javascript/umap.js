@@ -232,7 +232,7 @@ export async function fetchUmapData() {
     };
 
     const config = {
-      "modeBarButtons": [["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d"]],
+      "modeBarButtons": [["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "toImage"]],
       scrollZoom: true,
     };
 
