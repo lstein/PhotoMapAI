@@ -232,7 +232,7 @@ export async function fetchUmapData() {
     };
 
     const config = {
-      modeBarButtonsToRemove: ["select2d", "lasso2d"],
+      "modeBarButtons": [["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "toImage"]],
       scrollZoom: true,
     };
 
@@ -292,6 +292,20 @@ export async function fetchUmapData() {
 
       gd.on("plotly_relayout", (eventData) => {
         if (suppressRelayoutEvent) return; // Prevent feedback loop
+
+        // Auto-switch back to pan after zoom
+        const isZoomEvent =
+          eventData["xaxis.range[0]"] !== undefined ||
+          eventData["yaxis.range[0]"] !== undefined ||
+          eventData["xaxis.range"] !== undefined ||
+          eventData["yaxis.range"] !== undefined;
+        
+        if (isZoomEvent && gd.layout.dragmode === 'zoom') {
+          // Small delay to avoid interfering with the zoom operation
+          setTimeout(() => {
+            Plotly.relayout(gd, { dragmode: 'pan' });
+          }, 100);
+        }
 
         // Only update landmarks for actual user pan/zoom events, not our programmatic changes
         const isPanZoom =
