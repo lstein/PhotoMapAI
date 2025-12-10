@@ -54,9 +54,19 @@ export class AlbumManager {
     if (manageAlbumsBtn)
       manageAlbumsBtn.addEventListener("click", () => {
         closeSettingsModal();
-        showSpinner();
         this.show();
       });
+
+    // Back to Settings button
+    const backToSettingsBtn = document.getElementById("backToSettingsBtn");
+    if (backToSettingsBtn) {
+      backToSettingsBtn.addEventListener("click", () => {
+        this.hide();
+        import("./settings.js").then(({ openSettingsModal }) => {
+          openSettingsModal();
+        });
+      });
+    }
 
     // Close button
     document
@@ -431,16 +441,21 @@ export class AlbumManager {
 
   // Main show/hide methods
   async show() {
-    await this.loadAlbums();
-    await this.checkForOngoingIndexing(); // <-- Move this after loadAlbums
+    // Show the dialog immediately to prevent UMAP hover events
     this.overlay.classList.add("visible");
-    hideSpinner();
-
+    
     // Ensure add album form is hidden when opening normally
     if (!this.isSetupMode) {
       this.addAlbumSection.style.display = "none";
       this.addAlbumSection.classList.remove("slide-down", "slide-up");
     }
+
+    // Defer album loading until after dialog is visible
+    // Use setTimeout to allow the browser to render the dialog first
+    setTimeout(async () => {
+      await this.loadAlbums();
+      await this.checkForOngoingIndexing();
+    }, 0);
   }
 
   hide() {
