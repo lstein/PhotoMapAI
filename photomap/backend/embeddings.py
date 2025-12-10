@@ -145,32 +145,35 @@ def get_fps_indices_global(embeddings_path: Path, n_target: int, seed: int = 42)
 def _open_npz_file(embeddings_path: Path) -> Dict[str, Any]:
     """
     Global helper to open .npz files with caching.
-    Moved outside the class to avoid 'self' argument errors.
+    Uses context manager to ensure file handles are released.
     """
-    embeddings_path = Path(embeddings_path)
+    embeddings_path = Path(embeddings_path).resolve()
+    
     if not embeddings_path.exists():
         raise FileNotFoundError(
             f"Embeddings file {embeddings_path} does not exist."
         )
 
-    data = np.load(embeddings_path, allow_pickle=True)
+    # Use 'with' to ensure the file handle is closed
+    with np.load(embeddings_path, allow_pickle=True) as data:
+        filenames = data["filenames"].copy()
+        raw_metadata = data["metadata"].copy()
+        embeddings = data["embeddings"].copy()
+        modification_times = data["modification_times"].copy()
 
     # Pre-compute sorted order
-    modtimes = data["modification_times"]
-    sorted_indices = np.argsort(modtimes)
-
-    # Create filename -> position mapping for O(1) lookup
-    sorted_filenames = data["filenames"][sorted_indices]
+    sorted_indices = np.argsort(modification_times)
+    sorted_filenames = filenames[sorted_indices]
     filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
 
     return {
-        "filenames": data["filenames"],
-        "metadata": data["metadata"],
-        "embeddings": data["embeddings"],
-        "modification_times": data["modification_times"],
-        "sorted_modification_times": modtimes[sorted_indices],
+        "filenames": filenames,
+        "metadata": raw_metadata,
+        "embeddings": embeddings,
+        "modification_times": modification_times,
+        "sorted_modification_times": modification_times[sorted_indices],
         "sorted_filenames": sorted_filenames,
-        "sorted_metadata": data["metadata"][sorted_indices],
+        "sorted_metadata": raw_metadata[sorted_indices],
         "filename_map": filename_map,
     }
 
@@ -200,6 +203,12 @@ class Embeddings(BaseModel):
     minimum_image_size: ClassVar[int] = 100 * 1024  # Minimum image size in bytes (100K)
 
     embeddings_path: Path = Path("clip_image_embeddings.npz")
+
+    def __init__(self, **data):
+        """Ensure embeddings_path is always resolved to prevent cache key mismatches."""
+        if 'embeddings_path' in data:
+            data['embeddings_path'] = Path(data['embeddings_path']).resolve()
+        super().__init__(**data)
 
     def get_image_files_from_directory(
         self,
@@ -1071,28 +1080,39 @@ class Embeddings(BaseModel):
         Remove an image from the embeddings file.
         """
         try:
-            # Use optimized version for O(1) lookup
-            data = self.open_cached_embeddings(self.embeddings_path)
-
-            # Load the raw data for modification
-            sorted_filenames = data["sorted_filenames"]
-            filenames = data["filenames"]
-            embeddings = data["embeddings"]
-            modtimes = data["modification_times"]
-            metadata = data["metadata"]
+            # 1. Load data explicitly without using the cache wrapper
+            # This ensures we get a fresh copy to work on
+            with np.load(self.embeddings_path, allow_pickle=True) as data:
+                filenames = data["filenames"].copy()
+                embeddings = data["embeddings"].copy()
+                modtimes = data["modification_times"].copy()
+                metadata = data["metadata"].copy()
+                # Reconstruct sorting locally to find correct index
+                sorted_indices = np.argsort(modtimes)
+                sorted_filenames = filenames[sorted_indices]
 
             current_filename = sorted_filenames[index]
 
-            # Find the index in the original (unsorted) arrays
+            # 2. Find index in the arrays
             original_idx = np.where(filenames == current_filename)[0][0]
 
-            # Remove from all arrays
+            # 3. Remove from all arrays
             filenames = np.delete(filenames, original_idx)
             embeddings = np.delete(embeddings, original_idx, axis=0)
             modtimes = np.delete(modtimes, original_idx)
             metadata = np.delete(metadata, original_idx)
 
-            # Save updated data
+            # 4. Clear Cache immediately (Before touching disk)
+            _open_npz_file.cache_clear()
+
+            # 5. Force Delete the old file to prevent Windows locking issues
+            if self.embeddings_path.exists():
+                try:
+                    self.embeddings_path.unlink()
+                except PermissionError:
+                    logger.warning(f"File locked, attempting overwrite: {self.embeddings_path}")
+
+            # 6. Save updated data
             self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(
                 self.embeddings_path,
@@ -1101,12 +1121,13 @@ class Embeddings(BaseModel):
                 modification_times=modtimes,
                 metadata=metadata,
             )
-        except Exception as e:
-            logger.error(e)
-            raise
+            
+            # 7. Re-prime the cache immediately to verify the write
+            _open_npz_file(self.embeddings_path)
 
-        # Clear the LRU cache since the file has changed
-        _open_npz_file.cache_clear()
+        except Exception as e:
+            logger.error(f"Error removing image: {e}")
+            raise
 
     # This is not used in the current implementation, but can be useful for testing.
     def iterate_images(
@@ -1130,8 +1151,6 @@ class Embeddings(BaseModel):
             image_path = Path(filenames[idx])
             yield format_metadata(image_path, metadata[idx], int(idx), len(filenames))
 
-    @staticmethod
-    @functools.lru_cache(maxsize=3)
 
 
     @staticmethod
