@@ -19,6 +19,7 @@ from typing import Any, Callable, ClassVar, Dict, Generator, Optional, Set
 
 import clip
 import networkx as nx
+from sklearn.cluster import KMeans
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -47,6 +48,132 @@ SUPPORTED_EXTENSIONS = {
     ".heif",
     ".heic",
 }
+
+def get_kmeans_indices_global(embeddings_path: Path, n_target: int, seed: int = 42) -> list[str]:
+    """
+    Selects images by clustering them and picking the one closest to the center of each cluster.
+    Good for getting a 'Representative' spread of the common data.
+    """
+    data = _open_npz_file(embeddings_path)
+    embeddings = data["embeddings"]
+    filenames = data["filenames"]
+    
+    n_samples = len(embeddings)
+    if n_target >= n_samples:
+        return filenames.tolist()
+
+    logger.info(f"Running K-Means: Clustering {n_samples} images into {n_target} groups.")
+
+    # 1. Normalize
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    vectors = embeddings / (norms + 1e-10)
+
+    # 2. Cluster
+    kmeans = KMeans(n_clusters=n_target, random_state=seed, n_init=10)
+    labels = kmeans.fit_predict(vectors)
+    
+    selected_indices = []
+    
+    # 3. Find closest to centroid for each cluster
+    # (Iterating clusters is cleaner than vectors for large N)
+    for i in range(n_target):
+        # Get indices of points in this cluster
+        cluster_indices = np.where(labels == i)[0]
+        if len(cluster_indices) == 0:
+            continue
+            
+        cluster_vectors = vectors[cluster_indices]
+        centroid = kmeans.cluster_centers_[i]
+        
+        # Calculate distances to centroid
+        # Simple Euclidean distance is fine here since vectors are normalized
+        dists = np.linalg.norm(cluster_vectors - centroid, axis=1)
+        
+        # Pick the one with minimum distance
+        best_local_idx = np.argmin(dists)
+        best_global_idx = cluster_indices[best_local_idx]
+        
+        selected_indices.append(best_global_idx)
+
+    selected_filenames = [filenames[i] for i in selected_indices]
+    return selected_filenames
+
+def get_fps_indices_global(embeddings_path: Path, n_target: int, seed: int = 42) -> list[str]:
+    """
+    Selects a diverse subset of images using Farthest Point Sampling (FPS).
+    Global function: Does not require an Embeddings class instance.
+    """
+    # 1. Load cached data using the global loader we made earlier
+    data = _open_npz_file(embeddings_path)
+    embeddings = data["embeddings"]  # Shape: (N, 512)
+    filenames = data["filenames"]    # Shape: (N,)
+
+    n_samples = len(embeddings)
+    
+    # Edge case: If we want more than we have, return everything.
+    if n_target >= n_samples:
+        logger.info(f"Target {n_target} >= Total {n_samples}. Returning all images.")
+        return filenames.tolist()
+
+    logger.info(f"Running Farthest Point Sampling: Selecting {n_target} from {n_samples} images.")
+
+    # 2. Normalize embeddings
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    vectors = embeddings / (norms + 1e-10)
+
+    # 3. Initialization
+    np.random.seed(seed)
+    selected_indices = [np.random.randint(0, n_samples)]
+    
+    first_vector = vectors[selected_indices[0]].reshape(1, -1)
+    min_dists = 1.0 - np.dot(vectors, first_vector.T).flatten()
+
+    # 4. Iterative Selection
+    for _ in range(n_target - 1):
+        next_idx = np.argmax(min_dists)
+        selected_indices.append(next_idx)
+
+        new_vector = vectors[next_idx].reshape(1, -1)
+        dists_to_new = 1.0 - np.dot(vectors, new_vector.T).flatten()
+        min_dists = np.minimum(min_dists, dists_to_new)
+
+    # 5. Convert indices to filenames
+    selected_filenames = [filenames[i] for i in selected_indices]
+    return selected_filenames
+
+@functools.lru_cache(maxsize=3)
+def _open_npz_file(embeddings_path: Path) -> Dict[str, Any]:
+    """
+    Global helper to open .npz files with caching.
+    Moved outside the class to avoid 'self' argument errors.
+    """
+    embeddings_path = Path(embeddings_path)
+    if not embeddings_path.exists():
+        raise FileNotFoundError(
+            f"Embeddings file {embeddings_path} does not exist."
+        )
+
+    data = np.load(embeddings_path, allow_pickle=True)
+
+    # Pre-compute sorted order
+    modtimes = data["modification_times"]
+    sorted_indices = np.argsort(modtimes)
+
+    # Create filename -> position mapping for O(1) lookup
+    sorted_filenames = data["filenames"][sorted_indices]
+    filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
+
+    return {
+        "filenames": data["filenames"],
+        "metadata": data["metadata"],
+        "embeddings": data["embeddings"],
+        "modification_times": data["modification_times"],
+        "sorted_modification_times": modtimes[sorted_indices],
+        "sorted_filenames": sorted_filenames,
+        "sorted_metadata": data["metadata"][sorted_indices],
+        "filename_map": filename_map,
+    }
+
 
 class IndexResult(BaseModel):
     """
@@ -336,7 +463,7 @@ class Embeddings(BaseModel):
         )
 
         # Clear cache after saving
-        self.open_cached_embeddings.cache_clear()
+        _open_npz_file.cache_clear()
 
     def _get_new_and_missing_images(
         self,
@@ -979,7 +1106,7 @@ class Embeddings(BaseModel):
             raise
 
         # Clear the LRU cache since the file has changed
-        self.open_cached_embeddings.cache_clear()
+        _open_npz_file.cache_clear()
 
     # This is not used in the current implementation, but can be useful for testing.
     def iterate_images(
@@ -1005,36 +1132,15 @@ class Embeddings(BaseModel):
 
     @staticmethod
     @functools.lru_cache(maxsize=3)
+
+
+    @staticmethod
     def open_cached_embeddings(embeddings_path: Path) -> Dict[str, Any]:
         """
-        Open embeddings with pre-computed lookup structures.
+        Static wrapper calling the global function.
+        Works for both Embeddings.open_cached_embeddings() and self.open_cached_embeddings().
         """
-        embeddings_path = Path(embeddings_path)
-        if not embeddings_path.exists():
-            raise FileNotFoundError(
-                f"Embeddings file {embeddings_path} does not exist."
-            )
-
-        data = np.load(embeddings_path, allow_pickle=True)
-
-        # Pre-compute sorted order
-        modtimes = data["modification_times"]
-        sorted_indices = np.argsort(modtimes)
-
-        # Create filename -> position mapping for O(1) lookup
-        sorted_filenames = data["filenames"][sorted_indices]
-        filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
-
-        return {
-            "filenames": data["filenames"],
-            "metadata": data["metadata"],
-            "embeddings": data["embeddings"],
-            "modification_times": data["modification_times"],
-            "sorted_modification_times": modtimes[sorted_indices],
-            "sorted_filenames": sorted_filenames,
-            "sorted_metadata": data["metadata"][sorted_indices],
-            "filename_map": filename_map,
-        }
+        return _open_npz_file(embeddings_path)
 
     @staticmethod
     def extract_image_metadata(pil_image: Image.Image) -> dict:

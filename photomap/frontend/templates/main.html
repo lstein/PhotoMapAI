@@ -80,23 +80,24 @@
       };
     </script>
     <script type="module" src="static/main.js"></script>
+    <!-- We load curation.js via module import in main.js, so no script tag needed here -->
   </head>
 
   <body>
     {% include "modules/spinner.html" %} 
     {% include "modules/seek_slider.html" %} 
 
-<div id="singleSwiperContainer">
-     {% include "modules/swiper.html" %} 
-     <div class="swiper-button-prev" id="singleSwiperPrevButton"></div>
-     <div class="swiper-button-next" id="singleSwiperNextButton"></div>
-</div>
+    <div id="singleSwiperContainer">
+         {% include "modules/swiper.html" %} 
+         <div class="swiper-button-prev" id="singleSwiperPrevButton"></div>
+         <div class="swiper-button-next" id="singleSwiperNextButton"></div>
+    </div>
 
-<div id="gridViewContainer">
-      {% include "modules/grid-view.html" %}
-      <div class="swiper-button-prev" id="gridSwiperPrevButton"></div>
-      <div class="swiper-button-next" id="gridSwiperNextButton"></div>
-</div>
+    <div id="gridViewContainer">
+          {% include "modules/grid-view.html" %}
+          <div class="swiper-button-prev" id="gridSwiperPrevButton"></div>
+          <div class="swiper-button-next" id="gridSwiperNextButton"></div>
+    </div>
 
     {% include "modules/metadata-drawer.html" %}
     <div id="panelStackContainer">
@@ -110,5 +111,161 @@
     {% include "modules/metadata-modal.html" %} 
     {% include "modules/delete-modal.html" %}
     {% include "modules/about.html" %}
+
+    <!-- ========================================== -->
+    <!-- NEW: Curation Features                     -->
+    <!-- ========================================== -->
+
+    <!-- Trigger Button: Positioned to the left of the Search/Control panel (right: 380px) -->
+    <button onclick="window.toggleCurationPanel()" 
+            style="position: fixed; bottom: 20px; right: 380px; z-index: 10001; 
+                   background: #007bff; color: white; border: none; 
+                   padding: 10px 15px; border-radius: 50px; 
+                   font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+        🎯 Curate
+    </button>
+
+    <!-- Curation / LoRA Training Panel -->
+    <div id="curationPanel" class="curation-panel hidden">
+        <div class="curation-header">
+            <h3>LoRA Dataset Curator</h3>
+            <button id="curationCloseBtn" class="close-icon">&times;</button>
+        </div>
+        
+        <div class="curation-body">
+            <!-- Count and Seed -->
+            <div class="control-group">
+                <label>Target Images:</label>
+                <div class="slider-row">
+                    <input type="range" id="curationSlider" min="10" max="500" value="150" step="10">
+                    <input type="number" id="curationNumber" value="150" min="10" max="1000">
+                </div>
+                <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between;">
+                    <label style="margin:0; font-size: 11px; color:#aaa;">Seed:</label>
+                    <input type="number" id="curationSeed" value="42" style="width: 60px; background: #333; border: 1px solid #555; color: white; border-radius: 4px; padding: 4px; font-size: 12px;">
+                </div>
+            </div>
+
+            <!-- Algorithm Toggle -->
+            <div class="control-group">
+                <label>Algorithm:</label>
+                <div class="toggle-row">
+                    <span id="methodFps" class="toggle-label active" style="cursor:pointer;">Diversity (FPS)</span>
+                    <span id="methodKmeans" class="toggle-label" style="cursor:pointer;">Blocks (K-Means)</span>
+                </div>
+                <p class="help-text">Diversity = Edges/Outliers. Blocks = Representative/Centers.</p>
+            </div>
+
+            <!-- Actions -->
+            <div class="action-row" style="display: flex; gap: 10px;">
+                <button id="curationRunBtn" class="btn-primary" style="flex: 2;">
+                    <span class="btn-text">Preview</span>
+                </button>
+                <button id="curationClearBtn" class="btn-secondary" style="flex: 1; background: #444;">
+                    Clear
+                </button>
+            </div>
+
+            <hr>
+
+            <!-- Export -->
+            <div class="control-group">
+                <label>Export Path:</label>
+                <input type="text" id="curationExportPath" placeholder="C:/Training/Dataset_Filtered">
+            </div>
+
+            <div class="action-row">
+                <button id="curationExportBtn" class="btn-secondary" disabled>Export Dataset</button>
+            </div>
+            
+            <div id="curationStatus" class="status-text"></div>
+        </div>
+    </div>
+
+    <!-- Styles for the Curation Panel -->
+    <style>
+        .curation-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 300px;
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #eee;
+            z-index: 9999;
+            font-family: sans-serif;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .curation-panel.hidden {
+            transform: translateY(20px);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .curation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #333;
+            background: rgba(255,255,255,0.05);
+        }
+        .curation-header h3 { margin: 0; font-size: 14px; font-weight: 600; }
+        .curation-body { padding: 15px; }
+        .control-group { margin-bottom: 15px; }
+        .control-group label { display: block; font-size: 11px; color: #aaa; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .slider-row { display: flex; gap: 10px; align-items: center; }
+        .slider-row input[type=range] { flex: 1; }
+        .slider-row input[type=number] { width: 50px; background: #333; border: 1px solid #555; color: white; border-radius: 4px; padding: 4px; font-size: 12px; }
+        
+        /* Toggle Styles */
+        .toggle-row { display: flex; background: #333; border-radius: 4px; padding: 2px; }
+        .toggle-label { flex: 1; text-align: center; padding: 6px; font-size: 10px; color: #888; border-radius: 4px; transition: all 0.2s; }
+        .toggle-label.active { background: #007bff; color: white; font-weight: bold; }
+
+        .btn-primary, .btn-secondary {
+            width: 100%;
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-primary:hover { background: #0069d9; }
+        .btn-secondary { background: #28a745; color: white; }
+        .btn-secondary:disabled { background: #444; cursor: not-allowed; opacity: 0.7; }
+        
+        input[type=text] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px;
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .status-text { margin-top: 10px; font-size: 11px; color: #888; text-align: center; height: 14px; }
+        .help-text { font-size: 10px; color: #666; margin-top: 3px; font-style: italic; }
+        
+        /* Grid Highlighting Styles */
+        .curation-selected-img {
+            border: 3px solid #00ff00 !important;
+            opacity: 1.0 !important;
+            transform: scale(0.95);
+            transition: all 0.2s;
+        }
+        .curation-dimmed-img {
+            opacity: 0.2 !important;
+            filter: grayscale(100%);
+            transition: all 0.2s;
+        }
+    </style>
   </body>
 </html>

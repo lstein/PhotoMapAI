@@ -232,7 +232,7 @@ export async function fetchUmapData() {
     };
 
     const config = {
-      "modeBarButtons": [["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "toImage"]],
+      modeBarButtonsToRemove: ["select2d", "lasso2d"],
       scrollZoom: true,
     };
 
@@ -292,20 +292,6 @@ export async function fetchUmapData() {
 
       gd.on("plotly_relayout", (eventData) => {
         if (suppressRelayoutEvent) return; // Prevent feedback loop
-
-        // Auto-switch back to pan after zoom
-        const isZoomEvent =
-          eventData["xaxis.range[0]"] !== undefined ||
-          eventData["yaxis.range[0]"] !== undefined ||
-          eventData["xaxis.range"] !== undefined ||
-          eventData["yaxis.range"] !== undefined;
-        
-        if (isZoomEvent && gd.layout.dragmode === 'zoom') {
-          // Small delay to avoid interfering with the zoom operation
-          setTimeout(() => {
-            Plotly.relayout(gd, { dragmode: 'pan' });
-          }, 100);
-        }
 
         // Only update landmarks for actual user pan/zoom events, not our programmatic changes
         const isPanZoom =
@@ -1445,3 +1431,55 @@ export function isUmapFullscreen() {
 // Set initial title on DOMContentLoaded
 document.addEventListener("DOMContentLoaded", initializeUmapWindow);
 window.addEventListener("albumChanged", initializeUmapWindow);
+
+export function highlightCurationSelection(indicesArray) {
+    const plotDiv = document.getElementById("umapPlot");
+    // Ensure points are loaded
+    if (!plotDiv || !points || points.length === 0) return;
+
+    const traceName = "CurationSelection";
+    
+    // If we have no selection, remove the trace
+    if (!indicesArray || indicesArray.length === 0) {
+        if (plotDiv.data) {
+            const idx = plotDiv.data.findIndex(t => t.name === traceName);
+            if (idx !== -1) Plotly.deleteTraces(plotDiv, idx);
+        }
+        return;
+    }
+
+    // Filter the global 'points' array to find X/Y for our selected indices
+    const idxSet = new Set(indicesArray);
+    const selectedPoints = points.filter(p => idxSet.has(p.index));
+    
+    const x = selectedPoints.map(p => p.x);
+    const y = selectedPoints.map(p => p.y);
+
+    // Create the Highlight Trace (Green Dots)
+    const trace = {
+        x: x,
+        y: y,
+        mode: "markers",
+        type: "scattergl",
+        name: traceName,
+        marker: {
+            color: "#00ff00", // Bright Green
+            size: 8,          // Larger than normal points
+            symbol: "circle",
+            opacity: 1,
+            line: { color: "#ffffff", width: 1 } // White border for contrast
+        },
+        hoverinfo: "none" // Don't block hover tooltips of underlying points
+    };
+
+    const existingIdx = plotDiv.data ? plotDiv.data.findIndex(t => t.name === traceName) : -1;
+    
+    if (existingIdx !== -1) {
+        // Delete old trace and add new one to update positions
+        Plotly.deleteTraces(plotDiv, existingIdx).then(() => {
+             Plotly.addTraces(plotDiv, trace);
+        });
+    } else {
+        Plotly.addTraces(plotDiv, trace);
+    }
+}
