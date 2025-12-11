@@ -79,6 +79,12 @@ async def run_curation(request: CurationRequest):
             f_norm = os.path.normpath(filepath).lower()
             if f_norm in norm_map:
                 idx = int(norm_map[f_norm])
+                
+                # CRITICAL FIX: Strictly enforce exclusion. 
+                # Even if the algo returned it (e.g. due to index drift), we MUST drop it here.
+                if idx in request.excluded_indices:
+                    continue
+
                 subfolder = os.path.basename(os.path.dirname(filepath))
                 
                 analysis_results.append({

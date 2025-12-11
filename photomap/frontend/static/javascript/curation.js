@@ -177,7 +177,13 @@ function setupEventListeners() {
             clearSelectionData();
 
             // Populate data
-            currentSelectionIndices = new Set(data.selected_indices); // EXACTLY THE TOP N
+            // Populate data
+            currentSelectionIndices = new Set();
+            data.selected_indices.forEach(idx => {
+                if (!excludedIndices.has(idx)) {
+                    currentSelectionIndices.add(idx);
+                }
+            });
             currentSelectionFiles = data.selected_files;
             analysisResults = data.analysis_results;
 
@@ -186,6 +192,7 @@ function setupEventListeners() {
                 globalMetadataMap.set(r.index, {
                     filename: r.filename,
                     subfolder: r.subfolder,
+                    filepath: r.filepath, // Important: Store full path for export
                     frequency: r.frequency,
                     count: r.count
                 });
@@ -225,33 +232,60 @@ function setupEventListeners() {
     };
 
     // Export
+
     exportBtn.onclick = async () => {
         const path = document.getElementById('curationExportPath').value;
         if (!path) { alert("Please enter path."); return; }
-        setStatus("Exporting...", "loading");
+
+        // Reconstruct file list from current indices, respecting exclusions
+        let filesToExport = [];
+        currentSelectionIndices.forEach(idx => {
+            if (!excludedIndices.has(idx)) {
+                const meta = globalMetadataMap.get(idx);
+                if (meta && meta.filepath) {
+                    filesToExport.push(meta.filepath);
+                }
+            }
+        });
+
+        if (filesToExport.length === 0) {
+            alert("No files selected to export (all excluded?).");
+            return;
+        }
+
+        setStatus(`Exporting ${filesToExport.length} files...`, "loading");
         try {
             const response = await fetch('/api/curation/export', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filenames: currentSelectionFiles, output_folder: path })
+                body: JSON.stringify({ filenames: filesToExport, output_folder: path })
             });
             const data = await response.json();
             alert(`Exported ${data.exported} files.`);
             setStatus("Export Complete.", "success");
-        } catch (e) { alert("Export failed."); }
+        } catch (e) {
+            console.error(e);
+            alert("Export failed: " + e.message);
+        }
     };
 
     if (csvBtn) {
         csvBtn.onclick = () => {
-            if (globalMetadataMap.size === 0) return;
+            if (globalMetadataMap.size === 0 && currentSelectionIndices.size === 0 && excludedIndices.size === 0) return;
 
             let csvContent = "data:text/csv;charset=utf-8,Filename,Subfolder,Count,Frequency(%),Index,Status\n";
+
+            // Helper to escape CSV strings
+            const esc = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
 
             // 1. Add Included Items
             currentSelectionIndices.forEach(idx => {
                 const meta = globalMetadataMap.get(idx);
                 if (meta) {
-                    csvContent += `${meta.filename},${meta.subfolder},${meta.count},${meta.frequency},${idx},Included\n`;
+                    csvContent += `${esc(meta.filename)},${esc(meta.subfolder)},${meta.count},${meta.frequency},${idx},Included\n`;
+                } else {
+                    // Should include forced items too ideally, for now mark as Included-Unknown
+                    csvContent += `"Unknown","Unknown",0,0,${idx},Included\n`;
                 }
             });
 
@@ -259,12 +293,12 @@ function setupEventListeners() {
             excludedIndices.forEach(idx => {
                 const meta = globalMetadataMap.get(idx);
                 if (meta) {
-                    csvContent += `${meta.filename},${meta.subfolder},${meta.count},${meta.frequency},${idx},Excluded\n`;
+                    csvContent += `${esc(meta.filename)},${esc(meta.subfolder)},${meta.count},${meta.frequency},${idx},Excluded\n`;
                 } else {
-                    // Fallback if we somehow excluded something without metadata (unlikely if flow is followed)
-                    csvContent += `Unknown,Unknown,0,0,${idx},Excluded\n`;
+                    csvContent += `"Unknown (Manual)","Unknown",0,0,${idx},Excluded\n`;
                 }
             });
+
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
