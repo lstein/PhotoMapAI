@@ -15,6 +15,9 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 class CurationRequest(BaseModel):
+    """
+    Request model for the curation endpoint.
+    """
     target_count: int
     iterations: int = 1
     album: str
@@ -22,11 +25,23 @@ class CurationRequest(BaseModel):
     excluded_indices: List[int] = []
 
 class ExportRequest(BaseModel):
+    """
+    Request model for the export endpoint.
+    """
     filenames: List[str]
     output_folder: str
 
 @router.post("/curate")
 async def run_curation(request: CurationRequest):
+    """
+    Run the curation process (Monte Carlo FPS or K-Means) to select a diverse or representative set of images.
+    
+    Args:
+        request: CurationRequest containing target count, iterations, album, method, etc.
+        
+    Returns:
+        JSON response with status, selected indices, files, and analysis results.
+    """
     try:
         config_manager = get_config_manager()
         album_config = config_manager.get_album(request.album)
@@ -103,6 +118,15 @@ async def run_curation(request: CurationRequest):
 
 @router.post("/export")
 async def export_dataset(request: ExportRequest):
+    """
+    Export the selected images to a specified folder.
+    
+    Args:
+        request: ExportRequest containing filenames and output folder.
+        
+    Returns:
+        JSON response with success count and any errors.
+    """
     # (Keep the existing export function I gave you previously with the renaming logic)
     output_dir = request.output_folder
     if not output_dir: raise HTTPException(status_code=400, detail="Output folder required")

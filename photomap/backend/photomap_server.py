@@ -1,4 +1,8 @@
 # slideshow_server.py
+"""
+Main entry point for the PhotoMapAI backend server.
+Initializes the FastAPI app, mounts routers, and handles server startup.
+"""
 import logging
 import os
 import signal

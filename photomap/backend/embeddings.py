@@ -53,6 +53,18 @@ SUPPORTED_EXTENSIONS = {
 # FPS with Exclusion Support
 # =========================================================================
 def get_fps_indices_global(embeddings_path: Path, n_target: int, seed: int = 42, ignore_indices: list[int] = None) -> list[str]:
+    """
+    Select indices using Farthest Point Sampling to maximize diversity.
+    
+    Args:
+        embeddings_path: Path to the .npz embeddings file.
+        n_target: Number of images to select.
+        seed: Random seed for reproducibility.
+        ignore_indices: List of global indices to ignore/exclude.
+        
+    Returns:
+        List of selected filenames.
+    """
     data = _open_npz_file(embeddings_path)
     embeddings = data["embeddings"]
     filenames = data["filenames"]
@@ -79,9 +91,9 @@ def get_fps_indices_global(embeddings_path: Path, n_target: int, seed: int = 42,
     vectors = filtered_embeddings / (norms + 1e-10)
 
     # Standard FPS Logic on the FILTERED set
-    np.random.seed(seed)
+    rng = np.random.RandomState(seed)
     # Pick random index relative to the FILTERED set
-    start_idx = np.random.randint(0, n_samples)
+    start_idx = rng.randint(0, n_samples)
     selected_local_indices = [start_idx]
     
     first_vector = vectors[start_idx].reshape(1, -1)
@@ -104,6 +116,18 @@ def get_fps_indices_global(embeddings_path: Path, n_target: int, seed: int = 42,
 # K-Means with Exclusion Support
 # =========================================================================
 def get_kmeans_indices_global(embeddings_path: Path, n_target: int, seed: int = 42, ignore_indices: list[int] = None) -> list[str]:
+    """
+    Select indices using K-Means clustering to find representative images.
+    
+    Args:
+        embeddings_path: Path to the .npz embeddings file.
+        n_target: Number of images to select.
+        seed: Random seed for reproducibility.
+        ignore_indices: List of global indices to ignore/exclude.
+        
+    Returns:
+        List of selected filenames.
+    """
     data = _open_npz_file(embeddings_path)
     embeddings = data["embeddings"]
     filenames = data["filenames"]
