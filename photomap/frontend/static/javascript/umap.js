@@ -15,6 +15,15 @@ const UMAP_SIZES = {
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
 const randomWalkMaxSize = 2000; // Max cluster size to use random walk ordering
 
+let externalClickCallback = null;
+let updateMarkerTimer = null;
+let ignoreUpdatesUntil = 0;
+
+export function setUmapClickCallback(callback) {
+    externalClickCallback = callback;
+}
+// --------------------------------------------
+
 let points = [];
 let clusters = [];
 let colors = [];
@@ -352,6 +361,21 @@ export async function fetchUmapData() {
     document
       .getElementById("umapPlot")
       .on("plotly_click", async function (data) {
+        
+        // --- MODIFIED: Intercept click for Curation Lock Mode ---
+        if (externalClickCallback) {
+            const pt = data.points[0];
+            let index = pt.customdata; 
+            if (index === undefined && points[pt.pointIndex]) {
+                index = points[pt.pointIndex].index;
+            }
+            if (index !== undefined) {
+                externalClickCallback(index);
+                return; // Block normal search behavior
+            }
+        }
+        // ---------------------------------------------------
+
         const clickedLandmarkCluster = findLandmarkCluster(data.points[0]);
 
         if (clickedLandmarkCluster !== null) {
@@ -481,17 +505,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // --- Update colorization after search or cluster selection ---
 window.addEventListener("searchResultsChanged", function (e) {
-  setUmapColorMode();
-  // deactivate fullscreen mode when search results have come in
-  if (state.searchResults.length > 0 && isFullscreen) {
-    setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
-  }
+  updateUmapColorModeAvailability(e.detail.results);
 });
 
 window.addEventListener("slideChanged", async () => {
-  // Ensure the current image marker is updated when the slide changes
-  // add a slight timeout to ensure the slide is fully loaded.
-  setTimeout(() => updateCurrentImageMarker(), 500);
+  // Clear any existing pending update
+  if (updateMarkerTimer) clearTimeout(updateMarkerTimer);
+  
+  updateMarkerTimer = setTimeout(() => {
+      // If we are currently inside the "Ignore Window" triggered by Clear, skip this update.
+      if (Date.now() < ignoreUpdatesUntil) {
+          return;
+      }
+      updateCurrentImageMarker();
+  }, 500);
 });
 
 // --- Update Current Image Marker ---
@@ -1432,54 +1459,112 @@ export function isUmapFullscreen() {
 document.addEventListener("DOMContentLoaded", initializeUmapWindow);
 window.addEventListener("albumChanged", initializeUmapWindow);
 
-export function highlightCurationSelection(indicesArray) {
+// ========================================================
+// Curation Highlighting (Heatmap + Locks)
+// ========================================================
+export function highlightCurationSelection(highIndices, medIndices, lowIndices, lockedIndices) {
     const plotDiv = document.getElementById("umapPlot");
-    // Ensure points are loaded
     if (!plotDiv || !points || points.length === 0) return;
 
-    const traceName = "CurationSelection";
-    
-    // If we have no selection, remove the trace
-    if (!indicesArray || indicesArray.length === 0) {
-        if (plotDiv.data) {
-            const idx = plotDiv.data.findIndex(t => t.name === traceName);
-            if (idx !== -1) Plotly.deleteTraces(plotDiv, idx);
-        }
-        return;
+    // 1. Remove old curation traces
+    const tracesToRemove = [];
+    if(plotDiv.data) {
+        plotDiv.data.forEach((t, i) => {
+            if(t.name.startsWith('Curation')) tracesToRemove.push(i);
+        });
     }
+    if(tracesToRemove.length > 0) Plotly.deleteTraces(plotDiv, tracesToRemove);
 
-    // Filter the global 'points' array to find X/Y for our selected indices
-    const idxSet = new Set(indicesArray);
-    const selectedPoints = points.filter(p => idxSet.has(p.index));
-    
-    const x = selectedPoints.map(p => p.x);
-    const y = selectedPoints.map(p => p.y);
+    const newTraces = [];
+    const lockedSet = new Set(lockedIndices || []);
 
-    // Create the Highlight Trace (Green Dots)
-    const trace = {
-        x: x,
-        y: y,
-        mode: "markers",
-        type: "scattergl",
-        name: traceName,
-        marker: {
-            color: "#00ff00", // Bright Green
-            size: 8,          // Larger than normal points
-            symbol: "circle",
-            opacity: 1,
-            line: { color: "#ffffff", width: 1 } // White border for contrast
-        },
-        hoverinfo: "none" // Don't block hover tooltips of underlying points
+    // Helper to build trace
+    const createTrace = (indices, color, name, size=8) => {
+        if(!indices || indices.length === 0) return null;
+        
+        // STRICT FILTER: Never draw a dot in this trace if it is also Locked
+        // This prevents Cyan/Magenta from painting over Red
+        const validIndices = indices.filter(i => !lockedSet.has(i));
+        if (validIndices.length === 0) return null;
+
+        const idxSet = new Set(validIndices);
+        const pts = points.filter(p => idxSet.has(p.index));
+        
+        return {
+            x: pts.map(p => p.x),
+            y: pts.map(p => p.y),
+            mode: "markers",
+            type: "scattergl",
+            name: name,
+            marker: {
+                color: color,
+                size: size,
+                symbol: "circle",
+                opacity: 1,
+                line: { color: "#ffffff", width: 1 }
+            },
+            hoverinfo: "none"
+        };
     };
 
-    const existingIdx = plotDiv.data ? plotDiv.data.findIndex(t => t.name === traceName) : -1;
-    
-    if (existingIdx !== -1) {
-        // Delete old trace and add new one to update positions
-        Plotly.deleteTraces(plotDiv, existingIdx).then(() => {
-             Plotly.addTraces(plotDiv, trace);
-        });
-    } else {
-        Plotly.addTraces(plotDiv, trace);
+    // Draw Heatmap Layers FIRST (Bottom)
+    const tLow = createTrace(lowIndices, "#00ff00", "CurationLow");
+    if(tLow) newTraces.push(tLow);
+
+    const tMed = createTrace(medIndices, "#00ffff", "CurationMed");
+    if(tMed) newTraces.push(tMed);
+
+    const tHigh = createTrace(highIndices, "#ff00ff", "CurationHigh");
+    if(tHigh) newTraces.push(tHigh);
+
+    // Draw Locked Layer LAST (Top) - No filtering needed here
+    if (lockedIndices && lockedIndices.length > 0) {
+        const lockedPts = points.filter(p => lockedSet.has(p.index));
+        if (lockedPts.length > 0) {
+            newTraces.push({
+                x: lockedPts.map(p => p.x),
+                y: lockedPts.map(p => p.y),
+                mode: "markers",
+                type: "scattergl",
+                name: "CurationLocked",
+                marker: {
+                    color: "#ff0000", // Red
+                    size: 8,
+                    symbol: "circle",
+                    opacity: 1,
+                    line: { color: "#ffffff", width: 1 }
+                },
+                hoverinfo: "none"
+            });
+        }
     }
+
+    if (newTraces.length > 0) Plotly.addTraces(plotDiv, newTraces);
 }
+
+// ========================================================
+// Clear the Yellow "Current Image" Dot
+// ========================================================
+export function hideCurrentImageMarker() {
+    // 1. Stop any pending updates from the race condition
+    if (updateMarkerTimer) clearTimeout(updateMarkerTimer);
+    
+    // 2. Set a 1-second "Dead Zone". 
+    // Any slideChange events occurring in the next 1000ms will be ignored.
+    ignoreUpdatesUntil = Date.now() + 1000;
+
+    // 3. Force hide the dot immediately
+    const plotDiv = document.getElementById("umapPlot");
+    if (!plotDiv || !plotDiv.data) return;
+
+    const markerTraceIndex = plotDiv.data.findIndex(
+        (trace) => trace.name === "Current Image"
+    );
+
+    if (markerTraceIndex !== -1) {
+        Plotly.restyle(
+            "umapPlot", 
+            { x: [[]], y: [[]] }, 
+            markerTraceIndex
+        );
+    }}
