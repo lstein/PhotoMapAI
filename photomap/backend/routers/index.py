@@ -103,7 +103,7 @@ async def remove_index(album_key: str) -> JSONResponse:
                 status_code=404, detail=f"Album '{album_key}' not found"
             )
 
-        index_path = Path(album_config.index)
+        index_path = Path(album_config.index).resolve()
         if not index_path.exists():
             raise HTTPException(status_code=404, detail="Index file does not exist")
 

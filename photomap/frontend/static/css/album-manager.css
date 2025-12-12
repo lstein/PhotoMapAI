@@ -20,33 +20,12 @@
   color: #fff;
   margin: 0;
   font-size: 1.5em;
-  flex: 1;
-  text-align: center;
 }
 
 .header-buttons {
   display: flex;
   gap: 1em;
   align-items: center;
-}
-
-.back-arrow-btn {
-  background: none;
-  border: none;
-  color: #faea0e;
-  font-size: 1em;
-  cursor: pointer;
-  padding: 0.5em;
-  display: flex;
-  align-items: center;
-  gap: 0.25em;
-  transition: color 0.2s ease;
-}
-
-.back-arrow-btn:hover {
-  color: #fff;
-  background: rgba(250, 234, 14, 0.1);
-  border-radius: 4px;
 }
 
 .add-album-section {
