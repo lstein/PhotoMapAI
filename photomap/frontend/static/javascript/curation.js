@@ -158,7 +158,7 @@ function setupEventListeners() {
         setStatus(`Running ${method.toUpperCase()} (${iter} iterations)...`, "loading");
 
         try {
-            const response = await fetch('/api/curation/curate', {
+            const response = await fetch('api/curation/curate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
