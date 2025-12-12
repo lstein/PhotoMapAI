@@ -458,6 +458,7 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
       "marker.color": [markerColors],
       "marker.opacity": [markerAlphas],
       "marker.size": [markerSizes],
+      "marker.symbol": ["circle"],
     },
     [0]
   );
