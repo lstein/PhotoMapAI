@@ -2,6 +2,7 @@
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-manager.js";
 import { getImagePath, setSearchResults } from "./search.js";
+import { exitSearchMode } from "./search-ui.js";
 import { getCurrentSlideIndex } from "./slide-state.js";
 import { state } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
@@ -439,21 +440,24 @@ plotDiv.addEventListener("mouseleave", () => {
 // --- Dynamic Colorization ---
 export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
   if (!points.length) return;
-  let markerColors, markerAlphas;
+  let markerColors, markerAlphas, markerSizes;
 
   if (highlight && searchResults.length > 0) {
     const searchSet = new Set(searchResults.map((r) => r.index));
-    markerColors = points.map((p) => getClusterColor(p.cluster));
+    markerColors = points.map((p) => (searchSet.has(p.index) ? "#faea0e" : getClusterColor(p.cluster)));
     markerAlphas = points.map((p) => (searchSet.has(p.index) ? 1.0 : 0.2));
+    markerSizes = points.map((p) => (searchSet.has(p.index) ? 8 : 5));
   } else {
     markerColors = points.map((p) => getClusterColor(p.cluster));
     markerAlphas = points.map((p) => (p.cluster === -1 ? 0.25 : 0.5));
+    markerSizes = points.map(() => 5);
   }
   Plotly.restyle(
     "umapPlot",
     {
       "marker.color": [markerColors],
       "marker.opacity": [markerAlphas],
+      "marker.size": [markerSizes],
     },
     [0]
   );
@@ -466,6 +470,15 @@ document.addEventListener("DOMContentLoaded", () => {
     highlightCheckbox.checked = false;
     highlightCheckbox.addEventListener("change", () => {
       setUmapColorMode();
+    });
+  }
+
+  // Clear selection link
+  const clearSelectionLink = document.getElementById("umapClearSelectionLink");
+  if (clearSelectionLink) {
+    clearSelectionLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      exitSearchMode();
     });
   }
 
