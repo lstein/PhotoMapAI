@@ -4,7 +4,7 @@ import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex } from "./slide-state.js";
-import { state } from "./state.js";
+import { state, setUmapShowLandmarks, setUmapShowHoverThumbnails } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {
@@ -547,7 +547,8 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
 }
 
 // --- Checkbox event handler ---
-document.addEventListener("DOMContentLoaded", () => {
+// Wait for state to be ready before initializing checkboxes
+window.addEventListener("stateReady", () => {
   const highlightCheckbox = document.getElementById("umapHighlightSelection");
   if (highlightCheckbox) {
     highlightCheckbox.checked = false;
@@ -565,25 +566,27 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Hover thumbnails checkbox
+  // Hover thumbnails checkbox - initialize from state
   const hoverThumbCheckbox = document.getElementById("umapShowHoverThumbnails");
   if (hoverThumbCheckbox) {
-    hoverThumbCheckbox.checked = true;
-    hoverThumbnailsEnabled = true;
+    hoverThumbCheckbox.checked = state.umapShowHoverThumbnails;
+    hoverThumbnailsEnabled = state.umapShowHoverThumbnails;
     hoverThumbCheckbox.addEventListener("change", (e) => {
       hoverThumbnailsEnabled = e.target.checked;
+      setUmapShowHoverThumbnails(e.target.checked);
       // Remove any popup if disabling
       if (!hoverThumbnailsEnabled) removeUmapThumbnail();
     });
   }
 
-  // Landmarks checkbox
+  // Landmarks checkbox - initialize from state
   const landmarkCheckbox = document.getElementById("umapShowLandmarks");
   if (landmarkCheckbox) {
-    landmarkCheckbox.checked = true;
-    landmarksVisible = true;
+    landmarkCheckbox.checked = state.umapShowLandmarks;
+    landmarksVisible = state.umapShowLandmarks;
     landmarkCheckbox.addEventListener("change", (e) => {
       landmarksVisible = e.target.checked;
+      setUmapShowLandmarks(e.target.checked);
       updateLandmarkTrace();
     });
   }
