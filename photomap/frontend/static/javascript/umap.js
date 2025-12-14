@@ -381,9 +381,13 @@ export async function fetchUmapData() {
           if (landmarkPoint) {
             await handleClusterClick(landmarkPoint.index);
           }
-        } else if (data.points[0].curveNumber === 0) {
-          // Regular scatter plot click
-          await handleClusterClick(data.points[0].customdata);
+        } else {
+          const pt = data.points[0];
+          const traceName = pt.data?.name;
+          // Main points or highlighted points behave the same
+          if (traceName === "All Points" || traceName === "HighlightedPoints") {
+            await handleClusterClick(pt.customdata);
+          }
         }
       });
 
@@ -479,7 +483,7 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
         color: highlightedPoints.map(p => getClusterColor(p.cluster)),
         opacity: 1.0,
         size: 10,
-        line: { width: 2, color: "#fff" }
+        line: { width: 1, color: "#fff" }
       },
       customdata: highlightedPoints.map(p => p.index),
       name: "HighlightedPoints",
