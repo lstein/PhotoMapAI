@@ -1,8 +1,8 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-manager.js";
-import { getImagePath, setSearchResults } from "./search.js";
 import { exitSearchMode } from "./search-ui.js";
+import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex } from "./slide-state.js";
 import { state } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
@@ -140,7 +140,7 @@ export async function fetchUmapData() {
 
     // Prepare marker arrays
     const markerColors = points.map((p) => getClusterColor(p.cluster));
-    const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.08 : 0.5));
+    const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.08 : 0.75));
 
     // Main trace: all points
     const allPointsTrace = {
@@ -233,7 +233,9 @@ export async function fetchUmapData() {
     };
 
     const config = {
-      "modeBarButtons": [["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "toImage"]],
+      modeBarButtons: [
+        ["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "toImage"],
+      ],
       scrollZoom: true,
     };
 
@@ -300,11 +302,11 @@ export async function fetchUmapData() {
           eventData["yaxis.range[0]"] !== undefined ||
           eventData["xaxis.range"] !== undefined ||
           eventData["yaxis.range"] !== undefined;
-        
-        if (isZoomEvent && gd.layout.dragmode === 'zoom') {
+
+        if (isZoomEvent && gd.layout.dragmode === "zoom") {
           // Small delay to avoid interfering with the zoom operation
           setTimeout(() => {
-            Plotly.relayout(gd, { dragmode: 'pan' });
+            Plotly.relayout(gd, { dragmode: "pan" });
           }, 100);
         }
 
@@ -444,12 +446,16 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
 
   if (highlight && searchResults.length > 0) {
     const searchSet = new Set(searchResults.map((r) => r.index));
-    markerColors = points.map((p) => (searchSet.has(p.index) ? "#faea0e" : getClusterColor(p.cluster)));
-    markerAlphas = points.map((p) => (searchSet.has(p.index) ? 1.0 : 0.2));
+    markerColors = points.map((p) =>
+      searchSet.has(p.index) ? "#faea0e" : getClusterColor(p.cluster)
+    );
+    markerAlphas = points.map((p) =>
+      searchSet.has(p.index) ? 1.0 : p.cluster === -1 ? 0.2 : 0.75
+    );
     markerSizes = points.map((p) => (searchSet.has(p.index) ? 8 : 5));
   } else {
     markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.25 : 0.5));
+    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.2 : 0.75));
     markerSizes = points.map(() => 5);
   }
   Plotly.restyle(
