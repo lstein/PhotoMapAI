@@ -442,32 +442,104 @@ plotDiv.addEventListener("mouseleave", () => {
 // --- Dynamic Colorization ---
 export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
   if (!points.length) return;
-  let markerColors, markerAlphas, markerSizes;
+  
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.data) return;
 
   if (highlight && searchResults.length > 0) {
     const searchSet = new Set(searchResults.map((r) => r.index));
-    markerColors = points.map((p) =>
-      searchSet.has(p.index) ? "#faea0e" : getClusterColor(p.cluster)
+    
+    // Split points into two groups
+    const regularPoints = points.filter(p => !searchSet.has(p.index));
+    const highlightedPoints = points.filter(p => searchSet.has(p.index));
+    
+    // Update main trace with only regular points
+    Plotly.restyle(
+      "umapPlot",
+      {
+        x: [regularPoints.map(p => p.x)],
+        y: [regularPoints.map(p => p.y)],
+        "marker.color": [regularPoints.map(p => getClusterColor(p.cluster))],
+        "marker.opacity": [regularPoints.map(p => p.cluster === -1 ? 0.2 : 0.75)],
+        "marker.size": [regularPoints.map(() => 5)],
+        "marker.line.width": [0],
+        customdata: [regularPoints.map(p => p.index)],
+      },
+      [0]
     );
-    markerAlphas = points.map((p) =>
-      searchSet.has(p.index) ? 1.0 : p.cluster === -1 ? 0.2 : 0.75
+    
+    // Add/update highlighted trace
+    const highlightTraceIdx = plotDiv.data.findIndex(t => t.name === "HighlightedPoints");
+    const highlightTrace = {
+      x: highlightedPoints.map(p => p.x),
+      y: highlightedPoints.map(p => p.y),
+      mode: "markers",
+      type: "scattergl",
+      marker: {
+        color: highlightedPoints.map(p => getClusterColor(p.cluster)),
+        opacity: 1.0,
+        size: 10,
+        line: { width: 2, color: "#fff" }
+      },
+      customdata: highlightedPoints.map(p => p.index),
+      name: "HighlightedPoints",
+      hoverinfo: "none",
+    };
+    
+    if (highlightTraceIdx === -1) {
+      Plotly.addTraces(plotDiv, [highlightTrace]);
+    } else {
+      Plotly.restyle(plotDiv, {
+        x: [highlightTrace.x],
+        y: [highlightTrace.y],
+        "marker.color": [highlightTrace.marker.color],
+        "marker.opacity": [highlightTrace.marker.opacity],
+        "marker.size": [highlightTrace.marker.size],
+        customdata: [highlightTrace.customdata],
+      }, highlightTraceIdx);
+    }
+
+    // Ensure Current Image marker stays on top
+    const markerTraceIndex = plotDiv.data.findIndex(
+      (trace) => trace.name === "Current Image"
     );
-    markerSizes = points.map((p) => (searchSet.has(p.index) ? 8 : 5));
+    if (markerTraceIndex !== -1 && markerTraceIndex !== plotDiv.data.length - 1) {
+      Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
+    }
   } else {
-    markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.2 : 0.75));
-    markerSizes = points.map(() => 5);
+    // Remove highlight trace if it exists
+    const highlightTraceIdx = plotDiv.data?.findIndex(t => t.name === "HighlightedPoints");
+    if (highlightTraceIdx !== -1) {
+      Plotly.deleteTraces(plotDiv, highlightTraceIdx);
+    }
+    
+    // Restore ALL points to main trace with normal coloring
+    const markerColors = points.map((p) => getClusterColor(p.cluster));
+    const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.2 : 0.75));
+    const markerSizes = points.map(() => 5);
+    
+    Plotly.restyle(
+      "umapPlot",
+      {
+        x: [points.map(p => p.x)],
+        y: [points.map(p => p.y)],
+        "marker.color": [markerColors],
+        "marker.opacity": [markerAlphas],
+        "marker.size": [markerSizes],
+        "marker.line.width": [0],
+        customdata: [points.map(p => p.index)],
+      },
+      [0]
+    );
+
+    // Ensure Current Image marker stays on top after removing highlight
+    const markerTraceIndex = plotDiv.data.findIndex(
+      (trace) => trace.name === "Current Image"
+    );
+    if (markerTraceIndex !== -1 && markerTraceIndex !== plotDiv.data.length - 1) {
+      Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
+    }
   }
-  Plotly.restyle(
-    "umapPlot",
-    {
-      "marker.color": [markerColors],
-      "marker.opacity": [markerAlphas],
-      "marker.size": [markerSizes],
-      "marker.line.width": [0],
-    },
-    [0]
-  );
 }
 
 // --- Checkbox event handler ---
