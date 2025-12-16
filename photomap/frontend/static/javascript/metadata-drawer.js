@@ -4,6 +4,8 @@ import { bookmarkManager } from "./bookmarks.js";
 import { scoreDisplay } from "./score-display.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
+import { setSearchResults } from "./search.js";
+import { isColorLight } from "./utils.js";
 
 // Set up the bookmark toggle callback for the star icon
 scoreDisplay.setToggleBookmarkCallback((globalIndex) => {
@@ -103,7 +105,56 @@ export function updateMetadataOverlay(slide) {
     slide.dataset.filepath || "";
   document.getElementById("metadataLink").href =
     slide.dataset.metadata_url || "#";
+  
+  // Update cluster information display
+  updateClusterInfo(slide.dataset);
   updateCurrentImageScore(slide.dataset);
+}
+
+// Update cluster information in the metadata window
+function updateClusterInfo(metadata) {
+  const clusterInfoContainer = document.getElementById("clusterInfoContainer");
+  const clusterInfoBadge = document.getElementById("clusterInfoBadge");
+  
+  if (!clusterInfoContainer || !clusterInfoBadge) return;
+  
+  // Check if we have cluster information and we're in cluster search mode
+  if (metadata.cluster !== null && metadata.cluster !== undefined && state.searchType === "cluster") {
+    const cluster = metadata.cluster;
+    const color = metadata.color || "#cccccc";
+    
+    // Calculate cluster size from search results
+    const clusterSize = state.searchResults.length;
+    
+    // Create label
+    const clusterLabel = cluster === "unclustered" 
+      ? `Unclustered (size=${clusterSize})` 
+      : `Cluster ${cluster} (size=${clusterSize})`;
+    
+    // Set badge text and colors
+    clusterInfoBadge.textContent = clusterLabel;
+    clusterInfoBadge.style.backgroundColor = color;
+    clusterInfoBadge.style.color = isColorLight(color) ? "#222" : "#fff";
+    
+    // Show container
+    clusterInfoContainer.style.display = "block";
+    
+    // Set up click handler to select cluster (if not already set)
+    if (!clusterInfoBadge.hasAttribute("data-click-handler")) {
+      clusterInfoBadge.setAttribute("data-click-handler", "true");
+      clusterInfoBadge.addEventListener("click", () => {
+        // The cluster is already selected, so just ensure search results are populated
+        // This click should refresh or maintain the current cluster selection
+        if (state.searchResults.length > 0) {
+          // Already showing this cluster, no action needed
+          // Could potentially scroll to top or refocus on search results
+        }
+      });
+    }
+  } else {
+    // Hide cluster info if not in cluster mode
+    clusterInfoContainer.style.display = "none";
+  }
 }
 
 export async function updateCurrentImageScore(metadata) {

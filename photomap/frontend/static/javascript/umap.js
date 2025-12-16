@@ -759,9 +759,10 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   const filename = await getImagePath(state.album, index);
   if (!filename) return; // No valid filename, exit early
 
-  // Find cluster color and label
+  // Find cluster color and calculate cluster size
   const clusterColor = getClusterColor(cluster);
-  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster}`;
+  const clusterSize = points.filter((p) => p.cluster === cluster).length;
+  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster} (size=${clusterSize})`;
   const textIsDark = isColorLight(clusterColor) ? "#222" : "#fff";
   const textShadow = isColorLight(clusterColor)
     ? "0 1px 2px #fff, 0 0px 8px #fff"
