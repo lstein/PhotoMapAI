@@ -13,6 +13,7 @@ let visibilityChangeCount = 0;
 const UMAP_READY_TIMEOUT = 2000; // Maximum time to wait for UMAP plot to be ready
 const UMAP_READY_CHECK_INTERVAL = 100; // Interval for checking UMAP plot readiness
 const STATE_RESTORATION_DELAY = 100; // Delay before starting state restoration
+const PERIODIC_BACKUP_INTERVAL = 30000; // Periodic state backup interval (30 seconds)
 
 // Create a backup of critical state in sessionStorage
 // sessionStorage is more persistent than localStorage on iOS when app is backgrounded
@@ -220,7 +221,7 @@ function startPeriodicBackup() {
         console.warn("Failed to perform periodic backup:", e);
       }
     }
-  }, 30000); // 30 seconds
+  }, PERIODIC_BACKUP_INTERVAL);
 }
 
 // Stop periodic backup (for cleanup)
