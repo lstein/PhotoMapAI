@@ -10,7 +10,8 @@ let wasHidden = false;
 let visibilityChangeCount = 0;
 
 // Constants for timing
-const UMAP_READY_TIMEOUT = 1000; // Time to wait for UMAP plot to be ready
+const UMAP_READY_TIMEOUT = 2000; // Maximum time to wait for UMAP plot to be ready
+const UMAP_READY_CHECK_INTERVAL = 100; // Interval for checking UMAP plot readiness
 const STATE_RESTORATION_DELAY = 100; // Delay before starting state restoration
 
 // Create a backup of critical state in sessionStorage
@@ -37,6 +38,16 @@ function backupStateToSessionStorage() {
   }
 }
 
+// Helper function to convert boolean values for localStorage storage
+function booleanToStorage(value) {
+  return value ? "true" : "false";
+}
+
+// Helper function to convert stored string values to boolean
+function storageToBoolean(value) {
+  return value === true || value === 'true';
+}
+
 // Helper function to restore a single localStorage item from sessionStorage backup
 function restoreLocalStorageItem(key, backupValue, stateKey, converter = (v) => v) {
   if (!localStorage.getItem(key) && backupValue !== undefined) {
@@ -44,7 +55,7 @@ function restoreLocalStorageItem(key, backupValue, stateKey, converter = (v) => 
       const convertedValue = converter(backupValue);
       // Store booleans as "true"/"false" strings in localStorage
       const storageValue = typeof backupValue === 'boolean' 
-        ? (backupValue ? "true" : "false") 
+        ? booleanToStorage(backupValue)
         : String(backupValue);
       localStorage.setItem(key, storageValue);
       state[stateKey] = convertedValue;
@@ -70,15 +81,15 @@ function restoreStateFromSessionStorage() {
     restored = restoreLocalStorageItem("album", criticalState.album, "album") || restored;
     restored = restoreLocalStorageItem("currentDelay", criticalState.currentDelay, "currentDelay", (v) => parseInt(v, 10)) || restored;
     restored = restoreLocalStorageItem("mode", criticalState.mode, "mode") || restored;
-    restored = restoreLocalStorageItem("showControlPanelText", criticalState.showControlPanelText, "showControlPanelText", Boolean) || restored;
-    restored = restoreLocalStorageItem("gridViewActive", criticalState.gridViewActive, "gridViewActive", Boolean) || restored;
-    restored = restoreLocalStorageItem("suppressDeleteConfirm", criticalState.suppressDeleteConfirm, "suppressDeleteConfirm", Boolean) || restored;
+    restored = restoreLocalStorageItem("showControlPanelText", criticalState.showControlPanelText, "showControlPanelText", storageToBoolean) || restored;
+    restored = restoreLocalStorageItem("gridViewActive", criticalState.gridViewActive, "gridViewActive", storageToBoolean) || restored;
+    restored = restoreLocalStorageItem("suppressDeleteConfirm", criticalState.suppressDeleteConfirm, "suppressDeleteConfirm", storageToBoolean) || restored;
     restored = restoreLocalStorageItem("gridThumbSizeFactor", criticalState.gridThumbSizeFactor, "gridThumbSizeFactor", parseFloat) || restored;
     restored = restoreLocalStorageItem("minSearchScore", criticalState.minSearchScore, "minSearchScore", parseFloat) || restored;
     restored = restoreLocalStorageItem("maxSearchResults", criticalState.maxSearchResults, "maxSearchResults", (v) => parseInt(v, 10)) || restored;
-    restored = restoreLocalStorageItem("umapShowLandmarks", criticalState.umapShowLandmarks, "umapShowLandmarks", Boolean) || restored;
-    restored = restoreLocalStorageItem("umapShowHoverThumbnails", criticalState.umapShowHoverThumbnails, "umapShowHoverThumbnails", Boolean) || restored;
-    restored = restoreLocalStorageItem("umapExitFullscreenOnSelection", criticalState.umapExitFullscreenOnSelection, "umapExitFullscreenOnSelection", Boolean) || restored;
+    restored = restoreLocalStorageItem("umapShowLandmarks", criticalState.umapShowLandmarks, "umapShowLandmarks", storageToBoolean) || restored;
+    restored = restoreLocalStorageItem("umapShowHoverThumbnails", criticalState.umapShowHoverThumbnails, "umapShowHoverThumbnails", storageToBoolean) || restored;
+    restored = restoreLocalStorageItem("umapExitFullscreenOnSelection", criticalState.umapExitFullscreenOnSelection, "umapExitFullscreenOnSelection", storageToBoolean) || restored;
     
     if (restored) {
       console.log("State restored from sessionStorage backup");
@@ -116,22 +127,39 @@ async function verifyAndRestoreState() {
   }
 }
 
+// Wait for UMAP plot to be ready with polling
+async function waitForUmapReady() {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < UMAP_READY_TIMEOUT) {
+    const plotDiv = document.getElementById("umapPlot");
+    if (plotDiv && plotDiv.data && plotDiv.data.length > 0) {
+      return true; // UMAP is ready
+    }
+    // Wait for next check interval
+    await new Promise(resolve => setTimeout(resolve, UMAP_READY_CHECK_INTERVAL));
+  }
+  
+  return false; // Timeout reached
+}
+
 // Handle state restoration and UMAP marker refresh after page becomes visible
 async function handleStateRestorationAfterVisibility() {
   await verifyAndRestoreState();
   
   // Refresh the current image marker in UMAP
-  // Wait to ensure UMAP plot is ready
-  await new Promise(resolve => setTimeout(resolve, UMAP_READY_TIMEOUT));
+  // Poll to ensure UMAP plot is ready
+  const isReady = await waitForUmapReady();
   
-  try {
-    const plotDiv = document.getElementById("umapPlot");
-    if (plotDiv && plotDiv.data && plotDiv.data.length > 0) {
+  if (isReady) {
+    try {
       console.log("Refreshing UMAP current image marker...");
       updateCurrentImageMarker();
+    } catch (e) {
+      console.warn("Failed to refresh UMAP marker:", e);
     }
-  } catch (e) {
-    console.warn("Failed to refresh UMAP marker:", e);
+  } else {
+    console.warn("UMAP plot not ready after timeout, skipping marker refresh");
   }
 }
 
