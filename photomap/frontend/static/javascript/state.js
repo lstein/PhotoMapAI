@@ -31,6 +31,7 @@ export const state = {
 document.addEventListener("DOMContentLoaded", async function () {
   await restoreFromLocalStorage();
   initializeFromServer();
+  window.stateIsReady = true; // Flag for modules that may need to know if state is ready
   window.dispatchEvent(new Event("stateReady"));
 });
 

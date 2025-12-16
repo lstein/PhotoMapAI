@@ -40,14 +40,19 @@ function backupStateToSessionStorage() {
 // Helper function to restore a single localStorage item from sessionStorage backup
 function restoreLocalStorageItem(key, backupValue, stateKey, converter = (v) => v) {
   if (!localStorage.getItem(key) && backupValue !== undefined) {
-    const convertedValue = converter(backupValue);
-    // Store booleans as "true"/"false" strings in localStorage
-    const storageValue = typeof backupValue === 'boolean' 
-      ? (backupValue ? "true" : "false") 
-      : String(backupValue);
-    localStorage.setItem(key, storageValue);
-    state[stateKey] = convertedValue;
-    return true;
+    try {
+      const convertedValue = converter(backupValue);
+      // Store booleans as "true"/"false" strings in localStorage
+      const storageValue = typeof backupValue === 'boolean' 
+        ? (backupValue ? "true" : "false") 
+        : String(backupValue);
+      localStorage.setItem(key, storageValue);
+      state[stateKey] = convertedValue;
+      return true;
+    } catch (e) {
+      console.warn(`Failed to restore ${key} to localStorage:`, e);
+      return false;
+    }
   }
   return false;
 }
@@ -156,8 +161,12 @@ function handleVisibilityChange() {
 // Handle page freeze/resume events (iOS specific)
 function handlePageFreeze() {
   console.log("Page freeze detected, backing up state...");
-  saveSettingsToLocalStorage();
-  backupStateToSessionStorage();
+  try {
+    saveSettingsToLocalStorage();
+    backupStateToSessionStorage();
+  } catch (e) {
+    console.warn("Failed to backup state during page freeze:", e);
+  }
 }
 
 function handlePageResume() {
@@ -166,13 +175,32 @@ function handlePageResume() {
 }
 
 // Periodic state backup (every 30 seconds) as an extra safety measure
+let periodicBackupIntervalId = null;
+
 function startPeriodicBackup() {
-  setInterval(() => {
+  // Clear any existing interval to avoid duplicates
+  if (periodicBackupIntervalId) {
+    clearInterval(periodicBackupIntervalId);
+  }
+  
+  periodicBackupIntervalId = setInterval(() => {
     if (!document.hidden) {
-      saveSettingsToLocalStorage();
-      backupStateToSessionStorage();
+      try {
+        saveSettingsToLocalStorage();
+        backupStateToSessionStorage();
+      } catch (e) {
+        console.warn("Failed to perform periodic backup:", e);
+      }
     }
   }, 30000); // 30 seconds
+}
+
+// Stop periodic backup (for cleanup)
+export function stopPeriodicBackup() {
+  if (periodicBackupIntervalId) {
+    clearInterval(periodicBackupIntervalId);
+    periodicBackupIntervalId = null;
+  }
 }
 
 // Initialize page visibility handling
@@ -207,8 +235,13 @@ export function initializePageVisibilityHandling() {
 
 // Initialize when DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
-  // Wait for state to be ready before initializing
-  window.addEventListener("stateReady", () => {
+  // Check if state is already ready (in case event already fired)
+  if (window.stateIsReady) {
     initializePageVisibilityHandling();
-  });
+  } else {
+    // Wait for state to be ready before initializing
+    window.addEventListener("stateReady", () => {
+      initializePageVisibilityHandling();
+    });
+  }
 });
