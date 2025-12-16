@@ -8,9 +8,9 @@ import { state, setUmapShowLandmarks, setUmapShowHoverThumbnails, setUmapExitFul
 import { debounce, getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {
-  big: { width: 800, height: 560 },
-  medium: { width: 440, height: 280 },
-  small: { width: 340, height: 180 },
+  big: { width: 800, height: 590 },
+  medium: { width: 440, height: 310 },
+  small: { width: 340, height: 210 },
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
@@ -480,10 +480,10 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
       mode: "markers",
       type: "scattergl",
       marker: {
-        color: "#faea0e",
+        color: highlightedPoints.map(p => getClusterColor(p.cluster)),
         opacity: 1.0,
         size: 8,
-        line: { width: 0 }
+        line: { width: 1, color: "#fff" }
       },
       customdata: highlightedPoints.map(p => p.index),
       name: "HighlightedPoints",
