@@ -4,7 +4,7 @@ import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex } from "./slide-state.js";
-import { state, setUmapShowLandmarks, setUmapShowHoverThumbnails } from "./state.js";
+import { state, setUmapShowLandmarks, setUmapShowHoverThumbnails, setUmapExitFullscreenOnSelection } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {
@@ -590,13 +590,38 @@ window.addEventListener("stateReady", () => {
       updateLandmarkTrace();
     });
   }
+
+  // Exit fullscreen on selection checkbox - initialize from state
+  const exitFullscreenCheckbox = document.getElementById("umapExitFullscreenOnSelection");
+  const exitFullscreenLabel = document.getElementById("umapExitFullscreenLabel");
+  if (exitFullscreenCheckbox) {
+    exitFullscreenCheckbox.checked = state.umapExitFullscreenOnSelection;
+    exitFullscreenCheckbox.addEventListener("change", (e) => {
+      setUmapExitFullscreenOnSelection(e.target.checked);
+    });
+    
+    // Update enabled state based on fullscreen mode
+    updateExitFullscreenCheckboxState();
+  }
 });
+
+// Helper function to update the "Exit fullscreen on selection" checkbox state
+function updateExitFullscreenCheckboxState() {
+  const exitFullscreenCheckbox = document.getElementById("umapExitFullscreenOnSelection");
+  const exitFullscreenLabel = document.getElementById("umapExitFullscreenLabel");
+  
+  if (exitFullscreenCheckbox && exitFullscreenLabel) {
+    const shouldEnable = isFullscreen;
+    exitFullscreenCheckbox.disabled = !shouldEnable;
+    exitFullscreenLabel.style.opacity = shouldEnable ? "1" : "0.5";
+  }
+}
 
 // --- Update colorization after search or cluster selection ---
 window.addEventListener("searchResultsChanged", function (e) {
   setUmapColorMode();
-  // deactivate fullscreen mode when search results have come in
-  if (state.searchResults.length > 0 && isFullscreen) {
+  // deactivate fullscreen mode when search results have come in (if enabled)
+  if (state.searchResults.length > 0 && isFullscreen && state.umapExitFullscreenOnSelection) {
     setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
   }
 });
@@ -1464,18 +1489,21 @@ addButtonHandlers("umapResizeBig", () => {
   lastUnshadedSize = "big";
   saveCurrentPosition();
   isFullscreen = false;
+  updateExitFullscreenCheckboxState();
 });
 addButtonHandlers("umapResizeMedium", () => {
   setUmapWindowSize("medium");
   lastUnshadedSize = "medium";
   saveCurrentPosition();
   isFullscreen = false;
+  updateExitFullscreenCheckboxState();
 });
 addButtonHandlers("umapResizeSmall", () => {
   setUmapWindowSize("small");
   lastUnshadedSize = "small";
   saveCurrentPosition();
   isFullscreen = false;
+  updateExitFullscreenCheckboxState();
 });
 function toggleFullscreen(turnOn = null) {
   const win = document.getElementById("umapFloatingWindow");
@@ -1498,6 +1526,8 @@ function toggleFullscreen(turnOn = null) {
   }
   // if any hover thumbnail is visible, remove it
   removeUmapThumbnail();
+  // Update checkbox state when fullscreen mode changes
+  updateExitFullscreenCheckboxState();
 }
 
 addButtonHandlers("umapResizeFullscreen", toggleFullscreen);

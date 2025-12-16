@@ -25,6 +25,7 @@ export const state = {
   // persisted UMAP settings
   umapShowLandmarks: true,   // Show landmarks in UMAP
   umapShowHoverThumbnails: true, // Show hover thumbnails in UMAP
+  umapExitFullscreenOnSelection: true, // Exit fullscreen when cluster is selected
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -111,6 +112,11 @@ export async function restoreFromLocalStorage() {
   if (storedUmapShowHoverThumbnails !== null) {
     state.umapShowHoverThumbnails = storedUmapShowHoverThumbnails === "true";
   }
+
+  const storedUmapExitFullscreenOnSelection = localStorage.getItem("umapExitFullscreenOnSelection");
+  if (storedUmapExitFullscreenOnSelection !== null) {
+    state.umapExitFullscreenOnSelection = storedUmapExitFullscreenOnSelection === "true";
+  }
 }
 
 // Save state to local storage
@@ -129,6 +135,7 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("maxSearchResults", state.maxSearchResults);
   localStorage.setItem("umapShowLandmarks", state.umapShowLandmarks ? "true" : "false");
   localStorage.setItem("umapShowHoverThumbnails", state.umapShowHoverThumbnails ? "true" : "false");
+  localStorage.setItem("umapExitFullscreenOnSelection", state.umapExitFullscreenOnSelection ? "true" : "false");
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
@@ -223,6 +230,16 @@ export function setUmapShowHoverThumbnails(showHoverThumbnails) {
     saveSettingsToLocalStorage();
     window.dispatchEvent(
       new CustomEvent("settingsUpdated", { detail: { umapShowHoverThumbnails: showHoverThumbnails } })
+    );
+  }
+}
+
+export function setUmapExitFullscreenOnSelection(exitFullscreenOnSelection) {
+  if (state.umapExitFullscreenOnSelection !== exitFullscreenOnSelection) {
+    state.umapExitFullscreenOnSelection = exitFullscreenOnSelection;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { umapExitFullscreenOnSelection: exitFullscreenOnSelection } })
     );
   }
 }
