@@ -8,7 +8,10 @@ import { updateCurrentImageMarker } from "./umap.js";
 // Track if the page was hidden (for debugging and state restoration)
 let wasHidden = false;
 let visibilityChangeCount = 0;
-let lastStateSnapshot = null;
+
+// Constants for timing
+const UMAP_READY_TIMEOUT = 1000; // Time to wait for UMAP plot to be ready
+const STATE_RESTORATION_DELAY = 100; // Delay before starting state restoration
 
 // Create a backup of critical state in sessionStorage
 // sessionStorage is more persistent than localStorage on iOS when app is backgrounded
@@ -29,7 +32,6 @@ function backupStateToSessionStorage() {
       umapExitFullscreenOnSelection: state.umapExitFullscreenOnSelection,
     };
     sessionStorage.setItem("photomap_state_backup", JSON.stringify(criticalState));
-    lastStateSnapshot = criticalState;
   } catch (e) {
     console.warn("Failed to backup state to sessionStorage:", e);
   }
@@ -39,7 +41,11 @@ function backupStateToSessionStorage() {
 function restoreLocalStorageItem(key, backupValue, stateKey, converter = (v) => v) {
   if (!localStorage.getItem(key) && backupValue !== undefined) {
     const convertedValue = converter(backupValue);
-    localStorage.setItem(key, typeof backupValue === 'boolean' ? (backupValue ? "true" : "false") : String(backupValue));
+    // Store booleans as "true"/"false" strings in localStorage
+    const storageValue = typeof backupValue === 'boolean' 
+      ? (backupValue ? "true" : "false") 
+      : String(backupValue);
+    localStorage.setItem(key, storageValue);
     state[stateKey] = convertedValue;
     return true;
   }
@@ -59,6 +65,9 @@ function restoreStateFromSessionStorage() {
     restored = restoreLocalStorageItem("album", criticalState.album, "album") || restored;
     restored = restoreLocalStorageItem("currentDelay", criticalState.currentDelay, "currentDelay", (v) => parseInt(v, 10)) || restored;
     restored = restoreLocalStorageItem("mode", criticalState.mode, "mode") || restored;
+    restored = restoreLocalStorageItem("showControlPanelText", criticalState.showControlPanelText, "showControlPanelText", Boolean) || restored;
+    restored = restoreLocalStorageItem("gridViewActive", criticalState.gridViewActive, "gridViewActive", Boolean) || restored;
+    restored = restoreLocalStorageItem("suppressDeleteConfirm", criticalState.suppressDeleteConfirm, "suppressDeleteConfirm", Boolean) || restored;
     restored = restoreLocalStorageItem("gridThumbSizeFactor", criticalState.gridThumbSizeFactor, "gridThumbSizeFactor", parseFloat) || restored;
     restored = restoreLocalStorageItem("minSearchScore", criticalState.minSearchScore, "minSearchScore", parseFloat) || restored;
     restored = restoreLocalStorageItem("maxSearchResults", criticalState.maxSearchResults, "maxSearchResults", (v) => parseInt(v, 10)) || restored;
@@ -108,7 +117,7 @@ async function handleStateRestorationAfterVisibility() {
   
   // Refresh the current image marker in UMAP
   // Wait to ensure UMAP plot is ready
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  await new Promise(resolve => setTimeout(resolve, UMAP_READY_TIMEOUT));
   
   try {
     const plotDiv = document.getElementById("umapPlot");
@@ -139,7 +148,7 @@ function handleVisibilityChange() {
     
     if (wasHidden) {
       // Verify and restore state if needed
-      setTimeout(() => handleStateRestorationAfterVisibility(), 100);
+      setTimeout(() => handleStateRestorationAfterVisibility(), STATE_RESTORATION_DELAY);
     }
   }
 }
@@ -153,7 +162,7 @@ function handlePageFreeze() {
 
 function handlePageResume() {
   console.log("Page resume detected, verifying state...");
-  setTimeout(() => handleStateRestorationAfterVisibility(), 100);
+  setTimeout(() => handleStateRestorationAfterVisibility(), STATE_RESTORATION_DELAY);
 }
 
 // Periodic state backup (every 30 seconds) as an extra safety measure
