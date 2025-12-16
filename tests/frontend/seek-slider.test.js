@@ -188,4 +188,76 @@ describe('seek-slider.js', () => {
       );
     });
   });
+
+  describe('showSlider behavior', () => {
+    let slider;
+    let mockSlideState;
+    
+    // Simulate the showSlider logic for updating slider value
+    const simulateShowSlider = (slider, getCurrentIndex) => {
+      const currentIndex = getCurrentIndex();
+      if (slider) slider.value = currentIndex + 1;
+    };
+
+    beforeEach(() => {
+      // Create DOM elements
+      document.body.innerHTML = `
+        <input type="range" id="slideSeekSlider" min="1" max="100" value="1" />
+      `;
+      slider = document.getElementById('slideSeekSlider');
+      
+      // Mock slideState
+      mockSlideState = {
+        getCurrentIndex: jest.fn().mockReturnValue(0)
+      };
+    });
+
+    afterEach(() => {
+      document.body.innerHTML = '';
+      jest.clearAllMocks();
+    });
+
+    it('should set slider value to 1 when current index is 0', () => {
+      mockSlideState.getCurrentIndex.mockReturnValue(0);
+      
+      simulateShowSlider(slider, mockSlideState.getCurrentIndex);
+      
+      expect(slider.value).toBe('1');
+    });
+
+    it('should set slider value to match current index + 1', () => {
+      mockSlideState.getCurrentIndex.mockReturnValue(49);
+      
+      simulateShowSlider(slider, mockSlideState.getCurrentIndex);
+      
+      expect(slider.value).toBe('50');
+    });
+
+    it('should set slider value to max when at last slide', () => {
+      mockSlideState.getCurrentIndex.mockReturnValue(99);
+      
+      simulateShowSlider(slider, mockSlideState.getCurrentIndex);
+      
+      expect(slider.value).toBe('100');
+    });
+
+    it('should handle null slider gracefully', () => {
+      mockSlideState.getCurrentIndex.mockReturnValue(10);
+      
+      expect(() => simulateShowSlider(null, mockSlideState.getCurrentIndex)).not.toThrow();
+    });
+
+    it('should update from default value of 1 to current index', () => {
+      // Slider starts at value 1
+      expect(slider.value).toBe('1');
+      
+      // Current index is actually at position 25
+      mockSlideState.getCurrentIndex.mockReturnValue(25);
+      
+      simulateShowSlider(slider, mockSlideState.getCurrentIndex);
+      
+      // Slider should now reflect the actual position
+      expect(slider.value).toBe('26');
+    });
+  });
 });

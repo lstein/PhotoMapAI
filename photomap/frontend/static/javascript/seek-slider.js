@@ -344,6 +344,9 @@ class SeekSlider {
           this.renderSliderTicks();
           this.searchResultsChanged = false;
         });
+      // Update slider value to reflect current index
+      const currentIndex = slideState.getCurrentIndex();
+      if (this.slider) this.slider.value = currentIndex + 1;
       this.resetFadeOutTimer();
     }
   }
@@ -493,6 +496,9 @@ class SeekSlider {
       if (this.scoreSliderRow) this.scoreSliderRow.classList.add("visible");
       this.sliderContainer.classList.add("visible");
       await this.updateSliderRange();
+      // Update slider value to reflect current index
+      const currentIndex = slideState.getCurrentIndex();
+      if (this.slider) this.slider.value = currentIndex + 1;
       await this.renderSliderTicks();
       this.resetFadeOutTimer();
     } else {
