@@ -22,6 +22,10 @@ export const state = {
   // persisted search settings
   minSearchScore: 0.2,       // [0.0, 1.0]
   maxSearchResults: 100,     // [50, 500]
+  // persisted UMAP settings
+  umapShowLandmarks: true,   // Show landmarks in UMAP
+  umapShowHoverThumbnails: true, // Show hover thumbnails in UMAP
+  umapExitFullscreenOnSelection: true, // Exit fullscreen when cluster is selected
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -98,6 +102,21 @@ export async function restoreFromLocalStorage() {
     const v = Math.max(50, Math.min(500, parseInt(storedMaxSearchResults, 10)));
     if (!Number.isNaN(v)) state.maxSearchResults = v;
   }
+
+  const storedUmapShowLandmarks = localStorage.getItem("umapShowLandmarks");
+  if (storedUmapShowLandmarks !== null) {
+    state.umapShowLandmarks = storedUmapShowLandmarks === "true";
+  }
+
+  const storedUmapShowHoverThumbnails = localStorage.getItem("umapShowHoverThumbnails");
+  if (storedUmapShowHoverThumbnails !== null) {
+    state.umapShowHoverThumbnails = storedUmapShowHoverThumbnails === "true";
+  }
+
+  const storedUmapExitFullscreenOnSelection = localStorage.getItem("umapExitFullscreenOnSelection");
+  if (storedUmapExitFullscreenOnSelection !== null) {
+    state.umapExitFullscreenOnSelection = storedUmapExitFullscreenOnSelection === "true";
+  }
 }
 
 // Save state to local storage
@@ -114,6 +133,9 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("gridThumbSizeFactor", state.gridThumbSizeFactor);
   localStorage.setItem("minSearchScore", state.minSearchScore);
   localStorage.setItem("maxSearchResults", state.maxSearchResults);
+  localStorage.setItem("umapShowLandmarks", state.umapShowLandmarks ? "true" : "false");
+  localStorage.setItem("umapShowHoverThumbnails", state.umapShowHoverThumbnails ? "true" : "false");
+  localStorage.setItem("umapExitFullscreenOnSelection", state.umapExitFullscreenOnSelection ? "true" : "false");
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
@@ -188,6 +210,36 @@ export function setMaxSearchResults(newMax) {
     saveSettingsToLocalStorage();
     window.dispatchEvent(
       new CustomEvent("settingsUpdated", { detail: { maxSearchResults: clamped } })
+    );
+  }
+}
+
+export function setUmapShowLandmarks(showLandmarks) {
+  if (state.umapShowLandmarks !== showLandmarks) {
+    state.umapShowLandmarks = showLandmarks;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { umapShowLandmarks: showLandmarks } })
+    );
+  }
+}
+
+export function setUmapShowHoverThumbnails(showHoverThumbnails) {
+  if (state.umapShowHoverThumbnails !== showHoverThumbnails) {
+    state.umapShowHoverThumbnails = showHoverThumbnails;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { umapShowHoverThumbnails: showHoverThumbnails } })
+    );
+  }
+}
+
+export function setUmapExitFullscreenOnSelection(exitFullscreenOnSelection) {
+  if (state.umapExitFullscreenOnSelection !== exitFullscreenOnSelection) {
+    state.umapExitFullscreenOnSelection = exitFullscreenOnSelection;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { umapExitFullscreenOnSelection: exitFullscreenOnSelection } })
     );
   }
 }
