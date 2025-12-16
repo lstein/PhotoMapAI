@@ -35,6 +35,17 @@ function backupStateToSessionStorage() {
   }
 }
 
+// Helper function to restore a single localStorage item from sessionStorage backup
+function restoreLocalStorageItem(key, backupValue, stateKey, converter = (v) => v) {
+  if (!localStorage.getItem(key) && backupValue !== undefined) {
+    const convertedValue = converter(backupValue);
+    localStorage.setItem(key, typeof backupValue === 'boolean' ? (backupValue ? "true" : "false") : String(backupValue));
+    state[stateKey] = convertedValue;
+    return true;
+  }
+  return false;
+}
+
 // Restore state from sessionStorage backup if localStorage is missing critical data
 function restoreStateFromSessionStorage() {
   try {
@@ -44,60 +55,16 @@ function restoreStateFromSessionStorage() {
     const criticalState = JSON.parse(backup);
     let restored = false;
     
-    // Only restore if localStorage is missing critical data
-    if (!localStorage.getItem("album") && criticalState.album) {
-      localStorage.setItem("album", criticalState.album);
-      state.album = criticalState.album;
-      restored = true;
-    }
-    
-    if (!localStorage.getItem("currentDelay") && criticalState.currentDelay) {
-      localStorage.setItem("currentDelay", criticalState.currentDelay);
-      state.currentDelay = criticalState.currentDelay;
-      restored = true;
-    }
-    
-    if (!localStorage.getItem("mode") && criticalState.mode) {
-      localStorage.setItem("mode", criticalState.mode);
-      state.mode = criticalState.mode;
-      restored = true;
-    }
-    
-    if (!localStorage.getItem("gridThumbSizeFactor") && criticalState.gridThumbSizeFactor !== undefined) {
-      localStorage.setItem("gridThumbSizeFactor", criticalState.gridThumbSizeFactor);
-      state.gridThumbSizeFactor = criticalState.gridThumbSizeFactor;
-      restored = true;
-    }
-    
-    if (!localStorage.getItem("minSearchScore") && criticalState.minSearchScore !== undefined) {
-      localStorage.setItem("minSearchScore", criticalState.minSearchScore);
-      state.minSearchScore = criticalState.minSearchScore;
-      restored = true;
-    }
-    
-    if (!localStorage.getItem("maxSearchResults") && criticalState.maxSearchResults !== undefined) {
-      localStorage.setItem("maxSearchResults", criticalState.maxSearchResults);
-      state.maxSearchResults = criticalState.maxSearchResults;
-      restored = true;
-    }
-    
-    if (!localStorage.getItem("umapShowLandmarks") && criticalState.umapShowLandmarks !== undefined) {
-      localStorage.setItem("umapShowLandmarks", criticalState.umapShowLandmarks ? "true" : "false");
-      state.umapShowLandmarks = criticalState.umapShowLandmarks;
-      restored = true;
-    }
-    
-    if (!localStorage.getItem("umapShowHoverThumbnails") && criticalState.umapShowHoverThumbnails !== undefined) {
-      localStorage.setItem("umapShowHoverThumbnails", criticalState.umapShowHoverThumbnails ? "true" : "false");
-      state.umapShowHoverThumbnails = criticalState.umapShowHoverThumbnails;
-      restored = true;
-    }
-    
-    if (!localStorage.getItem("umapExitFullscreenOnSelection") && criticalState.umapExitFullscreenOnSelection !== undefined) {
-      localStorage.setItem("umapExitFullscreenOnSelection", criticalState.umapExitFullscreenOnSelection ? "true" : "false");
-      state.umapExitFullscreenOnSelection = criticalState.umapExitFullscreenOnSelection;
-      restored = true;
-    }
+    // Restore all critical settings using helper function
+    restored = restoreLocalStorageItem("album", criticalState.album, "album") || restored;
+    restored = restoreLocalStorageItem("currentDelay", criticalState.currentDelay, "currentDelay", (v) => parseInt(v, 10)) || restored;
+    restored = restoreLocalStorageItem("mode", criticalState.mode, "mode") || restored;
+    restored = restoreLocalStorageItem("gridThumbSizeFactor", criticalState.gridThumbSizeFactor, "gridThumbSizeFactor", parseFloat) || restored;
+    restored = restoreLocalStorageItem("minSearchScore", criticalState.minSearchScore, "minSearchScore", parseFloat) || restored;
+    restored = restoreLocalStorageItem("maxSearchResults", criticalState.maxSearchResults, "maxSearchResults", (v) => parseInt(v, 10)) || restored;
+    restored = restoreLocalStorageItem("umapShowLandmarks", criticalState.umapShowLandmarks, "umapShowLandmarks", Boolean) || restored;
+    restored = restoreLocalStorageItem("umapShowHoverThumbnails", criticalState.umapShowHoverThumbnails, "umapShowHoverThumbnails", Boolean) || restored;
+    restored = restoreLocalStorageItem("umapExitFullscreenOnSelection", criticalState.umapExitFullscreenOnSelection, "umapExitFullscreenOnSelection", Boolean) || restored;
     
     if (restored) {
       console.log("State restored from sessionStorage backup");
@@ -135,6 +102,25 @@ async function verifyAndRestoreState() {
   }
 }
 
+// Handle state restoration and UMAP marker refresh after page becomes visible
+async function handleStateRestorationAfterVisibility() {
+  await verifyAndRestoreState();
+  
+  // Refresh the current image marker in UMAP
+  // Wait to ensure UMAP plot is ready
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  
+  try {
+    const plotDiv = document.getElementById("umapPlot");
+    if (plotDiv && plotDiv.data && plotDiv.data.length > 0) {
+      console.log("Refreshing UMAP current image marker...");
+      updateCurrentImageMarker();
+    }
+  } catch (e) {
+    console.warn("Failed to refresh UMAP marker:", e);
+  }
+}
+
 // Handle page visibility changes
 function handleVisibilityChange() {
   visibilityChangeCount++;
@@ -153,23 +139,7 @@ function handleVisibilityChange() {
     
     if (wasHidden) {
       // Verify and restore state if needed
-      setTimeout(async () => {
-        await verifyAndRestoreState();
-        
-        // Refresh the current image marker in UMAP
-        // Use a timeout to ensure UMAP plot is ready
-        setTimeout(() => {
-          try {
-            const plotDiv = document.getElementById("umapPlot");
-            if (plotDiv && plotDiv.data && plotDiv.data.length > 0) {
-              console.log("Refreshing UMAP current image marker...");
-              updateCurrentImageMarker();
-            }
-          } catch (e) {
-            console.warn("Failed to refresh UMAP marker:", e);
-          }
-        }, 1000);
-      }, 100);
+      setTimeout(() => handleStateRestorationAfterVisibility(), 100);
     }
   }
 }
@@ -183,17 +153,7 @@ function handlePageFreeze() {
 
 function handlePageResume() {
   console.log("Page resume detected, verifying state...");
-  setTimeout(async () => {
-    await verifyAndRestoreState();
-    // Refresh UMAP marker
-    setTimeout(() => {
-      try {
-        updateCurrentImageMarker();
-      } catch (e) {
-        console.warn("Failed to refresh UMAP marker on resume:", e);
-      }
-    }, 1000);
-  }, 100);
+  setTimeout(() => handleStateRestorationAfterVisibility(), 100);
 }
 
 // Periodic state backup (every 30 seconds) as an extra safety measure
