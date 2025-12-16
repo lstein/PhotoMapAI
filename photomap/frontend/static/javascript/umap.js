@@ -480,10 +480,10 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
       mode: "markers",
       type: "scattergl",
       marker: {
-        color: highlightedPoints.map(p => getClusterColor(p.cluster)),
+        color: "#faea0e",
         opacity: 1.0,
-        size: 10,
-        line: { width: 1, color: "#fff" }
+        size: 8,
+        line: { width: 0 }
       },
       customdata: highlightedPoints.map(p => p.index),
       name: "HighlightedPoints",
