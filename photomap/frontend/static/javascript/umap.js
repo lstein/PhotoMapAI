@@ -4,13 +4,13 @@ import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex } from "./slide-state.js";
-import { state, setUmapShowLandmarks, setUmapShowHoverThumbnails, setUmapExitFullscreenOnSelection } from "./state.js";
+import { setUmapExitFullscreenOnSelection, setUmapShowHoverThumbnails, setUmapShowLandmarks, state } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {
   big: { width: 800, height: 590 },
   medium: { width: 440, height: 310 },
-  small: { width: 340, height: 210 },
+  small: { width: 360, height: 210 },
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
@@ -1410,12 +1410,13 @@ function setUmapWindowSize(sizeKey) {
   } else {
     if (contentDiv) contentDiv.style.display = "block";
     const { width, height } = UMAP_SIZES[sizeKey];
+    const bottomPadding = 8; // add breathing room under plot
     win.style.width = width + 60 + "px";
-    win.style.height = height + 120 + "px";
+    win.style.height = height + 120 + bottomPadding + "px"; // window taller
     win.style.minHeight = "200px";
     plotDiv.style.width = width + "px";
-    plotDiv.style.height = height + "px";
-    Plotly.relayout(plotDiv, { width, height });
+    plotDiv.style.height = height - bottomPadding + "px"; // plot area shorter
+    Plotly.relayout(plotDiv, { width, height: height - bottomPadding });
 
     // Turn landmarks OFF in small
     if (sizeKey === "small" && landmarkCheckbox) {
