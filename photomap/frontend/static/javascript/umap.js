@@ -257,7 +257,10 @@ export async function fetchUmapData() {
         if (!hoverThumbnailsEnabled) return;
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
-        const hoverCluster = points[pt.pointIndex]?.cluster ?? -1;
+        // Use customdata to get the actual index, then find the point
+        const ptIndex = pt.customdata;
+        const point = points.find((p) => p.index === ptIndex);
+        const hoverCluster = point?.cluster ?? -1;
         isHovering = true;
         hoverTimer = setTimeout(() => {
           if (isHovering) {
@@ -271,7 +274,7 @@ export async function fetchUmapData() {
               index = landmarkPoint.index;
               cluster = landmarkCluster;
             } else {
-              index = pt.customdata;
+              index = ptIndex;
               cluster = hoverCluster;
             }
             createUmapThumbnail({

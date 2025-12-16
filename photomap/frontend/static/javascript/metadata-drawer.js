@@ -118,23 +118,46 @@ function updateClusterInfo(metadata) {
   
   if (!clusterInfoContainer || !clusterInfoBadge) return;
   
-  // Check if we have cluster information and we're in cluster search mode
-  if (metadata.cluster !== null && metadata.cluster !== undefined && state.searchType === "cluster") {
-    const cluster = metadata.cluster;
-    const color = metadata.color || "#cccccc";
-    
-    // Calculate cluster size from search results
-    const clusterSize = state.searchResults.length;
+  // Try to get cluster info from metadata first (when in cluster search mode)
+  let cluster = metadata.cluster;
+  let color = metadata.color;
+  let clusterSize = null;
+  
+  // If not in cluster search mode, try to get cluster from UMAP data
+  if (!cluster && window.umapPoints && metadata.globalIndex !== undefined) {
+    const globalIndex = parseInt(metadata.globalIndex, 10);
+    const point = window.umapPoints.find(p => p.index === globalIndex);
+    if (point && point.cluster !== -1) {
+      cluster = point.cluster;
+      // Calculate cluster size from UMAP points
+      clusterSize = window.umapPoints.filter(p => p.cluster === point.cluster).length;
+      // Get cluster color
+      const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(point.cluster);
+      const palette = [
+        "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
+        "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
+        "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3",
+      ];
+      color = palette[clusterIdx % palette.length];
+    }
+  }
+  
+  // Check if we have cluster information
+  if (cluster !== null && cluster !== undefined && cluster !== "" && cluster !== -1) {
+    // If in cluster search mode, use search results length for size
+    if (state.searchType === "cluster" && state.searchResults.length > 0) {
+      clusterSize = state.searchResults.length;
+    }
     
     // Create label
     const clusterLabel = cluster === "unclustered" 
-      ? `Unclustered (size=${clusterSize})` 
-      : `Cluster ${cluster} (size=${clusterSize})`;
+      ? `Unclustered (size=${clusterSize || "?"})` 
+      : `Cluster ${cluster} (size=${clusterSize || "?"})`;
     
     // Set badge text and colors
     clusterInfoBadge.textContent = clusterLabel;
-    clusterInfoBadge.style.backgroundColor = color;
-    clusterInfoBadge.style.color = isColorLight(color) ? "#222" : "#fff";
+    clusterInfoBadge.style.backgroundColor = color || "#cccccc";
+    clusterInfoBadge.style.color = isColorLight(color || "#cccccc") ? "#222" : "#fff";
     
     // Show container
     clusterInfoContainer.style.display = "block";
@@ -143,16 +166,38 @@ function updateClusterInfo(metadata) {
     if (!clusterInfoBadge.hasAttribute("data-click-handler")) {
       clusterInfoBadge.setAttribute("data-click-handler", "true");
       clusterInfoBadge.addEventListener("click", () => {
-        // The cluster is already selected, so just ensure search results are populated
-        // This click should refresh or maintain the current cluster selection
-        if (state.searchResults.length > 0) {
-          // Already showing this cluster, no action needed
-          // Could potentially scroll to top or refocus on search results
+        // Get cluster info
+        const currentCluster = cluster === "unclustered" ? "unclustered" : parseInt(cluster, 10);
+        
+        // Find all points in this cluster from UMAP data
+        if (window.umapPoints) {
+          const clusterPoints = window.umapPoints.filter(p => p.cluster === currentCluster);
+          
+          if (clusterPoints.length > 0) {
+            // Get the cluster color
+            const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(currentCluster);
+            const palette = [
+              "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
+              "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
+              "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3",
+            ];
+            const clusterColor = palette[clusterIdx % palette.length];
+            
+            // Create search results
+            const clusterMembers = clusterPoints.map((point) => ({
+              index: point.index,
+              cluster: currentCluster === -1 ? "unclustered" : currentCluster,
+              color: clusterColor,
+            }));
+            
+            // Set search results
+            setSearchResults(clusterMembers, "cluster");
+          }
         }
       });
     }
   } else {
-    // Hide cluster info if not in cluster mode
+    // Hide cluster info if no cluster
     clusterInfoContainer.style.display = "none";
   }
 }
