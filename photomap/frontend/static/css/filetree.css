@@ -63,7 +63,7 @@
 .directory-picker-buttons {
   display: flex;
   gap: 10px;
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-top: 15px;
 }
 
@@ -73,6 +73,25 @@
   border-radius: 4px;
   cursor: pointer;
   font-weight: bold;
+}
+
+.create-folder-button-inline {
+  background: #0a6a0a;
+  color: white;
+  margin-right: auto;
+}
+
+.create-folder-button-inline:hover {
+  background: #0a8a0a;
+}
+
+.create-folder-button-inline:active {
+  background: #085a08;
+}
+
+#addDirBtn {
+  background: #0a6a0a;
+  color: white;
 }
 
 #selectDirBtn {
@@ -132,30 +151,6 @@
 
 .show-hidden-container input[type="checkbox"] {
   margin: 0;
-}
-
-.create-folder-container {
-  margin-bottom: 15px;
-}
-
-.create-folder-button {
-  width: 100%;
-  padding: 10px 16px;
-  background: #0a6a0a;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 0.95em;
-}
-
-.create-folder-button:hover {
-  background: #0a8a0a;
-}
-
-.create-folder-button:active {
-  background: #085a08;
 }
 
 .directory-item.selected {

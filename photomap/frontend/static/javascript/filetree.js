@@ -49,17 +49,13 @@ export class DirectoryPicker {
           </label>
         </div>
         
-        ${showCreateFolder ? `
-        <!-- Create folder button -->
-        <div class="create-folder-container">
-          <button id="createFolderBtn" class="create-folder-button">
-            📁➕ Create New Folder
-          </button>
-        </div>
-        ` : ''}
-        
         <div class="directory-tree" id="directoryTree"></div>
         <div class="directory-picker-buttons">
+          ${showCreateFolder ? `
+          <button id="createFolderBtn" class="create-folder-button-inline">
+            📁➕ New Folder
+          </button>
+          ` : ''}
           <button id="addDirBtn">${buttonLabel}</button>
           <button id="cancelDirBtn">Cancel</button>
         </div>
@@ -135,8 +131,18 @@ export class DirectoryPicker {
           });
 
           if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || `Failed to create folder: ${response.status}`);
+            // Try to parse as JSON, but handle HTML responses too
+            let errorMessage = `HTTP ${response.status}`;
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+              try {
+                const error = await response.json();
+                errorMessage = error.detail || errorMessage;
+              } catch (e) {
+                // JSON parsing failed, use default message
+              }
+            }
+            throw new Error(errorMessage);
           }
 
           const result = await response.json();
