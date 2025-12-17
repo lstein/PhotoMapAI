@@ -538,7 +538,7 @@ class BookmarkManager {
     let startingPath = "";
     try {
       const firstIndex = indices[0];
-      const response = await fetch(`image_path/${encodeURIComponent(state.album)}/${firstIndex}`);
+      const response = await fetch(`/image_path/${encodeURIComponent(state.album)}/${firstIndex}`);
       if (response.ok) {
         const imagePath = await response.text();
         // Extract directory from the path
@@ -573,7 +573,7 @@ class BookmarkManager {
 
     try {
       const response = await fetch(
-        `move_images/${encodeURIComponent(state.album)}`,
+        `/move_images/${encodeURIComponent(state.album)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

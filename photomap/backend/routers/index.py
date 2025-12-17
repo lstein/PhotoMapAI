@@ -5,14 +5,15 @@ It allows creating, deleting, and checking the existence of embeddings indices f
 """
 
 import logging
+import os
+import shutil
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from PIL import Image, ImageOps
 from pydantic import BaseModel
-from typing import List
 
 from ..config import get_config_manager
 from ..constants import DEFAULT_ALBUM
@@ -282,9 +283,6 @@ async def move_images(album_key: str, req: MoveImagesRequest) -> JSONResponse:
     """Move multiple images to a different directory."""
     check_album_lock(album_key)  # May raise a 403 exception
     try:
-        import shutil
-        import os
-        
         album_config = validate_album_exists(album_key)
         embeddings = Embeddings(embeddings_path=Path(album_config.index))
         
@@ -340,8 +338,13 @@ async def move_images(album_key: str, req: MoveImagesRequest) -> JSONResponse:
                 errors.append(f"Index {index}: {str(e)}")
         
         # Build response
+        # Operation is considered successful if:
+        # - At least one file was moved, OR
+        # - No errors occurred (files may already be in target folder)
+        operation_successful = len(moved_files) > 0 or len(errors) == 0
+        
         response_data = {
-            "success": len(moved_files) > 0 or (len(errors) == 0 and len(same_folder_files) > 0),
+            "success": operation_successful,
             "moved_count": len(moved_files),
             "moved_files": moved_files,
         }
