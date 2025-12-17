@@ -281,7 +281,7 @@ async def delete_image(album_key: str, index: int) -> JSONResponse:
 @index_router.post("/move_images/{album_key}", tags=["Index"])
 async def move_images(album_key: str, req: MoveImagesRequest) -> JSONResponse:
     """Move multiple images to a different directory."""
-    check_album_lock(album_key)  # May raise a 403 exception
+    check_album_lock()  # May raise a 403 exception
     try:
         album_config = validate_album_exists(album_key)
         embeddings = Embeddings(embeddings_path=Path(album_config.index))
