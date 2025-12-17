@@ -6,6 +6,7 @@ import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex } from "./slide-state.js";
 import { setUmapExitFullscreenOnSelection, setUmapShowHoverThumbnails, setUmapShowLandmarks, state } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
+import { CLUSTER_PALETTE, getClusterColorFromPoints } from "./cluster-utils.js";
 
 const UMAP_SIZES = {
   big: { width: 800, height: 590 },
@@ -19,25 +20,6 @@ const randomWalkMaxSize = 2000; // Max cluster size to use random walk ordering
 let points = [];
 let clusters = [];
 let colors = [];
-let palette = [
-  "#e41a1c",
-  "#377eb8",
-  "#4daf4a",
-  "#984ea3",
-  "#ff7f00",
-  "#ffff33",
-  "#a65628",
-  "#f781bf",
-  "#999999",
-  "#66c2a5",
-  "#fc8d62",
-  "#8da0cb",
-  "#e78ac3",
-  "#a6d854",
-  "#ffd92f",
-  "#e5c494",
-  "#b3b3b3",
-];
 let mapExists = false;
 let isShaded = false;
 let umapWindowHasBeenShown = false; // Track if window has been shown at least once
@@ -128,7 +110,7 @@ export async function fetchUmapData() {
 
     // Compute clusters and colors
     clusters = [...new Set(points.map((p) => p.cluster))];
-    colors = clusters.map((c, i) => palette[i % palette.length]);
+    colors = clusters.map((c, i) => CLUSTER_PALETTE[i % CLUSTER_PALETTE.length]);
 
     // Compute axis ranges (1st to 99th percentile)
     const xs = points.map((p) => p.x);

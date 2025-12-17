@@ -6,6 +6,7 @@ import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { setSearchResults } from "./search.js";
 import { isColorLight } from "./utils.js";
+import { getClusterInfoForImage, getClusterColorFromPoints } from "./cluster-utils.js";
 
 // Set up the bookmark toggle callback for the star icon
 scoreDisplay.setToggleBookmarkCallback((globalIndex) => {
@@ -118,45 +119,25 @@ function updateClusterInfo(metadata) {
   
   if (!clusterInfoContainer || !clusterInfoBadge) return;
   
-  let cluster = null;
-  let color = null;
-  let clusterSize = null;
-  
-  // Always get cluster from UMAP data based on the current image's globalIndex
-  if (window.umapPoints && metadata.globalIndex !== undefined) {
-    const globalIndex = parseInt(metadata.globalIndex, 10);
-    const point = window.umapPoints.find(p => p.index === globalIndex);
-    if (point) {
-      cluster = point.cluster;
-      // Calculate cluster size from UMAP points
-      clusterSize = window.umapPoints.filter(p => p.cluster === point.cluster).length;
-      // Get cluster color
-      if (point.cluster === -1) {
-        // Unclustered images use gray
-        color = "#cccccc";
-      } else {
-        const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(point.cluster);
-        const palette = [
-          "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
-          "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
-          "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3",
-        ];
-        color = palette[clusterIdx % palette.length];
-      }
-    }
-  }
+  // Get cluster info using shared utility
+  const clusterInfo = getClusterInfoForImage(
+    parseInt(metadata.globalIndex, 10),
+    window.umapPoints
+  );
   
   // Check if we have cluster information
-  if (cluster !== null && cluster !== undefined) {
+  if (clusterInfo && clusterInfo.cluster !== null && clusterInfo.cluster !== undefined) {
+    const { cluster, color, size } = clusterInfo;
+    
     // Create label
     const clusterLabel = cluster === -1 
-      ? `Unclustered (size=${clusterSize || "?"})` 
-      : `Cluster ${cluster} (size=${clusterSize || "?"})`;
+      ? `Unclustered (size=${size})` 
+      : `Cluster ${cluster} (size=${size})`;
     
     // Set badge text and colors
     clusterInfoBadge.textContent = clusterLabel;
-    clusterInfoBadge.style.backgroundColor = color || "#cccccc";
-    clusterInfoBadge.style.color = isColorLight(color || "#cccccc") ? "#222" : "#fff";
+    clusterInfoBadge.style.backgroundColor = color;
+    clusterInfoBadge.style.color = isColorLight(color) ? "#222" : "#fff";
     
     // Store current cluster value in data attribute for the click handler
     clusterInfoBadge.dataset.currentCluster = cluster;
@@ -176,19 +157,8 @@ function updateClusterInfo(metadata) {
           const clusterPoints = window.umapPoints.filter(p => p.cluster === currentCluster);
           
           if (clusterPoints.length > 0) {
-            // Get the cluster color
-            let clusterColor;
-            if (currentCluster === -1) {
-              clusterColor = "#cccccc";
-            } else {
-              const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(currentCluster);
-              const palette = [
-                "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
-                "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
-                "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3",
-              ];
-              clusterColor = palette[clusterIdx % palette.length];
-            }
+            // Get the cluster color using shared utility
+            const clusterColor = getClusterColorFromPoints(currentCluster, window.umapPoints);
             
             // Create search results
             const clusterMembers = clusterPoints.map((point) => ({
