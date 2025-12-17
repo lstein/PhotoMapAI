@@ -171,7 +171,7 @@ describe('score-display.js', () => {
       scoreDisplayInstance.setBookmarkStatus(1, false);
       scoreDisplayInstance.showCluster(3, '#ff0000');
 
-      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('cluster=3');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('Cluster 3');
       expect(scoreDisplayInstance.scoreText.innerHTML).toContain('score-star');
       expect(scoreDisplayInstance.isVisible).toBe(true);
     });
@@ -180,7 +180,7 @@ describe('score-display.js', () => {
       scoreDisplayInstance.setBookmarkStatus(1, false);
       scoreDisplayInstance.showCluster(2, '#00ff00', 4, 15);  // 0-based index 4 displays as 5
 
-      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('5/15 (cluster=2)');
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain('5/15 (Cluster 2)');
     });
 
     it('should display unclustered text for unclustered images', () => {
