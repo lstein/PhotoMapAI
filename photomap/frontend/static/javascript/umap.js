@@ -6,6 +6,7 @@ import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex } from "./slide-state.js";
 import { setUmapExitFullscreenOnSelection, setUmapShowHoverThumbnails, setUmapShowLandmarks, state } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
+import { CLUSTER_PALETTE, getClusterColorFromPoints } from "./cluster-utils.js";
 
 const UMAP_SIZES = {
   big: { width: 800, height: 590 },
@@ -19,25 +20,6 @@ const randomWalkMaxSize = 2000; // Max cluster size to use random walk ordering
 let points = [];
 let clusters = [];
 let colors = [];
-let palette = [
-  "#e41a1c",
-  "#377eb8",
-  "#4daf4a",
-  "#984ea3",
-  "#ff7f00",
-  "#ffff33",
-  "#a65628",
-  "#f781bf",
-  "#999999",
-  "#66c2a5",
-  "#fc8d62",
-  "#8da0cb",
-  "#e78ac3",
-  "#a6d854",
-  "#ffd92f",
-  "#e5c494",
-  "#b3b3b3",
-];
 let mapExists = false;
 let isShaded = false;
 let umapWindowHasBeenShown = false; // Track if window has been shown at least once
@@ -128,7 +110,7 @@ export async function fetchUmapData() {
 
     // Compute clusters and colors
     clusters = [...new Set(points.map((p) => p.cluster))];
-    colors = clusters.map((c, i) => palette[i % palette.length]);
+    colors = clusters.map((c, i) => CLUSTER_PALETTE[i % CLUSTER_PALETTE.length]);
 
     // Compute axis ranges (1st to 99th percentile)
     const xs = points.map((p) => p.x);
@@ -257,7 +239,10 @@ export async function fetchUmapData() {
         if (!hoverThumbnailsEnabled) return;
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
-        const hoverCluster = points[pt.pointIndex]?.cluster ?? -1;
+        // Use customdata to get the actual index, then find the point
+        const ptIndex = pt.customdata;
+        const point = points.find((p) => p.index === ptIndex);
+        const hoverCluster = point?.cluster ?? -1;
         isHovering = true;
         hoverTimer = setTimeout(() => {
           if (isHovering) {
@@ -271,7 +256,7 @@ export async function fetchUmapData() {
               index = landmarkPoint.index;
               cluster = landmarkCluster;
             } else {
-              index = pt.customdata;
+              index = ptIndex;
               cluster = hoverCluster;
             }
             createUmapThumbnail({
@@ -759,9 +744,10 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   const filename = await getImagePath(state.album, index);
   if (!filename) return; // No valid filename, exit early
 
-  // Find cluster color and label
+  // Find cluster color and calculate cluster size
   const clusterColor = getClusterColor(cluster);
-  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster}`;
+  const clusterSize = points.filter((p) => p.cluster === cluster).length;
+  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster} (size=${clusterSize})`;
   const textIsDark = isColorLight(clusterColor) ? "#222" : "#fff";
   const textShadow = isColorLight(clusterColor)
     ? "0 1px 2px #fff, 0 0px 8px #fff"
