@@ -118,13 +118,12 @@ function updateClusterInfo(metadata) {
   
   if (!clusterInfoContainer || !clusterInfoBadge) return;
   
-  // Try to get cluster info from metadata first (when in cluster search mode)
-  let cluster = metadata.cluster;
-  let color = metadata.color;
+  let cluster = null;
+  let color = null;
   let clusterSize = null;
   
-  // If not in cluster search mode, try to get cluster from UMAP data
-  if (!cluster && window.umapPoints && metadata.globalIndex !== undefined) {
+  // Always get cluster from UMAP data based on the current image's globalIndex
+  if (window.umapPoints && metadata.globalIndex !== undefined) {
     const globalIndex = parseInt(metadata.globalIndex, 10);
     const point = window.umapPoints.find(p => p.index === globalIndex);
     if (point && point.cluster !== -1) {
@@ -143,16 +142,9 @@ function updateClusterInfo(metadata) {
   }
   
   // Check if we have cluster information
-  if (cluster !== null && cluster !== undefined && cluster !== "" && cluster !== -1) {
-    // If in cluster search mode, use search results length for size
-    if (state.searchType === "cluster" && state.searchResults.length > 0) {
-      clusterSize = state.searchResults.length;
-    }
-    
+  if (cluster !== null && cluster !== undefined && cluster !== -1) {
     // Create label
-    const clusterLabel = cluster === "unclustered" 
-      ? `Unclustered (size=${clusterSize || "?"})` 
-      : `Cluster ${cluster} (size=${clusterSize || "?"})`;
+    const clusterLabel = `Cluster ${cluster} (size=${clusterSize || "?"})`;
     
     // Set badge text and colors
     clusterInfoBadge.textContent = clusterLabel;
@@ -166,16 +158,13 @@ function updateClusterInfo(metadata) {
     if (!clusterInfoBadge.hasAttribute("data-click-handler")) {
       clusterInfoBadge.setAttribute("data-click-handler", "true");
       clusterInfoBadge.addEventListener("click", () => {
-        // Get cluster info
-        const currentCluster = cluster === "unclustered" ? "unclustered" : parseInt(cluster, 10);
-        
         // Find all points in this cluster from UMAP data
         if (window.umapPoints) {
-          const clusterPoints = window.umapPoints.filter(p => p.cluster === currentCluster);
+          const clusterPoints = window.umapPoints.filter(p => p.cluster === cluster);
           
           if (clusterPoints.length > 0) {
             // Get the cluster color
-            const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(currentCluster);
+            const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(cluster);
             const palette = [
               "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
               "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
@@ -186,7 +175,7 @@ function updateClusterInfo(metadata) {
             // Create search results
             const clusterMembers = clusterPoints.map((point) => ({
               index: point.index,
-              cluster: currentCluster === -1 ? "unclustered" : currentCluster,
+              cluster: cluster,
               color: clusterColor,
             }));
             
