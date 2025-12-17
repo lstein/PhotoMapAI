@@ -15,7 +15,14 @@ export class DirectoryPicker {
     }
   }
 
-  static async createSimpleDirectoryPicker(callback, startingPath = "") {
+  static async createSimpleDirectoryPicker(callback, startingPath = "", options = {}) {
+    // Default options
+    const {
+      buttonLabel = "Add",
+      title = "Select Directory",
+      pathLabel = "Current directory to add:"
+    } = options;
+    
     // If no starting path provided, use home directory
     if (!startingPath) {
       startingPath = await DirectoryPicker.getHomeDirectory();
@@ -25,11 +32,11 @@ export class DirectoryPicker {
     modal.className = "directory-picker-modal";
     modal.innerHTML = `
       <div class="directory-picker-content">
-        <h3>Select Directory</h3>
+        <h3>${title}</h3>
         
         <!-- Current path display -->
         <div class="current-path-display">
-          <label>Current directory to add:</label>
+          <label>${pathLabel}</label>
           <input type="text" id="currentPathField" readonly />
         </div>
         
@@ -43,7 +50,7 @@ export class DirectoryPicker {
         
         <div class="directory-tree" id="directoryTree"></div>
         <div class="directory-picker-buttons">
-          <button id="addDirBtn">Add</button>
+          <button id="addDirBtn">${buttonLabel}</button>
           <button id="cancelDirBtn">Cancel</button>
         </div>
       </div>
@@ -226,6 +233,6 @@ export class DirectoryPicker {
 }
 
 // Convenience function that matches the original API
-export function createSimpleDirectoryPicker(callback, startingPath = "") {
-  return DirectoryPicker.createSimpleDirectoryPicker(callback, startingPath);
+export function createSimpleDirectoryPicker(callback, startingPath = "", options = {}) {
+  return DirectoryPicker.createSimpleDirectoryPicker(callback, startingPath, options);
 }
