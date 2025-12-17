@@ -147,7 +147,7 @@ export class ScoreDisplay {
    */
   showCluster(cluster, color, index = null, total = null) {
     if (cluster !== undefined && cluster !== null) {
-      let clusterText = (cluster === "unclustered") ? "unclustered" : `cluster=${cluster}`;
+      let clusterText = (cluster === "unclustered") ? "unclustered" : `Cluster ${cluster}`;
       let text = "";
       if (index !== null && total !== null) {
         text = `${index + 1}/${total} (${clusterText})`;
