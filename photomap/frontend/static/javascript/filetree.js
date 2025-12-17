@@ -20,7 +20,8 @@ export class DirectoryPicker {
     const {
       buttonLabel = "Add",
       title = "Select Directory",
-      pathLabel = "Current directory to add:"
+      pathLabel = "Current directory to add:",
+      showCreateFolder = false
     } = options;
     
     // If no starting path provided, use home directory
@@ -48,6 +49,15 @@ export class DirectoryPicker {
           </label>
         </div>
         
+        ${showCreateFolder ? `
+        <!-- Create folder button -->
+        <div class="create-folder-container">
+          <button id="createFolderBtn" class="create-folder-button">
+            📁➕ Create New Folder
+          </button>
+        </div>
+        ` : ''}
+        
         <div class="directory-tree" id="directoryTree"></div>
         <div class="directory-picker-buttons">
           <button id="addDirBtn">${buttonLabel}</button>
@@ -68,6 +78,7 @@ export class DirectoryPicker {
     const treeDiv = modal.querySelector("#directoryTree");
     const currentPathField = modal.querySelector("#currentPathField");
     const showHiddenCheckbox = modal.querySelector("#showHiddenCheckbox");
+    const createFolderBtn = modal.querySelector("#createFolderBtn");
 
     // Update current path display
     const updateCurrentPathDisplay = () => {
@@ -101,6 +112,55 @@ export class DirectoryPicker {
       }
       updateCurrentPathDisplay();
     };
+
+    // Handle create folder button
+    if (createFolderBtn) {
+      createFolderBtn.onclick = async () => {
+        const folderName = prompt("Enter new folder name:");
+        if (!folderName || folderName.trim() === "") {
+          return; // User cancelled or entered empty name
+        }
+
+        const parentPath = currentPath || "/";
+        showSpinner();
+
+        try {
+          const response = await fetch("/filetree/create_directory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              parent_path: parentPath,
+              directory_name: folderName.trim()
+            })
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || `Failed to create folder: ${response.status}`);
+          }
+
+          const result = await response.json();
+          
+          // Navigate into the newly created folder
+          currentPath = result.path;
+          selectedPath = null;
+          
+          await DirectoryPicker.loadDirectories(
+            currentPath,
+            treeDiv,
+            showHidden,
+            handleNavigation
+          );
+          updateCurrentPathDisplay();
+
+        } catch (error) {
+          console.error("Error creating folder:", error);
+          alert(`Failed to create folder: ${error.message}`);
+        } finally {
+          hideSpinner();
+        }
+      };
+    }
 
     // Handle hidden files checkbox
     showHiddenCheckbox.onchange = () => {

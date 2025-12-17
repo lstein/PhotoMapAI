@@ -560,7 +560,8 @@ class BookmarkManager {
       {
         buttonLabel: "Move",
         title: "Select Destination Folder",
-        pathLabel: "Move images to:"
+        pathLabel: "Move images to:",
+        showCreateFolder: true
       }
     );
   }

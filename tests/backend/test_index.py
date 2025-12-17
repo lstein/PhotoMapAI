@@ -193,3 +193,65 @@ def test_move_images_file_exists(
     assert result.get("error_count") == 1
     assert any("already exists" in error for error in result.get("errors", []))
 
+
+def test_create_directory(client: TestClient, tmp_path: Path):
+    """Test the ability to create a new directory."""
+    # Create a test directory
+    test_dir = tmp_path / "test_parent"
+    test_dir.mkdir()
+
+    # Test creating a new directory
+    response = client.post(
+        "/filetree/create_directory",
+        json={
+            "parent_path": str(test_dir),
+            "directory_name": "new_folder"
+        }
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result.get("success") is True
+    assert result.get("name") == "new_folder"
+
+    # Verify the directory was created
+    new_dir = test_dir / "new_folder"
+    assert new_dir.exists()
+    assert new_dir.is_dir()
+
+
+def test_create_directory_invalid_name(client: TestClient, tmp_path: Path):
+    """Test creating a directory with invalid name."""
+    test_dir = tmp_path / "test_parent"
+    test_dir.mkdir()
+
+    # Test with invalid character (slash)
+    response = client.post(
+        "/filetree/create_directory",
+        json={
+            "parent_path": str(test_dir),
+            "directory_name": "invalid/name"
+        }
+    )
+    assert response.status_code == 400
+    assert "invalid characters" in response.json().get("detail", "").lower()
+
+
+def test_create_directory_already_exists(client: TestClient, tmp_path: Path):
+    """Test creating a directory that already exists."""
+    test_dir = tmp_path / "test_parent"
+    test_dir.mkdir()
+    existing_dir = test_dir / "existing"
+    existing_dir.mkdir()
+
+    # Try to create the same directory again
+    response = client.post(
+        "/filetree/create_directory",
+        json={
+            "parent_path": str(test_dir),
+            "directory_name": "existing"
+        }
+    )
+    assert response.status_code == 409
+    assert "already exists" in response.json().get("detail", "").lower()
+
+
