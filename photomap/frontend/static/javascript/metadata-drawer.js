@@ -158,6 +158,9 @@ function updateClusterInfo(metadata) {
     clusterInfoBadge.style.backgroundColor = color || "#cccccc";
     clusterInfoBadge.style.color = isColorLight(color || "#cccccc") ? "#222" : "#fff";
     
+    // Store current cluster value in data attribute for the click handler
+    clusterInfoBadge.dataset.currentCluster = cluster;
+    
     // Show container
     clusterInfoContainer.style.display = "block";
     
@@ -165,17 +168,20 @@ function updateClusterInfo(metadata) {
     if (!clusterInfoBadge.hasAttribute("data-click-handler")) {
       clusterInfoBadge.setAttribute("data-click-handler", "true");
       clusterInfoBadge.addEventListener("click", () => {
+        // Get the current cluster from the data attribute
+        const currentCluster = parseInt(clusterInfoBadge.dataset.currentCluster, 10);
+        
         // Find all points in this cluster from UMAP data
         if (window.umapPoints) {
-          const clusterPoints = window.umapPoints.filter(p => p.cluster === cluster);
+          const clusterPoints = window.umapPoints.filter(p => p.cluster === currentCluster);
           
           if (clusterPoints.length > 0) {
             // Get the cluster color
             let clusterColor;
-            if (cluster === -1) {
+            if (currentCluster === -1) {
               clusterColor = "#cccccc";
             } else {
-              const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(cluster);
+              const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(currentCluster);
               const palette = [
                 "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
                 "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
@@ -187,7 +193,7 @@ function updateClusterInfo(metadata) {
             // Create search results
             const clusterMembers = clusterPoints.map((point) => ({
               index: point.index,
-              cluster: cluster,
+              cluster: currentCluster,
               color: clusterColor,
             }));
             
