@@ -126,25 +126,32 @@ function updateClusterInfo(metadata) {
   if (window.umapPoints && metadata.globalIndex !== undefined) {
     const globalIndex = parseInt(metadata.globalIndex, 10);
     const point = window.umapPoints.find(p => p.index === globalIndex);
-    if (point && point.cluster !== -1) {
+    if (point) {
       cluster = point.cluster;
       // Calculate cluster size from UMAP points
       clusterSize = window.umapPoints.filter(p => p.cluster === point.cluster).length;
       // Get cluster color
-      const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(point.cluster);
-      const palette = [
-        "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
-        "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
-        "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3",
-      ];
-      color = palette[clusterIdx % palette.length];
+      if (point.cluster === -1) {
+        // Unclustered images use gray
+        color = "#cccccc";
+      } else {
+        const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(point.cluster);
+        const palette = [
+          "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
+          "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
+          "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3",
+        ];
+        color = palette[clusterIdx % palette.length];
+      }
     }
   }
   
   // Check if we have cluster information
-  if (cluster !== null && cluster !== undefined && cluster !== -1) {
+  if (cluster !== null && cluster !== undefined) {
     // Create label
-    const clusterLabel = `Cluster ${cluster} (size=${clusterSize || "?"})`;
+    const clusterLabel = cluster === -1 
+      ? `Unclustered (size=${clusterSize || "?"})` 
+      : `Cluster ${cluster} (size=${clusterSize || "?"})`;
     
     // Set badge text and colors
     clusterInfoBadge.textContent = clusterLabel;
@@ -164,13 +171,18 @@ function updateClusterInfo(metadata) {
           
           if (clusterPoints.length > 0) {
             // Get the cluster color
-            const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(cluster);
-            const palette = [
-              "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
-              "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
-              "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3",
-            ];
-            const clusterColor = palette[clusterIdx % palette.length];
+            let clusterColor;
+            if (cluster === -1) {
+              clusterColor = "#cccccc";
+            } else {
+              const clusterIdx = [...new Set(window.umapPoints.map(p => p.cluster))].indexOf(cluster);
+              const palette = [
+                "#e41a1c", "#377eb8", "#4daf4a", "#984ea3", "#ff7f00", "#ffff33",
+                "#a65628", "#f781bf", "#999999", "#66c2a5", "#fc8d62", "#8da0cb",
+                "#e78ac3", "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3",
+              ];
+              clusterColor = palette[clusterIdx % palette.length];
+            }
             
             // Create search results
             const clusterMembers = clusterPoints.map((point) => ({
