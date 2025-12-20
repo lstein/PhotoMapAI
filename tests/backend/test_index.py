@@ -111,7 +111,9 @@ def test_move_images(
     # Verify the image can still be retrieved with updated path
     response = client.get(f"/retrieve_image/{album_key}/0")
     data = response.json()
-    assert str(new_path) in data.get("image_url", "")
+    # Check that the filepath has been updated to the new location
+    assert str(new_path) in data.get("filepath", "")
+
 
 
 def test_move_images_to_same_folder(
