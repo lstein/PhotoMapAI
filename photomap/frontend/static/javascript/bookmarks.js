@@ -7,7 +7,7 @@ import { createSimpleDirectoryPicker } from "./filetree.js";
 import { setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
-import { showSpinner, hideSpinner, setCheckmarkOnIcon } from "./utils.js";
+import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
 // SVG icons for bookmark actions
 const BOOKMARK_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -538,7 +538,7 @@ class BookmarkManager {
     let startingPath = "";
     try {
       const firstIndex = indices[0];
-      const response = await fetch(`/image_path/${encodeURIComponent(state.album)}/${firstIndex}`);
+      const response = await fetch(`image_path/${encodeURIComponent(state.album)}/${firstIndex}`);
       if (response.ok) {
         const imagePath = await response.text();
         // Extract directory from the path
@@ -574,7 +574,7 @@ class BookmarkManager {
 
     try {
       const response = await fetch(
-        `/move_images/${encodeURIComponent(state.album)}`,
+        `move_images/${encodeURIComponent(state.album)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

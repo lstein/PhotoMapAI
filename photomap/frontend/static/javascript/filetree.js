@@ -121,7 +121,7 @@ export class DirectoryPicker {
         showSpinner();
 
         try {
-          const response = await fetch("/filetree/create_directory", {
+          const response = await fetch("filetree/create_directory", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
