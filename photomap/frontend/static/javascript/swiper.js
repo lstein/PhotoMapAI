@@ -1,5 +1,6 @@
 // swiper.js
 // This file initializes the Swiper instance and manages slide transitions.
+import { albumManager } from "./album-manager.js";
 import { toggleGridSwiperView } from "./events.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
@@ -11,6 +12,7 @@ import { updateCurrentImageMarker } from "./umap.js";
 export const initializeSingleSwiper = async () => {
   const swiperManager = new SwiperManager();
   swiperManager.initializeSingleSwiper();
+  albumManager.setSwiperManager(swiperManager);
   return swiperManager;
 };
 

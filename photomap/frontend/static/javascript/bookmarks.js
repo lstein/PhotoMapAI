@@ -577,6 +577,7 @@ class BookmarkManager {
       // Check if target folder is in the current album
       const albumConfig = await this.getAlbumConfig();
       const targetPath = targetDirectory.endsWith('/') ? targetDirectory.slice(0, -1) : targetDirectory;
+      console.log("Album image paths:", albumConfig.image_paths) || [];
       const targetInAlbum = albumConfig.image_paths.some(path => {
         const cleanPath = path.endsWith('/') ? path.slice(0, -1) : path;
         return cleanPath === targetPath;
@@ -585,11 +586,14 @@ class BookmarkManager {
       // If target folder is not in album, ask user to confirm adding it
       if (!targetInAlbum) {
         hideSpinner();
+        console.log("showConfirmModal called");
         const shouldAddFolder = await showConfirmModal(
           `The destination folder is not in the current album.\n\nWould you like to add "${targetDirectory}" to the "${state.album}" album?`,
           "Yes, Add Folder",
           "No, Continue Without Adding"
         );
+        console.log("showConfirmModal returned:", shouldAddFolder);
+
 
         if (shouldAddFolder) {
           // Add the folder to the album

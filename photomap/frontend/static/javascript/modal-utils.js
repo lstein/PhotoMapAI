@@ -15,26 +15,24 @@ export function showConfirmModal(message, okButtonText = "OK", cancelButtonText 
     const cancelBtn = document.getElementById("confirmCancelBtn");
     const okBtn = document.getElementById("confirmOkBtn");
 
+    if (!modal || !text || !cancelBtn || !okBtn) {
+      console.error("Confirm modal elements not found in DOM");
+      resolve(false);
+      return;
+    }
+
     text.textContent = message;
     okBtn.textContent = okButtonText;
     cancelBtn.textContent = cancelButtonText;
     modal.style.display = "flex";
 
-    function cleanup() {
+    const cleanup = () => {
       modal.style.display = "none";
       cancelBtn.removeEventListener("click", onCancel);
       okBtn.removeEventListener("click", onOk);
-    }
-
-    function onCancel() {
-      cleanup();
-      resolve(false);
-    }
-
-    function onOk() {
-      cleanup();
-      resolve(true);
-    }
+    };
+    const onCancel = () => { cleanup(); resolve(false); };
+    const onOk = () => { cleanup(); resolve(true); };
 
     cancelBtn.addEventListener("click", onCancel);
     okBtn.addEventListener("click", onOk);
