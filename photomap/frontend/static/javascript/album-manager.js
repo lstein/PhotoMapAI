@@ -405,7 +405,7 @@ export class AlbumManager {
       onFolderPick: (currentPath, setPath) => {
         createSimpleDirectoryPicker((selectedPath) => {
           setPath(selectedPath);
-        }, currentPath);
+        }, currentPath, { showCreateFolder: true });
       },
     });
   }
@@ -424,7 +424,7 @@ export class AlbumManager {
       onFolderPick: (currentPath, setPath) => {
         createSimpleDirectoryPicker((selectedPath) => {
           setPath(selectedPath);
-        }, currentPath);
+        }, currentPath, { showCreateFolder: true });
       },
     });
   }
@@ -937,7 +937,7 @@ export class AlbumManager {
       onFolderPick: (currentPath, setPath) => {
         createSimpleDirectoryPicker((selectedPath) => {
           setPath(selectedPath);
-        }, currentPath);
+        }, currentPath, { showCreateFolder: true });
       },
     });
   }

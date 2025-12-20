@@ -53,7 +53,7 @@ export class DirectoryPicker {
         <div class="directory-picker-buttons">
           ${showCreateFolder ? `
           <button id="createFolderBtn" class="create-folder-button-inline">
-            📁➕ New Folder
+            📁 New Folder
           </button>
           ` : ''}
           <button id="addDirBtn">${buttonLabel}</button>

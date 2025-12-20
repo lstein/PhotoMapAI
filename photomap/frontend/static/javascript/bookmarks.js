@@ -4,6 +4,7 @@
 
 import { showDeleteConfirmModal } from "./control-panel.js";
 import { createSimpleDirectoryPicker } from "./filetree.js";
+import { showConfirmModal } from "./modal-utils.js";
 import { setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
@@ -573,6 +574,30 @@ class BookmarkManager {
     showSpinner();
 
     try {
+      // Check if target folder is in the current album
+      const albumConfig = await this.getAlbumConfig();
+      const targetPath = targetDirectory.endsWith('/') ? targetDirectory.slice(0, -1) : targetDirectory;
+      const targetInAlbum = albumConfig.image_paths.some(path => {
+        const cleanPath = path.endsWith('/') ? path.slice(0, -1) : path;
+        return cleanPath === targetPath;
+      });
+
+      // If target folder is not in album, ask user to confirm adding it
+      if (!targetInAlbum) {
+        hideSpinner();
+        const shouldAddFolder = await showConfirmModal(
+          `The destination folder is not in the current album.\n\nWould you like to add "${targetDirectory}" to the "${state.album}" album?`,
+          "Yes, Add Folder",
+          "No, Continue Without Adding"
+        );
+
+        if (shouldAddFolder) {
+          // Add the folder to the album
+          await this.addFolderToAlbum(targetDirectory, albumConfig);
+        }
+        showSpinner();
+      }
+
       const response = await fetch(
         `move_images/${encodeURIComponent(state.album)}`,
         {
@@ -631,6 +656,46 @@ class BookmarkManager {
     } finally {
       hideSpinner();
     }
+  }
+
+  /**
+   * Get the current album configuration
+   */
+  async getAlbumConfig() {
+    const response = await fetch(`album/${encodeURIComponent(state.album)}/`);
+    if (!response.ok) {
+      throw new Error("Failed to get album configuration");
+    }
+    return await response.json();
+  }
+
+  /**
+   * Add a folder to the current album
+   */
+  async addFolderToAlbum(folderPath, albumConfig) {
+    const updatedPaths = [...albumConfig.image_paths, folderPath];
+    
+    const response = await fetch("update_album/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: albumConfig.key,
+        name: albumConfig.name,
+        image_paths: updatedPaths,
+        index: albumConfig.index,
+        umap_eps: albumConfig.umap_eps || 0.07,
+        description: albumConfig.description || ""
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to add folder to album");
+    }
+
+    // Trigger album update (re-index may be needed)
+    window.dispatchEvent(new CustomEvent("albumUpdated", {
+      detail: { album: state.album }
+    }));
   }
 
   // === Bookmark Menu ===
@@ -714,9 +779,9 @@ class BookmarkManager {
     // Select All - only active when a search is being displayed (and not showing bookmarks)
     menu.appendChild(makeButton(SELECT_ALL_SVG, "Select All", () => this.selectAllFromSearch(), !isInSearchMode));
 
-    // Download, Move, and Delete
-    menu.appendChild(makeButton(DOWNLOAD_SVG, "Download", () => this.downloadBookmarkedImages(), !hasBookmarks));
+    // Move, Download, and Delete (Move is before Download as requested)
     menu.appendChild(makeButton(MOVE_SVG, "Move", () => this.moveBookmarkedImages(), !hasBookmarks));
+    menu.appendChild(makeButton(DOWNLOAD_SVG, "Download", () => this.downloadBookmarkedImages(), !hasBookmarks));
     menu.appendChild(makeButton(DELETE_SVG, "Delete", () => this.deleteBookmarkedImages(), !hasBookmarks));
 
     document.body.appendChild(menu);
