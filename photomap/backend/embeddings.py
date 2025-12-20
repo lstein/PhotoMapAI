@@ -1005,8 +1005,21 @@ class Embeddings(BaseModel):
             # Find the index in the original (unsorted) arrays
             original_idx = np.where(filenames == current_filename)[0][0]
 
+            # Convert new_path to string
+            new_path_str = str(new_path)
+            
+            # Check if the new path is longer than the current dtype allows
+            current_dtype = filenames.dtype
+            if hasattr(current_dtype, 'itemsize'):
+                # For string dtypes, check if we need to resize
+                max_len = current_dtype.itemsize // 4  # Unicode chars are 4 bytes each
+                if len(new_path_str) > max_len:
+                    # Need to create a new array with larger dtype
+                    new_max_len = max(len(new_path_str), max_len) + 50  # Add buffer
+                    filenames = filenames.astype(f'<U{new_max_len}')
+            
             # Update the filename in the original array
-            filenames[original_idx] = str(new_path)
+            filenames[original_idx] = new_path_str
 
             # Save updated data
             self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
