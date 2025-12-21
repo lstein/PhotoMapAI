@@ -5,8 +5,10 @@ It allows creating, deleting, and checking the existence of embeddings indices f
 """
 
 import logging
+import os
+import shutil
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -39,6 +41,11 @@ class ProgressResponse(BaseModel):
 
 class UpdateIndexRequest(BaseModel):
     album_key: str
+
+
+class MoveImagesRequest(BaseModel):
+    indices: List[int]
+    target_directory: str
 
 
 class EmbeddingsIndexMetadata(BaseModel):
@@ -269,6 +276,94 @@ async def delete_image(album_key: str, index: int) -> JSONResponse:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+
+@index_router.post("/move_images/{album_key}", tags=["Index"])
+async def move_images(album_key: str, req: MoveImagesRequest) -> JSONResponse:
+    """Move multiple images to a different directory."""
+    check_album_lock()  # May raise a 403 exception
+    try:
+        album_config = validate_album_exists(album_key)
+        embeddings = Embeddings(embeddings_path=Path(album_config.index))
+        
+        target_dir = Path(req.target_directory)
+        
+        # Validate target directory exists and is writable
+        if not target_dir.exists():
+            raise HTTPException(status_code=400, detail="Target directory does not exist")
+        if not target_dir.is_dir():
+            raise HTTPException(status_code=400, detail="Target path is not a directory")
+        if not os.access(target_dir, os.W_OK):
+            raise HTTPException(status_code=403, detail="Target directory is not writable")
+        
+        moved_files = []
+        errors = []
+        same_folder_files = []
+        
+        for index in req.indices:
+            try:
+                image_path = embeddings.get_image_path(index)
+                
+                if not validate_image_access(album_config, image_path):
+                    errors.append(f"Index {index}: Access denied")
+                    continue
+                
+                if not image_path.exists() or not image_path.is_file():
+                    errors.append(f"Index {index}: File not found")
+                    continue
+                
+                # Check if already in target folder
+                if image_path.parent.resolve() == target_dir.resolve():
+                    same_folder_files.append(image_path.name)
+                    continue
+                
+                target_path = target_dir / image_path.name
+                
+                # Check if target file exists
+                if target_path.exists():
+                    errors.append(f"{image_path.name}: File already exists in target directory")
+                    continue
+                
+                # Move the file
+                shutil.move(str(image_path), str(target_path))
+                
+                # Update embeddings with new path
+                embeddings.update_image_path(index, target_path)
+                
+                moved_files.append(image_path.name)
+                logger.info(f"Moved {image_path} to {target_path}")
+                
+            except Exception as e:
+                logger.error(f"Error moving image at index {index}: {e}")
+                errors.append(f"Index {index}: {str(e)}")
+        
+        # Build response
+        # Operation is considered successful if:
+        # - At least one file was moved, OR
+        # - No errors occurred (files may already be in target folder)
+        operation_successful = len(moved_files) > 0 or len(errors) == 0
+        
+        response_data = {
+            "success": operation_successful,
+            "moved_count": len(moved_files),
+            "moved_files": moved_files,
+        }
+        
+        if same_folder_files:
+            response_data["same_folder_files"] = same_folder_files
+            response_data["same_folder_count"] = len(same_folder_files)
+        
+        if errors:
+            response_data["errors"] = errors
+            response_data["error_count"] = len(errors)
+        
+        return JSONResponse(content=response_data, status_code=200)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to move images: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to move images: {str(e)}")
 
 
 # Background Tasks

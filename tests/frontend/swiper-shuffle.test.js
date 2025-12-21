@@ -1,10 +1,11 @@
 // Unit tests for shuffle mode in swiper.js - specifically testing the random slide selection logic
-import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 // Mock album-manager to prevent DOM errors (it has side effects on import)
 jest.unstable_mockModule('../../photomap/frontend/static/javascript/album-manager.js', () => ({
   albumManager: {
-    fetchAvailableAlbums: jest.fn(() => Promise.resolve([]))
+    fetchAvailableAlbums: jest.fn(() => Promise.resolve([])),
+    setSwiperManager: jest.fn()
   },
   checkAlbumIndex: jest.fn()
 }));

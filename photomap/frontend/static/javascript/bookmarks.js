@@ -3,10 +3,12 @@
 // Bookmarks are stored per-album in localStorage and persist across sessions.
 
 import { showDeleteConfirmModal } from "./control-panel.js";
+import { createSimpleDirectoryPicker } from "./filetree.js";
+import { showConfirmModal } from "./modal-utils.js";
 import { setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
-import { showSpinner, hideSpinner, setCheckmarkOnIcon } from "./utils.js";
+import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
 // SVG icons for bookmark actions
 const BOOKMARK_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -38,6 +40,11 @@ const DELETE_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" 
 const CLEAR_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <line x1="18" y1="6" x2="6" y2="18"/>
   <line x1="6" y1="6" x2="18" y2="18"/>
+</svg>`;
+
+const MOVE_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+  <polyline points="9 22 9 12 15 12 15 22"/>
 </svg>`;
 
 const HIDE_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -516,6 +523,181 @@ class BookmarkManager {
     }
   }
 
+  /**
+   * Move bookmarked images to a different folder
+   */
+  async moveBookmarkedImages() {
+    const indices = this.getBookmarkedIndices();
+    if (indices.length === 0) {
+      alert("No images are bookmarked.");
+      return;
+    }
+
+    this.removeBookmarkMenu();
+
+    // Get the first bookmarked image's directory as the starting path
+    let startingPath = "";
+    try {
+      const firstIndex = indices[0];
+      const response = await fetch(`image_path/${encodeURIComponent(state.album)}/${firstIndex}`);
+      if (response.ok) {
+        const imagePath = await response.text();
+        // Extract directory from the path
+        const lastSlash = Math.max(imagePath.lastIndexOf('/'), imagePath.lastIndexOf('\\'));
+        if (lastSlash > 0) {
+          startingPath = imagePath.substring(0, lastSlash);
+        }
+      }
+    } catch (error) {
+      console.warn("Could not determine starting path:", error);
+    }
+
+    // Show directory picker with custom labels
+    createSimpleDirectoryPicker(
+      async (targetDirectory) => {
+        await this.performMove(indices, targetDirectory);
+      },
+      startingPath,
+      {
+        buttonLabel: "Move",
+        title: "Select Destination Folder",
+        pathLabel: "Move images to:",
+        showCreateFolder: true
+      }
+    );
+  }
+
+  /**
+   * Perform the actual move operation
+   */
+  async performMove(indices, targetDirectory) {
+    showSpinner();
+
+    try {
+      // Check if target folder is in the current album
+      const albumConfig = await this.getAlbumConfig();
+      const targetPath = targetDirectory.endsWith('/') ? targetDirectory.slice(0, -1) : targetDirectory;
+      const targetInAlbum = albumConfig.image_paths.some(path => {
+        const cleanPath = path.endsWith('/') ? path.slice(0, -1) : path;
+        return cleanPath === targetPath;
+      });
+
+      // If target folder is not in album, ask user to confirm adding it
+      if (!targetInAlbum) {
+        hideSpinner();
+        const shouldAddFolder = await showConfirmModal(
+          `The destination folder is not in the current album.\n\nWould you like to add "${targetDirectory}" to the "${state.album}" album?`,
+          "Yes, Add Folder",
+          "No, Continue Without Adding"
+        );
+
+        if (shouldAddFolder) {
+          // Add the folder to the album
+          await this.addFolderToAlbum(targetDirectory, albumConfig);
+        }
+        showSpinner();
+      }
+
+      const response = await fetch(
+        `move_images/${encodeURIComponent(state.album)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            indices: indices,
+            target_directory: targetDirectory
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // Build confirmation message
+      let message = "";
+      if (result.moved_count > 0) {
+        message += `Successfully moved ${result.moved_count} image${result.moved_count > 1 ? 's' : ''}.`;
+      }
+      
+      if (result.same_folder_count > 0) {
+        if (message) message += "\n\n";
+        message += `${result.same_folder_count} image${result.same_folder_count > 1 ? 's were' : ' was'} already in the target folder:\n`;
+        message += result.same_folder_files.slice(0, 5).join("\n");
+        if (result.same_folder_files.length > 5) {
+          message += `\n... and ${result.same_folder_files.length - 5} more`;
+        }
+      }
+
+      if (result.error_count > 0) {
+        if (message) message += "\n\n";
+        message += `${result.error_count} error${result.error_count > 1 ? 's' : ''} occurred:\n`;
+        message += result.errors.slice(0, 5).join("\n");
+        if (result.errors.length > 5) {
+          message += `\n... and ${result.errors.length - 5} more`;
+        }
+      }
+
+      alert(message || "Move operation completed.");
+
+      // If any files were moved, trigger album refresh
+      if (result.moved_count > 0) {
+        window.dispatchEvent(new CustomEvent("albumChanged", {
+          detail: { album: state.album, totalImages: slideState.totalAlbumImages }
+        }));
+      }
+
+    } catch (error) {
+      console.error("Move failed:", error);
+      alert(`Move failed: ${error.message}`);
+    } finally {
+      hideSpinner();
+    }
+  }
+
+  /**
+   * Get the current album configuration
+   */
+  async getAlbumConfig() {
+    const response = await fetch(`album/${encodeURIComponent(state.album)}/`);
+    if (!response.ok) {
+      throw new Error("Failed to get album configuration");
+    }
+    return await response.json();
+  }
+
+  /**
+   * Add a folder to the current album
+   */
+  async addFolderToAlbum(folderPath, albumConfig) {
+    const updatedPaths = [...albumConfig.image_paths, folderPath];
+    
+    const response = await fetch("update_album/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: albumConfig.key,
+        name: albumConfig.name,
+        image_paths: updatedPaths,
+        index: albumConfig.index,
+        umap_eps: albumConfig.umap_eps || 0.07,
+        description: albumConfig.description || ""
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to add folder to album");
+    }
+
+    // Trigger album update (re-index may be needed)
+    window.dispatchEvent(new CustomEvent("albumUpdated", {
+      detail: { album: state.album }
+    }));
+  }
+
   // === Bookmark Menu ===
 
   /**
@@ -597,7 +779,8 @@ class BookmarkManager {
     // Select All - only active when a search is being displayed (and not showing bookmarks)
     menu.appendChild(makeButton(SELECT_ALL_SVG, "Select All", () => this.selectAllFromSearch(), !isInSearchMode));
 
-    // Download and Delete
+    // Move, Download, and Delete (Move is before Download as requested)
+    menu.appendChild(makeButton(MOVE_SVG, "Move", () => this.moveBookmarkedImages(), !hasBookmarks));
     menu.appendChild(makeButton(DOWNLOAD_SVG, "Download", () => this.downloadBookmarkedImages(), !hasBookmarks));
     menu.appendChild(makeButton(DELETE_SVG, "Delete", () => this.deleteBookmarkedImages(), !hasBookmarks));
 
