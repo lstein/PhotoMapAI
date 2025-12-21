@@ -11,17 +11,33 @@
   justify-content: center;
 }
 
-#deleteConfirmModal .modal-content {
+#confirmModal.modal {
+  position: fixed;
+  z-index: 9999;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#deleteConfirmModal .modal-content,
+#confirmModal .modal-content {
   background: rgba(0, 0, 0, 0.85);
   color: #fff;
   padding: 24px 32px;
   border-radius: 12px;
   min-width: 320px;
+  max-width: 500px;
   box-shadow: 0 2px 16px rgba(0,0,0,0.4);
   font-family: inherit;
 }
 
-#deleteConfirmText {
+#deleteConfirmText,
+#confirmText {
   color: #faea0e; /* Match the yellow from settings.css */
   font-weight: bold;
   margin-bottom: 1em;
@@ -38,7 +54,8 @@
   font-weight: normal;
 }
 
-#deleteConfirmModal button {
+#deleteConfirmModal button,
+#confirmModal button {
   background: #faea0e;
   color: #000;
   border: none;
@@ -51,18 +68,21 @@
   box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 
-#deleteConfirmModal button:hover {
+#deleteConfirmModal button:hover,
+#confirmModal button:hover {
   background: #fff700;
   color: #222;
 }
 
-#deleteConfirmModal #deleteCancelBtn {
+#deleteConfirmModal #deleteCancelBtn,
+#confirmModal #confirmCancelBtn {
   background: #333;
   color: #fff;
   border: 1px solid #faea0e;
 }
 
-#deleteConfirmModal #deleteCancelBtn:hover {
+#deleteConfirmModal #deleteCancelBtn:hover,
+#confirmModal #confirmCancelBtn:hover {
   background: #222;
   color: #faea0e;
 }
