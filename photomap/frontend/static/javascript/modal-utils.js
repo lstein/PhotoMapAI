@@ -10,10 +10,13 @@
  */
 export function showConfirmModal(message, okButtonText = "OK", cancelButtonText = "Cancel") {
   return new Promise((resolve) => {
+    console.log("showConfirmModal: Starting");
     const modal = document.getElementById("confirmModal");
     const text = document.getElementById("confirmText");
     const cancelBtn = document.getElementById("confirmCancelBtn");
     const okBtn = document.getElementById("confirmOkBtn");
+
+    console.log("Modal elements:", { modal, text, cancelBtn, okBtn });
 
     if (!modal || !text || !cancelBtn || !okBtn) {
       console.error("Confirm modal elements not found in DOM");
@@ -21,20 +24,34 @@ export function showConfirmModal(message, okButtonText = "OK", cancelButtonText 
       return;
     }
 
+    console.log("Setting up modal with message:", message);
     text.textContent = message;
     okBtn.textContent = okButtonText;
     cancelBtn.textContent = cancelButtonText;
     modal.style.display = "flex";
+    console.log("Modal display set to flex");
 
-    const cleanup = () => {
+    function cleanup() {
+      console.log("Cleanup called");
       modal.style.display = "none";
       cancelBtn.removeEventListener("click", onCancel);
       okBtn.removeEventListener("click", onOk);
-    };
-    const onCancel = () => { cleanup(); resolve(false); };
-    const onOk = () => { cleanup(); resolve(true); };
+    }
+    
+    function onCancel() {
+      console.log("Cancel clicked");
+      cleanup();
+      resolve(false);
+    }
+    
+    function onOk() {
+      console.log("OK clicked");
+      cleanup();
+      resolve(true);
+    }
 
     cancelBtn.addEventListener("click", onCancel);
     okBtn.addEventListener("click", onOk);
+    console.log("Event listeners attached");
   });
 }
