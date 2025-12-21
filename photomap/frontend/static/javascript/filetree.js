@@ -215,52 +215,17 @@ export class DirectoryPicker {
 
       // Add directories
       data.directories.forEach((dir) => {
-        const dirElement = document.createElement("div");
-        dirElement.className = "directory-item";
+        // render directory entry
+        const dirEl = document.createElement("div");
+        dirEl.className = "directory-item";
+        dirEl.innerHTML = `<span class="dir-icon">📁</span><span class="dir-name">${dir.name}</span>`;
 
-        // Use different icons for drives vs folders
-        const icon = dir.name.includes("Drive")
-          ? "💽"
-          : dir.hasChildren
-          ? "📂"
-          : "📁";
-
-        dirElement.innerHTML = `
-          <span class="dir-icon">${icon}</span>
-          <span class="dir-name">${dir.name}</span>
-        `;
-
-        // Handle single and double clicks
-        let clickTimeout = null;
-
-        dirElement.onclick = (e) => {
-          e.preventDefault();
-
-          // Clear any existing timeout
-          if (clickTimeout) {
-            clearTimeout(clickTimeout);
-            clickTimeout = null;
-
-            // This is a double-click - call onSelect immediately
-            onSelect(dir.path, true);
-            return;
-          }
-
-          // Set timeout for single-click
-          clickTimeout = setTimeout(() => {
-            clickTimeout = null;
-            // This is a single-click
-            onSelect(dir.path, false);
-
-            // Update visual selection
-            container.querySelectorAll(".directory-item").forEach((item) => {
-              item.classList.remove("selected");
-            });
-            dirElement.classList.add("selected");
-          }, 250); // Increased delay slightly to make double-click easier
+        // Single-click: navigate into directory (or select file)
+        dirEl.onclick = () => {
+          onSelect(dir.path, true); // single-click navigates into the directory
         };
 
-        container.appendChild(dirElement);
+        container.appendChild(dirEl);
       });
 
       // Add "Up" button if not at root
@@ -269,24 +234,17 @@ export class DirectoryPicker {
         upBtn.className = "directory-item up-button";
         upBtn.innerHTML = `<span class="dir-icon">⬆️</span><span class="dir-name">..</span>`;
 
+        // keep existing single-click behavior for Up button
         upBtn.onclick = () => {
-          // Handle going up differently on Windows vs Unix
           if (data.currentPath.match(/^[A-Z]:\\?$/)) {
-            // Going up from drive root shows all drives
             onSelect("", true);
           } else {
-            // Normal up navigation
             const isWindows = data.currentPath.includes(":\\");
-            const separator = isWindows ? "\\" : "/";
-            const parentPath = data.currentPath
-              .split(separator)
-              .slice(0, -1)
-              .join(separator);
+            const sep = isWindows ? "\\" : "/";
+            const parentPath = data.currentPath.split(sep).slice(0, -1).join(sep);
             onSelect(parentPath, true);
           }
         };
-
-        // Insert at the beginning
         container.insertBefore(upBtn, container.firstChild);
       }
     } catch (error) {

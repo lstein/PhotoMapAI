@@ -55,11 +55,6 @@
   font-weight: bold;
 }
 
-.directory-item.up-button {
-  background: #4a4a0a;
-  font-weight: bold;
-}
-
 .directory-picker-buttons {
   display: flex;
   gap: 10px;
@@ -159,6 +154,5 @@
 }
 
 .directory-item.up-button {
-  background: #4a4a0a;
   font-weight: bold;
 }
