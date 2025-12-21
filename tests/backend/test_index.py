@@ -89,10 +89,7 @@ def test_move_images(
     # Move the first image
     response = client.post(
         f"/move_images/{album_key}",
-        json={
-            "indices": [0],
-            "target_directory": str(target_dir)
-        }
+        json={"indices": [0], "target_directory": str(target_dir)},
     )
     assert response.status_code == 200
     result = response.json()
@@ -112,8 +109,7 @@ def test_move_images(
     response = client.get(f"/retrieve_image/{album_key}/0")
     data = response.json()
     # Check that the filepath has been updated to the new location
-    assert str(new_path) in data.get("filepath", "")
-
+    assert new_path.as_posix() in data.get("filepath", "")
 
 
 def test_move_images_to_same_folder(
@@ -123,7 +119,7 @@ def test_move_images_to_same_folder(
     build_index(client, new_album, monkeypatch)
 
     album_key = new_album["key"]
-    
+
     # Get the original directory
     response = client.get(f"/image_path/{album_key}/0")
     assert response.status_code == 200
@@ -133,10 +129,7 @@ def test_move_images_to_same_folder(
     # Try to move to the same directory
     response = client.post(
         f"/move_images/{album_key}",
-        json={
-            "indices": [0],
-            "target_directory": str(original_dir)
-        }
+        json={"indices": [0], "target_directory": str(original_dir)},
     )
     assert response.status_code == 200
     result = response.json()
@@ -154,10 +147,7 @@ def test_move_images_nonexistent_directory(
     # Try to move to a non-existent directory
     response = client.post(
         f"/move_images/{album_key}",
-        json={
-            "indices": [0],
-            "target_directory": "/nonexistent/directory"
-        }
+        json={"indices": [0], "target_directory": "/nonexistent/directory"},
     )
     assert response.status_code == 400
     assert "does not exist" in response.json().get("detail", "").lower()
@@ -185,10 +175,7 @@ def test_move_images_file_exists(
     # Try to move the image
     response = client.post(
         f"/move_images/{album_key}",
-        json={
-            "indices": [0],
-            "target_directory": str(target_dir)
-        }
+        json={"indices": [0], "target_directory": str(target_dir)},
     )
     assert response.status_code == 200
     result = response.json()
@@ -205,10 +192,7 @@ def test_create_directory(client: TestClient, tmp_path: Path):
     # Test creating a new directory
     response = client.post(
         "/filetree/create_directory",
-        json={
-            "parent_path": str(test_dir),
-            "directory_name": "new_folder"
-        }
+        json={"parent_path": str(test_dir), "directory_name": "new_folder"},
     )
     assert response.status_code == 200
     result = response.json()
@@ -229,10 +213,7 @@ def test_create_directory_invalid_name(client: TestClient, tmp_path: Path):
     # Test with invalid character (slash)
     response = client.post(
         "/filetree/create_directory",
-        json={
-            "parent_path": str(test_dir),
-            "directory_name": "invalid/name"
-        }
+        json={"parent_path": str(test_dir), "directory_name": "invalid/name"},
     )
     assert response.status_code == 400
     assert "invalid characters" in response.json().get("detail", "").lower()
@@ -248,12 +229,7 @@ def test_create_directory_already_exists(client: TestClient, tmp_path: Path):
     # Try to create the same directory again
     response = client.post(
         "/filetree/create_directory",
-        json={
-            "parent_path": str(test_dir),
-            "directory_name": "existing"
-        }
+        json={"parent_path": str(test_dir), "directory_name": "existing"},
     )
     assert response.status_code == 409
     assert "already exists" in response.json().get("detail", "").lower()
-
-
