@@ -1159,6 +1159,64 @@ class Embeddings(BaseModel):
             logger.error(f"Error removing image: {e}")
             raise
 
+    def update_image_path(self, index: int, new_path: Path) -> None:
+        """
+        Update the path of an image in the embeddings file after it has been moved.
+        
+        Args:
+            index: The sorted index of the image in the embeddings
+            new_path: The new path to the image file
+        """
+        try:
+            # Use optimized version for O(1) lookup
+            data = self.open_cached_embeddings(self.embeddings_path)
+
+            # Load the raw data for modification
+            sorted_filenames = data["sorted_filenames"]
+            filenames = data["filenames"]
+            embeddings = data["embeddings"]
+            modtimes = data["modification_times"]
+            metadata = data["metadata"]
+
+            current_filename = sorted_filenames[index]
+
+            # Find the index in the original (unsorted) arrays
+            original_idx = np.where(filenames == current_filename)[0][0]
+
+            # Convert new_path to string
+            new_path_str = str(new_path)
+            
+            # Check if the new path is longer than the current dtype allows
+            current_dtype = filenames.dtype
+            if hasattr(current_dtype, 'itemsize'):
+                # For string dtypes, check if we need to resize
+                max_len = current_dtype.itemsize // 4  # Unicode chars are 4 bytes each
+                if len(new_path_str) > max_len:
+                    # Need to create a new array with larger dtype
+                    new_max_len = max(len(new_path_str), max_len) + 50  # Add buffer
+                    filenames = filenames.astype(f'<U{new_max_len}')
+            
+            # Update the filename in the original array
+            filenames[original_idx] = new_path_str
+
+            # Save updated data
+            self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
+            np.savez(
+                self.embeddings_path,
+                embeddings=embeddings,
+                filenames=filenames,
+                modification_times=modtimes,
+                metadata=metadata,
+            )
+            
+            logger.info(f"Updated path in embeddings: {current_filename} -> {new_path}")
+        except Exception as e:
+            logger.error(f"Failed to update image path in embeddings: {e}")
+            raise
+
+        # Clear the LRU cache since the file has changed
+        self.open_cached_embeddings.cache_clear()
+
     # This is not used in the current implementation, but can be useful for testing.
     def iterate_images(
         self, random: bool = False

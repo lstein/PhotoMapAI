@@ -3,8 +3,10 @@
 
 import './javascript/album-manager.js';
 import './javascript/bookmarks.js';
+import './javascript/cluster-utils.js';
 import './javascript/events.js';
 import './javascript/metadata-drawer.js';
+import './javascript/page-visibility.js';
 import './javascript/search-ui.js';
 import './javascript/search.js';
 import './javascript/seek-slider.js';

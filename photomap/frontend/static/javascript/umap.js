@@ -1,15 +1,17 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-manager.js";
+import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex } from "./slide-state.js";
-import { state } from "./state.js";
+import { setUmapExitFullscreenOnSelection, setUmapShowHoverThumbnails, setUmapShowLandmarks, state } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
+import { CLUSTER_PALETTE, getClusterColorFromPoints } from "./cluster-utils.js";
 
 const UMAP_SIZES = {
-  big: { width: 800, height: 560 },
-  medium: { width: 440, height: 280 },
-  small: { width: 340, height: 180 },
+  big: { width: 800, height: 590 },
+  medium: { width: 440, height: 310 },
+  small: { width: 360, height: 210 },
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
@@ -27,25 +29,6 @@ export function setUmapClickCallback(callback) {
 let points = [];
 let clusters = [];
 let colors = [];
-let palette = [
-  "#e41a1c",
-  "#377eb8",
-  "#4daf4a",
-  "#984ea3",
-  "#ff7f00",
-  "#ffff33",
-  "#a65628",
-  "#f781bf",
-  "#999999",
-  "#66c2a5",
-  "#fc8d62",
-  "#8da0cb",
-  "#e78ac3",
-  "#a6d854",
-  "#ffd92f",
-  "#e5c494",
-  "#b3b3b3",
-];
 let mapExists = false;
 let isShaded = false;
 let umapWindowHasBeenShown = false; // Track if window has been shown at least once
@@ -136,7 +119,7 @@ export async function fetchUmapData() {
 
     // Compute clusters and colors
     clusters = [...new Set(points.map((p) => p.cluster))];
-    colors = clusters.map((c, i) => palette[i % palette.length]);
+    colors = clusters.map((c, i) => CLUSTER_PALETTE[i % CLUSTER_PALETTE.length]);
 
     // Compute axis ranges (1st to 99th percentile)
     const xs = points.map((p) => p.x);
@@ -148,7 +131,7 @@ export async function fetchUmapData() {
 
     // Prepare marker arrays
     const markerColors = points.map((p) => getClusterColor(p.cluster));
-    const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.08 : 0.5));
+    const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.08 : 0.75));
 
     // Main trace: all points
     const allPointsTrace = {
@@ -241,7 +224,9 @@ export async function fetchUmapData() {
     };
 
     const config = {
-      modeBarButtonsToRemove: ["select2d", "lasso2d"],
+      modeBarButtons: [
+        ["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "toImage"],
+      ],
       scrollZoom: true,
     };
 
@@ -265,7 +250,10 @@ export async function fetchUmapData() {
         if (!hoverThumbnailsEnabled) return;
         if (!eventData || !eventData.points || !eventData.points.length) return;
         const pt = eventData.points[0];
-        const hoverCluster = points[pt.pointIndex]?.cluster ?? -1;
+        // Use customdata to get the actual index, then find the point
+        const ptIndex = pt.customdata;
+        const point = points.find((p) => p.index === ptIndex);
+        const hoverCluster = point?.cluster ?? -1;
         isHovering = true;
         hoverTimer = setTimeout(() => {
           if (isHovering) {
@@ -279,7 +267,7 @@ export async function fetchUmapData() {
               index = landmarkPoint.index;
               cluster = landmarkCluster;
             } else {
-              index = pt.customdata;
+              index = ptIndex;
               cluster = hoverCluster;
             }
             createUmapThumbnail({
@@ -303,6 +291,20 @@ export async function fetchUmapData() {
 
       gd.on("plotly_relayout", (eventData) => {
         if (suppressRelayoutEvent) return; // Prevent feedback loop
+
+        // Auto-switch back to pan after zoom
+        const isZoomEvent =
+          eventData["xaxis.range[0]"] !== undefined ||
+          eventData["yaxis.range[0]"] !== undefined ||
+          eventData["xaxis.range"] !== undefined ||
+          eventData["yaxis.range"] !== undefined;
+
+        if (isZoomEvent && gd.layout.dragmode === "zoom") {
+          // Small delay to avoid interfering with the zoom operation
+          setTimeout(() => {
+            Plotly.relayout(gd, { dragmode: "pan" });
+          }, 100);
+        }
 
         // Only update landmarks for actual user pan/zoom events, not our programmatic changes
         const isPanZoom =
@@ -390,9 +392,13 @@ export async function fetchUmapData() {
           if (landmarkPoint) {
             await handleClusterClick(landmarkPoint.index);
           }
-        } else if (data.points[0].curveNumber === 0) {
-          // Regular scatter plot click
-          await handleClusterClick(data.points[0].customdata);
+        } else {
+          const pt = data.points[0];
+          const traceName = pt.data?.name;
+          // Main points or highlighted points behave the same
+          if (traceName === "All Points" || traceName === "HighlightedPoints") {
+            await handleClusterClick(pt.customdata);
+          }
         }
       });
 
@@ -451,28 +457,109 @@ plotDiv.addEventListener("mouseleave", () => {
 // --- Dynamic Colorization ---
 export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
   if (!points.length) return;
-  let markerColors, markerAlphas;
+  
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.data) return;
 
   if (highlight && searchResults.length > 0) {
     const searchSet = new Set(searchResults.map((r) => r.index));
-    markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerAlphas = points.map((p) => (searchSet.has(p.index) ? 1.0 : 0.2));
+    
+    // Split points into two groups
+    const regularPoints = points.filter(p => !searchSet.has(p.index));
+    const highlightedPoints = points.filter(p => searchSet.has(p.index));
+    
+    // Update main trace with only regular points
+    Plotly.restyle(
+      "umapPlot",
+      {
+        x: [regularPoints.map(p => p.x)],
+        y: [regularPoints.map(p => p.y)],
+        "marker.color": [regularPoints.map(p => getClusterColor(p.cluster))],
+        "marker.opacity": [regularPoints.map(p => p.cluster === -1 ? 0.2 : 0.75)],
+        "marker.size": [regularPoints.map(() => 5)],
+        "marker.line.width": [0],
+        customdata: [regularPoints.map(p => p.index)],
+      },
+      [0]
+    );
+    
+    // Add/update highlighted trace
+    const highlightTraceIdx = plotDiv.data.findIndex(t => t.name === "HighlightedPoints");
+    const highlightTrace = {
+      x: highlightedPoints.map(p => p.x),
+      y: highlightedPoints.map(p => p.y),
+      mode: "markers",
+      type: "scattergl",
+      marker: {
+        color: highlightedPoints.map(p => getClusterColor(p.cluster)),
+        opacity: 1.0,
+        size: 8,
+        line: { width: 1, color: "#fff" }
+      },
+      customdata: highlightedPoints.map(p => p.index),
+      name: "HighlightedPoints",
+      hoverinfo: "none",
+    };
+    
+    if (highlightTraceIdx === -1) {
+      Plotly.addTraces(plotDiv, [highlightTrace]);
+    } else {
+      Plotly.restyle(plotDiv, {
+        x: [highlightTrace.x],
+        y: [highlightTrace.y],
+        "marker.color": [highlightTrace.marker.color],
+        "marker.opacity": [highlightTrace.marker.opacity],
+        "marker.size": [highlightTrace.marker.size],
+        customdata: [highlightTrace.customdata],
+      }, highlightTraceIdx);
+    }
+
+    // Ensure Current Image marker stays on top
+    const markerTraceIndex = plotDiv.data.findIndex(
+      (trace) => trace.name === "Current Image"
+    );
+    if (markerTraceIndex !== -1 && markerTraceIndex !== plotDiv.data.length - 1) {
+      Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
+    }
   } else {
-    markerColors = points.map((p) => getClusterColor(p.cluster));
-    markerAlphas = points.map((p) => (p.cluster === -1 ? 0.25 : 0.5));
+    // Remove highlight trace if it exists
+    const highlightTraceIdx = plotDiv.data?.findIndex(t => t.name === "HighlightedPoints");
+    if (highlightTraceIdx !== -1) {
+      Plotly.deleteTraces(plotDiv, highlightTraceIdx);
+    }
+    
+    // Restore ALL points to main trace with normal coloring
+    const markerColors = points.map((p) => getClusterColor(p.cluster));
+    const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.2 : 0.75));
+    const markerSizes = points.map(() => 5);
+    
+    Plotly.restyle(
+      "umapPlot",
+      {
+        x: [points.map(p => p.x)],
+        y: [points.map(p => p.y)],
+        "marker.color": [markerColors],
+        "marker.opacity": [markerAlphas],
+        "marker.size": [markerSizes],
+        "marker.line.width": [0],
+        customdata: [points.map(p => p.index)],
+      },
+      [0]
+    );
+
+    // Ensure Current Image marker stays on top after removing highlight
+    const markerTraceIndex = plotDiv.data.findIndex(
+      (trace) => trace.name === "Current Image"
+    );
+    if (markerTraceIndex !== -1 && markerTraceIndex !== plotDiv.data.length - 1) {
+      Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
+    }
   }
-  Plotly.restyle(
-    "umapPlot",
-    {
-      "marker.color": [markerColors],
-      "marker.opacity": [markerAlphas],
-    },
-    [0]
-  );
 }
 
 // --- Checkbox event handler ---
-document.addEventListener("DOMContentLoaded", () => {
+// Wait for state to be ready before initializing checkboxes
+window.addEventListener("stateReady", () => {
   const highlightCheckbox = document.getElementById("umapHighlightSelection");
   if (highlightCheckbox) {
     highlightCheckbox.checked = false;
@@ -481,33 +568,74 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Hover thumbnails checkbox
+  // Clear selection link
+  const clearSelectionLink = document.getElementById("umapClearSelectionLink");
+  if (clearSelectionLink) {
+    clearSelectionLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      exitSearchMode();
+    });
+  }
+
+  // Hover thumbnails checkbox - initialize from state
   const hoverThumbCheckbox = document.getElementById("umapShowHoverThumbnails");
   if (hoverThumbCheckbox) {
-    hoverThumbCheckbox.checked = true;
-    hoverThumbnailsEnabled = true;
+    hoverThumbCheckbox.checked = state.umapShowHoverThumbnails;
+    hoverThumbnailsEnabled = state.umapShowHoverThumbnails;
     hoverThumbCheckbox.addEventListener("change", (e) => {
       hoverThumbnailsEnabled = e.target.checked;
+      setUmapShowHoverThumbnails(e.target.checked);
       // Remove any popup if disabling
       if (!hoverThumbnailsEnabled) removeUmapThumbnail();
     });
   }
 
-  // Landmarks checkbox
+  // Landmarks checkbox - initialize from state
   const landmarkCheckbox = document.getElementById("umapShowLandmarks");
   if (landmarkCheckbox) {
-    landmarkCheckbox.checked = true;
-    landmarksVisible = true;
+    landmarkCheckbox.checked = state.umapShowLandmarks;
+    landmarksVisible = state.umapShowLandmarks;
     landmarkCheckbox.addEventListener("change", (e) => {
       landmarksVisible = e.target.checked;
+      setUmapShowLandmarks(e.target.checked);
       updateLandmarkTrace();
     });
   }
+
+  // Exit fullscreen on selection checkbox - initialize from state
+  const exitFullscreenCheckbox = document.getElementById("umapExitFullscreenOnSelection");
+  const exitFullscreenLabel = document.getElementById("umapExitFullscreenLabel");
+  if (exitFullscreenCheckbox) {
+    exitFullscreenCheckbox.checked = state.umapExitFullscreenOnSelection;
+    exitFullscreenCheckbox.addEventListener("change", (e) => {
+      setUmapExitFullscreenOnSelection(e.target.checked);
+    });
+    
+    // Update enabled state based on fullscreen mode
+    updateExitFullscreenCheckboxState();
+  }
 });
+
+// Helper function to update the "Exit fullscreen on selection" checkbox state
+function updateExitFullscreenCheckboxState() {
+  const exitFullscreenCheckbox = document.getElementById("umapExitFullscreenOnSelection");
+  const exitFullscreenLabel = document.getElementById("umapExitFullscreenLabel");
+  
+  if (exitFullscreenCheckbox && exitFullscreenLabel) {
+    const shouldEnable = isFullscreen;
+    exitFullscreenCheckbox.disabled = !shouldEnable;
+    exitFullscreenLabel.style.opacity = shouldEnable ? "1" : "0.5";
+  }
+}
 
 // --- Update colorization after search or cluster selection ---
 window.addEventListener("searchResultsChanged", function (e) {
   updateUmapColorModeAvailability(e.detail.results);
+  setUmapColorMode();
+  // deactivate fullscreen mode when search results have come in (if enabled)
+  if (state.searchResults.length > 0 && isFullscreen && state.umapExitFullscreenOnSelection) {
+    setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
+  }
 });
 
 window.addEventListener("slideChanged", async () => {
@@ -655,9 +783,10 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   const filename = await getImagePath(state.album, index);
   if (!filename) return; // No valid filename, exit early
 
-  // Find cluster color and label
+  // Find cluster color and calculate cluster size
   const clusterColor = getClusterColor(cluster);
-  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster}`;
+  const clusterSize = points.filter((p) => p.cluster === cluster).length;
+  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster} (size=${clusterSize})`;
   const textIsDark = isColorLight(clusterColor) ? "#222" : "#fff";
   const textShadow = isColorLight(clusterColor)
     ? "0 1px 2px #fff, 0 0px 8px #fff"
@@ -1305,12 +1434,13 @@ function setUmapWindowSize(sizeKey) {
   } else {
     if (contentDiv) contentDiv.style.display = "block";
     const { width, height } = UMAP_SIZES[sizeKey];
+    const bottomPadding = 8; // add breathing room under plot
     win.style.width = width + 60 + "px";
-    win.style.height = height + 120 + "px";
+    win.style.height = height + 120 + bottomPadding + "px"; // window taller
     win.style.minHeight = "200px";
     plotDiv.style.width = width + "px";
-    plotDiv.style.height = height + "px";
-    Plotly.relayout(plotDiv, { width, height });
+    plotDiv.style.height = height - bottomPadding + "px"; // plot area shorter
+    Plotly.relayout(plotDiv, { width, height: height - bottomPadding });
 
     // Turn landmarks OFF in small
     if (sizeKey === "small" && landmarkCheckbox) {
@@ -1384,18 +1514,21 @@ addButtonHandlers("umapResizeBig", () => {
   lastUnshadedSize = "big";
   saveCurrentPosition();
   isFullscreen = false;
+  updateExitFullscreenCheckboxState();
 });
 addButtonHandlers("umapResizeMedium", () => {
   setUmapWindowSize("medium");
   lastUnshadedSize = "medium";
   saveCurrentPosition();
   isFullscreen = false;
+  updateExitFullscreenCheckboxState();
 });
 addButtonHandlers("umapResizeSmall", () => {
   setUmapWindowSize("small");
   lastUnshadedSize = "small";
   saveCurrentPosition();
   isFullscreen = false;
+  updateExitFullscreenCheckboxState();
 });
 function toggleFullscreen(turnOn = null) {
   const win = document.getElementById("umapFloatingWindow");
@@ -1418,6 +1551,8 @@ function toggleFullscreen(turnOn = null) {
   }
   // if any hover thumbnail is visible, remove it
   removeUmapThumbnail();
+  // Update checkbox state when fullscreen mode changes
+  updateExitFullscreenCheckboxState();
 }
 
 addButtonHandlers("umapResizeFullscreen", toggleFullscreen);

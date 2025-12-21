@@ -55,15 +55,10 @@
   font-weight: bold;
 }
 
-.directory-item.up-button {
-  background: #4a4a0a;
-  font-weight: bold;
-}
-
 .directory-picker-buttons {
   display: flex;
   gap: 10px;
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-top: 15px;
 }
 
@@ -73,6 +68,25 @@
   border-radius: 4px;
   cursor: pointer;
   font-weight: bold;
+}
+
+.create-folder-button-inline {
+  background: #0a6a0a;
+  color: white;
+  margin-right: auto;
+}
+
+.create-folder-button-inline:hover {
+  background: #0a8a0a;
+}
+
+.create-folder-button-inline:active {
+  background: #085a08;
+}
+
+#addDirBtn {
+  background: #0a6a0a;
+  color: white;
 }
 
 #selectDirBtn {
@@ -140,6 +154,5 @@
 }
 
 .directory-item.up-button {
-  background: #4a4a0a;
   font-weight: bold;
 }

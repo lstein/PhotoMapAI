@@ -4,7 +4,6 @@ import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
 import { exitSearchMode } from "./search-ui.js";
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
 import { setAlbum, state } from "./state.js";
-import { hideSpinner, showSpinner } from "./utils.js";
 
 export class AlbumManager {
   // Constants
@@ -395,7 +394,7 @@ export class AlbumManager {
       onFolderPick: (currentPath, setPath) => {
         createSimpleDirectoryPicker((selectedPath) => {
           setPath(selectedPath);
-        }, currentPath);
+        }, currentPath, { showCreateFolder: true });
       },
     });
   }
@@ -414,7 +413,7 @@ export class AlbumManager {
       onFolderPick: (currentPath, setPath) => {
         createSimpleDirectoryPicker((selectedPath) => {
           setPath(selectedPath);
-        }, currentPath);
+        }, currentPath, { showCreateFolder: true });
       },
     });
   }
@@ -922,7 +921,7 @@ export class AlbumManager {
       onFolderPick: (currentPath, setPath) => {
         createSimpleDirectoryPicker((selectedPath) => {
           setPath(selectedPath);
-        }, currentPath);
+        }, currentPath, { showCreateFolder: true });
       },
     });
   }
@@ -1439,6 +1438,10 @@ export class AlbumManager {
     // Find the album with the matching key
     const album = albums.find((a) => a.key === albumKey);
     return album || null;
+  }
+
+  setSwiperManager(swiperManager) {
+    this.single_swiper = swiperManager;
   }
 }
 

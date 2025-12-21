@@ -4,6 +4,9 @@ import { bookmarkManager } from "./bookmarks.js";
 import { scoreDisplay } from "./score-display.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
+import { setSearchResults } from "./search.js";
+import { isColorLight } from "./utils.js";
+import { getClusterInfoForImage, getClusterColorFromPoints } from "./cluster-utils.js";
 
 // Set up the bookmark toggle callback for the star icon
 scoreDisplay.setToggleBookmarkCallback((globalIndex) => {
@@ -103,7 +106,77 @@ export function updateMetadataOverlay(slide) {
     slide.dataset.filepath || "";
   document.getElementById("metadataLink").href =
     slide.dataset.metadata_url || "#";
+  
+  // Update cluster information display
+  updateClusterInfo(slide.dataset);
   updateCurrentImageScore(slide.dataset);
+}
+
+// Update cluster information in the metadata window
+function updateClusterInfo(metadata) {
+  const clusterInfoContainer = document.getElementById("clusterInfoContainer");
+  const clusterInfoBadge = document.getElementById("clusterInfoBadge");
+  
+  if (!clusterInfoContainer || !clusterInfoBadge) return;
+  
+  // Get cluster info using shared utility
+  const clusterInfo = getClusterInfoForImage(
+    parseInt(metadata.globalIndex, 10),
+    window.umapPoints
+  );
+  
+  // Check if we have cluster information
+  if (clusterInfo && clusterInfo.cluster !== null && clusterInfo.cluster !== undefined) {
+    const { cluster, color, size } = clusterInfo;
+    
+    // Create label
+    const clusterLabel = cluster === -1 
+      ? `Unclustered (size=${size})` 
+      : `Cluster ${cluster} (size=${size})`;
+    
+    // Set badge text and colors
+    clusterInfoBadge.textContent = clusterLabel;
+    clusterInfoBadge.style.backgroundColor = color;
+    clusterInfoBadge.style.color = isColorLight(color) ? "#222" : "#fff";
+    
+    // Store current cluster value in data attribute for the click handler
+    clusterInfoBadge.dataset.currentCluster = cluster;
+    
+    // Show container
+    clusterInfoContainer.style.display = "block";
+    
+    // Set up click handler to select cluster (if not already set)
+    if (!clusterInfoBadge.hasAttribute("data-click-handler")) {
+      clusterInfoBadge.setAttribute("data-click-handler", "true");
+      clusterInfoBadge.addEventListener("click", () => {
+        // Get the current cluster from the data attribute
+        const currentCluster = parseInt(clusterInfoBadge.dataset.currentCluster, 10);
+        
+        // Find all points in this cluster from UMAP data
+        if (window.umapPoints) {
+          const clusterPoints = window.umapPoints.filter(p => p.cluster === currentCluster);
+          
+          if (clusterPoints.length > 0) {
+            // Get the cluster color using shared utility
+            const clusterColor = getClusterColorFromPoints(currentCluster, window.umapPoints);
+            
+            // Create search results
+            const clusterMembers = clusterPoints.map((point) => ({
+              index: point.index,
+              cluster: currentCluster,
+              color: clusterColor,
+            }));
+            
+            // Set search results
+            setSearchResults(clusterMembers, "cluster");
+          }
+        }
+      });
+    }
+  } else {
+    // Hide cluster info if no cluster
+    clusterInfoContainer.style.display = "none";
+  }
 }
 
 export async function updateCurrentImageScore(metadata) {
