@@ -154,16 +154,20 @@ async def export_dataset(request: ExportRequest):
         raise HTTPException(status_code=400, detail=f"Invalid output folder: {e}")
 
     # Define the base directory under which exports are allowed
-    base_dir = Path.cwd().resolve()
+    # Use user's home directory as the base to prevent system-wide access
+    base_dir = Path.home().resolve()
 
     # Ensure the export directory is within the allowed base directory
-    if os.name == "nt":
-        # On Windows, also ensure the drive matches
-        if output_dir.drive.lower() != base_dir.drive.lower() or not (output_dir == base_dir or base_dir in output_dir.parents):
-            raise HTTPException(status_code=400, detail="Output folder is outside the allowed export directory")
-    else:
-        if not (output_dir == base_dir or base_dir in output_dir.parents):
-            raise HTTPException(status_code=400, detail="Output folder is outside the allowed export directory")
+    def is_within_base_dir(target_dir: Path, base: Path) -> bool:
+        """Check if target directory is within the base directory."""
+        if os.name == "nt":
+            # On Windows, also ensure the drive matches
+            return target_dir.drive.lower() == base.drive.lower() and (target_dir == base or base in target_dir.parents)
+        else:
+            return target_dir == base or base in target_dir.parents
+
+    if not is_within_base_dir(output_dir, base_dir):
+        raise HTTPException(status_code=400, detail="Output folder is outside the allowed export directory")
 
     if not output_dir.exists():
         try:
