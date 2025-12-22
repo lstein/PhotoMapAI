@@ -27,7 +27,7 @@ window.toggleCurationPanel = function () {
             updateVisuals();
         }
     }
-}
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
@@ -47,7 +47,6 @@ function setupEventListeners() {
     const toggleLockModeBtn = document.getElementById('toggleLockModeBtn');
     const lockThresholdBtn = document.getElementById('lockThresholdBtn');
     const unlockBtn = document.getElementById('unlockOutliersBtn');
-    const lockAllBtn = document.getElementById('lockAllGreenBtn');
 
     const methodFps = document.getElementById('methodFps');
     const methodKmeans = document.getElementById('methodKmeans');
@@ -76,7 +75,7 @@ function setupEventListeners() {
     const updateExcludeCount = () => {
         const el = document.getElementById('lockCountDisplay');
         if (el) el.innerText = `${excludedIndices.size} Excluded`;
-    }
+    };
 
     if (toggleLockModeBtn) {
         toggleLockModeBtn.onclick = () => {
@@ -131,10 +130,9 @@ function setupEventListeners() {
             updateVisuals();
             updateExcludeCount();
 
-            const totalExcluded = excludedIndices.size;
             // "Excluded 24 items from previous, and 10 new items >70%."
             setStatus(`Excluded ${previousExcludedCount} items from previous, and ${newExcludedCount} new items >${thresh}%.`, "success");
-        }
+        };
     }
 
     if (unlockBtn) {
@@ -143,7 +141,7 @@ function setupEventListeners() {
             updateVisuals();
             updateExcludeCount();
             setStatus("Exclusions cleared.", "normal");
-        }
+        };
     }
 
     // --- MAIN EXECUTION ---

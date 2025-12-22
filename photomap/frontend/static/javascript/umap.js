@@ -16,6 +16,7 @@ const UMAP_SIZES = {
 };
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
 const randomWalkMaxSize = 2000; // Max cluster size to use random walk ordering
+const MARKER_UPDATE_IGNORE_WINDOW_MS = 1000; // Time window to ignore marker updates after manual navigation
 
 let externalClickCallback = null;
 let updateMarkerTimer = null;
@@ -1690,9 +1691,9 @@ export function hideCurrentImageMarker() {
   // 1. Stop any pending updates from the race condition
   if (updateMarkerTimer) clearTimeout(updateMarkerTimer);
 
-  // 2. Set a 1-second "Dead Zone". 
-  // Any slideChange events occurring in the next 1000ms will be ignored.
-  ignoreUpdatesUntil = Date.now() + 1000;
+  // 2. Set a "Dead Zone" to ignore updates during manual navigation.
+  // Any slideChange events occurring in the next period will be ignored.
+  ignoreUpdatesUntil = Date.now() + MARKER_UPDATE_IGNORE_WINDOW_MS;
 
   // 3. Force hide the dot immediately
   const plotDiv = document.getElementById("umapPlot");

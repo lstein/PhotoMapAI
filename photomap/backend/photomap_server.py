@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
