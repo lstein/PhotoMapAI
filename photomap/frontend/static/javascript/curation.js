@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { highlightCurationSelection, setUmapClickCallback, updateCurrentImageMarker } from './umap.js';
+import { hideSpinner, showSpinner } from './utils.js';
 
 let currentSelectionIndices = new Set();
 let excludedIndices = new Set();
@@ -158,6 +159,7 @@ function setupEventListeners() {
         setStatus(`Running ${method.toUpperCase()} (${iter} iterations)...`, "loading");
 
         try {
+            showSpinner();
             const response = await fetch('api/curation/curate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -229,6 +231,7 @@ function setupEventListeners() {
             console.error(e);
             setStatus("Error: " + e.message, "error");
         }
+        hideSpinner();
     };
 
     // Export
@@ -255,7 +258,7 @@ function setupEventListeners() {
 
         setStatus(`Exporting ${filesToExport.length} files...`, "loading");
         try {
-            const response = await fetch('/api/curation/export', {
+            const response = await fetch('api/curation/export', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filenames: filesToExport, output_folder: path })
