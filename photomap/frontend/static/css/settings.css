@@ -158,7 +158,6 @@
   border: 1px solid #888;
   background: #333;
   color: #fff;
-  min-width: 150px;
 }
 
 #albumSelect:focus {
@@ -176,13 +175,14 @@
 
 .album-selector-group #albumSelect {
   flex: 1;
-  min-width: 150px;
+  min-width: 120px;
 }
 
 .album-selector-group #manageAlbumsBtn {
-  flex-shrink: 0;
+  flex-shrink: 1;
   white-space: nowrap;
   padding: 0.4em 0.8em;
+  max-width: fit-content;
 }
 
 #delayValue {

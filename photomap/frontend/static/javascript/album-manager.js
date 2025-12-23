@@ -2,8 +2,9 @@
 import { createSimpleDirectoryPicker } from "./filetree.js"; // Add this import
 import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
 import { exitSearchMode } from "./search-ui.js";
-import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
+import { closeSettingsModal, loadAvailableAlbums, openSettingsModal } from "./settings.js";
 import { setAlbum, state } from "./state.js";
+import { hideSpinner, showSpinner } from "./utils.js";
 
 export class AlbumManager {
   // Constants
@@ -55,6 +56,14 @@ export class AlbumManager {
         closeSettingsModal();
         showSpinner();
         this.show();
+      });
+
+    // Back to settings button
+    const backToSettingsBtn = document.getElementById("backToSettingsBtn");
+    if (backToSettingsBtn)
+      backToSettingsBtn.addEventListener("click", () => {
+        this.hide();
+        openSettingsModal();
       });
 
     // Close button
@@ -430,10 +439,10 @@ export class AlbumManager {
 
   // Main show/hide methods
   async show() {
-    await this.loadAlbums();
-    await this.checkForOngoingIndexing(); // <-- Move this after loadAlbums
     this.overlay.classList.add("visible");
     hideSpinner();
+    await this.loadAlbums();
+    await this.checkForOngoingIndexing(); // <-- Move this after loadAlbums
 
     // Ensure add album form is hidden when opening normally
     if (!this.isSetupMode) {

@@ -318,8 +318,7 @@ if (copyMetadataBtn && metadataTextArea) {
 }
 
 let isDraggingDrawer = false;
-let dragOffset = { x: 0, y: 0 };
-let originalPosition = { left: null, top: null };
+let startX, startY, initialLeft, initialTop;
 
 // Helper to get/set drawer position
 function setDrawerPosition(left, top) {
@@ -336,6 +335,14 @@ function resetDrawerPosition() {
   container.style.transform = ""; // Restore original transform
 }
 
+// Helper function to get coordinates from event (mouse or touch)
+const getEventCoords = (e) => {
+  if (e.touches && e.touches.length > 0) {
+    return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+  return { x: e.clientX, y: e.clientY };
+};
+
 // Mouse/touch drag handlers
 function onDrawerMouseDown(e) {
   // Only drag if background, not handle or children
@@ -345,22 +352,32 @@ function onDrawerMouseDown(e) {
     e.target.classList.contains("filename-banner")
   ) {
     isDraggingDrawer = true;
+    const coords = getEventCoords(e);
+    startX = coords.x;
+    startY = coords.y;
+    
     const container = document.getElementById("bannerDrawerContainer");
     const rect = container.getBoundingClientRect();
-    dragOffset.x = e.clientX - rect.left;
-    dragOffset.y = e.clientY - rect.top;
-    // Save original position for snapping back
-    originalPosition.left = rect.left;
-    originalPosition.top = rect.top;
+    initialLeft = rect.left;
+    initialTop = rect.top;
+    
     document.body.style.userSelect = "none";
+    e.preventDefault();
   }
 }
 
 function onDrawerMouseMove(e) {
   if (!isDraggingDrawer) return;
-  const left = e.clientX - dragOffset.x;
-  const top = e.clientY - dragOffset.y;
+  
+  const coords = getEventCoords(e);
+  const deltaX = coords.x - startX;
+  const deltaY = coords.y - startY;
+  
+  const left = initialLeft + deltaX;
+  const top = initialTop + deltaY;
   setDrawerPosition(left, top);
+  
+  e.preventDefault();
 }
 
 function onDrawerMouseUp() {
@@ -376,23 +393,32 @@ function onDrawerTouchStart(e) {
     e.target.classList.contains("filename-banner")
   ) {
     isDraggingDrawer = true;
+    const coords = getEventCoords(e);
+    startX = coords.x;
+    startY = coords.y;
+    
     const container = document.getElementById("bannerDrawerContainer");
     const rect = container.getBoundingClientRect();
-    const touch = e.touches[0];
-    dragOffset.x = touch.clientX - rect.left;
-    dragOffset.y = touch.clientY - rect.top;
-    originalPosition.left = rect.left;
-    originalPosition.top = rect.top;
+    initialLeft = rect.left;
+    initialTop = rect.top;
+    
     document.body.style.userSelect = "none";
+    e.preventDefault();
   }
 }
 
 function onDrawerTouchMove(e) {
   if (!isDraggingDrawer) return;
-  const touch = e.touches[0];
-  const left = touch.clientX - dragOffset.x;
-  const top = touch.clientY - dragOffset.y;
+  
+  const coords = getEventCoords(e);
+  const deltaX = coords.x - startX;
+  const deltaY = coords.y - startY;
+  
+  const left = initialLeft + deltaX;
+  const top = initialTop + deltaY;
   setDrawerPosition(left, top);
+  
+  e.preventDefault();
 }
 
 function onDrawerTouchEnd() {

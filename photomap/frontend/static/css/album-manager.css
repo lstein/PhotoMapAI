@@ -22,10 +22,33 @@
   font-size: 1.5em;
 }
 
+.back-button {
+  background: transparent;
+  border: 1px solid #666;
+  color: #faea0e;
+  padding: 0.4em 0.8em;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.back-button:hover,
+.back-button:focus {
+  background: rgba(250, 234, 14, 0.1);
+  border-color: #faea0e;
+  outline: none;
+}
+
 .header-buttons {
   display: flex;
   gap: 1em;
   align-items: center;
+}
+
+#showAddAlbumBtn {
+  margin-right: 20px;
 }
 
 .add-album-section {
