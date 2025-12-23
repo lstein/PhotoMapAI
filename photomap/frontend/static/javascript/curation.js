@@ -3,6 +3,7 @@ import { highlightCurationSelection, setUmapClickCallback, updateCurrentImageMar
 import { hideSpinner, showSpinner } from './utils.js';
 import { createSimpleDirectoryPicker } from './filetree.js';
 import { bookmarkManager } from './bookmarks.js';
+import { updateSearchCheckmarks } from './search-ui.js';
 
 let currentSelectionIndices = new Set();
 let excludedIndices = new Set();
@@ -184,6 +185,7 @@ function setupEventListeners() {
         exportBtn.disabled = true;
         if (csvBtn) csvBtn.disabled = true;
         updateStarButtonState();
+        updateSearchCheckmarks(null); // Hide clear search button
         setStatus("Selection cleared.", "normal");
     };
 
@@ -394,6 +396,9 @@ function setupEventListeners() {
                         setStatus(msg, "success");
                         hideSpinner();
                         
+                        // Show clear search button for curation results
+                        updateSearchCheckmarks('curation');
+                        
                     } else if (progressData.status === 'error') {
                         clearInterval(pollInterval);
                         throw new Error(progressData.error || 'Curation failed');
@@ -538,6 +543,7 @@ export function clearCurationData() {
     if (exportBtn) exportBtn.disabled = true;
     if (csvBtn) csvBtn.disabled = true;
     updateStarButtonState();
+    updateSearchCheckmarks(null); // Hide clear search button
     setStatus("", "normal");
 }
 
