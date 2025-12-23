@@ -40,8 +40,6 @@ function makePanelDraggable() {
     let isDragging = false;
     let startX, startY, initialLeft, initialTop;
 
-    header.style.cursor = 'move';
-
     header.addEventListener('mousedown', (e) => {
         // Don't drag if clicking the close button
         if (e.target.classList.contains('close-icon')) return;
@@ -149,8 +147,10 @@ function setupEventListeners() {
             // Clear existing bookmarks and add selected indices
             bookmarkManager.clearBookmarks();
             currentSelectionIndices.forEach(index => {
-                bookmarkManager.addBookmark(index);
+                bookmarkManager.bookmarks.add(index);
             });
+            bookmarkManager.saveBookmarks();
+            bookmarkManager.updateAllBookmarkIcons();
             setStatus(`Set ${currentSelectionIndices.size} images as favorites.`, "success");
         };
     }
