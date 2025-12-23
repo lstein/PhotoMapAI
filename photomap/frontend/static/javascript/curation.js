@@ -2,6 +2,7 @@ import { state } from './state.js';
 import { highlightCurationSelection, setUmapClickCallback, updateCurrentImageMarker } from './umap.js';
 import { hideSpinner, showSpinner } from './utils.js';
 import { createSimpleDirectoryPicker } from './filetree.js';
+import { bookmarkManager } from './bookmarks.js';
 
 let currentSelectionIndices = new Set();
 let excludedIndices = new Set();
@@ -145,18 +146,12 @@ function setupEventListeners() {
                 setStatus("No selection to set as favorites.", "error");
                 return;
             }
-            // Get bookmarks manager and set bookmarks
-            if (window.bookmarkManager) {
-                // Clear existing bookmarks
-                window.bookmarkManager.clearBookmarks();
-                // Add each selected index as a bookmark
-                currentSelectionIndices.forEach(index => {
-                    window.bookmarkManager.addBookmark(index);
-                });
-                setStatus(`Set ${currentSelectionIndices.size} images as favorites.`, "success");
-            } else {
-                setStatus("Bookmark manager not available.", "error");
-            }
+            // Clear existing bookmarks and add selected indices
+            bookmarkManager.clearBookmarks();
+            currentSelectionIndices.forEach(index => {
+                bookmarkManager.addBookmark(index);
+            });
+            setStatus(`Set ${currentSelectionIndices.size} images as favorites.`, "success");
         };
     }
 
