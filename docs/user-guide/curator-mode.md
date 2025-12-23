@@ -38,7 +38,6 @@ The curator offers two distinct algorithms for selecting images, selectable via 
     - When the curator panel opens, the UMAP visualization automatically switches to grey mode - all points turn grey to make the colored selection overlays more visible.
     - Unclustered points (normally very faint) increase in opacity to match clustered points, providing a uniform background.
     - Recommend turning off "Show landmarks" and "Show hover thumbnails" in the UMAP controls for a cleaner view.
-    - The UMAP checkboxes are arranged in two columns for easy access.
 
 ![Curator Mode Setup](../img/curator-setup.png)
 
@@ -46,9 +45,8 @@ The curator offers two distinct algorithms for selecting images, selectable via 
 3.  **Set Iterations**: 
     -   Algorithms like FPS can be sensitive to the starting point. Running multiple iterations (Monte Carlo simulation) helps identify the "consensus" selections—images that are statistically important regardless of the random start.
     -   **Recommendation:** Set to 20 iterations for analysis.
-4.  **Run Selection**: Click **Select Diverse Images** to run the simulation.
+4.  **Run Selection**: Click **Select Training Set** to select a diverse distribution of images.
     -   A yellow-and-white progress bar appears below the title, showing real-time progress (e.g., "Iteration 5/20").
-    -   The progress bar accurately reflects each iteration as it completes.
 
 ![Curator Mode Preview](../img/curator-preview.png)
 
@@ -78,7 +76,7 @@ This allows for a "Drill Down" workflow:
 
 ### Scenario A: Cleaning a Dataset (Removing Garbage)
 1.  Set **Target Count** to 20. Set **Iterations** to 20.
-2.  Click **Select Diverse Images** (FPS).
+2.  Click **Select Training Set** (FPS).
 3.  Look at the **Magenta** (>90%) results. Since FPS hunts for outliers, these will be your "weirdest" images.
 4.  If they are broken/blurry, click **Exclude Matches** (or exclude manually).
 5.  Repeat until the selection shows only high-quality images.
@@ -88,7 +86,7 @@ This allows for a "Drill Down" workflow:
 1.  Clear any previous selections (keep exclusions if you identified garbage in Scenario A).
 2.  Set **Target Count** to your desired training size (e.g., 150).
 3.  Set **Iterations** to 20.
-4.  Click **Select Diverse Images**.
+4.  Click **Select Training Set**.
 5.  Review the selection. If you see images you don't want in your LoRA, **Exclude** them and run Select Diverse Images again to replace them with fresh alternatives.
 6.  **Export Dataset**.
 

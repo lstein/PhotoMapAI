@@ -1,11 +1,9 @@
 import { bookmarkManager } from './bookmarks.js';
 import { createSimpleDirectoryPicker } from './filetree.js';
+import { updateSearchCheckmarks } from './search-ui.js';
 import { state } from './state.js';
 import { highlightCurationSelection, setCurationMode, setUmapClickCallback, updateCurrentImageMarker } from './umap.js';
 import { hideSpinner, showSpinner } from './utils.js';
-import { createSimpleDirectoryPicker } from './filetree.js';
-import { bookmarkManager } from './bookmarks.js';
-import { updateSearchCheckmarks } from './search-ui.js';
 
 let currentSelectionIndices = new Set();
 let excludedIndices = new Set();
