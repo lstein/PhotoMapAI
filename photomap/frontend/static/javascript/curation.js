@@ -1,8 +1,8 @@
-import { state } from './state.js';
-import { highlightCurationSelection, setUmapClickCallback, updateCurrentImageMarker, setCurationMode } from './umap.js';
-import { hideSpinner, showSpinner } from './utils.js';
-import { createSimpleDirectoryPicker } from './filetree.js';
 import { bookmarkManager } from './bookmarks.js';
+import { createSimpleDirectoryPicker } from './filetree.js';
+import { state } from './state.js';
+import { highlightCurationSelection, setCurationMode, setUmapClickCallback, updateCurrentImageMarker } from './umap.js';
+import { hideSpinner, showSpinner } from './utils.js';
 
 let currentSelectionIndices = new Set();
 let excludedIndices = new Set();
@@ -225,7 +225,7 @@ function setupEventListeners() {
     if (lockThresholdBtn) {
         lockThresholdBtn.onclick = () => {
             if (analysisResults.length === 0) {
-                setStatus("No analysis data. Run diversity selection first.", "error");
+                setStatus("No analysis data. Run training set selection first.", "error");
                 return;
             }
 
