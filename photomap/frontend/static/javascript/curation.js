@@ -555,6 +555,12 @@ function updateVisuals() {
         Array.from(lowFreqIndices),
         Array.from(excludedIndices)
     );
+    // Ensure grey mode persists after updating curation overlays
+    // This is needed because Plotly trace operations might affect the base trace
+    if (document.getElementById('curationPanel') && !document.getElementById('curationPanel').classList.contains('hidden')) {
+        // Panel is open, ensure grey mode is active
+        setCurationMode(true);
+    }
 }
 
 function applyGridHighlights() {
