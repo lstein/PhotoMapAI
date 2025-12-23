@@ -59,35 +59,61 @@ function makePanelDraggable() {
     let isDragging = false;
     let startX, startY, initialLeft, initialTop;
 
-    header.addEventListener('mousedown', (e) => {
+    // Helper function to get coordinates from event (mouse or touch)
+    const getEventCoords = (e) => {
+        if (e.touches && e.touches.length > 0) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+        return { x: e.clientX, y: e.clientY };
+    };
+
+    // Start dragging (mouse or touch)
+    const startDrag = (e) => {
         // Don't drag if clicking the close button
         if (e.target.classList.contains('close-icon')) return;
         
         isDragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
+        const coords = getEventCoords(e);
+        startX = coords.x;
+        startY = coords.y;
         
         const rect = panel.getBoundingClientRect();
         initialLeft = rect.left;
         initialTop = rect.top;
         
         e.preventDefault();
-    });
+    };
 
-    document.addEventListener('mousemove', (e) => {
+    // Handle dragging movement (mouse or touch)
+    const handleDrag = (e) => {
         if (!isDragging) return;
         
-        const deltaX = e.clientX - startX;
-        const deltaY = e.clientY - startY;
+        const coords = getEventCoords(e);
+        const deltaX = coords.x - startX;
+        const deltaY = coords.y - startY;
         
         panel.style.left = (initialLeft + deltaX) + 'px';
         panel.style.top = (initialTop + deltaY) + 'px';
         panel.style.bottom = 'auto'; // Remove bottom positioning
-    });
+        
+        e.preventDefault(); // Prevent scrolling while dragging on touch devices
+    };
 
-    document.addEventListener('mouseup', () => {
+    // End dragging (mouse or touch)
+    const endDrag = () => {
         isDragging = false;
-    });
+    };
+
+    // Mouse events
+    header.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', handleDrag);
+    document.addEventListener('mouseup', endDrag);
+
+    // Touch events
+    header.addEventListener('touchstart', startDrag, { passive: false });
+    document.addEventListener('touchmove', handleDrag, { passive: false });
+    document.addEventListener('touchend', endDrag);
+    document.addEventListener('touchcancel', endDrag);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
