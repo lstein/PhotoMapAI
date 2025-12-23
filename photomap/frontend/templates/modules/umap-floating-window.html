@@ -154,12 +154,13 @@
           />
         </div>
 
-        <!-- Colorization Mode Controls (vertical column) -->
+        <!-- Colorization Mode Controls (two columns) -->
         <div
           id="umapColorModeContainer"
           style="
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
             margin-bottom: 12px;
             padding-bottom: 20px;
           "
@@ -172,15 +173,6 @@
             />
             Show landmarks
           </label>
-          <label style="display: flex; align-items: center; gap: 8px">
-            <input
-              type="checkbox"
-              id="umapShowHoverThumbnails"
-              checked
-              style="margin-right: 6px"
-            />
-            Show hover thumbnails
-          </label>
           <label id="umapExitFullscreenLabel" style="display: flex; align-items: center; gap: 8px">
             <input
               type="checkbox"
@@ -189,6 +181,15 @@
               style="margin-right: 6px"
             />
             Exit fullscreen on selection
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px">
+            <input
+              type="checkbox"
+              id="umapShowHoverThumbnails"
+              checked
+              style="margin-right: 6px"
+            />
+            Show hover thumbnails
           </label>
           <label style="display: flex; align-items: center; gap: 8px">
             <input

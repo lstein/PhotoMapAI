@@ -21,6 +21,7 @@ const MARKER_UPDATE_IGNORE_WINDOW_MS = 1000; // Time window to ignore marker upd
 let externalClickCallback = null;
 let updateMarkerTimer = null;
 let ignoreUpdatesUntil = 0;
+let isCurationModeActive = false; // Track if curation panel is open
 
 export function setUmapClickCallback(callback) {
   externalClickCallback = callback;
@@ -1597,6 +1598,43 @@ export function isUmapFullscreen() {
 // Set initial title on DOMContentLoaded
 document.addEventListener("DOMContentLoaded", initializeUmapWindow);
 window.addEventListener("albumChanged", initializeUmapWindow);
+
+// ========================================================
+// Toggle Curation Mode (Grey out all points)
+// ========================================================
+export function setCurationMode(isActive) {
+  isCurationModeActive = isActive;
+  updateUmapColors();
+}
+
+function updateUmapColors() {
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.data || !points || points.length === 0) return;
+
+  // Find the "All Points" trace
+  const allPointsTraceIndex = plotDiv.data.findIndex(
+    (trace) => trace.name === "All Points"
+  );
+  if (allPointsTraceIndex === -1) return;
+
+  // Set colors based on curation mode
+  let markerColors;
+  if (isCurationModeActive) {
+    // Grey out all points when in curation mode
+    markerColors = points.map(() => "#888888");
+  } else {
+    // Use cluster colors
+    markerColors = points.map((p) => getClusterColor(p.cluster));
+  }
+
+  Plotly.restyle(
+    "umapPlot",
+    {
+      "marker.color": [markerColors]
+    },
+    allPointsTraceIndex
+  );
+}
 
 // ========================================================
 // Curation Highlighting (Heatmap + Locks)

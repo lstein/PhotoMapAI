@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { highlightCurationSelection, setUmapClickCallback, updateCurrentImageMarker } from './umap.js';
+import { highlightCurationSelection, setUmapClickCallback, updateCurrentImageMarker, setCurationMode } from './umap.js';
 import { hideSpinner, showSpinner } from './utils.js';
 import { createSimpleDirectoryPicker } from './filetree.js';
 import { bookmarkManager } from './bookmarks.js';
@@ -22,10 +22,16 @@ window.toggleCurationPanel = function () {
     const panel = document.getElementById('curationPanel');
     if (panel) {
         panel.classList.toggle('hidden');
+        const isOpen = !panel.classList.contains('hidden');
+        
+        // Toggle grey mode in UMAP
+        setCurationMode(isOpen);
+        
         // Force update of current image marker (yellow dot) to show it
         updateCurrentImageMarker();
+        
         // Also update curation visuals if opening
-        if (!panel.classList.contains('hidden')) {
+        if (isOpen) {
             updateVisuals();
         }
     }
@@ -86,6 +92,15 @@ function validateExportPath() {
     // Enable export button only if path is not empty and we have a selection
     const hasSelection = currentSelectionIndices.size > 0;
     exportBtn.disabled = !path || !hasSelection;
+}
+
+// Enable/disable star button based on selection
+function updateStarButtonState() {
+    const setFavoritesBtn = document.getElementById('curationSetFavoritesBtn');
+    if (!setFavoritesBtn) return;
+    
+    // Enable only if we have a selection
+    setFavoritesBtn.disabled = currentSelectionIndices.size === 0;
 }
 
 function setupEventListeners() {
@@ -170,6 +185,7 @@ function setupEventListeners() {
         updateVisuals();
         exportBtn.disabled = true;
         if (csvBtn) csvBtn.disabled = true;
+        updateStarButtonState();
         setStatus("Preview cleared.", "normal");
     };
 
@@ -316,6 +332,7 @@ function setupEventListeners() {
 
             updateVisuals();
             validateExportPath();
+            updateStarButtonState();
             if (csvBtn) csvBtn.disabled = false;
 
             const selectedCount = data.count || currentSelectionIndices.size;
