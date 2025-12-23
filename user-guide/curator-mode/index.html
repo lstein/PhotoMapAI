@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../../docker/">
+        <link rel="prev" href="../semantic-map/">
       
       
-        <link rel="next" href="../api/">
+        <link rel="next" href="../upgrading/">
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>Architecture - PhotoMapAI</title>
+        <title>Image Dataset Curation - PhotoMapAI</title>
       
     
     
@@ -72,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#photomapai-architecture" class="md-skip">
+        <a href="#dataset-curation" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Architecture
+              Image Dataset Curation
             
           </span>
         </div>
@@ -361,18 +361,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -388,7 +390,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             User Guide
@@ -402,7 +404,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/basic-usage/" class="md-nav__link">
+      <a href="../basic-usage/" class="md-nav__link">
         
   
   
@@ -425,7 +427,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/search/" class="md-nav__link">
+      <a href="../search/" class="md-nav__link">
         
   
   
@@ -448,7 +450,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/bookmarks/" class="md-nav__link">
+      <a href="../bookmarks/" class="md-nav__link">
         
   
   
@@ -471,7 +473,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/albums/" class="md-nav__link">
+      <a href="../albums/" class="md-nav__link">
         
   
   
@@ -494,7 +496,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/configuration/" class="md-nav__link">
+      <a href="../configuration/" class="md-nav__link">
         
   
   
@@ -517,7 +519,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/semantic-map/" class="md-nav__link">
+      <a href="../semantic-map/" class="md-nav__link">
         
   
   
@@ -537,10 +539,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../user-guide/curator-mode/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Image Dataset Curation
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -551,6 +575,161 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#accessing-the-curator" class="md-nav__link">
+    <span class="md-ellipsis">
+      Accessing the Curator
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selection-algorithms" class="md-nav__link">
+    <span class="md-ellipsis">
+      Selection Algorithms
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Selection Algorithms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#diversity-fps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Diversity (FPS)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#blocks-k-means" class="md-nav__link">
+    <span class="md-ellipsis">
+      Blocks (K-Means)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workflow
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stability-heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stability Heatmap
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#refinement-exclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Refinement &amp; Exclusion
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommended Workflows
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recommended Workflows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-a-cleaning-a-dataset-removing-garbage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario A: Cleaning a Dataset (Removing Garbage)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-b-generating-a-training-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario B: Generating a Training Set
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exporting
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Notes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#for-more-information" class="md-nav__link">
+    <span class="md-ellipsis">
+      For More Information
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -563,7 +742,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/upgrading/" class="md-nav__link">
+      <a href="../upgrading/" class="md-nav__link">
         
   
   
@@ -586,7 +765,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-guide/keyboard-shortcuts/" class="md-nav__link">
+      <a href="../keyboard-shortcuts/" class="md-nav__link">
         
   
   
@@ -635,20 +814,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
@@ -664,7 +841,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Developer Guide
@@ -675,32 +852,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Architecture
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../developer/architecture/" class="md-nav__link">
         
   
   
@@ -711,122 +866,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      Overview
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#component-diagram" class="md-nav__link">
-    <span class="md-ellipsis">
-      Component Diagram
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-components" class="md-nav__link">
-    <span class="md-ellipsis">
-      Key Components
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Key Components">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#frontend" class="md-nav__link">
-    <span class="md-ellipsis">
-      Frontend
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#backend" class="md-nav__link">
-    <span class="md-ellipsis">
-      Backend
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Storage
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#data-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      Data Flow
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#extensibility" class="md-nav__link">
-    <span class="md-ellipsis">
-      Extensibility
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#technologies-used" class="md-nav__link">
-    <span class="md-ellipsis">
-      Technologies Used
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#development-notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      Development Notes
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -839,7 +878,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../api/" class="md-nav__link">
+      <a href="../../developer/api/" class="md-nav__link">
         
   
   
@@ -862,7 +901,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../frontend/" class="md-nav__link">
+      <a href="../../developer/frontend/" class="md-nav__link">
         
   
   
@@ -934,55 +973,37 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#accessing-the-curator" class="md-nav__link">
     <span class="md-ellipsis">
-      Overview
+      Accessing the Curator
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#component-diagram" class="md-nav__link">
+  <a href="#selection-algorithms" class="md-nav__link">
     <span class="md-ellipsis">
-      Component Diagram
+      Selection Algorithms
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-components" class="md-nav__link">
-    <span class="md-ellipsis">
-      Key Components
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Key Components">
+    <nav class="md-nav" aria-label="Selection Algorithms">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#frontend" class="md-nav__link">
+  <a href="#diversity-fps" class="md-nav__link">
     <span class="md-ellipsis">
-      Frontend
+      Diversity (FPS)
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#backend" class="md-nav__link">
+  <a href="#blocks-k-means" class="md-nav__link">
     <span class="md-ellipsis">
-      Backend
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Storage
+      Blocks (K-Means)
     </span>
   </a>
   
@@ -994,36 +1015,93 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#data-flow" class="md-nav__link">
+  <a href="#workflow" class="md-nav__link">
     <span class="md-ellipsis">
-      Data Flow
+      Workflow
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stability-heatmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stability Heatmap
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#refinement-exclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Refinement &amp; Exclusion
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#extensibility" class="md-nav__link">
+  <a href="#recommended-workflows" class="md-nav__link">
     <span class="md-ellipsis">
-      Extensibility
+      Recommended Workflows
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recommended Workflows">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-a-cleaning-a-dataset-removing-garbage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario A: Cleaning a Dataset (Removing Garbage)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-b-generating-a-training-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario B: Generating a Training Set
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exporting
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#technologies-used" class="md-nav__link">
+  <a href="#notes" class="md-nav__link">
     <span class="md-ellipsis">
-      Technologies Used
+      Notes
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#development-notes" class="md-nav__link">
+  <a href="#for-more-information" class="md-nav__link">
     <span class="md-ellipsis">
-      Development Notes
+      For More Information
     </span>
   </a>
   
@@ -1048,109 +1126,147 @@
   
 
 
-<h1 id="photomapai-architecture">PhotoMapAI Architecture</h1>
-<p>PhotoMapAI is a modular web application designed for efficient photo management, AI-powered search, and interactive visualization. Its architecture is organized into distinct layers and components to ensure scalability, maintainability, and ease of development.</p>
-<hr />
-<h2 id="overview">Overview</h2>
-<p>PhotoMapAI consists of three main layers:</p>
+<h1 id="dataset-curation">Dataset Curation</h1>
+<p>The <strong>Dataset Curator</strong> is a powerful feature in PhotoMapAI designed to help you select a diverse or representative subset of images from a large album. This is particularly useful for creating training datasets for LoRA (Low-Rank Adaptation) image generation/classification models or simply reducing the redundancy in a large collection of images.</p>
+<p><img alt="Curator Mode Panel" src="../../img/curator-panel.png" /></p>
+<h2 id="accessing-the-curator">Accessing the Curator</h2>
 <ol>
-<li>
-<p><strong>Frontend</strong></p>
+<li>Open an album in the grid or semantic map view.</li>
+<li>Click the <strong>Favorites</strong> menu button (⭐) in the bottom-right of the window.</li>
+<li>Select <strong>Curate</strong> (pencil icon 📝) from the dropdown menu.</li>
+</ol>
+<p>The curator panel will appear and can be repositioned by dragging its title bar.</p>
+<h2 id="selection-algorithms">Selection Algorithms</h2>
+<p>The curator offers two distinct algorithms for selecting images, selectable via radio buttons:</p>
+<h3 id="diversity-fps">Diversity (FPS)</h3>
+<p><strong>Farthest Point Sampling</strong> selects images that are as different from each other as possible.</p>
 <ul>
-<li>Built with HTML, CSS, and JavaScript (ES6 modules).</li>
-<li>Provides a responsive user interface for browsing, searching, and visualizing photos.</li>
-<li>Uses libraries such as Swiper for slideshows and Plotly for UMAP visualizations.</li>
+<li>
+<p><strong>Best for:</strong> Ensuring your dataset covers the widest possible range of visual concepts, lighting conditions, and angles. Use it for:</p>
+<ul>
+<li>
+<p><strong>High Quality Data:</strong> FPS seeks outliers. In a "dirty" dataset, outliers are often blurry or broken images. In a "clean" dataset, outliers are your rare concepts (side profiles, dramatic lighting).</p>
+</li>
+<li>
+<p><strong>Unbalanced Data:</strong> If you have 50 full-body images and 10 close-ups, FPS will prioritize the close-ups to ensure the AI learns the rare concept, rather than just the common one.</p>
+</li>
 </ul>
 </li>
 <li>
-<p><strong>Backend</strong>  </p>
+<p><strong>How it works:</strong> It starts with a random image (or your excluded selection) and iteratively picks the image whose feature vector is farthest from the current set.</p>
+</li>
+</ul>
+<h3 id="blocks-k-means">Blocks (K-Means)</h3>
+<p><strong>K-Means Clustering</strong> groups images into clusters and picks a representative image from each cluster.</p>
 <ul>
-<li>Powered by FastAPI (Python).</li>
-<li>Handles API requests, image processing, metadata extraction, and search operations.</li>
-<li>Integrates with AI models for similarity and text-based search.</li>
+<li>
+<p><strong>Best for:</strong> Reducing redundancy while maintaining the overall distribution of the dataset (Representative Sampling). Use it for:</p>
+<ul>
+<li><strong>Balanced Distribution:</strong> If you have 50 full-body images and 10 close-ups, K-Means will select roughly 5 full-body images for every 1 close-up, preserving the original ratios of your dataset.</li>
 </ul>
 </li>
 <li>
-<p><strong>Storage &amp; Configuration</strong>  </p>
-<ul>
-<li>Stores images, thumbnails, and metadata on disk.</li>
-<li>Uses YAML configuration files to manage albums and application settings.</li>
+<p><strong>How it works:</strong> It divides your images into N clusters (where N is your target count) and selects the image closest to the mathematical center of each cluster.</p>
+</li>
+</ul>
+<h2 id="workflow">Workflow</h2>
+<p><img src="../../img/curator-setup.png" width="480" alt="Curator Panel Setup" class="img-hover-zoom"></p>
+<ol>
+<li><strong>Setup your UI</strong>: <ul>
+<li>When the curator panel opens, the UMAP visualization automatically switches to grey mode - all points turn grey to make the colored selection overlays more visible.</li>
+<li>Unclustered points (normally very faint) increase in opacity to match clustered points, providing a uniform background.</li>
+<li>It is recommended to turn off "Show landmarks" and "Show hover thumbnails" in the UMAP controls for a cleaner view.</li>
+</ul>
+</li>
+<li><strong>Set Target Count</strong>: Choose how many images you want in your final set (e.g., 50, 150).</li>
+<li><strong>Set Iterations</strong>: <ul>
+<li>Algorithms like FPS can be sensitive to the starting point. Running multiple iterations (Monte Carlo simulation) helps identify the "consensus" selections—images that are statistically important regardless of the random start.</li>
+<li><strong>Recommendation:</strong> Set to 20 iterations for analysis.</li>
+</ul>
+</li>
+<li><strong>Run Selection</strong>: Click <strong>Select Images</strong> (circled button) to select a diverse distribution of images.<ul>
+<li>A yellow-and-white progress bar appears below the title, showing the progress of the selected algorithm.</li>
 </ul>
 </li>
 </ol>
-<hr />
-<h2 id="component-diagram">Component Diagram</h2>
-<pre><code>+-------------------+      REST API      +-------------------+      Disk/YAML     +--------------+
-|   Frontend UI     | &lt;----------------&gt; |     Backend       | &lt;----------------&gt; | Images/Config|
-+-------------------+                    +-------------------+                    +--------------+
-</code></pre>
-<hr />
-<h2 id="key-components">Key Components</h2>
-<h3 id="frontend">Frontend</h3>
+<p><img src="../../img/curator-preview.png" width="480" alt="After selecting images" class="img-hover-zoom"></p>
+<h3 id="stability-heatmap">Stability Heatmap</h3>
+<p>The results are displayed as a Stability Heatmap:</p>
 <ul>
-<li><strong>Slideshow &amp; Gallery</strong>: Interactive image browsing with keyboard and touch support.</li>
-<li><strong>Search Panel</strong>: AI-enabled search (similarity, text, metadata).</li>
-<li><strong>UMAP Visualization</strong>: Clustered view of image embeddings.</li>
-<li><strong>Settings &amp; Album Manager</strong>: Album creation, editing, and configuration.</li>
+<li>🟣 <strong>Magenta</strong>: Core Outliers (Selected in &gt;90% of runs). These are your most mathematically unique images.</li>
+<li>🔵 <strong>Cyan</strong>: Stable (Selected in &gt;70% of runs).</li>
+<li>🟢 <strong>Green</strong>: Variable (Selected in &lt;70% of runs). Edge cases that usually fill gaps.</li>
 </ul>
-<h3 id="backend">Backend</h3>
-<ul>
-<li><strong>API Routers</strong>:  </li>
-<li><code>/search</code>: Search endpoints (similarity, text, metadata).</li>
-<li><code>/albums</code>: Album management.</li>
-<li><code>/images</code>: Image and thumbnail serving.</li>
-<li><strong>Metadata Extraction</strong>: Parses and formats image metadata (EXIF, AI-generated).</li>
-<li><strong>Indexing &amp; Embeddings</strong>: Generates and stores image embeddings for fast search.</li>
-<li><strong>Config Manager</strong>: Loads and updates YAML configuration files.</li>
-</ul>
-<h3 id="storage">Storage</h3>
-<ul>
-<li><strong>Images</strong>: Original and processed images stored in album directories.</li>
-<li><strong>Thumbnails</strong>: Cached thumbnails for fast display.</li>
-<li><strong>Metadata</strong>: JSON and YAML files for image and album metadata.</li>
-</ul>
-<hr />
-<h2 id="data-flow">Data Flow</h2>
+<p>If you now open the grid view (by hiding or minimizing the semantic map window) you will see the selected images at full brightness, while others will be dimmed. Press the "Clear" button on the curator panel or the "X" button on the bottom right of the main window, in order to clear the search and return to the normal view.</p>
+<h2 id="refinement-exclusion">Refinement &amp; Exclusion</h2>
+<p>You can manually refine the selection by excluding images. Excluding an image removes it from calculations and exports. This is commonly needed when your collection contains "garbage", such as blank or blurry images, that appear to the algorithm as interesting outliers.</p>
+<p>This allows for a "Drill Down" workflow:</p>
 <ol>
 <li>
-<p><strong>User Interaction</strong>:<br />
-   User browses or searches for images via the frontend UI.</p>
+<p>Run the analysis.</p>
 </li>
 <li>
-<p><strong>API Request</strong>:<br />
-   Frontend sends requests to backend endpoints for images, search, or metadata.</p>
+<p>If the top results (🟣 <strong>Magenta</strong>) are garbage, exclude them.</p>
 </li>
 <li>
-<p><strong>Processing</strong>:<br />
-   Backend processes requests, performs AI search, extracts metadata, and returns results.</p>
-</li>
-<li>
-<p><strong>Rendering</strong>:<br />
-   Frontend updates UI with images, overlays, and search results.</p>
+<p>Run <strong>Select Images</strong> again. The algorithm will be forced to ignore the excluded images and find the next best candidates.</p>
+<ul>
+<li><strong>Click-to-Exclude</strong>: Toggle this mode and click images in the grid (or UMAP) to exclude/include them. Excluded images appear as solid 🔴 <strong>Red</strong> circles. (See image below. Yellow arrows added for emphasis.)</li>
+<li><strong>Exclude Matches</strong>: Bulk-exclude all images that meet a certain frequency threshold (e.g., &gt;90%).</li>
+<li><strong>Clear Exclusions</strong>: Clear all exclusions in order to start over.</li>
+</ul>
 </li>
 </ol>
-<hr />
-<h2 id="extensibility">Extensibility</h2>
-<ul>
-<li><strong>Modular Routers</strong>: Easily add new API endpoints.</li>
-<li><strong>Pluggable Metadata Modules</strong>: Support for custom metadata extraction.</li>
-<li><strong>Frontend Components</strong>: Add new panels or visualizations with minimal changes.</li>
+<p><img src="../../img/curator-exclusion.png" width="480" alt="After excluding garbage" class="img-hover-zoom"></p>
+<h2 id="recommended-workflows">Recommended Workflows</h2>
+<h3 id="scenario-a-cleaning-a-dataset-removing-garbage">Scenario A: Cleaning a Dataset (Removing Garbage)</h3>
+<ol>
+<li>Set <strong>Target Count</strong> to 20. Set <strong>Iterations</strong> to 20.</li>
+<li>Click <strong>Select Training Set</strong> (FPS).</li>
+<li>Look at the <strong>Magenta</strong> (&gt;90%) results. Since FPS hunts for outliers, these will be your "weirdest" images.</li>
+<li>If they are broken/blurry, click <strong>Exclude Matches</strong> (or exclude manually).</li>
+<li>Repeat until the selection shows only high-quality images.<ul>
+<li><em>Note: Do not export yet. You are just identifying what to ignore.</em></li>
 </ul>
-<hr />
-<h2 id="technologies-used">Technologies Used</h2>
+</li>
+</ol>
+<h3 id="scenario-b-generating-a-training-set">Scenario B: Generating a Training Set</h3>
+<ol>
+<li>Clear any previous selections (keep exclusions if you identified garbage in Scenario A).</li>
+<li>Set <strong>Target Count</strong> to your desired training size (e.g., 150).</li>
+<li>Set <strong>Iterations</strong> to 20.</li>
+<li>Click <strong>Select Training Set</strong>.</li>
+<li>Review the selection. If you see images you don't want in your training set, <strong>Exclude</strong> them and run <strong>Select Images</strong> again to replace them with fresh alternatives.</li>
+<li>Repeat as needed.</li>
+</ol>
+<h2 id="exporting">Exporting</h2>
+<p>Once you are satisfied with your selection:</p>
+<ol>
+<li>
+<p>Click the folder icon (📁) next to the <strong>Export Path</strong> field to browse for a destination folder.</p>
 <ul>
-<li><strong>Frontend</strong>: HTML5, CSS3, JavaScript (ES6), Swiper, Plotly</li>
-<li><strong>Backend</strong>: Python 3, FastAPI, Pydantic, PIL/Pillow, UMAP, YAML</li>
-<li><strong>Storage</strong>: Local filesystem, YAML/JSON</li>
+<li>The selected path is saved in your browser and persists across sessions.</li>
 </ul>
-<hr />
-<h2 id="development-notes">Development Notes</h2>
+</li>
+<li>
+<p>Click <strong>Export Dataset</strong>.</p>
+</li>
+<li>
+<p>The system will copy the selected images (and associated text files, see below) to the folder. The original images will remain in place.</p>
+</li>
+<li>
+<p>Click the <strong>CSV</strong> button to export a tab-delimited inventory of the included and excluded files.</p>
+</li>
+</ol>
+<p>At any point, you may also click the <strong>Set Favorites</strong> button (⭐) to replace your current favorites with the curated selection. This allows you to show and hide the selection conveniently using the <strong>Favorites</strong> menu, as well as to move the selected images to a new folder while preserving them in the index.</p>
+<h2 id="notes">Notes</h2>
 <ul>
-<li>All major components are documented in the <code>docs/developer/</code> section.</li>
-<li>See <code>docs/developer/api.md</code> for endpoint details.</li>
-<li>See <code>docs/developer/frontend.md</code> for UI component structure.</li>
+<li>*Text files are also exported! If you have 0001.jpg and 0001.txt in the album, they will be exported together. This is useful for maintaining external text annotations of images.</li>
+<li>*Excluded (Red) images are NOT exported.</li>
+<li>*Filename collisions (e.g. apple/01.jpg vs orange/01.jpg) are automatically handled by renaming.</li>
 </ul>
-<hr />
+<h2 id="for-more-information">For More Information</h2>
+<p>Contact <em>/u/AcadiaVivid</em> on reddit or <em>NMWave</em> on github for assistance and information.</p>
 
 
 
