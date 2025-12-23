@@ -1474,7 +1474,7 @@ pip -mvenv install --prompt photomap
 <hr />
 <h3 id="docker-install">Docker Install</h3>
 <p>If you have Docker installed on your system, here is a one-liner to get PhotoMapAI up and running:</p>
-<pre><code class="language-bash">docker -p 8050:8050 -v /path/to/a/picture_folder:/Pictures lstein/photomapai:latest
+<pre><code class="language-bash">docker run -p 8050:8050 -v /path/to/a/picture_folder:/Pictures lstein/photomapai:latest
 </code></pre>
 <p>Change <code>/path/to/a/picture_folder</code> to a path on your desktop that contains the images/photos you wish to add to an album. After the startup messages, point your browser to http://localhost:8050 and follow the prompts. Your images will be found in the container directory <code>/Pictures</code>.</p>
 <hr />
