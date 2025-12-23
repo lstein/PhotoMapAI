@@ -392,13 +392,14 @@ async function insertUploadedImageFile(file) {
   });
 }
 
-function updateSearchCheckmarks(searchType = null) {
+export function updateSearchCheckmarks(searchType = null) {
   const searchTypeToIconMap = {
     cluster: document.getElementById("showUmapBtn"),
     image: document.getElementById("imageSearchIcon"),
     text: document.getElementById("textSearchIcon"),
     text_and_image: document.getElementById("textSearchIcon"),
     bookmarks: document.getElementById("bookmarkMenuBtn"),
+    curation: document.getElementById("bookmarkMenuBtn"), // Use bookmarks icon for curation too
   };
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   const element_to_highlight = searchTypeToIconMap[searchType] || null;
