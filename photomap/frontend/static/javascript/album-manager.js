@@ -4,6 +4,7 @@ import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
 import { exitSearchMode } from "./search-ui.js";
 import { closeSettingsModal, loadAvailableAlbums } from "./settings.js";
 import { setAlbum, state } from "./state.js";
+import { hideSpinner, showSpinner } from "./utils.js";
 
 export class AlbumManager {
   // Constants

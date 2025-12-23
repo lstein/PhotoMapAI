@@ -176,7 +176,7 @@
 
 .album-selector-group #albumSelect {
   flex: 1;
-  min-width: 150px;
+  min-width: 120px;
 }
 
 .album-selector-group #manageAlbumsBtn {
