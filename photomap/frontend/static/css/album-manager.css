@@ -34,9 +34,11 @@
   white-space: nowrap;
 }
 
-.back-button:hover {
+.back-button:hover,
+.back-button:focus {
   background: rgba(250, 234, 14, 0.1);
   border-color: #faea0e;
+  outline: none;
 }
 
 .header-buttons {
