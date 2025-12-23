@@ -158,7 +158,6 @@
   border: 1px solid #888;
   background: #333;
   color: #fff;
-  min-width: 150px;
 }
 
 #albumSelect:focus {
