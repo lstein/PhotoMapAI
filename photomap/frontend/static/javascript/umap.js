@@ -1617,20 +1617,27 @@ function updateUmapColors() {
   );
   if (allPointsTraceIndex === -1) return;
 
-  // Set colors based on curation mode
+  // Set colors and opacity based on curation mode
   let markerColors;
+  let markerOpacity;
+  
   if (isCurationModeActive) {
     // Grey out all points when in curation mode
     markerColors = points.map(() => "#888888");
+    // Increase opacity of unclustered points to match clustered ones
+    markerOpacity = points.map(() => 0.75);
   } else {
     // Use cluster colors
     markerColors = points.map((p) => getClusterColor(p.cluster));
+    // Default opacity: unclustered = 0.08, clustered = 0.75
+    markerOpacity = points.map((p) => (p.cluster === -1 ? 0.08 : 0.75));
   }
 
   Plotly.restyle(
     "umapPlot",
     {
-      "marker.color": [markerColors]
+      "marker.color": [markerColors],
+      "marker.opacity": [markerOpacity]
     },
     allPointsTraceIndex
   );
