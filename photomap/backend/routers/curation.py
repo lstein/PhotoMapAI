@@ -43,13 +43,22 @@ async def run_curation(request: CurationRequest):
         JSON response with status, selected indices, files, and analysis results.
     """
     try:
+        # Validate target_count parameter
+        if request.target_count <= 0:
+            raise HTTPException(status_code=400, detail="target_count must be positive")
+        if request.target_count > 100000:
+            raise HTTPException(status_code=400, detail="target_count exceeds reasonable limit")
+        
+        # Validate and cap iterations
+        if request.iterations < 1:
+            request.iterations = 1
+        if request.iterations > 30:
+            request.iterations = 30
+        
         config_manager = get_config_manager()
         album_config = config_manager.get_album(request.album)
         if not album_config: raise HTTPException(status_code=404, detail="Album not found")
         index_path = Path(album_config.index)
-        
-        if request.iterations < 1: request.iterations = 1
-        if request.iterations > 30: request.iterations = 30
 
         logger.info(f"Curation: Running {request.method.upper()} x{request.iterations}...")
 
@@ -133,41 +142,68 @@ async def export_dataset(request: ExportRequest):
     Returns:
         JSON response with success count and any errors.
     """
-    # (Keep the existing export function I gave you previously with the renaming logic)
-    output_dir = request.output_folder
-    if not output_dir: raise HTTPException(status_code=400, detail="Output folder required")
-    if not os.path.exists(output_dir):
-        try: os.makedirs(output_dir)
-        except OSError as e: raise HTTPException(status_code=400, detail=f"Create folder failed: {e}")
+    # Validate and sanitize the output folder to prevent path traversal
+    if not request.output_folder:
+        raise HTTPException(status_code=400, detail="Output folder required")
+
+    try:
+        requested_dir = Path(request.output_folder).expanduser()
+        # Resolve the requested directory to an absolute path
+        output_dir = requested_dir.resolve()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid output folder: {e}")
+
+    # Define the base directory under which exports are allowed
+    # Use user's home directory as the base to prevent system-wide access
+    base_dir = Path.home().resolve()
+
+    # Ensure the export directory is within the allowed base directory
+    def is_within_base_dir(target_dir: Path, base: Path) -> bool:
+        """Check if target directory is within the base directory."""
+        if os.name == "nt":
+            # On Windows, also ensure the drive matches
+            return target_dir.drive.lower() == base.drive.lower() and (target_dir == base or base in target_dir.parents)
+        else:
+            return target_dir == base or base in target_dir.parents
+
+    if not is_within_base_dir(output_dir, base_dir):
+        raise HTTPException(status_code=400, detail="Output folder is outside the allowed export directory")
+
+    if not output_dir.exists():
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise HTTPException(status_code=400, detail=f"Create folder failed: {e}")
 
     success_count = 0
     errors = []
 
     for img_path in request.filenames:
         try:
-            if not os.path.exists(img_path): continue
-            
+            if not os.path.exists(img_path):
+                continue
+
             original_filename = os.path.basename(img_path)
             parent_folder = os.path.basename(os.path.dirname(img_path))
             name_stem, name_ext = os.path.splitext(original_filename)
 
             candidate_name = original_filename
-            dest_path = os.path.join(output_dir, candidate_name)
+            dest_path = output_dir / candidate_name
 
-            if os.path.exists(dest_path):
+            if dest_path.exists():
                 candidate_name = f"{parent_folder}_{original_filename}"
-                dest_path = os.path.join(output_dir, candidate_name)
+                dest_path = output_dir / candidate_name
 
             counter = 1
-            while os.path.exists(dest_path):
+            while dest_path.exists():
                 candidate_name = f"{parent_folder}_{name_stem}_{counter}{name_ext}"
-                dest_path = os.path.join(output_dir, candidate_name)
+                dest_path = output_dir / candidate_name
                 counter += 1
 
             shutil.copy2(img_path, dest_path)
-            
+
             base_src = os.path.splitext(img_path)[0]
-            base_dest = os.path.splitext(dest_path)[0]
+            base_dest = os.path.splitext(str(dest_path))[0]
             for ext in ['.txt', '.caption', '.json']:
                 txt_src = base_src + ext
                 if os.path.exists(txt_src):

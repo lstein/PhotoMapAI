@@ -3,7 +3,6 @@ test_albums.py
 Tests for the albums functionality of the PhotoMap application.
 """
 
-import os
 from pathlib import Path
 
 from fixtures import client
