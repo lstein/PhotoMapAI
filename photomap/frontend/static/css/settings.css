@@ -179,9 +179,10 @@
 }
 
 .album-selector-group #manageAlbumsBtn {
-  flex-shrink: 0;
+  flex-shrink: 1;
   white-space: nowrap;
   padding: 0.4em 0.8em;
+  max-width: fit-content;
 }
 
 #delayValue {
