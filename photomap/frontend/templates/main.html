@@ -99,11 +99,18 @@
                     style="margin-top:5px; width:100%">
             </div>
 
-            <!-- Algorithm Toggle -->
+            <!-- Algorithm Selection -->
             <div class="control-group">
-                <div class="toggle-row">
-                    <span id="methodFps" class="toggle-label active" style="cursor:pointer;">Diversity (FPS)</span>
-                    <span id="methodKmeans" class="toggle-label" style="cursor:pointer;">Blocks (K-Means)</span>
+                <label style="display: block; font-size: 11px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Algorithm</label>
+                <div style="display: flex; gap: 15px;">
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="radio" name="curationMethod" id="methodFps" value="fps" checked style="cursor: pointer;">
+                        <span style="font-size: 12px;">Diversity (FPS)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="radio" name="curationMethod" id="methodKmeans" value="kmeans" style="cursor: pointer;">
+                        <span style="font-size: 12px;">Blocks (K-Means)</span>
+                    </label>
                 </div>
             </div>
 
@@ -129,7 +136,7 @@
 
             <!-- Main Actions -->
             <div class="action-row" style="display: flex; gap: 5px; margin-bottom: 15px;">
-                <button id="curationRunBtn" class="btn-primary" style="flex: 2;">Preview</button>
+                <button id="curationRunBtn" class="btn-primary" style="flex: 2;">Select Diverse Images</button>
                 <button id="curationClearBtn" class="btn-secondary" style="flex: 1; background: #444;">Clear</button>
             </div>
 

@@ -175,10 +175,7 @@ function setupEventListeners() {
     number.oninput = () => slider.value = number.value;
     closeBtn.onclick = window.toggleCurationPanel;
 
-    if (methodFps && methodKmeans) {
-        methodFps.onclick = () => { methodFps.classList.add('active'); methodKmeans.classList.remove('active'); };
-        methodKmeans.onclick = () => { methodKmeans.classList.add('active'); methodFps.classList.remove('active'); };
-    }
+    // Radio buttons don't need click handlers - they work automatically
 
     clearBtn.onclick = () => {
         clearSelectionData();
@@ -269,7 +266,7 @@ function setupEventListeners() {
         let iter = parseInt(iterationsInput.value) || 1;
         if (iter > 30) { iter = 30; iterationsInput.value = 30; } // Frontend Cap
 
-        const method = document.getElementById('methodKmeans').classList.contains('active') ? "kmeans" : "fps";
+        const method = document.getElementById('methodKmeans').checked ? "kmeans" : "fps";
 
         if (!state.album) { alert("No album loaded!"); return; }
 
