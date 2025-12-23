@@ -6,7 +6,8 @@ import { state } from "./state.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 import { WeightSlider } from "./weight-slider.js";
 // --- NEW IMPORT ---
-import { hideCurrentImageMarker } from "./umap.js"; 
+import { hideCurrentImageMarker } from "./umap.js";
+import { clearCurationData } from "./curation.js";
 
 let posPromptWeight = 0.5; 
 let negPromptWeight = 0.25; 
@@ -473,6 +474,9 @@ export function exitSearchMode(searchType = "clear") {
   
   // Clear the yellow dot
   hideCurrentImageMarker();
+  
+  // Clear curation data when clearing search
+  clearCurationData();
 }
 
 function renderSearchImageThumbArea() {

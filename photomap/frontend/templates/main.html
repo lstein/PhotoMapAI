@@ -77,6 +77,11 @@
             <button id="curationCloseBtn" class="close-icon">&times;</button>
         </div>
 
+        <!-- Progress Bar (hidden by default) -->
+        <div id="curationProgressBar" style="display: none; height: 4px; background: #333; overflow: hidden;">
+            <div id="curationProgressFill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #ffd700 0%, #ffffff 50%, #ffd700 100%); transition: width 0.3s ease;"></div>
+        </div>
+
         <div class="curation-body">
             <!-- Count and Iterations -->
             <div class="control-group">

@@ -274,9 +274,34 @@ function setupEventListeners() {
         if (!state.album) { alert("No album loaded!"); return; }
 
         setStatus(`Running ${method.toUpperCase()} (${iter} iterations)...`, "loading");
+        
+        // Show and initialize progress bar
+        const progressBar = document.getElementById('curationProgressBar');
+        const progressFill = document.getElementById('curationProgressFill');
+        if (progressBar && progressFill) {
+            progressBar.style.display = 'block';
+            progressFill.style.width = '0%';
+        }
 
         try {
             showSpinner();
+            
+            // Simulate progress updates based on estimated time
+            // Estimate: ~100-200ms per iteration for typical workloads
+            const estimatedTimePerIteration = 150; // milliseconds
+            const totalEstimatedTime = iter * estimatedTimePerIteration;
+            const updateInterval = Math.max(50, totalEstimatedTime / (iter * 2)); // Update twice per iteration
+            
+            let currentProgress = 0;
+            const progressInterval = setInterval(() => {
+                if (currentProgress < 95) { // Don't reach 100% until actually done
+                    currentProgress += (100 / iter) * 0.5; // Increment by half iteration
+                    if (progressFill) {
+                        progressFill.style.width = `${Math.min(currentProgress, 95)}%`;
+                    }
+                }
+            }, updateInterval);
+            
             const response = await fetch('api/curation/curate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -291,6 +316,17 @@ function setupEventListeners() {
 
             if (!response.ok) throw new Error(await response.text());
             const data = await response.json();
+            
+            // Clear progress interval and complete progress bar
+            clearInterval(progressInterval);
+            if (progressFill) {
+                progressFill.style.width = '100%';
+            }
+            
+            // Hide progress bar after a short delay
+            setTimeout(() => {
+                if (progressBar) progressBar.style.display = 'none';
+            }, 500);
 
             // Clear old buckets
             clearSelectionData();
@@ -348,6 +384,10 @@ function setupEventListeners() {
         } catch (e) {
             console.error(e);
             setStatus("Error: " + e.message, "error");
+            
+            // Hide progress bar on error
+            const progressBar = document.getElementById('curationProgressBar');
+            if (progressBar) progressBar.style.display = 'none';
         }
         hideSpinner();
     };
@@ -459,6 +499,20 @@ function clearSelectionData() {
     lowFreqIndices.clear();
     currentSelectionFiles = [];
     // Do NOT clear globalMetadataMap here, as we want to remember excluded items from previous runs
+}
+
+// Export function to allow clearing curation from external modules (like search-ui)
+export function clearCurationData() {
+    clearSelectionData();
+    analysisResults = [];
+    updateVisuals();
+    
+    const exportBtn = document.getElementById('curationExportBtn');
+    const csvBtn = document.getElementById('curationCsvBtn');
+    if (exportBtn) exportBtn.disabled = true;
+    if (csvBtn) csvBtn.disabled = true;
+    updateStarButtonState();
+    setStatus("", "normal");
 }
 
 function updateVisuals() {
