@@ -18,6 +18,7 @@ class IndexStatus(Enum):
     SCANNING = "scanning"
     INDEXING = "indexing"
     UMAPPING = "mapping"
+    CURATING = "curating"
     COMPLETED = "completed"
     ERROR = "error"
 
@@ -109,6 +110,7 @@ class ProgressTracker:
             IndexStatus.SCANNING,
             IndexStatus.INDEXING,
             IndexStatus.UMAPPING,
+            IndexStatus.CURATING,
         ]
 
     def complete_operation(

@@ -19,6 +19,17 @@ async def get_umap_data(
     cluster_eps: float = 0.07,
     cluster_min_samples: int = 10,
 ) -> JSONResponse:
+    """
+    Get UMAP coordinates for all images in an album.
+    
+    Args:
+        album_key: The key of the album to retrieve data for.
+        cluster_eps: Epsilon parameter for DBSCAN clustering.
+        cluster_min_samples: Min samples parameter for DBSCAN clustering.
+        
+    Returns:
+        JSONResponse containing a list of points with x, y, index, and cluster ID.
+    """
     # Instantiate your Embeddings object (adjust path as needed)
     embeddings = get_embeddings_for_album(album_key)
     album_config = config_manager.get_album(album_key)

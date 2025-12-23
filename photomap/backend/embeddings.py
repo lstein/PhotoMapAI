@@ -25,6 +25,7 @@ import torch.nn.functional as F
 from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
 from pydantic import BaseModel
+from sklearn.cluster import KMeans
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 from umap import UMAP
@@ -47,6 +48,181 @@ SUPPORTED_EXTENSIONS = {
     ".heif",
     ".heic",
 }
+
+
+# =========================================================================
+# FPS with Exclusion Support
+# =========================================================================
+def get_fps_indices_global(
+    embeddings_path: Path,
+    n_target: int,
+    seed: int = 42,
+    ignore_indices: list[int] = None,
+) -> list[str]:
+    """
+    Select indices using Farthest Point Sampling to maximize diversity.
+
+    Args:
+        embeddings_path: Path to the .npz embeddings file.
+        n_target: Number of images to select.
+        seed: Random seed for reproducibility.
+        ignore_indices: List of global indices to ignore/exclude.
+
+    Returns:
+        List of selected filenames.
+    """
+    data = _open_npz_file(embeddings_path)
+    embeddings = data["embeddings"]
+    filenames = data["filenames"]
+
+    n_total = len(embeddings)
+
+    # Create a mask of VALID indices (True = Keep, False = Ignore)
+    valid_mask = np.ones(n_total, dtype=bool)
+    if ignore_indices:
+        valid_mask[ignore_indices] = False
+
+    # Get the indices that are actually available
+    valid_global_indices = np.where(valid_mask)[0]
+
+    # Filter embeddings to only valid ones
+    filtered_embeddings = embeddings[valid_global_indices]
+
+    n_samples = len(filtered_embeddings)
+    if n_samples == 0:
+        return []
+    if n_target >= n_samples:
+        return filenames[valid_global_indices].tolist()
+
+    # Normalize
+    norms = np.linalg.norm(filtered_embeddings, axis=1, keepdims=True)
+    vectors = filtered_embeddings / (norms + 1e-10)
+
+    # Standard FPS Logic on the FILTERED set
+    rng = np.random.RandomState(seed)
+    # Pick random index relative to the FILTERED set
+    start_idx = rng.randint(0, n_samples)
+    selected_local_indices = [start_idx]
+
+    first_vector = vectors[start_idx].reshape(1, -1)
+    min_dists = 1.0 - np.dot(vectors, first_vector.T).flatten()
+
+    for _ in range(n_target - 1):
+        next_idx = np.argmax(min_dists)
+        selected_local_indices.append(next_idx)
+
+        new_vector = vectors[next_idx].reshape(1, -1)
+        dists_to_new = 1.0 - np.dot(vectors, new_vector.T).flatten()
+        min_dists = np.minimum(min_dists, dists_to_new)
+
+    # Map LOCAL filtered indices back to GLOBAL indices
+    final_global_indices = valid_global_indices[selected_local_indices]
+
+    return [filenames[i] for i in final_global_indices]
+
+
+# =========================================================================
+# K-Means with Exclusion Support
+# =========================================================================
+def get_kmeans_indices_global(
+    embeddings_path: Path,
+    n_target: int,
+    seed: int = 42,
+    ignore_indices: list[int] = None,
+) -> list[str]:
+    """
+    Select indices using K-Means clustering to find representative images.
+
+    Args:
+        embeddings_path: Path to the .npz embeddings file.
+        n_target: Number of images to select.
+        seed: Random seed for reproducibility.
+        ignore_indices: List of global indices to ignore/exclude.
+
+    Returns:
+        List of selected filenames.
+    """
+    data = _open_npz_file(embeddings_path)
+    embeddings = data["embeddings"]
+    filenames = data["filenames"]
+
+    n_total = len(embeddings)
+
+    valid_mask = np.ones(n_total, dtype=bool)
+    if ignore_indices:
+        valid_mask[ignore_indices] = False
+
+    valid_global_indices = np.where(valid_mask)[0]
+    filtered_embeddings = embeddings[valid_global_indices]
+
+    n_samples = len(filtered_embeddings)
+    if n_samples == 0:
+        return []
+    if n_target >= n_samples:
+        return filenames[valid_global_indices].tolist()
+
+    # Normalize
+    norms = np.linalg.norm(filtered_embeddings, axis=1, keepdims=True)
+    vectors = filtered_embeddings / (norms + 1e-10)
+
+    # Cluster
+    kmeans = KMeans(n_clusters=n_target, random_state=seed, n_init=10)
+    labels = kmeans.fit_predict(vectors)
+
+    selected_local_indices = []
+
+    for i in range(n_target):
+        cluster_indices = np.where(labels == i)[0]
+        if len(cluster_indices) == 0:
+            continue
+
+        cluster_vectors = vectors[cluster_indices]
+        centroid = kmeans.cluster_centers_[i]
+
+        dists = np.linalg.norm(cluster_vectors - centroid, axis=1)
+        best_local_sub_idx = np.argmin(dists)
+        best_local_idx = cluster_indices[best_local_sub_idx]
+        selected_local_indices.append(best_local_idx)
+
+    # Map back to global
+    final_global_indices = valid_global_indices[selected_local_indices]
+    return [filenames[i] for i in final_global_indices]
+
+
+@functools.lru_cache(maxsize=3)
+def _open_npz_file(embeddings_path: Path) -> Dict[str, Any]:
+    """
+    Global helper to open .npz files with caching.
+    Uses context manager to ensure file handles are released.
+    """
+    embeddings_path = Path(embeddings_path).resolve()
+
+    if not embeddings_path.exists():
+        raise FileNotFoundError(f"Embeddings file {embeddings_path} does not exist.")
+
+    # Use 'with' to ensure the file handle is closed
+    with np.load(embeddings_path, allow_pickle=True) as data:
+        filenames = data["filenames"].copy()
+        raw_metadata = data["metadata"].copy()
+        embeddings = data["embeddings"].copy()
+        modification_times = data["modification_times"].copy()
+
+    # Pre-compute sorted order
+    sorted_indices = np.argsort(modification_times)
+    sorted_filenames = filenames[sorted_indices]
+    filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
+
+    return {
+        "filenames": filenames,
+        "metadata": raw_metadata,
+        "embeddings": embeddings,
+        "modification_times": modification_times,
+        "sorted_modification_times": modification_times[sorted_indices],
+        "sorted_filenames": sorted_filenames,
+        "sorted_metadata": raw_metadata[sorted_indices],
+        "filename_map": filename_map,
+    }
+
 
 class IndexResult(BaseModel):
     """
@@ -73,6 +249,12 @@ class Embeddings(BaseModel):
     minimum_image_size: ClassVar[int] = 100 * 1024  # Minimum image size in bytes (100K)
 
     embeddings_path: Path = Path("clip_image_embeddings.npz")
+
+    def __init__(self, **data):
+        """Ensure embeddings_path is always resolved to prevent cache key mismatches."""
+        if "embeddings_path" in data:
+            data["embeddings_path"] = Path(data["embeddings_path"]).resolve()
+        super().__init__(**data)
 
     def get_image_files_from_directory(
         self,
@@ -211,13 +393,13 @@ class Embeddings(BaseModel):
         except Exception as e:
             logger.error(f"Error processing {image_path}: {e}")
             return None, None, None
-        
+
     def _clip_root(self) -> Optional[str]:
         """
         Determine the root directory for CLIP model caching.
         This is important for PyInstaller compatibility.
         """
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             # If running in a PyInstaller bundle, use the bundled cache directory
             bundle_dir = sys._MEIPASS
             return os.path.join(bundle_dir, "clip_models")
@@ -282,7 +464,9 @@ class Embeddings(BaseModel):
         Async version of _process_images_batch with progress tracking.
         """
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model, preprocess = clip.load("ViT-B/32", device=device, download_root=self._clip_root())
+        model, preprocess = clip.load(
+            "ViT-B/32", device=device, download_root=self._clip_root()
+        )
 
         embeddings = []
         filenames = []
@@ -336,7 +520,7 @@ class Embeddings(BaseModel):
         )
 
         # Clear cache after saving
-        self.open_cached_embeddings.cache_clear()
+        _open_npz_file.cache_clear()
 
     def _get_new_and_missing_images(
         self,
@@ -795,7 +979,9 @@ class Embeddings(BaseModel):
         filename_map = data["filename_map"]
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model, preprocess = clip.load("ViT-B/32", device=device, download_root=self._clip_root())
+        model, preprocess = clip.load(
+            "ViT-B/32", device=device, download_root=self._clip_root()
+        )
 
         # Handle None queries: set weight to zero and skip embedding
         if query_image_data is None:
@@ -944,28 +1130,41 @@ class Embeddings(BaseModel):
         Remove an image from the embeddings file.
         """
         try:
-            # Use optimized version for O(1) lookup
-            data = self.open_cached_embeddings(self.embeddings_path)
-
-            # Load the raw data for modification
-            sorted_filenames = data["sorted_filenames"]
-            filenames = data["filenames"]
-            embeddings = data["embeddings"]
-            modtimes = data["modification_times"]
-            metadata = data["metadata"]
+            # 1. Load data explicitly without using the cache wrapper
+            # This ensures we get a fresh copy to work on
+            with np.load(self.embeddings_path, allow_pickle=True) as data:
+                filenames = data["filenames"].copy()
+                embeddings = data["embeddings"].copy()
+                modtimes = data["modification_times"].copy()
+                metadata = data["metadata"].copy()
+                # Reconstruct sorting locally to find correct index
+                sorted_indices = np.argsort(modtimes)
+                sorted_filenames = filenames[sorted_indices]
 
             current_filename = sorted_filenames[index]
 
-            # Find the index in the original (unsorted) arrays
+            # 2. Find index in the arrays
             original_idx = np.where(filenames == current_filename)[0][0]
 
-            # Remove from all arrays
+            # 3. Remove from all arrays
             filenames = np.delete(filenames, original_idx)
             embeddings = np.delete(embeddings, original_idx, axis=0)
             modtimes = np.delete(modtimes, original_idx)
             metadata = np.delete(metadata, original_idx)
 
-            # Save updated data
+            # 4. Clear Cache immediately (Before touching disk)
+            _open_npz_file.cache_clear()
+
+            # 5. Force Delete the old file to prevent Windows locking issues
+            if self.embeddings_path.exists():
+                try:
+                    self.embeddings_path.unlink()
+                except PermissionError:
+                    logger.warning(
+                        f"File locked, attempting overwrite: {self.embeddings_path}"
+                    )
+
+            # 6. Save updated data
             self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(
                 self.embeddings_path,
@@ -974,17 +1173,18 @@ class Embeddings(BaseModel):
                 modification_times=modtimes,
                 metadata=metadata,
             )
-        except Exception as e:
-            logger.error(e)
-            raise
 
-        # Clear the LRU cache since the file has changed
-        self.open_cached_embeddings.cache_clear()
+            # 7. Re-prime the cache immediately to verify the write
+            _open_npz_file(self.embeddings_path)
+
+        except Exception as e:
+            logger.error(f"Error removing image: {e}")
+            raise
 
     def update_image_path(self, index: int, new_path: Path) -> None:
         """
         Update the path of an image in the embeddings file after it has been moved.
-        
+
         Args:
             index: The sorted index of the image in the embeddings
             new_path: The new path to the image file
@@ -1007,17 +1207,17 @@ class Embeddings(BaseModel):
 
             # Convert new_path to string
             new_path_str = str(new_path)
-            
+
             # Check if the new path is longer than the current dtype allows
             current_dtype = filenames.dtype
-            if hasattr(current_dtype, 'itemsize'):
+            if hasattr(current_dtype, "itemsize"):
                 # For string dtypes, check if we need to resize
                 max_len = current_dtype.itemsize // 4  # Unicode chars are 4 bytes each
                 if len(new_path_str) > max_len:
                     # Need to create a new array with larger dtype
                     new_max_len = max(len(new_path_str), max_len) + 50  # Add buffer
-                    filenames = filenames.astype(f'<U{new_max_len}')
-            
+                    filenames = filenames.astype(f"<U{new_max_len}")
+
             # Update the filename in the original array
             filenames[original_idx] = new_path_str
 
@@ -1030,14 +1230,14 @@ class Embeddings(BaseModel):
                 modification_times=modtimes,
                 metadata=metadata,
             )
-            
+
             logger.info(f"Updated path in embeddings: {current_filename} -> {new_path}")
         except Exception as e:
             logger.error(f"Failed to update image path in embeddings: {e}")
             raise
 
         # Clear the LRU cache since the file has changed
-        self.open_cached_embeddings.cache_clear()
+        _open_npz_file.cache_clear()
 
     # This is not used in the current implementation, but can be useful for testing.
     def iterate_images(
@@ -1062,37 +1262,12 @@ class Embeddings(BaseModel):
             yield format_metadata(image_path, metadata[idx], int(idx), len(filenames))
 
     @staticmethod
-    @functools.lru_cache(maxsize=3)
     def open_cached_embeddings(embeddings_path: Path) -> Dict[str, Any]:
         """
-        Open embeddings with pre-computed lookup structures.
+        Static wrapper calling the global function.
+        Works for both Embeddings.open_cached_embeddings() and self.open_cached_embeddings().
         """
-        embeddings_path = Path(embeddings_path)
-        if not embeddings_path.exists():
-            raise FileNotFoundError(
-                f"Embeddings file {embeddings_path} does not exist."
-            )
-
-        data = np.load(embeddings_path, allow_pickle=True)
-
-        # Pre-compute sorted order
-        modtimes = data["modification_times"]
-        sorted_indices = np.argsort(modtimes)
-
-        # Create filename -> position mapping for O(1) lookup
-        sorted_filenames = data["filenames"][sorted_indices]
-        filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
-
-        return {
-            "filenames": data["filenames"],
-            "metadata": data["metadata"],
-            "embeddings": data["embeddings"],
-            "modification_times": data["modification_times"],
-            "sorted_modification_times": modtimes[sorted_indices],
-            "sorted_filenames": sorted_filenames,
-            "sorted_metadata": data["metadata"][sorted_indices],
-            "filename_map": filename_map,
-        }
+        return _open_npz_file(embeddings_path)
 
     @staticmethod
     def extract_image_metadata(pil_image: Image.Image) -> dict:
@@ -1117,11 +1292,12 @@ def tqdm_progress_callback(total_images):
 def print_cuda_message():
     """Print a message about CUDA availability."""
     if os.environ.get("PHOTOMAP_CUDA_GRIPE"):
-       return
+        return
     if torch.cuda.is_available():
         logger.info("CUDA detected. Using GPU acceleration for indexing.")
     else:
         logger.info("CUDA not detected. Using CPU for indexing.")
     os.environ["PHOTOMAP_CUDA_GRIPE"] = "true"
+
 
 print_cuda_message()

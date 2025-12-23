@@ -13,7 +13,6 @@ from pydantic import BaseModel
 from .config import get_config_manager
 from .metadata_modules import SlideSummary, format_exif_metadata, format_invoke_metadata
 
-config_manager = get_config_manager()
 logger = logging.getLogger(__name__)
 
 
@@ -49,5 +48,6 @@ def format_metadata(
     ):
         return format_invoke_metadata(result, metadata)
     else:
+        config_manager = get_config_manager()
         api_key = config_manager.get_locationiq_api_key()
         return format_exif_metadata(result, metadata, api_key)

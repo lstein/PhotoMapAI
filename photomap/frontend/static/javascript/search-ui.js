@@ -1,23 +1,24 @@
-// search.js
+// search-ui.js
 // This file handles the search functionality for the Clipslide application.
-// Swiper initialization
 import { calculate_search_score_cutoff, searchImage, searchTextAndImage, setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 import { WeightSlider } from "./weight-slider.js";
+// --- NEW IMPORT ---
+import { hideCurrentImageMarker } from "./umap.js";
+import { clearCurationData } from "./curation.js";
 
-let posPromptWeight = 0.5; // Default weight for positive prompts
-let negPromptWeight = 0.25; // Default weight for negative prompts
-let imgPromptWeight = 0.5; // Default weight for image prompts
-let currentSearchImageUrl = null; // Track the current image URL
+let posPromptWeight = 0.5; 
+let negPromptWeight = 0.25; 
+let imgPromptWeight = 0.5; 
+let currentSearchImageUrl = null; 
 
 document.addEventListener("DOMContentLoaded", async function () {
   const textSearchPanel = document.getElementById("textSearchPanel");
   const textSearchBtn = document.getElementById("textSearchBtn");
   const closeTextSearchBtn = document.getElementById("closeTextSearchBtn");
 
-  // Close text search panel button
   if (closeTextSearchBtn) {
     closeTextSearchBtn.onclick = function() {
       textSearchPanel.style.display = 'none';
@@ -34,14 +35,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       setTimeout(() => {
         textSearchPanel.style.display = "block";
         textSearchPanel.style.opacity = 1;
-        // Hide the noResultsMsg when opening
         const noResultsMsg = document.getElementById("noResultsMsg");
         if (noResultsMsg) noResultsMsg.style.display = "none";
       }, 20);
     } else {
       textSearchPanel.style.display = "none";
       textSearchPanel.style.opacity = 0;
-      // Hide the noResultsMsg when closing
       const noResultsMsg = document.getElementById("noResultsMsg");
       if (noResultsMsg) noResultsMsg.style.display = "none";
     }
@@ -83,9 +82,8 @@ document.addEventListener("DOMContentLoaded", async function () {
   async function searchWithTextAndImage(searchType = "text_and_image") {
     const positiveQuery = searchInput.value.trim();
     const negativeQuery = negativeSearchInput.value.trim();
-    const imageFile = state.currentSearchImageFile || null; // You need to set this when an image is uploaded or selected
+    const imageFile = state.currentSearchImageFile || null; 
 
-    // Get weights from sliders
     const posWeight = posPromptWeightSlider.getValue
       ? posPromptWeightSlider.getValue()
       : posPromptWeight;
@@ -115,7 +113,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         top_k: 500,
       });
 
-      // calculate score cutoffs based on weights
       const cutoff = calculate_search_score_cutoff(imageFile, imgWeight, positiveQuery, posWeight, negativeQuery, negWeight);
       new_results = new_results.filter((item) => item.score >= cutoff);
 
@@ -126,9 +123,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           textSearchPanel.style.display = "none";
         }, 200);
       }
-      // If no results, keep the panel open so the message is visible
     } catch (err) {
-      // scoreDisplay.hide();
       hideSpinner();
       console.error("Search request failed:", err);
     } finally {
@@ -137,7 +132,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   }
 
-  // Image Search
   const imageSearchBtn = document.getElementById("imageSearchBtn");
   imageSearchBtn.addEventListener("click", async function () {
     searchInput.value = "";
@@ -163,7 +157,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       const imgResponse = await fetch(imgUrl);
       const blob = await imgResponse.blob();
       const file = new File([blob], filename, { type: blob.type });
-      // Set the search image for the panel
       setSearchImage(imgUrl, file);
       await searchWithTextAndImage("image");
       hideSpinner();
@@ -174,8 +167,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // This removes the results not found message when the panel is closed.
-  // PROBABLY NOT NECESSARY
   textSearchPanel.addEventListener("transitionend", function (e) {
     if (textSearchPanel.style.opacity === "0") {
       textSearchPanel.style.display = "none";
@@ -192,7 +183,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     uploadImageInput.click();
   });
 
-  // Upload via input (do NOT auto-search, just set image)
   uploadImageInput.addEventListener("change", async function (e) {
     const file = e.target.files[0];
     if (file && file.type.startsWith("image/")) {
@@ -276,7 +266,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     searchImageThumbArea.classList.remove("dragover");
   });
 
-  // Drag-and-drop onto the search panel (do NOT auto-search, just set image)
   searchImageThumbArea.addEventListener("drop", async function (e) {
     e.preventDefault();
     const files = e.dataTransfer.files;
@@ -334,9 +323,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  // Called whenever the search results are updated
   window.addEventListener("searchResultsChanged", async function (e) {
-    // Only show the no results message if this is a real search, not a clear/reset
     let noResultsMsg = document.getElementById("noResultsMsg");
     if (!noResultsMsg) {
       noResultsMsg = document.createElement("div");
@@ -405,13 +392,14 @@ async function insertUploadedImageFile(file) {
   });
 }
 
-function updateSearchCheckmarks(searchType = null) {
+export function updateSearchCheckmarks(searchType = null) {
   const searchTypeToIconMap = {
     cluster: document.getElementById("showUmapBtn"),
     image: document.getElementById("imageSearchIcon"),
     text: document.getElementById("textSearchIcon"),
     text_and_image: document.getElementById("textSearchIcon"),
     bookmarks: document.getElementById("bookmarkMenuBtn"),
+    curation: document.getElementById("bookmarkMenuBtn"), // Use bookmarks icon for curation too
   };
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   const element_to_highlight = searchTypeToIconMap[searchType] || null;
@@ -475,15 +463,21 @@ window.addEventListener("paste", async function (e) {
   }
 });
 
+// --- UPDATED: Exit Search Mode now clears UMAP marker ---
 export function exitSearchMode(searchType = "clear") {
-  // scoreDisplay.hide();
   const searchInput = document.getElementById("searchInput");
   if (searchInput) searchInput.value = "";
   const negativeSearchInput = document.getElementById("negativeSearchInput");
   if (negativeSearchInput) negativeSearchInput.value = "";
-  setSearchImage(null, null); // Clear the search image and thumbnail
+  setSearchImage(null, null); 
   updateSearchCheckmarks(searchType);
   setSearchResults([], searchType);
+  
+  // Clear the yellow dot
+  hideCurrentImageMarker();
+  
+  // Clear curation data when clearing search
+  clearCurationData();
 }
 
 function renderSearchImageThumbArea() {
@@ -500,7 +494,6 @@ function renderSearchImageThumbArea() {
     img.alt = "Search image";
     wrapper.appendChild(img);
 
-    // Add the X button
     const clearBtn = document.createElement("button");
     clearBtn.innerHTML = "&times;";
     clearBtn.title = "Clear search image";
@@ -543,12 +536,10 @@ function renderSearchImageThumbArea() {
   }
 }
 
-// Call this after a search image is set or cleared:
 function setSearchImage(url, file = null) {
   currentSearchImageUrl = url;
   state.currentSearchImageFile = file;
   renderSearchImageThumbArea();
 }
 
-// Initial render
 document.addEventListener("DOMContentLoaded", renderSearchImageThumbArea);

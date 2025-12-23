@@ -1,4 +1,8 @@
 # slideshow_server.py
+"""
+Main entry point for the PhotoMapAI backend server.
+Initializes the FastAPI app, mounts routers, and handles server startup.
+"""
 import logging
 import os
 import signal
@@ -7,7 +11,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +26,7 @@ from photomap.backend.routers.search import search_router
 from photomap.backend.routers.umap import umap_router
 from photomap.backend.routers.upgrade import upgrade_router
 from photomap.backend.util import get_app_url
+from photomap.backend.routers.curation import router as curation_router
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -40,6 +44,8 @@ for router in [
     upgrade_router,
 ]:
     app.include_router(router)
+
+app.include_router(curation_router, prefix="/api/curation", tags=["curation"])
 
 # Mount static files and templates
 static_path = get_package_resource_path("static")

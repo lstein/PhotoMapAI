@@ -15,4 +15,5 @@ import './javascript/state.js';
 import './javascript/swiper.js';
 import './javascript/umap.js';
 import './javascript/utils.js';
+import './javascript/curation.js';
 
