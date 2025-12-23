@@ -172,8 +172,10 @@ function applyAlbumLockState() {
     
     if (browseBtn) {
         browseBtn.disabled = true;
-        browseBtn.style.opacity = '0.3';
+        browseBtn.style.opacity = '0.5';
+        browseBtn.style.filter = 'grayscale(100%)';
         browseBtn.style.cursor = 'not-allowed';
+        browseBtn.style.backgroundColor = '#333';
         browseBtn.title = 'Browse disabled when album is locked';
     }
 }
