@@ -14,7 +14,7 @@ nav:
       - Albums: user-guide/albums.md
       - Configuration: user-guide/configuration.md
       - Semantic Map: user-guide/semantic-map.md
-      - Curator Mode: user-guide/curator-mode.md
+      - Image Dataset Curation: user-guide/curator-mode.md
       - Updating PhotoMapAI: user-guide/upgrading.md
       - Keyboard Shortcuts: user-guide/keyboard-shortcuts.md
   - Running from Docker: docker.md

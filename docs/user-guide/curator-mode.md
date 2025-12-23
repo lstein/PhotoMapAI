@@ -1,13 +1,13 @@
-# Image Generation Model Dataset Curator
+# Dataset Curation
 
-The Dataset Curator is a powerful feature in PhotoMapAI designed to help you select a diverse or representative subset of images from a large album. This is particularly useful for creating training datasets for LoRA (Low-Rank Adaptation) models or simply thinning out a large collection using CLIP embeddings as the driver.
+The **Dataset Curator** is a powerful feature in PhotoMapAI designed to help you select a diverse or representative subset of images from a large album. This is particularly useful for creating training datasets for LoRA (Low-Rank Adaptation) image generation/classification models or simply reducing the redundancy in a large collection of images.
 
 ![Curator Mode Panel](../img/curator-panel.png)
 
 ## Accessing the Curator
 
-1.  Open an album in the grid view.
-2.  Click the **Favorites** menu button (⭐) in the top-right corner.
+1.  Open an album in the grid or semantic map view.
+2.  Click the **Favorites** menu button (⭐) in the bottom-right of the window.
 3.  Select **Curate** (pencil icon 📝) from the dropdown menu.
 
 The curator panel will appear and can be repositioned by dragging its title bar.
@@ -18,59 +18,66 @@ The curator offers two distinct algorithms for selecting images, selectable via 
 
 ### Diversity (FPS)
 **Farthest Point Sampling** selects images that are as different from each other as possible.
--   **Best for:** Ensuring your dataset covers the widest possible range of visual concepts, lighting conditions, and angles.
--   **When to use:**
-    -   **High Quality Data:** FPS seeks outliers. In a "dirty" dataset, outliers are often blurry or broken images. In a "clean" dataset, outliers are your rare concepts (side profiles, dramatic lighting).
-    -   **Unbalanced Data:** If you have 50 full-body images and 10 close-ups, FPS will prioritize the close-ups to ensure the AI learns the rare concept, rather than just the common one.
--   **How it works:** It starts with a random image (or your excluded selection) and iteratively picks the image whose feature vector is farthest from the current set.
+
+* **Best for:** Ensuring your dataset covers the widest possible range of visual concepts, lighting conditions, and angles. Use it for:
+
+    * **High Quality Data:** FPS seeks outliers. In a "dirty" dataset, outliers are often blurry or broken images. In a "clean" dataset, outliers are your rare concepts (side profiles, dramatic lighting).
+
+    * **Unbalanced Data:** If you have 50 full-body images and 10 close-ups, FPS will prioritize the close-ups to ensure the AI learns the rare concept, rather than just the common one.
+
+* **How it works:** It starts with a random image (or your excluded selection) and iteratively picks the image whose feature vector is farthest from the current set.
 
 ### Blocks (K-Means)
 **K-Means Clustering** groups images into clusters and picks a representative image from each cluster.
--   **Best for:** Reducing redundancy while maintaining the overall distribution of the dataset (Representative Sampling).
--   **When to use:**
-    -   **Balanced Distribution:** If you have 50 full-body images and 10 close-ups, K-Means will select roughly 5 full-body images for every 1 close-up, preserving the original ratios of your dataset.
--   **How it works:** It divides your images into N clusters (where N is your target count) and selects the image closest to the mathematical center of each cluster.
 
+* **Best for:** Reducing redundancy while maintaining the overall distribution of the dataset (Representative Sampling). Use it for:
 
+    * **Balanced Distribution:** If you have 50 full-body images and 10 close-ups, K-Means will select roughly 5 full-body images for every 1 close-up, preserving the original ratios of your dataset.
+
+* **How it works:** It divides your images into N clusters (where N is your target count) and selects the image closest to the mathematical center of each cluster.
 
 ## Workflow
+
+<img src="../../img/curator-setup.png" width="480" alt="Curator Panel Setup" class="img-hover-zoom">
+
 1.  **Setup your UI**: 
     - When the curator panel opens, the UMAP visualization automatically switches to grey mode - all points turn grey to make the colored selection overlays more visible.
     - Unclustered points (normally very faint) increase in opacity to match clustered points, providing a uniform background.
-    - Recommend turning off "Show landmarks" and "Show hover thumbnails" in the UMAP controls for a cleaner view.
-
-![Curator Mode Setup](../img/curator-setup.png)
-
+    - It is recommended to turn off "Show landmarks" and "Show hover thumbnails" in the UMAP controls for a cleaner view.
 2.  **Set Target Count**: Choose how many images you want in your final set (e.g., 50, 150).
 3.  **Set Iterations**: 
     -   Algorithms like FPS can be sensitive to the starting point. Running multiple iterations (Monte Carlo simulation) helps identify the "consensus" selections—images that are statistically important regardless of the random start.
     -   **Recommendation:** Set to 20 iterations for analysis.
-4.  **Run Selection**: Click **Select Training Set** to select a diverse distribution of images.
-    -   A yellow-and-white progress bar appears below the title, showing real-time progress (e.g., "Iteration 5/20").
+4.  **Run Selection**: Click **Select Images** (circled button) to select a diverse distribution of images.
+    -   A yellow-and-white progress bar appears below the title, showing the progress of the selected algorithm.
 
-![Curator Mode Preview](../img/curator-preview.png)
+<img src="../../img/curator-preview.png" width="480" alt="After selecting images" class="img-hover-zoom">
 
 ### Stability Heatmap
 The results are displayed as a Stability Heatmap:
--   🟣 **Magenta**: Core Outliers (Selected in >90% of runs). These are your most mathematically unique images.
--   🔵 **Cyan**: Stable (Selected in >70% of runs).
--   🟢 **Green**: Variable (Selected in <70% of runs). Edge cases that usually fill gaps.
 
-Unselected images will be dimmed. When you have an active curation selection, the "Exit Search" button appears, allowing you to clear the selection and return to normal view.
+*   🟣 **Magenta**: Core Outliers (Selected in >90% of runs). These are your most mathematically unique images.
+*   🔵 **Cyan**: Stable (Selected in >70% of runs).
+*   🟢 **Green**: Variable (Selected in <70% of runs). Edge cases that usually fill gaps.
+
+If you now open the grid view (by hiding or minimizing the semantic map window) you will see the selected images at full brightness, while others will be dimmed. Press the "Clear" button on the curator panel or the "X" button on the bottom right of the main window, in order to clear the search and return to the normal view.
 
 ## Refinement & Exclusion
-You can manually refine the selection by "Excluding" images. Excluding an image removes it from calculations and exports.
+You can manually refine the selection by excluding images. Excluding an image removes it from calculations and exports. This is commonly needed when your collection contains "garbage", such as blank or blurry images, that appear to the algorithm as interesting outliers.
 
 This allows for a "Drill Down" workflow:
+
 1.  Run the analysis.
-2.  If the top results (Magenta) are garbage (e.g., blurry images), Exclude them.
-3.  Run Select Diverse Images again. The algorithm is forced to ignore the excluded images and find the next best candidates.
 
--   **Click-to-Exclude**: Toggle this mode and click images in the grid (or UMAP) to exclude/include them. Excluded images appear with a **Red Border**.
--   **Exclude Matches**: Bulk-exclude all images that meet a certain frequency threshold (e.g., >90%).
--   **Clear Exclusions**: Clear all exclusions and restart the analysis.
+2.  If the top results (🟣 **Magenta**) are garbage, exclude them.
 
-![Exclusion Example](../img/curator-exclusion.png)
+3.  Run **Select Images** again. The algorithm will be forced to ignore the excluded images and find the next best candidates.
+
+    -   **Click-to-Exclude**: Toggle this mode and click images in the grid (or UMAP) to exclude/include them. Excluded images appear as solid 🔴 **Red** circles. (See image below. Yellow arrows added for emphasis.)
+    -   **Exclude Matches**: Bulk-exclude all images that meet a certain frequency threshold (e.g., >90%).
+    -   **Clear Exclusions**: Clear all exclusions in order to start over.
+
+<img src="../../img/curator-exclusion.png" width="480" alt="After excluding garbage" class="img-hover-zoom">
 
 ## Recommended Workflows
 
@@ -87,40 +94,30 @@ This allows for a "Drill Down" workflow:
 2.  Set **Target Count** to your desired training size (e.g., 150).
 3.  Set **Iterations** to 20.
 4.  Click **Select Training Set**.
-5.  Review the selection. If you see images you don't want in your LoRA, **Exclude** them and run Select Diverse Images again to replace them with fresh alternatives.
-6.  **Export Dataset**.
+5.  Review the selection. If you see images you don't want in your training set, **Exclude** them and run **Select Images** again to replace them with fresh alternatives.
+6.  Repeat as needed.
 
 ## Exporting
-![Ready To Export Example](../img/curator-readytoexport.png)
-Once you are satisfied with your selection (Magenta/Cyan/Green images):
+
+Once you are satisfied with your selection:
+
 1.  Click the folder icon (📁) next to the **Export Path** field to browse for a destination folder.
     - The selected path is saved in your browser and persists across sessions.
-    - The Export Dataset button remains disabled until a valid path is selected.
+    
 2.  Click **Export Dataset**.
-3.  The system will copy the selected images (and associated text files) to the folder.
-4.  Click the **CSV** button to export data on the included and excluded files.
-5.  Click the **Set Favorites** button (⭐) to replace your current favorites with the curated selection.
-    - The star button is disabled when there's no selection.
-    - This provides quick access to your curated images for review.
 
-*   *Note: Text files are also exported! If you have 0001.jpg and 0001.txt in the album, they will be exported together.*
-*   *Note: Excluded (Red) images are NOT exported.*
-*   *Note: Filename collisions (e.g. apple/01.jpg vs orange/01.jpg) are automatically handled by renaming.*
+3.  The system will copy the selected images (and associated text files, see below) to the folder. The original images will remain in place.
 
-## Clearing Results
-When you have an active curation selection, the "Exit Search" button becomes visible in the search panel. Click it to:
-- Clear the curation selection
-- Remove colored overlays from the UMAP
-- Return the UMAP to normal cluster colors
-- Hide the "Exit Search" button
+4.  Click the **CSV** button to export a tab-delimited inventory of the included and excluded files.
 
-## Visual Feedback
-- **Panel Position**: The curator panel can be dragged by its title bar to any position on screen
-- **UMAP Integration**: When the panel is open, the UMAP automatically adjusts:
-  - All points turn grey for better contrast with selection colors
-  - Unclustered points become fully visible (opacity 0.75)
-  - The current image marker (yellow dot) remains visible
-- **Progress Tracking**: Real-time iteration progress with accurate percentage display
-- **Button States**: All action buttons (Export, CSV, Set Favorites) are intelligently enabled/disabled based on selection state
+At any point, you may also click the **Set Favorites** button (⭐) to replace your current favorites with the curated selection. This allows you to show and hide the selection conveniently using the **Favorites** menu, as well as to move the selected images to a new folder while preserving them in the index.
 
-### Contact /u/AcadiaVivid on reddit or NMWave on github for more info on implementation.
+## Notes
+
+*   *Text files are also exported! If you have 0001.jpg and 0001.txt in the album, they will be exported together. This is useful for maintaining external text annotations of images.
+*   *Excluded (Red) images are NOT exported.
+*   *Filename collisions (e.g. apple/01.jpg vs orange/01.jpg) are automatically handled by renaming.
+
+## For More Information
+
+Contact */u/AcadiaVivid* on reddit or *NMWave* on github for assistance and information.
