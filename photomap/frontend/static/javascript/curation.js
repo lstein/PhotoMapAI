@@ -283,23 +283,8 @@ function setupEventListeners() {
         try {
             showSpinner();
             
-            // Simulate progress updates based on estimated time
-            // Estimate: ~100-200ms per iteration for typical workloads
-            const estimatedTimePerIteration = 150; // milliseconds
-            const totalEstimatedTime = iter * estimatedTimePerIteration;
-            const updateInterval = Math.max(50, totalEstimatedTime / (iter * 2)); // Update twice per iteration
-            
-            let currentProgress = 0;
-            const progressInterval = setInterval(() => {
-                if (currentProgress < 95) { // Don't reach 100% until actually done
-                    currentProgress += (100 / iter) * 0.5; // Increment by half iteration
-                    if (progressFill) {
-                        progressFill.style.width = `${Math.min(currentProgress, 95)}%`;
-                    }
-                }
-            }, updateInterval);
-            
-            const response = await fetch('api/curation/curate', {
+            // Start the curation job
+            const startResponse = await fetch('api/curation/curate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -311,82 +296,126 @@ function setupEventListeners() {
                 })
             });
 
-            if (!response.ok) throw new Error(await response.text());
-            const data = await response.json();
+            if (!startResponse.ok) throw new Error(await startResponse.text());
+            const startData = await startResponse.json();
             
-            // Clear progress interval and complete progress bar
-            clearInterval(progressInterval);
-            if (progressFill) {
-                progressFill.style.width = '100%';
+            if (startData.status !== 'started') {
+                throw new Error('Failed to start curation job');
             }
             
-            // Hide progress bar after a short delay
-            setTimeout(() => {
-                if (progressBar) progressBar.style.display = 'none';
-            }, 500);
+            const jobId = startData.job_id;
+            
+            // Poll for progress
+            let pollInterval = setInterval(async () => {
+                try {
+                    const progressResponse = await fetch(`api/curation/curate/progress/${jobId}`);
+                    if (!progressResponse.ok) {
+                        clearInterval(pollInterval);
+                        throw new Error('Failed to get progress');
+                    }
+                    
+                    const progressData = await progressResponse.json();
+                    
+                    if (progressData.status === 'running' && progressData.progress) {
+                        // Update progress bar with real progress
+                        const percentage = progressData.progress.percentage;
+                        if (progressFill) {
+                            progressFill.style.width = `${percentage}%`;
+                        }
+                        setStatus(`${progressData.progress.step}...`, "loading");
+                    } else if (progressData.status === 'completed') {
+                        clearInterval(pollInterval);
+                        
+                        // Complete progress bar
+                        if (progressFill) {
+                            progressFill.style.width = '100%';
+                        }
+                        
+                        // Process results
+                        const data = progressData.result;
+                        if (!data || data.status === 'error') {
+                            throw new Error(data.error || 'Curation failed');
+                        }
+                        
+                        // Hide progress bar after a short delay
+                        setTimeout(() => {
+                            if (progressBar) progressBar.style.display = 'none';
+                        }, 500);
 
-            // Clear old buckets
-            clearSelectionData();
+                        // Clear old buckets
+                        clearSelectionData();
 
-            // Populate data
-            // Populate data
-            currentSelectionIndices = new Set();
-            data.selected_indices.forEach(idx => {
-                if (!excludedIndices.has(idx)) {
-                    currentSelectionIndices.add(idx);
+                        // Populate data
+                        currentSelectionIndices = new Set();
+                        data.selected_indices.forEach(idx => {
+                            if (!excludedIndices.has(idx)) {
+                                currentSelectionIndices.add(idx);
+                            }
+                        });
+                        currentSelectionFiles = data.selected_files;
+                        analysisResults = data.analysis_results;
+
+                        // Merge new results into Global Metadata Map
+                        analysisResults.forEach(r => {
+                            globalMetadataMap.set(r.index, {
+                                filename: r.filename,
+                                subfolder: r.subfolder,
+                                filepath: r.filepath,
+                                frequency: r.frequency,
+                                count: r.count
+                            });
+                        });
+
+                        // Bucketize for Colors (Heatmap)
+                        const freqMap = {};
+                        data.analysis_results.forEach(r => freqMap[r.index] = r.frequency);
+
+                        currentSelectionIndices.forEach(idx => {
+                            if (!excludedIndices.has(idx)) {
+                                const freq = freqMap[idx] || 100;
+                                if (freq >= 90) highFreqIndices.add(idx);
+                                else if (freq >= 70) medFreqIndices.add(idx);
+                                else lowFreqIndices.add(idx);
+                            }
+                        });
+
+                        updateVisuals();
+                        validateExportPath();
+                        updateStarButtonState();
+                        if (csvBtn) csvBtn.disabled = false;
+
+                        const selectedCount = data.count || currentSelectionIndices.size;
+                        const target = data.target_count || targetCount;
+
+                        let msg = `${selectedCount} out of ${target} images selected.`;
+                        if (excludedIndices.size > 0) {
+                            msg += ` (${excludedIndices.size} excluded)`;
+                        }
+                        setStatus(msg, "success");
+                        hideSpinner();
+                        
+                    } else if (progressData.status === 'error') {
+                        clearInterval(pollInterval);
+                        throw new Error(progressData.error || 'Curation failed');
+                    }
+                } catch (pollError) {
+                    clearInterval(pollInterval);
+                    console.error('Polling error:', pollError);
+                    setStatus("Error: " + pollError.message, "error");
+                    hideSpinner();
+                    if (progressBar) progressBar.style.display = 'none';
                 }
-            });
-            currentSelectionFiles = data.selected_files;
-            analysisResults = data.analysis_results;
-
-            // Merge new results into Global Metadata Map
-            analysisResults.forEach(r => {
-                globalMetadataMap.set(r.index, {
-                    filename: r.filename,
-                    subfolder: r.subfolder,
-                    filepath: r.filepath, // Important: Store full path for export
-                    frequency: r.frequency,
-                    count: r.count
-                });
-            });
-
-            // Bucketize for Colors (Heatmap)
-            // We only look at items that are in the Top N Winners (currentSelectionIndices)
-            const freqMap = {};
-            data.analysis_results.forEach(r => freqMap[r.index] = r.frequency);
-
-            currentSelectionIndices.forEach(idx => {
-                if (!excludedIndices.has(idx)) {
-                    const freq = freqMap[idx] || 100;
-                    if (freq >= 90) highFreqIndices.add(idx);
-                    else if (freq >= 70) medFreqIndices.add(idx);
-                    else lowFreqIndices.add(idx);
-                }
-            });
-
-            updateVisuals();
-            validateExportPath();
-            updateStarButtonState();
-            if (csvBtn) csvBtn.disabled = false;
-
-            const selectedCount = data.count || currentSelectionIndices.size;
-            const target = data.target_count || targetCount;
-
-            let msg = `${selectedCount} out of ${target} images selected.`;
-            if (excludedIndices.size > 0) {
-                msg += ` (${excludedIndices.size} excluded)`;
-            }
-            setStatus(msg, "success");
+            }, 500); // Poll every 500ms
 
         } catch (e) {
             console.error(e);
             setStatus("Error: " + e.message, "error");
+            hideSpinner();
             
             // Hide progress bar on error
             const progressBar = document.getElementById('curationProgressBar');
             if (progressBar) progressBar.style.display = 'none';
         }
-        hideSpinner();
     };
 
     // Export
