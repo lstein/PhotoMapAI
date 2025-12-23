@@ -1,0 +1,128 @@
+<!-- Curation / LoRA Training Panel -->
+<div id="curationPanel" class="curation-panel hidden">
+    <div class="curation-header">
+        <h3>Model Training Dataset Curator</h3>
+        <button id="curationCloseBtn" class="close-icon">&times;</button>
+    </div>
+
+    <!-- Progress Bar (hidden by default) -->
+    <div id="curationProgressBar" style="display: none; height: 4px; background: #333; overflow: hidden;">
+        <div id="curationProgressFill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #ffd700 0%, #ffffff 50%, #ffd700 100%); transition: width 0.3s ease;"></div>
+    </div>
+
+    <div class="curation-body">
+        <!-- Count and Iterations -->
+        <div class="control-group">
+            <div style="display:flex; gap:10px;">
+                <div style="flex:2">
+                    <label>Target Count</label>
+                    <input type="number" id="curationNumber" value="80" min="10" max="1000" style="width:100%">
+                </div>
+                <div style="flex:1">
+                    <label>Iterations</label>
+                    <input type="number" id="curationIterations" value="20" min="1" max="30" style="width:100%">
+                </div>
+            </div>
+            <input type="range" id="curationSlider" min="10" max="1000" value="80" step="10"
+                style="margin-top:5px; width:100%">
+        </div>
+
+        <!-- Algorithm Selection -->
+        <div class="control-group">
+            <label style="display: block; font-size: 11px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Algorithm</label>
+            <div style="display: flex; gap: 15px;">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="radio" name="curationMethod" id="methodFps" value="fps" checked style="cursor: pointer;">
+                    <span style="font-size: 12px;">Diversity (FPS)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="radio" name="curationMethod" id="methodKmeans" value="kmeans" style="cursor: pointer;">
+                    <span style="font-size: 12px;">Blocks (K-Means)</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px; padding:0 5px;">
+            <div style="display:flex; align-items:center; gap:3px;">
+                <div style="width:8px; height:8px; background:#ff00ff; border-radius:50%;"></div>
+                <span style="font-size:9px; color:#aaa;">&gt;90%</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:3px;">
+                <div style="width:8px; height:8px; background:#00ffff; border-radius:50%;"></div>
+                <span style="font-size:9px; color:#aaa;">&gt;70%</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:3px;">
+                <div style="width:8px; height:8px; background:#00ff00; border-radius:50%;"></div>
+                <span style="font-size:9px; color:#aaa;">&lt;70%</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:3px;">
+                <div style="width:8px; height:8px; background:#ff0000; border-radius:50%;"></div>
+                <span style="font-size:9px; color:#aaa;">Excluded</span>
+            </div>
+        </div>
+
+        <!-- Main Actions -->
+        <div class="action-row" style="display: flex; gap: 5px; margin-bottom: 15px;">
+            <button id="curationRunBtn" class="btn-primary" style="flex: 2;">Select Diverse Images</button>
+            <button id="curationClearBtn" class="btn-secondary" style="flex: 1; background: #444;">Clear</button>
+        </div>
+
+        <hr style="border-color: #444; margin: 10px 0;">
+
+        <!-- Refinement / Exclusion -->
+        <div class="control-group"
+            style="background: #2a2a2a; padding: 8px; border-radius: 4px; border: 1px solid #444;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
+                <label style="color:#aaa; font-size:10px; font-weight:bold;">Manual Refinement</label>
+                <span id="lockCountDisplay" style="color:#ff8888; font-size:10px;">0 Excluded</span>
+            </div>
+
+            <!-- Threshold Exclusion -->
+            <div style="display:flex; gap:5px; margin-bottom:5px; align-items:center;">
+                <label style="font-size:10px; color:#aaa;">Exclude &gt;</label>
+                <input type="number" id="lockThresholdInput" value="90" min="1" max="100"
+                    style="width:40px; padding:2px; height:20px; font-size:10px;">
+                <label style="font-size:10px; color:#aaa;">%</label>
+                <button id="lockThresholdBtn" class="btn-secondary"
+                    style="flex:1; background: #d9534f; color:white; font-size:10px; height:24px; line-height:10px;">
+                    Exclude Matches
+                </button>
+            </div>
+
+            <div style="display:flex; gap:5px; margin-bottom:5px;">
+                <button id="toggleLockModeBtn" class="btn-secondary"
+                    style="flex:1; background: #444; font-size:10px;">Click-to-Exclude</button>
+
+                <button id="unlockOutliersBtn" class="btn-secondary"
+                    style="flex:1; background: #555; font-size:10px;">Clear Exclusions</button>
+            </div>
+        </div>
+
+        <hr style="border-color: #444; margin: 10px 0;">
+
+        <!-- Export -->
+        <div class="control-group">
+            <label>Export Path:</label>
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <input type="text" id="curationExportPath" placeholder="Select export folder" style="flex: 1;">
+                <button id="curationBrowseBtn" class="btn-secondary" style="width: 40px; padding: 8px; flex-shrink: 0;" title="Browse for folder">
+                    📁
+                </button>
+            </div>
+        </div>
+
+        <div class="action-row" style="display:flex; gap:5px;">
+            <button id="curationExportBtn" class="btn-secondary" style="flex:2;" disabled>Export Dataset</button>
+            <button id="curationCsvBtn" class="btn-secondary" style="flex:1;" disabled
+                title="Download Analysis CSV">
+                📥 CSV
+            </button>
+            <button id="curationSetFavoritesBtn" class="btn-secondary" style="flex:1;" disabled title="Set current selection as Favorites">
+                ⭐
+            </button>
+        </div>
+
+        <div id="curationStatus" class="status-text"></div>
+    </div>
+</div>
