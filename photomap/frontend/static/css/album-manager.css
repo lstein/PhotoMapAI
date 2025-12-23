@@ -47,6 +47,10 @@
   align-items: center;
 }
 
+#showAddAlbumBtn {
+  margin-right: 20px;
+}
+
 .add-album-section {
   display: none;
   margin-bottom: 2em;
