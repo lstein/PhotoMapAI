@@ -80,6 +80,7 @@ function makePanelDraggable() {
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     makePanelDraggable();
+    updateStarButtonState(); // Initialize star button state
 });
 
 // Validate export path and enable/disable export button
