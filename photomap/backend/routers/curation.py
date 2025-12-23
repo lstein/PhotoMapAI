@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ..embeddings import get_fps_indices_global, get_kmeans_indices_global, _open_npz_file
 from ..config import get_config_manager
 from ..progress import progress_tracker, IndexStatus
+from .index import check_album_lock
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -325,6 +326,7 @@ async def export_dataset(request: ExportRequest):
     Returns:
         JSON response with success count and any errors.
     """
+    check_album_lock()  # May raise a 403 exception
     # Validate and sanitize the output folder to prevent path traversal
     if not request.output_folder:
         raise HTTPException(status_code=400, detail="Output folder required")

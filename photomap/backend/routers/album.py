@@ -267,6 +267,7 @@ def validate_image_access(album_config, image_path: Path) -> bool:
 @album_router.get("/filetree/home", tags=["File Management"])
 async def get_home_directory():
     """Get the home directory path for the current user."""
+    check_album_lock()  # May raise a 403 exception
     # In a real application, you would determine the home directory based on the user's
     # profile or configuration. Here, we just return a fixed path for demonstration.
     try:

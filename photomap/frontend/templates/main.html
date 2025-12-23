@@ -34,7 +34,8 @@
             currentDelay: {% if delay %}{{ delay }}{% else %}null{% endif %},
         mode: {% if mode %}"{{ mode }}"{% else %}null{% endif %},
         highWaterMark: {% if highWaterMark %}{{ highWaterMark }}{% else %}null{% endif %},
-        album: {% if album %}"{{ album }}"{% else %}null{% endif %}
+        album: {% if album %}"{{ album }}"{% else %}null{% endif %},
+        albumLocked: {% if album_locked %}true{% else %}false{% endif %}
       };
     </script>
     <script type="module" src="static/main.js"></script>

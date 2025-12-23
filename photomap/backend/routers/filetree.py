@@ -164,6 +164,7 @@ async def get_directories(path: str = "", show_hidden: bool = False):
 @filetree_router.get("/filetree/home", tags=["FileTree"])
 async def get_home_directory():
     """Get the user's home directory path"""
+    check_album_lock()  # May raise a 403 exception
     try:
         home_path = str(Path.home().resolve())
         return JSONResponse(content={"homePath": home_path})

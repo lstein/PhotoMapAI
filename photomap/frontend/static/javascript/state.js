@@ -19,6 +19,7 @@ export const state = {
   suppressDeleteConfirm: false, // Flag to suppress delete confirmation dialogs
   gridThumbSizeFactor: 1.0,  // Scaling factor for grid thumbnails
   swiper: null,  // backwards compatibility hack; contains the single_swiper.swiper instance
+  albumLocked: false, // Whether album management is locked
   // persisted search settings
   minSearchScore: 0.2,       // [0.0, 1.0]
   maxSearchResults: 100,     // [50, 500]
@@ -47,6 +48,10 @@ export function initializeFromServer() {
 
   if (window.slideshowConfig?.album !== null) {
     setAlbum(window.slideshowConfig.album);
+  }
+
+  if (window.slideshowConfig?.albumLocked !== undefined) {
+    state.albumLocked = window.slideshowConfig.albumLocked;
   }
 }
 
