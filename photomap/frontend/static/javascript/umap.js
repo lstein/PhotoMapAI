@@ -669,16 +669,13 @@ export async function updateCurrentImageMarker() {
   const currentPoint = points.find((p) => p.index === globalIndex);
   if (!currentPoint) return;
 
-  // Check if Curation Panel is open
-  const curationPanel = document.getElementById('curationPanel');
-  const isCurationMode = curationPanel && !curationPanel.classList.contains('hidden');
-
+  // Always show the marker trace regardless of curation panel state
   Plotly.restyle(
     "umapPlot",
     {
       x: [[currentPoint.x]],
       y: [[currentPoint.y]],
-      "marker.opacity": isCurationMode ? 0 : 1
+      "marker.opacity": 1
     },
     markerTraceIndex // Use the found index
   );

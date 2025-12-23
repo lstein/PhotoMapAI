@@ -70,18 +70,10 @@
     {% include "modules/confirm-modal.html" %}
     {% include "modules/about.html" %}
 
-    <!-- Trigger Button -->
-    <button onclick="window.toggleCurationPanel()" style="position: fixed; bottom: 20px; right: 380px; z-index: 10001; 
-                   background: #007bff; color: white; border: none; 
-                   padding: 10px 15px; border-radius: 50px; 
-                   font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-        Curate
-    </button>
-
     <!-- Curation / LoRA Training Panel -->
     <div id="curationPanel" class="curation-panel hidden">
         <div class="curation-header">
-            <h3>Diffusion Model Dataset Curator</h3>
+            <h3>Image Generation Model Dataset Curator</h3>
             <button id="curationCloseBtn" class="close-icon">&times;</button>
         </div>
 
@@ -172,11 +164,19 @@
             <!-- Export -->
             <div class="control-group">
                 <label>Export Path:</label>
-                <input type="text" id="curationExportPath" placeholder="C:/Training/Dataset_Filtered">
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <input type="text" id="curationExportPath" placeholder="" style="flex: 1;">
+                    <button id="curationBrowseBtn" class="btn-secondary" style="width: 40px; padding: 8px; flex-shrink: 0;" title="Browse for folder">
+                        📁
+                    </button>
+                </div>
             </div>
 
             <div class="action-row" style="display:flex; gap:5px;">
                 <button id="curationExportBtn" class="btn-secondary" style="flex:2;" disabled>Export Dataset</button>
+                <button id="curationSetFavoritesBtn" class="btn-secondary" style="flex:1;" title="Set current selection as Favorites">
+                    ⭐
+                </button>
                 <button id="curationCsvBtn" class="btn-secondary" style="flex:1;" disabled
                     title="Download Analysis CSV">
                     📥 CSV

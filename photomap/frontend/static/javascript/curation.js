@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { highlightCurationSelection, setUmapClickCallback, updateCurrentImageMarker } from './umap.js';
 import { hideSpinner, showSpinner } from './utils.js';
+import { createSimpleDirectoryPicker } from './filetree.js';
 
 let currentSelectionIndices = new Set();
 let excludedIndices = new Set();
@@ -20,7 +21,7 @@ window.toggleCurationPanel = function () {
     const panel = document.getElementById('curationPanel');
     if (panel) {
         panel.classList.toggle('hidden');
-        // Force update of current image marker (yellow dot) to hide/show it based on panel visibility
+        // Force update of current image marker (yellow dot) to show it
         updateCurrentImageMarker();
         // Also update curation visuals if opening
         if (!panel.classList.contains('hidden')) {
@@ -29,9 +30,64 @@ window.toggleCurationPanel = function () {
     }
 };
 
+// Make the panel draggable by its header
+function makePanelDraggable() {
+    const panel = document.getElementById('curationPanel');
+    const header = document.querySelector('.curation-header');
+    if (!panel || !header) return;
+
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
+
+    header.style.cursor = 'move';
+
+    header.addEventListener('mousedown', (e) => {
+        // Don't drag if clicking the close button
+        if (e.target.classList.contains('close-icon')) return;
+        
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        const rect = panel.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+        
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        
+        panel.style.left = (initialLeft + deltaX) + 'px';
+        panel.style.top = (initialTop + deltaY) + 'px';
+        panel.style.bottom = 'auto'; // Remove bottom positioning
+    });
+
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
+    makePanelDraggable();
 });
+
+// Validate export path and enable/disable export button
+function validateExportPath() {
+    const exportPathInput = document.getElementById('curationExportPath');
+    const exportBtn = document.getElementById('curationExportBtn');
+    if (!exportPathInput || !exportBtn) return;
+    
+    const path = exportPathInput.value.trim();
+    // Enable export button only if path is not empty and we have a selection
+    const hasSelection = currentSelectionIndices.size > 0;
+    exportBtn.disabled = !path || !hasSelection;
+}
 
 function setupEventListeners() {
     const slider = document.getElementById('curationSlider');
@@ -43,6 +99,9 @@ function setupEventListeners() {
     const exportBtn = document.getElementById('curationExportBtn');
     const csvBtn = document.getElementById('curationCsvBtn');
     const closeBtn = document.getElementById('curationCloseBtn');
+    const browseBtn = document.getElementById('curationBrowseBtn');
+    const setFavoritesBtn = document.getElementById('curationSetFavoritesBtn');
+    const exportPathInput = document.getElementById('curationExportPath');
 
     const toggleLockModeBtn = document.getElementById('toggleLockModeBtn');
     const lockThresholdBtn = document.getElementById('lockThresholdBtn');
@@ -52,6 +111,54 @@ function setupEventListeners() {
     const methodKmeans = document.getElementById('methodKmeans');
 
     if (!runBtn) return;
+
+    // Load saved export path from localStorage
+    const savedPath = localStorage.getItem('curationExportPath');
+    if (savedPath) {
+        exportPathInput.value = savedPath;
+        validateExportPath();
+    }
+
+    // Monitor export path changes
+    exportPathInput.oninput = () => {
+        const path = exportPathInput.value.trim();
+        localStorage.setItem('curationExportPath', path);
+        validateExportPath();
+    };
+
+    // Browse button - open file tree
+    if (browseBtn) {
+        browseBtn.onclick = () => {
+            const currentPath = exportPathInput.value || '';
+            createSimpleDirectoryPicker((selectedPath) => {
+                exportPathInput.value = selectedPath;
+                localStorage.setItem('curationExportPath', selectedPath);
+                validateExportPath();
+            }, currentPath, { title: 'Select Export Folder' });
+        };
+    }
+
+    // Set Favorites button
+    if (setFavoritesBtn) {
+        setFavoritesBtn.onclick = () => {
+            if (currentSelectionIndices.size === 0) {
+                setStatus("No selection to set as favorites.", "error");
+                return;
+            }
+            // Get bookmarks manager and set bookmarks
+            if (window.bookmarkManager) {
+                // Clear existing bookmarks
+                window.bookmarkManager.clearBookmarks();
+                // Add each selected index as a bookmark
+                currentSelectionIndices.forEach(index => {
+                    window.bookmarkManager.addBookmark(index);
+                });
+                setStatus(`Set ${currentSelectionIndices.size} images as favorites.`, "success");
+            } else {
+                setStatus("Bookmark manager not available.", "error");
+            }
+        };
+    }
 
     slider.oninput = () => number.value = slider.value;
     number.oninput = () => slider.value = number.value;
@@ -213,7 +320,7 @@ function setupEventListeners() {
             });
 
             updateVisuals();
-            exportBtn.disabled = false;
+            validateExportPath();
             if (csvBtn) csvBtn.disabled = false;
 
             const selectedCount = data.count || currentSelectionIndices.size;

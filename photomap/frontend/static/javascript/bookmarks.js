@@ -57,6 +57,12 @@ const SELECT_ALL_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="no
   <polyline points="9 11 12 14 15 8"/>
 </svg>`;
 
+const CURATE_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 20h9"/>
+  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+</svg>`;
+
+
 class BookmarkManager {
   constructor() {
     if (BookmarkManager.instance) {
@@ -778,6 +784,13 @@ class BookmarkManager {
 
     // Select All - only active when a search is being displayed (and not showing bookmarks)
     menu.appendChild(makeButton(SELECT_ALL_SVG, "Select All", () => this.selectAllFromSearch(), !isInSearchMode));
+
+    // Curate - opens the curation panel
+    menu.appendChild(makeButton(CURATE_SVG, "Curate", () => {
+      if (window.toggleCurationPanel) {
+        window.toggleCurationPanel();
+      }
+    }, false));
 
     // Move, Download, and Delete (Move is before Download as requested)
     menu.appendChild(makeButton(MOVE_SVG, "Move", () => this.moveBookmarkedImages(), !hasBookmarks));
