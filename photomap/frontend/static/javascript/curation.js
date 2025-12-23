@@ -184,7 +184,7 @@ function setupEventListeners() {
         exportBtn.disabled = true;
         if (csvBtn) csvBtn.disabled = true;
         updateStarButtonState();
-        setStatus("Preview cleared.", "normal");
+        setStatus("Selection cleared.", "normal");
     };
 
     // --- EXCLUSION LOGIC ---
@@ -225,7 +225,7 @@ function setupEventListeners() {
     if (lockThresholdBtn) {
         lockThresholdBtn.onclick = () => {
             if (analysisResults.length === 0) {
-                setStatus("No analysis data. Run Preview first.", "error");
+                setStatus("No analysis data. Run diversity selection first.", "error");
                 return;
             }
 
