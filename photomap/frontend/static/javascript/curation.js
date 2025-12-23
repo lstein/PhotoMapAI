@@ -2,6 +2,7 @@ import { bookmarkManager } from './bookmarks.js';
 import { createSimpleDirectoryPicker } from './filetree.js';
 import { updateSearchCheckmarks } from './search-ui.js';
 import { state } from './state.js';
+import { slideState } from './slide-state.js';
 import { highlightCurationSelection, setCurationMode, setUmapClickCallback, updateCurrentImageMarker } from './umap.js';
 import { hideSpinner, showSpinner } from './utils.js';
 
@@ -27,6 +28,17 @@ window.toggleCurationPanel = function () {
         
         // Toggle grey mode in UMAP
         setCurationMode(isOpen);
+        
+        // Set UMAP click behavior based on panel state
+        if (isOpen) {
+            // When panel is open, clicking UMAP points should navigate to that image
+            setUmapClickCallback((index) => {
+                slideState.navigateToIndex(index, false);
+            });
+        } else {
+            // When panel is closed, restore default cluster selection behavior
+            setUmapClickCallback(null);
+        }
         
         // Force update of current image marker (yellow dot) to show it
         updateCurrentImageMarker();
