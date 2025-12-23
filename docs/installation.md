@@ -182,7 +182,7 @@ You can also just use the file browser to navigate to the `start_photomap` execu
 If you have Docker installed on your system, here is a one-liner to get PhotoMapAI up and running:
 
 ```bash
-docker -p 8050:8050 -v /path/to/a/picture_folder:/Pictures lstein/photomapai:latest
+docker run -p 8050:8050 -v /path/to/a/picture_folder:/Pictures lstein/photomapai:latest
 ```
 Change `/path/to/a/picture_folder` to a path on your desktop that contains the images/photos you wish to add to an album. After the startup messages, point your browser to http://localhost:8050 and follow the prompts. Your images will be found in the container directory `/Pictures`.
 
