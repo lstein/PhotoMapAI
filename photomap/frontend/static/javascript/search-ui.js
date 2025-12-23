@@ -6,7 +6,8 @@ import { state } from "./state.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 import { WeightSlider } from "./weight-slider.js";
 // --- NEW IMPORT ---
-import { hideCurrentImageMarker } from "./umap.js"; 
+import { hideCurrentImageMarker } from "./umap.js";
+import { clearCurationData } from "./curation.js";
 
 let posPromptWeight = 0.5; 
 let negPromptWeight = 0.25; 
@@ -391,13 +392,14 @@ async function insertUploadedImageFile(file) {
   });
 }
 
-function updateSearchCheckmarks(searchType = null) {
+export function updateSearchCheckmarks(searchType = null) {
   const searchTypeToIconMap = {
     cluster: document.getElementById("showUmapBtn"),
     image: document.getElementById("imageSearchIcon"),
     text: document.getElementById("textSearchIcon"),
     text_and_image: document.getElementById("textSearchIcon"),
     bookmarks: document.getElementById("bookmarkMenuBtn"),
+    curation: document.getElementById("bookmarkMenuBtn"), // Use bookmarks icon for curation too
   };
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   const element_to_highlight = searchTypeToIconMap[searchType] || null;
@@ -473,6 +475,9 @@ export function exitSearchMode(searchType = "clear") {
   
   // Clear the yellow dot
   hideCurrentImageMarker();
+  
+  // Clear curation data when clearing search
+  clearCurationData();
 }
 
 function renderSearchImageThumbArea() {

@@ -1,5 +1,9 @@
+import { bookmarkManager } from './bookmarks.js';
+import { createSimpleDirectoryPicker } from './filetree.js';
+import { updateSearchCheckmarks } from './search-ui.js';
 import { state } from './state.js';
-import { highlightCurationSelection, setUmapClickCallback, updateCurrentImageMarker } from './umap.js';
+import { slideState } from './slide-state.js';
+import { highlightCurationSelection, setCurationMode, setUmapClickCallback, updateCurrentImageMarker } from './umap.js';
 import { hideSpinner, showSpinner } from './utils.js';
 
 let currentSelectionIndices = new Set();
@@ -20,18 +24,98 @@ window.toggleCurationPanel = function () {
     const panel = document.getElementById('curationPanel');
     if (panel) {
         panel.classList.toggle('hidden');
-        // Force update of current image marker (yellow dot) to hide/show it based on panel visibility
+        const isOpen = !panel.classList.contains('hidden');
+        
+        // Toggle grey mode in UMAP
+        setCurationMode(isOpen);
+        
+        // Set UMAP click behavior based on panel state
+        if (isOpen) {
+            // When panel is open, clicking UMAP points should navigate to that image
+            setUmapClickCallback((index) => {
+                slideState.navigateToIndex(index, false);
+            });
+        } else {
+            // When panel is closed, restore default cluster selection behavior
+            setUmapClickCallback(null);
+        }
+        
+        // Force update of current image marker (yellow dot) to show it
         updateCurrentImageMarker();
+        
         // Also update curation visuals if opening
-        if (!panel.classList.contains('hidden')) {
+        if (isOpen) {
             updateVisuals();
         }
     }
 };
 
+// Make the panel draggable by its header
+function makePanelDraggable() {
+    const panel = document.getElementById('curationPanel');
+    const header = document.querySelector('.curation-header');
+    if (!panel || !header) return;
+
+    let isDragging = false;
+    let startX, startY, initialLeft, initialTop;
+
+    header.addEventListener('mousedown', (e) => {
+        // Don't drag if clicking the close button
+        if (e.target.classList.contains('close-icon')) return;
+        
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        const rect = panel.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+        
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        
+        panel.style.left = (initialLeft + deltaX) + 'px';
+        panel.style.top = (initialTop + deltaY) + 'px';
+        panel.style.bottom = 'auto'; // Remove bottom positioning
+    });
+
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
+    makePanelDraggable();
+    updateStarButtonState(); // Initialize star button state
 });
+
+// Validate export path and enable/disable export button
+function validateExportPath() {
+    const exportPathInput = document.getElementById('curationExportPath');
+    const exportBtn = document.getElementById('curationExportBtn');
+    if (!exportPathInput || !exportBtn) return;
+    
+    const path = exportPathInput.value.trim();
+    // Enable export button only if path is not empty and we have a selection
+    const hasSelection = currentSelectionIndices.size > 0;
+    exportBtn.disabled = !path || !hasSelection;
+}
+
+// Enable/disable star button based on selection
+function updateStarButtonState() {
+    const setFavoritesBtn = document.getElementById('curationSetFavoritesBtn');
+    if (!setFavoritesBtn) return;
+    
+    // Enable only if we have a selection
+    setFavoritesBtn.disabled = currentSelectionIndices.size === 0;
+}
 
 function setupEventListeners() {
     const slider = document.getElementById('curationSlider');
@@ -43,6 +127,9 @@ function setupEventListeners() {
     const exportBtn = document.getElementById('curationExportBtn');
     const csvBtn = document.getElementById('curationCsvBtn');
     const closeBtn = document.getElementById('curationCloseBtn');
+    const browseBtn = document.getElementById('curationBrowseBtn');
+    const setFavoritesBtn = document.getElementById('curationSetFavoritesBtn');
+    const exportPathInput = document.getElementById('curationExportPath');
 
     const toggleLockModeBtn = document.getElementById('toggleLockModeBtn');
     const lockThresholdBtn = document.getElementById('lockThresholdBtn');
@@ -53,14 +140,55 @@ function setupEventListeners() {
 
     if (!runBtn) return;
 
+    // Load saved export path from localStorage
+    const savedPath = localStorage.getItem('curationExportPath');
+    if (savedPath) {
+        exportPathInput.value = savedPath;
+        validateExportPath();
+    }
+
+    // Monitor export path changes
+    exportPathInput.oninput = () => {
+        const path = exportPathInput.value.trim();
+        localStorage.setItem('curationExportPath', path);
+        validateExportPath();
+    };
+
+    // Browse button - open file tree
+    if (browseBtn) {
+        browseBtn.onclick = () => {
+            const currentPath = exportPathInput.value || '';
+            createSimpleDirectoryPicker((selectedPath) => {
+                exportPathInput.value = selectedPath;
+                localStorage.setItem('curationExportPath', selectedPath);
+                validateExportPath();
+            }, currentPath, { title: 'Select Export Folder' });
+        };
+    }
+
+    // Set Favorites button
+    if (setFavoritesBtn) {
+        setFavoritesBtn.onclick = () => {
+            if (currentSelectionIndices.size === 0) {
+                setStatus("No selection to set as favorites.", "error");
+                return;
+            }
+            // Clear existing bookmarks and add selected indices
+            bookmarkManager.clearBookmarks();
+            currentSelectionIndices.forEach(index => {
+                bookmarkManager.bookmarks.add(index);
+            });
+            bookmarkManager.saveBookmarks();
+            bookmarkManager.updateAllBookmarkIcons();
+            setStatus(`Set ${currentSelectionIndices.size} images as favorites.`, "success");
+        };
+    }
+
     slider.oninput = () => number.value = slider.value;
     number.oninput = () => slider.value = number.value;
     closeBtn.onclick = window.toggleCurationPanel;
 
-    if (methodFps && methodKmeans) {
-        methodFps.onclick = () => { methodFps.classList.add('active'); methodKmeans.classList.remove('active'); };
-        methodKmeans.onclick = () => { methodKmeans.classList.add('active'); methodFps.classList.remove('active'); };
-    }
+    // Radio buttons don't need click handlers - they work automatically
 
     clearBtn.onclick = () => {
         clearSelectionData();
@@ -68,7 +196,9 @@ function setupEventListeners() {
         updateVisuals();
         exportBtn.disabled = true;
         if (csvBtn) csvBtn.disabled = true;
-        setStatus("Preview cleared.", "normal");
+        updateStarButtonState();
+        updateSearchCheckmarks(null); // Hide clear search button
+        setStatus("Selection cleared.", "normal");
     };
 
     // --- EXCLUSION LOGIC ---
@@ -109,7 +239,7 @@ function setupEventListeners() {
     if (lockThresholdBtn) {
         lockThresholdBtn.onclick = () => {
             if (analysisResults.length === 0) {
-                setStatus("No analysis data. Run Preview first.", "error");
+                setStatus("No analysis data. Run training set selection first.", "error");
                 return;
             }
 
@@ -150,15 +280,25 @@ function setupEventListeners() {
         let iter = parseInt(iterationsInput.value) || 1;
         if (iter > 30) { iter = 30; iterationsInput.value = 30; } // Frontend Cap
 
-        const method = document.getElementById('methodKmeans').classList.contains('active') ? "kmeans" : "fps";
+        const method = document.getElementById('methodKmeans').checked ? "kmeans" : "fps";
 
         if (!state.album) { alert("No album loaded!"); return; }
 
         setStatus(`Running ${method.toUpperCase()} (${iter} iterations)...`, "loading");
+        
+        // Show and initialize progress bar
+        const progressBar = document.getElementById('curationProgressBar');
+        const progressFill = document.getElementById('curationProgressFill');
+        if (progressBar && progressFill) {
+            progressBar.style.display = 'block';
+            progressFill.style.width = '0%';
+        }
 
         try {
             showSpinner();
-            const response = await fetch('api/curation/curate', {
+            
+            // Start the curation job
+            const startResponse = await fetch('api/curation/curate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -170,66 +310,129 @@ function setupEventListeners() {
                 })
             });
 
-            if (!response.ok) throw new Error(await response.text());
-            const data = await response.json();
-
-            // Clear old buckets
-            clearSelectionData();
-
-            // Populate data
-            // Populate data
-            currentSelectionIndices = new Set();
-            data.selected_indices.forEach(idx => {
-                if (!excludedIndices.has(idx)) {
-                    currentSelectionIndices.add(idx);
-                }
-            });
-            currentSelectionFiles = data.selected_files;
-            analysisResults = data.analysis_results;
-
-            // Merge new results into Global Metadata Map
-            analysisResults.forEach(r => {
-                globalMetadataMap.set(r.index, {
-                    filename: r.filename,
-                    subfolder: r.subfolder,
-                    filepath: r.filepath, // Important: Store full path for export
-                    frequency: r.frequency,
-                    count: r.count
-                });
-            });
-
-            // Bucketize for Colors (Heatmap)
-            // We only look at items that are in the Top N Winners (currentSelectionIndices)
-            const freqMap = {};
-            data.analysis_results.forEach(r => freqMap[r.index] = r.frequency);
-
-            currentSelectionIndices.forEach(idx => {
-                if (!excludedIndices.has(idx)) {
-                    const freq = freqMap[idx] || 100;
-                    if (freq >= 90) highFreqIndices.add(idx);
-                    else if (freq >= 70) medFreqIndices.add(idx);
-                    else lowFreqIndices.add(idx);
-                }
-            });
-
-            updateVisuals();
-            exportBtn.disabled = false;
-            if (csvBtn) csvBtn.disabled = false;
-
-            const selectedCount = data.count || currentSelectionIndices.size;
-            const target = data.target_count || targetCount;
-
-            let msg = `${selectedCount} out of ${target} images selected.`;
-            if (excludedIndices.size > 0) {
-                msg += ` (${excludedIndices.size} excluded)`;
+            if (!startResponse.ok) throw new Error(await startResponse.text());
+            const startData = await startResponse.json();
+            
+            if (startData.status !== 'started') {
+                throw new Error('Failed to start curation job');
             }
-            setStatus(msg, "success");
+            
+            const jobId = startData.job_id;
+            
+            // Poll for progress
+            let pollInterval = setInterval(async () => {
+                try {
+                    const progressResponse = await fetch(`api/curation/curate/progress/${jobId}`);
+                    if (!progressResponse.ok) {
+                        clearInterval(pollInterval);
+                        throw new Error('Failed to get progress');
+                    }
+                    
+                    const progressData = await progressResponse.json();
+                    
+                    if (progressData.status === 'running' && progressData.progress) {
+                        // Update progress bar with real progress
+                        const percentage = progressData.progress.percentage;
+                        if (progressFill) {
+                            progressFill.style.width = `${percentage}%`;
+                        }
+                        setStatus(`${progressData.progress.step}...`, "loading");
+                    } else if (progressData.status === 'completed') {
+                        clearInterval(pollInterval);
+                        
+                        // Complete progress bar
+                        if (progressFill) {
+                            progressFill.style.width = '100%';
+                        }
+                        
+                        // Process results
+                        const data = progressData.result;
+                        if (!data || data.status === 'error') {
+                            throw new Error(data.error || 'Curation failed');
+                        }
+                        
+                        // Hide progress bar after a short delay
+                        setTimeout(() => {
+                            if (progressBar) progressBar.style.display = 'none';
+                        }, 500);
+
+                        // Clear old buckets
+                        clearSelectionData();
+
+                        // Populate data
+                        currentSelectionIndices = new Set();
+                        data.selected_indices.forEach(idx => {
+                            if (!excludedIndices.has(idx)) {
+                                currentSelectionIndices.add(idx);
+                            }
+                        });
+                        currentSelectionFiles = data.selected_files;
+                        analysisResults = data.analysis_results;
+
+                        // Merge new results into Global Metadata Map
+                        analysisResults.forEach(r => {
+                            globalMetadataMap.set(r.index, {
+                                filename: r.filename,
+                                subfolder: r.subfolder,
+                                filepath: r.filepath,
+                                frequency: r.frequency,
+                                count: r.count
+                            });
+                        });
+
+                        // Bucketize for Colors (Heatmap)
+                        const freqMap = {};
+                        data.analysis_results.forEach(r => freqMap[r.index] = r.frequency);
+
+                        currentSelectionIndices.forEach(idx => {
+                            if (!excludedIndices.has(idx)) {
+                                const freq = freqMap[idx] || 100;
+                                if (freq >= 90) highFreqIndices.add(idx);
+                                else if (freq >= 70) medFreqIndices.add(idx);
+                                else lowFreqIndices.add(idx);
+                            }
+                        });
+
+                        updateVisuals();
+                        validateExportPath();
+                        updateStarButtonState();
+                        if (csvBtn) csvBtn.disabled = false;
+
+                        const selectedCount = data.count || currentSelectionIndices.size;
+                        const target = data.target_count || targetCount;
+
+                        let msg = `${selectedCount} out of ${target} images selected.`;
+                        if (excludedIndices.size > 0) {
+                            msg += ` (${excludedIndices.size} excluded)`;
+                        }
+                        setStatus(msg, "success");
+                        hideSpinner();
+                        
+                        // Show clear search button for curation results
+                        updateSearchCheckmarks('curation');
+                        
+                    } else if (progressData.status === 'error') {
+                        clearInterval(pollInterval);
+                        throw new Error(progressData.error || 'Curation failed');
+                    }
+                } catch (pollError) {
+                    clearInterval(pollInterval);
+                    console.error('Polling error:', pollError);
+                    setStatus("Error: " + pollError.message, "error");
+                    hideSpinner();
+                    if (progressBar) progressBar.style.display = 'none';
+                }
+            }, 500); // Poll every 500ms
 
         } catch (e) {
             console.error(e);
             setStatus("Error: " + e.message, "error");
+            hideSpinner();
+            
+            // Hide progress bar on error
+            const progressBar = document.getElementById('curationProgressBar');
+            if (progressBar) progressBar.style.display = 'none';
         }
-        hideSpinner();
     };
 
     // Export
@@ -341,6 +544,21 @@ function clearSelectionData() {
     // Do NOT clear globalMetadataMap here, as we want to remember excluded items from previous runs
 }
 
+// Export function to allow clearing curation from external modules (like search-ui)
+export function clearCurationData() {
+    clearSelectionData();
+    analysisResults = [];
+    updateVisuals();
+    
+    const exportBtn = document.getElementById('curationExportBtn');
+    const csvBtn = document.getElementById('curationCsvBtn');
+    if (exportBtn) exportBtn.disabled = true;
+    if (csvBtn) csvBtn.disabled = true;
+    updateStarButtonState();
+    updateSearchCheckmarks(null); // Hide clear search button
+    setStatus("", "normal");
+}
+
 function updateVisuals() {
     applyGridHighlights();
     highlightCurationSelection(
@@ -349,6 +567,12 @@ function updateVisuals() {
         Array.from(lowFreqIndices),
         Array.from(excludedIndices)
     );
+    // Ensure grey mode persists after updating curation overlays
+    // This is needed because Plotly trace operations might affect the base trace
+    if (document.getElementById('curationPanel') && !document.getElementById('curationPanel').classList.contains('hidden')) {
+        // Panel is open, ensure grey mode is active
+        setCurationMode(true);
+    }
 }
 
 function applyGridHighlights() {

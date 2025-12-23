@@ -21,6 +21,7 @@ const MARKER_UPDATE_IGNORE_WINDOW_MS = 1000; // Time window to ignore marker upd
 let externalClickCallback = null;
 let updateMarkerTimer = null;
 let ignoreUpdatesUntil = 0;
+let isCurationModeActive = false; // Track if curation panel is open
 
 export function setUmapClickCallback(callback) {
   externalClickCallback = callback;
@@ -669,16 +670,13 @@ export async function updateCurrentImageMarker() {
   const currentPoint = points.find((p) => p.index === globalIndex);
   if (!currentPoint) return;
 
-  // Check if Curation Panel is open
-  const curationPanel = document.getElementById('curationPanel');
-  const isCurationMode = curationPanel && !curationPanel.classList.contains('hidden');
-
+  // Always show the marker trace regardless of curation panel state
   Plotly.restyle(
     "umapPlot",
     {
       x: [[currentPoint.x]],
       y: [[currentPoint.y]],
-      "marker.opacity": isCurationMode ? 0 : 1
+      "marker.opacity": 1
     },
     markerTraceIndex // Use the found index
   );
@@ -1600,6 +1598,50 @@ export function isUmapFullscreen() {
 // Set initial title on DOMContentLoaded
 document.addEventListener("DOMContentLoaded", initializeUmapWindow);
 window.addEventListener("albumChanged", initializeUmapWindow);
+
+// ========================================================
+// Toggle Curation Mode (Grey out all points)
+// ========================================================
+export function setCurationMode(isActive) {
+  isCurationModeActive = isActive;
+  updateUmapColors();
+}
+
+function updateUmapColors() {
+  const plotDiv = document.getElementById("umapPlot");
+  if (!plotDiv || !plotDiv.data || !points || points.length === 0) return;
+
+  // Find the "All Points" trace
+  const allPointsTraceIndex = plotDiv.data.findIndex(
+    (trace) => trace.name === "All Points"
+  );
+  if (allPointsTraceIndex === -1) return;
+
+  // Set colors and opacity based on curation mode
+  let markerColors;
+  let markerOpacity;
+  
+  if (isCurationModeActive) {
+    // Grey out all points when in curation mode
+    markerColors = points.map(() => "#888888");
+    // Increase opacity of unclustered points to match clustered ones
+    markerOpacity = points.map(() => 0.75);
+  } else {
+    // Use cluster colors
+    markerColors = points.map((p) => getClusterColor(p.cluster));
+    // Default opacity: unclustered = 0.08, clustered = 0.75
+    markerOpacity = points.map((p) => (p.cluster === -1 ? 0.08 : 0.75));
+  }
+
+  Plotly.restyle(
+    "umapPlot",
+    {
+      "marker.color": [markerColors],
+      "marker.opacity": [markerOpacity]
+    },
+    allPointsTraceIndex
+  );
+}
 
 // ========================================================
 // Curation Highlighting (Heatmap + Locks)

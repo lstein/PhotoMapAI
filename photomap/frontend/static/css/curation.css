@@ -27,6 +27,7 @@
     padding: 12px 15px;
     border-bottom: 1px solid #333;
     background: rgba(255, 255, 255, 0.05);
+    cursor: move;
 }
 
 .curation-header h3 {
