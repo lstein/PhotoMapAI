@@ -120,7 +120,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     makePanelDraggable();
     updateStarButtonState(); // Initialize star button state
-    applyAlbumLockState(); // Apply album lock restrictions
+});
+
+// Wait for state to be initialized before applying album lock restrictions
+window.addEventListener('stateReady', () => {
+    applyAlbumLockState(); // Apply album lock restrictions after state is ready
 });
 
 // Validate export path and enable/disable export button
