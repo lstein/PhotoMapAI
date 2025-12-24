@@ -122,11 +122,22 @@ document.addEventListener('DOMContentLoaded', () => {
     updateStarButtonState(); // Initialize star button state
 });
 
+// Wait for state to be initialized before applying album lock restrictions
+window.addEventListener('stateReady', () => {
+    applyAlbumLockState(); // Apply album lock restrictions after state is ready
+});
+
 // Validate export path and enable/disable export button
 function validateExportPath() {
     const exportPathInput = document.getElementById('curationExportPath');
     const exportBtn = document.getElementById('curationExportBtn');
     if (!exportPathInput || !exportBtn) return;
+    
+    // If album is locked, always disable
+    if (state.albumLocked) {
+        exportBtn.disabled = true;
+        return;
+    }
     
     const path = exportPathInput.value.trim();
     // Enable export button only if path is not empty and we have a selection
@@ -141,6 +152,36 @@ function updateStarButtonState() {
     
     // Enable only if we have a selection
     setFavoritesBtn.disabled = currentSelectionIndices.size === 0;
+}
+
+// Apply album lock restrictions to UI elements
+function applyAlbumLockState() {
+    if (!state.albumLocked) return;
+    
+    const exportPathInput = document.getElementById('curationExportPath');
+    const exportBtn = document.getElementById('curationExportBtn');
+    const browseBtn = document.getElementById('curationBrowseBtn');
+    
+    if (exportPathInput) {
+        exportPathInput.disabled = true;
+        exportPathInput.placeholder = 'Disabled (Album Locked)';
+        exportPathInput.style.backgroundColor = '#333';
+        exportPathInput.style.color = '#666';
+    }
+    
+    if (exportBtn) {
+        exportBtn.disabled = true;
+        exportBtn.title = 'Export disabled when album is locked';
+    }
+    
+    if (browseBtn) {
+        browseBtn.disabled = true;
+        browseBtn.style.opacity = '0.5';
+        browseBtn.style.filter = 'grayscale(100%)';
+        browseBtn.style.cursor = 'not-allowed';
+        browseBtn.style.backgroundColor = '#333';
+        browseBtn.title = 'Browse disabled when album is locked';
+    }
 }
 
 function setupEventListeners() {
@@ -183,6 +224,9 @@ function setupEventListeners() {
     // Browse button - open file tree
     if (browseBtn) {
         browseBtn.onclick = () => {
+            if (state.albumLocked) {
+                return; // Do nothing if album is locked
+            }
             const currentPath = exportPathInput.value || '';
             createSimpleDirectoryPicker((selectedPath) => {
                 exportPathInput.value = selectedPath;
@@ -464,6 +508,11 @@ function setupEventListeners() {
     // Export
 
     exportBtn.onclick = async () => {
+        if (state.albumLocked) {
+            alert('Export is disabled when album is locked.');
+            return;
+        }
+        
         const path = document.getElementById('curationExportPath').value;
         if (!path) { alert("Please enter path."); return; }
 

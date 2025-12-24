@@ -793,9 +793,9 @@ class BookmarkManager {
     }, false));
 
     // Move, Download, and Delete (Move is before Download as requested)
-    menu.appendChild(makeButton(MOVE_SVG, "Move", () => this.moveBookmarkedImages(), !hasBookmarks));
+    menu.appendChild(makeButton(MOVE_SVG, "Move", () => this.moveBookmarkedImages(), !hasBookmarks || state.albumLocked));
     menu.appendChild(makeButton(DOWNLOAD_SVG, "Download", () => this.downloadBookmarkedImages(), !hasBookmarks));
-    menu.appendChild(makeButton(DELETE_SVG, "Delete", () => this.deleteBookmarkedImages(), !hasBookmarks));
+    menu.appendChild(makeButton(DELETE_SVG, "Delete", () => this.deleteBookmarkedImages(), !hasBookmarks || state.albumLocked));
 
     document.body.appendChild(menu);
 
