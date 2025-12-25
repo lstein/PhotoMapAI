@@ -1291,6 +1291,9 @@ async function handleImageClick(clickedIndex) {
   const clickedPoint = points.find((p) => p.index === clickedIndex);
   if (!clickedPoint) return;
 
+  // Clear any existing search selection
+  exitSearchMode();
+  
   // Navigate directly to the clicked image without entering search mode
   slideState.navigateToIndex(clickedIndex, false);
 }
