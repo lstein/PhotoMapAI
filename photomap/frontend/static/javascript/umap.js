@@ -3,8 +3,8 @@
 import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
-import { getCurrentSlideIndex } from "./slide-state.js";
-import { setUmapExitFullscreenOnSelection, setUmapShowHoverThumbnails, setUmapShowLandmarks, state } from "./state.js";
+import { getCurrentSlideIndex, slideState } from "./slide-state.js";
+import { setUmapExitFullscreenOnSelection, setUmapShowHoverThumbnails, setUmapShowLandmarks, setUmapClickSelectsCluster, state } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
 import { CLUSTER_PALETTE, getClusterColorFromPoints } from "./cluster-utils.js";
 
@@ -392,14 +392,24 @@ export async function fetchUmapData() {
           // Use the landmark placement algorithm to get the landmark point
           const landmarkPoint = getLandmarkForCluster(clusterPoints);
           if (landmarkPoint) {
-            await handleClusterClick(landmarkPoint.index);
+            // Check if we should select cluster or image
+            if (state.umapClickSelectsCluster) {
+              await handleClusterClick(landmarkPoint.index);
+            } else {
+              await handleImageClick(landmarkPoint.index);
+            }
           }
         } else {
           const pt = data.points[0];
           const traceName = pt.data?.name;
           // Main points or highlighted points behave the same
           if (traceName === "All Points" || traceName === "HighlightedPoints") {
-            await handleClusterClick(pt.customdata);
+            // Check if we should select cluster or image
+            if (state.umapClickSelectsCluster) {
+              await handleClusterClick(pt.customdata);
+            } else {
+              await handleImageClick(pt.customdata);
+            }
           }
         }
       });
@@ -615,6 +625,31 @@ window.addEventListener("stateReady", () => {
     
     // Update enabled state based on fullscreen mode
     updateExitFullscreenCheckboxState();
+  }
+
+  // Click behavior radio buttons - initialize from state
+  const clickSelectsClusterRadio = document.getElementById("umapClickSelectsClusterRadio");
+  const clickSelectsImageRadio = document.getElementById("umapClickSelectsImageRadio");
+  if (clickSelectsClusterRadio && clickSelectsImageRadio) {
+    // Set initial state
+    if (state.umapClickSelectsCluster) {
+      clickSelectsClusterRadio.checked = true;
+    } else {
+      clickSelectsImageRadio.checked = true;
+    }
+    
+    // Add event listeners
+    clickSelectsClusterRadio.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        setUmapClickSelectsCluster(true);
+      }
+    });
+    
+    clickSelectsImageRadio.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        setUmapClickSelectsCluster(false);
+      }
+    });
   }
 });
 
@@ -1246,6 +1281,15 @@ async function handleClusterClick(clickedIndex) {
   }));
 
   setSearchResults(clusterMembers, "cluster");
+}
+
+// Handle single image selection (navigate to clicked image)
+async function handleImageClick(clickedIndex) {
+  const clickedPoint = points.find((p) => p.index === clickedIndex);
+  if (!clickedPoint) return;
+
+  // Navigate directly to the clicked image without entering search mode
+  slideState.navigateToIndex(clickedIndex, false);
 }
 
 // -------------------- Window Management --------------------
