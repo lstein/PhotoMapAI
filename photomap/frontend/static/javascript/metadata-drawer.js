@@ -208,10 +208,14 @@ export async function updateCurrentImageScore(metadata) {
     return;
   }
 
-  if (metadata.cluster !== null && metadata.cluster !== undefined) {
+  // Get current cluster info from UMAP points, not from stale metadata
+  const clusterInfo = getClusterInfoForImage(globalIndex, window.umapPoints);
+  if (clusterInfo && clusterInfo.cluster !== null && clusterInfo.cluster !== undefined) {
+    // Show "unclustered" text for cluster -1
+    const clusterDisplay = clusterInfo.cluster === -1 ? "unclustered" : clusterInfo.cluster;
     scoreDisplay.showCluster(
-      metadata.cluster || 0,
-      metadata.color,
+      clusterDisplay,
+      clusterInfo.color,
       searchIndex,
       state.searchResults.length
     );
