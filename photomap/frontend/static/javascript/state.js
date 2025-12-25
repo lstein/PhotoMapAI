@@ -27,6 +27,7 @@ export const state = {
   umapShowLandmarks: true,   // Show landmarks in UMAP
   umapShowHoverThumbnails: true, // Show hover thumbnails in UMAP
   umapExitFullscreenOnSelection: true, // Exit fullscreen when cluster is selected
+  umapClickSelectsCluster: true, // Whether click selects cluster or single image
 };
 
 document.addEventListener("DOMContentLoaded", async function () {
@@ -123,6 +124,11 @@ export async function restoreFromLocalStorage() {
   if (storedUmapExitFullscreenOnSelection !== null) {
     state.umapExitFullscreenOnSelection = storedUmapExitFullscreenOnSelection === "true";
   }
+
+  const storedUmapClickSelectsCluster = localStorage.getItem("umapClickSelectsCluster");
+  if (storedUmapClickSelectsCluster !== null) {
+    state.umapClickSelectsCluster = storedUmapClickSelectsCluster === "true";
+  }
 }
 
 // Save state to local storage
@@ -142,6 +148,7 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("umapShowLandmarks", state.umapShowLandmarks ? "true" : "false");
   localStorage.setItem("umapShowHoverThumbnails", state.umapShowHoverThumbnails ? "true" : "false");
   localStorage.setItem("umapExitFullscreenOnSelection", state.umapExitFullscreenOnSelection ? "true" : "false");
+  localStorage.setItem("umapClickSelectsCluster", state.umapClickSelectsCluster ? "true" : "false");
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
@@ -246,6 +253,16 @@ export function setUmapExitFullscreenOnSelection(exitFullscreenOnSelection) {
     saveSettingsToLocalStorage();
     window.dispatchEvent(
       new CustomEvent("settingsUpdated", { detail: { umapExitFullscreenOnSelection: exitFullscreenOnSelection } })
+    );
+  }
+}
+
+export function setUmapClickSelectsCluster(clickSelectsCluster) {
+  if (state.umapClickSelectsCluster !== clickSelectsCluster) {
+    state.umapClickSelectsCluster = clickSelectsCluster;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(
+      new CustomEvent("settingsUpdated", { detail: { umapClickSelectsCluster: clickSelectsCluster } })
     );
   }
 }

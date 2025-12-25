@@ -137,11 +137,11 @@
           gap: 24px;
           justify-content: center;
           align-items: flex-start;
-          margin-top: 12px;
+          margin-top: 4px;
         "
       >
         <!-- EPS Spinner Container -->
-        <div id="umapEpsContainer" style="display: none; padding: 8px">
+        <div id="umapEpsContainer" style="display: none; padding: 0px">
           <label for="umapEpsSpinner">Cluster Strength</label>
           <input
             type="number"
@@ -152,6 +152,29 @@
             value="0.1"
             style="width: 60px"
           />
+          
+          <!-- Click Behavior Radio Buttons -->
+          <div id="umapClickBehaviorContainer" style="margin-top: 12px; display: flex; flex-direction: column; gap: 4px;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
+              <input
+                type="radio"
+                name="umapClickBehavior"
+                id="umapClickSelectsClusterRadio"
+                value="cluster"
+                checked
+              />
+              Click selects cluster
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.9em;">
+              <input
+                type="radio"
+                name="umapClickBehavior"
+                id="umapClickSelectsImageRadio"
+                value="image"
+              />
+              Click selects image
+            </label>
+          </div>
         </div>
 
         <!-- Colorization Mode Controls (two columns) -->
@@ -161,8 +184,6 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
-            margin-bottom: 12px;
-            padding-bottom: 20px;
           "
         >
           <label style="display: flex; align-items: center; gap: 8px">

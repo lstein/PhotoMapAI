@@ -118,3 +118,16 @@
   font-size: 0.85em;
 }
 
+#umapClickBehaviorContainer {
+  font-size: 0.85em;
+}
+
+#umapClickBehaviorContainer label {
+  cursor: pointer;
+  user-select: none;
+}
+
+#umapClickBehaviorContainer input[type="radio"] {
+  cursor: pointer;
+}
+
