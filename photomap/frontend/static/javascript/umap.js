@@ -1453,6 +1453,8 @@ function setUmapWindowSize(sizeKey) {
   } else if (sizeKey === "fullscreen") {
     const narrowScreen = window.innerWidth <= 600;
     if (contentDiv) contentDiv.style.display = "block";
+    // controlsHeight: space reserved below plot for UMAP controls (~120px with radio buttons)
+    // plus clearance for bottom ControlPanel/SearchPanel (~110px)
     const controlsHeight = 230;
     win.style.left = "0px";
     win.style.top = "0px";
