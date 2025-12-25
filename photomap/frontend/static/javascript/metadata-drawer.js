@@ -474,6 +474,24 @@ function setupOverlayButtons() {
 // Initialize metadata drawer - sets up all event listeners
 export function initializeMetadataDrawer() {
   setupOverlayButtons();
+  
+  // Listen for UMAP data loaded event to refresh cluster info for the current slide
+  window.addEventListener('umapDataLoaded', () => {
+    const currentSlide = slideState.getCurrentSlide();
+    if (currentSlide && currentSlide.globalIndex !== undefined) {
+      // Get the slide data/metadata for the current slide
+      // In swiper view, we need to get the actual slide element
+      const swiperSlide = document.querySelector(`[data-global-index="${currentSlide.globalIndex}"]`);
+      if (swiperSlide && swiperSlide.dataset) {
+        updateClusterInfo(swiperSlide.dataset);
+        updateCurrentImageScore(swiperSlide.dataset);
+      } else {
+        // In grid view or if slide element not found, construct minimal metadata
+        const metadata = { globalIndex: currentSlide.globalIndex };
+        updateClusterInfo(metadata);
+      }
+    }
+  });
 }
 
 // Position metadata drawer (called from events.js during initialization and on window resize)
