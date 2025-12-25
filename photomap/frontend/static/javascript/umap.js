@@ -417,6 +417,9 @@ export async function fetchUmapData() {
     window.umapPoints = points;
     state.dataChanged = false;
 
+    // Dispatch event to notify that UMAP data has been loaded
+    window.dispatchEvent(new CustomEvent('umapDataLoaded'));
+
     setUmapColorMode();
   } finally {
     hideUmapSpinner();
