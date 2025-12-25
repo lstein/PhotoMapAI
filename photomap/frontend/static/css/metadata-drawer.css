@@ -12,6 +12,13 @@
   margin: 0;
   order: 1;
   pointer-events: auto;
+  border: 2px dotted rgba(128, 128, 128, 0.5);
+  cursor: move;
+  transition: border-color 0.2s ease;
+}
+
+.filename-banner:hover {
+  border-color: rgba(128, 128, 128, 0.8);
 }
 
 .filenameDescContainer {
