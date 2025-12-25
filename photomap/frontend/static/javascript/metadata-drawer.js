@@ -113,7 +113,7 @@ export function updateMetadataOverlay(slide) {
 }
 
 // Update cluster information in the metadata window
-function updateClusterInfo(metadata) {
+export function updateClusterInfo(metadata) {
   const clusterInfoContainer = document.getElementById("clusterInfoContainer");
   const clusterInfoBadge = document.getElementById("clusterInfoBadge");
   
