@@ -3,6 +3,7 @@ import { toggleGridSwiperView } from "./events.js";
 import {
   replaceReferenceImagesWithLinks,
   updateCurrentImageScore,
+  updateClusterInfo,
 } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
 import { slideState } from "./slide-state.js";
@@ -703,6 +704,9 @@ class GridViewManager {
     document.getElementById("filepathText").textContent =
       data["filepath"] || "";
     document.getElementById("metadataLink").href = data["metadata_url"] || "#";
+    
+    // Update cluster information display
+    updateClusterInfo(data);
   }
 
   // These functions act as a semaphore to prevent overlapping batch loads

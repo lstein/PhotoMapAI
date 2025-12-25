@@ -66,7 +66,8 @@ jest.unstable_mockModule('../../photomap/frontend/static/javascript/search.js', 
 // Mock metadata-drawer.js
 jest.unstable_mockModule('../../photomap/frontend/static/javascript/metadata-drawer.js', () => ({
   replaceReferenceImagesWithLinks: jest.fn(() => ''),
-  updateCurrentImageScore: jest.fn()
+  updateCurrentImageScore: jest.fn(),
+  updateClusterInfo: jest.fn()
 }));
 
 // Mock slide-state.js
