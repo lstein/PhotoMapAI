@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 
 import pytest
 from fastapi.testclient import TestClient
@@ -294,7 +295,6 @@ def test_copy_images_file_exists(
     target_dir.mkdir()
     
     # Copy the file manually to simulate it already existing
-    import shutil
     shutil.copy2(original_path, target_dir / original_filename)
 
     # Try to copy the image (should fail)
