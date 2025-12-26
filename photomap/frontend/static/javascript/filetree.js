@@ -18,9 +18,9 @@ export class DirectoryPicker {
   static async createSimpleDirectoryPicker(callback, startingPath = "", options = {}) {
     // Default options
     const {
-      buttonLabel = "Add",
+      buttonLabel = "Select Directory",
       title = "Select Directory",
-      pathLabel = "Current directory to add:",
+      pathLabel = "Selected directory:",
       showCreateFolder = false
     } = options;
     
@@ -56,8 +56,8 @@ export class DirectoryPicker {
             📁 New Folder
           </button>
           ` : ''}
-          <button id="addDirBtn">${buttonLabel}</button>
           <button id="cancelDirBtn">Cancel</button>
+          <button id="addDirBtn">${buttonLabel}</button>
         </div>
       </div>
     `;

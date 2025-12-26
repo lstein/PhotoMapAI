@@ -47,6 +47,12 @@ const MOVE_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" st
   <polyline points="9 22 9 12 15 12 15 22"/>
 </svg>`;
 
+const EXPORT_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+  <polyline points="17 8 12 3 7 8"/>
+  <line x1="12" y1="3" x2="12" y2="15"/>
+</svg>`;
+
 const HIDE_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
   <line x1="1" y1="1" x2="23" y2="23"/>
@@ -659,6 +665,101 @@ class BookmarkManager {
     } catch (error) {
       console.error("Move failed:", error);
       alert(`Move failed: ${error.message}`);
+    } finally {
+      hideSpinner();
+    }
+  }
+
+  /**
+   * Export bookmarked images to a different folder (copy, not move)
+   */
+  async exportBookmarkedImages() {
+    const indices = this.getBookmarkedIndices();
+    if (indices.length === 0) {
+      alert("No images are bookmarked.");
+      return;
+    }
+
+    this.removeBookmarkMenu();
+
+    // Get the first bookmarked image's directory as the starting path
+    let startingPath = "";
+    try {
+      const firstIndex = indices[0];
+      const response = await fetch(`image_path/${encodeURIComponent(state.album)}/${firstIndex}`);
+      if (response.ok) {
+        const imagePath = await response.text();
+        // Extract directory from the path
+        const lastSlash = Math.max(imagePath.lastIndexOf('/'), imagePath.lastIndexOf('\\'));
+        if (lastSlash > 0) {
+          startingPath = imagePath.substring(0, lastSlash);
+        }
+      }
+    } catch (error) {
+      console.warn("Could not determine starting path:", error);
+    }
+
+    // Show directory picker with custom labels for export
+    createSimpleDirectoryPicker(
+      async (targetDirectory) => {
+        await this.performExport(indices, targetDirectory);
+      },
+      startingPath,
+      {
+        buttonLabel: "Export",
+        title: "Select Export Destination",
+        pathLabel: "Export images to:",
+        showCreateFolder: true
+      }
+    );
+  }
+
+  /**
+   * Perform the actual export operation
+   */
+  async performExport(indices, targetDirectory) {
+    showSpinner();
+
+    try {
+      const response = await fetch(
+        `copy_images/${encodeURIComponent(state.album)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            indices: indices,
+            target_directory: targetDirectory
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // Build confirmation message
+      let message = "";
+      if (result.copied_count > 0) {
+        message += `Successfully exported ${result.copied_count} image${result.copied_count > 1 ? 's' : ''} to:\n${targetDirectory}`;
+      }
+
+      if (result.error_count > 0) {
+        if (message) message += "\n\n";
+        message += `${result.error_count} error${result.error_count > 1 ? 's' : ''} occurred:\n`;
+        message += result.errors.slice(0, 5).join("\n");
+        if (result.errors.length > 5) {
+          message += `\n... and ${result.errors.length - 5} more`;
+        }
+      }
+
+      alert(message || "Export operation completed.");
+
+    } catch (error) {
+      console.error("Export failed:", error);
+      alert(`Export failed: ${error.message}`);
     } finally {
       hideSpinner();
     }
