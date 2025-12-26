@@ -1296,6 +1296,11 @@ async function handleImageClick(clickedIndex) {
   
   // Navigate directly to the clicked image without entering search mode
   slideState.navigateToIndex(clickedIndex, false);
+  
+  // Exit fullscreen mode if enabled
+  if (isFullscreen && state.umapExitFullscreenOnSelection) {
+    setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
+  }
 }
 
 // -------------------- Window Management --------------------
