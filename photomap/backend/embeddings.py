@@ -1015,80 +1015,78 @@ class Embeddings(BaseModel):
             "ViT-B/32", device=device, download_root=self._clip_root()
         )
 
-        # Handle None queries: set weight to zero and skip embedding
-        if query_image_data is None:
-            image_weight = 0.0
-            image_embedding = None
-        else:
-            pil_image = ImageOps.exif_transpose(query_image_data)
-            pil_image = pil_image.convert("RGB")
-            image_tensor: torch.Tensor = preprocess(pil_image)  # type: ignore
-            image_tensor = image_tensor.unsqueeze(0).to(device)
-            with torch.no_grad():
-                image_embedding = model.encode_image(image_tensor).squeeze(0)
-
-        if not positive_query:
-            positive_weight = 0.0
-            pos_emb = None
-        else:
-            tokens = clip.tokenize([positive_query]).to(device)
-            with torch.no_grad():
-                pos_emb = model.encode_text(tokens).squeeze(0)
-
-        if not negative_query:
-            negative_weight = 0.0
-            neg_emb = None
-        else:
-            tokens = clip.tokenize([negative_query]).to(device)
-            with torch.no_grad():
-                neg_emb = model.encode_text(tokens).squeeze(0)
-
-        # If all weights are zero, return empty result
-        if image_weight == 0.0 and positive_weight == 0.0 and negative_weight == 0.0:
-            self._cleanup_cuda_memory(model, device)
-            return [], []
-
-        # Weighted combination: image + positive - negative
-        combined_embedding = None
-        if image_weight > 0.0 and image_embedding is not None:
-            combined_embedding = image_weight * image_embedding
-        if positive_weight > 0.0 and pos_emb is not None:
-            if combined_embedding is None:
-                combined_embedding = positive_weight * pos_emb
+        try:
+            # Handle None queries: set weight to zero and skip embedding
+            if query_image_data is None:
+                image_weight = 0.0
+                image_embedding = None
             else:
-                combined_embedding += positive_weight * pos_emb
-        if negative_weight > 0.0 and neg_emb is not None:
-            if combined_embedding is None:
-                combined_embedding = -negative_weight * neg_emb
+                pil_image = ImageOps.exif_transpose(query_image_data)
+                pil_image = pil_image.convert("RGB")
+                image_tensor: torch.Tensor = preprocess(pil_image)  # type: ignore
+                image_tensor = image_tensor.unsqueeze(0).to(device)
+                with torch.no_grad():
+                    image_embedding = model.encode_image(image_tensor).squeeze(0)
+
+            if not positive_query:
+                positive_weight = 0.0
+                pos_emb = None
             else:
-                combined_embedding -= negative_weight * neg_emb
+                tokens = clip.tokenize([positive_query]).to(device)
+                with torch.no_grad():
+                    pos_emb = model.encode_text(tokens).squeeze(0)
 
-        # Normalize
-        embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=device)
-        norm_embeddings = F.normalize(embeddings_tensor, dim=-1).to(torch.float32)
-        assert combined_embedding is not None
-        combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(
-            torch.float32
-        )
+            if not negative_query:
+                negative_weight = 0.0
+                neg_emb = None
+            else:
+                tokens = clip.tokenize([negative_query]).to(device)
+                with torch.no_grad():
+                    neg_emb = model.encode_text(tokens).squeeze(0)
 
-        # Similarity
-        similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
-        top_indices = similarities.argsort()[-top_k:][::-1]
-        top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
-        
-        if not top_indices:
-            # Clean up GPU memory before returning empty results
+            # If all weights are zero, return empty result
+            if image_weight == 0.0 and positive_weight == 0.0 and negative_weight == 0.0:
+                return [], []
+
+            # Weighted combination: image + positive - negative
+            combined_embedding = None
+            if image_weight > 0.0 and image_embedding is not None:
+                combined_embedding = image_weight * image_embedding
+            if positive_weight > 0.0 and pos_emb is not None:
+                if combined_embedding is None:
+                    combined_embedding = positive_weight * pos_emb
+                else:
+                    combined_embedding += positive_weight * pos_emb
+            if negative_weight > 0.0 and neg_emb is not None:
+                if combined_embedding is None:
+                    combined_embedding = -negative_weight * neg_emb
+                else:
+                    combined_embedding -= negative_weight * neg_emb
+
+            # Normalize
+            embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=device)
+            norm_embeddings = F.normalize(embeddings_tensor, dim=-1).to(torch.float32)
+            assert combined_embedding is not None
+            combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(
+                torch.float32
+            )
+
+            # Similarity
+            similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
+            top_indices = similarities.argsort()[-top_k:][::-1]
+            top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
+            
+            if not top_indices:
+                return [], []
+            
+            # Translate from filename array indices to sorted filename top_indices
+            result_indices = [int(filename_map[filenames[i]]) for i in top_indices]
+            result_similarities = similarities[top_indices].tolist()
+            
+            return result_indices, result_similarities
+        finally:
+            # Clean up GPU memory after search (always executed)
             self._cleanup_cuda_memory(model, device)
-            return [], []
-        
-        # Translate from filename array indices to sorted filename top_indices
-        result_indices = [int(filename_map[filenames[i]]) for i in top_indices]
-        result_similarities = similarities[top_indices].tolist()
-        
-        # Clean up GPU memory after search
-        self._cleanup_cuda_memory(model, device)
-        
-        return result_indices, result_similarities
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):
         """
