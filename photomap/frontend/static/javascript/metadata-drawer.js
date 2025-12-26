@@ -349,12 +349,14 @@ const getEventCoords = (e) => {
 
 // Mouse/touch drag handlers
 function onDrawerMouseDown(e) {
-  // Only drag if background, not handle or children
-  if (
-    e.target.classList.contains("banner-drawer-container") ||
-    e.target.id === "filenameBanner" ||
-    e.target.classList.contains("filename-banner")
-  ) {
+  // Only drag if clicking on the titlebar, but not on the copy button
+  const isTitlebar = e.target.id === "filenameTitlebar" || 
+                     e.target.classList.contains("filename-titlebar") ||
+                     e.target.id === "filenameText";
+  const isCopyButton = e.target.id === "copyTextBtn" || 
+                       e.target.closest("#copyTextBtn");
+  
+  if (isTitlebar && !isCopyButton) {
     isDraggingDrawer = true;
     const coords = getEventCoords(e);
     startX = coords.x;
@@ -391,11 +393,14 @@ function onDrawerMouseUp() {
 
 // Touch support
 function onDrawerTouchStart(e) {
-  if (
-    e.target.classList.contains("banner-drawer-container") ||
-    e.target.id === "filenameBanner" ||
-    e.target.classList.contains("filename-banner")
-  ) {
+  // Only drag if clicking on the titlebar, but not on the copy button
+  const isTitlebar = e.target.id === "filenameTitlebar" || 
+                     e.target.classList.contains("filename-titlebar") ||
+                     e.target.id === "filenameText";
+  const isCopyButton = e.target.id === "copyTextBtn" || 
+                       e.target.closest("#copyTextBtn");
+  
+  if (isTitlebar && !isCopyButton) {
     isDraggingDrawer = true;
     const coords = getEventCoords(e);
     startX = coords.x;
