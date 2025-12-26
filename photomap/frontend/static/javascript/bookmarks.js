@@ -178,6 +178,13 @@ class BookmarkManager {
     }
     this.saveBookmarks();
     this.updateAllBookmarkIcons();
+    
+    // Update the score display star if in single swiper view
+    if (window.scoreDisplay) {
+      const isBookmarked = this.isBookmarked(globalIndex);
+      window.scoreDisplay.setBookmarkStatus(globalIndex, isBookmarked);
+      window.scoreDisplay.refreshDisplay();
+    }
   }
 
   /**
@@ -255,6 +262,13 @@ class BookmarkManager {
   toggleCurrentBookmark() {
     const { globalIndex } = slideState.getCurrentSlide();
     this.toggleBookmark(globalIndex);
+    
+    // Update the score display star if in single swiper view
+    if (window.scoreDisplay) {
+      const isBookmarked = this.isBookmarked(globalIndex);
+      window.scoreDisplay.setBookmarkStatus(globalIndex, isBookmarked);
+      window.scoreDisplay.refreshDisplay();
+    }
   }
 
   /**

@@ -198,3 +198,4 @@ export class ScoreDisplay {
 
 // Create global instance
 export const scoreDisplay = new ScoreDisplay();
+window.scoreDisplay = scoreDisplay; // Expose globally for other modules
