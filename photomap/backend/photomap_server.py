@@ -65,11 +65,21 @@ async def get_root(
     mode: Optional[str] = None,
 ):
     """Serve the main slideshow page."""
-    if os.environ.get("PHOTOMAP_ALBUM_LOCKED"):
-        album = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
+    locked_albums_str = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
+    if locked_albums_str:
+        locked_albums = [a.strip() for a in locked_albums_str.split(",")]
         album_locked = True
+        multiple_locked_albums = len(locked_albums) > 1
+        
+        # If album is provided in URL, validate it's in the locked list
+        if album is not None and album in locked_albums:
+            pass  # Use the album from URL
+        else:
+            # Default to the first locked album
+            album = locked_albums[0]
     else:
         album_locked = False
+        multiple_locked_albums = False
         config_manager = get_config_manager()
         if album is not None:
             albums = config_manager.get_albums()
@@ -91,6 +101,7 @@ async def get_root(
             "highWaterMark": high_water_mark,
             "version": get_version(),
             "album_locked": album_locked,
+            "multiple_locked_albums": multiple_locked_albums,
             "inline_upgrades_allowed": inline_upgrades_allowed,
         },
     )
@@ -172,7 +183,8 @@ def main():
         os.environ["PHOTOMAP_CONFIG"] = args.config.as_posix()
 
     if args.album_locked:
-        os.environ["PHOTOMAP_ALBUM_LOCKED"] = args.album_locked
+        # Convert list of album keys to comma-separated string
+        os.environ["PHOTOMAP_ALBUM_LOCKED"] = ",".join(args.album_locked)
 
     os.environ["PHOTOMAP_INLINE_UPGRADE"] = "1" if args.inline_upgrade else "0"
 

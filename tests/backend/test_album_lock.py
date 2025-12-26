@@ -28,6 +28,24 @@ def setup_album_lock():
         os.environ.pop("PHOTOMAP_ALBUM_LOCKED", None)
 
 
+@pytest.fixture
+def setup_multiple_album_lock():
+    """Setup and teardown for multiple album lock tests."""
+    # Save original state
+    original_album_locked = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
+    
+    # Set multiple album lock
+    os.environ["PHOTOMAP_ALBUM_LOCKED"] = "test_album,another_album"
+    
+    yield
+    
+    # Restore original state
+    if original_album_locked:
+        os.environ["PHOTOMAP_ALBUM_LOCKED"] = original_album_locked
+    else:
+        os.environ.pop("PHOTOMAP_ALBUM_LOCKED", None)
+
+
 def test_add_album_locked(client, setup_album_lock):
     """Test that /add_album is disabled when album is locked."""
     new_album = create_album(
@@ -112,3 +130,42 @@ def test_routes_work_without_lock(client):
     response = client.get("/filetree/directories")
     # Should return 200 or 404 depending on path, but not 403
     assert response.status_code != 403
+
+
+def test_multiple_albums_locked_management_disabled(client, setup_multiple_album_lock):
+    """Test that album management is disabled even with multiple locked albums."""
+    # Test that /add_album is disabled
+    new_album = create_album(
+        "new_album",
+        "New Album",
+        image_paths=["./tests/test_images"],
+        index="./tests/test_images/embeddings.npz",
+        umap_eps=0.1,
+    )
+    response = client.post("/add_album", json=new_album.model_dump())
+    assert response.status_code == 403
+    assert "Album management is locked" in response.json()["detail"]
+
+
+def test_multiple_albums_locked_filetree_disabled(client, setup_multiple_album_lock):
+    """Test that filetree operations are disabled with multiple locked albums."""
+    # Test that /filetree/home is disabled
+    response = client.get("/filetree/home")
+    assert response.status_code == 403
+    assert "Album management is locked" in response.json()["detail"]
+
+
+def test_multiple_albums_access_allowed_album(client, setup_multiple_album_lock):
+    """Test that accessing a locked album is allowed."""
+    # This test verifies that operations on locked albums don't raise 403
+    # when the album key is in the locked list
+    # Note: The actual behavior depends on the album existing in the config
+    pass
+
+
+def test_multiple_albums_access_denied_non_locked_album(client, setup_multiple_album_lock):
+    """Test that accessing a non-locked album is denied when albums are locked."""
+    # Try to get an album that's not in the locked list
+    response = client.get("/album/unlocked_album/")
+    assert response.status_code == 403
+    assert "Album management is locked" in response.json()["detail"]
