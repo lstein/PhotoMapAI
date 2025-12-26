@@ -1097,10 +1097,16 @@ class Embeddings(BaseModel):
             try:
                 del model, preprocess
                 # Delete any tensors that may still be around
+                if 'image_tensor' in locals():
+                    del image_tensor
+                if 'tokens' in locals():
+                    del tokens
                 if 'embeddings_tensor' in locals():
                     del embeddings_tensor
                 if 'norm_embeddings' in locals():
                     del norm_embeddings
+                if 'combined_embedding' in locals():
+                    del combined_embedding
                 if 'combined_embedding_norm' in locals():
                     del combined_embedding_norm
                 if 'similarities' in locals():
