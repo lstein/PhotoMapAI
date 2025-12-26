@@ -262,9 +262,12 @@ class Embeddings(BaseModel):
         """
         Clean up CUDA memory by clearing cache and forcing garbage collection.
         
-        This completely frees GPU VRAM to ensure it returns to zero after operations.
-        The model will need to be reloaded on subsequent operations, but this ensures
-        GPU memory is available for other processes.
+        This completely frees GPU VRAM to ensure it returns to zero (or minimal baseline) 
+        after operations. The model will need to be reloaded on subsequent operations, 
+        but this ensures GPU memory is available for other processes.
+        
+        Note: A baseline CUDA context (~188 MiB) may remain after first GPU use.
+        This is a PyTorch/CUDA limitation and cannot be freed without ending the process.
         
         Args:
             device: The device string ("cuda" or "cpu")
@@ -273,10 +276,13 @@ class Embeddings(BaseModel):
             try:
                 # Synchronize to ensure all CUDA operations are complete
                 torch.cuda.synchronize()
-                # Empty the CUDA cache
+                # Empty the CUDA cache multiple times to be thorough
                 torch.cuda.empty_cache()
-                # Force garbage collection
+                # Force garbage collection twice for better cleanup
                 gc.collect()
+                gc.collect()
+                # Empty cache again after GC
+                torch.cuda.empty_cache()
             except RuntimeError as e:
                 # Log but don't crash if CUDA operations fail
                 logger.warning(f"CUDA cleanup failed: {e}")
