@@ -6,9 +6,10 @@ jobs:
   upload-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Download all workflow run artifacts
+      - name: Download CPU installer package artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: "*-cpu-*"
           path: artifacts
 
       - name: List downloaded artifacts
@@ -17,6 +18,6 @@ jobs:
       - name: Upload artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*cpu*/*
+          files: artifacts/*-cpu-*/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -27,6 +27,17 @@ Or you can permanently fix these environment variables by setting them in your s
 
 On Windows systems, setting environment variables can be done through the GUI as well as on the command line. See [How to Set Environment Variables in Windows](https://phoenixnap.com/kb/windows-set-environment-variable) for a good walkthrough.
 
+## Limiting the Available Albums
+
+You may wish to expose an instance of PhotoMapAI that only shows a subset of albums. To do this, run `start_photomap` with `--album-locked list,of,albums`. Use the album key(s) to select which albums to display, separating the keys with commas. Only these albums will then be available to users of the web application.
+
+It may also be handy to pair this with a specific URL that starts PhotoMapAI with a specific album. The format to start with an album named "my_album" is:
+
+```bash
+http://your.photomap.host/:8050?album=my_album
+```
+
+
 ## Running PhotoMapAI Under HTTPS
 
 By default, PhotoMapAI runs as a non-secure `HTTP` service. This generates a warning icon in some browsers, but more seriously prevents cut and paste between the PhotoMapAI tab and browser tabs and desktop applications. 
