@@ -31,12 +31,30 @@ album_router = APIRouter()
 config_manager = get_config_manager()
 
 
-def check_album_lock(album_key: Optional[str] = None):
+def get_locked_albums() -> Optional[List[str]]:
+    """Get list of locked albums from environment variable.
+    
+    Returns:
+        List of locked album keys, or None if no lock is set.
+    """
     locked_albums_str = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
     if not locked_albums_str:
-        return  # No lock is set
+        return None
+    return [a.strip() for a in locked_albums_str.split(",")]
+
+
+def check_album_lock(album_key: Optional[str] = None):
+    """Check if album operations are allowed based on lock settings.
     
-    locked_albums = [a.strip() for a in locked_albums_str.split(",")]
+    Args:
+        album_key: Optional album key to check. If None, checks if any modifications are allowed.
+        
+    Raises:
+        HTTPException: If the operation is not allowed due to album lock.
+    """
+    locked_albums = get_locked_albums()
+    if locked_albums is None:
+        return  # No lock is set
     
     if album_key and album_key not in locked_albums:
         logger.warning(
@@ -44,7 +62,7 @@ def check_album_lock(album_key: Optional[str] = None):
         )
         raise HTTPException(
             status_code=403,
-            detail=f"Album management is locked to album(s) '{locked_albums_str}' in this deployment.",
+            detail=f"Album management is locked to album(s) '{','.join(locked_albums)}' in this deployment.",
         )
     
     elif not album_key:
@@ -65,11 +83,7 @@ async def get_available_albums() -> List[Dict[str, Any]]:
         if not albums:
             return []
         
-        locked_albums_str = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
-        if locked_albums_str:
-            locked_albums = [a.strip() for a in locked_albums_str.split(",")]
-        else:
-            locked_albums = None
+        locked_albums = get_locked_albums()
 
         return [
             {

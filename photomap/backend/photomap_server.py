@@ -19,7 +19,7 @@ from fastapi.templating import Jinja2Templates
 from photomap.backend.args import get_args, get_version
 from photomap.backend.config import get_config_manager
 from photomap.backend.constants import get_package_resource_path
-from photomap.backend.routers.album import album_router
+from photomap.backend.routers.album import album_router, get_locked_albums
 from photomap.backend.routers.filetree import filetree_router
 from photomap.backend.routers.index import index_router
 from photomap.backend.routers.search import search_router
@@ -65,9 +65,8 @@ async def get_root(
     mode: Optional[str] = None,
 ):
     """Serve the main slideshow page."""
-    locked_albums_str = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
-    if locked_albums_str:
-        locked_albums = [a.strip() for a in locked_albums_str.split(",")]
+    locked_albums = get_locked_albums()
+    if locked_albums:
         album_locked = True
         multiple_locked_albums = len(locked_albums) > 1
         
