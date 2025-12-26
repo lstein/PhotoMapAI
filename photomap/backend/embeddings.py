@@ -458,11 +458,12 @@ class Embeddings(BaseModel):
             bad_files=bad_files,
         )
         
-        # Clean up GPU memory after batch processing
-        del model, preprocess
+        # Clean up GPU memory after batch processing by moving model to CPU
+        # This frees VRAM while keeping model in system RAM
         if device == "cuda":
+            model.to("cpu")
             torch.cuda.empty_cache()
-        gc.collect()
+            gc.collect()
         
         return result
 
@@ -515,11 +516,12 @@ class Embeddings(BaseModel):
             bad_files=bad_files,
         )
         
-        # Clean up GPU memory after async batch processing
-        del model, preprocess
+        # Clean up GPU memory after async batch processing by moving model to CPU
+        # This frees VRAM while keeping model in system RAM
         if device == "cuda":
+            model.to("cpu")
             torch.cuda.empty_cache()
-        gc.collect()
+            gc.collect()
         
         return result
 
@@ -1059,37 +1061,33 @@ class Embeddings(BaseModel):
         similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
         top_indices = similarities.argsort()[-top_k:][::-1]
         top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
+        
+        # Translate from filename array indices to sorted filename top_indices
         if not top_indices:
-            # Clean up GPU memory before returning
-            del model, embeddings_tensor, norm_embeddings, combined_embedding_norm
+            result_indices = []
+            result_similarities = []
+        else:
+            result_indices = [int(filename_map[filenames[i]]) for i in top_indices]
+            result_similarities = similarities[top_indices].tolist()
+        
+        # Clean up GPU memory after search by moving model to CPU
+        # This frees VRAM while keeping the model in system RAM for potential reuse
+        if device == "cuda":
+            # Move model to CPU to free GPU memory
+            model.to("cpu")
+            # Delete GPU tensors
+            del embeddings_tensor, norm_embeddings, combined_embedding_norm, similarities
             if image_embedding is not None:
                 del image_embedding
             if pos_emb is not None:
                 del pos_emb
             if neg_emb is not None:
                 del neg_emb
-            if device == "cuda":
-                torch.cuda.empty_cache()
-            gc.collect()
-            return [], []
-
-        # Translate from filename array indices to sorted filename top_indices
-        global_indices = [int(filename_map[filenames[i]]) for i in top_indices]
-        result_similarities = similarities[top_indices].tolist()
-        
-        # Clean up GPU memory after search
-        del model, embeddings_tensor, norm_embeddings, combined_embedding_norm, similarities
-        if image_embedding is not None:
-            del image_embedding
-        if pos_emb is not None:
-            del pos_emb
-        if neg_emb is not None:
-            del neg_emb
-        if device == "cuda":
+            # Empty CUDA cache to release VRAM
             torch.cuda.empty_cache()
-        gc.collect()
+            gc.collect()
         
-        return global_indices, result_similarities
+        return result_indices, result_similarities
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):
         """
