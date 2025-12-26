@@ -5,13 +5,36 @@
   width: 100%;
   background: rgba(0, 0, 0, 0.75);
   color: #fff;
-  padding: 1em 2em;
+  padding: 0;
   box-sizing: border-box;
   text-align: left;
   border-radius: 8px 0 0 8px;
   margin: 0;
   order: 1;
   pointer-events: auto;
+  overflow: hidden;
+}
+
+/* Draggable Titlebar */
+.filename-titlebar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+  background: rgba(50, 50, 50, 0.9);
+  padding: 0.6em 1em;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+  cursor: move;
+  user-select: none;
+}
+
+.filename-titlebar:hover {
+  background: rgba(60, 60, 60, 0.9);
+}
+
+.filename-banner:hover {
+  /* No hover effect on the banner itself anymore */
 }
 
 .filenameDescContainer {
@@ -20,6 +43,7 @@
   align-items: flex-start;
   justify-content: center;
   margin-bottom: 0;
+  padding: 1em 2em;
 }
 
 .filenameRow {
@@ -41,6 +65,8 @@
   max-height: 40vh;
   overflow-y: auto;
   text-align: left;
+  cursor: auto;
+}
 }
 
 #filepathText {
@@ -51,17 +77,21 @@
   text-align: left;
   word-break: break-word;
   white-space: pre-line;
+  cursor: auto;
 }
 
 #filenameText {
   display: inline-block;
   max-width: 100%;
   font-weight: bold;
+  font-size: 1em;
   color: #fff700;
   overflow-wrap: anywhere;
   word-break: break-all;
   white-space: normal;
   vertical-align: middle;
+  flex: 1;
+  cursor: move;
 }
 
 .exif-metadata {
@@ -218,6 +248,7 @@
   height: auto;
   min-width: 24px;
   min-height: 24px;
+  flex-shrink: 0;
 }
 
 #copyTextBtn:hover,
