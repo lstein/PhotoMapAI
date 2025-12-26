@@ -172,14 +172,16 @@
     {% endif %}
 
     <!-- Album selection row -->
-    {% if not album_locked %}
+    {% if not album_locked or multiple_locked_albums %}
     <div class="setting-row">
       <label for="albumSelect">Album:</label>
       <div class="album-selector-group">
         <select id="albumSelect">
           <option value="">Loading albums...</option>
         </select>
+        {% if not album_locked %}
         <button id="manageAlbumsBtn" class="btn-primary">Manage Albums</button>
+        {% endif %}
       </div>
     </div>
     {% endif %}

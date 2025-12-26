@@ -19,7 +19,7 @@ from fastapi.templating import Jinja2Templates
 from photomap.backend.args import get_args, get_version
 from photomap.backend.config import get_config_manager
 from photomap.backend.constants import get_package_resource_path
-from photomap.backend.routers.album import album_router
+from photomap.backend.routers.album import album_router, get_locked_albums
 from photomap.backend.routers.filetree import filetree_router
 from photomap.backend.routers.index import index_router
 from photomap.backend.routers.search import search_router
@@ -65,11 +65,20 @@ async def get_root(
     mode: Optional[str] = None,
 ):
     """Serve the main slideshow page."""
-    if os.environ.get("PHOTOMAP_ALBUM_LOCKED"):
-        album = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
+    locked_albums = get_locked_albums()
+    if locked_albums:
         album_locked = True
+        multiple_locked_albums = len(locked_albums) > 1
+        
+        # If album is provided in URL, validate it's in the locked list
+        if album is not None and album in locked_albums:
+            pass  # Use the album from URL
+        else:
+            # Default to the first locked album
+            album = locked_albums[0]
     else:
         album_locked = False
+        multiple_locked_albums = False
         config_manager = get_config_manager()
         if album is not None:
             albums = config_manager.get_albums()
@@ -91,6 +100,7 @@ async def get_root(
             "highWaterMark": high_water_mark,
             "version": get_version(),
             "album_locked": album_locked,
+            "multiple_locked_albums": multiple_locked_albums,
             "inline_upgrades_allowed": inline_upgrades_allowed,
         },
     )
@@ -172,7 +182,8 @@ def main():
         os.environ["PHOTOMAP_CONFIG"] = args.config.as_posix()
 
     if args.album_locked:
-        os.environ["PHOTOMAP_ALBUM_LOCKED"] = args.album_locked
+        # Convert list of album keys to comma-separated string
+        os.environ["PHOTOMAP_ALBUM_LOCKED"] = ",".join(args.album_locked)
 
     os.environ["PHOTOMAP_INLINE_UPGRADE"] = "1" if args.inline_upgrade else "0"
 

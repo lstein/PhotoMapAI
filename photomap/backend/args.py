@@ -50,8 +50,9 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--album-locked",
         type=str,
+        nargs='+',
         default=None,
-        help="Start with a specific locked in album and disable album management (default: None)",
+        help="Lock to specific album(s) and disable album management. Provide one or more album keys separated by spaces (default: None)",
     )
     parser.add_argument(
         "--reload",
