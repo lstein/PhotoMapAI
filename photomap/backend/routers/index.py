@@ -48,6 +48,11 @@ class MoveImagesRequest(BaseModel):
     target_directory: str
 
 
+class CopyImagesRequest(BaseModel):
+    indices: List[int]
+    target_directory: str
+
+
 class EmbeddingsIndexMetadata(BaseModel):
     filename_count: int
     embeddings_path: str
@@ -364,6 +369,80 @@ async def move_images(album_key: str, req: MoveImagesRequest) -> JSONResponse:
     except Exception as e:
         logger.error(f"Failed to move images: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to move images: {str(e)}")
+
+
+@index_router.post("/copy_images/{album_key}", tags=["Index"])
+async def copy_images(album_key: str, req: CopyImagesRequest) -> JSONResponse:
+    """Copy multiple images to a different directory."""
+    # Note: No album lock check - copying doesn't modify the album
+    try:
+        album_config = validate_album_exists(album_key)
+        embeddings = Embeddings(embeddings_path=Path(album_config.index))
+        
+        target_dir = Path(req.target_directory)
+        
+        # Validate target directory exists and is writable
+        if not target_dir.exists():
+            raise HTTPException(status_code=400, detail="Target directory does not exist")
+        if not target_dir.is_dir():
+            raise HTTPException(status_code=400, detail="Target path is not a directory")
+        if not os.access(target_dir, os.W_OK):
+            raise HTTPException(status_code=403, detail="Target directory is not writable")
+        
+        copied_files = []
+        errors = []
+        skipped_files = []
+        
+        for index in req.indices:
+            try:
+                image_path = embeddings.get_image_path(index)
+                
+                if not validate_image_access(album_config, image_path):
+                    errors.append(f"Index {index}: Access denied")
+                    continue
+                
+                if not image_path.exists() or not image_path.is_file():
+                    errors.append(f"Index {index}: File not found")
+                    continue
+                
+                target_path = target_dir / image_path.name
+                
+                # Check if target file exists
+                if target_path.exists():
+                    errors.append(f"{image_path.name}: File already exists in target directory")
+                    continue
+                
+                # Copy the file (shutil.copy2 preserves metadata)
+                shutil.copy2(str(image_path), str(target_path))
+                
+                copied_files.append(image_path.name)
+                logger.info(f"Copied {image_path} to {target_path}")
+                
+            except Exception as e:
+                logger.error(f"Error copying image at index {index}: {e}")
+                errors.append(f"Index {index}: {str(e)}")
+        
+        # Build response
+        # Operation is considered successful if at least one file was copied
+        operation_successful = len(copied_files) > 0
+        
+        response_data = {
+            "success": operation_successful,
+            "copied_count": len(copied_files),
+            "copied_files": copied_files,
+        }
+        
+        if errors:
+            response_data["errors"] = errors
+            response_data["error_count"] = len(errors)
+        
+        return JSONResponse(content=response_data, status_code=200)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to copy images: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to copy images: {str(e)}")
 
 
 # Background Tasks

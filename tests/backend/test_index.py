@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 
 import pytest
 from fastapi.testclient import TestClient
@@ -215,6 +216,90 @@ def test_move_images_file_exists(
     # Try to move the image
     response = client.post(
         f"/move_images/{album_key}",
+        json={"indices": [0], "target_directory": str(target_dir)},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result.get("error_count") == 1
+    assert any("already exists" in error for error in result.get("errors", []))
+
+
+def test_copy_images(
+    client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    """Test the ability to copy images to a different directory."""
+    build_index(client, new_album, monkeypatch)
+
+    album_key = new_album["key"]
+
+    # Get the first image path
+    response = client.get(f"/retrieve_image/{album_key}/0")
+    data = response.json()
+    assert data.get("index") == 0
+    original_filename = data.get("filename")
+    assert original_filename is not None
+
+    # Get the original file path
+    response = client.get(f"/image_path/{album_key}/0")
+    assert response.status_code == 200
+    original_path = Path(response.text)
+    assert original_path.exists(), "Original image should exist before copy"
+
+    # Create a target directory
+    target_dir = tmp_path / "export_folder"
+    target_dir.mkdir()
+
+    # Copy the first image
+    response = client.post(
+        f"/copy_images/{album_key}",
+        json={"indices": [0], "target_directory": str(target_dir)},
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result.get("success") is True
+    assert result.get("copied_count") == 1
+    assert original_filename in result.get("copied_files", [])
+
+    # Check that the file exists in the new location
+    new_path = target_dir / original_filename
+    assert new_path.exists(), "Image should exist in target directory"
+
+    # Check that the file still exists in the old location (copy, not move)
+    assert original_path.exists(), "Image should still exist in original directory"
+
+    # Verify the original image is still accessible
+    response = client.get(f"/retrieve_image/{album_key}/0")
+    data = response.json()
+    assert data.get("index") == 0
+
+
+def test_copy_images_file_exists(
+    client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    """Test copying images when file already exists in target directory."""
+    build_index(client, new_album, monkeypatch)
+
+    album_key = new_album["key"]
+
+    # Get the first image
+    response = client.get(f"/retrieve_image/{album_key}/0")
+    data = response.json()
+    original_filename = data.get("filename")
+
+    # Get the original file path
+    response = client.get(f"/image_path/{album_key}/0")
+    original_path = Path(response.text)
+
+    # Create a target directory with a file of the same name
+    target_dir = tmp_path / "export_folder"
+    target_dir.mkdir()
+    
+    # Copy the file manually to simulate it already existing
+    shutil.copy2(original_path, target_dir / original_filename)
+
+    # Try to copy the image (should fail)
+    response = client.post(
+        f"/copy_images/{album_key}",
         json={"indices": [0], "target_directory": str(target_dir)},
     )
     assert response.status_code == 200
