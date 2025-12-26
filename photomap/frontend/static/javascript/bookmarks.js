@@ -893,8 +893,9 @@ class BookmarkManager {
       }
     }, false));
 
-    // Move, Download, and Delete (Move is before Download as requested)
+    // Move, Export, Download, and Delete (Export is after Move as requested)
     menu.appendChild(makeButton(MOVE_SVG, "Move", () => this.moveBookmarkedImages(), !hasBookmarks || state.albumLocked));
+    menu.appendChild(makeButton(EXPORT_SVG, "Export", () => this.exportBookmarkedImages(), !hasBookmarks));
     menu.appendChild(makeButton(DOWNLOAD_SVG, "Download", () => this.downloadBookmarkedImages(), !hasBookmarks));
     menu.appendChild(makeButton(DELETE_SVG, "Delete", () => this.deleteBookmarkedImages(), !hasBookmarks || state.albumLocked));
 
