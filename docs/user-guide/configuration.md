@@ -29,13 +29,48 @@ On Windows systems, setting environment variables can be done through the GUI as
 
 ## Limiting the Available Albums
 
-You may wish to expose an instance of PhotoMapAI that only shows a subset of albums. To do this, run `start_photomap` with `--album-locked list,of,albums`. Use the album key(s) to select which albums to display, separating the keys with commas. Only these albums will then be available to users of the web application.
+You may wish to expose an instance of PhotoMapAI that only shows a subset of albums. To do this, run `start_photomap` with the `--album-locked` option followed by one or more album keys separated by spaces.
+
+### Single Album Lock
+
+To lock PhotoMapAI to a single album, provide a single album key:
+
+```bash
+start_photomap --album-locked my_album
+```
+
+When a single album is locked:
+- The album selection dropdown disappears from the settings dialog
+- Only the locked album is accessible
+- All album management features (adding, editing, deleting albums) are disabled
+- File system operations (browsing directories, creating folders) are disabled
+- The favorites export function is disabled
+
+### Multiple Album Lock
+
+To lock PhotoMapAI to multiple albums, provide multiple album keys separated by spaces:
+
+```bash
+start_photomap --album-locked album1 album2 album3
+```
+
+When multiple albums are locked:
+- The album selection dropdown appears in the settings dialog showing only the locked albums
+- Users can switch between the locked albums
+- The "Manage Albums" button remains hidden
+- All album management features remain disabled
+- File system operations remain disabled
+- The favorites export function remains disabled
+
+### Using URL Parameters
 
 It may also be handy to pair this with a specific URL that starts PhotoMapAI with a specific album. The format to start with an album named "my_album" is:
 
 ```bash
-http://your.photomap.host/:8050?album=my_album
+http://your.photomap.host:8050?album=my_album
 ```
+
+When using multiple locked albums, the URL parameter allows users to select which of the locked albums to view initially. If the album specified in the URL is not in the locked list, the first locked album will be used instead.
 
 
 ## Running PhotoMapAI Under HTTPS
