@@ -13,6 +13,7 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 - Thematic image clustering and visualization
 - Flexible album management
 - Bookmark images for quick access, batch download, or deletion
+- Curator mode for selecting a balanced set of images to use for LoRA training
 - Responsive UI for desktop and mobile
 - Support for wide range of image formats, including Apple's HEIC
 - Integration with the <a href="https://github.com/invoke-ai/InvokeAI">InvokeAI</a> AI image generation system
@@ -43,6 +44,12 @@ You can start an image similarity search by uploading a local image file, draggi
 When viewing a photo in full-screen mode, you can pop out a little drawer to show its metadata, including the GPS location (if available), and the camera/phone settings:
 
 <img src="https://github.com/lstein/PhotoMapAI/blob/master/docs/img/photomap_metadata.png?raw=true" alt="Image Metadata" class="img-hover-zoom">
+
+## Curator Mode
+
+The curator mode allows you to use a combination of algorithms and manual selection to identify a subset of images suitable for use to train image generation models (such as LoRAs) and classifiers. 
+
+<img src="https://github.com/lstein/PhotoMapAI/blob/master/docs/img/curator-panel.png?raw=true" alt="Image Curator Panel" class="img-hover-zoom">
 
 ### InvokeAI Support
 
