@@ -258,21 +258,24 @@ class Embeddings(BaseModel):
         super().__init__(**data)
 
     @staticmethod
-    def _cleanup_cuda_memory(model: "clip.model.CLIP", device: str) -> None:  # type: ignore
+    def _cleanup_cuda_memory(device: str) -> None:
         """
-        Clean up CUDA memory by moving model to CPU and clearing cache.
+        Clean up CUDA memory by clearing cache and forcing garbage collection.
         
-        This frees GPU VRAM while keeping the model in system RAM for potential reuse,
-        avoiding the overhead of reloading the model on subsequent operations.
+        This completely frees GPU VRAM to ensure it returns to zero after operations.
+        The model will need to be reloaded on subsequent operations, but this ensures
+        GPU memory is available for other processes.
         
         Args:
-            model: The CLIP model to move to CPU
             device: The device string ("cuda" or "cpu")
         """
         if device == "cuda":
             try:
-                model.to("cpu")
+                # Synchronize to ensure all CUDA operations are complete
+                torch.cuda.synchronize()
+                # Empty the CUDA cache
                 torch.cuda.empty_cache()
+                # Force garbage collection
                 gc.collect()
             except RuntimeError as e:
                 # Log but don't crash if CUDA operations fail
@@ -480,7 +483,9 @@ class Embeddings(BaseModel):
         )
         
         # Clean up GPU memory after batch processing
-        self._cleanup_cuda_memory(model, device)
+        # Delete model references to completely free VRAM
+        del model, preprocess
+        self._cleanup_cuda_memory(device)
         
         return result
 
@@ -534,7 +539,9 @@ class Embeddings(BaseModel):
         )
         
         # Clean up GPU memory after async batch processing
-        self._cleanup_cuda_memory(model, device)
+        # Delete model references to completely free VRAM
+        del model, preprocess
+        self._cleanup_cuda_memory(device)
         
         return result
 
@@ -1086,7 +1093,28 @@ class Embeddings(BaseModel):
             return result_indices, result_similarities
         finally:
             # Clean up GPU memory after search (always executed)
-            self._cleanup_cuda_memory(model, device)
+            # Delete all GPU tensors and model references to completely free VRAM
+            try:
+                del model, preprocess
+                # Delete any tensors that may still be around
+                if 'embeddings_tensor' in locals():
+                    del embeddings_tensor
+                if 'norm_embeddings' in locals():
+                    del norm_embeddings
+                if 'combined_embedding_norm' in locals():
+                    del combined_embedding_norm
+                if 'similarities' in locals():
+                    del similarities
+                if 'image_embedding' in locals():
+                    del image_embedding
+                if 'pos_emb' in locals():
+                    del pos_emb
+                if 'neg_emb' in locals():
+                    del neg_emb
+            except (NameError, UnboundLocalError):
+                # Variables may not be defined if early return
+                pass
+            self._cleanup_cuda_memory(device)
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):
         """
