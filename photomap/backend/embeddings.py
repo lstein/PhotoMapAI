@@ -276,12 +276,11 @@ class Embeddings(BaseModel):
             try:
                 # Synchronize to ensure all CUDA operations are complete
                 torch.cuda.synchronize()
-                # Empty the CUDA cache multiple times to be thorough
+                # Empty the CUDA cache
                 torch.cuda.empty_cache()
-                # Force garbage collection twice for better cleanup
+                # Force garbage collection to clean up Python references
                 gc.collect()
-                gc.collect()
-                # Empty cache again after GC
+                # Empty cache again after GC to catch any newly freed memory
                 torch.cuda.empty_cache()
             except RuntimeError as e:
                 # Log but don't crash if CUDA operations fail
