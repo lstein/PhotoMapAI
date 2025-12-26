@@ -9,6 +9,7 @@ for image embeddings and similarity calculations.
 
 import asyncio
 import functools
+import gc
 import logging
 import os
 import sys
@@ -447,8 +448,8 @@ class Embeddings(BaseModel):
         umap_embeddings = self.create_umap_index(
             np.array(embeddings) if embeddings else np.empty((0, 512))
         )
-
-        return IndexResult(
+        
+        result = IndexResult(
             embeddings=np.array(embeddings) if embeddings else np.empty((0, 512)),
             filenames=np.array(filenames),
             modification_times=np.array(modification_times),
@@ -456,6 +457,14 @@ class Embeddings(BaseModel):
             umap_embeddings=umap_embeddings,
             bad_files=bad_files,
         )
+        
+        # Clean up GPU memory after batch processing
+        del model, preprocess
+        if device == "cuda":
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        return result
 
     async def _process_images_batch_async(
         self, image_paths: list[Path], album_key: str, yield_interval: int = 10
@@ -498,13 +507,21 @@ class Embeddings(BaseModel):
             if i % yield_interval == 0:
                 await asyncio.sleep(0.01)
 
-        return IndexResult(
+        result = IndexResult(
             embeddings=np.array(embeddings) if embeddings else np.empty((0, 512)),
             filenames=np.array(filenames),
             modification_times=np.array(modification_times),
             metadata=np.array(metadatas, dtype=object),
             bad_files=bad_files,
         )
+        
+        # Clean up GPU memory after async batch processing
+        del model, preprocess
+        if device == "cuda":
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        return result
 
     def _save_embeddings(self, index_result: IndexResult) -> None:
         """Save embeddings to disk and clear cache."""
@@ -1043,11 +1060,36 @@ class Embeddings(BaseModel):
         top_indices = similarities.argsort()[-top_k:][::-1]
         top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
         if not top_indices:
+            # Clean up GPU memory before returning
+            del model, embeddings_tensor, norm_embeddings, combined_embedding_norm
+            if image_embedding is not None:
+                del image_embedding
+            if pos_emb is not None:
+                del pos_emb
+            if neg_emb is not None:
+                del neg_emb
+            if device == "cuda":
+                torch.cuda.empty_cache()
+            gc.collect()
             return [], []
 
         # Translate from filename array indices to sorted filename top_indices
         global_indices = [int(filename_map[filenames[i]]) for i in top_indices]
-        return global_indices, similarities[top_indices].tolist()
+        result_similarities = similarities[top_indices].tolist()
+        
+        # Clean up GPU memory after search
+        del model, embeddings_tensor, norm_embeddings, combined_embedding_norm, similarities
+        if image_embedding is not None:
+            del image_embedding
+        if pos_emb is not None:
+            del pos_emb
+        if neg_emb is not None:
+            del neg_emb
+        if device == "cuda":
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        return global_indices, result_similarities
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):
         """
