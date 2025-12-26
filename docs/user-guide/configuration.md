@@ -29,7 +29,7 @@ On Windows systems, setting environment variables can be done through the GUI as
 
 ## Limiting the Available Albums
 
-You may wish to expose an instance of PhotoMapAI that only shows a subset of albums. To do this, run `start_photomap` with `--album-locked list,of,albums`. Use the album key(s) to select which albums to display, separating the keys with commas. Only these albums will then be available to users of the web application.
+You may wish to expose an instance of PhotoMapAI that only shows a subset of albums. To do this, run `start_photomap` with `--album-locked album1 album2 album3`. Use the album key(s) to select which albums to display, separating the keys with whitespace. Only these albums will then be available to users of the web application.
 
 It may also be handy to pair this with a specific URL that starts PhotoMapAI with a specific album. The format to start with an album named "my_album" is:
 
