@@ -258,7 +258,7 @@ class Embeddings(BaseModel):
         super().__init__(**data)
 
     @staticmethod
-    def _cleanup_cuda_memory(model, device: str) -> None:
+    def _cleanup_cuda_memory(model: "clip.model.CLIP", device: str) -> None:  # type: ignore
         """
         Clean up CUDA memory by moving model to CPU and clearing cache.
         
@@ -270,9 +270,13 @@ class Embeddings(BaseModel):
             device: The device string ("cuda" or "cpu")
         """
         if device == "cuda":
-            model.to("cpu")
-            torch.cuda.empty_cache()
-            gc.collect()
+            try:
+                model.to("cpu")
+                torch.cuda.empty_cache()
+                gc.collect()
+            except RuntimeError as e:
+                # Log but don't crash if CUDA operations fail
+                logger.warning(f"CUDA cleanup failed: {e}")
 
     def get_image_files_from_directory(
         self,
@@ -1041,6 +1045,7 @@ class Embeddings(BaseModel):
 
         # If all weights are zero, return empty result
         if image_weight == 0.0 and positive_weight == 0.0 and negative_weight == 0.0:
+            self._cleanup_cuda_memory(model, device)
             return [], []
 
         # Weighted combination: image + positive - negative
