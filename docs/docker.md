@@ -11,7 +11,7 @@ The second image is `photomapai`. This is the full-featured version of the appli
 Assuming you have [Docker](https://docker.com installed on your system, run the following command to launch the demo version:
 
 ```
-docker -p 8050:8050 lstein/photomapai-demo:latest
+docker run -p 8050:8050 lstein/photomapai-demo:latest
 ```
 
 This will download the latest version of PhotoMapAI from DockerHub and run it, while mapping your desktop's network port 8050 to port 8050 running inside the container. You will see some startup messages. When they finish, point your browser to http://localhost:8050. You will see the PhotoMapAI user interface.
@@ -19,7 +19,7 @@ This will download the latest version of PhotoMapAI from DockerHub and run it, w
 Running the full version is almost as easy:
 
 ```
-docker -p 8050:8050 -v /path/to/my/pictures:/Pictures lstein/photomapai:latest
+docker run -p 8050:8050 -v /path/to/my/pictures:/Pictures lstein/photomapai:latest
 ```
 
 The additional `-v` option maps a folder on your desktop machine to the `/Pictures` folder in the container. Replace `/path/to/my/pictures` with the appropriate folder path on your system. You may provide multiple `-v` options to map more directories. Once PhotoMapAI is running, point your browser to http://localhost:8050 and proceed to define an album as described in [Managing Albums](user-guide/albums.md).
