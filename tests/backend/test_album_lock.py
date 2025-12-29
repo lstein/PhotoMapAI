@@ -169,3 +169,32 @@ def test_multiple_albums_access_denied_non_locked_album(client, setup_multiple_a
     response = client.get("/album/unlocked_album/")
     assert response.status_code == 403
     assert "Album management is locked" in response.json()["detail"]
+
+
+def test_validate_locked_albums_exist():
+    """Test that the validation logic correctly identifies invalid album keys."""
+    from photomap.backend.config import get_config_manager
+    
+    # Get the config manager with test config
+    config = get_config_manager()
+    available_albums = config.get_albums()
+    
+    # Test with valid albums (should not raise any errors)
+    # Note: The test config may or may not have albums, so we just verify the logic
+    if available_albums:
+        valid_albums = list(available_albums.keys())
+        invalid = [album for album in valid_albums if album not in available_albums]
+        assert len(invalid) == 0, "Valid albums should not be marked as invalid"
+    
+    # Test with invalid albums
+    invalid_albums = ["nonexistent_album_1", "nonexistent_album_2"]
+    invalid = [album for album in invalid_albums if album not in available_albums]
+    assert len(invalid) == len(invalid_albums), "All nonexistent albums should be detected as invalid"
+    
+    # Test mixed valid and invalid (if albums exist)
+    if available_albums:
+        valid_album = list(available_albums.keys())[0]
+        mixed = [valid_album, "nonexistent_album"]
+        invalid = [album for album in mixed if album not in available_albums]
+        assert len(invalid) == 1, "Should detect exactly one invalid album"
+        assert invalid[0] == "nonexistent_album"

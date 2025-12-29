@@ -190,6 +190,23 @@ def main():
     app_url = get_app_url(host, port)
 
     config = get_config_manager()
+    
+    # Validate that all locked albums exist in the configuration
+    if args.album_locked:
+        available_albums = config.get_albums()
+        if not available_albums:
+            logger.error("Error: No albums are configured in the configuration file.")
+            logger.error("Cannot lock to albums when no albums exist.")
+            sys.exit(1)
+        
+        invalid_albums = [album for album in args.album_locked if album not in available_albums]
+        if invalid_albums:
+            logger.error(f"Error: The following album(s) specified in --album-locked do not exist in the configuration:")
+            for album in invalid_albums:
+                logger.error(f"  - {album}")
+            logger.error(f"Available albums: {', '.join(available_albums.keys())}")
+            sys.exit(1)
+    
     logger.info(f"Using configuration file: {config.config_path}")
     logger.info(f"Backend root directory: {repo_root}")
     logger.info(
