@@ -179,22 +179,19 @@ def test_validate_locked_albums_exist():
     config = get_config_manager()
     available_albums = config.get_albums()
     
-    # Test with valid albums (should not raise any errors)
-    # Note: The test config may or may not have albums, so we just verify the logic
-    if available_albums:
-        valid_albums = list(available_albums.keys())
-        invalid = [album for album in valid_albums if album not in available_albums]
-        assert len(invalid) == 0, "Valid albums should not be marked as invalid"
-    
-    # Test with invalid albums
+    # Test with invalid albums - these should always be detected
     invalid_albums = ["nonexistent_album_1", "nonexistent_album_2"]
     invalid = [album for album in invalid_albums if album not in available_albums]
     assert len(invalid) == len(invalid_albums), "All nonexistent albums should be detected as invalid"
     
-    # Test mixed valid and invalid (if albums exist)
+    # Test mixed valid and invalid (if albums exist in test config)
     if available_albums:
         valid_album = list(available_albums.keys())[0]
         mixed = [valid_album, "nonexistent_album"]
         invalid = [album for album in mixed if album not in available_albums]
         assert len(invalid) == 1, "Should detect exactly one invalid album"
         assert invalid[0] == "nonexistent_album"
+        
+        # Verify valid albums pass validation
+        valid = [album for album in [valid_album] if album not in available_albums]
+        assert len(valid) == 0, "Valid album should pass validation"
