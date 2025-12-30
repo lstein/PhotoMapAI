@@ -533,13 +533,14 @@ class BookmarkManager {
         }
       }
 
-      // Clear bookmarks after successful deletion
-      this.clearBookmarks();
-      
-      // Trigger album refresh
+      // Trigger album refresh BEFORE clearing bookmarks
+      // This ensures slideState.totalAlbumImages is updated before any grid refreshes
       window.dispatchEvent(new CustomEvent("albumChanged", {
         detail: { album: state.album, totalImages: slideState.totalAlbumImages - indices.length }
       }));
+      
+      // Clear bookmarks after album refresh
+      this.clearBookmarks();
 
     } catch (error) {
       console.error("Delete failed:", error);
