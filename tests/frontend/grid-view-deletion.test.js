@@ -86,7 +86,10 @@ const mockSlideState = {
       const newIndex = Math.max(0, currentIndex - deletedBefore);
       
       // Clamp to new total, ensuring non-negative
-      mockSlideState.currentGlobalIndex = Math.max(0, Math.min(newIndex, detail.totalImages - 1));
+      // Handle edge case where all images are deleted (totalImages = 0)
+      mockSlideState.currentGlobalIndex = detail.totalImages > 0
+        ? Math.max(0, Math.min(newIndex, detail.totalImages - 1))
+        : 0;
     } else {
       mockSlideState.currentGlobalIndex = 0;
     }
