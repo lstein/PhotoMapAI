@@ -72,15 +72,34 @@ const mockSlideState = {
   isSearchMode: false,
   searchResults: [],
   totalAlbumImages: 10,
+  currentGlobalIndex: 0,
+  isSearchMode: false,
   handleAlbumChanged: jest.fn((detail) => {
+    // Implement the actual logic from slide-state.js
+    if (detail.changeType === 'deletion' && detail.deletedIndices && !mockSlideState.isSearchMode) {
+      const deletedIndices = detail.deletedIndices;
+      const currentIndex = mockSlideState.currentGlobalIndex;
+      
+      // Count how many deleted images were before the current position
+      const deletedBefore = deletedIndices.filter(idx => idx < currentIndex).length;
+      
+      // Adjust current position by subtracting deleted images before it
+      const newIndex = Math.max(0, currentIndex - deletedBefore);
+      
+      // Clamp to new total
+      mockSlideState.currentGlobalIndex = Math.min(newIndex, detail.totalImages - 1);
+    } else {
+      mockSlideState.currentGlobalIndex = 0;
+    }
+    
     mockSlideState.totalAlbumImages = detail.totalImages;
     mockSlideState.getCurrentSlide.mockReturnValue({ 
-      globalIndex: 0, 
+      globalIndex: mockSlideState.currentGlobalIndex, 
       searchIndex: null, 
       totalCount: detail.totalImages, 
       isSearchMode: false 
     });
-    mockSlideState.getCurrentIndex.mockReturnValue(0);
+    mockSlideState.getCurrentIndex.mockReturnValue(mockSlideState.currentGlobalIndex);
     mockSlideState.indexToGlobal.mockImplementation((i) => i < detail.totalImages ? i : null);
   })
 };
@@ -191,14 +210,18 @@ describe('grid-view.js - image deletion', () => {
     
     // This is the CORRECT order: dispatch albumChanged BEFORE any other events
     // so that slideState.totalAlbumImages is updated before grid refreshes
-    mockSlideState.handleAlbumChanged({ album: 'test-album', totalImages: newTotalImages });
+    const detail = { 
+      album: 'test-album', 
+      totalImages: newTotalImages,
+      changeType: 'deletion',
+      deletedIndices: deletedIndices
+    };
+    mockSlideState.handleAlbumChanged(detail);
     mockSlideState.totalAlbumImages = newTotalImages;
     mockSlideState.indexToGlobal.mockImplementation((i) => i < newTotalImages ? i : null);
     
     // Dispatch albumChanged event (simulating what bookmarks.js does)
-    window.dispatchEvent(new CustomEvent("albumChanged", {
-      detail: { album: 'test-album', totalImages: newTotalImages }
-    }));
+    window.dispatchEvent(new CustomEvent("albumChanged", { detail }));
     
     // Wait for event handler to complete
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -274,5 +297,90 @@ describe('grid-view.js - image deletion', () => {
     // resetAllSlides should NOT have been called because grid is not visible
     expect(mockSwiperInstance.removeAllSlides).not.toHaveBeenCalled();
     expect(mockShowSpinner).not.toHaveBeenCalled();
+  });
+
+  it('should preserve grid position when deleting images before current position', async () => {
+    // Initialize the grid view manager
+    gridViewManager = await initializeGridSwiper();
+    
+    // Set initial state: viewing image at index 8 out of 10 total
+    mockSlideState.currentGlobalIndex = 8;
+    mockSlideState.totalAlbumImages = 10;
+    mockSlideState.isSearchMode = false;
+    mockSlideState.getCurrentSlide.mockReturnValue({
+      globalIndex: 8,
+      searchIndex: null,
+      totalCount: 10,
+      isSearchMode: false
+    });
+    mockSlideState.getCurrentIndex.mockReturnValue(8);
+    
+    // Delete images at indices 2, 3, 4 (before current position)
+    const deletedIndices = [2, 3, 4];
+    const newTotalImages = 10 - deletedIndices.length;
+    
+    // Call handleAlbumChanged with deletion details
+    const detail = {
+      album: 'test-album',
+      totalImages: newTotalImages,
+      changeType: 'deletion',
+      deletedIndices: deletedIndices
+    };
+    mockSlideState.handleAlbumChanged(detail);
+    
+    // Current position should be adjusted: was 8, deleted 3 before it, so now 8-3=5
+    expect(mockSlideState.currentGlobalIndex).toBe(5);
+  });
+
+  it('should not change position when deleting images after current position', async () => {
+    // Initialize the grid view manager
+    gridViewManager = await initializeGridSwiper();
+    
+    // Set initial state: viewing image at index 3 out of 10 total
+    mockSlideState.currentGlobalIndex = 3;
+    mockSlideState.totalAlbumImages = 10;
+    mockSlideState.isSearchMode = false;
+    
+    // Delete images at indices 7, 8, 9 (after current position)
+    const deletedIndices = [7, 8, 9];
+    const newTotalImages = 10 - deletedIndices.length;
+    
+    // Call handleAlbumChanged with deletion details
+    const detail = {
+      album: 'test-album',
+      totalImages: newTotalImages,
+      changeType: 'deletion',
+      deletedIndices: deletedIndices
+    };
+    mockSlideState.handleAlbumChanged(detail);
+    
+    // Current position should remain the same since deletions were after it
+    expect(mockSlideState.currentGlobalIndex).toBe(3);
+  });
+
+  it('should adjust position when deleting images around current position', async () => {
+    // Initialize the grid view manager
+    gridViewManager = await initializeGridSwiper();
+    
+    // Set initial state: viewing image at index 5 out of 10 total
+    mockSlideState.currentGlobalIndex = 5;
+    mockSlideState.totalAlbumImages = 10;
+    mockSlideState.isSearchMode = false;
+    
+    // Delete images at indices 2, 4, 6, 8 (mix of before and after)
+    const deletedIndices = [2, 4, 6, 8];
+    const newTotalImages = 10 - deletedIndices.length;
+    
+    // Call handleAlbumChanged with deletion details
+    const detail = {
+      album: 'test-album',
+      totalImages: newTotalImages,
+      changeType: 'deletion',
+      deletedIndices: deletedIndices
+    };
+    mockSlideState.handleAlbumChanged(detail);
+    
+    // 2 images deleted before index 5 (indices 2 and 4), so position should be 5-2=3
+    expect(mockSlideState.currentGlobalIndex).toBe(3);
   });
 });
