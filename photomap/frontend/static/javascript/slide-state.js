@@ -254,8 +254,8 @@ class SlideStateManager {
       // Adjust current position by subtracting deleted images before it
       const newIndex = Math.max(0, currentIndex - deletedBefore);
       
-      // Clamp to new total
-      this.currentGlobalIndex = Math.min(newIndex, detail.totalImages - 1);
+      // Clamp to new total, ensuring non-negative
+      this.currentGlobalIndex = Math.max(0, Math.min(newIndex, detail.totalImages - 1));
       this.currentSearchIndex = 0;
     } else {
       // For other changes (album switch, move, etc.), reset to beginning
