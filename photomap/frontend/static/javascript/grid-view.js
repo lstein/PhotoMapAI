@@ -389,15 +389,18 @@ class GridViewManager {
 
     try {
       if (!this.swiper.destroyed) {
+        console.log('[GridView] Removing all slides, current slide count:', this.swiper.slides.length);
         this.swiper.slideTo(0, 0, false); // prevents a TypeError warning
         await this.swiper.removeAllSlides();
+        console.log('[GridView] All slides removed, new slide count:', this.swiper.slides.length);
       }
     } catch (err) {
-      console.warn("removeAllSlides failed:", err);
+      console.error('[GridView] removeAllSlides failed:', err);
     }
 
     try {
       // Load batches - placeholders appear immediately, metadata loads in background
+      console.log('[GridView] Loading batches starting at index:', targetIndex);
       await this.loadBatch(targetIndex, true);
       slideState.setCurrentIndex(targetIndex);
       this.updateCurrentSlide();
@@ -407,8 +410,9 @@ class GridViewManager {
       if (targetIndex > 0) {
         await this.loadBatch(targetIndex - this.slidesPerBatch, false);
       }
+      console.log('[GridView] Batches loaded, final slide count:', this.swiper.slides.length);
     } catch (err) {
-      console.warn(err);
+      console.error('[GridView] Load batches failed:', err);
     }
 
     hideSpinner();
