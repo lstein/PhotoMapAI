@@ -33,6 +33,7 @@ class GridViewManager {
     this.currentColumns = 0;
     this.suppressSlideChange = false;
     this.batchLoading = false;
+    this.resetInProgress = false; // Guard against concurrent resets
     this.slideData = {};
     this.GRID_MAX_SCREENS = 6;
     
@@ -165,6 +166,7 @@ class GridViewManager {
       window,
       "searchResultsChanged",
       async (e) => {
+        console.log('[GridView] searchResultsChanged event received', e.detail);
         await this.resetAllSlides();
       }
     );
@@ -220,6 +222,7 @@ class GridViewManager {
     );
 
     this.addEventListener(window, "albumChanged", async () => {
+      console.log('[GridView] albumChanged event received');
       await this.resetAllSlides();
     });
 
@@ -358,9 +361,25 @@ class GridViewManager {
   }
 
   async resetAllSlides() {
+    console.log('[GridView] resetAllSlides called', {
+      gridInitialized: this.gridInitialized,
+      hasSwiper: !!this.swiper,
+      isVisible: this.isVisible(),
+      destroyed: this.swiper?.destroyed,
+      resetInProgress: this.resetInProgress
+    });
+    
     if (!this.gridInitialized) return;
     if (!this.swiper) return;
     if (!this.isVisible()) return;
+    
+    // Guard against concurrent resets
+    if (this.resetInProgress) {
+      console.log('[GridView] Reset already in progress, skipping');
+      return;
+    }
+    
+    this.resetInProgress = true;
 
     showSpinner();
 
@@ -393,6 +412,8 @@ class GridViewManager {
     }
 
     hideSpinner();
+    this.resetInProgress = false;
+    console.log('[GridView] resetAllSlides completed');
   }
 
   async loadBatch(startIndex = null, append = true) {
