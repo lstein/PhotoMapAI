@@ -33,6 +33,8 @@ class GridViewManager {
     this.currentColumns = 0;
     this.suppressSlideChange = false;
     this.batchLoading = false;
+    this.resetInProgress = false; // Guard against concurrent resets
+    this.cacheBreaker = Date.now(); // Cache breaker for thumbnail URLs
     this.slideData = {};
     this.GRID_MAX_SCREENS = 6;
     
@@ -219,7 +221,11 @@ class GridViewManager {
       }
     );
 
-    this.addEventListener(window, "albumChanged", async () => {
+    this.addEventListener(window, "albumChanged", async (e) => {
+      // Update cache breaker to force thumbnail reload, especially for deletions
+      if (e.detail?.changeType === 'deletion') {
+        this.cacheBreaker = Date.now();
+      }
       await this.resetAllSlides();
     });
 
@@ -361,6 +367,13 @@ class GridViewManager {
     if (!this.gridInitialized) return;
     if (!this.swiper) return;
     if (!this.isVisible()) return;
+    
+    // Guard against concurrent resets
+    if (this.resetInProgress) {
+      return;
+    }
+    
+    this.resetInProgress = true;
 
     showSpinner();
 
@@ -393,6 +406,7 @@ class GridViewManager {
     }
 
     hideSpinner();
+    this.resetInProgress = false;
   }
 
   async loadBatch(startIndex = null, append = true) {
@@ -617,7 +631,7 @@ class GridViewManager {
   }
 
   makePlaceholderSlideHTML(globalIndex) {
-    const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${this.slideHeight}`;
+    const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${this.slideHeight}&t=${this.cacheBreaker}`;
     return `
     <div class="swiper-slide" style="width:${this.slideHeight}px; height:${
       this.slideHeight
@@ -643,7 +657,7 @@ class GridViewManager {
     data.searchIndex = slideState.globalToSearch(globalIndex);
     this.slideData[globalIndex] = data;
 
-    const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${this.slideHeight}`;
+    const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${this.slideHeight}&t=${this.cacheBreaker}`;
     return `
     <div class="swiper-slide" style="width:${this.slideHeight}px; height:${
       this.slideHeight

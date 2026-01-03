@@ -243,8 +243,29 @@ class SlideStateManager {
   }
 
   handleAlbumChanged(detail) {
-    this.currentGlobalIndex = 0;
-    this.currentSearchIndex = 0;
+    // For deletions, try to preserve position by calculating how many images before current were deleted
+    if (detail.changeType === 'deletion' && detail.deletedIndices && !this.isSearchMode) {
+      const deletedIndices = detail.deletedIndices;
+      const currentIndex = this.currentGlobalIndex;
+      
+      // Count how many deleted images were before the current position
+      const deletedBefore = deletedIndices.filter(idx => idx < currentIndex).length;
+      
+      // Adjust current position by subtracting deleted images before it
+      const newIndex = Math.max(0, currentIndex - deletedBefore);
+      
+      // Clamp to new total, ensuring non-negative
+      // Handle edge case where all images are deleted (totalImages = 0)
+      this.currentGlobalIndex = detail.totalImages > 0 
+        ? Math.max(0, Math.min(newIndex, detail.totalImages - 1))
+        : 0;
+      this.currentSearchIndex = 0;
+    } else {
+      // For other changes (album switch, move, etc.), reset to beginning
+      this.currentGlobalIndex = 0;
+      this.currentSearchIndex = 0;
+    }
+    
     this.exitSearchMode();
     this.totalAlbumImages = detail.totalImages; // Update from state
   }
