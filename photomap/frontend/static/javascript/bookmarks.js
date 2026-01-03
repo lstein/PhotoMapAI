@@ -212,11 +212,6 @@ class BookmarkManager {
    * Clear all bookmarks
    */
   clearBookmarks() {
-    console.log('[Bookmarks] clearBookmarks called', {
-      isShowingBookmarks: this.isShowingBookmarks,
-      bookmarksCount: this.bookmarks.size
-    });
-    
     this.bookmarks.clear();
     this.saveBookmarks();
     this.updateAllBookmarkIcons();
@@ -224,17 +219,14 @@ class BookmarkManager {
     
     // If we were showing bookmarks, restore previous search results (like hideBookmarkedImages)
     if (this.isShowingBookmarks) {
-      console.log('[Bookmarks] Was showing bookmarks, restoring search state');
       this.isShowingBookmarks = false;
       this.removeBookmarkMenu();
       
       if (this.previousSearchResults !== null) {
         // Restore previous search results
-        console.log('[Bookmarks] Restoring previous search results');
         setSearchResults(this.previousSearchResults, this.previousSearchType || "search");
       } else {
         // Return to chronological mode (clear search)
-        console.log('[Bookmarks] Returning to chronological mode');
         setSearchResults([], "clear");
       }
       
@@ -544,14 +536,6 @@ class BookmarkManager {
       // Trigger album refresh BEFORE clearing bookmarks
       // This ensures slideState.totalAlbumImages is updated before any grid refreshes
       // Pass deletedIndices to allow position preservation
-      console.log('[Bookmarks] Dispatching albumChanged event', {
-        album: state.album,
-        totalImages: slideState.totalAlbumImages - indices.length,
-        changeType: 'deletion',
-        deletedIndices: indices,
-        deletedIndicesValues: Array.from(indices)
-      });
-      
       window.dispatchEvent(new CustomEvent("albumChanged", {
         detail: { 
           album: state.album, 
@@ -560,8 +544,6 @@ class BookmarkManager {
           deletedIndices: indices
         }
       }));
-      
-      console.log('[Bookmarks] Calling clearBookmarks');
       
       // Clear bookmarks after album refresh
       this.clearBookmarks();

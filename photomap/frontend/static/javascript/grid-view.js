@@ -167,7 +167,6 @@ class GridViewManager {
       window,
       "searchResultsChanged",
       async (e) => {
-        console.log('[GridView] searchResultsChanged event received', e.detail);
         await this.resetAllSlides();
       }
     );
@@ -223,11 +222,9 @@ class GridViewManager {
     );
 
     this.addEventListener(window, "albumChanged", async (e) => {
-      console.log('[GridView] albumChanged event received', e.detail);
       // Update cache breaker to force thumbnail reload, especially for deletions
       if (e.detail?.changeType === 'deletion') {
         this.cacheBreaker = Date.now();
-        console.log('[GridView] Updated cache breaker for deletion:', this.cacheBreaker);
       }
       await this.resetAllSlides();
     });
@@ -367,21 +364,12 @@ class GridViewManager {
   }
 
   async resetAllSlides() {
-    console.log('[GridView] resetAllSlides called', {
-      gridInitialized: this.gridInitialized,
-      hasSwiper: !!this.swiper,
-      isVisible: this.isVisible(),
-      destroyed: this.swiper?.destroyed,
-      resetInProgress: this.resetInProgress
-    });
-    
     if (!this.gridInitialized) return;
     if (!this.swiper) return;
     if (!this.isVisible()) return;
     
     // Guard against concurrent resets
     if (this.resetInProgress) {
-      console.log('[GridView] Reset already in progress, skipping');
       return;
     }
     
@@ -395,18 +383,15 @@ class GridViewManager {
 
     try {
       if (!this.swiper.destroyed) {
-        console.log('[GridView] Removing all slides, current slide count:', this.swiper.slides.length);
         this.swiper.slideTo(0, 0, false); // prevents a TypeError warning
         await this.swiper.removeAllSlides();
-        console.log('[GridView] All slides removed, new slide count:', this.swiper.slides.length);
       }
     } catch (err) {
-      console.error('[GridView] removeAllSlides failed:', err);
+      console.warn("removeAllSlides failed:", err);
     }
 
     try {
       // Load batches - placeholders appear immediately, metadata loads in background
-      console.log('[GridView] Loading batches starting at index:', targetIndex);
       await this.loadBatch(targetIndex, true);
       slideState.setCurrentIndex(targetIndex);
       this.updateCurrentSlide();
@@ -416,14 +401,12 @@ class GridViewManager {
       if (targetIndex > 0) {
         await this.loadBatch(targetIndex - this.slidesPerBatch, false);
       }
-      console.log('[GridView] Batches loaded, final slide count:', this.swiper.slides.length);
     } catch (err) {
-      console.error('[GridView] Load batches failed:', err);
+      console.warn(err);
     }
 
     hideSpinner();
     this.resetInProgress = false;
-    console.log('[GridView] resetAllSlides completed');
   }
 
   async loadBatch(startIndex = null, append = true) {
