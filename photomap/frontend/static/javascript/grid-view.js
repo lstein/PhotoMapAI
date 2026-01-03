@@ -34,6 +34,7 @@ class GridViewManager {
     this.suppressSlideChange = false;
     this.batchLoading = false;
     this.resetInProgress = false; // Guard against concurrent resets
+    this.cacheBreaker = Date.now(); // Cache breaker for thumbnail URLs
     this.slideData = {};
     this.GRID_MAX_SCREENS = 6;
     
@@ -221,8 +222,13 @@ class GridViewManager {
       }
     );
 
-    this.addEventListener(window, "albumChanged", async () => {
-      console.log('[GridView] albumChanged event received');
+    this.addEventListener(window, "albumChanged", async (e) => {
+      console.log('[GridView] albumChanged event received', e.detail);
+      // Update cache breaker to force thumbnail reload, especially for deletions
+      if (e.detail?.changeType === 'deletion') {
+        this.cacheBreaker = Date.now();
+        console.log('[GridView] Updated cache breaker for deletion:', this.cacheBreaker);
+      }
       await this.resetAllSlides();
     });
 
@@ -642,7 +648,7 @@ class GridViewManager {
   }
 
   makePlaceholderSlideHTML(globalIndex) {
-    const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${this.slideHeight}`;
+    const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${this.slideHeight}&t=${this.cacheBreaker}`;
     return `
     <div class="swiper-slide" style="width:${this.slideHeight}px; height:${
       this.slideHeight
@@ -668,7 +674,7 @@ class GridViewManager {
     data.searchIndex = slideState.globalToSearch(globalIndex);
     this.slideData[globalIndex] = data;
 
-    const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${this.slideHeight}`;
+    const thumbnail_url = `thumbnails/${state.album}/${globalIndex}?size=${this.slideHeight}&t=${this.cacheBreaker}`;
     return `
     <div class="swiper-slide" style="width:${this.slideHeight}px; height:${
       this.slideHeight

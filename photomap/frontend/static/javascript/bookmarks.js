@@ -548,7 +548,8 @@ class BookmarkManager {
         album: state.album,
         totalImages: slideState.totalAlbumImages - indices.length,
         changeType: 'deletion',
-        deletedIndices: indices
+        deletedIndices: indices,
+        deletedIndicesValues: Array.from(indices)
       });
       
       window.dispatchEvent(new CustomEvent("albumChanged", {
