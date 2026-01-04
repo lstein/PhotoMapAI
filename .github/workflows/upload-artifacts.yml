@@ -1,14 +1,19 @@
 name: Upload Release Artifacts
 
 on:
-    workflow_call:
+  workflow_call: 
+    inputs:
+      tag_name: 
+        required: true
+        type:  string
+
 jobs:
-  upload-release:
+  upload-release: 
     runs-on: ubuntu-latest
     steps:
       - name: Download CPU installer package artifacts
         uses: actions/download-artifact@v4
-        with:
+        with: 
           pattern: "*-cpu-*"
           path: artifacts
 
@@ -18,6 +23,7 @@ jobs:
       - name: Upload artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name }}
           files: artifacts/*-cpu-*/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,43 +2,61 @@ name: Deploy Release
 
 on:
   workflow_dispatch:
-  release:
+  release: 
     types: [published]
+
 jobs:
-  tag-release:
+  tag-release: 
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      tag:  ${{ steps.get_version. outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
-        with:
+        with: 
           python-version: '3.12'
 
       - name: Extract version from pyproject.toml
         id: get_version
         run: |
           VERSION=$(python -c "
-          try:
+          try: 
               import tomllib
               with open('pyproject.toml', 'rb') as f:
                   data = tomllib.load(f)
               print(data['project']['version'])
           except Exception as e:
+              import sys
               print(f'Error reading version: {e}', file=sys.stderr)
               exit(1)
           ")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git ls-remote --tags origin | grep -q "refs/tags/v${{ steps.get_version.outputs. version }}"; then
+            echo "Tag already exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag does not exist"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Tag the release
+        if: steps. check_tag.outputs.exists == 'false'
         run: |
-          git config user.name "github-actions"
+          git config user. name "github-actions"
           git config user.email "github-actions@github.com"
           git tag v${{ steps.get_version.outputs.version }}
           git push origin v${{ steps.get_version.outputs.version }}
 
-  deploy-pypi:
+  deploy-pypi: 
     needs: tag-release
     uses: ./.github/workflows/deploy-pypi.yml
     secrets:
@@ -49,12 +67,14 @@ jobs:
     uses: ./.github/workflows/deploy-dockerhub.yml
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets. DOCKERHUB_TOKEN }}
 
   deploy-pyinstaller:
     needs: deploy-dockerhub
     uses: ./.github/workflows/deploy-pyinstaller.yml
 
   upload-release:
-    needs: [deploy-pypi, deploy-dockerhub, deploy-pyinstaller]
-    uses: ./.github/workflows/upload-artifacts.yml
+    needs: [tag-release, deploy-pypi, deploy-dockerhub, deploy-pyinstaller]
+    uses:  ./.github/workflows/upload-artifacts.yml
+    with:
+      tag_name: ${{ needs.tag-release.outputs.tag }}
