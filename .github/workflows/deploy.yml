@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.get_version.outputs.version }}
-      tag:  ${{ steps.get_version. outputs.tag }}
+      tag:  ${{ steps.get_version.outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
