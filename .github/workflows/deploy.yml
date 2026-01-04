@@ -75,6 +75,6 @@ jobs:
 
   upload-release:
     needs: [tag-release, deploy-pypi, deploy-dockerhub, deploy-pyinstaller]
-    uses:  ./.github/workflows/upload-artifacts.yml
+    uses: ./.github/workflows/upload-artifacts.yml
     with:
       tag_name: ${{ needs.tag-release.outputs.tag }}
