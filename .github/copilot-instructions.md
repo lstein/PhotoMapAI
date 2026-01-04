@@ -184,4 +184,4 @@ The backend uses FastAPI with modular routers:
 - [User Guide](https://lstein.github.io/PhotoMapAI/user-guide/basic-usage/)
 - [Developer Architecture Guide](https://lstein.github.io/PhotoMapAI/developer/architecture/)
 - [Installation Guide](https://lstein.github.io/PhotoMapAI/installation/)
-- [Contributing Guide](../CONTRIBUTING.md)
+- [Contributing Guide](CONTRIBUTING.md)
