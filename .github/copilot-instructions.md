@@ -102,6 +102,7 @@ The backend uses FastAPI with modular routers:
 - `/api/index/` - Image indexing and embedding generation
 - `/api/curation/` - Image curation tools
 - `/api/filetree/` - File system navigation
+- `/api/upgrade/` - Application upgrade and version management
 
 ### Configuration Management
 
@@ -118,6 +119,7 @@ The backend uses FastAPI with modular routers:
 - Use Pydantic models for request/response validation
 - Log important operations with Python's logging module
 - Handle file paths with pathlib.Path
+- Use the ConfigManager singleton pattern via `get_config_manager()` for accessing application configuration
 
 #### Frontend
 - State management: Use the centralized `state.js` module for application state
