@@ -109,9 +109,7 @@ async def get_root(
 def start_photomap_loop():
     """Start the PhotoMapAI server loop."""
     running = True
-    exe_dir = os.path.dirname(sys.executable)
-    photomap_server_exe = os.path.join(exe_dir, Path(sys.argv[0]).name)
-    args = [photomap_server_exe] + sys.argv[1:] + ["--once"]
+    args = [sys.executable] + ["-m", "photomap.backend.photomap_server"] + sys.argv[1:] + ["--once"]
 
     while running:
         try:
