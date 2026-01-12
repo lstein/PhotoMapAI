@@ -1,14 +1,14 @@
 import os
-import threading
-import time
 import signal
 import subprocess
 import sys
+import threading
+import time
 from importlib.metadata import version
 from logging import getLogger
 
 import requests
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from packaging import version as pversion
 

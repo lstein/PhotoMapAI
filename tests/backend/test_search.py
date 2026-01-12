@@ -1,14 +1,11 @@
-import time
 from base64 import b64encode
 from pathlib import Path
 from urllib.parse import quote
 
 import pytest
 from fixtures import (
-    client,
     count_test_images,
     fetch_filename,
-    new_album,
     poll_during_indexing,
 )
 
@@ -23,7 +20,7 @@ def test_index_update(client, new_album, monkeypatch):
         Embeddings, "minimum_image_size", 10 * 1024
     )  # Set minimum image size to 10K for testing
     # Start async index update
-    response = client.post(f"/update_index_async", json={"album_key": new_album["key"]})
+    response = client.post("/update_index_async", json={"album_key": new_album["key"]})
     assert response.status_code == 202
     task_id = response.json().get("task_id")
     assert task_id is not None
@@ -74,7 +71,7 @@ def test_index_exists(client, new_album, monkeypatch):
     assert exists is False  # Index should not exist before creation
 
     # Now create the index
-    response = client.post(f"/update_index_async", json={"album_key": new_album["key"]})
+    response = client.post("/update_index_async", json={"album_key": new_album["key"]})
     assert response.status_code == 202  # Index creation started
     try:
         poll_during_indexing(client, new_album["key"])
@@ -108,7 +105,7 @@ def test_image_search(client, new_album, monkeypatch):
     )  # Set minimum image size to 10K for testing
 
     # Create the index first
-    response = client.post(f"/update_index_async", json={"album_key": new_album["key"]})
+    response = client.post("/update_index_async", json={"album_key": new_album["key"]})
     assert response.status_code == 202
     try:
         poll_during_indexing(client, new_album["key"])
@@ -156,7 +153,7 @@ def test_text_search(client, new_album, monkeypatch):
     )  # Set minimum image size to 10K for testing
 
     # Create the index first
-    response = client.post(f"/update_index_async", json={"album_key": new_album["key"]})
+    response = client.post("/update_index_async", json={"album_key": new_album["key"]})
     assert response.status_code == 202
     try:
         poll_during_indexing(client, new_album["key"])

@@ -14,20 +14,16 @@ import {
   toggleMetadataOverlay,
 } from "./metadata-drawer.js";
 import { switchAlbum } from "./settings.js";
-import {
-  initializeSlideshowControls,
-  toggleSlideshowWithIndicator,
-  updateSlideshowButtonIcon
-} from "./slideshow.js";
+import { initializeSlideshowControls, toggleSlideshowWithIndicator, updateSlideshowButtonIcon } from "./slideshow.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import { initializeSingleSwiper } from "./swiper.js";
-import { } from "./touch.js"; // Import touch event handlers
+import {} from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 import { setCheckmarkOnIcon } from "./utils.js";
 
 // MAIN INITIALIZATION FUNCTIONS
 // Initialize event listeners after the DOM is fully loaded
-window.addEventListener("stateReady", async function () {
+window.addEventListener("stateReady", async () => {
   await initializeEvents();
 });
 
@@ -93,18 +89,14 @@ function handleKeydown(e) {
 }
 
 function shouldIgnoreKeyEvent(e) {
-  return (
-    e.target.tagName === "INPUT" ||
-    e.target.tagName === "TEXTAREA" ||
-    e.target.isContentEditable
-  );
+  return e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable;
 }
 
 function setupGlobalEventListeners() {
   // Keyboard navigation
   window.addEventListener("keydown", handleKeydown);
 
-  // Window resize event  
+  // Window resize event
   window.addEventListener("resize", positionMetadataDrawer);
 
   // About button and modal
@@ -135,9 +127,13 @@ function setupGlobalEventListeners() {
 // After both swipers are initialized (e.g. at end of initializeSwipers or in initializeEvents)
 window.addEventListener("slideshowStartRequested", async () => {
   // ensure we are in single swiper view before starting
-  if (state.gridViewActive) await toggleGridSwiperView(false);
-  await state.single_swiper.resetAllSlides(state.mode == "random")
-  if (isUmapFullscreen()) toggleUmapWindow(false);
+  if (state.gridViewActive) {
+    await toggleGridSwiperView(false);
+  }
+  await state.single_swiper.resetAllSlides(state.mode === "random");
+  if (isUmapFullscreen()) {
+    toggleUmapWindow(false);
+  }
   try {
     state.single_swiper.resumeSlideshow();
   } catch (err) {
@@ -154,7 +150,7 @@ function setupAccessibility() {
   // Handle radio button accessibility
   document.querySelectorAll('input[type="radio"]').forEach((rb) => {
     rb.tabIndex = -1; // Remove from tab order
-    rb.addEventListener("mousedown", function (e) {
+    rb.addEventListener("mousedown", (e) => {
       e.preventDefault(); // Prevent focus on mouse down
     });
     rb.addEventListener("focus", function () {
@@ -186,8 +182,7 @@ export function showHidePanelText(hide) {
 }
 
 // Listen for slide changes to update UI
-window.addEventListener("slideChanged", (e) => {
-  const { globalIndex, searchIndex, totalCount, isSearchMode } = e.detail;
+window.addEventListener("slideChanged", () => {
   // nothing to do here yet, but could be used to update UI elements
 });
 
@@ -198,8 +193,11 @@ export async function toggleGridSwiperView(gridView = null) {
     return;
   }
 
-  if (gridView === null) state.gridViewActive = !state.gridViewActive;
-  else state.gridViewActive = gridView;
+  if (gridView === null) {
+    state.gridViewActive = !state.gridViewActive;
+  } else {
+    state.gridViewActive = gridView;
+  }
 
   saveSettingsToLocalStorage();
 
@@ -236,8 +234,10 @@ export async function toggleGridSwiperView(gridView = null) {
     gridContainer.style.display = "none";
     gridContainer.classList.remove("fade-out");
 
-    if (singleContainer.style.display == "none") // if previous hidden, then reset
-      await state.single_swiper.resetAllSlides(slideShowRunning && state.mode == "random");
+    if (singleContainer.style.display === "none") // if previous hidden, then reset
+    {
+      await state.single_swiper.resetAllSlides(slideShowRunning && state.mode === "random");
+    }
 
     // Fade in single view
     singleContainer.style.display = "";
@@ -248,7 +248,6 @@ export async function toggleGridSwiperView(gridView = null) {
   // Update the grid icon with a checkmark if in grid view
   const gridViewBtn = document.getElementById("gridViewBtn");
   setCheckmarkOnIcon(gridViewBtn, state.gridViewActive);
-
 }
 
 // Handle clicks on the slide navigation buttons
@@ -260,9 +259,7 @@ function setupNavigationButtons() {
     prevBtn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const swiperMgr = state.gridViewActive
-        ? state.grid_swiper
-        : state.single_swiper;
+      const swiperMgr = state.gridViewActive ? state.grid_swiper : state.single_swiper;
       swiperMgr.swiper.slidePrev();
     };
   }
@@ -271,24 +268,25 @@ function setupNavigationButtons() {
     nextBtn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const swiperMgr = state.gridViewActive
-        ? state.grid_swiper
-        : state.single_swiper;
+      const swiperMgr = state.gridViewActive ? state.grid_swiper : state.single_swiper;
       swiperMgr.swiper.slideNext();
     };
   }
 }
 
 // Show/hide grid button
- async function initializeSwipers() {
+async function initializeSwipers() {
   const gridViewBtn = document.getElementById("gridViewBtn");
   state.single_swiper = await initializeSingleSwiper();
   state.grid_swiper = await initializeGridSwiper();
   setupNavigationButtons();
 
-  if (gridViewBtn)
+  if (gridViewBtn) {
     gridViewBtn.addEventListener("click", async () => {
-      if (isUmapFullscreen()) toggleUmapWindow(false); // Close umap if open
+      if (isUmapFullscreen()) {
+        toggleUmapWindow(false);
+      } // Close umap if open
       await toggleGridSwiperView();
     });
+  }
 }

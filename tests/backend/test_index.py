@@ -1,9 +1,9 @@
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from fixtures import build_index, client, count_test_images, fetch_filename, new_album
+from fixtures import build_index, count_test_images
 
 from photomap.backend.config import get_config_manager
 
@@ -45,7 +45,7 @@ def test_delete_image(
     album_key = new_album["key"]
 
     # === DEBUG: Check cache state before deletion ===
-    print(f"\n=== BEFORE DELETION ===")
+    print("\n=== BEFORE DELETION ===")
     print(f"Cache info: {_open_npz_file.cache_info()}")
 
     # Fetch the first slide, check its index
@@ -57,7 +57,7 @@ def test_delete_image(
     filename_to_delete = data.get("filename")
     assert filename_to_delete is not None
 
-    print(f"\n=== ABOUT TO DELETE ===")
+    print("\n=== ABOUT TO DELETE ===")
     print(f"Cache info: {_open_npz_file.cache_info()}")
 
     # Delete the image
@@ -65,7 +65,7 @@ def test_delete_image(
     assert response.status_code == 200
     assert response.json().get("success") is True
 
-    print(f"\n=== AFTER DELETION ===")
+    print("\n=== AFTER DELETION ===")
     print(f"Cache info: {_open_npz_file.cache_info()}")
 
     # Force clear cache to verify it's not a cache issue
@@ -77,7 +77,7 @@ def test_delete_image(
     assert response.status_code == 200
     metadata = response.json()
 
-    print(f"\n=== METADATA CHECK ===")
+    print("\n=== METADATA CHECK ===")
     print(f"Expected count: {TEST_IMAGE_COUNT - 1}")
     print(f"Actual count: {metadata['filename_count']}")
     print(f"Embeddings path: {metadata['embeddings_path']}")
@@ -86,7 +86,7 @@ def test_delete_image(
     # Let's also directly check the file on disk
     config = get_config_manager().get_album(album_key)
     index_path = Path(config.index)
-    print(f"\n=== DIRECT FILE CHECK ===")
+    print("\n=== DIRECT FILE CHECK ===")
     print(f"Index path: {index_path}")
     print(f"Index path resolved: {index_path.resolve()}")
 
@@ -293,7 +293,7 @@ def test_copy_images_file_exists(
     # Create a target directory with a file of the same name
     target_dir = tmp_path / "export_folder"
     target_dir.mkdir()
-    
+
     # Copy the file manually to simulate it already existing
     shutil.copy2(original_path, target_dir / original_filename)
 

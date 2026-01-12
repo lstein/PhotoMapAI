@@ -4,12 +4,18 @@
   "description": "PhotoMapAI Frontend JavaScript Tests",
   "type": "module",
   "scripts": {
-    "test": "NODE_OPTIONS='--experimental-vm-modules' jest"
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "lint": "eslint photomap/frontend/static/javascript/**/*.js tests/frontend/**/*.js",
+    "lint:fix": "eslint --fix photomap/frontend/static/javascript/**/*.js tests/frontend/**/*.js",
+    "format": "prettier --write 'photomap/frontend/static/javascript/**/*.js' 'tests/frontend/**/*.js'",
+    "format:check": "prettier --check 'photomap/frontend/static/javascript/**/*.js' 'tests/frontend/**/*.js'"
   },
   "devDependencies": {
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.0"
+    "@testing-library/jest-dom": "^6.6.0",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2"
   }
 }

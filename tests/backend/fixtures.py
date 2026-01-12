@@ -2,7 +2,6 @@
 Fixtures for pytest
 """
 
-import os
 import shutil
 import time
 from pathlib import Path
@@ -10,8 +9,6 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from photomap.backend.config import Album, create_album
-from photomap.backend.config import get_config_manager
 
 @pytest.fixture
 def client() -> TestClient:
@@ -77,7 +74,7 @@ def build_index(client, new_album, monkeypatch):
         Embeddings, "minimum_image_size", 10 * 1024
     )  # Set minimum image size to 10K for testing
 
-    response = client.post(f"/update_index_async", json={"album_key": new_album["key"]})
+    response = client.post("/update_index_async", json={"album_key": new_album["key"]})
     assert response.status_code == 202
     task_id = response.json().get("task_id")
     assert task_id is not None

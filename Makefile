@@ -11,6 +11,9 @@ help:
 	@echo "docker-demo      Build the Docker demo site image."
 	@echo "docs             Serve the mkdocs site with live reload."
 	@echo "deploy-docs      Deploy the mkdocs site to GitHub pages."
+	@echo "backend-lint     Run Python backend linting with Ruff."
+	@echo "frontend-lint    Run JavaScript frontend linting with ESLint and Prettier."
+	@echo "lint             Run both backend and frontend linting."
 
 # Run the unit tests
 test:
@@ -48,3 +51,26 @@ docs:
 
 deploy-docs:
 	mkdocs gh-deploy
+
+# Run backend linting with Ruff
+# fix with ruff check photomap tests photomap --fix
+.PHONY: backend-lint
+backend-lint:
+	@echo "Running Ruff on Python backend..."
+	ruff check photomap tests photomap
+
+# Run frontend linting with ESLint and Prettier
+# Fix with npm run lint:fix
+#          npm run format
+.PHONY: frontend-lint
+frontend-lint:
+	@echo "Installing npm dependencies if needed..."
+	npm install
+	@echo "Running ESLint on JavaScript frontend..."
+	npm run lint
+	@echo "Running Prettier check on JavaScript frontend..."
+	npm run format:check
+
+# Run both backend and frontend linting
+.PHONY: lint
+lint: backend-lint frontend-lint

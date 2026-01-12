@@ -19,7 +19,9 @@ export function slideShowRunning() {
 export function updateSlideshowButtonIcon() {
   const container = document.getElementById("slideshowIcon");
   const btn = document.getElementById("startStopSlideshowBtn");
-  if (!container) return;
+  if (!container) {
+    return;
+  }
 
   const isRunning = slideShowRunning();
   const mode = state.mode || "chronological";
@@ -27,14 +29,18 @@ export function updateSlideshowButtonIcon() {
 
   if (isRunning) {
     container.innerHTML = PAUSE_SVG;
-    if (btn) btn.title = `Pause Slideshow (${modeLabel})`;
+    if (btn) {
+      btn.title = `Pause Slideshow (${modeLabel})`;
+    }
   } else {
     if (mode === "random") {
       container.innerHTML = SHUFFLE_SVG;
     } else {
       container.innerHTML = PLAY_SVG;
     }
-    if (btn) btn.title = `Start Slideshow (${modeLabel})`;
+    if (btn) {
+      btn.title = `Start Slideshow (${modeLabel})`;
+    }
   }
 }
 
@@ -48,7 +54,9 @@ export function showPlayPauseIndicator(isPlaying) {
 
 export function removeExistingIndicator() {
   const existing = document.getElementById("fullscreen-indicator");
-  if (existing) existing.remove();
+  if (existing) {
+    existing.remove();
+  }
   if (indicatorTimer) {
     clearTimeout(indicatorTimer);
     indicatorTimer = null;
@@ -70,7 +78,9 @@ function showIndicatorWithAnimation(indicator) {
   indicatorTimer = setTimeout(() => {
     indicator.classList.remove("show");
     setTimeout(() => {
-      if (indicator.parentNode) indicator.parentNode.removeChild(indicator);
+      if (indicator.parentNode) {
+        indicator.parentNode.removeChild(indicator);
+      }
     }, 300);
   }, 800);
 }
@@ -97,7 +107,9 @@ export async function toggleSlideshowWithIndicator(e) {
   window.dispatchEvent(new Event("slideshowStartRequested"));
 
   // Ensure UMAP closed if necessary
-  if (isUmapFullscreen()) toggleUmapWindow(false);
+  if (isUmapFullscreen()) {
+    toggleUmapWindow(false);
+  }
 
   try {
     state.single_swiper.resumeSlideshow();
@@ -133,12 +145,14 @@ function createModeMenu(x, y) {
     b.style.background = "transparent";
     b.style.border = "none";
     b.style.cursor = "pointer";
-    b.onclick = async (ev) =>  {
+    b.onclick = async (ev) => {
       ev.stopPropagation();
       state.mode = modeVal;
       removeModeMenu();
       saveSettingsToLocalStorage();
-      if (slideShowRunning()) await toggleSlideshowWithIndicator();
+      if (slideShowRunning()) {
+        await toggleSlideshowWithIndicator();
+      }
       updateSlideshowButtonIcon();
     };
     return b;
@@ -164,10 +178,14 @@ function createModeMenu(x, y) {
 
   // close when clicking elsewhere or Esc
   const onDocClick = (ev) => {
-    if (!menu.contains(ev.target)) removeModeMenu();
+    if (!menu.contains(ev.target)) {
+      removeModeMenu();
+    }
   };
   const onKey = (ev) => {
-    if (ev.key === "Escape") removeModeMenu();
+    if (ev.key === "Escape") {
+      removeModeMenu();
+    }
   };
   setTimeout(() => {
     document.addEventListener("click", onDocClick);
@@ -182,7 +200,9 @@ function createModeMenu(x, y) {
 function removeModeMenu() {
   const existing = document.getElementById("slideshowModeMenu");
   if (existing) {
-    if (existing._cleanup) existing._cleanup();
+    if (existing._cleanup) {
+      existing._cleanup();
+    }
     existing.remove();
   }
 }
@@ -195,7 +215,9 @@ export function showSlideshowModeMenu(x, y) {
 // initialize click and contextmenu for the start/stop button
 export function initializeSlideshowControls() {
   const btn = document.getElementById("startStopSlideshowBtn");
-  if (!btn) return;
+  if (!btn) {
+    return;
+  }
 
   // left-click toggles
   btn.addEventListener("click", toggleSlideshowWithIndicator);

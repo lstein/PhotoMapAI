@@ -2,7 +2,6 @@ import logging
 import os
 import platform
 from pathlib import Path
-from typing import Dict, List
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -52,7 +51,7 @@ def is_path_safe(path_str: str) -> bool:
             path = Path(path_str)
             # Must be absolute and exist
             return path.is_absolute() and path.exists()
-        except:
+        except Exception:
             return False
     else:
         # On Unix, check if it's within ROOT_DIR or if it's an absolute path we want to allow
@@ -67,7 +66,7 @@ def is_path_safe(path_str: str) -> bool:
             else:
                 # If no ROOT_DIR restriction, allow any existing absolute path
                 return path.exists()
-        except:
+        except Exception:
             return False
 
 
@@ -111,7 +110,7 @@ async def get_directories(path: str = "", show_hidden: bool = False):
 
     except Exception as e:
         logger.error(f"Invalid path or path error: {e}")
-        raise HTTPException(status_code=404, detail="Invalid or non-existent directory")
+        raise HTTPException(status_code=404, detail="Invalid or non-existent directory") from e
 
     # --- Directory listing logic ---
     try:
@@ -182,58 +181,58 @@ class CreateDirectoryRequest(BaseModel):
 async def create_directory(req: CreateDirectoryRequest):
     """Create a new directory in the specified parent path"""
     check_album_lock()  # May raise a 403 exception
-    
+
     try:
         parent_path = Path(req.parent_path)
-        
+
         # Validate parent path exists and is a directory
         if not parent_path.exists():
             raise HTTPException(status_code=404, detail="Parent directory does not exist")
         if not parent_path.is_dir():
             raise HTTPException(status_code=400, detail="Parent path is not a directory")
-        
+
         # Security check
         if not is_path_safe(str(parent_path)):
             raise HTTPException(status_code=403, detail="Access denied to parent directory")
-        
+
         # Validate directory name
         if not req.directory_name or req.directory_name.strip() == "":
             raise HTTPException(status_code=400, detail="Directory name cannot be empty")
-        
+
         # Check for invalid characters
         invalid_chars = ['/', '\\', '\0']
         if platform.system() == "Windows":
             invalid_chars.extend([':', '*', '?', '"', '<', '>', '|'])
-        
+
         if any(char in req.directory_name for char in invalid_chars):
             raise HTTPException(
-                status_code=400, 
-                detail=f"Directory name contains invalid characters"
+                status_code=400,
+                detail="Directory name contains invalid characters"
             )
-        
+
         # Create the new directory path
         new_dir_path = parent_path / req.directory_name
-        
+
         # Check if directory already exists
         if new_dir_path.exists():
             raise HTTPException(status_code=409, detail="Directory already exists")
-        
+
         # Check if parent is writable
         if not os.access(parent_path, os.W_OK):
             raise HTTPException(status_code=403, detail="Parent directory is not writable")
-        
+
         # Create the directory
         new_dir_path.mkdir(parents=False, exist_ok=False)
         logger.info(f"Created directory: {new_dir_path}")
-        
+
         return JSONResponse(content={
             "success": True,
             "path": str(new_dir_path.resolve()),
             "name": req.directory_name
         })
-    
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error creating directory: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create directory: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create directory: {str(e)}") from e

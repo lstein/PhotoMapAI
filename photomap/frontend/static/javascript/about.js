@@ -71,15 +71,13 @@ class AboutManager {
 
     // Insert at the bottom of the modal content, after the links row
     const linksRow = this.modal.querySelector(".about-links-row");
-    linksRow.parentNode.insertBefore(
-      this.updateContainer,
-      linksRow.nextSibling
-    );
+    linksRow.parentNode.insertBefore(this.updateContainer, linksRow.nextSibling);
 
     // Add click handler for update button
     const updateBtn = document.getElementById("updateBtn");
-    if (updateBtn)
+    if (updateBtn) {
       updateBtn.addEventListener("click", () => this.performUpdate());
+    }
   }
 
   hideUpdateNotification() {
@@ -102,10 +100,7 @@ class AboutManager {
 
     // Insert at the bottom of the modal content, after the links row
     const linksRow = this.modal.querySelector(".about-links-row");
-    linksRow.parentNode.insertBefore(
-      this.updateContainer,
-      linksRow.nextSibling
-    );
+    linksRow.parentNode.insertBefore(this.updateContainer, linksRow.nextSibling);
   }
 
   async performUpdate() {
@@ -134,8 +129,7 @@ class AboutManager {
           setTimeout(async () => {
             try {
               await fetch("version/restart", { method: "POST" });
-              updateStatus.textContent =
-                "Server restarting... Waiting for server to come back online...";
+              updateStatus.textContent = "Server restarting... Waiting for server to come back online...";
 
               // Wait 5 seconds before starting to poll
               setTimeout(function pollForServer() {
@@ -149,15 +143,14 @@ class AboutManager {
                       setTimeout(() => window.location.reload(), 1000);
                       return;
                     }
-                  } catch (e) {
+                  } catch {
                     // Ignore errors, server is still down
                   }
                   setTimeout(pollForServer, 2000);
                 })();
               }, 5000);
-            } catch (e) {
-              updateStatus.textContent =
-                "Update complete. Please refresh manually.";
+            } catch {
+              updateStatus.textContent = "Update complete. Please refresh manually.";
             }
           }, 1000);
         }

@@ -1,13 +1,7 @@
 """
 Extract Invoke5 metadata from the raw metadata dictionary.
 """
-
-"""
-Support for metadata extraction from images created with InvokeAI v3.
-"""
-
 import logging
-from typing import List
 
 from .invoke_metadata_abc import (
     ControlLayer,
@@ -51,7 +45,7 @@ class Invoke5Metadata(InvokeMetadataABC):
         """
         return self.raw_metadata.get("seed", 0)
 
-    def get_loras(self) -> List[Lora]:
+    def get_loras(self) -> list[Lora]:
         """
         Extract Lora information from the raw metadata.
 
@@ -68,7 +62,7 @@ class Invoke5Metadata(InvokeMetadataABC):
             if "lora" in lora
         ]
 
-    def get_reference_images(self) -> List[ReferenceImage]:
+    def get_reference_images(self) -> list[ReferenceImage]:
         """
         Extract reference image (IPAdapter) information from the raw metadata.
 
@@ -85,7 +79,7 @@ class Invoke5Metadata(InvokeMetadataABC):
             )
         )
 
-    def _get_reference_images(self) -> List[ReferenceImage]:
+    def _get_reference_images(self) -> list[ReferenceImage]:
         """
         This is called to get the reference image when the metadata contains a ref_images field.
         """
@@ -109,7 +103,7 @@ class Invoke5Metadata(InvokeMetadataABC):
             if image.get("isEnabled", False)
         ]
 
-    def _get_reference_images_from_canvas_v2(self) -> List[ReferenceImage]:
+    def _get_reference_images_from_canvas_v2(self) -> list[ReferenceImage]:
         """
         This is called to get the reference image when the metadata contains a canvas_v2_metadata field,
         and not the "ref_images" tag.
@@ -131,7 +125,7 @@ class Invoke5Metadata(InvokeMetadataABC):
             if image.get("isEnabled", False)
         ]
 
-    def get_control_layers(self) -> List[ControlLayer]:
+    def get_control_layers(self) -> list[ControlLayer]:
         """
         Extract control layer information from the raw metadata.
         Returns:
@@ -147,7 +141,7 @@ class Invoke5Metadata(InvokeMetadataABC):
             )
         )
 
-    def get_raster_images(self) -> List[str]:
+    def get_raster_images(self) -> list[str]:
         """
         Extract raster image information from the raw metadata.
         """
@@ -168,7 +162,7 @@ class Invoke5Metadata(InvokeMetadataABC):
             result.extend(images)
         return result
 
-    def _get_control_layers(self) -> List[ControlLayer]:
+    def _get_control_layers(self) -> list[ControlLayer]:
         """
         This is called to get the control layers when the metadata contains a controlLayers field.
         """
@@ -183,7 +177,7 @@ class Invoke5Metadata(InvokeMetadataABC):
             if layer.get("isEnabled", False)
         ]
 
-    def _get_control_layers_from_canvas_v2(self) -> List[ControlLayer]:
+    def _get_control_layers_from_canvas_v2(self) -> list[ControlLayer]:
         """
         This is called to get the control layers when the metadata contains a canvas_v2_metadata field,
         and not the "controlLayers" tag.

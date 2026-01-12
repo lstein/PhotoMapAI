@@ -3,7 +3,6 @@ Support for metadata extraction from images created with InvokeAI v3.
 """
 
 from logging import getLogger
-from typing import List
 
 from .invoke_metadata_abc import (
     ControlLayer,
@@ -49,7 +48,7 @@ class Invoke3Metadata(InvokeMetadataABC):
         """
         return self.raw_metadata.get("seed", 0)
 
-    def get_loras(self) -> List[Lora]:
+    def get_loras(self) -> list[Lora]:
         """
         Extract Lora information from the raw metadata.
 
@@ -72,7 +71,7 @@ class Invoke3Metadata(InvokeMetadataABC):
             for lora in loras
         ]
 
-    def get_reference_images(self) -> List[ReferenceImage]:
+    def get_reference_images(self) -> list[ReferenceImage]:
         """
         Extract reference image (IPAdapter) information from the raw metadata.
 
@@ -89,7 +88,7 @@ class Invoke3Metadata(InvokeMetadataABC):
             for image in reference_images
         ]
 
-    def get_control_layers(self) -> List[ControlLayer]:
+    def get_control_layers(self) -> list[ControlLayer]:
         """
         Extract control layer information from the raw metadata.
 
@@ -109,7 +108,7 @@ class Invoke3Metadata(InvokeMetadataABC):
             for layer in control_layers
         ]
 
-    def get_raster_images(self) -> List[str]:
+    def get_raster_images(self) -> list[str]:
         """
         Extract raster image information from the raw metadata.
 

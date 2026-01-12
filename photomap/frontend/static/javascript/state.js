@@ -3,7 +3,6 @@
 import { albumManager } from "./album-manager.js";
 import { getIndexMetadata } from "./index.js";
 
-
 // TO DO - CONVERT THIS INTO A CLASS
 export const state = {
   single_swiper: null, // Will be initialized in swiper.js
@@ -17,20 +16,20 @@ export const state = {
   availableAlbums: [], // List of available albums
   dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
   suppressDeleteConfirm: false, // Flag to suppress delete confirmation dialogs
-  gridThumbSizeFactor: 1.0,  // Scaling factor for grid thumbnails
-  swiper: null,  // backwards compatibility hack; contains the single_swiper.swiper instance
+  gridThumbSizeFactor: 1.0, // Scaling factor for grid thumbnails
+  swiper: null, // backwards compatibility hack; contains the single_swiper.swiper instance
   albumLocked: false, // Whether album management is locked
   // persisted search settings
-  minSearchScore: 0.2,       // [0.0, 1.0]
-  maxSearchResults: 100,     // [50, 500]
+  minSearchScore: 0.2, // [0.0, 1.0]
+  maxSearchResults: 100, // [50, 500]
   // persisted UMAP settings
-  umapShowLandmarks: true,   // Show landmarks in UMAP
+  umapShowLandmarks: true, // Show landmarks in UMAP
   umapShowHoverThumbnails: true, // Show hover thumbnails in UMAP
   umapExitFullscreenOnSelection: true, // Exit fullscreen when cluster is selected
   umapClickSelectsCluster: true, // Whether click selects cluster or single image
 };
 
-document.addEventListener("DOMContentLoaded", async function () {
+document.addEventListener("DOMContentLoaded", async () => {
   await restoreFromLocalStorage();
   initializeFromServer();
   window.stateIsReady = true; // Flag for modules that may need to know if state is ready
@@ -59,15 +58,16 @@ export function initializeFromServer() {
 // Restore state from local storage
 export async function restoreFromLocalStorage() {
   const storedCurrentDelay = localStorage.getItem("currentDelay");
-  if (storedCurrentDelay !== null)
+  if (storedCurrentDelay !== null) {
     state.currentDelay = parseInt(storedCurrentDelay, 10);
+  }
 
   const storedMode = localStorage.getItem("mode");
-  if (storedMode) state.mode = storedMode;
+  if (storedMode) {
+    state.mode = storedMode;
+  }
 
-  const storedShowControlPanelText = localStorage.getItem(
-    "showControlPanelText"
-  );
+  const storedShowControlPanelText = localStorage.getItem("showControlPanelText");
   if (storedShowControlPanelText !== null) {
     state.showControlPanelText = storedShowControlPanelText === "true";
   } else {
@@ -76,11 +76,15 @@ export async function restoreFromLocalStorage() {
 
   let storedAlbum = localStorage.getItem("album");
   const albumList = await albumManager.fetchAvailableAlbums();
-  if (!albumList || albumList.length === 0) return; // No albums available, do not set album
+  if (!albumList || albumList.length === 0) {
+    return;
+  } // No albums available, do not set album
   if (storedAlbum) {
     // check that this is a valid album
     const validAlbum = albumList.find((album) => album.key === storedAlbum);
-    if (!validAlbum) storedAlbum = null;
+    if (!validAlbum) {
+      storedAlbum = null;
+    }
   }
   state.album = storedAlbum || albumList[0].key;
 
@@ -102,12 +106,16 @@ export async function restoreFromLocalStorage() {
   const storedMinSearchScore = localStorage.getItem("minSearchScore");
   if (storedMinSearchScore !== null) {
     const v = Math.max(0.0, Math.min(1.0, parseFloat(storedMinSearchScore)));
-    if (!Number.isNaN(v)) state.minSearchScore = v;
+    if (!Number.isNaN(v)) {
+      state.minSearchScore = v;
+    }
   }
   const storedMaxSearchResults = localStorage.getItem("maxSearchResults");
   if (storedMaxSearchResults !== null) {
     const v = Math.max(50, Math.min(500, parseInt(storedMaxSearchResults, 10)));
-    if (!Number.isNaN(v)) state.maxSearchResults = v;
+    if (!Number.isNaN(v)) {
+      state.maxSearchResults = v;
+    }
   }
 
   const storedUmapShowLandmarks = localStorage.getItem("umapShowLandmarks");
@@ -136,10 +144,7 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("currentDelay", state.currentDelay);
   localStorage.setItem("mode", state.mode);
   localStorage.setItem("album", state.album);
-  localStorage.setItem(
-    "showControlPanelText",
-    state.showControlPanelText || ""
-  );
+  localStorage.setItem("showControlPanelText", state.showControlPanelText || "");
   localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
   localStorage.setItem("suppressDeleteConfirm", state.suppressDeleteConfirm ? "true" : "false");
   localStorage.setItem("gridThumbSizeFactor", state.gridThumbSizeFactor);
@@ -154,19 +159,19 @@ export function saveSettingsToLocalStorage() {
 export async function setAlbum(newAlbumKey, force = false) {
   if (force || state.album !== newAlbumKey) {
     state.album = newAlbumKey;
-    
+
     const metadata = await getIndexMetadata(state.album);
-    
+
     state.dataChanged = true;
     saveSettingsToLocalStorage();
-    
+
     // dispatch an album changed event to system
     window.dispatchEvent(
-      new CustomEvent("albumChanged", { 
-        detail: { 
+      new CustomEvent("albumChanged", {
+        detail: {
           album: newAlbumKey,
-          totalImages: metadata.filename_count || 0  // Pass this to SlideStateManager
-        } 
+          totalImages: metadata.filename_count || 0, // Pass this to SlideStateManager
+        },
       })
     );
   }
@@ -176,9 +181,7 @@ export function setMode(newMode) {
   if (state.mode !== newMode) {
     state.mode = newMode;
     saveSettingsToLocalStorage();
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { mode: newMode } })
-    );
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { mode: newMode } }));
   }
 }
 
@@ -198,9 +201,7 @@ export function setDelay(newDelay) {
   if (state.currentDelay !== newDelay) {
     state.currentDelay = newDelay;
     saveSettingsToLocalStorage();
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { delay: newDelay } })
-    );
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { delay: newDelay } }));
   }
 }
 
@@ -210,9 +211,7 @@ export function setMinSearchScore(newScore) {
   if (!Number.isNaN(clamped) && state.minSearchScore !== clamped) {
     state.minSearchScore = clamped;
     saveSettingsToLocalStorage();
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { minSearchScore: clamped } })
-    );
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { minSearchScore: clamped } }));
   }
 }
 
@@ -221,9 +220,7 @@ export function setMaxSearchResults(newMax) {
   if (!Number.isNaN(clamped) && state.maxSearchResults !== clamped) {
     state.maxSearchResults = clamped;
     saveSettingsToLocalStorage();
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { maxSearchResults: clamped } })
-    );
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { maxSearchResults: clamped } }));
   }
 }
 
@@ -231,9 +228,7 @@ export function setUmapShowLandmarks(showLandmarks) {
   if (state.umapShowLandmarks !== showLandmarks) {
     state.umapShowLandmarks = showLandmarks;
     saveSettingsToLocalStorage();
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { umapShowLandmarks: showLandmarks } })
-    );
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { umapShowLandmarks: showLandmarks } }));
   }
 }
 

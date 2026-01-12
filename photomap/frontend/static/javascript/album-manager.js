@@ -51,27 +51,27 @@ export class AlbumManager {
   initializeEventListeners() {
     // Main management button
     const manageAlbumsBtn = document.getElementById("manageAlbumsBtn");
-    if (manageAlbumsBtn)
+    if (manageAlbumsBtn) {
       manageAlbumsBtn.addEventListener("click", () => {
         closeSettingsModal();
         showSpinner();
         this.show();
       });
+    }
 
     // Back to settings button
     const backToSettingsBtn = document.getElementById("backToSettingsBtn");
-    if (backToSettingsBtn)
+    if (backToSettingsBtn) {
       backToSettingsBtn.addEventListener("click", () => {
         this.hide();
         openSettingsModal();
       });
+    }
 
     // Close button
-    document
-      .getElementById("closeAlbumManagementBtn")
-      .addEventListener("click", () => {
-        this.hide();
-      });
+    document.getElementById("closeAlbumManagementBtn").addEventListener("click", () => {
+      this.hide();
+    });
 
     // Show add album form button
     document.getElementById("showAddAlbumBtn").addEventListener("click", () => {
@@ -79,17 +79,13 @@ export class AlbumManager {
     });
 
     // Cancel add album buttons (both X and Cancel button)
-    document
-      .getElementById("cancelAddAlbumBtn")
-      .addEventListener("click", () => {
-        this.hideAddAlbumForm();
-      });
+    document.getElementById("cancelAddAlbumBtn").addEventListener("click", () => {
+      this.hideAddAlbumForm();
+    });
 
-    document
-      .getElementById("cancelAddAlbumBtn2")
-      .addEventListener("click", () => {
-        this.hideAddAlbumForm();
-      });
+    document.getElementById("cancelAddAlbumBtn2").addEventListener("click", () => {
+      this.hideAddAlbumForm();
+    });
 
     // Add album button
     document.getElementById("addAlbumBtn").addEventListener("click", () => {
@@ -114,9 +110,7 @@ export class AlbumManager {
       const { albumKey } = e.detail;
       await albumManager.show();
       setTimeout(async () => {
-        const cardElement = document.querySelector(
-          `.album-card[data-album-key="${albumKey}"]`
-        );
+        const cardElement = document.querySelector(`.album-card[data-album-key="${albumKey}"]`);
         if (cardElement) {
           // Fetch the album object
           const album = await albumManager.getAlbum(albumKey);
@@ -153,9 +147,7 @@ export class AlbumManager {
 
       await albumManager.show();
       setTimeout(async () => {
-        const cardElement = document.querySelector(
-          `.album-card[data-album-key="${albumKey}"]`
-        );
+        const cardElement = document.querySelector(`.album-card[data-album-key="${albumKey}"]`);
         if (cardElement) {
           // Show a user-friendly error message in the card
           let errorDiv = cardElement.querySelector(".album-error-message");
@@ -165,17 +157,13 @@ export class AlbumManager {
             cardElement.appendChild(errorDiv);
           }
           if (errorType === "missing") {
-            errorDiv.textContent =
-              "This album's index is missing. Indexing will start automatically.";
+            errorDiv.textContent = "This album's index is missing. Indexing will start automatically.";
           } else if (errorType === "corrupted") {
-            errorDiv.textContent =
-              "This album's index is corrupted. Indexing will start automatically.";
+            errorDiv.textContent = "This album's index is corrupted. Indexing will start automatically.";
           } else if (errorType === "outOfDate") {
-            errorDiv.textContent =
-              "This album's index is out of date. Re-indexing will start automatically.";
+            errorDiv.textContent = "This album's index is out of date. Re-indexing will start automatically.";
           } else {
-            errorDiv.textContent =
-              "This album's index is corrupted or unreadable. Indexing will start automatically.";
+            errorDiv.textContent = "This album's index is corrupted or unreadable. Indexing will start automatically.";
           }
           errorDiv.style.color = "#b00020";
           errorDiv.style.marginTop = "0.5em";
@@ -184,11 +172,7 @@ export class AlbumManager {
           cardElement.scrollIntoView({ behavior: "smooth", block: "center" });
 
           // Automatically start indexing
-          await albumManager.startIndexing(
-            albumKey,
-            cardElement,
-            errorType === "corrupted"
-          );
+          await albumManager.startIndexing(albumKey, cardElement, errorType === "corrupted");
           albumManager.showProgressUI(cardElement);
         }
       }, 500);
@@ -286,13 +270,7 @@ export class AlbumManager {
     }
   }
 
-  _createAlbumPathRow({
-    path = "",
-    onAddRow,
-    onRemoveRow,
-    onFolderPick,
-    container,
-  } = {}) {
+  _createAlbumPathRow({ path = "", onAddRow, onRemoveRow, onFolderPick } = {}) {
     const wrapper = document.createElement("div");
     wrapper.className = "album-path-row";
     wrapper.style.cssText = `
@@ -306,8 +284,7 @@ export class AlbumManager {
     input.type = "text";
     input.className = "album-path-input";
     input.value = path;
-    input.placeholder =
-      "Enter the path to a folder of images, or click the folder icon";
+    input.placeholder = "Enter the path to a folder of images, or click the folder icon";
     input.style.cssText = `
       flex: 1;
       background: #222;
@@ -323,10 +300,7 @@ export class AlbumManager {
         // Show the trash icon when Enter is pressed
         trashBtn.style.display = "inline-block";
         // Only add a new row if this is the last row
-        if (
-          wrapper.nextElementSibling === null &&
-          typeof onAddRow === "function"
-        ) {
+        if (wrapper.nextElementSibling === null && typeof onAddRow === "function") {
           onAddRow();
         }
       }
@@ -351,10 +325,7 @@ export class AlbumManager {
         onFolderPick(currentPath, (selectedPath) => {
           input.value = selectedPath;
           trashBtn.style.display = "inline-block";
-          if (
-            wrapper.nextElementSibling === null &&
-            typeof onAddRow === "function"
-          ) {
+          if (wrapper.nextElementSibling === null && typeof onAddRow === "function") {
             onAddRow();
           }
         });
@@ -401,9 +372,13 @@ export class AlbumManager {
         }
       },
       onFolderPick: (currentPath, setPath) => {
-        createSimpleDirectoryPicker((selectedPath) => {
-          setPath(selectedPath);
-        }, currentPath, { showCreateFolder: true });
+        createSimpleDirectoryPicker(
+          (selectedPath) => {
+            setPath(selectedPath);
+          },
+          currentPath,
+          { showCreateFolder: true }
+        );
       },
     });
   }
@@ -420,18 +395,19 @@ export class AlbumManager {
         }
       },
       onFolderPick: (currentPath, setPath) => {
-        createSimpleDirectoryPicker((selectedPath) => {
-          setPath(selectedPath);
-        }, currentPath, { showCreateFolder: true });
+        createSimpleDirectoryPicker(
+          (selectedPath) => {
+            setPath(selectedPath);
+          },
+          currentPath,
+          { showCreateFolder: true }
+        );
       },
     });
   }
 
   collectNewAlbumPathFields() {
-    const inputs =
-      this.elements.newAlbumPathsContainer.querySelectorAll(
-        ".album-path-input"
-      );
+    const inputs = this.elements.newAlbumPathsContainer.querySelectorAll(".album-path-input");
     return Array.from(inputs)
       .map((input) => input.value.trim())
       .filter((path) => path.length > 0);
@@ -480,14 +456,13 @@ export class AlbumManager {
 
   showSetupMessage() {
     const existingMessage = this.overlay.querySelector(".setup-message");
-    if (existingMessage) return;
+    if (existingMessage) {
+      return;
+    }
 
     const setupMessage = this.createSetupMessage();
     if (this.elements.albumManagementContent) {
-      this.elements.albumManagementContent.insertBefore(
-        setupMessage,
-        this.elements.albumManagementContent.firstChild
-      );
+      this.elements.albumManagementContent.insertBefore(setupMessage, this.elements.albumManagementContent.firstChild);
     }
   }
 
@@ -554,9 +529,7 @@ export class AlbumManager {
 
   showCompletionMessage() {
     // Remove any existing completion message before adding a new one
-    const existingCompletion = this.overlay.querySelector(
-      ".completion-message"
-    );
+    const existingCompletion = this.overlay.querySelector(".completion-message");
     if (existingCompletion && existingCompletion.parentNode) {
       existingCompletion.remove();
     }
@@ -581,9 +554,7 @@ export class AlbumManager {
     this.enableClosing();
     this.removeSetupMessage();
     // Remove any existing completion message
-    const existingCompletion = this.overlay.querySelector(
-      ".completion-message"
-    );
+    const existingCompletion = this.overlay.querySelector(".completion-message");
     if (existingCompletion && existingCompletion.parentNode) {
       existingCompletion.remove();
     }
@@ -628,18 +599,12 @@ export class AlbumManager {
     const card = this.template.content.cloneNode(true);
 
     // Populate album info with defensive handling
-    card.querySelector(".album-name").textContent =
-      album.name || "Unknown Album";
-    card.querySelector(".album-key").textContent = `Key: ${
-      album.key || "Unknown"
-    }`;
-    card.querySelector(".album-description").textContent =
-      album.description || "No description";
+    card.querySelector(".album-name").textContent = album.name || "Unknown Album";
+    card.querySelector(".album-key").textContent = `Key: ${album.key || "Unknown"}`;
+    card.querySelector(".album-description").textContent = album.description || "No description";
 
     const imagePaths = album.image_paths || [];
-    card.querySelector(".album-paths").textContent = `Paths: ${
-      imagePaths.join(", ") || "No paths configured"
-    }`;
+    card.querySelector(".album-paths").textContent = `Paths: ${imagePaths.join(", ") || "No paths configured"}`;
 
     // Set up event listeners
     const cardElement = card.querySelector(".album-card");
@@ -658,10 +623,10 @@ export class AlbumManager {
     try {
       const metadata = await getIndexMetadata(album.key);
       if (metadata) {
-        const modDate = new Date(metadata.last_modified * 1000).toLocaleString(
-          undefined,
-          { dateStyle: "medium", timeStyle: "short" }
-        );
+        const modDate = new Date(metadata.last_modified * 1000).toLocaleString(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        });
         const fileCount = metadata.filename_count;
         status.textContent = `Index updated ${modDate} (${fileCount} images)`;
         status.style.color = "green";
@@ -671,7 +636,7 @@ export class AlbumManager {
         status.style.color = "red";
         createBtn.textContent = "Create Index";
       }
-    } catch (e) {
+    } catch {
       status.textContent = "No index present";
       status.style.color = "red";
       createBtn.textContent = "Create Index";
@@ -734,9 +699,7 @@ export class AlbumManager {
     const duplicate = albums.some((album) => album.key === formData.key);
     if (duplicate) {
       this.elements.newAlbumKey.classList.add("input-error");
-      alert(
-        `An album with the key "${formData.key}" already exists. Please choose a different key.`
-      );
+      alert(`An album with the key "${formData.key}" already exists. Please choose a different key.`);
       return;
     }
 
@@ -744,8 +707,7 @@ export class AlbumManager {
     const paths = formData.paths;
 
     // Always set index path based on first path
-    const indexPath =
-      paths.length > 0 ? `${paths[0]}/photomap_index/embeddings.npz` : "";
+    const indexPath = paths.length > 0 ? `${paths[0]}/photomap_index/embeddings.npz` : "";
 
     const newAlbum = {
       key: formData.key,
@@ -800,9 +762,9 @@ export class AlbumManager {
   }
 
   async startAutoIndexing(albumKey) {
-    const albumCard = Array.from(
-      this.albumsList.querySelectorAll(".album-card")
-    ).find((card) => card.dataset.albumKey === albumKey);
+    const albumCard = Array.from(this.albumsList.querySelectorAll(".album-card")).find(
+      (card) => card.dataset.albumKey === albumKey
+    );
 
     if (albumCard) {
       // Don't start indexing again - it's already running
@@ -814,11 +776,7 @@ export class AlbumManager {
   }
 
   async deleteAlbum(albumKey) {
-    if (
-      !confirm(
-        `Are you sure you want to delete album "${albumKey}"? This action cannot be undone.`
-      )
-    ) {
+    if (!confirm(`Are you sure you want to delete album "${albumKey}"? This action cannot be undone.`)) {
       return;
     }
 
@@ -874,12 +832,12 @@ export class AlbumManager {
     const albumInfo = cardElement.querySelector(".album-info");
 
     // Remove 'editing' class from all cards first
-    document.querySelectorAll('.album-card.editing').forEach(card => {
-      card.classList.remove('editing');
+    document.querySelectorAll(".album-card.editing").forEach((card) => {
+      card.classList.remove("editing");
     });
 
     // Add 'editing' class to this card
-    cardElement.classList.add('editing');
+    cardElement.classList.add("editing");
 
     // Set the edit form title to include the album name
     const editTitle = editForm.querySelector(".edit-album-title");
@@ -889,8 +847,7 @@ export class AlbumManager {
 
     // Populate edit form
     editForm.querySelector(".edit-album-name").value = album.name;
-    editForm.querySelector(".edit-album-description").value =
-      album.description || "";
+    editForm.querySelector(".edit-album-description").value = album.description || "";
 
     // Initialize the dynamic path fields for THIS specific card
     this.initializePathFields(album.image_paths || [], cardElement);
@@ -902,13 +859,13 @@ export class AlbumManager {
     // Attach event listeners
     editForm.querySelector(".save-album-btn").onclick = () => {
       this.saveAlbumChanges(cardElement, album);
-      cardElement.classList.remove('editing');
+      cardElement.classList.remove("editing");
     };
 
     editForm.querySelector(".cancel-edit-btn").onclick = () => {
       albumInfo.style.display = "block";
       editForm.style.display = "none";
-      cardElement.classList.remove('editing');
+      cardElement.classList.remove("editing");
     };
 
     // --- Scroll the card so its bottom is visible ---
@@ -928,9 +885,13 @@ export class AlbumManager {
         }
       },
       onFolderPick: (currentPath, setPath) => {
-        createSimpleDirectoryPicker((selectedPath) => {
-          setPath(selectedPath);
-        }, currentPath, { showCreateFolder: true });
+        createSimpleDirectoryPicker(
+          (selectedPath) => {
+            setPath(selectedPath);
+          },
+          currentPath,
+          { showCreateFolder: true }
+        );
       },
     });
   }
@@ -957,9 +918,7 @@ export class AlbumManager {
   }
 
   collectPathFields(cardElement) {
-    const inputs = cardElement.querySelectorAll(
-      ".edit-album-paths-container .album-path-input"
-    );
+    const inputs = cardElement.querySelectorAll(".edit-album-paths-container .album-path-input");
     return Array.from(inputs)
       .map((input) => input.value.trim())
       .filter((path) => path.length > 0);
@@ -972,10 +931,7 @@ export class AlbumManager {
     const updatedPaths = this.collectPathFields(cardElement);
 
     // Always set index path based on first path
-    const indexPath =
-      updatedPaths.length > 0
-        ? `${updatedPaths[0]}/photomap_index/embeddings.npz`
-        : "";
+    const indexPath = updatedPaths.length > 0 ? `${updatedPaths[0]}/photomap_index/embeddings.npz` : "";
 
     const updatedAlbum = {
       key: album.key,
@@ -987,9 +943,7 @@ export class AlbumManager {
 
     // Compare old and new paths (order and content)
     const oldPaths = Array.isArray(album.image_paths) ? album.image_paths : [];
-    const pathsChanged =
-      oldPaths.length !== updatedPaths.length ||
-      oldPaths.some((p, i) => p !== updatedPaths[i]);
+    const pathsChanged = oldPaths.length !== updatedPaths.length || oldPaths.some((p, i) => p !== updatedPaths[i]);
 
     try {
       const response = await fetch("update_album/", {
@@ -1027,23 +981,15 @@ export class AlbumManager {
       const response = await fetch(`index_progress/${albumKey}`);
       if (response.ok) {
         const progress = await response.json();
-        if (
-          progress.status === "indexing" ||
-          progress.status === "scanning" ||
-          progress.status === "mapping"
-        ) {
-          console.log(
-            `Backend reports indexing already in progress for album: ${albumKey}`
-          );
+        if (progress.status === "indexing" || progress.status === "scanning" || progress.status === "mapping") {
+          console.log(`Backend reports indexing already in progress for album: ${albumKey}`);
           this.showProgressUIWithoutScroll(cardElement, progress);
           this.startProgressPolling(albumKey, cardElement);
           return;
         }
       }
-    } catch (error) {
-      console.debug(
-        `Could not check backend indexing status for album: ${albumKey}`
-      );
+    } catch {
+      console.debug(`Could not check backend indexing status for album: ${albumKey}`);
     }
 
     if (isCorrupted) {
@@ -1062,7 +1008,9 @@ export class AlbumManager {
       }
     }
     const progress = await updateIndex(albumKey);
-    if (!progress) return;
+    if (!progress) {
+      return;
+    }
     this.showProgressUIWithoutScroll(cardElement, progress);
     this.startProgressPolling(albumKey, cardElement);
   }
@@ -1087,7 +1035,6 @@ export class AlbumManager {
     const progressContainer = cardElement.querySelector(".progress-container");
     const cancelBtn = cardElement.querySelector(".cancel-index-btn");
     const status = cardElement.querySelector(".index-status");
-    const estimatedTime = cardElement.querySelector(".estimated-time");
 
     progressContainer.style.display = "block";
     createBtn.style.display = "none";
@@ -1154,9 +1101,7 @@ export class AlbumManager {
     this.showIndexingCompletedUI(cardElement);
 
     if (albumKey === state.album) {
-      console.log(
-        `Refreshing slideshow for completed indexing of current album: ${albumKey}`
-      );
+      console.log(`Refreshing slideshow for completed indexing of current album: ${albumKey}`);
       this.single_swiper.resetAllSlides();
     }
 
@@ -1228,8 +1173,12 @@ export class AlbumManager {
 
     // Defensive: ensure progress_percentage is a number between 0 and 100
     let percentage = Number(progress.progress_percentage);
-    if (isNaN(percentage) || percentage < 0) percentage = 0;
-    if (percentage > 100) percentage = 100;
+    if (isNaN(percentage) || percentage < 0) {
+      percentage = 0;
+    }
+    if (percentage > 100) {
+      percentage = 100;
+    }
     progressBar.style.width = `${percentage}%`;
     progressText.textContent = `${Math.round(percentage)}%`;
 
@@ -1239,13 +1188,8 @@ export class AlbumManager {
     }
 
     // Update estimated time remaining
-    if (
-      progress.estimated_time_remaining !== null &&
-      progress.estimated_time_remaining !== undefined
-    ) {
-      const timeRemaining = this.formatTimeRemaining(
-        progress.estimated_time_remaining
-      );
+    if (progress.estimated_time_remaining !== null && progress.estimated_time_remaining !== undefined) {
+      const timeRemaining = this.formatTimeRemaining(progress.estimated_time_remaining);
       estimatedTime.textContent = `Estimated time remaining: ${timeRemaining}`;
     } else {
       estimatedTime.textContent = "";
@@ -1266,10 +1210,7 @@ export class AlbumManager {
       status.style.color = "#b00020"; // Explicit red
       estimatedTime.textContent = "";
       // Detect the specific error of empty or invalid image directory and dispatch a custom event
-      if (
-        progress.error_message &&
-        progress.error_message.includes("No image files found")
-      ) {
+      if (progress.error_message && progress.error_message.includes("No image files found")) {
         window.dispatchEvent(
           new CustomEvent("albumIndexingNoImages", {
             detail: { albumKey: progress.album_key },
@@ -1335,13 +1276,8 @@ export class AlbumManager {
         if (response.ok) {
           const progress = await response.json();
 
-          if (
-            progress.status === "indexing" ||
-            progress.status === "scanning"
-          ) {
-            console.log(
-              `Restoring progress UI for ongoing operation: ${albumKey} (${progress.status})`
-            );
+          if (progress.status === "indexing" || progress.status === "scanning") {
+            console.log(`Restoring progress UI for ongoing operation: ${albumKey} (${progress.status})`);
 
             this.showProgressUIWithoutScroll(cardElement, progress);
             this.startProgressPolling(albumKey, cardElement);
@@ -1350,7 +1286,7 @@ export class AlbumManager {
             return { albumKey, restored: true };
           }
         }
-      } catch (error) {
+      } catch {
         console.debug(`No ongoing operation for album: ${albumKey}`);
       }
 
@@ -1361,9 +1297,7 @@ export class AlbumManager {
     const restoredCount = results.filter((r) => r.restored).length;
 
     if (restoredCount > 0) {
-      console.log(
-        `Restored progress UI for ${restoredCount} ongoing operation(s)`
-      );
+      console.log(`Restored progress UI for ${restoredCount} ongoing operation(s)`);
     }
   }
 
@@ -1419,7 +1353,7 @@ export class AlbumManager {
 
   relativePath(fullPath, album) {
     // Get the current album's image_paths from state or settings
-    let imagePaths = album.image_paths || [];
+    const imagePaths = album.image_paths || [];
 
     // Try to make fullPath relative to any image path
     for (const imagePath of imagePaths) {
@@ -1427,7 +1361,9 @@ export class AlbumManager {
       if (fullPath.startsWith(imagePath)) {
         // Remove the imagePath prefix and any leading slash
         let rel = fullPath.slice(imagePath.length);
-        if (rel.startsWith("/") || rel.startsWith("\\")) rel = rel.slice(1);
+        if (rel.startsWith("/") || rel.startsWith("\\")) {
+          rel = rel.slice(1);
+        }
         return rel;
       }
     }
@@ -1438,7 +1374,9 @@ export class AlbumManager {
   async getCurrentAlbum(albumKey = null) {
     // Get the current album key from state
     albumKey = albumKey || state.album;
-    if (!albumKey) return null;
+    if (!albumKey) {
+      return null;
+    }
 
     // Fetch albums from the backend
     const response = await fetch("available_albums/");
@@ -1457,14 +1395,18 @@ export class AlbumManager {
 // Check for existence of an album index
 export async function checkAlbumIndex() {
   const albumKey = state.album;
-  if (!albumKey) return;
+  if (!albumKey) {
+    return;
+  }
 
   // Fetch album info from backend
   const response = await fetch("available_albums/");
   const albums = await response.json();
   const album = albums.find((a) => a.key === albumKey);
 
-  if (!album) return;
+  if (!album) {
+    return;
+  }
 
   // Check if index file exists (ask backend or check album.index)
   const indexExists = await fetch(`index_exists/${albumKey}`)
@@ -1472,14 +1414,10 @@ export async function checkAlbumIndex() {
     .then((j) => j.exists);
 
   if (!indexExists) {
-    alert(
-      "This album needs to be indexed before you can use it. Please build/update the index."
-    );
+    alert("This album needs to be indexed before you can use it. Please build/update the index.");
     albumManager.show();
     setTimeout(() => {
-      const cardElement = document.querySelector(
-        `.album-card[data-album-key="${albumKey}"]`
-      );
+      const cardElement = document.querySelector(`.album-card[data-album-key="${albumKey}"]`);
       if (cardElement) {
         albumManager.startIndexing(albumKey, cardElement);
         albumManager.showProgressUI(cardElement);
@@ -1499,9 +1437,7 @@ export async function checkAlbumIndex() {
     );
     albumManager.show();
     setTimeout(() => {
-      const cardElement = document.querySelector(
-        `.album-card[data-album-key="${albumKey}"]`
-      );
+      const cardElement = document.querySelector(`.album-card[data-album-key="${albumKey}"]`);
       if (cardElement) {
         albumManager.editAlbum(cardElement, album); // Open card for edit
         cardElement.scrollIntoView({ behavior: "smooth", block: "center" }); // Autoscroll to card

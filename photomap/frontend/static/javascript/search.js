@@ -9,17 +9,15 @@ const TEXT_SCORE_CUTOFF = 0.2; // Default text score cutoff
 // Call the server to fetch the image indicated by the index
 export async function fetchImageByIndex(index) {
   let response;
-  if (!state.album) return null; // No album set, cannot fetch image
+  if (!state.album) {
+    return null;
+  } // No album set, cannot fetch image
 
-  let spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
+  const spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
 
   try {
-    let url;
-
     // Album and index go into path
-    url = `retrieve_image/${encodeURIComponent(
-      state.album
-    )}/${encodeURIComponent(index)}`;
+    const url = `retrieve_image/${encodeURIComponent(state.album)}/${encodeURIComponent(index)}`;
 
     response = await fetch(url, {
       method: "GET",
@@ -45,8 +43,9 @@ export async function fetchImageByIndex(index) {
 export function setSearchResults(results, searchType) {
   state.searchType = searchType;
   state.searchResults = results;
-  if (searchType === "switchAlbum")
-    return; // Don't trigger event on album change
+  if (searchType === "switchAlbum") {
+    return;
+  } // Don't trigger event on album change
   window.dispatchEvent(
     new CustomEvent("searchResultsChanged", {
       detail: {
@@ -97,14 +96,11 @@ export async function searchTextAndImage({
   };
 
   try {
-    const response = await fetch(
-      `search_with_text_and_image/${encodeURIComponent(state.album)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
+    const response = await fetch(`search_with_text_and_image/${encodeURIComponent(state.album)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
     const result = await response.json();
     return result.results || [];
   } catch (err) {
@@ -115,7 +111,9 @@ export async function searchTextAndImage({
 
 export async function getImagePath(album, index) {
   const response = await fetch(`image_path/${encodeURIComponent(album)}/${encodeURIComponent(index)}`);
-  if (!response.ok) return null;
+  if (!response.ok) {
+    return null;
+  }
   return await response.text();
 }
 

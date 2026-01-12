@@ -33,13 +33,11 @@ function handleFullscreenChange() {
   const isFullscreen = !!document.fullscreenElement;
 
   // Toggle visibility of UI panels
-  [elements.controlPanel, elements.searchPanel, elements.scoreDisplay].forEach(
-    (panel) => {
-      if (panel) {
-        panel.classList.toggle("hidden-fullscreen", isFullscreen);
-      }
+  [elements.controlPanel, elements.searchPanel, elements.scoreDisplay].forEach((panel) => {
+    if (panel) {
+      panel.classList.toggle("hidden-fullscreen", isFullscreen);
     }
-  );
+  });
 }
 
 // Copy text to clipboard
@@ -55,18 +53,13 @@ function handleCopyText() {
     return;
   }
   // Get the element of the current slide
-  const slideEl = document.querySelector(
-    `.swiper-slide[data-global-index='${globalIndex}']`
-  );
+  const slideEl = document.querySelector(`.swiper-slide[data-global-index='${globalIndex}']`);
   if (!slideEl) {
     alert("Current slide element not found.");
     return;
   }
   const filepath = slideEl.dataset.filepath || "";
-  if (
-    navigator.clipboard &&
-    typeof navigator.clipboard.writeText === "function"
-  ) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
     navigator.clipboard
       .writeText(filepath)
       .then(() => {
@@ -99,7 +92,7 @@ function handleCopyText() {
 
 // Delete the current file
 async function handleDeleteCurrentFile() {
-  const [globalIndex, totalImages, searchIndex] = getCurrentSlideIndex();
+  const [globalIndex, , searchIndex] = getCurrentSlideIndex();
   const currentFilepath = await getCurrentFilepath();
 
   if (globalIndex === -1 || !currentFilepath) {
@@ -108,7 +101,9 @@ async function handleDeleteCurrentFile() {
   }
 
   const confirmed = await confirmDelete(currentFilepath, globalIndex);
-  if (!confirmed) return;
+  if (!confirmed) {
+    return;
+  }
 
   try {
     showSpinner();
@@ -134,7 +129,7 @@ function showDeleteConfirmModal(filepath, globalIndex) {
     dontAsk.checked = false;
     modal.style.display = "flex";
 
-    function cleanup(result) {
+    function cleanup() {
       modal.style.display = "none";
       cancelBtn.removeEventListener("click", onCancel);
       confirmBtn.removeEventListener("click", onConfirm);
@@ -159,7 +154,9 @@ function showDeleteConfirmModal(filepath, globalIndex) {
 }
 
 async function confirmDelete(filepath, globalIndex) {
-  if (state.suppressDeleteConfirm) return true;
+  if (state.suppressDeleteConfirm) {
+    return true;
+  }
   return await showDeleteConfirmModal(filepath, globalIndex);
 }
 
@@ -203,7 +200,7 @@ async function handleSuccessfulDelete(globalIndex, searchIndex) {
 function setupControlPanelEventListeners() {
   // Fullscreen button
   if (elements.fullscreenBtn) {
-    elements.fullscreenBtn.addEventListener("click", function (e) {
+    elements.fullscreenBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleFullscreen();
     });
@@ -216,10 +213,7 @@ function setupControlPanelEventListeners() {
 
   // Delete current file button
   if (elements.deleteCurrentFileBtn) {
-    elements.deleteCurrentFileBtn.addEventListener(
-      "click",
-      handleDeleteCurrentFile
-    );
+    elements.deleteCurrentFileBtn.addEventListener("click", handleDeleteCurrentFile);
   }
 
   // Fullscreen change event

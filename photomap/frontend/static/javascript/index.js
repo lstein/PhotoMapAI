@@ -2,23 +2,23 @@
 // Functions for managing the embeddings index
 
 export async function updateIndex(albumKey) {
-    try {
-      const response = await fetch("update_index_async/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ album_key: albumKey }),
-      });
+  try {
+    const response = await fetch("update_index_async/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ album_key: albumKey }),
+    });
 
-      if (response.ok) {
-        return await response.json();
-      } else {
-        throw new Error("Failed to update index");
-      }
-    } catch (error) {
-      console.error("Failed to start indexing:", error);
-      alert(`Failed to start indexing: ${error.message}`);
+    if (response.ok) {
+      return await response.json();
+    } else {
+      throw new Error("Failed to update index");
     }
-    return null;
+  } catch (error) {
+    console.error("Failed to start indexing:", error);
+    alert(`Failed to start indexing: ${error.message}`);
+  }
+  return null;
 }
 
 // This function is called to remove the index for a specific album
@@ -42,13 +42,10 @@ export async function removeIndex(albumKey) {
 
 export async function deleteImage(albumKey, index) {
   try {
-    const response = await fetch(
-      `delete_image/${encodeURIComponent(albumKey)}/${encodeURIComponent(index)}`,
-      {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    const response = await fetch(`delete_image/${encodeURIComponent(albumKey)}/${encodeURIComponent(index)}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+    });
 
     if (!response.ok) {
       throw new Error(`Failed to delete image: ${response.statusText}`);

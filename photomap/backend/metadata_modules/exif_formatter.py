@@ -6,8 +6,6 @@ Returns an HTML representation of the EXIF data.
 """
 
 from logging import getLogger
-from pathlib import Path
-from typing import Optional, Tuple
 
 import requests
 
@@ -17,7 +15,7 @@ logger = getLogger(__name__)
 
 
 def format_exif_metadata(
-    slide_data: SlideSummary, metadata: dict, locationiq_api_key: Optional[str] = None
+    slide_data: SlideSummary, metadata: dict, locationiq_api_key: str | None = None
 ) -> SlideSummary:
     """
     Format EXIF metadata dictionary into an HTML string.
@@ -133,7 +131,7 @@ def _format_field_value(field_name: str, value) -> str:
 
     # Handle specific field formatting
     if field_name == "ExposureTime":
-        if isinstance(value, (int, float)) and value < 1:
+        if isinstance(value, int | float) and value < 1:
             return f"1/{int(1/value)}s"
         return f"{value}s"
 
@@ -212,18 +210,18 @@ def get_locationiq_place_name(latitude, longitude, api_key):
             return (data.get("display_name"), "ok")
         elif response.status_code == 401:
             # Unauthorized - invalid API key
-            logger.warning(f"LocationIQ API key is invalid (401 Unauthorized)")
+            logger.warning("LocationIQ API key is invalid (401 Unauthorized)")
             return (None, "unauthorized")
         elif response.status_code == 403:
             # Forbidden - API key might be expired or quota exceeded
             logger.warning(
-                f"LocationIQ API access forbidden (403) - check API key and quota"
+                "LocationIQ API access forbidden (403) - check API key and quota"
             )
             return (None, "access forbidden")
         elif response.status_code == 429:
             # Too Many Requests - rate limit exceeded
             logger.warning(
-                f"LocationIQ API rate limit exceeded (429 Too Many Requests)"
+                "LocationIQ API rate limit exceeded (429 Too Many Requests)"
             )
             return (None, "rate limit exceeded")
         else:

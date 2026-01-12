@@ -31,12 +31,12 @@ export function showConfirmModal(message, okButtonText = "OK", cancelButtonText 
       cancelBtn.removeEventListener("click", onCancel);
       okBtn.removeEventListener("click", onOk);
     }
-    
+
     function onCancel() {
       cleanup();
       resolve(false);
     }
-    
+
     function onOk() {
       cleanup();
       resolve(true);

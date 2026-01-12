@@ -9,51 +9,49 @@ import { WeightSlider } from "./weight-slider.js";
 import { hideCurrentImageMarker } from "./umap.js";
 import { clearCurationData } from "./curation.js";
 
-let posPromptWeight = 0.5; 
-let negPromptWeight = 0.25; 
-let imgPromptWeight = 0.5; 
-let currentSearchImageUrl = null; 
+let posPromptWeight = 0.5;
+let negPromptWeight = 0.25;
+let imgPromptWeight = 0.5;
+let currentSearchImageUrl = null;
 
-document.addEventListener("DOMContentLoaded", async function () {
+document.addEventListener("DOMContentLoaded", async () => {
   const textSearchPanel = document.getElementById("textSearchPanel");
   const textSearchBtn = document.getElementById("textSearchBtn");
   const closeTextSearchBtn = document.getElementById("closeTextSearchBtn");
 
   if (closeTextSearchBtn) {
-    closeTextSearchBtn.onclick = function() {
-      textSearchPanel.style.display = 'none';
+    closeTextSearchBtn.onclick = function () {
+      textSearchPanel.style.display = "none";
     };
   }
 
-  textSearchBtn.addEventListener("click", function (e) {
+  textSearchBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (
-      textSearchPanel.style.display === "none" ||
-      textSearchPanel.style.display === ""
-    ) {
+    if (textSearchPanel.style.display === "none" || textSearchPanel.style.display === "") {
       textSearchPanel.focus();
       setTimeout(() => {
         textSearchPanel.style.display = "block";
         textSearchPanel.style.opacity = 1;
         const noResultsMsg = document.getElementById("noResultsMsg");
-        if (noResultsMsg) noResultsMsg.style.display = "none";
+        if (noResultsMsg) {
+          noResultsMsg.style.display = "none";
+        }
       }, 20);
     } else {
       textSearchPanel.style.display = "none";
       textSearchPanel.style.opacity = 0;
       const noResultsMsg = document.getElementById("noResultsMsg");
-      if (noResultsMsg) noResultsMsg.style.display = "none";
+      if (noResultsMsg) {
+        noResultsMsg.style.display = "none";
+      }
     }
   });
 
   document.addEventListener(
     "click",
-    function (e) {
+    (e) => {
       if (textSearchPanel.style.display === "block") {
-        if (
-          !textSearchPanel.contains(e.target) &&
-          !textSearchBtn.contains(e.target)
-        ) {
+        if (!textSearchPanel.contains(e.target) && !textSearchBtn.contains(e.target)) {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
@@ -67,7 +65,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     true
   );
 
-  textSearchPanel.addEventListener("click", function (e) {
+  textSearchPanel.addEventListener("click", (e) => {
     e.stopPropagation();
   });
 
@@ -75,26 +73,22 @@ document.addEventListener("DOMContentLoaded", async function () {
   const searchInput = document.getElementById("searchInput");
   const negativeSearchInput = document.getElementById("negativeSearchInput");
 
-  doSearchBtn.addEventListener("click", function () {
+  doSearchBtn.addEventListener("click", () => {
     searchWithTextAndImage("text");
   });
 
   async function searchWithTextAndImage(searchType = "text_and_image") {
     const positiveQuery = searchInput.value.trim();
     const negativeQuery = negativeSearchInput.value.trim();
-    const imageFile = state.currentSearchImageFile || null; 
+    const imageFile = state.currentSearchImageFile || null;
 
-    const posWeight = posPromptWeightSlider.getValue
-      ? posPromptWeightSlider.getValue()
-      : posPromptWeight;
-    const negWeight = negPromptWeightSlider.getValue
-      ? negPromptWeightSlider.getValue()
-      : negPromptWeight;
-    const imgWeight = imgPromptWeightSlider.getValue
-      ? imgPromptWeightSlider.getValue()
-      : imgPromptWeight;
+    const posWeight = posPromptWeightSlider.getValue ? posPromptWeightSlider.getValue() : posPromptWeight;
+    const negWeight = negPromptWeightSlider.getValue ? negPromptWeightSlider.getValue() : negPromptWeight;
+    const imgWeight = imgPromptWeightSlider.getValue ? imgPromptWeightSlider.getValue() : imgPromptWeight;
 
-    if (!positiveQuery && !negativeQuery && !imageFile) return;
+    if (!positiveQuery && !negativeQuery && !imageFile) {
+      return;
+    }
 
     const slideShowRunning = state.swiper?.autoplay?.running;
     state.single_swiper.pauseSlideshow();
@@ -113,7 +107,14 @@ document.addEventListener("DOMContentLoaded", async function () {
         top_k: 500,
       });
 
-      const cutoff = calculate_search_score_cutoff(imageFile, imgWeight, positiveQuery, posWeight, negativeQuery, negWeight);
+      const cutoff = calculate_search_score_cutoff(
+        imageFile,
+        imgWeight,
+        positiveQuery,
+        posWeight,
+        negativeQuery,
+        negWeight
+      );
       new_results = new_results.filter((item) => item.score >= cutoff);
 
       setSearchResults(new_results, searchType);
@@ -128,12 +129,14 @@ document.addEventListener("DOMContentLoaded", async function () {
       console.error("Search request failed:", err);
     } finally {
       hideSpinner();
-      if (slideShowRunning) state.single_swiper.resumeSlideshow();
+      if (slideShowRunning) {
+        state.single_swiper.resumeSlideshow();
+      }
     }
   }
 
   const imageSearchBtn = document.getElementById("imageSearchBtn");
-  imageSearchBtn.addEventListener("click", async function () {
+  imageSearchBtn.addEventListener("click", async () => {
     searchInput.value = "";
     negativeSearchInput.value = "";
     let slide;
@@ -143,12 +146,16 @@ document.addEventListener("DOMContentLoaded", async function () {
       const globalIndex = currentSlide.globalIndex.toString();
       slide = swiper.slides.find((s) => s.dataset.globalIndex === globalIndex);
     } else {
-      slide = swiper.slides[state.swiper.activeIndex];  
+      slide = swiper.slides[state.swiper.activeIndex];
     }
-    if (!slide) return;
+    if (!slide) {
+      return;
+    }
     const imgUrl = slide.querySelector("img")?.src;
     const filename = slide.dataset.filename || "image.jpg";
-    if (!imgUrl) return;
+    if (!imgUrl) {
+      return;
+    }
 
     try {
       const slideShowRunning = state.swiper?.autoplay?.running;
@@ -160,30 +167,34 @@ document.addEventListener("DOMContentLoaded", async function () {
       setSearchImage(imgUrl, file);
       await searchWithTextAndImage("image");
       hideSpinner();
-      if (slideShowRunning) state.single_swiper.resumeSlideshow();
+      if (slideShowRunning) {
+        state.single_swiper.resumeSlideshow();
+      }
     } catch (err) {
       hideSpinner();
       console.error("Image similarity search failed:", err);
     }
   });
 
-  textSearchPanel.addEventListener("transitionend", function (e) {
+  textSearchPanel.addEventListener("transitionend", () => {
     if (textSearchPanel.style.opacity === "0") {
       textSearchPanel.style.display = "none";
       const noResultsMsg = document.getElementById("noResultsMsg");
-      if (noResultsMsg) noResultsMsg.style.display = "none";
+      if (noResultsMsg) {
+        noResultsMsg.style.display = "none";
+      }
     }
   });
 
   const uploadImageLink = document.getElementById("uploadImageLink");
   const uploadImageInput = document.getElementById("uploadImageInput");
 
-  uploadImageLink.addEventListener("click", function (e) {
+  uploadImageLink.addEventListener("click", (e) => {
     e.preventDefault();
     uploadImageInput.click();
   });
 
-  uploadImageInput.addEventListener("change", async function (e) {
+  uploadImageInput.addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (file && file.type.startsWith("image/")) {
       showSpinner();
@@ -199,79 +210,69 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  searchInput.addEventListener("keydown", function (e) {
+  searchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       doSearchBtn.click();
     }
   });
 
-  negativeSearchInput.addEventListener("keydown", function (e) {
+  negativeSearchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       doSearchBtn.click();
     }
   });
 
-  const posPromptWeightSlider = new WeightSlider(
-    document.getElementById("posPromptWeightSlider"),
-    0.5,
-    (val) => {
-      posPromptWeight = val;
-    }
-  );
+  const posPromptWeightSlider = new WeightSlider(document.getElementById("posPromptWeightSlider"), 0.5, (val) => {
+    posPromptWeight = val;
+  });
 
-  const negPromptWeightSlider = new WeightSlider(
-    document.getElementById("negPromptWeightSlider"),
-    0.25,
-    (val) => {
-      negPromptWeight = val;
-    }
-  );
+  const negPromptWeightSlider = new WeightSlider(document.getElementById("negPromptWeightSlider"), 0.25, (val) => {
+    negPromptWeight = val;
+  });
 
-  const imgPromptWeightSlider = new WeightSlider(
-    document.getElementById("imgPromptWeightSlider"),
-    0.5,
-    (val) => {
-      imgPromptWeight = val;
-    }
-  );
+  const imgPromptWeightSlider = new WeightSlider(document.getElementById("imgPromptWeightSlider"), 0.5, (val) => {
+    imgPromptWeight = val;
+  });
 
   const clearSearchBtn = document.getElementById("clearSearchBtn");
-  clearSearchBtn.addEventListener("click", function () {
+  clearSearchBtn.addEventListener("click", () => {
     exitSearchMode();
   });
 
   const clearTextSearchBtn = document.getElementById("clearTextSearchBtn");
-  clearTextSearchBtn.addEventListener("click", function () {
+  clearTextSearchBtn.addEventListener("click", () => {
     searchInput.value = "";
   });
 
-  const clearNegativeTextSearchBtn = document.getElementById(
-    "clearNegativeTextSearchBtn"
-  );
+  const clearNegativeTextSearchBtn = document.getElementById("clearNegativeTextSearchBtn");
   clearNegativeTextSearchBtn.addEventListener("click", () => {
     negativeSearchInput.value = "";
   });
 
   const searchImageThumbArea = document.getElementById("searchImageThumbArea");
 
-  searchImageThumbArea.addEventListener("dragover", function (e) {
+  searchImageThumbArea.addEventListener("dragover", (e) => {
     e.preventDefault();
     searchImageThumbArea.classList.add("dragover");
   });
 
-  searchImageThumbArea.addEventListener("dragleave", function (e) {
+  searchImageThumbArea.addEventListener("dragleave", (e) => {
     e.preventDefault();
     searchImageThumbArea.classList.remove("dragover");
   });
 
-  searchImageThumbArea.addEventListener("drop", async function (e) {
+  searchImageThumbArea.addEventListener("drop", async (e) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      return;
+    }
     const file = files[0];
-    if (!file.type.startsWith("image/")) return;
+    if (!file.type.startsWith("image/")) {
+      return;
+    }
 
     showSpinner();
     try {
@@ -290,20 +291,24 @@ document.addEventListener("DOMContentLoaded", async function () {
   });
 
   const searchPanel = document.getElementById("searchPanel");
-  searchPanel.addEventListener("dragover", function (e) {
+  searchPanel.addEventListener("dragover", (e) => {
     e.preventDefault();
     searchPanel.classList.add("dragover");
   });
-  searchPanel.addEventListener("dragleave", function (e) {
+  searchPanel.addEventListener("dragleave", (e) => {
     e.preventDefault();
     searchPanel.classList.remove("dragover");
   });
-  searchPanel.addEventListener("drop", async function (e) {
+  searchPanel.addEventListener("drop", async (e) => {
     e.preventDefault();
     const files = e.dataTransfer.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      return;
+    }
     const file = files[0];
-    if (!file.type.startsWith("image/")) return;
+    if (!file.type.startsWith("image/")) {
+      return;
+    }
 
     showSpinner();
     try {
@@ -312,7 +317,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         setSearchImage(event.target.result, file);
       };
       reader.readAsDataURL(file);
-      let slide = await insertUploadedImageFile(file);
+      const slide = await insertUploadedImageFile(file);
       await searchWithImage(file, slide);
     } catch (err) {
       console.error("Image search failed:", err);
@@ -323,7 +328,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
   });
 
-  window.addEventListener("searchResultsChanged", async function (e) {
+  window.addEventListener("searchResultsChanged", async (e) => {
     let noResultsMsg = document.getElementById("noResultsMsg");
     if (!noResultsMsg) {
       noResultsMsg = document.createElement("div");
@@ -348,7 +353,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   renderSearchImageThumbArea();
 });
 
-export async function searchWithImage(file, first_slide) {
+export async function searchWithImage(file) {
   try {
     showSpinner();
     let results = await searchImage(file);
@@ -421,10 +426,14 @@ export function updateSearchCheckmarks(searchType = null) {
   }
 }
 
-window.addEventListener("paste", async function (e) {
-  if (!e.clipboardData) return;
+window.addEventListener("paste", async (e) => {
+  if (!e.clipboardData) {
+    return;
+  }
   const items = e.clipboardData.items;
-  if (!items) return;
+  if (!items) {
+    return;
+  }
   const swiper = state.gridViewActive ? state.grid_swiper.swiper : state.single_swiper.swiper;
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -466,16 +475,20 @@ window.addEventListener("paste", async function (e) {
 // --- UPDATED: Exit Search Mode now clears UMAP marker ---
 export function exitSearchMode(searchType = "clear") {
   const searchInput = document.getElementById("searchInput");
-  if (searchInput) searchInput.value = "";
+  if (searchInput) {
+    searchInput.value = "";
+  }
   const negativeSearchInput = document.getElementById("negativeSearchInput");
-  if (negativeSearchInput) negativeSearchInput.value = "";
-  setSearchImage(null, null); 
+  if (negativeSearchInput) {
+    negativeSearchInput.value = "";
+  }
+  setSearchImage(null, null);
   updateSearchCheckmarks(searchType);
   setSearchResults([], searchType);
-  
+
   // Clear the yellow dot
   hideCurrentImageMarker();
-  
+
   // Clear curation data when clearing search
   clearCurationData();
 }

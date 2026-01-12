@@ -2,24 +2,13 @@
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
-import {
-  saveSettingsToLocalStorage,
-  setAlbum,
-  setMaxSearchResults,
-  setMinSearchScore,
-  state,
-} from "./state.js";
+import { saveSettingsToLocalStorage, setAlbum, setMaxSearchResults, setMinSearchScore, state } from "./state.js";
 
 // Constants
 const DELAY_CONFIG = {
   step: 1, // seconds to increase/decrease per click
   min: 1, // minimum delay in seconds
   max: 60, // maximum delay in seconds
-};
-
-const WATERMARK_CONFIG = {
-  min: 2,
-  max: 100,
 };
 
 // Cache DOM elements to avoid repeated queries
@@ -38,9 +27,7 @@ function cacheElements() {
     slowerBtn: document.getElementById("slowerBtn"),
     fasterBtn: document.getElementById("fasterBtn"),
     locationiqApiKeyInput: document.getElementById("locationiqApiKeyInput"),
-    showControlPanelTextCheckbox: document.getElementById(
-      "showControlPanelTextCheckbox"
-    ),
+    showControlPanelTextCheckbox: document.getElementById("showControlPanelTextCheckbox"),
     confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
     minSearchScore: document.getElementById("minSearchScore"),
@@ -56,7 +43,9 @@ export async function loadAvailableAlbums() {
   try {
     const response = await fetch("available_albums/");
     const albums = await response.json();
-    if (!elements.albumSelect) return; // If album selection is locked, skip
+    if (!elements.albumSelect) {
+      return;
+    } // If album selection is locked, skip
 
     elements.albumSelect.innerHTML = ""; // Clear placeholder
 
@@ -132,8 +121,7 @@ function updateDelayDisplay(newDelay) {
 }
 
 function adjustDelay(direction) {
-  const adjustment =
-    direction === "slower" ? DELAY_CONFIG.step : -DELAY_CONFIG.step;
+  const adjustment = direction === "slower" ? DELAY_CONFIG.step : -DELAY_CONFIG.step;
   const newDelay =
     direction === "slower"
       ? Math.min(DELAY_CONFIG.max, state.currentDelay + adjustment)
@@ -161,25 +149,30 @@ function toggleSettingsModal() {
 
 async function populateModalFields() {
   elements.delayValueSpan.textContent = state.currentDelay;
-  if (elements.albumSelect)
+  if (elements.albumSelect) {
     elements.albumSelect.value = state.album;
+  }
   elements.modeRandom.checked = state.mode === "random";
   elements.modeChronological.checked = state.mode === "chronological";
   elements.showControlPanelTextCheckbox.checked = state.showControlPanelText;
 
   // Set the confirm delete checkbox state
-  if (elements.confirmDeleteCheckbox)
+  if (elements.confirmDeleteCheckbox) {
     elements.confirmDeleteCheckbox.checked = !state.suppressDeleteConfirm;
+  }
 
   // Set the grid thumbnail size factor spinner value
-  if (elements.gridThumbSizeFactor)
+  if (elements.gridThumbSizeFactor) {
     elements.gridThumbSizeFactor.value = state.gridThumbSizeFactor;
+  }
 
   // search settings initial values
-  if (elements.minSearchScore)
+  if (elements.minSearchScore) {
     elements.minSearchScore.value = state.minSearchScore.toFixed(2);
-  if (elements.maxSearchResults)
+  }
+  if (elements.maxSearchResults) {
     elements.maxSearchResults.value = state.maxSearchResults;
+  }
 
   await loadLocationIQApiKey();
 }
@@ -235,7 +228,9 @@ function setupModalControls() {
 }
 
 function setupAlbumSelector() {
-  if (!elements.albumSelect) return; // If album selection is locked, skip
+  if (!elements.albumSelect) {
+    return;
+  } // If album selection is locked, skip
   elements.albumSelect.addEventListener("change", function () {
     const newAlbum = this.value;
     if (newAlbum !== state.album) {
@@ -246,7 +241,9 @@ function setupAlbumSelector() {
 }
 
 function setupConfirmDeleteControl() {
-  if (!elements.confirmDeleteCheckbox) return;
+  if (!elements.confirmDeleteCheckbox) {
+    return;
+  }
   elements.confirmDeleteCheckbox.addEventListener("change", function () {
     state.suppressDeleteConfirm = !this.checked;
     saveSettingsToLocalStorage();
@@ -255,15 +252,16 @@ function setupConfirmDeleteControl() {
 
 async function loadLocationIQApiKey() {
   try {
-    if (!elements.locationiqApiKeyInput) return; // If album selection is locked, skip
+    if (!elements.locationiqApiKeyInput) {
+      return;
+    } // If album selection is locked, skip
     const response = await fetch("locationiq_key/");
     const data = await response.json();
 
     if (data.has_key) {
       elements.locationiqApiKeyInput.placeholder = `Current key: ${data.key}`;
     } else {
-      elements.locationiqApiKeyInput.placeholder =
-        "Enter your LocationIQ API key (optional)";
+      elements.locationiqApiKeyInput.placeholder = "Enter your LocationIQ API key (optional)";
     }
   } catch (error) {
     console.error("Failed to load LocationIQ API key:", error);
@@ -290,7 +288,9 @@ async function saveLocationIQApiKey(apiKey) {
 }
 
 function setupLocationIQApiKeyControl() {
-  if (!elements.locationiqApiKeyInput) return; // If album selection is locked, skip
+  if (!elements.locationiqApiKeyInput) {
+    return;
+  } // If album selection is locked, skip
 
   // Load existing key on initialization
   loadLocationIQApiKey();
@@ -310,20 +310,24 @@ function setupLocationIQApiKeyControl() {
 }
 
 function setupGridThumbSizeFactorControl() {
-  if (!elements.gridThumbSizeFactor) return;
+  if (!elements.gridThumbSizeFactor) {
+    return;
+  }
   let debounceTimeout = null;
   elements.gridThumbSizeFactor.addEventListener("input", function () {
     clearTimeout(debounceTimeout);
     debounceTimeout = setTimeout(() => {
       let val = parseFloat(this.value);
-      if (isNaN(val) || val < 0.5) val = 0.5;
-      if (val > 2.0) val = 2.0;
+      if (isNaN(val) || val < 0.5) {
+        val = 0.5;
+      }
+      if (val > 2.0) {
+        val = 2.0;
+      }
       state.gridThumbSizeFactor = val;
       saveSettingsToLocalStorage();
       // Notify grid to reinitialize
-      window.dispatchEvent(
-        new CustomEvent("gridThumbSizeFactorChanged", { detail: { factor: val } })
-      );
+      window.dispatchEvent(new CustomEvent("gridThumbSizeFactorChanged", { detail: { factor: val } }));
     }, 300); // 300ms debounce
   });
 }
@@ -334,18 +338,20 @@ function setupSearchSettingsControls() {
   if (elements.minSearchScore) {
     elements.minSearchScore.addEventListener("input", function () {
       const val = this.value.trim();
-      if (val === "") return; // let user type
+      if (val === "") {
+        return;
+      } // let user type
       const num = Number(val);
-      if (!Number.isFinite(num)) return;
+      if (!Number.isFinite(num)) {
+        return;
+      }
       const clamped = Math.max(0.0, Math.min(1.0, num));
       setMinSearchScore(clamped);
     });
 
     elements.minSearchScore.addEventListener("blur", function () {
       const num = Number(this.value);
-      const clamped = Number.isFinite(num)
-        ? Math.max(0.0, Math.min(1.0, num))
-        : state.minSearchScore;
+      const clamped = Number.isFinite(num) ? Math.max(0.0, Math.min(1.0, num)) : state.minSearchScore;
       setMinSearchScore(clamped);
       this.value = clamped.toFixed(2); // normalize on commit
     });
@@ -355,18 +361,20 @@ function setupSearchSettingsControls() {
   if (elements.maxSearchResults) {
     elements.maxSearchResults.addEventListener("input", function () {
       const val = this.value.trim();
-      if (val === "") return;
+      if (val === "") {
+        return;
+      }
       const num = parseInt(val, 10);
-      if (!Number.isFinite(num)) return;
+      if (!Number.isFinite(num)) {
+        return;
+      }
       const clamped = Math.max(50, Math.min(500, num));
       setMaxSearchResults(clamped);
     });
 
     elements.maxSearchResults.addEventListener("blur", function () {
       const num = parseInt(this.value, 10);
-      const clamped = Number.isFinite(num)
-        ? Math.max(50, Math.min(500, num))
-        : state.maxSearchResults;
+      const clamped = Number.isFinite(num) ? Math.max(50, Math.min(500, num)) : state.maxSearchResults;
       setMaxSearchResults(clamped);
       this.value = String(clamped); // normalize on commit
     });

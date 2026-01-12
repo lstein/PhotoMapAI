@@ -8,7 +8,6 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class ProgressInfo:
     images_processed: int
     total_images: int
     start_time: float
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     @property
     def progress_percentage(self) -> float:
@@ -44,7 +43,7 @@ class ProgressInfo:
         return time.time() - self.start_time
 
     @property
-    def estimated_time_remaining(self) -> Optional[float]:
+    def estimated_time_remaining(self) -> float | None:
         if self.images_processed == 0:
             return None
         rate = self.images_processed / self.elapsed_time
@@ -56,7 +55,7 @@ class ProgressTracker:
     """Global progress tracker for indexing operations."""
 
     def __init__(self):
-        self._progress: Dict[str, ProgressInfo] = {}
+        self._progress: dict[str, ProgressInfo] = {}
 
     def start_operation(self, album_key: str, total_images: int, operation_type: str):
         """Start tracking progress for an album."""
@@ -95,7 +94,7 @@ class ProgressTracker:
             progress.status = IndexStatus.ERROR
             progress.error_message = error_message
 
-    def get_progress(self, album_key: str) -> Optional[ProgressInfo]:
+    def get_progress(self, album_key: str) -> ProgressInfo | None:
         """Get progress info for an album."""
         return self._progress.get(album_key)
 

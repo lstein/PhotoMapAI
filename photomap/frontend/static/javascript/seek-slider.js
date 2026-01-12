@@ -23,7 +23,7 @@ class SeekSlider {
     this.hideTimerId = null;
     this.TICK_COUNT = 10;
     this.FADE_OUT_DELAY = 10000;
-    this.HIDE_DELAY_MS = 150;  // Delay before hiding to prevent jitter from rapid mouse events
+    this.HIDE_DELAY_MS = 150; // Delay before hiding to prevent jitter from rapid mouse events
     this.isUserSeeking = false;
     this.lastFetchTime = 0;
     this.FETCH_THROTTLE_MS = 200;
@@ -47,11 +47,11 @@ class SeekSlider {
     this.addEventListeners();
     this.updateSliderPosition();
     this.updateHoverStripProgress();
-    
+
     // Update position when window resizes (debounced to avoid performance issues)
     this.debouncedUpdatePosition = debounce(() => this.updateSliderPosition(), 100);
     window.addEventListener("resize", this.debouncedUpdatePosition);
-    
+
     // Update slider position when score display content changes
     window.addEventListener("scoreDisplayContentChanged", () => this.updateSliderPosition());
   }
@@ -60,11 +60,13 @@ class SeekSlider {
    * Update the left position of slider and yellow strip based on score display's right edge
    */
   updateSliderPosition() {
-    if (!this.scoreDisplayElement || !this.scoreSliderRow || !this.hoverStrip) return;
-    
+    if (!this.scoreDisplayElement || !this.scoreSliderRow || !this.hoverStrip) {
+      return;
+    }
+
     const rect = this.scoreDisplayElement.getBoundingClientRect();
     const leftPosition = rect.right + 8; // 8px gap after score display
-    
+
     this.scoreSliderRow.style.left = `${leftPosition}px`;
     this.hoverStrip.style.left = `${leftPosition}px`;
   }
@@ -75,28 +77,32 @@ class SeekSlider {
    * @param {number|null} sliderValue - Optional slider value (1-indexed). If not provided, uses slideState.
    */
   updateHoverStripProgress(sliderValue = null) {
-    if (!this.hoverStrip) return;
-    
+    if (!this.hoverStrip) {
+      return;
+    }
+
     let max = 1;
-    
+
     if (state.searchResults?.length > 0) {
       max = state.searchResults.length;
     } else {
       const [, totalSlides] = getCurrentSlideIndex();
       max = totalSlides || 1;
     }
-    
+
     // Calculate percentage using same formula as slider thumb positioning
     // Slider uses 1-indexed values with min=1
     const value = sliderValue !== null ? sliderValue : slideState.getCurrentIndex() + 1;
     const percent = max > 1 ? ((value - 1) / (max - 1)) * 100 : 0;
-    
+
     // Apply gradient: yellow up to current position, white after
     // Use CSS custom properties for colors (defined in seek-slider.css)
-    const progressColor = getComputedStyle(document.documentElement).getPropertyValue('--slider-progress-color').trim() || '#ffc107';
-    const remainingColor = getComputedStyle(document.documentElement).getPropertyValue('--slider-remaining-color').trim() || '#ffffff';
+    const progressColor =
+      getComputedStyle(document.documentElement).getPropertyValue("--slider-progress-color").trim() || "#ffc107";
+    const remainingColor =
+      getComputedStyle(document.documentElement).getPropertyValue("--slider-remaining-color").trim() || "#ffffff";
     this.hoverStrip.style.background = `linear-gradient(to right, ${progressColor} ${percent}%, ${remainingColor} ${percent}%)`;
-    
+
     // Also update the slider track to match
     this.updateSliderTrack(percent);
   }
@@ -106,8 +112,10 @@ class SeekSlider {
    * @param {number} percent - The percentage of progress (0-100)
    */
   updateSliderTrack(percent) {
-    if (!this.slider) return;
-    this.slider.style.setProperty('--slider-progress', `${percent}%`);
+    if (!this.slider) {
+      return;
+    }
+    this.slider.style.setProperty("--slider-progress", `${percent}%`);
   }
 
   addEventListeners() {
@@ -137,30 +145,22 @@ class SeekSlider {
       });
       this.scoreSliderRow.addEventListener("mouseleave", (e) => {
         // Only hide if not moving to another slider-related element
-        if (!this.scoreSliderRow.contains(e.relatedTarget) && 
-            e.relatedTarget !== this.hoverStrip) {
+        if (!this.scoreSliderRow.contains(e.relatedTarget) && e.relatedTarget !== this.hoverStrip) {
           this.scheduleHide();
         }
       });
     }
     if (this.slider) {
-      this.slider.addEventListener(
-        "input",
-        async (e) => await this.onSliderInput(e)
-      );
-      this.slider.addEventListener(
-        "change",
-        async () => await this.onSliderChange()
-      );
+      this.slider.addEventListener("input", async (e) => await this.onSliderInput(e));
+      this.slider.addEventListener("change", async () => await this.onSliderChange());
       this.slider.addEventListener("blur", () => {
-        if (this.infoPanel) this.infoPanel.style.display = "none";
+        if (this.infoPanel) {
+          this.infoPanel.style.display = "none";
+        }
       });
     }
 
-    window.addEventListener(
-      "slideChanged",
-      async (event) => await this.onSlideChanged(event)
-    );
+    window.addEventListener("slideChanged", async (event) => await this.onSlideChanged(event));
     window.addEventListener("searchResultsChanged", () => {
       this.searchResultsChanged = true;
       this.updateHoverStripProgress();
@@ -213,9 +213,7 @@ class SeekSlider {
             const panelText = `${String(date.getDate()).padStart(
               2,
               "0"
-            )}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(
-              date.getFullYear()
-            ).slice(-2)}`;
+            )}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getFullYear()).slice(-2)}`;
             this.infoPanel.textContent = panelText;
           }
         } catch {
@@ -227,10 +225,7 @@ class SeekSlider {
     this.resetFadeOutTimer();
 
     let panelText = "";
-    if (
-      state.searchResults?.length > 0 &&
-      state.searchResults[0].score !== undefined
-    ) {
+    if (state.searchResults?.length > 0 && state.searchResults[0].score !== undefined) {
       const result = state.searchResults[value - 1];
       panelText = result ? `Score: ${result.score.toFixed(3)}` : "";
     } else if (!state.searchResults || state.searchResults.length === 0) {
@@ -240,9 +235,10 @@ class SeekSlider {
         if (resp.ok) {
           const info = await resp.json();
           const date = new Date(info.last_modified * 1000);
-          panelText = `${String(date.getDate()).padStart(2, "0")}/${String(
-            date.getMonth() + 1
-          ).padStart(2, "0")}/${String(date.getFullYear()).slice(-2)}`;
+          panelText = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(
+            2,
+            "0"
+          )}/${String(date.getFullYear()).slice(-2)}`;
         }
       } catch {
         panelText = "";
@@ -261,8 +257,7 @@ class SeekSlider {
         left = e.clientX - containerRect.left - this.infoPanel.offsetWidth / 2;
         top = this.slider.offsetTop - this.infoPanel.offsetHeight - 8;
       } else {
-        const percent =
-          (value - this.slider.min) / (this.slider.max - this.slider.min);
+        const percent = (value - this.slider.min) / (this.slider.max - this.slider.min);
         const sliderRect = this.slider.getBoundingClientRect();
         left = percent * sliderRect.width - this.infoPanel.offsetWidth / 2;
         top = this.slider.offsetBottom + 8;
@@ -281,16 +276,11 @@ class SeekSlider {
       // Update bookmark status for the star display
       const isBookmarked = globalIndex !== undefined ? bookmarkManager.isBookmarked(globalIndex) : false;
       this.scoreDisplayObj.setBookmarkStatus(globalIndex, isBookmarked);
-      
+
       if (state.searchResults[targetIndex]?.cluster !== undefined) {
         const cluster = state.searchResults[targetIndex]?.cluster;
         const color = state.searchResults[targetIndex]?.color;
-        this.scoreDisplayObj.showCluster(
-          cluster,
-          color,
-          targetIndex + 1,
-          state.searchResults.length
-        );
+        this.scoreDisplayObj.showCluster(cluster, color, targetIndex + 1, state.searchResults.length);
       } else {
         this.scoreDisplayObj.showSearchScore(
           state.searchResults[targetIndex]?.score,
@@ -319,11 +309,15 @@ class SeekSlider {
     }, 1500);
   }
 
-  async onSlideChanged(event) {
+  async onSlideChanged() {
     this.searchResultsChanged = true;
-    if (this.isUserSeeking) return;
+    if (this.isUserSeeking) {
+      return;
+    }
     const currentIndex = slideState.getCurrentIndex();
-    if (this.slider) this.slider.value = currentIndex + 1;
+    if (this.slider) {
+      this.slider.value = currentIndex + 1;
+    }
     this.updateHoverStripProgress();
     this.resetFadeOutTimer();
   }
@@ -331,22 +325,29 @@ class SeekSlider {
   async showSlider() {
     // Clear any pending hide timer to prevent jitter
     this.clearHideTimer();
-    
+
     if (!this.sliderVisible && this.sliderContainer) {
       this.sliderVisible = true;
       // Hide the yellow strip and show the slider row with animation
-      if (this.hoverStrip) this.hoverStrip.classList.add("hidden");
-      if (this.scoreSliderRow) this.scoreSliderRow.classList.add("visible");
+      if (this.hoverStrip) {
+        this.hoverStrip.classList.add("hidden");
+      }
+      if (this.scoreSliderRow) {
+        this.scoreSliderRow.classList.add("visible");
+      }
       this.sliderContainer.classList.add("visible");
-      let [globalIndex, total, searchIndex] = getCurrentSlideIndex();
-      if (total > 0 && this.searchResultsChanged)
+      const [, total] = getCurrentSlideIndex();
+      if (total > 0 && this.searchResultsChanged) {
         this.updateSliderRange().then(() => {
           this.renderSliderTicks();
           this.searchResultsChanged = false;
         });
+      }
       // Update slider value to reflect current index
       const currentIndex = slideState.getCurrentIndex();
-      if (this.slider) this.slider.value = currentIndex + 1;
+      if (this.slider) {
+        this.slider.value = currentIndex + 1;
+      }
       this.resetFadeOutTimer();
     }
   }
@@ -356,10 +357,16 @@ class SeekSlider {
       this.sliderVisible = false;
       this.sliderContainer.classList.remove("visible");
       // Show the yellow strip and hide the slider row with animation
-      if (this.scoreSliderRow) this.scoreSliderRow.classList.remove("visible");
-      if (this.hoverStrip) this.hoverStrip.classList.remove("hidden");
+      if (this.scoreSliderRow) {
+        this.scoreSliderRow.classList.remove("visible");
+      }
+      if (this.hoverStrip) {
+        this.hoverStrip.classList.remove("hidden");
+      }
       this.slider.blur();
-      if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
+      if (this.infoPanel) {
+        this.infoPanel.style.display = "none";
+      } // Hide infoPanel
     }
   }
 
@@ -370,10 +377,16 @@ class SeekSlider {
         this.sliderContainer.classList.remove("visible");
         this.sliderVisible = false;
         // Show the yellow strip and hide the slider row with animation
-        if (this.scoreSliderRow) this.scoreSliderRow.classList.remove("visible");
-        if (this.hoverStrip) this.hoverStrip.classList.remove("hidden");
+        if (this.scoreSliderRow) {
+          this.scoreSliderRow.classList.remove("visible");
+        }
+        if (this.hoverStrip) {
+          this.hoverStrip.classList.remove("hidden");
+        }
         this.slider.blur();
-        if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
+        if (this.infoPanel) {
+          this.infoPanel.style.display = "none";
+        } // Hide infoPanel
         this.fadeOutTimeoutId = null;
       }, 600);
     }
@@ -386,9 +399,15 @@ class SeekSlider {
         this.sliderContainer.classList.remove("visible");
         this.sliderVisible = false;
         // Show the yellow strip and hide the slider row with animation
-        if (this.scoreSliderRow) this.scoreSliderRow.classList.remove("visible");
-        if (this.hoverStrip) this.hoverStrip.classList.remove("hidden");
-        if (this.infoPanel) this.infoPanel.style.display = "none"; // Hide infoPanel
+        if (this.scoreSliderRow) {
+          this.scoreSliderRow.classList.remove("visible");
+        }
+        if (this.hoverStrip) {
+          this.hoverStrip.classList.remove("hidden");
+        }
+        if (this.infoPanel) {
+          this.infoPanel.style.display = "none";
+        } // Hide infoPanel
         this.fadeOutTimeoutId = null;
       }
     }, this.FADE_OUT_DELAY);
@@ -402,11 +421,10 @@ class SeekSlider {
   }
 
   async renderSliderTicks() {
-    if (!this.slider || !this.ticksContainer || !this.contextLabel) return;
-    if (
-      !this.sliderVisible ||
-      !this.sliderContainer.classList.contains("visible")
-    ) {
+    if (!this.slider || !this.ticksContainer || !this.contextLabel) {
+      return;
+    }
+    if (!this.sliderVisible || !this.sliderContainer.classList.contains("visible")) {
       this.ticksContainer.innerHTML = "";
       this.contextLabel.textContent = "";
       return;
@@ -415,8 +433,8 @@ class SeekSlider {
     let ticks = [];
     let contextText = "";
     const numTicks = this.TICK_COUNT;
-    let min = parseInt(this.slider.min, 10);
-    let max = parseInt(this.slider.max, 10);
+    const min = parseInt(this.slider.min, 10);
+    const max = parseInt(this.slider.max, 10);
 
     if (max <= min) {
       this.ticksContainer.innerHTML = "";
@@ -424,9 +442,9 @@ class SeekSlider {
       return;
     }
 
-    let positions = [];
+    const positions = [];
     for (let i = 0; i < numTicks; i++) {
-      let pos = Math.round(min + ((max - min) * i) / (numTicks - 1));
+      const pos = Math.round(min + ((max - min) * i) / (numTicks - 1));
       positions.push(pos);
     }
 
@@ -437,31 +455,24 @@ class SeekSlider {
           try {
             const albumKey = state.album;
             const resp = await fetch(`image_info/${albumKey}/${idx - 1}`);
-            if (!resp.ok) return "";
+            if (!resp.ok) {
+              return "";
+            }
             const info = await resp.json();
             const date = new Date(info.last_modified * 1000);
-            return `${String(date.getMonth() + 1).padStart(
-              2,
-              "0"
-            )}/${date.getFullYear()}`;
+            return `${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
           } catch {
             return "";
           }
         })
       );
-    } else if (
-      state.searchResults.length > 0 &&
-      state.searchResults[0].score !== undefined
-    ) {
+    } else if (state.searchResults.length > 0 && state.searchResults[0].score !== undefined) {
       contextText = "Score";
       ticks = positions.map((idx) => {
         const result = state.searchResults[idx - 1];
         return result ? result.score.toFixed(3) : "";
       });
-    } else if (
-      state.searchResults.length > 0 &&
-      state.searchResults[0].cluster !== undefined
-    ) {
+    } else if (state.searchResults.length > 0 && state.searchResults[0].cluster !== undefined) {
       contextText = "Cluster Position";
       ticks = positions.map((idx) => `${idx}`);
     }
@@ -492,21 +503,33 @@ class SeekSlider {
     this.sliderVisible = !this.sliderVisible;
     if (this.sliderVisible) {
       // Hide the yellow strip and show the slider row with animation
-      if (this.hoverStrip) this.hoverStrip.classList.add("hidden");
-      if (this.scoreSliderRow) this.scoreSliderRow.classList.add("visible");
+      if (this.hoverStrip) {
+        this.hoverStrip.classList.add("hidden");
+      }
+      if (this.scoreSliderRow) {
+        this.scoreSliderRow.classList.add("visible");
+      }
       this.sliderContainer.classList.add("visible");
       await this.updateSliderRange();
       // Update slider value to reflect current index
       const currentIndex = slideState.getCurrentIndex();
-      if (this.slider) this.slider.value = currentIndex + 1;
+      if (this.slider) {
+        this.slider.value = currentIndex + 1;
+      }
       await this.renderSliderTicks();
       this.resetFadeOutTimer();
     } else {
       this.sliderContainer.classList.remove("visible");
       // Show the yellow strip and hide the slider row with animation
-      if (this.scoreSliderRow) this.scoreSliderRow.classList.remove("visible");
-      if (this.hoverStrip) this.hoverStrip.classList.remove("hidden");
-      if (this.ticksContainer) this.ticksContainer.innerHTML = "";
+      if (this.scoreSliderRow) {
+        this.scoreSliderRow.classList.remove("visible");
+      }
+      if (this.hoverStrip) {
+        this.hoverStrip.classList.remove("hidden");
+      }
+      if (this.ticksContainer) {
+        this.ticksContainer.innerHTML = "";
+      }
       this.clearFadeOutTimer();
     }
   }

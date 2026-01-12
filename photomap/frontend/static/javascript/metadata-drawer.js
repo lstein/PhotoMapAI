@@ -42,11 +42,7 @@ export function toggleMetadataOverlay() {
 }
 
 // Function to replace reference image filenames with clickable links
-export function replaceReferenceImagesWithLinks(
-  description,
-  referenceImages,
-  albumKey
-) {
+export function replaceReferenceImagesWithLinks(description, referenceImages, albumKey) {
   if (!description || !referenceImages || !albumKey) {
     return description || "";
   }
@@ -70,13 +66,8 @@ export function replaceReferenceImagesWithLinks(
   imageList.forEach((imageName) => {
     if (imageName && typeof imageName === "string") {
       // Create a case-insensitive global regex to find all instances
-      const regex = new RegExp(
-        imageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        "gi"
-      );
-      const link = `<a href="image_by_name/${encodeURIComponent(
-        albumKey
-      )}/${encodeURIComponent(
+      const regex = new RegExp(imageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      const link = `<a href="image_by_name/${encodeURIComponent(albumKey)}/${encodeURIComponent(
         imageName
       )}" target="_blank" style="color: #faea0e;">${imageName}</a>`;
       processedDescription = processedDescription.replace(regex, link);
@@ -88,25 +79,20 @@ export function replaceReferenceImagesWithLinks(
 
 // Update banner with current slide's metadata
 export function updateMetadataOverlay(slide) {
-  if (!slide) return;
+  if (!slide) {
+    return;
+  }
 
   // Process description with reference image links
   const rawDescription = slide.dataset.description || "";
   const referenceImages = slide.dataset.reference_images || [];
-  const processedDescription = replaceReferenceImagesWithLinks(
-    rawDescription,
-    referenceImages,
-    state.album
-  );
+  const processedDescription = replaceReferenceImagesWithLinks(rawDescription, referenceImages, state.album);
 
   document.getElementById("descriptionText").innerHTML = processedDescription;
-  document.getElementById("filenameText").textContent =
-    slide.dataset.filename || "";
-  document.getElementById("filepathText").textContent =
-    slide.dataset.filepath || "";
-  document.getElementById("metadataLink").href =
-    slide.dataset.metadata_url || "#";
-  
+  document.getElementById("filenameText").textContent = slide.dataset.filename || "";
+  document.getElementById("filepathText").textContent = slide.dataset.filepath || "";
+  document.getElementById("metadataLink").href = slide.dataset.metadata_url || "#";
+
   // Update cluster information display
   updateClusterInfo(slide.dataset);
   updateCurrentImageScore(slide.dataset);
@@ -116,57 +102,54 @@ export function updateMetadataOverlay(slide) {
 export function updateClusterInfo(metadata) {
   const clusterInfoContainer = document.getElementById("clusterInfoContainer");
   const clusterInfoBadge = document.getElementById("clusterInfoBadge");
-  
-  if (!clusterInfoContainer || !clusterInfoBadge) return;
-  
+
+  if (!clusterInfoContainer || !clusterInfoBadge) {
+    return;
+  }
+
   // Get cluster info using shared utility
-  const clusterInfo = getClusterInfoForImage(
-    parseInt(metadata.globalIndex, 10),
-    window.umapPoints
-  );
-  
+  const clusterInfo = getClusterInfoForImage(parseInt(metadata.globalIndex, 10), window.umapPoints);
+
   // Check if we have cluster information
   if (clusterInfo && clusterInfo.cluster !== null && clusterInfo.cluster !== undefined) {
     const { cluster, color, size } = clusterInfo;
-    
+
     // Create label
-    const clusterLabel = cluster === -1 
-      ? `Unclustered (size=${size})` 
-      : `Cluster ${cluster} (size=${size})`;
-    
+    const clusterLabel = cluster === -1 ? `Unclustered (size=${size})` : `Cluster ${cluster} (size=${size})`;
+
     // Set badge text and colors
     clusterInfoBadge.textContent = clusterLabel;
     clusterInfoBadge.style.backgroundColor = color;
     clusterInfoBadge.style.color = isColorLight(color) ? "#222" : "#fff";
-    
+
     // Store current cluster value in data attribute for the click handler
     clusterInfoBadge.dataset.currentCluster = cluster;
-    
+
     // Show container
     clusterInfoContainer.style.display = "block";
-    
+
     // Set up click handler to select cluster (if not already set)
     if (!clusterInfoBadge.hasAttribute("data-click-handler")) {
       clusterInfoBadge.setAttribute("data-click-handler", "true");
       clusterInfoBadge.addEventListener("click", () => {
         // Get the current cluster from the data attribute
         const currentCluster = parseInt(clusterInfoBadge.dataset.currentCluster, 10);
-        
+
         // Find all points in this cluster from UMAP data
         if (window.umapPoints) {
-          const clusterPoints = window.umapPoints.filter(p => p.cluster === currentCluster);
-          
+          const clusterPoints = window.umapPoints.filter((p) => p.cluster === currentCluster);
+
           if (clusterPoints.length > 0) {
             // Get the cluster color using shared utility
             const clusterColor = getClusterColorFromPoints(currentCluster, window.umapPoints);
-            
+
             // Create search results
             const clusterMembers = clusterPoints.map((point) => ({
               index: point.index,
               cluster: currentCluster,
               color: clusterColor,
             }));
-            
+
             // Set search results
             setSearchResults(clusterMembers, "cluster");
           }
@@ -213,12 +196,7 @@ export async function updateCurrentImageScore(metadata) {
   if (clusterInfo && clusterInfo.cluster !== null && clusterInfo.cluster !== undefined) {
     // Show "unclustered" text for cluster -1
     const clusterDisplay = clusterInfo.cluster === -1 ? "unclustered" : clusterInfo.cluster;
-    scoreDisplay.showCluster(
-      clusterDisplay,
-      clusterInfo.color,
-      searchIndex,
-      state.searchResults.length
-    );
+    scoreDisplay.showCluster(clusterDisplay, clusterInfo.color, searchIndex, state.searchResults.length);
     return;
   }
 }
@@ -230,9 +208,11 @@ const closeMetadataModalBtn = document.getElementById("closeMetadataModalBtn");
 const metadataLink = document.getElementById("metadataLink");
 
 // Show modal and fetch metadata
-metadataLink.addEventListener("click", async function (e) {
+metadataLink.addEventListener("click", async (e) => {
   e.preventDefault();
-  if (!metadataModal || !metadataTextArea) return;
+  if (!metadataModal || !metadataTextArea) {
+    return;
+  }
   metadataModal.classList.add("visible");
 
   // Fetch JSON metadata from the link's href
@@ -244,35 +224,37 @@ metadataLink.addEventListener("click", async function (e) {
     } else {
       metadataTextArea.value = "Failed to load metadata.";
     }
-  } catch (err) {
+  } catch {
     metadataTextArea.value = "Error loading metadata.";
   }
 });
 
 // Hide modal on close button
-closeMetadataModalBtn.addEventListener("click", function () {
+closeMetadataModalBtn.addEventListener("click", () => {
   metadataModal.classList.remove("visible");
 });
 
 // Hide modal when clicking outside the modal content
-metadataModal.addEventListener("click", function (e) {
+metadataModal.addEventListener("click", (e) => {
   if (e.target === metadataModal) {
     metadataModal.classList.remove("visible");
   }
 });
 
-document.addEventListener("click", function (e) {
+document.addEventListener("click", (e) => {
   // Check if the click is on the copy icon or its SVG child
-  let icon = e.target.closest(".copy-icon");
+  const icon = e.target.closest(".copy-icon");
   if (icon) {
     // Find the parent td.copyme
-    let td = icon.closest("td.copyme");
+    const td = icon.closest("td.copyme");
     if (td) {
       // Clone the td, remove the icon, and get the text
-      let clone = td.cloneNode(true);
-      let iconClone = clone.querySelector(".copy-icon");
-      if (iconClone) iconClone.remove();
-      let text = clone.textContent.trim();
+      const clone = td.cloneNode(true);
+      const iconClone = clone.querySelector(".copy-icon");
+      if (iconClone) {
+        iconClone.remove();
+      }
+      const text = clone.textContent.trim();
       if (text) {
         // Save the original SVG/icon HTML
         const originalIconHTML = icon.innerHTML;
@@ -303,7 +285,7 @@ document.addEventListener("click", function (e) {
 const copyMetadataBtn = document.getElementById("copyMetadataBtn");
 
 if (copyMetadataBtn && metadataTextArea) {
-  copyMetadataBtn.addEventListener("click", function () {
+  copyMetadataBtn.addEventListener("click", () => {
     const text = metadataTextArea.value;
     if (text) {
       navigator.clipboard
@@ -350,39 +332,41 @@ const getEventCoords = (e) => {
 // Mouse/touch drag handlers
 function onDrawerMouseDown(e) {
   // Only drag if clicking on the titlebar, but not on the copy button
-  const isTitlebar = e.target.id === "filenameTitlebar" || 
-                     e.target.classList.contains("filename-titlebar") ||
-                     e.target.id === "filenameText";
-  const isCopyButton = e.target.id === "copyTextBtn" || 
-                       e.target.closest("#copyTextBtn");
-  
+  const isTitlebar =
+    e.target.id === "filenameTitlebar" ||
+    e.target.classList.contains("filename-titlebar") ||
+    e.target.id === "filenameText";
+  const isCopyButton = e.target.id === "copyTextBtn" || e.target.closest("#copyTextBtn");
+
   if (isTitlebar && !isCopyButton) {
     isDraggingDrawer = true;
     const coords = getEventCoords(e);
     startX = coords.x;
     startY = coords.y;
-    
+
     const container = document.getElementById("bannerDrawerContainer");
     const rect = container.getBoundingClientRect();
     initialLeft = rect.left;
     initialTop = rect.top;
-    
+
     document.body.style.userSelect = "none";
     e.preventDefault();
   }
 }
 
 function onDrawerMouseMove(e) {
-  if (!isDraggingDrawer) return;
-  
+  if (!isDraggingDrawer) {
+    return;
+  }
+
   const coords = getEventCoords(e);
   const deltaX = coords.x - startX;
   const deltaY = coords.y - startY;
-  
+
   const left = initialLeft + deltaX;
   const top = initialTop + deltaY;
   setDrawerPosition(left, top);
-  
+
   e.preventDefault();
 }
 
@@ -394,39 +378,41 @@ function onDrawerMouseUp() {
 // Touch support
 function onDrawerTouchStart(e) {
   // Only drag if clicking on the titlebar, but not on the copy button
-  const isTitlebar = e.target.id === "filenameTitlebar" || 
-                     e.target.classList.contains("filename-titlebar") ||
-                     e.target.id === "filenameText";
-  const isCopyButton = e.target.id === "copyTextBtn" || 
-                       e.target.closest("#copyTextBtn");
-  
+  const isTitlebar =
+    e.target.id === "filenameTitlebar" ||
+    e.target.classList.contains("filename-titlebar") ||
+    e.target.id === "filenameText";
+  const isCopyButton = e.target.id === "copyTextBtn" || e.target.closest("#copyTextBtn");
+
   if (isTitlebar && !isCopyButton) {
     isDraggingDrawer = true;
     const coords = getEventCoords(e);
     startX = coords.x;
     startY = coords.y;
-    
+
     const container = document.getElementById("bannerDrawerContainer");
     const rect = container.getBoundingClientRect();
     initialLeft = rect.left;
     initialTop = rect.top;
-    
+
     document.body.style.userSelect = "none";
     e.preventDefault();
   }
 }
 
 function onDrawerTouchMove(e) {
-  if (!isDraggingDrawer) return;
-  
+  if (!isDraggingDrawer) {
+    return;
+  }
+
   const coords = getEventCoords(e);
   const deltaX = coords.x - startX;
   const deltaY = coords.y - startY;
-  
+
   const left = initialLeft + deltaX;
   const top = initialTop + deltaY;
   setDrawerPosition(left, top);
-  
+
   e.preventDefault();
 }
 
@@ -469,7 +455,7 @@ function setupOverlayButtons() {
 
   // Overlay drawer button
   if (overlayDrawer) {
-    overlayDrawer.addEventListener("click", function (e) {
+    overlayDrawer.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleMetadataOverlay();
     });
@@ -479,9 +465,9 @@ function setupOverlayButtons() {
 // Initialize metadata drawer - sets up all event listeners
 export function initializeMetadataDrawer() {
   setupOverlayButtons();
-  
+
   // Listen for UMAP data loaded event to refresh cluster info for the current slide
-  window.addEventListener('umapDataLoaded', () => {
+  window.addEventListener("umapDataLoaded", () => {
     const currentSlide = slideState.getCurrentSlide();
     if (currentSlide && currentSlide.globalIndex !== undefined) {
       // Get the slide data/metadata for the current slide

@@ -21,9 +21,9 @@ export class DirectoryPicker {
       buttonLabel = "Select Directory",
       title = "Select Directory",
       pathLabel = "Selected directory:",
-      showCreateFolder = false
+      showCreateFolder = false,
     } = options;
-    
+
     // If no starting path provided, use home directory
     if (!startingPath) {
       startingPath = await DirectoryPicker.getHomeDirectory();
@@ -51,11 +51,15 @@ export class DirectoryPicker {
         
         <div class="directory-tree" id="directoryTree"></div>
         <div class="directory-picker-buttons">
-          ${showCreateFolder ? `
+          ${
+            showCreateFolder
+              ? `
           <button id="createFolderBtn" class="create-folder-button-inline">
             📁 New Folder
           </button>
-          ` : ''}
+          `
+              : ""
+          }
           <button id="cancelDirBtn">Cancel</button>
           <button id="addDirBtn">${buttonLabel}</button>
         </div>
@@ -93,12 +97,7 @@ export class DirectoryPicker {
           item.classList.remove("selected");
         });
         try {
-          await DirectoryPicker.loadDirectories(
-            currentPath,
-            treeDiv,
-            showHidden,
-            handleNavigation
-          );
+          await DirectoryPicker.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
         } finally {
           hideSpinner();
         }
@@ -126,8 +125,8 @@ export class DirectoryPicker {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               parent_path: parentPath,
-              directory_name: folderName.trim()
-            })
+              directory_name: folderName.trim(),
+            }),
           });
 
           if (!response.ok) {
@@ -138,7 +137,7 @@ export class DirectoryPicker {
               try {
                 const error = await response.json();
                 errorMessage = error.detail || errorMessage;
-              } catch (e) {
+              } catch {
                 // JSON parsing failed, use default message
               }
             }
@@ -146,19 +145,13 @@ export class DirectoryPicker {
           }
 
           const result = await response.json();
-          
+
           // Navigate into the newly created folder
           currentPath = result.path;
           selectedPath = null;
-          
-          await DirectoryPicker.loadDirectories(
-            currentPath,
-            treeDiv,
-            showHidden,
-            handleNavigation
-          );
-          updateCurrentPathDisplay();
 
+          await DirectoryPicker.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
+          updateCurrentPathDisplay();
         } catch (error) {
           console.error("Error creating folder:", error);
           alert(`Failed to create folder: ${error.message}`);
@@ -172,22 +165,12 @@ export class DirectoryPicker {
     showHiddenCheckbox.onchange = () => {
       showHidden = showHiddenCheckbox.checked;
       selectedPath = null; // Clear selection when refreshing view
-      DirectoryPicker.loadDirectories(
-        currentPath,
-        treeDiv,
-        showHidden,
-        handleNavigation
-      );
+      DirectoryPicker.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
       updateCurrentPathDisplay();
     };
 
     // Load initial directory - start at the provided path
-    DirectoryPicker.loadDirectories(
-      currentPath,
-      treeDiv,
-      showHidden,
-      handleNavigation
-    );
+    DirectoryPicker.loadDirectories(currentPath, treeDiv, showHidden, handleNavigation);
     updateCurrentPathDisplay();
 
     addBtn.onclick = () => {
@@ -204,11 +187,7 @@ export class DirectoryPicker {
   static async loadDirectories(path, container, showHidden, onSelect) {
     showSpinner();
     try {
-      const response = await fetch(
-        `filetree/directories?path=${encodeURIComponent(
-          path
-        )}&show_hidden=${showHidden}`
-      );
+      const response = await fetch(`filetree/directories?path=${encodeURIComponent(path)}&show_hidden=${showHidden}`);
       const data = await response.json();
 
       container.innerHTML = "";
@@ -249,8 +228,7 @@ export class DirectoryPicker {
       }
     } catch (error) {
       console.error("Error loading directories:", error);
-      container.innerHTML =
-        "<div class='error'>Error loading directories</div>";
+      container.innerHTML = "<div class='error'>Error loading directories</div>";
     }
     hideSpinner();
   }

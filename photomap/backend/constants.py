@@ -4,11 +4,11 @@ Constants used elsewhere in the application.
 Also defines the function get_package_resource_path to retrieve paths to static files or templates.
 '''
 
-import sys
-import os
 import logging
-
+import os
+import sys
 from pathlib import Path
+
 try:
     # Python 3.9+
     from importlib.resources import files
@@ -30,7 +30,7 @@ try:
     for i in range(len(sys.argv)):
         if sys.argv[i] == "--config":
             os.environ["PHOTOMAP_CONFIG"] = sys.argv[i+1]
-except IndexError as e:
+except IndexError:
     logger.warning("Could not parse --config option. Will use default config.")
 
 def get_package_resource_path(resource_name: str) -> str:
