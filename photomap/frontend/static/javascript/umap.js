@@ -1256,50 +1256,72 @@ function proximityClusterOrder(clusterIndices, points, startIndex) {
 async function handleClusterClick(clickedIndex) {
   const clickedPoint = points.find((p) => p.index === clickedIndex);
   if (!clickedPoint) return;
+  
+  // Show spinner immediately to provide visual feedback
+  showUmapSpinner();
+  
+  // Yield to the browser to allow spinner to render before heavy computation
+  await new Promise(resolve => setTimeout(resolve, 0));
+  
+  try {
+    const clickedCluster = clickedPoint.cluster;
+    const clusterColor = getClusterColor(clickedCluster);
+    let clusterIndices = points
+      .filter((p) => p.cluster === clickedCluster)
+      .map((p) => p.index);
 
-  const clickedCluster = clickedPoint.cluster;
-  const clusterColor = getClusterColor(clickedCluster);
-  let clusterIndices = points
-    .filter((p) => p.cluster === clickedCluster)
-    .map((p) => p.index);
+    // Remove clickedFilename from the list
+    clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
 
-  // Remove clickedFilename from the list
-  clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
+    // --- Greedy random walk order from clicked point ---
+    const sort_algorithm =
+      clusterIndices.length > randomWalkMaxSize
+        ? proximityClusterOrder
+        : randomWalkClusterOrder;
+    const sortedClusterIndices = sort_algorithm(
+      [clickedIndex, ...clusterIndices],
+      points,
+      clickedIndex
+    );
 
-  // --- Greedy random walk order from clicked point ---
-  const sort_algorithm =
-    clusterIndices.length > randomWalkMaxSize
-      ? proximityClusterOrder
-      : randomWalkClusterOrder;
-  const sortedClusterIndices = sort_algorithm(
-    [clickedIndex, ...clusterIndices],
-    points,
-    clickedIndex
-  );
+    const clusterMembers = sortedClusterIndices.map((index) => ({
+      index: index,
+      cluster: clickedCluster === -1 ? "unclustered" : clickedCluster,
+      color: clusterColor,
+    }));
 
-  const clusterMembers = sortedClusterIndices.map((index) => ({
-    index: index,
-    cluster: clickedCluster === -1 ? "unclustered" : clickedCluster,
-    color: clusterColor,
-  }));
-
-  setSearchResults(clusterMembers, "cluster");
+    setSearchResults(clusterMembers, "cluster");
+  } finally {
+    // Always hide spinner, even if there's an error
+    hideUmapSpinner();
+  }
 }
 
 // Handle single image selection (navigate to clicked image)
 async function handleImageClick(clickedIndex) {
   const clickedPoint = points.find((p) => p.index === clickedIndex);
   if (!clickedPoint) return;
-
-  // Clear any existing search selection
-  exitSearchMode();
   
-  // Navigate directly to the clicked image without entering search mode
-  slideState.navigateToIndex(clickedIndex, false);
+  // Show spinner immediately to provide visual feedback
+  showUmapSpinner();
   
-  // Exit fullscreen mode if enabled
-  if (isFullscreen && state.umapExitFullscreenOnSelection) {
-    setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
+  // Yield to the browser to allow spinner to render before heavy computation
+  await new Promise(resolve => setTimeout(resolve, 0));
+  
+  try {
+    // Clear any existing search selection
+    exitSearchMode();
+    
+    // Navigate directly to the clicked image without entering search mode
+    slideState.navigateToIndex(clickedIndex, false);
+    
+    // Exit fullscreen mode if enabled
+    if (isFullscreen && state.umapExitFullscreenOnSelection) {
+      setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
+    }
+  } finally {
+    // Always hide spinner, even if there's an error
+    hideUmapSpinner();
   }
 }
 
