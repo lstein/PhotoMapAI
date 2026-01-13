@@ -14,9 +14,10 @@ import logging
 import os
 import sys
 import warnings
+from collections.abc import Callable, Generator
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Dict, Generator, Optional, Set
+from typing import Any, ClassVar
 
 import clip
 import networkx as nx
@@ -191,7 +192,7 @@ def get_kmeans_indices_global(
 
 
 @functools.lru_cache(maxsize=3)
-def _open_npz_file(embeddings_path: Path) -> Dict[str, Any]:
+def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
     """
     Global helper to open .npz files with caching.
     Uses context manager to ensure file handles are released.
@@ -234,7 +235,7 @@ class IndexResult(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     embeddings: np.ndarray
-    umap_embeddings: Optional[np.ndarray] = None  # UMAP embeddings, if created
+    umap_embeddings: np.ndarray | None = None  # UMAP embeddings, if created
     filenames: np.ndarray
     modification_times: np.ndarray
     metadata: np.ndarray
@@ -261,14 +262,14 @@ class Embeddings(BaseModel):
     def _cleanup_cuda_memory(device: str) -> None:
         """
         Clean up CUDA memory by clearing cache and forcing garbage collection.
-        
-        This completely frees GPU VRAM to ensure it returns to zero (or minimal baseline) 
-        after operations. The model will need to be reloaded on subsequent operations, 
+
+        This completely frees GPU VRAM to ensure it returns to zero (or minimal baseline)
+        after operations. The model will need to be reloaded on subsequent operations,
         but this ensures GPU memory is available for other processes.
-        
+
         Note: A baseline CUDA context (~188 MiB) may remain after first GPU use.
         This is a PyTorch/CUDA limitation and cannot be freed without ending the process.
-        
+
         Args:
             device: The device string ("cuda" or "cpu")
         """
@@ -289,8 +290,8 @@ class Embeddings(BaseModel):
     def get_image_files_from_directory(
         self,
         directory: Path,
-        exts: Set[str] = SUPPORTED_EXTENSIONS,
-        progress_callback: Optional[Callable] = None,
+        exts: set[str] = SUPPORTED_EXTENSIONS,
+        progress_callback: Callable | None = None,
         update_interval: int = 100,
     ) -> list[Path]:
         """
@@ -339,8 +340,8 @@ class Embeddings(BaseModel):
     def get_image_files(
         self,
         image_paths_or_dir: list[Path] | Path,
-        exts: Set[str] = SUPPORTED_EXTENSIONS,
-        progress_callback: Optional[Callable] = None,
+        exts: set[str] = SUPPORTED_EXTENSIONS,
+        progress_callback: Callable | None = None,
     ) -> list[Path]:
         """
         Get a list of image file paths from a directory or a list of image paths.
@@ -371,7 +372,7 @@ class Embeddings(BaseModel):
             raise ValueError("Input must be a Path object or a list of Paths.")
         return images
 
-    def _get_modification_time(self, metadata: dict) -> Optional[float]:
+    def _get_modification_time(self, metadata: dict) -> float | None:
         """
         Extract the modification time from image metadata.
         If no valid EXIF date is found, use the file's last modified time.
@@ -394,7 +395,7 @@ class Embeddings(BaseModel):
 
     def _process_single_image(
         self, image_path: Path, model, preprocess, device: str
-    ) -> tuple[Optional[np.ndarray], Optional[float], Optional[dict]]:
+    ) -> tuple[np.ndarray | None, float | None, dict | None]:
         """
         Process a single image and return its embedding, modification time, and metadata.
 
@@ -424,7 +425,7 @@ class Embeddings(BaseModel):
             logger.error(f"Error processing {image_path}: {e}")
             return None, None, None
 
-    def _clip_root(self) -> Optional[str]:
+    def _clip_root(self) -> str | None:
         """
         Determine the root directory for CLIP model caching.
         This is important for PyInstaller compatibility.
@@ -438,7 +439,7 @@ class Embeddings(BaseModel):
             return None
 
     def _process_images_batch(
-        self, image_paths: list[Path], progress_callback: Optional[Callable] = None
+        self, image_paths: list[Path], progress_callback: Callable | None = None
     ) -> IndexResult:
         """
         Process a batch of images and return IndexResult.
@@ -477,7 +478,7 @@ class Embeddings(BaseModel):
         umap_embeddings = self.create_umap_index(
             np.array(embeddings) if embeddings else np.empty((0, 512))
         )
-        
+
         result = IndexResult(
             embeddings=np.array(embeddings) if embeddings else np.empty((0, 512)),
             filenames=np.array(filenames),
@@ -486,12 +487,12 @@ class Embeddings(BaseModel):
             umap_embeddings=umap_embeddings,
             bad_files=bad_files,
         )
-        
+
         # Clean up GPU memory after batch processing
         # Delete model references to completely free VRAM
         del model, preprocess
         self._cleanup_cuda_memory(device)
-        
+
         return result
 
     async def _process_images_batch_async(
@@ -511,7 +512,7 @@ class Embeddings(BaseModel):
         metadatas = []
         bad_files = []
 
-        total_images = len(image_paths)
+        len(image_paths)
 
         for i, image_path in enumerate(image_paths):
             # Update progress
@@ -542,12 +543,12 @@ class Embeddings(BaseModel):
             metadata=np.array(metadatas, dtype=object),
             bad_files=bad_files,
         )
-        
+
         # Clean up GPU memory after async batch processing
         # Delete model references to completely free VRAM
         del model, preprocess
         self._cleanup_cuda_memory(device)
-        
+
         return result
 
     def _save_embeddings(self, index_result: IndexResult) -> None:
@@ -570,7 +571,7 @@ class Embeddings(BaseModel):
         self,
         image_paths_or_dir: list[Path] | Path,
         existing_filenames: np.ndarray,
-        progress_callback: Optional[Callable] = None,
+        progress_callback: Callable | None = None,
     ) -> tuple[set[Path], set[Path]]:
         """Determine which images are new and which are missing."""
         image_path_set = set(
@@ -682,7 +683,7 @@ class Embeddings(BaseModel):
         image_paths_or_dir: list[Path] | Path,
         album_key: str,
         create_index: bool = True,
-    ) -> Optional[IndexResult]:
+    ) -> IndexResult | None:
         """Asynchronously index images using CLIP with progress tracking."""
         logger.info("Starting asynchronous indexing operation")
         progress_tracker.start_operation(album_key, 0, "scanning")
@@ -735,7 +736,7 @@ class Embeddings(BaseModel):
 
     def update_index(
         self, image_paths_or_dir: list[Path] | Path
-    ) -> Optional[IndexResult]:
+    ) -> IndexResult | None:
         """Update existing embeddings with new images."""
         assert (
             self.embeddings_path.exists()
@@ -801,7 +802,7 @@ class Embeddings(BaseModel):
                 )
 
             # Final progress update
-            logger.info(f"Indexing completed successfully. Saving updated index...")
+            logger.info("Indexing completed successfully. Saving updated index...")
 
             # Combine and save
             combined_result = self._combine_index_results(filtered_existing, new_result)
@@ -822,7 +823,7 @@ class Embeddings(BaseModel):
 
     async def update_index_async(
         self, image_paths_or_dir: list[Path] | Path, album_key: str
-    ) -> Optional[IndexResult]:
+    ) -> IndexResult | None:
         """Asynchronously update existing embeddings with new images."""
         assert (
             self.embeddings_path.exists()
@@ -980,7 +981,7 @@ class Embeddings(BaseModel):
         return data["umap"]
 
     @property
-    def indexes(self) -> Dict[str, np.ndarray]:
+    def indexes(self) -> dict[str, np.ndarray]:
         """
         Load all indexes from the embeddings file.
 
@@ -993,9 +994,9 @@ class Embeddings(BaseModel):
     # Main search entry point.
     def search_images_by_text_and_image(
         self,
-        query_image_data: Optional[Image.Image] = None,
-        positive_query: Optional[str] = "",
-        negative_query: Optional[str] = None,
+        query_image_data: Image.Image | None = None,
+        positive_query: str | None = "",
+        negative_query: str | None = None,
         image_weight: float = 0.5,
         positive_weight: float = 0.5,
         negative_weight: float = 0.5,
@@ -1087,14 +1088,14 @@ class Embeddings(BaseModel):
             similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
             top_indices = similarities.argsort()[-top_k:][::-1]
             top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
-            
+
             if not top_indices:
                 return [], []
-            
+
             # Translate from filename array indices to sorted filename top_indices
             result_indices = [int(filename_map[filenames[i]]) for i in top_indices]
             result_similarities = similarities[top_indices].tolist()
-            
+
             return result_indices, result_similarities
         finally:
             # Clean up GPU memory after search (always executed)
@@ -1340,7 +1341,7 @@ class Embeddings(BaseModel):
             yield format_metadata(image_path, metadata[idx], int(idx), len(filenames))
 
     @staticmethod
-    def open_cached_embeddings(embeddings_path: Path) -> Dict[str, Any]:
+    def open_cached_embeddings(embeddings_path: Path) -> dict[str, Any]:
         """
         Static wrapper calling the global function.
         Works for both Embeddings.open_cached_embeddings() and self.open_cached_embeddings().

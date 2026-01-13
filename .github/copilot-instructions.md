@@ -42,6 +42,7 @@ PhotoMapAI/
 - Prefer f-strings for string formatting
 - Use pathlib.Path for file path operations instead of os.path
 - Import organization: standard library → third-party → local imports
+- Python files must pass ruff check
 
 #### JavaScript
 - Use ES6 modules with explicit imports/exports
@@ -49,6 +50,7 @@ PhotoMapAI/
 - Use descriptive function and variable names
 - Add comments for complex logic, especially in event handlers
 - Follow existing file structure: one module per file with clear responsibilities
+- JavaScript files must pass `npm lint` and `npm run format:check`
 
 ### Testing
 

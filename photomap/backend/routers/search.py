@@ -11,15 +11,13 @@ import zipfile
 from io import BytesIO
 from logging import getLogger
 from pathlib import Path
-from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel
 
 from ..config import get_config_manager
-from ..constants import DEFAULT_TOP_K
 from ..metadata_modules import SlideSummary
 from .album import (
     get_embeddings_for_album,
@@ -39,7 +37,7 @@ class SearchResult(BaseModel):
 
 
 class SearchResultsResponse(BaseModel):
-    results: List[SearchResult]
+    results: list[SearchResult]
 
 
 # Basic information about the image stored in the index
@@ -54,7 +52,7 @@ class ImageData(BaseModel):
 class SearchWithTextAndImageRequest(BaseModel):
     positive_query: str = ""
     negative_query: str = ""
-    image_data: Optional[str] = None  # base64-encoded image string, or null
+    image_data: str | None = None  # base64-encoded image string, or null
     image_weight: float = 0.5
     positive_weight: float = 0.5
     negative_weight: float = 0.5
@@ -63,7 +61,7 @@ class SearchWithTextAndImageRequest(BaseModel):
 
 
 class DownloadImagesZipRequest(BaseModel):
-    indices: List[int]
+    indices: list[int]
 
 
 @search_router.post(
@@ -179,7 +177,7 @@ async def serve_thumbnail(
     album_key: str,
     index: int,
     size: int = 256,
-    color: Optional[str] = None,
+    color: str | None = None,
     radius: int = 12,  # Add a radius parameter for rounded corners
 ) -> FileResponse:
     """Serve a reduced-size thumbnail for an image by index, with optional colored border."""
@@ -189,7 +187,7 @@ async def serve_thumbnail(
     except Exception as e:
         raise HTTPException(
             status_code=404, detail=f"Image not found for index {index}: {e}"
-        )
+        ) from e
 
     album_config = validate_album_exists(album_key)
     if not validate_image_access(album_config, image_path):
@@ -247,7 +245,7 @@ async def serve_thumbnail(
                 im.save(thumb_path.with_suffix(".png"), format="PNG")
         except Exception as e:
             logger.error(f"Error generating thumbnail for {image_path}: {e}")
-            raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}")
+            raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}") from e
 
     return FileResponse(thumb_path.with_suffix(".png"))
 
@@ -335,7 +333,7 @@ async def get_image_path(album_key: str, index: int) -> str:
     except Exception as e:
         raise HTTPException(
             status_code=404, detail=f"Image not found for index {index}: {e}"
-        )
+        ) from e
 
 
 @search_router.get(
@@ -373,7 +371,7 @@ async def get_image_by_name(album_key: str, filename: str) -> FileResponse:
 
 # Utility Functions
 def create_search_results(
-    results: List[int], scores: List[float], album_key: str
+    results: list[int], scores: list[float], album_key: str
 ) -> SearchResultsResponse:
     """Create a standardized search results response."""
     return SearchResultsResponse(
@@ -382,7 +380,7 @@ def create_search_results(
                 index=index,
                 score=float(score),
             )
-            for index, score in zip(results, scores)
+            for index, score in zip(results, scores, strict=False)
         ]
     )
 
@@ -413,4 +411,4 @@ def serve_image_with_conversion(image_path: Path) -> StreamingResponse:
             return StreamingResponse(buf, media_type=f"image/{format.lower()}")
     except Exception as e:
         print(f"Error processing image {image_path}: {e}")
-        raise HTTPException(status_code=500, detail=f"Image processing error: {e}")
+        raise HTTPException(status_code=500, detail=f"Image processing error: {e}") from e

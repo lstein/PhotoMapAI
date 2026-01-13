@@ -68,25 +68,24 @@ const CURATE_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" 
   <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
 </svg>`;
 
-
 class BookmarkManager {
   constructor() {
     if (BookmarkManager.instance) {
       return BookmarkManager.instance;
     }
-    
+
     this.bookmarks = new Set();
     this.isShowingBookmarks = false;
     this.previousSearchResults = null; // Store previous search results before showing bookmarks
-    this.previousSearchType = null;    // Store previous search type
-    
+    this.previousSearchType = null; // Store previous search type
+
     BookmarkManager.instance = this;
     this.setupEventListeners();
   }
 
   setupEventListeners() {
     // Listen for album changes to load bookmarks for the new album
-    window.addEventListener("albumChanged", (e) => {
+    window.addEventListener("albumChanged", () => {
       this.loadBookmarks();
       this.isShowingBookmarks = false;
       this.previousSearchResults = null;
@@ -117,7 +116,9 @@ class BookmarkManager {
    * Get localStorage key for current album
    */
   getStorageKey() {
-    if (!state.album) return null;
+    if (!state.album) {
+      return null;
+    }
     return `photomap_bookmarks_${state.album}`;
   }
 
@@ -130,7 +131,7 @@ class BookmarkManager {
       this.bookmarks = new Set();
       return;
     }
-    
+
     try {
       const stored = localStorage.getItem(key);
       if (stored) {
@@ -143,7 +144,7 @@ class BookmarkManager {
       console.warn("Failed to load bookmarks:", e);
       this.bookmarks = new Set();
     }
-    
+
     this.updateBookmarkButton();
   }
 
@@ -152,19 +153,23 @@ class BookmarkManager {
    */
   saveBookmarks() {
     const key = this.getStorageKey();
-    if (!key) return;
-    
+    if (!key) {
+      return;
+    }
+
     try {
       const indices = Array.from(this.bookmarks);
       localStorage.setItem(key, JSON.stringify(indices));
     } catch (e) {
       console.warn("Failed to save bookmarks:", e);
     }
-    
+
     this.updateBookmarkButton();
-    window.dispatchEvent(new CustomEvent("bookmarksChanged", {
-      detail: { count: this.bookmarks.size }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("bookmarksChanged", {
+        detail: { count: this.bookmarks.size },
+      })
+    );
   }
 
   /**
@@ -178,7 +183,7 @@ class BookmarkManager {
     }
     this.saveBookmarks();
     this.updateAllBookmarkIcons();
-    
+
     // Update the score display star if in single swiper view
     if (window.scoreDisplay) {
       const isBookmarked = this.isBookmarked(globalIndex);
@@ -216,12 +221,12 @@ class BookmarkManager {
     this.saveBookmarks();
     this.updateAllBookmarkIcons();
     this.updateBookmarkButton();
-    
+
     // If we were showing bookmarks, restore previous search results (like hideBookmarkedImages)
     if (this.isShowingBookmarks) {
       this.isShowingBookmarks = false;
       this.removeBookmarkMenu();
-      
+
       if (this.previousSearchResults !== null) {
         // Restore previous search results
         setSearchResults(this.previousSearchResults, this.previousSearchType || "search");
@@ -229,7 +234,7 @@ class BookmarkManager {
         // Return to chronological mode (clear search)
         setSearchResults([], "clear");
       }
-      
+
       // Clear stored previous results
       this.previousSearchResults = null;
       this.previousSearchType = null;
@@ -262,7 +267,7 @@ class BookmarkManager {
   toggleCurrentBookmark() {
     const { globalIndex } = slideState.getCurrentSlide();
     this.toggleBookmark(globalIndex);
-    
+
     // Update the score display star if in single swiper view
     if (window.scoreDisplay) {
       const isBookmarked = this.isBookmarked(globalIndex);
@@ -278,7 +283,7 @@ class BookmarkManager {
   updateAllBookmarkIcons() {
     // Update grid bookmark icons only (swiper view uses the star in ScoreDisplay)
     const gridSlides = document.querySelectorAll("#gridViewSwiperWrapper .swiper-slide");
-    gridSlides.forEach(slide => {
+    gridSlides.forEach((slide) => {
       const globalIndex = parseInt(slide.dataset.globalIndex, 10);
       if (!isNaN(globalIndex)) {
         this.updateSlideBookmarkIcon(slide, globalIndex);
@@ -291,7 +296,7 @@ class BookmarkManager {
    */
   updateSlideBookmarkIcon(slideEl, globalIndex) {
     let bookmarkIcon = slideEl.querySelector(".bookmark-icon");
-    
+
     if (!bookmarkIcon) {
       // Create bookmark icon if it doesn't exist
       bookmarkIcon = document.createElement("button");
@@ -324,11 +329,13 @@ class BookmarkManager {
    */
   updateBookmarkButton() {
     const btn = document.getElementById("bookmarkMenuBtn");
-    if (!btn) return;
+    if (!btn) {
+      return;
+    }
 
     const count = this.getCount();
     const iconSpan = btn.querySelector("#bookmarkMenuIcon");
-    
+
     if (count > 0) {
       iconSpan.innerHTML = BOOKMARK_FILLED_SVG;
       btn.title = `Bookmarks (${count})`;
@@ -365,11 +372,11 @@ class BookmarkManager {
     }
 
     // Create search results from bookmarked indices
-    const results = indices.map((index, i) => ({
+    const results = indices.map((index) => ({
       index: index,
       score: 1.0,
       cluster: null,
-      color: "#ffc107"
+      color: "#ffc107",
     }));
 
     this.isShowingBookmarks = true;
@@ -453,19 +460,23 @@ class BookmarkManager {
 
   async downloadSingleImage(globalIndex) {
     const response = await fetch(`retrieve_image/${encodeURIComponent(state.album)}/${globalIndex}`);
-    if (!response.ok) throw new Error("Failed to fetch image info");
-    
+    if (!response.ok) {
+      throw new Error("Failed to fetch image info");
+    }
+
     const data = await response.json();
     const imageUrl = data.image_url;
     const filename = data.filename || `image_${globalIndex}.jpg`;
 
     // Fetch the actual image
     const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) throw new Error("Failed to fetch image");
-    
+    if (!imageResponse.ok) {
+      throw new Error("Failed to fetch image");
+    }
+
     const blob = await imageResponse.blob();
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
@@ -480,7 +491,7 @@ class BookmarkManager {
     const response = await fetch(`download_images_zip/${encodeURIComponent(state.album)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ indices: indices })
+      body: JSON.stringify({ indices: indices }),
     });
 
     if (!response.ok) {
@@ -489,7 +500,7 @@ class BookmarkManager {
 
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement("a");
     a.href = url;
     a.download = `${state.album}_bookmarked_images.zip`;
@@ -512,22 +523,23 @@ class BookmarkManager {
     this.removeBookmarkMenu();
 
     // Use existing delete confirmation modal with custom message for bookmarks
-    const message = `${indices.length} bookmarked image${indices.length > 1 ? 's' : ''}`;
+    const message = `${indices.length} bookmarked image${indices.length > 1 ? "s" : ""}`;
     const confirmed = await showDeleteConfirmModal(message, `${indices.length} images`);
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     showSpinner();
 
     try {
       // Delete images in reverse order to maintain index consistency
       const sortedIndices = [...indices].sort((a, b) => b - a);
-      
+
       for (const globalIndex of sortedIndices) {
-        const response = await fetch(
-          `delete_image/${encodeURIComponent(state.album)}/${globalIndex}`,
-          { method: "DELETE" }
-        );
-        
+        const response = await fetch(`delete_image/${encodeURIComponent(state.album)}/${globalIndex}`, {
+          method: "DELETE",
+        });
+
         if (!response.ok) {
           console.warn(`Failed to delete image at index ${globalIndex}`);
         }
@@ -536,18 +548,19 @@ class BookmarkManager {
       // Trigger album refresh BEFORE clearing bookmarks
       // This ensures slideState.totalAlbumImages is updated before any grid refreshes
       // Pass deletedIndices to allow position preservation
-      window.dispatchEvent(new CustomEvent("albumChanged", {
-        detail: { 
-          album: state.album, 
-          totalImages: slideState.totalAlbumImages - indices.length,
-          changeType: 'deletion',
-          deletedIndices: indices
-        }
-      }));
-      
+      window.dispatchEvent(
+        new CustomEvent("albumChanged", {
+          detail: {
+            album: state.album,
+            totalImages: slideState.totalAlbumImages - indices.length,
+            changeType: "deletion",
+            deletedIndices: indices,
+          },
+        })
+      );
+
       // Clear bookmarks after album refresh
       this.clearBookmarks();
-
     } catch (error) {
       console.error("Delete failed:", error);
       alert(`Delete failed: ${error.message}`);
@@ -576,7 +589,7 @@ class BookmarkManager {
       if (response.ok) {
         const imagePath = await response.text();
         // Extract directory from the path
-        const lastSlash = Math.max(imagePath.lastIndexOf('/'), imagePath.lastIndexOf('\\'));
+        const lastSlash = Math.max(imagePath.lastIndexOf("/"), imagePath.lastIndexOf("\\"));
         if (lastSlash > 0) {
           startingPath = imagePath.substring(0, lastSlash);
         }
@@ -595,7 +608,7 @@ class BookmarkManager {
         buttonLabel: "Move",
         title: "Select Destination Folder",
         pathLabel: "Move images to:",
-        showCreateFolder: true
+        showCreateFolder: true,
       }
     );
   }
@@ -609,9 +622,9 @@ class BookmarkManager {
     try {
       // Check if target folder is in the current album
       const albumConfig = await this.getAlbumConfig();
-      const targetPath = targetDirectory.endsWith('/') ? targetDirectory.slice(0, -1) : targetDirectory;
-      const targetInAlbum = albumConfig.image_paths.some(path => {
-        const cleanPath = path.endsWith('/') ? path.slice(0, -1) : path;
+      const targetPath = targetDirectory.endsWith("/") ? targetDirectory.slice(0, -1) : targetDirectory;
+      const targetInAlbum = albumConfig.image_paths.some((path) => {
+        const cleanPath = path.endsWith("/") ? path.slice(0, -1) : path;
         return cleanPath === targetPath;
       });
 
@@ -631,17 +644,14 @@ class BookmarkManager {
         showSpinner();
       }
 
-      const response = await fetch(
-        `move_images/${encodeURIComponent(state.album)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            indices: indices,
-            target_directory: targetDirectory
-          })
-        }
-      );
+      const response = await fetch(`move_images/${encodeURIComponent(state.album)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          indices: indices,
+          target_directory: targetDirectory,
+        }),
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -653,12 +663,14 @@ class BookmarkManager {
       // Build confirmation message
       let message = "";
       if (result.moved_count > 0) {
-        message += `Successfully moved ${result.moved_count} image${result.moved_count > 1 ? 's' : ''}.`;
+        message += `Successfully moved ${result.moved_count} image${result.moved_count > 1 ? "s" : ""}.`;
       }
-      
+
       if (result.same_folder_count > 0) {
-        if (message) message += "\n\n";
-        message += `${result.same_folder_count} image${result.same_folder_count > 1 ? 's were' : ' was'} already in the target folder:\n`;
+        if (message) {
+          message += "\n\n";
+        }
+        message += `${result.same_folder_count} image${result.same_folder_count > 1 ? "s were" : " was"} already in the target folder:\n`;
         message += result.same_folder_files.slice(0, 5).join("\n");
         if (result.same_folder_files.length > 5) {
           message += `\n... and ${result.same_folder_files.length - 5} more`;
@@ -666,8 +678,10 @@ class BookmarkManager {
       }
 
       if (result.error_count > 0) {
-        if (message) message += "\n\n";
-        message += `${result.error_count} error${result.error_count > 1 ? 's' : ''} occurred:\n`;
+        if (message) {
+          message += "\n\n";
+        }
+        message += `${result.error_count} error${result.error_count > 1 ? "s" : ""} occurred:\n`;
         message += result.errors.slice(0, 5).join("\n");
         if (result.errors.length > 5) {
           message += `\n... and ${result.errors.length - 5} more`;
@@ -678,11 +692,12 @@ class BookmarkManager {
 
       // If any files were moved, trigger album refresh
       if (result.moved_count > 0) {
-        window.dispatchEvent(new CustomEvent("albumChanged", {
-          detail: { album: state.album, totalImages: slideState.totalAlbumImages }
-        }));
+        window.dispatchEvent(
+          new CustomEvent("albumChanged", {
+            detail: { album: state.album, totalImages: slideState.totalAlbumImages },
+          })
+        );
       }
-
     } catch (error) {
       console.error("Move failed:", error);
       alert(`Move failed: ${error.message}`);
@@ -711,7 +726,7 @@ class BookmarkManager {
       if (response.ok) {
         const imagePath = await response.text();
         // Extract directory from the path
-        const lastSlash = Math.max(imagePath.lastIndexOf('/'), imagePath.lastIndexOf('\\'));
+        const lastSlash = Math.max(imagePath.lastIndexOf("/"), imagePath.lastIndexOf("\\"));
         if (lastSlash > 0) {
           startingPath = imagePath.substring(0, lastSlash);
         }
@@ -730,7 +745,7 @@ class BookmarkManager {
         buttonLabel: "Export",
         title: "Select Export Destination",
         pathLabel: "Export images to:",
-        showCreateFolder: true
+        showCreateFolder: true,
       }
     );
   }
@@ -742,17 +757,14 @@ class BookmarkManager {
     showSpinner();
 
     try {
-      const response = await fetch(
-        `copy_images/${encodeURIComponent(state.album)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            indices: indices,
-            target_directory: targetDirectory
-          })
-        }
-      );
+      const response = await fetch(`copy_images/${encodeURIComponent(state.album)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          indices: indices,
+          target_directory: targetDirectory,
+        }),
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -764,12 +776,14 @@ class BookmarkManager {
       // Build confirmation message
       let message = "";
       if (result.copied_count > 0) {
-        message += `Successfully exported ${result.copied_count} image${result.copied_count > 1 ? 's' : ''} to:\n${targetDirectory}`;
+        message += `Successfully exported ${result.copied_count} image${result.copied_count > 1 ? "s" : ""} to:\n${targetDirectory}`;
       }
 
       if (result.error_count > 0) {
-        if (message) message += "\n\n";
-        message += `${result.error_count} error${result.error_count > 1 ? 's' : ''} occurred:\n`;
+        if (message) {
+          message += "\n\n";
+        }
+        message += `${result.error_count} error${result.error_count > 1 ? "s" : ""} occurred:\n`;
         message += result.errors.slice(0, 5).join("\n");
         if (result.errors.length > 5) {
           message += `\n... and ${result.errors.length - 5} more`;
@@ -777,7 +791,6 @@ class BookmarkManager {
       }
 
       alert(message || "Export operation completed.");
-
     } catch (error) {
       console.error("Export failed:", error);
       alert(`Export failed: ${error.message}`);
@@ -802,7 +815,7 @@ class BookmarkManager {
    */
   async addFolderToAlbum(folderPath, albumConfig) {
     const updatedPaths = [...albumConfig.image_paths, folderPath];
-    
+
     const response = await fetch("update_album/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -812,8 +825,8 @@ class BookmarkManager {
         image_paths: updatedPaths,
         index: albumConfig.index,
         umap_eps: albumConfig.umap_eps || 0.07,
-        description: albumConfig.description || ""
-      })
+        description: albumConfig.description || "",
+      }),
     });
 
     if (!response.ok) {
@@ -821,9 +834,11 @@ class BookmarkManager {
     }
 
     // Trigger album update (re-index may be needed)
-    window.dispatchEvent(new CustomEvent("albumUpdated", {
-      detail: { album: state.album }
-    }));
+    window.dispatchEvent(
+      new CustomEvent("albumUpdated", {
+        detail: { album: state.album },
+      })
+    );
   }
 
   // === Bookmark Menu ===
@@ -836,7 +851,7 @@ class BookmarkManager {
 
     const count = this.getCount();
     const isInSearchMode = slideState.isSearchMode && !this.isShowingBookmarks;
-    
+
     const menu = document.createElement("div");
     menu.id = "bookmarkActionsMenu";
     menu.style.position = "fixed";
@@ -862,7 +877,7 @@ class BookmarkManager {
       btn.style.padding = "6px 10px";
       btn.style.borderRadius = "4px";
       btn.disabled = disabled;
-      
+
       if (!disabled) {
         btn.addEventListener("mouseover", () => {
           btn.style.background = "rgba(255,255,255,0.1)";
@@ -899,26 +914,44 @@ class BookmarkManager {
     }
 
     // Clear bookmarks (under Show/Hide)
-    menu.appendChild(makeButton(CLEAR_SVG, "Clear", () => {
-      this.clearBookmarks();
-      this.removeBookmarkMenu();
-    }, !hasBookmarks));
+    menu.appendChild(
+      makeButton(
+        CLEAR_SVG,
+        "Clear",
+        () => {
+          this.clearBookmarks();
+          this.removeBookmarkMenu();
+        },
+        !hasBookmarks
+      )
+    );
 
     // Select All - only active when a search is being displayed (and not showing bookmarks)
     menu.appendChild(makeButton(SELECT_ALL_SVG, "Select All", () => this.selectAllFromSearch(), !isInSearchMode));
 
     // Curate - opens the curation panel
-    menu.appendChild(makeButton(CURATE_SVG, "Curate", () => {
-      if (window.toggleCurationPanel) {
-        window.toggleCurationPanel();
-      }
-    }, false));
+    menu.appendChild(
+      makeButton(
+        CURATE_SVG,
+        "Curate",
+        () => {
+          if (window.toggleCurationPanel) {
+            window.toggleCurationPanel();
+          }
+        },
+        false
+      )
+    );
 
     // Move, Export, Download, and Delete (Export is after Move as requested)
-    menu.appendChild(makeButton(MOVE_SVG, "Move", () => this.moveBookmarkedImages(), !hasBookmarks || state.albumLocked));
+    menu.appendChild(
+      makeButton(MOVE_SVG, "Move", () => this.moveBookmarkedImages(), !hasBookmarks || state.albumLocked)
+    );
     menu.appendChild(makeButton(EXPORT_SVG, "Export", () => this.exportBookmarkedImages(), !hasBookmarks));
     menu.appendChild(makeButton(DOWNLOAD_SVG, "Download", () => this.downloadBookmarkedImages(), !hasBookmarks));
-    menu.appendChild(makeButton(DELETE_SVG, "Delete", () => this.deleteBookmarkedImages(), !hasBookmarks || state.albumLocked));
+    menu.appendChild(
+      makeButton(DELETE_SVG, "Delete", () => this.deleteBookmarkedImages(), !hasBookmarks || state.albumLocked)
+    );
 
     document.body.appendChild(menu);
 
@@ -945,10 +978,14 @@ class BookmarkManager {
 
     // Close when clicking elsewhere or pressing Escape
     const onDocClick = (e) => {
-      if (!menu.contains(e.target)) this.removeBookmarkMenu();
+      if (!menu.contains(e.target)) {
+        this.removeBookmarkMenu();
+      }
     };
     const onKey = (e) => {
-      if (e.key === "Escape") this.removeBookmarkMenu();
+      if (e.key === "Escape") {
+        this.removeBookmarkMenu();
+      }
     };
 
     setTimeout(() => {
@@ -967,7 +1004,9 @@ class BookmarkManager {
   removeBookmarkMenu() {
     const existing = document.getElementById("bookmarkActionsMenu");
     if (existing) {
-      if (existing._cleanup) existing._cleanup();
+      if (existing._cleanup) {
+        existing._cleanup();
+      }
       existing.remove();
     }
   }
@@ -996,7 +1035,9 @@ window.addEventListener("stateReady", () => {
 
 function initializeBookmarkButton() {
   const btn = document.getElementById("bookmarkMenuBtn");
-  if (!btn) return;
+  if (!btn) {
+    return;
+  }
 
   // Left-click opens menu
   btn.addEventListener("click", (e) => {

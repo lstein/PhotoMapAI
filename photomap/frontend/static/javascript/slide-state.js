@@ -37,9 +37,7 @@ class SlideStateManager {
     return {
       globalIndex: this.currentGlobalIndex,
       searchIndex: this.isSearchMode ? this.currentSearchIndex : null,
-      totalCount: this.isSearchMode
-        ? this.searchResults.length
-        : this.totalAlbumImages,
+      totalCount: this.isSearchMode ? this.searchResults.length : this.totalAlbumImages,
       isSearchMode: this.isSearchMode,
     };
   }
@@ -49,9 +47,7 @@ class SlideStateManager {
    * @returns {number} Current index (search or global)
    */
   getCurrentIndex() {
-    return this.isSearchMode
-      ? this.currentSearchIndex
-      : this.currentGlobalIndex;
+    return this.isSearchMode ? this.currentSearchIndex : this.currentGlobalIndex;
   }
 
   /**
@@ -67,23 +63,14 @@ class SlideStateManager {
 
     if (isSearchIndex && this.searchResults.length > 0) {
       // Set within search results
-      this.currentSearchIndex = Math.max(
-        0,
-        Math.min(index, this.searchResults.length - 1)
-      );
-      this.currentGlobalIndex =
-        this.searchResults[this.currentSearchIndex]?.index || 0;
+      this.currentSearchIndex = Math.max(0, Math.min(index, this.searchResults.length - 1));
+      this.currentGlobalIndex = this.searchResults[this.currentSearchIndex]?.index || 0;
     } else {
       // Set within full album
-      this.currentGlobalIndex = Math.max(
-        0,
-        Math.min(index, this.totalAlbumImages - 1)
-      );
+      this.currentGlobalIndex = Math.max(0, Math.min(index, this.totalAlbumImages - 1));
       if (this.isSearchMode) {
         // Find corresponding search index if in search mode
-        this.currentSearchIndex = this.searchResults.findIndex(
-          (result) => result.index === this.currentGlobalIndex
-        );
+        this.currentSearchIndex = this.searchResults.findIndex((result) => result.index === this.currentGlobalIndex);
         if (this.currentSearchIndex === -1) {
           // Exit search mode if global index not in search results
           this.exitSearchMode();
@@ -126,18 +113,13 @@ class SlideStateManager {
     this.isSearchMode = this.searchResults.length > 0;
 
     if (this.isSearchMode) {
-      this.currentSearchIndex = Math.max(
-        0,
-        Math.min(startIndex, this.searchResults.length - 1)
-      );
-      this.currentGlobalIndex =
-        this.searchResults[this.currentSearchIndex]?.index ||
-        this.currentGlobalIndex;
+      this.currentSearchIndex = Math.max(0, Math.min(startIndex, this.searchResults.length - 1));
+      this.currentGlobalIndex = this.searchResults[this.currentSearchIndex]?.index || this.currentGlobalIndex;
     }
 
     this.notifySlideChanged();
   }
-  
+
   /**
    * Exit search mode and return to album browsing
    */
@@ -155,11 +137,7 @@ class SlideStateManager {
    * @param {number} searchIndex - The search results index (optional)
    */
   updateFromExternal(globalIndex, searchIndex = null) {
-    if (
-      this.isSearchMode &&
-      searchIndex !== null &&
-      this.searchResults.length > 0
-    ) {
+    if (this.isSearchMode && searchIndex !== null && this.searchResults.length > 0) {
       this.currentGlobalIndex = this.searchResults[searchIndex]?.index;
       this.currentSearchIndex = searchIndex;
     } else {
@@ -178,10 +156,7 @@ class SlideStateManager {
   indexToGlobal(index) {
     if (this.isSearchMode && this.searchResults.length > 0) {
       // Clamp to valid range
-      const clampedIndex = Math.max(
-        0,
-        Math.min(index, this.searchResults.length - 1)
-      );
+      const clampedIndex = Math.max(0, Math.min(index, this.searchResults.length - 1));
       return this.searchResults[clampedIndex]?.index || null;
     } else {
       // Clamp to valid range
@@ -196,14 +171,14 @@ class SlideStateManager {
    */
   resolveOffset(offset) {
     if (this.isSearchMode && this.searchResults.length > 0) {
-      let searchIndex = (this.currentSearchIndex + offset) % this.searchResults.length;
+      const searchIndex = (this.currentSearchIndex + offset) % this.searchResults.length;
       if (searchIndex < 0 || searchIndex >= this.searchResults.length) {
         return { globalIndex: null, searchIndex: null }; // Out of bounds
       }
-      let globalIndex = this.searchResults[searchIndex]?.index;
+      const globalIndex = this.searchResults[searchIndex]?.index;
       return { globalIndex, searchIndex };
     } else {
-      let globalIndex = (this.currentGlobalIndex + offset) % this.totalAlbumImages;
+      const globalIndex = (this.currentGlobalIndex + offset) % this.totalAlbumImages;
       if (globalIndex < 0 || globalIndex >= this.totalAlbumImages) {
         return { globalIndex: null, searchIndex: null }; // Out of bounds
       }
@@ -216,8 +191,9 @@ class SlideStateManager {
    */
   searchToGlobal(searchIndex) {
     if (this.isSearchMode && this.searchResults.length > 0) {
-      if (searchIndex < 0 || searchIndex >= this.searchResults.length)
+      if (searchIndex < 0 || searchIndex >= this.searchResults.length) {
         return null;
+      }
       return this.searchResults[searchIndex]?.index;
     }
     return null;
@@ -244,28 +220,26 @@ class SlideStateManager {
 
   handleAlbumChanged(detail) {
     // For deletions, try to preserve position by calculating how many images before current were deleted
-    if (detail.changeType === 'deletion' && detail.deletedIndices && !this.isSearchMode) {
+    if (detail.changeType === "deletion" && detail.deletedIndices && !this.isSearchMode) {
       const deletedIndices = detail.deletedIndices;
       const currentIndex = this.currentGlobalIndex;
-      
+
       // Count how many deleted images were before the current position
-      const deletedBefore = deletedIndices.filter(idx => idx < currentIndex).length;
-      
+      const deletedBefore = deletedIndices.filter((idx) => idx < currentIndex).length;
+
       // Adjust current position by subtracting deleted images before it
       const newIndex = Math.max(0, currentIndex - deletedBefore);
-      
+
       // Clamp to new total, ensuring non-negative
       // Handle edge case where all images are deleted (totalImages = 0)
-      this.currentGlobalIndex = detail.totalImages > 0 
-        ? Math.max(0, Math.min(newIndex, detail.totalImages - 1))
-        : 0;
+      this.currentGlobalIndex = detail.totalImages > 0 ? Math.max(0, Math.min(newIndex, detail.totalImages - 1)) : 0;
       this.currentSearchIndex = 0;
     } else {
       // For other changes (album switch, move, etc.), reset to beginning
       this.currentGlobalIndex = 0;
       this.currentSearchIndex = 0;
     }
-    
+
     this.exitSearchMode();
     this.totalAlbumImages = detail.totalImages; // Update from state
   }
@@ -311,10 +285,10 @@ export function getCurrentSlideIndex() {
 export async function getCurrentFilepath() {
   // Call the /image_path/ endpoint to get the filepath
   const response = await fetch(
-    `image_path/${encodeURIComponent(state.album)}/${encodeURIComponent(
-      slideState.currentGlobalIndex
-    )}`
+    `image_path/${encodeURIComponent(state.album)}/${encodeURIComponent(slideState.currentGlobalIndex)}`
   );
-  if (!response.ok) return null;
+  if (!response.ok) {
+    return null;
+  }
   return await response.text();
 }

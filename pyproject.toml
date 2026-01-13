@@ -67,6 +67,7 @@ development = [
     "twine",
     "pymdown-extensions",
     "pyinstaller",
+    "ruff",
 ]
 
 [tool.setuptools.packages.find]
@@ -84,3 +85,39 @@ search_images = "photomap.backend.imagetool:main"
 search_text = "photomap.backend.imagetool:main"
 find_duplicate_images = "photomap.backend.imagetool:main"
 start_photomap = "photomap.backend.photomap_server:main"
+
+[tool.ruff]
+# Set line length to match the project's style
+line-length = 120
+target-version = "py310"
+
+# Enable selected rule sets
+lint.select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+]
+
+# Ignore certain rules
+lint.ignore = [
+    "E501",  # Line too long (handled by formatter)
+]
+
+# Exclude directories
+exclude = [
+    ".git",
+    ".github",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["photomap"]

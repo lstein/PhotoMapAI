@@ -27,7 +27,7 @@ class SwiperManager {
     this.isPrepending = false;
     this.isAppending = false;
     this.isInternalSlideChange = false;
-    
+
     // Store event listeners for cleanup
     this.eventListeners = [];
 
@@ -49,11 +49,7 @@ class SwiperManager {
 
   // Check if the device is mobile
   isTouchDevice() {
-    return (
-      "ontouchstart" in window ||
-      navigator.maxTouchPoints > 0 ||
-      navigator.msMaxTouchPoints > 0
-    );
+    return "ontouchstart" in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
   }
 
   isVisible() {
@@ -119,31 +115,44 @@ class SwiperManager {
   }
 
   initializeSwiperHandlers() {
-    if (!this.swiper) return;
+    if (!this.swiper) {
+      return;
+    }
 
     this.swiper.on("autoplayStart", () => {
-      if (!state.gridViewActive) updateSlideshowButtonIcon();
+      if (!state.gridViewActive) {
+        updateSlideshowButtonIcon();
+      }
     });
 
     this.swiper.on("autoplayResume", () => {
-      if (!state.gridViewActive) updateSlideshowButtonIcon();
+      if (!state.gridViewActive) {
+        updateSlideshowButtonIcon();
+      }
     });
 
     this.swiper.on("autoplayStop", () => {
-      if (!state.gridViewActive) updateSlideshowButtonIcon();
+      if (!state.gridViewActive) {
+        updateSlideshowButtonIcon();
+      }
     });
 
     this.swiper.on("autoplayPause", () => {
-      if (!state.gridViewActive) updateSlideshowButtonIcon();
+      if (!state.gridViewActive) {
+        updateSlideshowButtonIcon();
+      }
     });
 
     this.swiper.on("scrollbarDragStart", () => {
-      if (!state.gridViewActive) this.pauseSlideshow();
+      if (!state.gridViewActive) {
+        this.pauseSlideshow();
+      }
     });
 
     this.swiper.on("slideChange", () => {
-      if (this.isAppending || this.isPrepending || this.isInternalSlideChange)
+      if (this.isAppending || this.isPrepending || this.isInternalSlideChange) {
         return;
+      }
       this.isInternalSlideChange = true;
       const activeSlide = this.swiper.slides[this.swiper.activeIndex];
       if (activeSlide) {
@@ -156,14 +165,15 @@ class SwiperManager {
     });
 
     this.swiper.on("slideNextTransitionStart", () => {
-      if (this.isAppending) return;
+      if (this.isAppending) {
+        return;
+      }
 
       if (this.swiper.activeIndex === this.swiper.slides.length - 1) {
         this.isAppending = true;
         this.swiper.allowSlideNext = false;
 
-        const { globalIndex: nextGlobal, searchIndex: nextSearch } =
-          slideState.resolveOffset(+1);
+        const { globalIndex: nextGlobal, searchIndex: nextSearch } = slideState.resolveOffset(+1);
 
         if (nextGlobal !== null) {
           this.addSlideByIndex(nextGlobal, nextSearch)
@@ -185,8 +195,7 @@ class SwiperManager {
     this.swiper.on("slidePrevTransitionEnd", () => {
       const [globalIndex] = getCurrentSlideIndex();
       if (this.swiper.activeIndex === 0 && globalIndex > 0) {
-        const { globalIndex: prevGlobal, searchIndex: prevSearch } =
-          slideState.resolveOffset(-1);
+        const { globalIndex: prevGlobal, searchIndex: prevSearch } = slideState.resolveOffset(-1);
         if (prevGlobal !== null) {
           const prevExists = Array.from(this.swiper.slides).some(
             (el) => parseInt(el.dataset.globalIndex, 10) === prevGlobal
@@ -216,26 +225,16 @@ class SwiperManager {
 
   initializeEventHandlers() {
     // Stop slideshow on next and prev button clicks
-    document
-      .querySelectorAll(".swiper-button-next, .swiper-button-prev")
-      .forEach((btn) => {
-        this.addEventListener(
-          btn,
-          "click",
-          function (event) {
-            state.single_swiper.pauseSlideshow();
-            event.stopPropagation();
-            this.blur();
-          }
-        );
-        this.addEventListener(
-          btn,
-          "mousedown",
-          function (event) {
-            this.blur();
-          }
-        );
+    document.querySelectorAll(".swiper-button-next, .swiper-button-prev").forEach((btn) => {
+      this.addEventListener(btn, "click", function (event) {
+        state.single_swiper.pauseSlideshow();
+        event.stopPropagation();
+        this.blur();
       });
+      this.addEventListener(btn, "mousedown", function () {
+        this.blur();
+      });
+    });
 
     // Pause slideshow on arrow key navigation
     document.addEventListener("keydown", (e) => {
@@ -250,33 +249,23 @@ class SwiperManager {
     });
 
     // Reset slide show when the search results change
-    this.addEventListener(
-      window,
-      "searchResultsChanged",
-      () => {
-        this.resetAllSlides();
-      }
-    );
+    this.addEventListener(window, "searchResultsChanged", () => {
+      this.resetAllSlides();
+    });
 
     // Handle slideshow mode changes
-    this.addEventListener(
-      window,
-      "swiperModeChanged",
-      () => {
-        this.resetAllSlides();
-      }
-    );
+    this.addEventListener(window, "swiperModeChanged", () => {
+      this.resetAllSlides();
+    });
 
     // Navigate to a slide
-    this.addEventListener(
-      window,
-      "seekToSlideIndex",
-      (event) => this.seekToSlideIndex(event)
-    );
+    this.addEventListener(window, "seekToSlideIndex", (event) => this.seekToSlideIndex(event));
   }
 
   addDoubleTapHandlersToSlides() {
-    if (!this.swiper) return;
+    if (!this.swiper) {
+      return;
+    }
     // Attach handlers to all current slides
     this.swiper.slides.forEach((slideEl) => {
       this.attachDoubleTapHandler(slideEl);
@@ -290,7 +279,9 @@ class SwiperManager {
   }
 
   attachDoubleTapHandler(slideEl) {
-    if (slideEl.dataset.doubleTapHandlerAttached) return;
+    if (slideEl.dataset.doubleTapHandlerAttached) {
+      return;
+    }
 
     // Double-click (desktop)
     slideEl.addEventListener("dblclick", async () => {
@@ -307,7 +298,7 @@ class SwiperManager {
       (e) => {
         if (e.touches.length === 1) {
           tapCount++;
-          
+
           // Only prevent default on the second tap within the double-tap window
           if (tapCount === 2) {
             const now = Date.now();
@@ -315,7 +306,7 @@ class SwiperManager {
               e.preventDefault(); // Prevent zoom only on actual double-tap
             }
           }
-          
+
           // Reset tap count after the double-tap window expires
           clearTimeout(tapTimer);
           tapTimer = setTimeout(() => {
@@ -328,10 +319,7 @@ class SwiperManager {
 
     slideEl.addEventListener("touchend", async (e) => {
       // Only trigger on single-finger touch
-      if (
-        e.touches.length > 0 ||
-        (e.changedTouches && e.changedTouches.length > 1)
-      ) {
+      if (e.touches.length > 0 || (e.changedTouches && e.changedTouches.length > 1)) {
         return;
       }
 
@@ -371,15 +359,9 @@ class SwiperManager {
    * @returns {{globalIndex: number|null, searchIndex: number|null}} The selected indices
    */
   selectRandomSlideIndex() {
-    const totalPool = slideState.isSearchMode
-      ? slideState.searchResults.length
-      : slideState.totalAlbumImages;
+    const totalPool = slideState.isSearchMode ? slideState.searchResults.length : slideState.totalAlbumImages;
 
-    const existingIndices = new Set(
-      Array.from(this.swiper.slides).map((el) =>
-        parseInt(el.dataset.globalIndex, 10)
-      )
-    );
+    const existingIndices = new Set(Array.from(this.swiper.slides).map((el) => parseInt(el.dataset.globalIndex, 10)));
 
     // Try to find a random slide that doesn't already exist in the swiper
     // Limit attempts to avoid infinite loop when all slides are already loaded
@@ -398,7 +380,7 @@ class SwiperManager {
         searchIndex = null;
       }
       // Check for valid globalIndex and that it doesn't already exist
-      if (globalIndex != null && !existingIndices.has(globalIndex)) {
+      if (globalIndex !== null && !existingIndices.has(globalIndex)) {
         break;
       }
     }
@@ -406,19 +388,13 @@ class SwiperManager {
     return { globalIndex, searchIndex };
   }
 
-  async addSlideByIndex(
-    globalIndex,
-    searchIndex = null,
-    prepend = false,
-    random = null
-  ) {
-    if (!this.swiper) return;
+  async addSlideByIndex(globalIndex, searchIndex = null, prepend = false, random = null) {
+    if (!this.swiper) {
+      return;
+    }
 
     // only use random mode when the slideshow is running or when explicitly specified
-    const is_random =
-      random !== null
-        ? random
-        : state.mode === "random" && slideShowRunning();
+    const is_random = random !== null ? random : state.mode === "random" && slideShowRunning();
 
     if (is_random) {
       const selected = this.selectRandomSlideIndex();
@@ -426,10 +402,10 @@ class SwiperManager {
       searchIndex = selected.searchIndex;
     }
 
-    const exists = Array.from(this.swiper.slides).some(
-      (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
-    );
-    if (exists) return;
+    const exists = Array.from(this.swiper.slides).some((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
+    if (exists) {
+      return;
+    }
 
     let currentScore, currentCluster, currentColor;
     if (slideState.isSearchMode && searchIndex !== null) {
@@ -474,9 +450,7 @@ class SwiperManager {
       slide.dataset.total = data.total || 0;
       slide.dataset.searchIndex = searchIndex !== null ? searchIndex : "";
       slide.dataset.metadata_url = metadata_url || "";
-      slide.dataset.reference_images = JSON.stringify(
-        data.reference_images || []
-      );
+      slide.dataset.reference_images = JSON.stringify(data.reference_images || []);
 
       // Attach double-tap/double-click handler immediately
       this.attachDoubleTapHandler(slide);
@@ -496,10 +470,10 @@ class SwiperManager {
   async handleSlideChange() {
     const { globalIndex } = slideState.getCurrentSlide();
     const slideEls = this.swiper.slides;
-    let activeIndex = Array.from(slideEls).findIndex(
-      (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
-    );
-    if (activeIndex === -1) activeIndex = 0;
+    let activeIndex = Array.from(slideEls).findIndex((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
+    if (activeIndex === -1) {
+      activeIndex = 0;
+    }
     const activeSlide = slideEls[activeIndex];
     if (activeSlide) {
       const globalIndex = parseInt(activeSlide.dataset.globalIndex, 10) || 0;
@@ -510,13 +484,15 @@ class SwiperManager {
   }
 
   removeSlidesAfterCurrent() {
-    if (!this.swiper) return;
+    if (!this.swiper) {
+      return;
+    }
     const { globalIndex } = slideState.getCurrentSlide();
     const slideEls = this.swiper.slides;
-    let activeIndex = Array.from(slideEls).findIndex(
-      (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
-    );
-    if (activeIndex === -1) activeIndex = 0;
+    let activeIndex = Array.from(slideEls).findIndex((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
+    if (activeIndex === -1) {
+      activeIndex = 0;
+    }
     const slidesToRemove = slideEls.length - activeIndex - 1;
     if (slidesToRemove > 0) {
       this.swiper.removeSlide(activeIndex + 1, slidesToRemove);
@@ -525,14 +501,18 @@ class SwiperManager {
   }
 
   currentSlide() {
-    if (!this.swiper) return null;
+    if (!this.swiper) {
+      return null;
+    }
     return this.swiper.slides[this.swiper.activeIndex] || null;
   }
 
   // The random_nextslide parameter is a hack that will make the preloaded next slide a random one
   // It is a hack that should be fixed.
   async resetAllSlides(random_nextslide = false) {
-    if (!this.swiper) return;
+    if (!this.swiper) {
+      return;
+    }
 
     const slideShowRunning = this.swiper.autoplay?.running;
     this.pauseSlideshow();
@@ -541,33 +521,23 @@ class SwiperManager {
     const { globalIndex, searchIndex } = slideState.getCurrentSlide();
 
     const swiperContainer = document.getElementById("singleSwiper");
-    if (swiperContainer) swiperContainer.style.visibility = "hidden";
+    if (swiperContainer) {
+      swiperContainer.style.visibility = "hidden";
+    }
 
     // Add previous slide if available
-    const { globalIndex: prevGlobal, searchIndex: prevSearch } =
-      slideState.resolveOffset(-1);
+    const { globalIndex: prevGlobal, searchIndex: prevSearch } = slideState.resolveOffset(-1);
     if (prevGlobal !== null) {
-      await this.addSlideByIndex(
-        prevGlobal,
-        prevSearch,
-        false,
-        random_nextslide
-      );
+      await this.addSlideByIndex(prevGlobal, prevSearch, false, random_nextslide);
     }
 
     // Add current slide
     await this.addSlideByIndex(globalIndex, searchIndex);
 
     // Add next slide if available
-    const { globalIndex: nextGlobal, searchIndex: nextSearch } =
-      slideState.resolveOffset(1);
+    const { globalIndex: nextGlobal, searchIndex: nextSearch } = slideState.resolveOffset(1);
     if (nextGlobal !== null) {
-      await this.addSlideByIndex(
-        nextGlobal,
-        nextSearch,
-        false,
-        random_nextslide
-      );
+      await this.addSlideByIndex(nextGlobal, nextSearch, false, random_nextslide);
     }
 
     // Navigate to the current slide
@@ -575,10 +545,14 @@ class SwiperManager {
     this.swiper.slideTo(slideIndex, 0);
 
     await new Promise(requestAnimationFrame);
-    if (swiperContainer) swiperContainer.style.visibility = "";
+    if (swiperContainer) {
+      swiperContainer.style.visibility = "";
+    }
 
     updateMetadataOverlay(this.currentSlide());
-    if (slideShowRunning) this.resumeSlideshow();
+    if (slideShowRunning) {
+      this.resumeSlideshow();
+    }
 
     setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
   }
@@ -589,7 +563,7 @@ class SwiperManager {
     const slides = swiper.slides.length;
 
     if (slides > maxSlides) {
-      let slideShowRunning = swiper.autoplay.running;
+      const slideShowRunning = swiper.autoplay.running;
       this.pauseSlideshow();
 
       if (backward) {
@@ -598,21 +572,24 @@ class SwiperManager {
         swiper.removeSlide(0);
       }
 
-      if (slideShowRunning) this.resumeSlideshow();
+      if (slideShowRunning) {
+        this.resumeSlideshow();
+      }
     }
   }
 
   async seekToSlideIndex(event) {
-    let { globalIndex, searchIndex, totalCount, isSearchMode } = event.detail;
+    let { globalIndex } = event.detail;
+    const isSearchMode = event.detail.isSearchMode;
+    const searchIndex = event.detail.searchIndex;
+    const totalCount = event.detail.totalCount || slideState.totalAlbumImages;
 
     if (isSearchMode) {
       globalIndex = slideState.searchToGlobal(searchIndex);
     }
 
     let slideEls = this.swiper.slides;
-    const exists = Array.from(slideEls).some(
-      (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
-    );
+    const exists = Array.from(slideEls).some((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
     if (exists) {
       const targetSlideIdx = Array.from(slideEls).findIndex(
         (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
@@ -638,22 +615,23 @@ class SwiperManager {
     swiperContainer.style.visibility = "hidden";
 
     for (let i = origin; i < slides_to_add; i++) {
-      if (searchIndex + i >= totalCount) break;
-      if (globalIndex + i < 0) continue;
-      if (globalIndex + i >= slideState.totalAlbumImages) break;
-      await this.addSlideByIndex(
-        globalIndex + i,
-        searchIndex + i,
-        false,
-        false
-      );
+      if (searchIndex + i >= totalCount) {
+        break;
+      }
+      if (globalIndex + i < 0) {
+        continue;
+      }
+      if (globalIndex + i >= slideState.totalAlbumImages) {
+        break;
+      }
+      await this.addSlideByIndex(globalIndex + i, searchIndex + i, false, false);
     }
 
     slideEls = this.swiper.slides;
-    let targetSlideIdx = Array.from(slideEls).findIndex(
-      (el) => parseInt(el.dataset.globalIndex, 10) === globalIndex
-    );
-    if (targetSlideIdx === -1) targetSlideIdx = 0;
+    let targetSlideIdx = Array.from(slideEls).findIndex((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
+    if (targetSlideIdx === -1) {
+      targetSlideIdx = 0;
+    }
     this.swiper.slideTo(targetSlideIdx, 0);
 
     swiperContainer.style.visibility = "visible";

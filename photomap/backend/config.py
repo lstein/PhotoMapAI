@@ -8,7 +8,7 @@ import logging
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 from platformdirs import user_config_dir
@@ -22,7 +22,7 @@ class Album(BaseModel):
 
     key: str = Field(..., description="Unique album identifier")
     name: str = Field(..., description="Display name for the album")
-    image_paths: List[str] = Field(
+    image_paths: list[str] = Field(
         ..., min_length=1, description="List of paths containing images"
     )
     index: str = Field(..., description="Path to the embeddings index file")
@@ -31,7 +31,7 @@ class Album(BaseModel):
 
     @field_validator("image_paths")
     @classmethod
-    def expand_and_validate_image_paths(cls, v: List[str]) -> List[str]:
+    def expand_and_validate_image_paths(cls, v: list[str]) -> list[str]:
         """Expand ~ and warn if image paths do not exist."""
         expanded = [str(Path(path).expanduser()) for path in v]
         for path in expanded:
@@ -48,7 +48,7 @@ class Album(BaseModel):
             raise ValueError("Index file must have .npz extension")
         return index_path.as_posix()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert album to dictionary format for YAML."""
         return {
             "name": self.name,
@@ -59,7 +59,7 @@ class Album(BaseModel):
         }
 
     @classmethod
-    def from_dict(cls, key: str, data: Dict[str, Any]) -> "Album":
+    def from_dict(cls, key: str, data: dict[str, Any]) -> "Album":
         """Create Album from dictionary."""
         return cls(
             key=key,
@@ -75,10 +75,10 @@ class Config(BaseModel):
     """Main configuration model."""
 
     config_version: str = Field("1.0.0", description="Configuration format version")
-    albums: Dict[str, Album] = Field(
+    albums: dict[str, Album] = Field(
         default_factory=dict, description="Album configurations"
     )
-    locationiq_api_key: Optional[str] = Field(
+    locationiq_api_key: str | None = Field(
         default=None, description="LocationIQ API key for map services"
     )
 
@@ -91,8 +91,8 @@ class Config(BaseModel):
             parts = v.split(".")
             if len(parts) != 3 or not all(part.isdigit() for part in parts):
                 raise ValueError("Version must be in format x.y.z")
-        except Exception:
-            raise ValueError("Invalid version format")
+        except Exception as e:
+            raise ValueError("Invalid version format") from e
         return v
 
     @model_validator(mode="after")
@@ -102,7 +102,7 @@ class Config(BaseModel):
             print("Warning: No albums configured")
         return self
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary format for YAML."""
         return {
             "config_version": self.config_version,
@@ -114,14 +114,14 @@ class Config(BaseModel):
 class ConfigManager:
     """Manages PhotoMap configuration file with Pydantic validation."""
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         """Initialize configuration manager.
 
         Args:
             config_path: Optional custom path to config file. If None, uses platform default.
         """
         self.config_path = config_path or self._get_default_config_path()
-        self._config: Optional[Config] = None
+        self._config: Config | None = None
 
     def _get_default_config_path(self) -> Path:
         """Get platform-specific default configuration file path."""
@@ -134,7 +134,7 @@ class ConfigManager:
         config_dir.mkdir(parents=True, exist_ok=True)
         return config_dir / "config.yaml"
 
-    def get_locationiq_api_key(self) -> Optional[str]:
+    def get_locationiq_api_key(self) -> str | None:
         """Get the LocationIQ API key."""
         if os.environ.get(
             "PHOTOMAP_ALBUM_LOCKED"
@@ -143,7 +143,7 @@ class ConfigManager:
         config = self.load_config()
         return config.locationiq_api_key
 
-    def set_locationiq_api_key(self, api_key: Optional[str]) -> None:
+    def set_locationiq_api_key(self, api_key: str | None) -> None:
         """Set the LocationIQ API key.
 
         Args:
@@ -174,7 +174,7 @@ class ConfigManager:
                 )
             else:
                 try:
-                    with open(self.config_path, "r") as f:
+                    with open(self.config_path) as f:
                         config_data = yaml.safe_load(f)
 
                     # Convert album dictionaries to Album objects
@@ -191,7 +191,7 @@ class ConfigManager:
                 except Exception as e:
                     raise RuntimeError(
                         f"Failed to load configuration from {self.config_path}: {e}"
-                    )
+                    ) from e
 
         return self._config
 
@@ -210,14 +210,14 @@ class ConfigManager:
         except Exception as e:
             raise RuntimeError(
                 f"Failed to save configuration to {self.config_path}: {e}"
-            )
+            ) from e
 
-    def get_albums(self) -> Dict[str, Album]:
+    def get_albums(self) -> dict[str, Album]:
         """Get all albums."""
         config = self.load_config()
         return config.albums.copy()
 
-    def get_album(self, key: str) -> Optional[Album]:
+    def get_album(self, key: str) -> Album | None:
         """Get a specific album by key."""
         albums = self.get_albums()
         return albums.get(key)
@@ -282,7 +282,7 @@ class ConfigManager:
         self._config = None  # Clear cache to ensure fresh reads
         return True
 
-    def get_photo_albums_dict(self) -> Dict[str, str]:
+    def get_photo_albums_dict(self) -> dict[str, str]:
         """Get albums in the old PHOTO_ALBUMS format for backward compatibility.
 
         Returns:
@@ -294,7 +294,7 @@ class ConfigManager:
             for key, album in albums.items()
         }
 
-    def find_image_in_album(self, album_key: str, relative_path: str) -> Optional[Path]:
+    def find_image_in_album(self, album_key: str, relative_path: str) -> Path | None:
         """Find the full path of an image in any of the album's image paths.
 
         Args:
@@ -318,7 +318,7 @@ class ConfigManager:
             return Path(album.image_paths[0]) / relative_path
         return None
 
-    def get_relative_path(self, full_path: str, album_key: str) -> Optional[str]:
+    def get_relative_path(self, full_path: str, album_key: str) -> str | None:
         """Get relative path of image within album's image paths.
 
         Args:
@@ -386,7 +386,7 @@ class ConfigManager:
 def create_album(
     key: str,
     name: str,
-    image_paths: List[str],
+    image_paths: list[str],
     index: str,
     umap_eps: float,
     description: str = "",
@@ -418,6 +418,6 @@ def create_album(
 
 
 @lru_cache(maxsize=1)
-def get_config_manager(config_path: Optional[Path] = None) -> ConfigManager:
+def get_config_manager(config_path: Path | None = None) -> ConfigManager:
     """Get a singleton instance of ConfigManager."""
     return ConfigManager(config_path=config_path)

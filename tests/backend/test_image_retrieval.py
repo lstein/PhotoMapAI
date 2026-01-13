@@ -1,7 +1,6 @@
 from pathlib import Path
 
-import pytest
-from fixtures import build_index, client, count_test_images, fetch_filename, new_album
+from fixtures import build_index, count_test_images, fetch_filename
 
 TEST_IMAGE_COUNT = count_test_images()
 

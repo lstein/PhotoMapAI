@@ -3,7 +3,6 @@ metadata.py
 Parse metadata from the legacy (pre v3.0) InvokeAI format.
 """
 
-from typing import List
 
 from .invoke_metadata_abc import (
     ControlLayer,
@@ -52,7 +51,7 @@ class InvokeLegacyMetadata(InvokeMetadataABC):
         """
         return self.raw_metadata.get("image", {}).get("seed", 0)
 
-    def get_loras(self) -> List[Lora]:
+    def get_loras(self) -> list[Lora]:
         """
         Extract Lora information from the raw metadata.
         Returns:
@@ -60,7 +59,7 @@ class InvokeLegacyMetadata(InvokeMetadataABC):
         """
         return []  # no Lora support in legacy metadata
 
-    def get_reference_images(self) -> List[ReferenceImage]:
+    def get_reference_images(self) -> list[ReferenceImage]:
         """
         Extract reference image (IPAdapter) information from the raw metadata.
         Returns:
@@ -68,7 +67,7 @@ class InvokeLegacyMetadata(InvokeMetadataABC):
         """
         return []  # no IPAdapter support in legacy metadata
 
-    def get_control_layers(self) -> List[ControlLayer]:
+    def get_control_layers(self) -> list[ControlLayer]:
         """
         Extract control layer information from the raw metadata.
 
@@ -77,5 +76,5 @@ class InvokeLegacyMetadata(InvokeMetadataABC):
         """
         return []  # no control layer support in legacy metadata
 
-    def get_raster_images(self) -> List[str]:
+    def get_raster_images(self) -> list[str]:
         return []  # no raster image support in legacy metadata

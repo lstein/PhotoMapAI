@@ -1,25 +1,25 @@
-import os
-import shutil
 import logging
+import os
 import random
-import asyncio
+import shutil
 import uuid
 from collections import Counter
-from typing import List, Dict, Any
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from typing import Any
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from ..embeddings import get_fps_indices_global, get_kmeans_indices_global, _open_npz_file
 from ..config import get_config_manager
-from ..progress import progress_tracker, IndexStatus
+from ..embeddings import _open_npz_file, get_fps_indices_global, get_kmeans_indices_global
+from ..progress import IndexStatus, progress_tracker
 from .index import check_album_lock
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Store results for completed curation jobs
-_curation_results: Dict[str, Any] = {}
+_curation_results: dict[str, Any] = {}
 
 class CurationRequest(BaseModel):
     """
@@ -29,13 +29,13 @@ class CurationRequest(BaseModel):
     iterations: int = 1
     album: str
     method: str = "fps"
-    excluded_indices: List[int] = []
+    excluded_indices: list[int] = []
 
 class ExportRequest(BaseModel):
     """
     Request model for the export endpoint.
     """
-    filenames: List[str]
+    filenames: list[str]
     output_folder: str
 
 def _run_curation_task(job_id: str, request: CurationRequest):
@@ -45,13 +45,13 @@ def _run_curation_task(job_id: str, request: CurationRequest):
     try:
         # Start progress tracking
         progress_tracker.start_operation(job_id, request.iterations, "curating")
-        
+
         config_manager = get_config_manager()
         album_config = config_manager.get_album(request.album)
         if not album_config:
             progress_tracker.set_error(job_id, "Album not found")
             return
-        
+
         index_path = Path(album_config.index)
         logger.info(f"Curation Job {job_id}: Running {request.method.upper()} x{request.iterations}...")
 
@@ -69,11 +69,11 @@ def _run_curation_task(job_id: str, request: CurationRequest):
                     index_path, request.target_count, run_seed, request.excluded_indices
                 )
             vote_counter.update(selected_files)
-            
+
             # Update progress after each iteration
             progress_tracker.update_progress(
-                job_id, 
-                i + 1, 
+                job_id,
+                i + 1,
                 f"Iteration {i + 1}/{request.iterations}"
             )
 
@@ -88,12 +88,12 @@ def _run_curation_task(job_id: str, request: CurationRequest):
             f_norm = os.path.normpath(filepath).lower()
             if f_norm in norm_map:
                 idx = int(norm_map[f_norm])
-                
+
                 if idx in request.excluded_indices:
                     continue
 
                 subfolder = os.path.basename(os.path.dirname(filepath))
-                
+
                 analysis_results.append({
                     "filename": os.path.basename(filepath),
                     "subfolder": subfolder,
@@ -105,7 +105,7 @@ def _run_curation_task(job_id: str, request: CurationRequest):
 
         # Generate Selection (top N winners)
         consensus_files = [x['filepath'] for x in analysis_results[:request.target_count]]
-        
+
         selected_indices = []
         final_file_list = []
 
@@ -123,14 +123,14 @@ def _run_curation_task(job_id: str, request: CurationRequest):
             "selected_files": final_file_list,
             "analysis_results": analysis_results
         }
-        
+
         # Store result
         _curation_results[job_id] = result
-        
+
         # Mark as completed
         progress_tracker.complete_operation(job_id, "Curation completed")
         logger.info(f"Curation Job {job_id}: Completed successfully")
-        
+
     except Exception as e:
         logger.error(f"Curation Job {job_id}: Error - {str(e)}")
         progress_tracker.set_error(job_id, str(e))
@@ -151,28 +151,28 @@ async def run_curation(request: CurationRequest, background_tasks: BackgroundTas
             raise HTTPException(status_code=400, detail="target_count must be positive")
         if request.target_count > 100000:
             raise HTTPException(status_code=400, detail="target_count exceeds reasonable limit")
-        
+
         # Validate and cap iterations
         if request.iterations < 1:
             request.iterations = 1
         if request.iterations > 30:
             request.iterations = 30
-        
+
         # Generate unique job ID
         job_id = f"curation_{uuid.uuid4().hex[:8]}"
-        
+
         # Start background task
         background_tasks.add_task(_run_curation_task, job_id, request)
-        
+
         return {
             "status": "started",
             "job_id": job_id,
             "iterations": request.iterations
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to start curation: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/curate/progress/{job_id}")
 async def get_curation_progress(job_id: str):
@@ -180,7 +180,7 @@ async def get_curation_progress(job_id: str):
     Poll for curation progress.
     """
     progress = progress_tracker.get_progress(job_id)
-    
+
     if progress is None:
         # Check if we have a completed result
         if job_id in _curation_results:
@@ -189,13 +189,13 @@ async def get_curation_progress(job_id: str):
                 "result": _curation_results[job_id]
             }
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     if progress.status == IndexStatus.ERROR:
         return {
             "status": "error",
             "error": progress.error_message
         }
-    
+
     if progress.status == IndexStatus.COMPLETED:
         # Return result if available
         result = _curation_results.get(job_id, {})
@@ -203,7 +203,7 @@ async def get_curation_progress(job_id: str):
             "status": "completed",
             "result": result
         }
-    
+
     # Still running
     return {
         "status": "running",
@@ -220,10 +220,10 @@ async def run_curation_sync(request: CurationRequest):
     """
     Run the curation process synchronously (for backwards compatibility).
     This is the original synchronous version.
-    
+
     Args:
         request: CurationRequest containing target count, iterations, album, method, etc.
-        
+
     Returns:
         JSON response with status, selected indices, files, and analysis results.
     """
@@ -233,16 +233,17 @@ async def run_curation_sync(request: CurationRequest):
             raise HTTPException(status_code=400, detail="target_count must be positive")
         if request.target_count > 100000:
             raise HTTPException(status_code=400, detail="target_count exceeds reasonable limit")
-        
+
         # Validate and cap iterations
         if request.iterations < 1:
             request.iterations = 1
         if request.iterations > 30:
             request.iterations = 30
-        
+
         config_manager = get_config_manager()
         album_config = config_manager.get_album(request.album)
-        if not album_config: raise HTTPException(status_code=404, detail="Album not found")
+        if not album_config:
+            raise HTTPException(status_code=404, detail="Album not found")
         index_path = Path(album_config.index)
 
         logger.info(f"Curation: Running {request.method.upper()} x{request.iterations}...")
@@ -250,7 +251,7 @@ async def run_curation_sync(request: CurationRequest):
         vote_counter = Counter()
 
         # 1. Run Monte Carlo
-        for i in range(request.iterations):
+        for _i in range(request.iterations):
             run_seed = random.randint(0, 1000000)
             if request.method == "kmeans":
                 selected_files = get_kmeans_indices_global(
@@ -273,14 +274,14 @@ async def run_curation_sync(request: CurationRequest):
             f_norm = os.path.normpath(filepath).lower()
             if f_norm in norm_map:
                 idx = int(norm_map[f_norm])
-                
-                # CRITICAL FIX: Strictly enforce exclusion. 
+
+                # CRITICAL FIX: Strictly enforce exclusion.
                 # Even if the algo returned it (e.g. due to index drift), we MUST drop it here.
                 if idx in request.excluded_indices:
                     continue
 
                 subfolder = os.path.basename(os.path.dirname(filepath))
-                
+
                 analysis_results.append({
                     "filename": os.path.basename(filepath),
                     "subfolder": subfolder,
@@ -292,7 +293,7 @@ async def run_curation_sync(request: CurationRequest):
 
         # 4. Generate Selection (Green Dots) - Just the top N winners
         consensus_files = [x['filepath'] for x in analysis_results[:request.target_count]]
-        
+
         selected_indices = []
         final_file_list = []
 
@@ -303,7 +304,7 @@ async def run_curation_sync(request: CurationRequest):
                 final_file_list.append(f)
 
         return {
-            "status": "success", 
+            "status": "success",
             "count": len(selected_indices),
             "target_count": request.target_count,
             "selected_indices": selected_indices,
@@ -313,16 +314,16 @@ async def run_curation_sync(request: CurationRequest):
 
     except Exception as e:
         logger.error(f"Curation Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.post("/export")
 async def export_dataset(request: ExportRequest):
     """
     Export the selected images to a specified folder.
-    
+
     Args:
         request: ExportRequest containing filenames and output folder.
-        
+
     Returns:
         JSON response with success count and any errors.
     """
@@ -336,7 +337,7 @@ async def export_dataset(request: ExportRequest):
         # Resolve the requested directory to an absolute path
         output_dir = requested_dir.resolve()
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid output folder: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid output folder: {e}") from e
 
     # Define the base directory under which exports are allowed
     # Use user's home directory as the base to prevent system-wide access
@@ -358,7 +359,7 @@ async def export_dataset(request: ExportRequest):
         try:
             output_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
-            raise HTTPException(status_code=400, detail=f"Create folder failed: {e}")
+            raise HTTPException(status_code=400, detail=f"Create folder failed: {e}") from e
 
     success_count = 0
     errors = []

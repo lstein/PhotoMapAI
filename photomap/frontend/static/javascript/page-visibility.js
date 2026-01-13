@@ -46,7 +46,7 @@ function booleanToStorage(value) {
 
 // Helper function to convert stored string values to boolean
 function storageToBoolean(value) {
-  return value === true || value === 'true';
+  return value === true || value === "true";
 }
 
 // Helper function to restore a single localStorage item from sessionStorage backup
@@ -55,9 +55,7 @@ function restoreLocalStorageItem(key, backupValue, stateKey, converter = (v) => 
     try {
       const convertedValue = converter(backupValue);
       // Store booleans as "true"/"false" strings in localStorage
-      const storageValue = typeof backupValue === 'boolean' 
-        ? booleanToStorage(backupValue)
-        : String(backupValue);
+      const storageValue = typeof backupValue === "boolean" ? booleanToStorage(backupValue) : String(backupValue);
       localStorage.setItem(key, storageValue);
       state[stateKey] = convertedValue;
       return true;
@@ -73,31 +71,77 @@ function restoreLocalStorageItem(key, backupValue, stateKey, converter = (v) => 
 function restoreStateFromSessionStorage() {
   try {
     const backup = sessionStorage.getItem("photomap_state_backup");
-    if (!backup) return false;
-    
+    if (!backup) {
+      return false;
+    }
+
     const criticalState = JSON.parse(backup);
     let restored = false;
-    
+
     // Restore all critical settings using helper function
     restored = restoreLocalStorageItem("album", criticalState.album, "album") || restored;
-    restored = restoreLocalStorageItem("currentDelay", criticalState.currentDelay, "currentDelay", (v) => parseInt(v, 10)) || restored;
+    restored =
+      restoreLocalStorageItem("currentDelay", criticalState.currentDelay, "currentDelay", (v) => parseInt(v, 10)) ||
+      restored;
     restored = restoreLocalStorageItem("mode", criticalState.mode, "mode") || restored;
-    restored = restoreLocalStorageItem("showControlPanelText", criticalState.showControlPanelText, "showControlPanelText", storageToBoolean) || restored;
-    restored = restoreLocalStorageItem("gridViewActive", criticalState.gridViewActive, "gridViewActive", storageToBoolean) || restored;
-    restored = restoreLocalStorageItem("suppressDeleteConfirm", criticalState.suppressDeleteConfirm, "suppressDeleteConfirm", storageToBoolean) || restored;
-    restored = restoreLocalStorageItem("gridThumbSizeFactor", criticalState.gridThumbSizeFactor, "gridThumbSizeFactor", parseFloat) || restored;
-    restored = restoreLocalStorageItem("minSearchScore", criticalState.minSearchScore, "minSearchScore", parseFloat) || restored;
-    restored = restoreLocalStorageItem("maxSearchResults", criticalState.maxSearchResults, "maxSearchResults", (v) => parseInt(v, 10)) || restored;
-    restored = restoreLocalStorageItem("umapShowLandmarks", criticalState.umapShowLandmarks, "umapShowLandmarks", storageToBoolean) || restored;
-    restored = restoreLocalStorageItem("umapShowHoverThumbnails", criticalState.umapShowHoverThumbnails, "umapShowHoverThumbnails", storageToBoolean) || restored;
-    restored = restoreLocalStorageItem("umapExitFullscreenOnSelection", criticalState.umapExitFullscreenOnSelection, "umapExitFullscreenOnSelection", storageToBoolean) || restored;
-    
+    restored =
+      restoreLocalStorageItem(
+        "showControlPanelText",
+        criticalState.showControlPanelText,
+        "showControlPanelText",
+        storageToBoolean
+      ) || restored;
+    restored =
+      restoreLocalStorageItem("gridViewActive", criticalState.gridViewActive, "gridViewActive", storageToBoolean) ||
+      restored;
+    restored =
+      restoreLocalStorageItem(
+        "suppressDeleteConfirm",
+        criticalState.suppressDeleteConfirm,
+        "suppressDeleteConfirm",
+        storageToBoolean
+      ) || restored;
+    restored =
+      restoreLocalStorageItem(
+        "gridThumbSizeFactor",
+        criticalState.gridThumbSizeFactor,
+        "gridThumbSizeFactor",
+        parseFloat
+      ) || restored;
+    restored =
+      restoreLocalStorageItem("minSearchScore", criticalState.minSearchScore, "minSearchScore", parseFloat) || restored;
+    restored =
+      restoreLocalStorageItem("maxSearchResults", criticalState.maxSearchResults, "maxSearchResults", (v) =>
+        parseInt(v, 10)
+      ) || restored;
+    restored =
+      restoreLocalStorageItem(
+        "umapShowLandmarks",
+        criticalState.umapShowLandmarks,
+        "umapShowLandmarks",
+        storageToBoolean
+      ) || restored;
+    restored =
+      restoreLocalStorageItem(
+        "umapShowHoverThumbnails",
+        criticalState.umapShowHoverThumbnails,
+        "umapShowHoverThumbnails",
+        storageToBoolean
+      ) || restored;
+    restored =
+      restoreLocalStorageItem(
+        "umapExitFullscreenOnSelection",
+        criticalState.umapExitFullscreenOnSelection,
+        "umapExitFullscreenOnSelection",
+        storageToBoolean
+      ) || restored;
+
     if (restored) {
       console.log("State restored from sessionStorage backup");
       // Dispatch an event to notify other components
       window.dispatchEvent(new CustomEvent("stateRestored", { detail: { source: "sessionStorage" } }));
     }
-    
+
     return restored;
   } catch (e) {
     console.warn("Failed to restore state from sessionStorage:", e);
@@ -109,20 +153,22 @@ function restoreStateFromSessionStorage() {
 async function verifyAndRestoreState() {
   // Check if critical localStorage keys are missing
   const criticalKeys = ["album", "currentDelay", "mode"];
-  const missingKeys = criticalKeys.filter(key => !localStorage.getItem(key));
-  
+  const missingKeys = criticalKeys.filter((key) => !localStorage.getItem(key));
+
   if (missingKeys.length > 0) {
     console.warn("Missing critical localStorage keys:", missingKeys);
     const restored = restoreStateFromSessionStorage();
-    
+
     if (restored) {
       // Re-apply restored state to UI
       await restoreFromLocalStorage();
       // Force album change event to update UI
       if (state.album) {
-        window.dispatchEvent(new CustomEvent("albumChanged", { 
-          detail: { album: state.album } 
-        }));
+        window.dispatchEvent(
+          new CustomEvent("albumChanged", {
+            detail: { album: state.album },
+          })
+        );
       }
     }
   }
@@ -131,27 +177,27 @@ async function verifyAndRestoreState() {
 // Wait for UMAP plot to be ready with polling
 async function waitForUmapReady() {
   const startTime = Date.now();
-  
+
   while (Date.now() - startTime < UMAP_READY_TIMEOUT) {
     const plotDiv = document.getElementById("umapPlot");
     if (plotDiv && plotDiv.data && plotDiv.data.length > 0) {
       return true; // UMAP is ready
     }
     // Wait for next check interval
-    await new Promise(resolve => setTimeout(resolve, UMAP_READY_CHECK_INTERVAL));
+    await new Promise((resolve) => setTimeout(resolve, UMAP_READY_CHECK_INTERVAL));
   }
-  
+
   return false; // Timeout reached
 }
 
 // Handle state restoration and UMAP marker refresh after page becomes visible
 async function handleStateRestorationAfterVisibility() {
   await verifyAndRestoreState();
-  
+
   // Refresh the current image marker in UMAP
   // Poll to ensure UMAP plot is ready
   const isReady = await waitForUmapReady();
-  
+
   if (isReady) {
     try {
       console.log("Refreshing UMAP current image marker...");
@@ -167,19 +213,19 @@ async function handleStateRestorationAfterVisibility() {
 // Handle page visibility changes
 function handleVisibilityChange() {
   visibilityChangeCount++;
-  
+
   if (document.hidden) {
     // Page is being hidden (backgrounded)
     wasHidden = true;
     console.log("Page hidden, backing up state...");
-    
+
     // Save current state to both localStorage and sessionStorage
     saveSettingsToLocalStorage();
     backupStateToSessionStorage();
   } else {
     // Page is becoming visible again
     console.log("Page visible again (change #" + visibilityChangeCount + ")");
-    
+
     if (wasHidden) {
       // Verify and restore state if needed
       setTimeout(() => handleStateRestorationAfterVisibility(), STATE_RESTORATION_DELAY);
@@ -211,7 +257,7 @@ function startPeriodicBackup() {
   if (periodicBackupIntervalId) {
     clearInterval(periodicBackupIntervalId);
   }
-  
+
   periodicBackupIntervalId = setInterval(() => {
     if (!document.hidden) {
       try {
@@ -235,14 +281,14 @@ export function stopPeriodicBackup() {
 // Initialize page visibility handling
 export function initializePageVisibilityHandling() {
   console.log("Initializing page visibility handling for iOS compatibility...");
-  
+
   // Listen for visibility changes
   document.addEventListener("visibilitychange", handleVisibilityChange);
-  
+
   // Listen for page lifecycle events (iOS specific)
   document.addEventListener("freeze", handlePageFreeze, { capture: true });
   document.addEventListener("resume", handlePageResume, { capture: true });
-  
+
   // Also listen for pagehide/pageshow as backup
   window.addEventListener("pagehide", handlePageFreeze);
   window.addEventListener("pageshow", (event) => {
@@ -252,13 +298,13 @@ export function initializePageVisibilityHandling() {
       handlePageResume();
     }
   });
-  
+
   // Start periodic backup
   startPeriodicBackup();
-  
+
   // Create initial backup
   backupStateToSessionStorage();
-  
+
   console.log("Page visibility handling initialized");
 }
 

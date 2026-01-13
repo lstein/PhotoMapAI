@@ -5,8 +5,9 @@ When album-locked is set, various file management API routes should be disabled.
 """
 
 import os
+
 import pytest
-from fixtures import client
+
 from photomap.backend.config import create_album
 
 
@@ -15,12 +16,12 @@ def setup_album_lock():
     """Setup and teardown for album lock tests."""
     # Save original state
     original_album_locked = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
-    
+
     # Set album lock
     os.environ["PHOTOMAP_ALBUM_LOCKED"] = "test_album"
-    
+
     yield
-    
+
     # Restore original state
     if original_album_locked:
         os.environ["PHOTOMAP_ALBUM_LOCKED"] = original_album_locked
@@ -33,12 +34,12 @@ def setup_multiple_album_lock():
     """Setup and teardown for multiple album lock tests."""
     # Save original state
     original_album_locked = os.environ.get("PHOTOMAP_ALBUM_LOCKED")
-    
+
     # Set multiple album lock
     os.environ["PHOTOMAP_ALBUM_LOCKED"] = "test_album,another_album"
-    
+
     yield
-    
+
     # Restore original state
     if original_album_locked:
         os.environ["PHOTOMAP_ALBUM_LOCKED"] = original_album_locked
@@ -120,12 +121,12 @@ def test_routes_work_without_lock(client):
     """Test that routes work normally when album is not locked."""
     # Ensure no album lock is set
     os.environ.pop("PHOTOMAP_ALBUM_LOCKED", None)
-    
+
     # Test that /filetree/home works
     response = client.get("/filetree/home")
     assert response.status_code == 200
     assert "homePath" in response.json()
-    
+
     # Test that /filetree/directories works
     response = client.get("/filetree/directories")
     # Should return 200 or 404 depending on path, but not 403
@@ -174,16 +175,16 @@ def test_multiple_albums_access_denied_non_locked_album(client, setup_multiple_a
 def test_validate_locked_albums_exist():
     """Test that the validation logic correctly identifies invalid album keys."""
     from photomap.backend.config import get_config_manager
-    
+
     # Get the config manager with test config
     config = get_config_manager()
     available_albums = config.get_albums()
-    
+
     # Test with invalid albums - these should always be detected
     invalid_albums = ["nonexistent_album_1", "nonexistent_album_2"]
     invalid = [album for album in invalid_albums if album not in available_albums]
     assert len(invalid) == len(invalid_albums), "All nonexistent albums should be detected as invalid"
-    
+
     # Test mixed valid and invalid (if albums exist in test config)
     if available_albums:
         valid_album = list(available_albums.keys())[0]
@@ -191,7 +192,7 @@ def test_validate_locked_albums_exist():
         invalid = [album for album in mixed if album not in available_albums]
         assert len(invalid) == 1, "Should detect exactly one invalid album"
         assert invalid[0] == "nonexistent_album"
-        
+
         # Verify valid albums pass validation
         valid = [album for album in [valid_album] if album not in available_albums]
         assert len(valid) == 0, "Valid album should pass validation"

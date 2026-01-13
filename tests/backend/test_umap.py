@@ -1,7 +1,6 @@
 from pathlib import Path
 
-import pytest
-from fixtures import build_index, client, fetch_filename, new_album
+from fixtures import build_index, fetch_filename
 
 
 def test_umap_construction(client, new_album, monkeypatch):

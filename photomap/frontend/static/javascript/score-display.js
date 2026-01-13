@@ -1,6 +1,6 @@
 // score-display.js
 // This file manages the score display functionality, showing and hiding the score overlay.
-import { isColorLight } from "./utils.js"; // Utility function to check if a color is light 
+import { isColorLight } from "./utils.js"; // Utility function to check if a color is light
 
 // Star SVG icons for favorites display
 const STAR_EMPTY_SVG = `<svg class="score-star" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
@@ -16,10 +16,10 @@ export class ScoreDisplay {
     this.isBookmarked = false;
     this.onToggleBookmark = null; // Callback for toggling bookmark
     this.lastDisplayedText = ""; // Track the text portion for refresh
-    
+
     // Set up click listener for the star icon (deferred until DOM is ready)
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => this.setupStarClickHandler());
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => this.setupStarClickHandler());
     } else {
       this.setupStarClickHandler();
     }
@@ -147,7 +147,7 @@ export class ScoreDisplay {
    */
   showCluster(cluster, color, index = null, total = null) {
     if (cluster !== undefined && cluster !== null) {
-      let clusterText = (cluster === "unclustered") ? "unclustered" : `Cluster ${cluster}`;
+      const clusterText = cluster === "unclustered" ? "unclustered" : `Cluster ${cluster}`;
       let text = "";
       if (index !== null && total !== null) {
         text = `${index + 1}/${total} (${clusterText})`;

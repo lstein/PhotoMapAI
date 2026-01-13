@@ -3,8 +3,7 @@ test_app.py
 Tests for the main entry point of the Clipslide application.
 """
 import os
-import pytest
-from fixtures import client
+
 
 def test_temp_config_file():
     assert os.path.exists(os.environ["PHOTOMAP_CONFIG"])

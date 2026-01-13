@@ -35,19 +35,19 @@ export function getClusterColorFromPoints(cluster, umapPoints) {
   if (cluster === -1) {
     return UNCLUSTERED_COLOR;
   }
-  
+
   if (!umapPoints || umapPoints.length === 0) {
     return UNCLUSTERED_COLOR;
   }
-  
+
   // Get all unique clusters and find the index of the target cluster
-  const uniqueClusters = [...new Set(umapPoints.map(p => p.cluster))];
+  const uniqueClusters = [...new Set(umapPoints.map((p) => p.cluster))];
   const clusterIdx = uniqueClusters.indexOf(cluster);
-  
+
   if (clusterIdx === -1) {
     return UNCLUSTERED_COLOR;
   }
-  
+
   return CLUSTER_PALETTE[clusterIdx % CLUSTER_PALETTE.length];
 }
 
@@ -61,8 +61,8 @@ export function getClusterSize(cluster, umapPoints) {
   if (!umapPoints || umapPoints.length === 0) {
     return 0;
   }
-  
-  return umapPoints.filter(p => p.cluster === cluster).length;
+
+  return umapPoints.filter((p) => p.cluster === cluster).length;
 }
 
 /**
@@ -75,15 +75,15 @@ export function getClusterInfoForImage(globalIndex, umapPoints) {
   if (!umapPoints || umapPoints.length === 0) {
     return null;
   }
-  
-  const point = umapPoints.find(p => p.index === globalIndex);
+
+  const point = umapPoints.find((p) => p.index === globalIndex);
   if (!point) {
     return null;
   }
-  
+
   const cluster = point.cluster;
   const color = getClusterColorFromPoints(cluster, umapPoints);
   const size = getClusterSize(cluster, umapPoints);
-  
+
   return { cluster, color, size };
 }

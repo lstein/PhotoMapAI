@@ -5,8 +5,7 @@ This class is used to define the interface for formatting metadata from Invoke m
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -22,7 +21,7 @@ class InvokeMetadataABC(BaseModel, ABC):
     Abstract base class for formatting Invoke metadata.
     """
 
-    raw_metadata: Dict[str, Any] = {}
+    raw_metadata: dict[str, Any] = {}
 
     @abstractmethod
     def get_prompts(self) -> Prompts:
@@ -55,7 +54,7 @@ class InvokeMetadataABC(BaseModel, ABC):
         pass
 
     @abstractmethod
-    def get_loras(self) -> List[Lora]:
+    def get_loras(self) -> list[Lora]:
         """
         Extract Lora information from the raw metadata.
 
@@ -65,7 +64,7 @@ class InvokeMetadataABC(BaseModel, ABC):
         pass
 
     @abstractmethod
-    def get_reference_images(self) -> List[ReferenceImage]:
+    def get_reference_images(self) -> list[ReferenceImage]:
         """
         Extract reference image (IPAdapter) information from the raw metadata.
 
@@ -75,7 +74,7 @@ class InvokeMetadataABC(BaseModel, ABC):
         pass
 
     @abstractmethod
-    def get_raster_images(self) -> List[str]:
+    def get_raster_images(self) -> list[str]:
         """
         Extract raster image information from the raw metadata.
 
@@ -100,7 +99,7 @@ class InvokeMetadataABC(BaseModel, ABC):
     #     pass
 
     @abstractmethod
-    def get_control_layers(self) -> List[ControlLayer]:
+    def get_control_layers(self) -> list[ControlLayer]:
         """
         Extract control layer information from the raw metadata.
 

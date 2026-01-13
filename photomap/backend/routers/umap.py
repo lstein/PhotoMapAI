@@ -6,7 +6,6 @@ from fastapi.responses import JSONResponse
 from sklearn.cluster import DBSCAN
 
 from ..config import get_config_manager
-from ..constants import DEFAULT_ALBUM
 from .album import get_embeddings_for_album
 
 umap_router = APIRouter()
@@ -21,12 +20,12 @@ async def get_umap_data(
 ) -> JSONResponse:
     """
     Get UMAP coordinates for all images in an album.
-    
+
     Args:
         album_key: The key of the album to retrieve data for.
         cluster_eps: Epsilon parameter for DBSCAN clustering.
         cluster_min_samples: Min samples parameter for DBSCAN clustering.
-        
+
     Returns:
         JSONResponse containing a list of points with x, y, index, and cluster ID.
     """
@@ -61,7 +60,7 @@ async def get_umap_data(
             "cluster": int(cluster),
         }
         for idx, (x, y, cluster) in enumerate(
-            zip(umap_embeddings[:, 0], umap_embeddings[:, 1], labels)
+            zip(umap_embeddings[:, 0], umap_embeddings[:, 1], labels, strict=False)
         )
     ]
     return JSONResponse(points)

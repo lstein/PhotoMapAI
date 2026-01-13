@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+coverage
+.pytest_cache
+__pycache__
+*.min.js
+package-lock.json
+*.pyc

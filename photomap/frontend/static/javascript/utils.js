@@ -10,16 +10,21 @@ export function hideSpinner() {
 }
 
 export function joinPath(dir, relpath) {
-  if (dir.endsWith("/")) dir = dir.slice(0, -1);
-  if (relpath.startsWith("/")) relpath = relpath.slice(1);
+  if (dir.endsWith("/")) {
+    dir = dir.slice(0, -1);
+  }
+  if (relpath.startsWith("/")) {
+    relpath = relpath.slice(1);
+  }
   return dir + "/" + relpath;
 }
 
 export function setCheckmarkOnIcon(iconElement, show) {
   // Remove any existing checkmark
-  let checkOverlay =
-    iconElement?.parentElement?.querySelector(".checkmark-overlay");
-  if (checkOverlay) checkOverlay.remove();
+  const checkOverlay = iconElement?.parentElement?.querySelector(".checkmark-overlay");
+  if (checkOverlay) {
+    checkOverlay.remove();
+  }
 
   if (show) {
     const check = document.createElement("div");
@@ -45,12 +50,16 @@ export function setCheckmarkOnIcon(iconElement, show) {
 }
 
 export function getPercentile(arr, p) {
-  if (arr.length === 0) return 0;
+  if (arr.length === 0) {
+    return 0;
+  }
   const sorted = [...arr].sort((a, b) => a - b);
   const idx = (p / 100) * (sorted.length - 1);
   const lower = Math.floor(idx);
   const upper = Math.ceil(idx);
-  if (lower === upper) return sorted[lower];
+  if (lower === upper) {
+    return sorted[lower];
+  }
   return sorted[lower] + (sorted[upper] - sorted[lower]) * (idx - lower);
 }
 
@@ -58,7 +67,12 @@ export function isColorLight(hex) {
   // Remove hash if present
   hex = hex.replace("#", "");
   // Convert 3-digit to 6-digit
-  if (hex.length === 3) hex = hex.split("").map((x) => x + x).join("");
+  if (hex.length === 3) {
+    hex = hex
+      .split("")
+      .map((x) => x + x)
+      .join("");
+  }
   const r = parseInt(hex.substr(0, 2), 16);
   const g = parseInt(hex.substr(2, 2), 16);
   const b = parseInt(hex.substr(4, 2), 16);
@@ -71,8 +85,9 @@ export function isColorLight(hex) {
 export function debounce(fn, delay) {
   let timer = null;
   return function (...args) {
-    if (timer) clearTimeout(timer);
+    if (timer) {
+      clearTimeout(timer);
+    }
     timer = setTimeout(() => fn.apply(this, args), delay);
   };
 }
-

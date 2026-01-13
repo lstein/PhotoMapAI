@@ -5,8 +5,6 @@ Tests for the albums functionality of the PhotoMap application.
 
 from pathlib import Path
 
-from fixtures import client
-
 from photomap.backend.config import Album, create_album, get_config_manager
 
 
@@ -111,7 +109,7 @@ def test_album_routes(client):
     # Check the EPS get/set functionality
     from photomap.backend.routers.album import (
         UmapEpsSetRequest,
-    )  # delay import to avoid early initialization of config manager
+    )
 
     response = client.post(
         "/set_umap_eps", json=UmapEpsSetRequest(eps=0.50, album=album.key).model_dump()

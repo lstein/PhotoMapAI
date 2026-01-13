@@ -69,11 +69,13 @@ export class WeightSlider {
 
   setValueFromEvent(e) {
     const rect = this.bar.getBoundingClientRect();
-    let x = e.clientX - rect.left;
-    let percent = Math.min(Math.max(x / rect.width, 0), 1);
+    const x = e.clientX - rect.left;
+    const percent = Math.min(Math.max(x / rect.width, 0), 1);
     this.value = parseFloat(percent.toFixed(2));
     this.update();
-    if (this.onChange) this.onChange(this.value);
+    if (this.onChange) {
+      this.onChange(this.value);
+    }
   }
 
   update() {
@@ -84,7 +86,9 @@ export class WeightSlider {
   setValue(val) {
     this.value = Math.min(Math.max(val, 0), 1);
     this.update();
-    if (this.onChange) this.onChange(this.value);
+    if (this.onChange) {
+      this.onChange(this.value);
+    }
   }
 
   getValue() {

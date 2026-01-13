@@ -30,7 +30,9 @@ function handleTouchMove(e) {
     return;
   }
 
-  if (touchStartY === null || touchStartX === null) return;
+  if (touchStartY === null || touchStartX === null) {
+    return;
+  }
 
   const currentY = e.touches[0].clientY;
   const currentX = e.touches[0].clientX;
@@ -45,7 +47,9 @@ function handleTouchMove(e) {
 
 function handleTouchEnd(e) {
   // Handle single-finger events only
-  if (touchStartY === null || touchStartX === null) return;
+  if (touchStartY === null || touchStartX === null) {
+    return;
+  }
 
   // Ignore if this was a multi-touch event
   if (!e.changedTouches || e.changedTouches.length !== 1) {
@@ -61,10 +65,7 @@ function handleTouchEnd(e) {
   const touchDuration = Date.now() - touchStartTime;
 
   // Check if this is a tap (small movement and short duration)
-  const isTap =
-    Math.abs(deltaX) < tapThreshold &&
-    Math.abs(deltaY) < tapThreshold &&
-    touchDuration < tapTimeThreshold;
+  const isTap = Math.abs(deltaX) < tapThreshold && Math.abs(deltaY) < tapThreshold && touchDuration < tapTimeThreshold;
 
   // Check if text search panel is open
   const textSearchPanel = document.getElementById("textSearchPanel");
@@ -74,9 +75,7 @@ function handleTouchEnd(e) {
     // If panel is open, check if tap was outside it
     const tapTarget = e.target;
     const tapOutsidePanel =
-      isTap &&
-      !textSearchPanel.contains(tapTarget) &&
-      !(textSearchBtn && textSearchBtn.contains(tapTarget));
+      isTap && !textSearchPanel.contains(tapTarget) && !(textSearchBtn && textSearchBtn.contains(tapTarget));
 
     if (tapOutsidePanel) {
       e.preventDefault();
@@ -106,20 +105,18 @@ function handleTouchEnd(e) {
   // Detect fullscreen using standard and vendor-prefixed properties.
   // document.fullScreenElement is incorrect (wrong capitalization) and returns undefined,
   // which made the tap check always fail.
-  const isFullscreen =
-    !!(document.fullscreenElement ||
-      document.webkitFullscreenElement ||
-      document.mozFullScreenElement ||
-      document.msFullscreenElement);
+  const isFullscreen = !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
 
   if (isTap && isFullscreen) {
     toggleSlideshowWithIndicator();
   } else {
     // Only detect horizontal swipe (left/right) for pausing slideshow
-    if (
-      Math.abs(deltaX) > Math.abs(deltaY) &&
-      Math.abs(deltaX) > swipeThreshold
-    ) {
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
       state.single_swiper.pauseSlideshow();
     }
   }
@@ -174,7 +171,7 @@ if (slideshowBtn) {
   });
 }
 
-document.addEventListener("DOMContentLoaded", async function () {
+document.addEventListener("DOMContentLoaded", async () => {
   const swiperContainer = document.querySelector(".swiper");
   swiperContainer.addEventListener("touchstart", handleTouchStart, {
     passive: false,
