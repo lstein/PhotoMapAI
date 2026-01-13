@@ -3,6 +3,9 @@ import os
 import pytest
 import yaml
 
+# Import fixtures so they're available to all tests
+from fixtures import client, new_album  # noqa: F401
+
 
 @pytest.fixture(scope="session", autouse=True)
 def set_temp_config_env(tmp_path_factory):
