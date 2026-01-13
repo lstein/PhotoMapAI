@@ -108,24 +108,25 @@
       </button>
     </div>
   </div>
-  <!-- Spinner (always visible during loading) -->
-  <div
-    id="umapSpinner"
-    style="
-      display: none;
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 10000;
-      pointer-events: none;
-    "
-  >
-    <div class="umap-spinner"></div>
-  </div>
 
   <!-- All other content hidden until plot is ready -->
   <div id="umapContent" style="display: none">
+    <!-- Spinner (always visible during loading) -->
+    <div
+      id="umapSpinner"
+      style="
+        display: none;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10000;
+        pointer-events: none;
+      "
+    >
+      <div class="umap-spinner"></div>
+    </div>
+
     <!-- Plotly Plot -->
     <div id="umapPlot"></div>
 
