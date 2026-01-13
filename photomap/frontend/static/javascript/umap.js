@@ -238,14 +238,14 @@ export async function fetchUmapData() {
       scrollZoom: true,
     };
 
-    Plotly.newPlot("umapPlot", [allPointsTrace, currentImageTrace], layout, config).then((gd) => {
+    Plotly.newPlot("umapPlot", [allPointsTrace, currentImageTrace], layout, config).then(async (gd) => {
       document.getElementById("umapContent").style.display = "block";
       setUmapWindowSize("fullscreen");
       hideUmapSpinner();
 
       window.dispatchEvent(new CustomEvent("umapRedrawn"));
 
-      setUmapColorMode();
+      await setUmapColorMode();
       let hoverTimer = null;
       let isHovering = false;
 
@@ -410,7 +410,7 @@ export async function fetchUmapData() {
     // Dispatch event to notify that UMAP data has been loaded
     window.dispatchEvent(new CustomEvent("umapDataLoaded"));
 
-    setUmapColorMode();
+    await setUmapColorMode();
   } finally {
     hideUmapSpinner();
   }
@@ -457,7 +457,7 @@ plotDiv.addEventListener("mouseleave", () => {
 });
 
 // --- Dynamic Colorization ---
-export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
+export async function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
   if (!points.length) {
     return;
   }
@@ -467,6 +467,9 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
     return;
   }
 
+  // Yield to the browser to allow spinner to render before heavy Plotly operations
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
   if (highlight && searchResults.length > 0) {
     const searchSet = new Set(searchResults.map((r) => r.index));
 
@@ -475,7 +478,7 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
     const highlightedPoints = points.filter((p) => searchSet.has(p.index));
 
     // Update main trace with only regular points
-    Plotly.restyle(
+    await Plotly.restyle(
       "umapPlot",
       {
         x: [regularPoints.map((p) => p.x)],
@@ -508,9 +511,9 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
     };
 
     if (highlightTraceIdx === -1) {
-      Plotly.addTraces(plotDiv, [highlightTrace]);
+      await Plotly.addTraces(plotDiv, [highlightTrace]);
     } else {
-      Plotly.restyle(
+      await Plotly.restyle(
         plotDiv,
         {
           x: [highlightTrace.x],
@@ -527,13 +530,13 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
     // Ensure Current Image marker stays on top
     const markerTraceIndex = plotDiv.data.findIndex((trace) => trace.name === "Current Image");
     if (markerTraceIndex !== -1 && markerTraceIndex !== plotDiv.data.length - 1) {
-      Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
+      await Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
     }
   } else {
     // Remove highlight trace if it exists
     const highlightTraceIdx = plotDiv.data?.findIndex((t) => t.name === "HighlightedPoints");
     if (highlightTraceIdx !== -1) {
-      Plotly.deleteTraces(plotDiv, highlightTraceIdx);
+      await Plotly.deleteTraces(plotDiv, highlightTraceIdx);
     }
 
     // Restore ALL points to main trace with normal coloring
@@ -541,7 +544,7 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
     const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.2 : 0.75));
     const markerSizes = points.map(() => 5);
 
-    Plotly.restyle(
+    await Plotly.restyle(
       "umapPlot",
       {
         x: [points.map((p) => p.x)],
@@ -558,7 +561,7 @@ export function colorizeUmap({ highlight = false, searchResults = [] } = {}) {
     // Ensure Current Image marker stays on top after removing highlight
     const markerTraceIndex = plotDiv.data.findIndex((trace) => trace.name === "Current Image");
     if (markerTraceIndex !== -1 && markerTraceIndex !== plotDiv.data.length - 1) {
-      Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
+      await Plotly.moveTraces(plotDiv, markerTraceIndex, plotDiv.data.length - 1);
     }
   }
 }
@@ -569,8 +572,8 @@ window.addEventListener("stateReady", () => {
   const highlightCheckbox = document.getElementById("umapHighlightSelection");
   if (highlightCheckbox) {
     highlightCheckbox.checked = false;
-    highlightCheckbox.addEventListener("change", () => {
-      setUmapColorMode();
+    highlightCheckbox.addEventListener("change", async () => {
+      await setUmapColorMode();
     });
   }
 
@@ -661,9 +664,11 @@ function updateExitFullscreenCheckboxState() {
 }
 
 // --- Update colorization after search or cluster selection ---
-window.addEventListener("searchResultsChanged", (e) => {
+window.addEventListener("searchResultsChanged", async (e) => {
   updateUmapColorModeAvailability(e.detail.results);
-  setUmapColorMode();
+  await setUmapColorMode();
+  // Hide spinner after colorization completes
+  hideUmapSpinner();
   // deactivate fullscreen mode when search results have come in (if enabled)
   if (state.searchResults.length > 0 && isFullscreen && state.umapExitFullscreenOnSelection) {
     setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
@@ -920,8 +925,8 @@ function removeUmapThumbnail() {
   umapThumbnailDiv = null;
 }
 
-export function setUmapColorMode() {
-  colorizeUmap({
+export async function setUmapColorMode() {
+  await colorizeUmap({
     highlight: document.getElementById("umapHighlightSelection")?.checked,
     searchResults: state.searchResults,
   });
@@ -943,7 +948,7 @@ function updateUmapColorModeAvailability(searchResults = []) {
     highlightCheckbox.disabled = true;
     highlightCheckbox.parentElement.style.opacity = "0.5";
   }
-  setUmapColorMode();
+  // Note: setUmapColorMode is called by the searchResultsChanged event handler
 }
 
 // ------------- Handling Landmark Thumbnails -------------
@@ -1265,29 +1270,25 @@ async function handleClusterClick(clickedIndex) {
   // Yield to the browser to allow spinner to render before heavy computation
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  try {
-    const clickedCluster = clickedPoint.cluster;
-    const clusterColor = getClusterColor(clickedCluster);
-    let clusterIndices = points.filter((p) => p.cluster === clickedCluster).map((p) => p.index);
+  const clickedCluster = clickedPoint.cluster;
+  const clusterColor = getClusterColor(clickedCluster);
+  let clusterIndices = points.filter((p) => p.cluster === clickedCluster).map((p) => p.index);
 
-    // Remove clickedFilename from the list
-    clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
+  // Remove clickedFilename from the list
+  clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
 
-    // --- Greedy random walk order from clicked point ---
-    const sort_algorithm = clusterIndices.length > randomWalkMaxSize ? proximityClusterOrder : randomWalkClusterOrder;
-    const sortedClusterIndices = sort_algorithm([clickedIndex, ...clusterIndices], points, clickedIndex);
+  // --- Greedy random walk order from clicked point ---
+  const sort_algorithm = clusterIndices.length > randomWalkMaxSize ? proximityClusterOrder : randomWalkClusterOrder;
+  const sortedClusterIndices = sort_algorithm([clickedIndex, ...clusterIndices], points, clickedIndex);
 
-    const clusterMembers = sortedClusterIndices.map((index) => ({
-      index: index,
-      cluster: clickedCluster === -1 ? "unclustered" : clickedCluster,
-      color: clusterColor,
-    }));
+  const clusterMembers = sortedClusterIndices.map((index) => ({
+    index: index,
+    cluster: clickedCluster === -1 ? "unclustered" : clickedCluster,
+    color: clusterColor,
+  }));
 
-    setSearchResults(clusterMembers, "cluster");
-  } finally {
-    // Always hide spinner, even if there's an error
-    hideUmapSpinner();
-  }
+  setSearchResults(clusterMembers, "cluster");
+  // Note: spinner is hidden by searchResultsChanged event handler after colorization completes
 }
 
 // Handle single image selection (navigate to clicked image)
@@ -1303,21 +1304,17 @@ async function handleImageClick(clickedIndex) {
   // Yield to the browser to allow spinner to render before heavy computation
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  try {
-    // Clear any existing search selection
-    exitSearchMode();
+  // Clear any existing search selection
+  exitSearchMode();
 
-    // Navigate directly to the clicked image without entering search mode
-    slideState.navigateToIndex(clickedIndex, false);
+  // Navigate directly to the clicked image without entering search mode
+  slideState.navigateToIndex(clickedIndex, false);
 
-    // Exit fullscreen mode if enabled
-    if (isFullscreen && state.umapExitFullscreenOnSelection) {
-      setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
-    }
-  } finally {
-    // Always hide spinner, even if there's an error
-    hideUmapSpinner();
+  // Exit fullscreen mode if enabled
+  if (isFullscreen && state.umapExitFullscreenOnSelection) {
+    setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
   }
+  // Note: spinner is hidden by searchResultsChanged event handler after colorization completes
 }
 
 // -------------------- Window Management --------------------
