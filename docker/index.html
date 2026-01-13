@@ -896,11 +896,11 @@
 <p>There are two versions of PhotoMapAI available on DockerHub. The first, <code>photomapai-demo</code> is a demo version that comes prepackaged with a series of copyright-free images from <a href="https://storage.googleapis.com/openimages/web/index.html">Open Images</a>. In this version, the ability to add, remove and edit albums has been disabled, as well as the ability to set the LocationIQ API key that is used to generate map thumbnails to display photograph GPS metadata. (Because LocationIQ grants licenses for personal use, this key cannot be incorporated into a public demo.)</p>
 <p>The second image is <code>photomapai</code>. This is the full-featured version of the application, that comes without any pre-configured albums. </p>
 <p>Assuming you have [Docker](https://docker.com installed on your system, run the following command to launch the demo version:</p>
-<pre><code>docker -p 8050:8050 lstein/photomapai-demo:latest
+<pre><code>docker run -p 8050:8050 lstein/photomapai-demo:latest
 </code></pre>
 <p>This will download the latest version of PhotoMapAI from DockerHub and run it, while mapping your desktop's network port 8050 to port 8050 running inside the container. You will see some startup messages. When they finish, point your browser to http://localhost:8050. You will see the PhotoMapAI user interface.</p>
 <p>Running the full version is almost as easy:</p>
-<pre><code>docker -p 8050:8050 -v /path/to/my/pictures:/Pictures lstein/photomapai:latest
+<pre><code>docker run -p 8050:8050 -v /path/to/my/pictures:/Pictures lstein/photomapai:latest
 </code></pre>
 <p>The additional <code>-v</code> option maps a folder on your desktop machine to the <code>/Pictures</code> folder in the container. Replace <code>/path/to/my/pictures</code> with the appropriate folder path on your system. You may provide multiple <code>-v</code> options to map more directories. Once PhotoMapAI is running, point your browser to http://localhost:8050 and proceed to define an album as described in <a href="../user-guide/albums/">Managing Albums</a>.</p>
 <p>You may find earlier versions of PhotoMapAI on DockerHub. Just do <code>docker search photomapai</code> to see all the available versions.</p>

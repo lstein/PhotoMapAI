@@ -555,6 +555,48 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#limiting-the-available-albums" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limiting the Available Albums
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Limiting the Available Albums">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#single-album-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      Single Album Lock
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-album-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multiple Album Lock
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-url-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using URL Parameters
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#running-photomapai-under-https" class="md-nav__link">
     <span class="md-ellipsis">
       Running PhotoMapAI Under HTTPS
@@ -907,6 +949,48 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#limiting-the-available-albums" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limiting the Available Albums
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Limiting the Available Albums">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#single-album-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      Single Album Lock
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-album-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multiple Album Lock
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-url-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using URL Parameters
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#running-photomapai-under-https" class="md-nav__link">
     <span class="md-ellipsis">
       Running PhotoMapAI Under HTTPS
@@ -994,6 +1078,34 @@
 </code></pre>
 <p>Or you can permanently fix these environment variables by setting them in your shell's profile, e.g. <code>.bashrc</code>.</p>
 <p>On Windows systems, setting environment variables can be done through the GUI as well as on the command line. See <a href="https://phoenixnap.com/kb/windows-set-environment-variable">How to Set Environment Variables in Windows</a> for a good walkthrough.</p>
+<h2 id="limiting-the-available-albums">Limiting the Available Albums</h2>
+<p>You may wish to expose an instance of PhotoMapAI that only shows a subset of albums. To do this, run <code>start_photomap</code> with the <code>--album-locked</code> option followed by one or more album keys separated by spaces.</p>
+<h3 id="single-album-lock">Single Album Lock</h3>
+<p>To lock PhotoMapAI to a single album, provide a single album key:</p>
+<pre><code class="language-bash">start_photomap --album-locked my_album
+</code></pre>
+<p>When a single album is locked:
+- The album selection dropdown disappears from the settings dialog
+- Only the locked album is accessible
+- All album management features (adding, editing, deleting albums) are disabled
+- File system operations (browsing directories, creating folders) are disabled
+- The favorites export function is disabled</p>
+<h3 id="multiple-album-lock">Multiple Album Lock</h3>
+<p>To lock PhotoMapAI to multiple albums, provide multiple album keys separated by spaces:</p>
+<pre><code class="language-bash">start_photomap --album-locked album1 album2 album3
+</code></pre>
+<p>When multiple albums are locked:
+- The album selection dropdown appears in the settings dialog showing only the locked albums
+- Users can switch between the locked albums
+- The "Manage Albums" button remains hidden
+- All album management features remain disabled
+- File system operations remain disabled
+- The favorites export function remains disabled</p>
+<h3 id="using-url-parameters">Using URL Parameters</h3>
+<p>It may also be handy to pair this with a specific URL that starts PhotoMapAI with a specific album. The format to start with an album named "my_album" is:</p>
+<pre><code class="language-bash">http://your.photomap.host:8050?album=my_album
+</code></pre>
+<p>When using multiple locked albums, the URL parameter allows users to select which of the locked albums to view initially. If the album specified in the URL is not in the locked list, the first locked album will be used instead.</p>
 <h2 id="running-photomapai-under-https">Running PhotoMapAI Under HTTPS</h2>
 <p>By default, PhotoMapAI runs as a non-secure <code>HTTP</code> service. This generates a warning icon in some browsers, but more seriously prevents cut and paste between the PhotoMapAI tab and browser tabs and desktop applications. </p>
 <p>There are several ways to enable HTTP for PhotoMapAI:</p>
