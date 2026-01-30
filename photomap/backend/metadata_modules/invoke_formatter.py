@@ -102,7 +102,7 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     if raster_images:
         html += f"<tr><th>Raster Images</th><td>{', '.join(raster_images)}</td></tr>"
     if reference_image_table:
-        html += f"<tr><th>IPAdapters</th><td>{reference_image_table}</td></tr>"
+        html += f"<tr><th>Reference Images</th><td>{reference_image_table}</td></tr>"
     if control_layer_table:
         html += f"<tr><th>Control Layers</th><td>{control_layer_table}</td></tr>"
     html += "</table>"
