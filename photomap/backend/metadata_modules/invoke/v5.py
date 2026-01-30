@@ -1,6 +1,8 @@
 """
 Extract Invoke5 metadata from the raw metadata dictionary.
 """
+
+import itertools
 import logging
 
 from .invoke_metadata_abc import (
@@ -84,24 +86,32 @@ class Invoke5Metadata(InvokeMetadataABC):
         This is called to get the reference image when the metadata contains a ref_images field.
         """
         reference_images = self.raw_metadata.get("ref_images", [])
-        return [
-            ReferenceImage(
-                model_name=image.get("config", {})
-                .get("model", {})
-                .get("name", "Unknown Model"),
-                image_name=image.get("config", {})
-                .get("image", {})
-                .get("image_name", "")
-                or image.get("config", {})
-                .get("image", {})
-                .get("original", {})
-                .get("image", {})
-                .get("image_name", "Unknown Image"),
-                weight=image.get("config", {}).get("weight", 1.0),
+        # for some reason, ref_images can be a list of lists
+        if any(isinstance(img, list) for img in reference_images):
+            reference_images = list(itertools.chain.from_iterable(reference_images))
+
+        reference_image_list = []
+        for image in reference_images:
+            if image.get("isEnabled", False) is False:
+                continue
+            model = image.get("config", {}).get("model", {}) or {}
+            model_name = model.get("name", "N/A")
+            image_name = image.get("config", {}).get("image", {}).get(
+                "image_name", ""
+            ) or image.get("config", {}).get("image", {}).get("original", {}).get(
+                "image", {}
+            ).get(
+                "image_name", "Unknown Image"
             )
-            for image in reference_images
-            if image.get("isEnabled", False)
-        ]
+            weight = image.get("config", {}).get("weight", 1.0)
+            reference_image_list.append(
+                ReferenceImage(
+                    model_name=model_name,
+                    image_name=image_name,
+                    weight=weight,
+                )
+            )
+        return reference_image_list
 
     def _get_reference_images_from_canvas_v2(self) -> list[ReferenceImage]:
         """

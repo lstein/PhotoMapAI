@@ -12,7 +12,7 @@
   margin: 0;
   order: 1;
   pointer-events: auto;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Draggable Titlebar */
@@ -52,7 +52,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: 0.5em;
-  white-space: nowrap;
+  flex-wrap: wrap;
 }
 
 #descriptionText {
@@ -162,7 +162,7 @@
   top: 120px;
   transform: translateX(-100%);
   width: auto;
-  max-width: 60vw;
+  max-width: 50vw;
   z-index: 4001;
   transition: transform 0.4s ease, top 0.2s;
   pointer-events: auto;
