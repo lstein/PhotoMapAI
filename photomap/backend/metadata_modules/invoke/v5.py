@@ -92,7 +92,7 @@ class Invoke5Metadata(InvokeMetadataABC):
 
         reference_image_list = []
         for image in reference_images:
-            if image.get("isEnabled", False) == False:
+            if image.get("isEnabled", False) is False:
                 continue
             model = image.get("config", {}).get("model", {}) or {}
             model_name = model.get("name", "N/A")
