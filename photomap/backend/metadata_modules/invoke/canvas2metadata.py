@@ -105,6 +105,7 @@ class Ipadapter(BaseModel):
     type: str
     method: Optional[str] = None
     weight: Optional[float] = None
+    image_influence: Optional[str] = Field(None, alias="imageInfluence")
 
     class Config:
         populate_by_name = True
