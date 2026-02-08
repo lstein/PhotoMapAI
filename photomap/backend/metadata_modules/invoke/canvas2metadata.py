@@ -1,6 +1,20 @@
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
+
+from photomap.backend.metadata_modules.invoke.common_metadata_elements import (
+    ClipEmbedModel,
+    ControlAdapter,
+    Fill,
+    Lora,
+    Model,
+    Object,
+    Position,
+    ReferenceImage,
+    RegionalGuidance,
+    T5Encoder,
+    tag_reference_images,
+)
 
 
 class Clip(BaseModel):
@@ -10,63 +24,8 @@ class Clip(BaseModel):
     y: float
 
 
-class Color(BaseModel):
-    b: int
-    g: int
-    r: int
-
-
-class Fill(BaseModel):
-    color: Color
-    style: str
-
-
-class Model(BaseModel):
-    base: str
-    hash: str
-    key: str
-    name: str
-    type: str
-
-
-class ImageData(BaseModel):
-    image_type: Literal["dataURL"] = Field(default="dataURL", alias="type")
-    data_url: str = Field(alias="dataURL")
-    height: int
-    width: int
-
-    class Config:
-        populate_by_name = True
-
-
-class ImageFile(BaseModel):
-    image_type: Literal["file"] = Field(default="file", alias="type")
-    image_name: str
-    height: int
-    width: int
-
-    class Config:
-        populate_by_name = True
-
-
-ImageUnion = Annotated[
-    Union[ImageFile, ImageData],
-    Field(discriminator="image_type"),
-]
-
-
-class Object(BaseModel):
-    id: str
-    image: Optional[ImageUnion] = None
-    type: str
-
-
-class Position(BaseModel):
-    x: int | float
-    y: int | float
-
-
 class Inpaintmask(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     fill: Fill
     id: str
     is_enabled: bool = Field(alias="isEnabled")
@@ -77,11 +36,9 @@ class Inpaintmask(BaseModel):
     position: Position
     type: str
 
-    class Config:
-        populate_by_name = True
-
 
 class Rasterlayer(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     id: str
     is_enabled: bool = Field(alias="isEnabled")
     is_locked: bool = Field(alias="isLocked")
@@ -91,51 +48,10 @@ class Rasterlayer(BaseModel):
     position: Position
     type: str
 
-    class Config:
-        populate_by_name = True
 
-
-class Ipadapter(BaseModel):
-    begin_end_step_pct: Optional[List[int | float]] = Field(
-        None, alias="beginEndStepPct"
-    )
-    clip_vision_model: Optional[str] = Field(None, alias="clipVisionModel")
-    image: ImageUnion
-    model: Model
-    type: str
-    method: Optional[str] = None
-    weight: Optional[float] = None
-    image_influence: Optional[str] = Field(None, alias="imageInfluence")
-
-    class Config:
-        populate_by_name = True
-
-
-class ReferenceImage(BaseModel):
-    id: str
-    ip_adapter: Ipadapter = Field(alias="ipAdapter")
-    is_enabled: Optional[bool] = Field(None, alias="isEnabled")
-    is_locked: Optional[bool] = Field(None, alias="isLocked")
-    name: Optional[Any] = None
-    type: Optional[str] = None
-
-    class Config:
-        populate_by_name = True
-
-
-class Controladapter(BaseModel):
-    begin_end_step_pct: List[int | float] = Field(alias="beginEndStepPct")
-    control_mode: Optional[str] = Field(None, alias="controlMode")
-    model: Model
-    type: str
-    weight: float
-
-    class Config:
-        populate_by_name = True
-
-
-class Controllayer(BaseModel):
-    control_adapter: Controladapter = Field(alias="controlAdapter")
+class ControlLayer(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    control_adapter: ControlAdapter = Field(alias="controlAdapter")
     id: str
     is_enabled: bool = Field(alias="isEnabled")
     is_locked: bool = Field(alias="isLocked")
@@ -146,32 +62,11 @@ class Controllayer(BaseModel):
     type: str
     with_transparency_effect: bool = Field(alias="withTransparencyEffect")
 
-    class Config:
-        populate_by_name = True
-
-
-class RegionalGuidance(BaseModel):
-    auto_negative: bool = Field(alias="autoNegative")
-    fill: Fill
-    id: str
-    is_enabled: bool = Field(alias="isEnabled")
-    is_locked: bool = Field(alias="isLocked")
-    name: Optional[Any]
-    negative_prompt: Optional[Any] = Field(None, alias="negativePrompt")
-    objects: List[Object]
-    opacity: float
-    position: Position
-    positive_prompt: Optional[Any] = Field(None, alias="positivePrompt")
-    reference_images: List[ReferenceImage] = Field(alias="referenceImages")
-    type: str
-
-    class Config:
-        populate_by_name = True
-
 
 class CanvasV2Metadata(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     raster_layers: Optional[List[Rasterlayer]] = Field(None, alias="rasterLayers")
-    control_layers: Optional[List[Controllayer]] = Field(None, alias="controlLayers")
+    control_layers: Optional[List[ControlLayer]] = Field(None, alias="controlLayers")
     inpaint_masks: Optional[List[Inpaintmask]] = Field(None, alias="inpaintMasks")
     reference_images: Optional[List[ReferenceImage]] = Field(
         None, alias="referenceImages"
@@ -180,14 +75,55 @@ class CanvasV2Metadata(BaseModel):
         None, alias="regionalGuidance"
     )
 
-    class Config:
-        populate_by_name = True
+    @model_validator(mode="before")
+    @classmethod
+    def _preprocess_canvas_metadata(
+        cls, canvas_metadata: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Preprocess canvas metadata to add type discriminators to image objects."""
 
+        def process_image_in_dict(obj: dict[str, Any], key: str = "image") -> None:
+            """Add type discriminator to an image object if it exists."""
+            if key in obj and obj[key]:
+                tag_reference_images(obj[key])
 
-class GenerationMetadataCanvas(BaseModel):
-    metadata_version: Literal["canvas"]
-    canvas_v2_metadata: CanvasV2Metadata
-    model: Optional[Model] = None
-    negative_prompt: Optional[str] = None
-    positive_prompt: Optional[str] = None
-    seed: Optional[int] = None
+        def process_objects(objects: list[dict[str, Any]]) -> None:
+            """Process a list of objects that may contain images."""
+            for obj in objects:
+                process_image_in_dict(obj)
+
+        def process_reference_images(ref_images: list[dict[str, Any]]) -> None:
+            """Process reference images with ipAdapter."""
+            for ref_image in ref_images:
+                if "ipAdapter" in ref_image and ref_image["ipAdapter"]:
+                    process_image_in_dict(ref_image["ipAdapter"])
+
+        # Process layers with objects (rasterLayers, inpaintMasks, controlLayers)
+        for layer_key in ["rasterLayers", "inpaintMasks", "controlLayers"]:
+            if layer_key in canvas_metadata and canvas_metadata[layer_key]:
+                for layer in canvas_metadata[layer_key]:
+                    if "objects" in layer and layer["objects"]:
+                        process_objects(layer["objects"])
+
+        # Process top-level referenceImages
+        if "referenceImages" in canvas_metadata and canvas_metadata["referenceImages"]:
+            process_reference_images(canvas_metadata["referenceImages"])
+
+        # Process regionalGuidance with objects and referenceImages
+        if (
+            "regionalGuidance" in canvas_metadata
+            and canvas_metadata["regionalGuidance"]
+        ):
+            for region in canvas_metadata["regionalGuidance"]:
+                if "objects" in region and region["objects"]:
+                    process_objects(region["objects"])
+                if "referenceImages" in region and region["referenceImages"]:
+                    process_reference_images(region["referenceImages"])
+
+        return canvas_metadata
+
+    @model_serializer(mode="wrap")
+    def serialize_model(self, serializer, info):
+        """Exclude None values when serializing."""
+        data = serializer(self)
+        return {k: v for k, v in data.items() if v is not None}

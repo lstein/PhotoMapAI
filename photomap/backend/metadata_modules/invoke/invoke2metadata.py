@@ -1,6 +1,6 @@
 from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class Prompt(BaseModel):
@@ -26,6 +26,7 @@ class Image(BaseModel):
 
 
 class GenerationMetadata2(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     metadata_version: Literal[2]
     app_id: str
     app_version: str
