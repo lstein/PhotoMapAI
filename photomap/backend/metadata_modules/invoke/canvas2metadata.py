@@ -3,16 +3,12 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from photomap.backend.metadata_modules.invoke.common_metadata_elements import (
-    ClipEmbedModel,
     ControlAdapter,
     Fill,
-    Lora,
-    Model,
     Object,
     Position,
     ReferenceImage,
     RegionalGuidance,
-    T5Encoder,
     tag_reference_images,
 )
 
@@ -32,7 +28,7 @@ class Inpaintmask(BaseModel):
     is_locked: bool = Field(alias="isLocked")
     name: Optional[Any]
     objects: List[Object]
-    opacity: int
+    opacity: float
     position: Position
     type: str
 
