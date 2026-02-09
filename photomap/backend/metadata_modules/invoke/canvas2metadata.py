@@ -40,7 +40,7 @@ class Rasterlayer(BaseModel):
     is_locked: bool = Field(alias="isLocked")
     name: Optional[Any]
     objects: List[Object]
-    opacity: int
+    opacity: float
     position: Position
     type: str
 
@@ -53,7 +53,7 @@ class ControlLayer(BaseModel):
     is_locked: bool = Field(alias="isLocked")
     name: Optional[Any]
     objects: List[Object]
-    opacity: int
+    opacity: float
     position: Position
     type: str
     with_transparency_effect: bool = Field(alias="withTransparencyEffect")
