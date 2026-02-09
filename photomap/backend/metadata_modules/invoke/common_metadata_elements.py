@@ -1,7 +1,7 @@
 import sys
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 
 class Color(BaseModel):
@@ -13,10 +13,16 @@ class Color(BaseModel):
 class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
     name: str = Field(alias="model_name")
-    base: str = Field(default="unknown", alias="base_model")
+    base: Optional[str] = Field(default=None, alias="base_model")
     hash: Optional[str] = None
     key: Optional[str] = None
     type: str = Field(default="main", alias="model_type")
+
+    @model_serializer(mode="wrap")
+    def serialize_model(self, serializer, info):
+        """Exclude None values when serializing."""
+        data = serializer(self)
+        return {k: v for k, v in data.items() if v is not None}
 
 
 class T5Encoder(Model):
@@ -25,21 +31,6 @@ class T5Encoder(Model):
 
 class ClipEmbedModel(Model):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
-
-
-class ControlAdapter(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-    begin_end_step_pct: List[int | float] = Field(alias="beginEndStepPct")
-    control_mode: Optional[str] = Field(None, alias="controlMode")
-    model: Model
-    type: str
-    weight: float
-
-    @model_validator(mode="before")
-    @classmethod
-    def fixup_step_percentages(cls, json_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert begin_step_percent and end_step_percent to beginEndStepPct if they exist, and ensure the values are in a list."""
-        return fixup_step_percentages(json_data)
 
 
 class ImageData(BaseModel):
@@ -62,6 +53,30 @@ Image = Annotated[
     Union[ImageFile, ImageData],
     Field(discriminator="type"),
 ]
+
+
+class ControlAdapter(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    image: Image
+    begin_end_step_pct: List[int | float] = Field(alias="beginEndStepPct")
+    control_mode: Optional[str] = Field(None, alias="controlMode")
+    model: Model = Field(alias="control_model")
+    type: Optional[str] = Field(default=None)
+    weight: float = Field(alias="control_weight")
+
+    @model_validator(mode="before")
+    @classmethod
+    def fixup_step_percentages(cls, json_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert begin_step_percent and end_step_percent to beginEndStepPct if they exist, and ensure the values are in a list."""
+        return fixup_step_percentages(json_data)
+
+    @model_validator(mode="before")
+    @classmethod
+    def tag_reference_images(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Tag reference images with a discriminator for proper parsing."""
+        if "image" in data and isinstance(data["image"], dict):
+            tag_reference_images(data["image"])
+        return data
 
 
 class Lora(BaseModel):
