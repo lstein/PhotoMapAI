@@ -239,10 +239,25 @@ export async function fetchUmapData() {
       scrollZoom: true,
     };
 
+    const isFirstRender = !mapExists;
+    // Save current plot dimensions before Plotly.newPlot resets them to the layout defaults.
+    const umapPlotDiv = document.getElementById("umapPlot");
+    const savedPlotWidth = parseInt(umapPlotDiv.style.width, 10);
+    const savedPlotHeight = parseInt(umapPlotDiv.style.height, 10);
     Plotly.newPlot("umapPlot", [allPointsTrace, currentImageTrace], layout, config).then(async (gd) => {
       document.getElementById("umapContent").style.display = "block";
       applyUmapControlsVisibility();
-      setUmapWindowSize("fullscreen");
+      if (isFirstRender) {
+        setUmapWindowSize("fullscreen");
+      } else if (isShaded) {
+        setUmapWindowSize(lastUnshadedSize);
+      } else if (savedPlotWidth > 0 && savedPlotHeight > 0) {
+        // Recalculation: only resize the Plotly plot back to its pre-newPlot dimensions,
+        // leaving the window container size and position untouched.
+        Plotly.relayout(gd, { width: savedPlotWidth, height: savedPlotHeight });
+      } else {
+        setUmapWindowSize(lastUnshadedSize);
+      }
       hideUmapSpinner();
 
       window.dispatchEvent(new CustomEvent("umapRedrawn"));
