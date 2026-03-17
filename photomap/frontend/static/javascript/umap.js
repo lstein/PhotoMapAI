@@ -1686,6 +1686,62 @@ addButtonHandlers("umapCloseBtn", () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
 });
 
+// --- Cluster Info Modal ---
+function showClusterInfoModal() {
+  const modal = document.getElementById("umapClusterInfoModal");
+  if (!modal) return;
+
+  // Compute stats from the module-level points array
+  const eps = parseFloat(document.getElementById("umapEpsSpinner").value);
+  const clustered = points.filter((p) => p.cluster !== -1);
+  const clusterIds = [...new Set(clustered.map((p) => p.cluster))];
+  const clusterCount = clusterIds.length;
+  const unclusteredCount = points.length - clustered.length;
+
+  let largestSize = 0;
+  let smallestSize = Infinity;
+  for (const id of clusterIds) {
+    const size = points.filter((p) => p.cluster === id).length;
+    if (size > largestSize) largestSize = size;
+    if (size < smallestSize) smallestSize = size;
+  }
+  if (clusterCount === 0) {
+    largestSize = 0;
+    smallestSize = 0;
+  }
+
+  document.getElementById("umapInfoEps").textContent = isNaN(eps) ? "—" : eps.toFixed(2);
+  document.getElementById("umapInfoClusterCount").textContent =
+    clusterCount === 1 ? "1 cluster" : `${clusterCount} clusters`;
+  document.getElementById("umapInfoLargest").textContent =
+    largestSize === 1 ? "1 image" : `${largestSize} images`;
+  document.getElementById("umapInfoSmallest").textContent =
+    smallestSize === 1 ? "1 image" : `${smallestSize} images`;
+  document.getElementById("umapInfoUnclustered").textContent =
+    unclusteredCount === 1 ? "1 image" : `${unclusteredCount} images`;
+  document.getElementById("umapInfoTotal").textContent =
+    points.length === 1 ? "1 image" : `${points.length} images`;
+
+  modal.classList.add("visible");
+}
+
+function hideClusterInfoModal() {
+  const modal = document.getElementById("umapClusterInfoModal");
+  if (modal) modal.classList.remove("visible");
+}
+
+document.getElementById("umapClusterInfoBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  showClusterInfoModal();
+});
+
+document.getElementById("umapClusterInfoClose").addEventListener("click", hideClusterInfoModal);
+
+document.getElementById("umapClusterInfoModal").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) hideClusterInfoModal();
+});
+
+
 window.addEventListener("resize", () => {
   // Only resize if UMAP window is in fullscreen mode
   const win = document.getElementById("umapFloatingWindow");

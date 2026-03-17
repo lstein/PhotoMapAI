@@ -150,6 +150,7 @@
         <!-- Row 1: Cluster Strength + Click behavior (inline) -->
         <div style="display: flex; flex-direction: row; gap: 12px; align-items: center;">
           <div id="umapEpsContainer" style="display: none; padding: 0px">
+            <button id="umapClusterInfoBtn" type="button" class="umap-info-btn" title="Cluster information">i</button>
             <label for="umapEpsSpinner">Cluster Strength</label>
             <input
               type="number"
@@ -222,5 +223,41 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Cluster Info Modal -->
+<div id="umapClusterInfoModal" class="modal-overlay">
+  <div class="modal-content" style="max-width: 400px; position: relative;">
+    <button id="umapClusterInfoClose" class="modal-close" title="Close">✖</button>
+    <p style="margin: 0 0 14px 0; color: #ccc; line-height: 1.5; font-size: 0.9em;">
+      Higher cluster strength values increase the size and reduce the number of clusters.
+    </p>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+      <tr>
+        <td style="color: #888; padding: 4px 0;">Current cluster strength</td>
+        <td id="umapInfoEps" style="text-align: right; color: #faea0e; font-weight: bold;"></td>
+      </tr>
+      <tr>
+        <td style="color: #888; padding: 4px 0;">Cluster count</td>
+        <td id="umapInfoClusterCount" style="text-align: right; color: #fff;"></td>
+      </tr>
+      <tr>
+        <td style="color: #888; padding: 4px 0;">Largest cluster</td>
+        <td id="umapInfoLargest" style="text-align: right; color: #fff;"></td>
+      </tr>
+      <tr>
+        <td style="color: #888; padding: 4px 0;">Smallest cluster</td>
+        <td id="umapInfoSmallest" style="text-align: right; color: #fff;"></td>
+      </tr>
+      <tr>
+        <td style="color: #888; padding: 4px 0;">Unclustered images</td>
+        <td id="umapInfoUnclustered" style="text-align: right; color: #fff;"></td>
+      </tr>
+      <tr>
+        <td style="color: #888; padding: 4px 0; border-top: 1px solid #444;">Total images</td>
+        <td id="umapInfoTotal" style="text-align: right; color: #fff; border-top: 1px solid #444;"></td>
+      </tr>
+    </table>
   </div>
 </div>
