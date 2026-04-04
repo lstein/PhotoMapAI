@@ -16,13 +16,13 @@ jobs:
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.sh
             executable_ext: ""
             macos_app_flag: ""
-            archive_ext: ".tar.gz"
+            archive_ext: ".zip"
           - os: macos-latest
             platform: macos-x64
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.sh
             executable_ext: ""
             macos_app_flag: "--macos-app"
-            archive_ext: ".tar.gz"
+            archive_ext: ".zip"
           - os: windows-latest
             platform: windows-x64
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.ps1
@@ -161,9 +161,9 @@ jobs:
           ARCHIVE_NAME="photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$VERSION"
           cd dist
           if [ -d "${ARCHIVE_NAME}.app" ]; then
-            tar czf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}.app"
+            zip -r "${ARCHIVE_NAME}.zip" "${ARCHIVE_NAME}.app"
           else
-            tar czf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+            zip -r "${ARCHIVE_NAME}.zip" "${ARCHIVE_NAME}"
           fi
         shell: bash
 
