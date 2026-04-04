@@ -32,9 +32,17 @@ def test_ie_compatibility_header_on_api(client):
 
 def test_legacy_edge_detection_script_present(client):
     """The root page must include an inline script that detects legacy EdgeHTML
-    (Edge ≤18 / Edge 44) and shows an upgrade-instructions page before any
-    ES2020 library code runs."""
+    (Edge ≤18 / Edge 44) and redirects to the upgrade-instructions page before
+    any ES2020 library code runs."""
     response = client.get("/")
     assert "window.StyleMedia" in response.text
+    assert "/static/unsupported-browser.html" in response.text
+
+
+def test_unsupported_browser_page_served(client):
+    """The static unsupported-browser page must be served and contain the
+    upgrade link so that legacy Edge users see the instructions."""
+    response = client.get("/static/unsupported-browser.html")
+    assert response.status_code == 200
     assert "microsoft.com/edge" in response.text
 
