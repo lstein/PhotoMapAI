@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from photomap.backend.args import get_args, get_version
 from photomap.backend.config import get_config_manager
@@ -45,6 +46,23 @@ for router in [
     app.include_router(router)
 
 app.include_router(curation_router, prefix="/api/curation", tags=["curation"])
+
+
+class IECompatibilityMiddleware(BaseHTTPMiddleware):
+    """Add X-UA-Compatible header to every response.
+
+    This prevents Microsoft Edge and Internet Explorer from switching into
+    IE Compatibility Mode, which breaks Swiper v11 (SCRIPT1028) and causes
+    various HTML parsing errors (HTML1416, HTML1500).
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-UA-Compatible"] = "IE=edge"
+        return response
+
+
+app.add_middleware(IECompatibilityMiddleware)
 
 # Mount static files and templates
 static_path = get_package_resource_path("static")
