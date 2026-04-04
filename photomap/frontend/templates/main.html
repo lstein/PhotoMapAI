@@ -3,11 +3,55 @@
 
 <head>
     <title id="slideshow_title">PhotoMap</title>
-    <!-- ... (Head content remains the same) ... -->
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="icon" type="image/x-icon" href="static/icons/favicon.ico" />
+
+    <!-- Detect legacy EdgeHTML (Edge ≤18 / Edge 44) before loading any ES2020 scripts.
+         window.StyleMedia is unique to EdgeHTML and absent from Chromium-based Edge. -->
+    <script>
+        (function () {
+            var isLegacyEdge = !!window.StyleMedia;
+            if (!isLegacyEdge) {
+                try { Function("x?.y"); } catch (e) { isLegacyEdge = true; }
+            }
+            if (isLegacyEdge) {
+                document.open();
+                document.write(
+                    "<!DOCTYPE html><html><head>" +
+                    "<meta charset='UTF-8'>" +
+                    "<title>Browser not supported \u2014 PhotoMapAI</title>" +
+                    "<style>" +
+                    "body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;" +
+                    "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}" +
+                    ".box{background:#16213e;border:1px solid #0f3460;border-radius:8px;" +
+                    "padding:40px;max-width:540px;text-align:center;}" +
+                    "h1{color:#e94560;margin-top:0;}" +
+                    "p{line-height:1.6;}" +
+                    "a{color:#0f9b8e;}" +
+                    ".steps{text-align:left;margin:20px 0;padding-left:20px;}" +
+                    ".steps li{margin:8px 0;}" +
+                    "</style>" +
+                    "</head><body><div class='box'>" +
+                    "<h1>Browser not supported</h1>" +
+                    "<p>You are using <strong>Microsoft Edge (Legacy)</strong>, which does not support" +
+                    " the modern JavaScript required by PhotoMapAI.</p>" +
+                    "<p>Please upgrade to the new <strong>Microsoft Edge (Chromium)</strong>:</p>" +
+                    "<ol class='steps'>" +
+                    "<li>Visit <a href='https://www.microsoft.com/en-us/edge' target='_blank'>" +
+                    "microsoft.com/edge</a></li>" +
+                    "<li>Click <strong>Download</strong> and run the installer</li>" +
+                    "<li>After installation, open PhotoMapAI in the new Edge</li>" +
+                    "</ol>" +
+                    "<p>Chrome and Firefox are also fully supported.</p>" +
+                    "</div></body></html>"
+                );
+                document.close();
+            }
+        }());
+    </script>
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>

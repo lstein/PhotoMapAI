@@ -29,3 +29,12 @@ def test_ie_compatibility_header_on_api(client):
     response = client.get("/api/albums/")
     assert response.headers.get("x-ua-compatible") == "IE=edge"
 
+
+def test_legacy_edge_detection_script_present(client):
+    """The root page must include an inline script that detects legacy EdgeHTML
+    (Edge ≤18 / Edge 44) and shows an upgrade-instructions page before any
+    ES2020 library code runs."""
+    response = client.get("/")
+    assert "window.StyleMedia" in response.text
+    assert "microsoft.com/edge" in response.text
+
