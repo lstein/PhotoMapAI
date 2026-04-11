@@ -16,16 +16,19 @@ jobs:
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.sh
             executable_ext: ""
             macos_app_flag: ""
+            archive_ext: ".zip"
           - os: macos-latest
             platform: macos-x64
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.sh
             executable_ext: ""
             macos_app_flag: "--macos-app"
+            archive_ext: ".zip"
           - os: windows-latest
             platform: windows-x64
             build_script: ./INSTALL/pyinstaller/make_pyinstaller_image.ps1
             executable_ext: ".exe"
             macos_app_flag: ""
+            archive_ext: ".zip"
         exclude:
           - os: macos-latest
             torch_variant: cu129
@@ -151,6 +154,27 @@ jobs:
           Get-ChildItem *
         shell: pwsh
 
+      - name: Create archive (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          VERSION="${{ steps.get_version_unix.outputs.version }}"
+          ARCHIVE_NAME="photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$VERSION"
+          cd dist
+          if [ -d "${ARCHIVE_NAME}.app" ]; then
+            zip -r "${ARCHIVE_NAME}.zip" "${ARCHIVE_NAME}.app"
+          else
+            zip -r "${ARCHIVE_NAME}.zip" "${ARCHIVE_NAME}"
+          fi
+        shell: bash
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $version = "${{ steps.get_version_win.outputs.version }}"
+          $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$version"
+          Compress-Archive -Path "dist\$archiveName" -DestinationPath "dist\$archiveName.zip" -Force
+        shell: pwsh
+
       - name: Debug - List dist contents
         run: ls -la dist/
         shell: bash
@@ -165,5 +189,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}
-          path: dist/photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}*
+          path: dist/photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}${{ matrix.archive_ext }}
           retention-days: 30
