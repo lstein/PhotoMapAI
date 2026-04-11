@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, model_serializer, model_validator
 
 from photomap.backend.metadata_modules.invoke.common_metadata_elements import Model
 
@@ -18,17 +18,17 @@ class ImageVariation(BaseModel):
 class Image(BaseModel):
     cfg_scale: float
     height: int
-    hires_fix: Optional[bool] = None
-    perlin: Optional[int | float] = None
-    postprocessing: Optional[Any]
-    prompt: str | List[Prompt]
+    hires_fix: bool | None = None
+    perlin: int | float | None = None
+    postprocessing: Any | None
+    prompt: str | list[Prompt]
     sampler: str
-    seamless: Optional[bool] = None
+    seamless: bool | None = None
     seed: int
     steps: int
-    threshold: Optional[int | float] = None
+    threshold: int | float | None = None
     type: str
-    variations: Optional[List[ImageVariation]] = None
+    variations: list[ImageVariation] | None = None
     width: int
 
 
@@ -42,20 +42,20 @@ class GenerationMetadata2(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
     metadata_version: Literal[2]
     app_id: str
-    model_id: Optional[str] = None
+    model_id: str | None = None
     app_version: str
-    image: Optional[Image] = None
-    images: Optional[List[Image]] = None
+    image: Image | None = None
+    images: list[Image] | None = None
     model: str
     model_hash: str
-    model_weights: Optional[str] = None
+    model_weights: str | None = None
     # This appears in a few old images, but is not well structured.
     # We structure it a bit in the model validator.
-    model_list: Optional[List[ModelListElement]] = None
+    model_list: list[ModelListElement] | None = None
 
     @model_validator(mode="before")
     @classmethod
-    def validate_model_id(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_model_id(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Munge the model_list into a more compatible structure"""
         if "model_list" in data and isinstance(data["model_list"], dict):
             model_list = []

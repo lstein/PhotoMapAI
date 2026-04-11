@@ -1,4 +1,4 @@
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
@@ -26,8 +26,8 @@ class Inpaintmask(BaseModel):
     id: str
     is_enabled: bool = Field(alias="isEnabled")
     is_locked: bool = Field(alias="isLocked")
-    name: Optional[Any]
-    objects: List[Object]
+    name: Any | None
+    objects: list[Object]
     opacity: float
     position: Position
     type: str
@@ -38,8 +38,8 @@ class Rasterlayer(BaseModel):
     id: str
     is_enabled: bool = Field(alias="isEnabled")
     is_locked: bool = Field(alias="isLocked")
-    name: Optional[Any]
-    objects: List[Object]
+    name: Any | None
+    objects: list[Object]
     opacity: float
     position: Position
     type: str
@@ -51,8 +51,8 @@ class ControlLayer(BaseModel):
     id: str
     is_enabled: bool = Field(alias="isEnabled")
     is_locked: bool = Field(alias="isLocked")
-    name: Optional[Any]
-    objects: List[Object]
+    name: Any | None
+    objects: list[Object]
     opacity: float
     position: Position
     type: str
@@ -61,21 +61,21 @@ class ControlLayer(BaseModel):
 
 class CanvasV2Metadata(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    raster_layers: Optional[List[Rasterlayer]] = Field(None, alias="rasterLayers")
-    control_layers: Optional[List[ControlLayer]] = Field(None, alias="controlLayers")
-    inpaint_masks: Optional[List[Inpaintmask]] = Field(None, alias="inpaintMasks")
-    reference_images: Optional[List[ReferenceImage]] = Field(
+    raster_layers: list[Rasterlayer] | None = Field(None, alias="rasterLayers")
+    control_layers: list[ControlLayer] | None = Field(None, alias="controlLayers")
+    inpaint_masks: list[Inpaintmask] | None = Field(None, alias="inpaintMasks")
+    reference_images: list[ReferenceImage] | None = Field(
         None, alias="referenceImages"
     )
-    regional_guidance: Optional[List[RegionalGuidance]] = Field(
+    regional_guidance: list[RegionalGuidance] | None = Field(
         None, alias="regionalGuidance"
     )
 
     @model_validator(mode="before")
     @classmethod
     def _preprocess_canvas_metadata(
-        cls, canvas_metadata: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        cls, canvas_metadata: dict[str, Any]
+    ) -> dict[str, Any]:
         """Preprocess canvas metadata to add type discriminators to image objects."""
 
         def process_image_in_dict(obj: dict[str, Any], key: str = "image") -> None:

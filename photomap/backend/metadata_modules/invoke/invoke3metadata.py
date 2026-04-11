@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
@@ -19,76 +19,76 @@ class T2IAdapter(IPAdapter):
 class CanvasObject(BaseModel):
     kind: str
     layer: str
-    tool: Optional[str] = None
-    stroke_width: Optional[int] = Field(default=None, alias="strokeWidth")
-    x: Optional[int] = None
-    y: Optional[int] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
-    image_name: Optional[str] = Field(default=None, alias="imageName")
-    points: Optional[List[float]] = None
-    clip: Optional[Clip] = None
+    tool: str | None = None
+    stroke_width: int | None = Field(default=None, alias="strokeWidth")
+    x: int | None = None
+    y: int | None = None
+    width: int | None = None
+    height: int | None = None
+    image_name: str | None = Field(default=None, alias="imageName")
+    points: list[float] | None = None
+    clip: Clip | None = None
 
 
 class PostProcessing(BaseModel):
     type: str
-    orig_path: Optional[List[str]] = None
-    orig_hash: Optional[str] = None
-    scale: Optional[float] = None
-    strength: Optional[float] = None
+    orig_path: list[str] | None = None
+    orig_hash: str | None = None
+    scale: float | None = None
+    strength: float | None = None
 
 
 # Most fields are optional because of various glitches and exceptions in v3 metadata
 class GenerationMetadata3(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
     metadata_version: Literal[3]
-    app_version: Optional[str] = Field(default="3.X.X", alias="imported_app_version")
-    generation_mode: Optional[str] = None
-    positive_prompt: Optional[str] = None
-    positive_style_prompt: Optional[str] = None
-    negative_prompt: Optional[str] = None
-    negative_style_prompt: Optional[str] = None
-    height: Optional[int] = None
-    width: Optional[int] = None
-    rand_device: Optional[str] = None
-    scheduler: Optional[str] = None
-    seed: Optional[int] = None
-    steps: Optional[int] = None
-    strength: Optional[float] = None
-    init_image: Optional[str] = None
-    post_processing: Optional[List[PostProcessing]] = None
-    model: Optional[Model] = None
-    vae: Optional[Model] = None
-    ip_adapters: Optional[List[IPAdapter]] = Field(default=None, alias="ipAdapters")
-    t2iAdapters: Optional[List[T2IAdapter]] = None
-    loras: Optional[List[Lora]] = None
-    controlnets: Optional[List[ControlAdapter]] = None
-    cfg_rescale_multiplier: Optional[float] = None
-    cfg_scale: Optional[float] = None
-    esrgan_model: Optional[str] = None
-    clip_skip: Optional[int] = None
-    seamless_x: Optional[bool] = None
-    seamless_y: Optional[bool] = None
+    app_version: str | None = Field(default="3.X.X", alias="imported_app_version")
+    generation_mode: str | None = None
+    positive_prompt: str | None = None
+    positive_style_prompt: str | None = None
+    negative_prompt: str | None = None
+    negative_style_prompt: str | None = None
+    height: int | None = None
+    width: int | None = None
+    rand_device: str | None = None
+    scheduler: str | None = None
+    seed: int | None = None
+    steps: int | None = None
+    strength: float | None = None
+    init_image: str | None = None
+    post_processing: list[PostProcessing] | None = None
+    model: Model | None = None
+    vae: Model | None = None
+    ip_adapters: list[IPAdapter] | None = Field(default=None, alias="ipAdapters")
+    t2iAdapters: list[T2IAdapter] | None = None
+    loras: list[Lora] | None = None
+    controlnets: list[ControlAdapter] | None = None
+    cfg_rescale_multiplier: float | None = None
+    cfg_scale: float | None = None
+    esrgan_model: str | None = None
+    clip_skip: int | None = None
+    seamless_x: bool | None = None
+    seamless_y: bool | None = None
     # These fields appear in some app_version 3 images
-    refiner_model: Optional[Model] = None
-    refiner_cfg_scale: Optional[float] = None
-    refiner_steps: Optional[int] = None
-    refiner_scheduler: Optional[str] = None
-    refiner_positive_aesthetic_score: Optional[float] = Field(
+    refiner_model: Model | None = None
+    refiner_cfg_scale: float | None = None
+    refiner_steps: int | None = None
+    refiner_scheduler: str | None = None
+    refiner_positive_aesthetic_score: float | None = Field(
         default=None, alias="refiner_positive_aesthetic_store"
     )
-    refiner_negative_aesthetic_score: Optional[float] = Field(
+    refiner_negative_aesthetic_score: float | None = Field(
         default=None, alias="refiner_negative_aesthetic_store"
     )
-    refiner_start: Optional[float] = None
+    refiner_start: float | None = None
     # A few examples of these
-    hrf_enabled: Optional[bool] = None
-    hrf_method: Optional[str] = None
-    hrf_strength: Optional[float] = None
-    hrf_width: Optional[int] = None
-    hrf_height: Optional[int] = None
+    hrf_enabled: bool | None = None
+    hrf_method: str | None = None
+    hrf_strength: float | None = None
+    hrf_width: int | None = None
+    hrf_height: int | None = None
     # One example of this found!
-    canvas_objects: Optional[List[CanvasObject]] = Field(
+    canvas_objects: list[CanvasObject] | None = Field(
         default=None, alias="_canvas_objects"
     )
 

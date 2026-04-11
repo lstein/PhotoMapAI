@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
@@ -21,19 +21,19 @@ class ControlLayer(BaseModel):
     type: str
     is_enabled: bool = Field(alias="isEnabled")
     is_selected: bool = Field(alias="isSelected")
-    control_adapter: Optional[IPAdapter] = Field(default=None, alias="ipAdapter")
+    control_adapter: IPAdapter | None = Field(default=None, alias="ipAdapter")
 
 
 class ControlLayers(BaseModel):
     version: int | float
-    layers: List[ControlLayer]
+    layers: list[ControlLayer]
 
 
 class ControlNet(BaseModel):
     image: Image
     model: Model = Field(alias="control_model")
-    weight: Optional[float] = Field(alias="control_weight")
-    begin_end_step_pct: Optional[List[int | float]] = Field(
+    weight: float | None = Field(alias="control_weight")
+    begin_end_step_pct: list[int | float] | None = Field(
         None, alias="beginEndStepPct"
     )
     control_mode: str
@@ -41,7 +41,7 @@ class ControlNet(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def fixup_step_percentages(cls, json_data: Dict[str, Any]) -> Dict[str, Any]:
+    def fixup_step_percentages(cls, json_data: dict[str, Any]) -> dict[str, Any]:
         """Convert begin_step_percent and end_step_percent to beginEndStepPct if they exist, and ensure the values are in a list."""
         return fixup_step_percentages(json_data)
 
@@ -49,12 +49,12 @@ class ControlNet(BaseModel):
 class RefImageConfig(BaseModel):
     type: str
     image: Image
-    model: Optional[Model] = None
-    beginEndStepPct: Optional[List[float]] = None
-    method: Optional[str] = None
-    clipVisionModel: Optional[str] = None
-    weight: Optional[float] = None
-    image_influence: Optional[str] = Field(default=None, alias="imageInfluence")
+    model: Model | None = None
+    beginEndStepPct: list[float] | None = None
+    method: str | None = None
+    clipVisionModel: str | None = None
+    weight: float | None = None
+    image_influence: str | None = Field(default=None, alias="imageInfluence")
 
 
 class RefImage(BaseModel):
@@ -77,66 +77,106 @@ class RefImage(BaseModel):
 class GenerationMetadata5(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
     metadata_version: Literal[5]
-    app_version: Optional[str] = Field(default="5.X.X")
-    model: Optional[Model | str] = Field(default=None, alias="Model")
-    generation_mode: Optional[str] = None
-    height: Optional[int] = None
-    width: Optional[int] = None
-    positive_prompt: Optional[str] = Field(default=None, alias="Positive Prompt")
-    positive_style_prompt: Optional[str] = None
-    negative_prompt: Optional[str] = None
-    negative_style_prompt: Optional[str] = None
-    scheduler: Optional[str] = None
-    seed: Optional[int] = None
-    steps: Optional[int] = Field(default=None, alias="Steps")
-    guidance: Optional[int | float] = None
-    ref_images: Optional[List[RefImage]] = None
-    control_layers: Optional[ControlLayers] = Field(default=None)
-    loras: Optional[List[Lora]] = None
-    regions: Optional[List[RegionalGuidance]] = None
-    t5_encoder: Optional[T5Encoder] = None
-    qwen3_encoder: Optional[Model] = None
-    qwen3_source: Optional[Model] = None
-    vae: Optional[Model] = None
-    clip_embed_model: Optional[ClipEmbedModel] = None
-    dype_preset: Optional[str] = None
-    rand_device: Optional[str] = None
-    cfg_scale: Optional[float] = None
-    cfg_rescale_multiplier: Optional[float] = None
-    seamless_x: Optional[bool] = None
-    seamless_y: Optional[bool] = None
-    upscale_model: Optional[Model] = None
-    upscale_initial_image: Optional[Image] = None
-    upscale_scale: Optional[float] = None
-    creativity: Optional[float] = None
-    structure: Optional[float] = None
-    tile_size: Optional[int] = None
-    tile_overlap: Optional[int] = None
-    clip_skip: Optional[int] = None
-    canvas_v2_metadata: Optional[CanvasV2Metadata] = None
+    app_version: str | None = Field(default="5.X.X")
+    model: Model | str | None = Field(default=None, alias="Model")
+    generation_mode: str | None = None
+    height: int | None = None
+    width: int | None = None
+    positive_prompt: str | None = Field(default=None, alias="Positive Prompt")
+    positive_style_prompt: str | None = None
+    negative_prompt: str | None = None
+    negative_style_prompt: str | None = None
+    scheduler: str | None = None
+    seed: int | None = None
+    steps: int | None = Field(default=None, alias="Steps")
+    guidance: int | float | None = None
+    ref_images: list[RefImage] | None = None
+    control_layers: ControlLayers | None = Field(default=None)
+    loras: list[Lora] | None = None
+    regions: list[RegionalGuidance] | None = None
+    t5_encoder: T5Encoder | None = None
+    qwen3_encoder: Model | None = None
+    qwen3_source: Model | None = None
+    vae: Model | None = None
+    clip_embed_model: ClipEmbedModel | None = None
+    dype_preset: str | None = None
+    rand_device: str | None = None
+    cfg_scale: float | None = None
+    cfg_rescale_multiplier: float | None = None
+    seamless_x: bool | None = None
+    seamless_y: bool | None = None
+    upscale_model: Model | None = None
+    upscale_initial_image: Image | None = None
+    upscale_scale: float | None = None
+    creativity: float | None = None
+    structure: float | None = None
+    tile_size: int | None = None
+    tile_overlap: int | None = None
+    clip_skip: int | None = None
+    canvas_v2_metadata: CanvasV2Metadata | None = None
     # These fields appear in some ZiT images
-    seed_variance_strength: Optional[float] = None
-    seed_variance_enabled: Optional[bool] = Field(
+    seed_variance_strength: float | None = None
+    seed_variance_enabled: bool | None = Field(
         default=None, alias="z_image_seed_variance_enabled"
     )
-    seed_variance_randomize_percentage: Optional[int] = Field(
+    seed_variance_randomize_percentage: int | None = Field(
         default=None, alias="z_image_seed_variance_randomize_percentage"
     )
     # These fields appear in some Flux.1 images
-    dype_scale: Optional[float] = None
-    dype_exponent: Optional[float] = None
+    dype_scale: float | None = None
+    dype_exponent: float | None = None
     # These fields appear in some sdxl images
-    strength: Optional[float] = None
-    init_image: Optional[str] = None
-    hrf_enabled: Optional[bool] = None
-    hrf_method: Optional[str] = None
-    hrf_strength: Optional[float] = None
-    refiner_cfg_scale: Optional[float] = None
-    refiner_steps: Optional[int] = None
-    refiner_scheduler: Optional[str] = None
-    refiner_positive_aesthetic_score: Optional[float] = None
-    refiner_negative_aesthetic_score: Optional[float] = None
-    refiner_start: Optional[float] = None
+    strength: float | None = None
+    init_image: str | None = None
+    hrf_enabled: bool | None = None
+    hrf_method: str | None = None
+    hrf_strength: float | None = None
+    refiner_cfg_scale: float | None = None
+    refiner_steps: int | None = None
+    refiner_scheduler: str | None = None
+    refiner_positive_aesthetic_score: float | None = None
+    refiner_negative_aesthetic_score: float | None = None
+    refiner_start: float | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_ref_images(cls, data):
+        """Flatten legacy ``ref_images`` structures before validation.
+
+        Two historical quirks are handled here:
+
+        * In some versions, ``ref_images`` was serialized as a list of lists.
+          Flatten the outer wrapper to a plain list.
+        * Earlier metadata nested the image under
+          ``config.image.original.image``; collapse that down to
+          ``config.image``.
+        """
+        if not isinstance(data, dict):
+            return data
+        ref_images = data.get("ref_images")
+        if not isinstance(ref_images, list) or not ref_images:
+            return data
+
+        # Flatten list-of-lists wrapper
+        if isinstance(ref_images[0], list):
+            ref_images = ref_images[0]
+
+        # Unwrap nested ``config.image.original.image`` structures
+        for ref_image in ref_images:
+            if not isinstance(ref_image, dict):
+                continue
+            config = ref_image.get("config")
+            if not isinstance(config, dict):
+                continue
+            image_obj = config.get("image")
+            if not isinstance(image_obj, dict):
+                continue
+            original = image_obj.get("original")
+            if isinstance(original, dict) and "image" in original:
+                config["image"] = original["image"]
+
+        data["ref_images"] = ref_images
+        return data
 
     @model_validator(mode="before")
     @classmethod
@@ -172,7 +212,7 @@ class GenerationMetadata5(BaseModel):
         return data
 
     @model_validator(mode="before")
-    def fixup_controlnets(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+    def fixup_controlnets(cls, data: dict[str, Any]) -> dict[str, Any]:
         """ "
         Massage the legacy controlnet format into the new control_layers format
         """
