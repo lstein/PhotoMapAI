@@ -155,6 +155,61 @@
   padding: 6px 10px;
 }
 
+/* ===== Recall / Remix buttons (bottom of invoke metadata drawer) ===== */
+.invoke-recall-controls {
+  display: flex;
+  gap: 12px;
+  margin: 10px 0 4px 0;
+  align-items: center;
+}
+
+.invoke-recall-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #2a2a2a;
+  color: #faea0e;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.invoke-recall-btn:hover:not(:disabled) {
+  background: #3a3a3a;
+  border-color: #faea0e;
+}
+
+.invoke-recall-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.invoke-recall-btn svg {
+  flex-shrink: 0;
+}
+
+.invoke-recall-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.invoke-recall-status.success {
+  color: #4caf50;
+}
+
+.invoke-recall-status.error {
+  color: #e53935;
+}
+
 /* ===== BANNER DRAWER CONTAINER ===== */
 .banner-drawer-container {
   position: fixed;

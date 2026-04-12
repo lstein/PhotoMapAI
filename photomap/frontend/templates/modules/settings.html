@@ -171,6 +171,51 @@
     </form>
     {% endif %}
 
+    <!-- InvokeAI connection settings -->
+    {% if not album_locked %}
+    <form autocomplete="off">
+      <div class="setting-row">
+        <label for="invokeaiUrlInput">InvokeAI Backend URL:</label>
+        <input
+          type="text"
+          id="invokeaiUrlInput"
+          placeholder="e.g. http://localhost:9090"
+          autocomplete="off"
+        />
+        <small
+          style="
+            color: #666;
+            font-size: 0.85em;
+            display: block;
+            margin-top: 4px;
+            grid-column: 2 / 3;
+          "
+        >
+          Optional: URL of a running InvokeAI server. Enables the
+          <em>Recall</em> / <em>Remix</em> buttons in the metadata drawer.
+        </small>
+      </div>
+      <div class="setting-row">
+        <label for="invokeaiUsernameInput">InvokeAI Username:</label>
+        <input
+          type="text"
+          id="invokeaiUsernameInput"
+          placeholder="(for future multi-user support)"
+          autocomplete="off"
+        />
+      </div>
+      <div class="setting-row">
+        <label for="invokeaiPasswordInput">InvokeAI Password:</label>
+        <input
+          type="password"
+          id="invokeaiPasswordInput"
+          placeholder="(for future multi-user support)"
+          autocomplete="new-password"
+        />
+      </div>
+    </form>
+    {% endif %}
+
     <!-- Album selection row -->
     {% if not album_locked or multiple_locked_albums %}
     <div class="setting-row">
