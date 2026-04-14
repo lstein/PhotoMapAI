@@ -75,7 +75,7 @@ class RefImage(BaseModel):
 
 # Empirically, pretty much all fields are optional in v5!
 class GenerationMetadata5(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
     metadata_version: Literal[5]
     app_version: str | None = Field(default="5.X.X")
     model: Model | str | None = Field(default=None, alias="Model")
@@ -97,6 +97,9 @@ class GenerationMetadata5(BaseModel):
     t5_encoder: T5Encoder | None = None
     qwen3_encoder: Model | None = None
     qwen3_source: Model | None = None
+    qwen_image_component_source: Model | None = None
+    qwen_image_quantization: str | None = None
+    qwen_image_shift: int | float | None = None
     vae: Model | None = None
     clip_embed_model: ClipEmbedModel | None = None
     dype_preset: str | None = None
