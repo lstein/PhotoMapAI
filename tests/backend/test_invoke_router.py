@@ -125,9 +125,11 @@ def test_recall_proxies_payload_to_invokeai_backend(
         async def __aexit__(self, *args):
             return False
 
-        async def post(self, url, json):
+        async def post(self, url, json, **kwargs):
             captured["url"] = url
             captured["json"] = json
+            captured["params"] = kwargs.get("params")
+            captured["headers"] = kwargs.get("headers")
             return _StubResponse()
 
     monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
@@ -186,7 +188,7 @@ def test_recall_remix_omits_seed(client, clear_invokeai_config, monkeypatch):
         async def __aexit__(self, *args):
             return False
 
-        async def post(self, url, json):
+        async def post(self, url, json, **kwargs):
             captured["json"] = json
             return _StubResponse()
 
@@ -228,7 +230,7 @@ def test_recall_upstream_unreachable_returns_502(
         async def __aexit__(self, *args):
             return False
 
-        async def post(self, url, json):
+        async def post(self, url, json, **kwargs):
             raise httpx.ConnectError("connection refused")
 
     monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)

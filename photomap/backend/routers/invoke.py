@@ -9,14 +9,16 @@ Provides:
   it to the configured InvokeAI backend's ``/api/v1/recall/{queue_id}``
   endpoint.
 
-Authentication against a multi-user InvokeAI deployment is not implemented
-yet — the ``username`` / ``password`` fields are persisted for future use
-but currently unused when contacting the remote backend.
+When the configured InvokeAI backend runs in multi-user mode, the
+``username`` / ``password`` fields are used to obtain a JWT bearer token
+via ``/api/v1/auth/login``.  The token is cached in-process and
+automatically refreshed on 401.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -36,6 +38,67 @@ invoke_router = APIRouter(prefix="/invokeai", tags=["InvokeAI"])
 _HTTP_TIMEOUT = 5.0
 
 config_manager = get_config_manager()
+
+# ── InvokeAI JWT token cache ──────────────────────────────────────────
+_cached_token: str | None = None
+_token_expires_at: float = 0.0
+_token_base_url: str | None = None
+_token_username: str | None = None
+
+
+async def _get_auth_headers(base_url: str, username: str | None, password: str | None) -> dict[str, str]:
+    """Return an ``Authorization`` header dict, or empty dict for single-user mode.
+
+    Obtains (and caches) a JWT bearer token from the InvokeAI backend when
+    credentials are provided.  The cached token is reused until it expires or
+    the backend / username change.
+    """
+    global _cached_token, _token_expires_at, _token_base_url, _token_username  # noqa: PLW0603
+
+    if not username or not password:
+        return {}
+
+    # Reuse cached token if still valid for this backend+user
+    if (
+        _cached_token
+        and time.monotonic() < _token_expires_at
+        and _token_base_url == base_url
+        and _token_username == username
+    ):
+        return {"Authorization": f"Bearer {_cached_token}"}
+
+    # Obtain a fresh token
+    login_url = f"{base_url.rstrip('/')}/api/v1/auth/login"
+    try:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+            resp = await client.post(login_url, json={"email": username, "password": password})
+    except httpx.RequestError as exc:
+        logger.warning("InvokeAI auth request failed: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach InvokeAI backend for authentication: {exc}",
+        ) from exc
+
+    if resp.status_code != 200:
+        detail = resp.json().get("detail", resp.text[:200]) if resp.headers.get("content-type", "").startswith("application/json") else resp.text[:200]
+        raise HTTPException(
+            status_code=502,
+            detail=f"InvokeAI authentication failed ({resp.status_code}): {detail}",
+        )
+
+    data = resp.json()
+    _cached_token = data["token"]
+    _token_expires_at = time.monotonic() + data.get("expires_in", 86400) - 60  # refresh 60s early
+    _token_base_url = base_url
+    _token_username = username
+    return {"Authorization": f"Bearer {_cached_token}"}
+
+
+def _invalidate_token_cache() -> None:
+    """Clear the cached token so the next request re-authenticates."""
+    global _cached_token, _token_expires_at  # noqa: PLW0603
+    _cached_token = None
+    _token_expires_at = 0.0
 
 
 class InvokeAISettings(BaseModel):
@@ -80,6 +143,7 @@ async def set_invokeai_config(settings: InvokeAISettings) -> dict:
     A password of ``None`` leaves the existing stored password untouched so
     the settings panel can re-submit without clobbering what was saved.
     """
+    _invalidate_token_cache()
     existing = config_manager.get_invokeai_settings()
     password = settings.password if settings.password is not None else existing["password"]
     try:
@@ -126,7 +190,12 @@ def _build_recall_payload(raw_metadata: dict, include_seed: bool) -> dict:
 
 @invoke_router.post("/recall")
 async def recall_parameters(request: RecallRequest) -> dict:
-    """Forward a parsed recall payload to the configured InvokeAI backend."""
+    """Forward a parsed recall payload to the configured InvokeAI backend.
+
+    When the backend runs in multi-user mode and credentials are configured,
+    a JWT bearer token is obtained (and cached) automatically.  A 401 from
+    the recall endpoint triggers a single re-authentication attempt.
+    """
     settings = config_manager.get_invokeai_settings()
     base_url = settings["url"]
     if not base_url:
@@ -147,9 +216,20 @@ async def recall_parameters(request: RecallRequest) -> dict:
         )
 
     url = f"{base_url.rstrip('/')}/api/v1/recall/{request.queue_id}"
+    username = settings["username"]
+    password = settings["password"]
+
+    auth_headers = await _get_auth_headers(base_url, username, password)
+
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            response = await client.post(url, json=payload, params={"strict": "true"})
+            response = await client.post(url, json=payload, params={"strict": "true"}, headers=auth_headers)
+
+            # Retry once on 401 with a fresh token
+            if response.status_code == 401 and username and password:
+                _invalidate_token_cache()
+                auth_headers = await _get_auth_headers(base_url, username, password)
+                response = await client.post(url, json=payload, params={"strict": "true"}, headers=auth_headers)
     except httpx.RequestError as exc:
         logger.warning("InvokeAI recall request failed: %s", exc)
         raise HTTPException(
