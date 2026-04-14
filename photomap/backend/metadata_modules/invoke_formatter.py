@@ -37,8 +37,54 @@ _COPY_SVG = (
     "</svg></span>"
 )
 
+# Asterisk icon for the recall button — matches InvokeAI's own recall iconography.
+_RECALL_SVG = (
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" '
+    'aria-hidden="true">'
+    '<path d="M12 2a1 1 0 0 1 1 1v6.382l5.536-2.77a1 1 0 0 1 .894 1.789L13.894 '
+    '11.17l5.536 2.77a1 1 0 1 1-.894 1.789L13 12.96v6.042a1 1 0 1 1-2 0v-6.042'
+    'l-5.536 2.77a1 1 0 0 1-.894-1.789l5.536-2.77-5.536-2.768a1 1 0 0 1 .894'
+    '-1.789L11 9.382V3a1 1 0 0 1 1-1z"/>'
+    "</svg>"
+)
 
-def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSummary:
+# Two circling arrows — a "refresh / remix" icon matching the reference
+# screenshot.
+_REMIX_SVG = (
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" '
+    'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" '
+    'stroke-linejoin="round" aria-hidden="true">'
+    '<polyline points="20 4 20 9 15 9"/>'
+    '<path d="M20 9A8 8 0 0 0 5.6 6.6"/>'
+    '<polyline points="4 20 4 15 9 15"/>'
+    '<path d="M4 15a8 8 0 0 0 14.4 2.4"/>'
+    "</svg>"
+)
+
+
+def _recall_buttons_html() -> str:
+    """Render the recall / remix button group shown at the bottom of the drawer."""
+    return (
+        '<div class="invoke-recall-controls" data-invoke-recall="1">'
+        '<button type="button" class="invoke-recall-btn" data-recall-mode="recall" '
+        'title="Recall parameters (including seed) to InvokeAI">'
+        f'{_RECALL_SVG}<span class="invoke-recall-label">Recall</span>'
+        '<span class="invoke-recall-status" aria-live="polite"></span>'
+        "</button>"
+        '<button type="button" class="invoke-recall-btn" data-recall-mode="remix" '
+        'title="Remix (recall parameters without the seed) to InvokeAI">'
+        f'{_REMIX_SVG}<span class="invoke-recall-label">Remix</span>'
+        '<span class="invoke-recall-status" aria-live="polite"></span>'
+        "</button>"
+        "</div>"
+    )
+
+
+def format_invoke_metadata(
+    slide_data: SlideSummary,
+    metadata: dict,
+    show_recall_buttons: bool = False,
+) -> SlideSummary:
     """Render InvokeAI metadata into an HTML table on ``slide_data.description``.
 
     Also populates ``slide_data.reference_images`` with the image names of any
@@ -106,7 +152,12 @@ def format_invoke_metadata(slide_data: SlideSummary, metadata: dict) -> SlideSum
     if control_layers and (ctrl_html := _tuple_table(control_layers)):
         rows.append(f"<tr><th>Control Layers</th><td>{ctrl_html}</td></tr>")
 
-    slide_data.description = "<table class='invoke-metadata'>" + "".join(rows) + "</table>"
+    slide_data.description = (
+        "<table class='invoke-metadata'>"
+        + "".join(rows)
+        + "</table>"
+        + (_recall_buttons_html() if show_recall_buttons else "")
+    )
     slide_data.reference_images = [
         ri.image_name for ri in reference_images if ri.image_name
     ] + [

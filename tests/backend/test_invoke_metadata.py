@@ -817,3 +817,80 @@ class TestFormatInvokeMetadataEmptyFields:
         assert tuple_table.count("<tr>") == 1
         assert "canny" in tuple_table
         assert "e.png" in tuple_table
+
+
+# ---------------------------------------------------------------------------
+# InvokeMetadataView.to_recall_payload — serialization for /api/v1/recall
+# ---------------------------------------------------------------------------
+
+
+class TestRecallPayload:
+    def test_v3_includes_core_fields_loras_controls_ip_adapters(self, v3_metadata):
+        payload = _view(v3_metadata).to_recall_payload(include_seed=True)
+        assert payload["positive_prompt"] == "a cat riding a skateboard"
+        assert payload["negative_prompt"] == "blurry, low quality"
+        assert payload["model"] == "dreamshaper"
+        assert payload["seed"] == 42
+        assert payload["loras"] == [
+            {"model_name": "detail_lora", "weight": 0.8},
+            {"model_name": "style_lora", "weight": 0.5},
+        ]
+        assert payload["ip_adapters"] == [
+            {"model_name": "ip_adapter_sd15", "image_name": "ref.png", "weight": 0.5}
+        ]
+        assert payload["control_layers"] == [
+            {
+                "model_name": "canny_sd15",
+                "image_name": "control.png",
+                "weight": 0.7,
+            }
+        ]
+
+    def test_remix_omits_seed(self, v3_metadata):
+        payload = _view(v3_metadata).to_recall_payload(include_seed=False)
+        assert "seed" not in payload
+        # Everything else still present
+        assert payload["positive_prompt"] == "a cat riding a skateboard"
+        assert payload["loras"]
+
+    def test_v5_ref_images_path(self, v5_ref_images_metadata):
+        payload = _view(v5_ref_images_metadata).to_recall_payload(include_seed=True)
+        assert payload["positive_prompt"] == "a dog in a hat"
+        assert payload["model"] == "flux-schnell"
+        assert payload["seed"] == 100
+        # disabled ref images and disabled control layers are filtered out
+        assert payload["ip_adapters"] == [
+            {"model_name": "ipa-flux", "image_name": "ref1.png", "weight": 0.7}
+        ]
+        assert payload["control_layers"] == [
+            {"model_name": "canny_flux", "image_name": "edges.png", "weight": 0.9}
+        ]
+
+    def test_empty_metadata_returns_empty_payload(self):
+        # Build a view over a near-empty v5 record so that to_recall_payload
+        # still exercises the "omit None" branches.
+        metadata = {"metadata_version": 5}
+        view = _view(metadata)
+        payload = view.to_recall_payload(include_seed=True)
+        assert payload == {}
+
+
+# ---------------------------------------------------------------------------
+# format_invoke_metadata — recall button rendering
+# ---------------------------------------------------------------------------
+
+
+class TestFormatInvokeRecallButtons:
+    def test_buttons_hidden_by_default(self, v3_metadata):
+        html = format_invoke_metadata(_slide(), v3_metadata).description
+        assert "invoke-recall-controls" not in html
+
+    def test_buttons_shown_when_enabled(self, v3_metadata):
+        html = format_invoke_metadata(
+            _slide(), v3_metadata, show_recall_buttons=True
+        ).description
+        assert 'class="invoke-recall-controls"' in html
+        assert 'data-recall-mode="recall"' in html
+        assert 'data-recall-mode="remix"' in html
+        # Asterisk SVG is present for the recall button
+        assert html.count('class="invoke-recall-btn"') == 2

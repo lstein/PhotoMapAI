@@ -22,23 +22,25 @@
         </svg>
       </button>
     </div>
-    <!-- Content Area -->
+    <!-- Scrollable Content Area -->
     <div class="filenameDescContainer">
       <div id="clusterInfoContainer" style="display: none; margin-top: 0.5em;">
         <span id="clusterInfoBadge" class="cluster-info-badge" style="cursor: pointer;"></span>
       </div>
       <div id="descriptionText"></div>
-      <div id="filepathText"></div>
-      <div id="metadataLinkContainer">
-        <a
-          id="metadataLink"
-          href="#"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="metadata-link"
-          >View Metadata (JSON)</a
-        >
-      </div>
+    </div>
+    <!-- Recall/Remix buttons (below scrollable area, always visible) -->
+    <div id="recallButtonsContainer"></div>
+    <!-- Metadata link (below buttons, always visible) -->
+    <div id="metadataLinkContainer">
+      <a
+        id="metadataLink"
+        href="#"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="metadata-link"
+        >View Metadata (JSON)</a
+      >
     </div>
   </div>
 </div>
