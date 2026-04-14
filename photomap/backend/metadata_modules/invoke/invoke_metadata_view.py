@@ -338,17 +338,21 @@ class InvokeMetadataView:
             payload["control_layers"] = control_layers
 
         ip_adapters: list[dict] = []
+        reference_images: list[dict] = []
         for ref in self.reference_images:
-            if not ref.model_name:
-                continue
-            entry = {"model_name": ref.model_name}
-            if ref.image_name:
-                entry["image_name"] = ref.image_name
-            if isinstance(ref.weight, int | float):
-                entry["weight"] = float(ref.weight)
-            ip_adapters.append(entry)
+            if ref.model_name:
+                entry: dict = {"model_name": ref.model_name}
+                if ref.image_name:
+                    entry["image_name"] = ref.image_name
+                if isinstance(ref.weight, int | float):
+                    entry["weight"] = float(ref.weight)
+                ip_adapters.append(entry)
+            elif ref.image_name:
+                reference_images.append({"image_name": ref.image_name})
         if ip_adapters:
             payload["ip_adapters"] = ip_adapters
+        if reference_images:
+            payload["reference_images"] = reference_images
 
         return payload
 
