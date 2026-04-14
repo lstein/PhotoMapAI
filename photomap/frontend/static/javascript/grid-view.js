@@ -678,8 +678,31 @@ class GridViewManager {
     const processedDescription = replaceReferenceImagesWithLinks(rawDescription, referenceImages, state.album);
 
     document.getElementById("descriptionText").innerHTML = processedDescription;
+
+    // Inject filepath as first row of the metadata table
+    const filepath = data["filepath"] || "";
+    if (filepath) {
+      const table = document.querySelector("#descriptionText .invoke-metadata");
+      if (table) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<th>Path</th><td style="word-break:break-all">${filepath}</td>`;
+        table.tBodies[0]
+          ? table.tBodies[0].insertBefore(row, table.tBodies[0].firstChild)
+          : table.insertBefore(row, table.firstChild);
+      }
+    }
+
+    // Move recall/remix buttons out of the scrollable description area
+    const recallContainer = document.getElementById("recallButtonsContainer");
+    if (recallContainer) {
+      recallContainer.innerHTML = "";
+      const recallControls = document.querySelector("#descriptionText .invoke-recall-controls");
+      if (recallControls) {
+        recallContainer.appendChild(recallControls);
+      }
+    }
+
     document.getElementById("filenameText").textContent = data["filename"] || "";
-    document.getElementById("filepathText").textContent = data["filepath"] || "";
     document.getElementById("metadataLink").href = data["metadata_url"] || "#";
 
     // Update cluster information display

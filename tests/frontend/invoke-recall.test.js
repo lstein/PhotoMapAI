@@ -178,7 +178,7 @@ describe("invoke-recall.js", () => {
 
       const status = btn.querySelector(".invoke-recall-status");
       expect(status.classList.contains("error")).toBe(true);
-      expect(status.textContent).toBe("✕");
+      expect(status.querySelector("svg")).not.toBeNull();
     });
   });
 });

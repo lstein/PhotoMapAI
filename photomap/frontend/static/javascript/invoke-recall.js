@@ -36,20 +36,43 @@ function showStatus(button, kind) {
     return;
   }
   statusEl.classList.remove("success", "error");
-  statusEl.textContent = "";
+  statusEl.innerHTML = "";
   if (kind === "success") {
     statusEl.classList.add("success");
     statusEl.textContent = "✓";
   } else if (kind === "error") {
     statusEl.classList.add("error");
-    statusEl.textContent = "✕";
+    statusEl.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">' +
+      '<path d="M3.5 2.4L7 5.9l3.5-3.5 1.1 1.1L8.1 7l3.5 3.5-1.1 1.1L7 8.1l-3.5 3.5-1.1-1.1L5.9 7 2.4 3.5z"/>' +
+      "</svg>";
   }
   if (kind) {
     setTimeout(() => {
       statusEl.classList.remove("success", "error");
-      statusEl.textContent = "";
+      statusEl.innerHTML = "";
     }, STATUS_RESET_MS);
   }
+}
+
+function showErrorMessage(button, message) {
+  const controls = button.closest(".invoke-recall-controls");
+  if (!controls) {
+    return;
+  }
+  // Remove any existing error banner
+  const existing = controls.parentElement.querySelector(".invoke-recall-error");
+  if (existing) {
+    existing.remove();
+  }
+  if (!message) {
+    return;
+  }
+  const banner = document.createElement("div");
+  banner.className = "invoke-recall-error";
+  banner.textContent = message;
+  controls.insertAdjacentElement("afterend", banner);
+  setTimeout(() => banner.remove(), STATUS_RESET_MS * 3);
 }
 
 export async function sendRecall({ albumKey, index, includeSeed }) {
@@ -115,15 +138,7 @@ async function handleRecallClick(button) {
   } catch (err) {
     console.error("InvokeAI recall failed:", err);
     showStatus(button, "error");
-    if (err && err.message) {
-      button.title = err.message;
-      setTimeout(() => {
-        button.title =
-          mode === "remix"
-            ? "Remix (recall parameters without the seed) to InvokeAI"
-            : "Recall parameters (including seed) to InvokeAI";
-      }, STATUS_RESET_MS);
-    }
+    showErrorMessage(button, err && err.message ? err.message : "Recall failed");
   } finally {
     button.disabled = false;
   }

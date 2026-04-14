@@ -43,7 +43,7 @@
   align-items: flex-start;
   justify-content: center;
   margin-bottom: 0;
-  padding: 1em 2em;
+  padding: 1em 2em 0;
 }
 
 .filenameRow {
@@ -122,7 +122,7 @@
   color: #faea0e;
   text-decoration: none;
   font-weight: bold;
-  font-size: 0.7em;
+  font-size: 1em;
 }
 
 .cluster-info-badge {
@@ -144,7 +144,7 @@
   border-collapse: collapse;
   border: 1px solid #bbb;
   width: 100%;
-  margin: 0.5em 0;
+  margin: 0.5em 0 0;
 }
 
 .invoke-metadata th,
@@ -155,11 +155,23 @@
   padding: 6px 10px;
 }
 
-/* ===== Recall / Remix buttons (bottom of invoke metadata drawer) ===== */
+/* ===== Recall / Remix buttons (pinned outside scrollable area) ===== */
+#recallButtonsContainer:empty {
+  display: none;
+}
+
+#recallButtonsContainer {
+  padding: 0 2em;
+}
+
+#metadataLinkContainer {
+  padding: 0.4em 2em 0.8em;
+}
+
 .invoke-recall-controls {
   display: flex;
   gap: 12px;
-  margin: 10px 0 4px 0;
+  margin: 2px 0 4px 0;
   align-items: center;
 }
 
@@ -175,6 +187,8 @@
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
+  height: 32px;
+  box-sizing: border-box;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
@@ -196,10 +210,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  font-size: 16px;
+  min-width: 14px;
+  height: 14px;
+  font-size: 14px;
   font-weight: bold;
+  line-height: 1;
+  overflow: hidden;
+}
+
+.invoke-recall-status:empty {
+  display: none;
 }
 
 .invoke-recall-status.success {
@@ -208,6 +228,13 @@
 
 .invoke-recall-status.error {
   color: #e53935;
+}
+
+.invoke-recall-error {
+  color: #e53935;
+  font-size: 12px;
+  margin-top: 4px;
+  word-break: break-word;
 }
 
 /* ===== BANNER DRAWER CONTAINER ===== */

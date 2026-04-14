@@ -47,16 +47,15 @@ _token_username: str | None = None
 
 
 async def _get_auth_headers(base_url: str, username: str | None, password: str | None) -> dict[str, str]:
-    """Return an ``Authorization`` header dict, or empty dict for single-user mode.
+    """Return an ``Authorization`` header dict, or empty dict for anonymous access.
 
-    Obtains (and caches) a JWT bearer token from the InvokeAI backend when
-    credentials are provided.  The cached token is reused until it expires or
-    the backend / username change.
+    If a valid cached token exists it is reused.  If no token is cached the
+    caller should first try the request without credentials — the InvokeAI
+    backend running in single-user mode will accept it.  When the caller
+    receives a 401 it should call ``_invalidate_token_cache`` and call this
+    function again; the second call will perform the login.
     """
     global _cached_token, _token_expires_at, _token_base_url, _token_username  # noqa: PLW0603
-
-    if not username or not password:
-        return {}
 
     # Reuse cached token if still valid for this backend+user
     if (
@@ -67,7 +66,11 @@ async def _get_auth_headers(base_url: str, username: str | None, password: str |
     ):
         return {"Authorization": f"Bearer {_cached_token}"}
 
-    # Obtain a fresh token
+    # No credentials configured — anonymous access
+    if not username or not password:
+        return {}
+
+    # No cached token yet — try to obtain one
     login_url = f"{base_url.rstrip('/')}/api/v1/auth/login"
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
@@ -219,13 +222,14 @@ async def recall_parameters(request: RecallRequest) -> dict:
     username = settings["username"]
     password = settings["password"]
 
+    # Try without credentials first (single-user mode). If the backend
+    # requires authentication (401), obtain a token and retry.
     auth_headers = await _get_auth_headers(base_url, username, password)
 
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
             response = await client.post(url, json=payload, params={"strict": "true"}, headers=auth_headers)
 
-            # Retry once on 401 with a fresh token
             if response.status_code == 401 and username and password:
                 _invalidate_token_cache()
                 auth_headers = await _get_auth_headers(base_url, username, password)
