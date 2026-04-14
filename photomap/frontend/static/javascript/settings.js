@@ -495,6 +495,29 @@ function setupResetDefaultsControls() {
   }
 }
 
+// Accordion section toggle
+function setupAccordions() {
+  document.querySelectorAll(".settings-accordion .accordion-header").forEach((header) => {
+    const section = header.closest(".settings-accordion").dataset.section;
+    const body = header.nextElementSibling;
+    const storageKey = `settings-accordion-${section}`;
+
+    // Restore persisted open/closed state
+    const wasOpen = localStorage.getItem(storageKey) === "true";
+    if (wasOpen) {
+      header.setAttribute("aria-expanded", "true");
+      body.classList.add("open");
+    }
+
+    header.addEventListener("click", () => {
+      const expanded = header.getAttribute("aria-expanded") === "true";
+      header.setAttribute("aria-expanded", String(!expanded));
+      body.classList.toggle("open");
+      localStorage.setItem(storageKey, String(!expanded));
+    });
+  });
+}
+
 // MAIN INITIALIZATION FUNCTION
 async function initializeSettings() {
   cacheElements();
@@ -503,6 +526,7 @@ async function initializeSettings() {
   await loadAvailableAlbums();
 
   // Setup all controls
+  setupAccordions();
   setupDelayControls();
   setupModeControls();
   setupModalControls();

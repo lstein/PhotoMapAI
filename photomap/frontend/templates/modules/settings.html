@@ -17,206 +17,7 @@
       </span>
     </div>
 
-    <div class="settings-main">
-      <!-- Left column: Slower/Faster/Interval -->
-      <div class="delay-controls">
-        <div id="delayLabel">Image Change Interval</div>
-
-        <div class="delay-control-buttons">
-          <button id="fasterBtn" title="Faster">&#9664;</button>
-          <span id="delayValue">10</span>
-          <button id="slowerBtn" title="Slower">&#9654;</button>
-        </div>
-      </div>
-
-      <!-- Right column: Mode controls -->
-      <div id="modeControls">
-        <div id="modeLabel">Image Slideshow Mode:</div>
-
-        <div id="modeRadioGroup">
-          <label
-            ><input
-              type="radio"
-              id="modeChronological"
-              name="mode"
-              value="chronological"
-              checked
-            />
-            Sequential</label
-          >
-          <label
-            ><input type="radio" id="modeRandom" name="mode" value="random" />
-            Shuffle</label
-          >
-        </div>
-      </div>
-    </div>
-
-    <!-- Settings rows -->
-    <div class="setting-row">
-      <label for="gridThumbSizeFactor">Grid thumbnail size factor:</label>
-      <div style="display:flex; align-items:center; gap:6px;">
-        <input
-          type="number"
-          id="gridThumbSizeFactor"
-          min="0.5"
-          max="2.0"
-          step="0.05"
-          value="1.0"
-          style="width: 70px"
-        />
-        <button
-          id="gridThumbSizeFactorReset"
-          class="reset-default-btn"
-          title="Reset to default (1.0)"
-          aria-label="Reset Grid thumbnail size factor to default"
-          style="background:none;border:none;padding:0;cursor:pointer;line-height:1;"
-        >
-          <span style="color:#FFC107; font-size:16px;">↩</span>
-        </button>
-      </div>
-    </div>
-
-    <div class="setting-row">
-      <label for="minSearchScore">Minimum search score:</label>
-      <div style="display:flex; align-items:center; gap:6px;">
-        <input
-          type="number"
-          id="minSearchScore"
-          min="0.0"
-          max="1.0"
-          step="0.01"
-          value="0.2"
-          style="width: 70px"
-        />
-        <button
-          id="minSearchScoreReset"
-          class="reset-default-btn"
-          title="Reset to default (0.20)"
-          aria-label="Reset Minimum search score to default"
-          style="background:none;border:none;padding:0;cursor:pointer;line-height:1;"
-        >
-          <span style="color:#FFC107; font-size:16px;">↩</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Maximum number of search results -->
-    <div class="setting-row">
-      <label for="maxSearchResults">Maximum # of search results:</label>
-      <div style="display:flex; align-items:center; gap:6px;">
-        <input
-          type="number"
-          id="maxSearchResults"
-          min="50"
-          max="500"
-          step="10"
-          value="100"
-          style="width: 70px"
-        />
-        <button
-          id="maxSearchResultsReset"
-          class="reset-default-btn"
-          title="Reset to default (100)"
-          aria-label="Reset Maximum # of search results to default"
-          style="background:none;border:none;padding:0;cursor:pointer;line-height:1;"
-        >
-          <span style="color:#FFC107; font-size:16px;">↩</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Row for control panel text visibility -->
-    <div class="setting-row">
-      <label for="showControlPanelTextCheckbox">Show Button Labels:</label>
-      <input type="checkbox" id="showControlPanelTextCheckbox" />
-    </div>
-
-    {% if not album_locked %}
-    <div class="setting-row">
-      <label for="confirmDeleteCheckbox">Confirm before deleting images:</label>
-      <input type="checkbox" id="confirmDeleteCheckbox" />
-    </div>
-    {% endif %}
-
-    <!-- Input for the LocationIQ API Key -->
-    {% if not album_locked %}
-    <form>
-      <div class="setting-row">
-        <label for="locationiqApiKeyInput">LocationIQ Map API Key:</label>
-        <input
-          type="password"
-          id="locationiqApiKeyInput"
-          placeholder="Enter your LocationIQ API key (optional)"
-          autocomplete="pk-xxxxxxxx"
-        />
-        <small
-          style="
-            color: #666;
-            font-size: 0.85em;
-            display: block;
-            margin-top: 4px;
-            grid-column: 2 / 3;
-          "
-        >
-          Optional: Enables location names and maps in EXIF data.
-          <a
-            href="https://locationiq.com"
-            target="_blank"
-            style="color: #007bff"
-            >Get a free key</a
-          >
-        </small>
-      </div>
-    </form>
-    {% endif %}
-
-    <!-- InvokeAI connection settings -->
-    {% if not album_locked %}
-    <form autocomplete="off">
-      <div class="setting-row">
-        <label for="invokeaiUrlInput">InvokeAI Backend URL:</label>
-        <input
-          type="text"
-          id="invokeaiUrlInput"
-          placeholder="e.g. http://localhost:9090"
-          autocomplete="off"
-        />
-        <small
-          style="
-            color: #666;
-            font-size: 0.85em;
-            display: block;
-            margin-top: 4px;
-            grid-column: 2 / 3;
-          "
-        >
-          Optional: URL of a running InvokeAI server. Enables the
-          <em>Recall</em> / <em>Remix</em> buttons in the metadata drawer.
-        </small>
-      </div>
-      <div class="setting-row">
-        <label for="invokeaiUsernameInput">InvokeAI Username:</label>
-        <input
-          type="text"
-          id="invokeaiUsernameInput"
-          placeholder="(for future multi-user support)"
-          autocomplete="off"
-        />
-      </div>
-      <div class="setting-row">
-        <label for="invokeaiPasswordInput">InvokeAI Password:</label>
-        <input
-          type="password"
-          id="invokeaiPasswordInput"
-          placeholder="(for future multi-user support)"
-          autocomplete="new-password"
-        />
-      </div>
-    </form>
-    {% endif %}
-
-    <!-- Album selection row -->
+    <!-- Album selection row (always visible, not collapsible) -->
     {% if not album_locked or multiple_locked_albums %}
     <div class="setting-row">
       <label for="albumSelect">Album:</label>
@@ -230,5 +31,234 @@
       </div>
     </div>
     {% endif %}
+
+    <!-- Slideshow Settings accordion -->
+    <div class="settings-accordion" data-section="slideshow">
+      <button class="accordion-header" type="button" aria-expanded="false">
+        <span class="accordion-chevron">&#9654;</span>
+        Slideshow Settings
+      </button>
+      <div class="accordion-body">
+        <div class="settings-main">
+          <!-- Left column: Slower/Faster/Interval -->
+          <div class="delay-controls">
+            <div id="delayLabel">Image Change Interval</div>
+            <div class="delay-control-buttons">
+              <button id="fasterBtn" title="Faster">&#9664;</button>
+              <span id="delayValue">10</span>
+              <button id="slowerBtn" title="Slower">&#9654;</button>
+            </div>
+          </div>
+
+          <!-- Right column: Mode controls -->
+          <div id="modeControls">
+            <div id="modeLabel">Image Slideshow Mode:</div>
+            <div id="modeRadioGroup">
+              <label
+                ><input
+                  type="radio"
+                  id="modeChronological"
+                  name="mode"
+                  value="chronological"
+                  checked
+                />
+                Sequential</label
+              >
+              <label
+                ><input type="radio" id="modeRandom" name="mode" value="random" />
+                Shuffle</label
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Appearance accordion -->
+    <div class="settings-accordion" data-section="appearance">
+      <button class="accordion-header" type="button" aria-expanded="false">
+        <span class="accordion-chevron">&#9654;</span>
+        Appearance
+      </button>
+      <div class="accordion-body">
+        <div class="setting-row">
+          <label for="gridThumbSizeFactor">Grid thumbnail size factor:</label>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <input
+              type="number"
+              id="gridThumbSizeFactor"
+              min="0.5"
+              max="2.0"
+              step="0.05"
+              value="1.0"
+              style="width: 70px"
+            />
+            <button
+              id="gridThumbSizeFactorReset"
+              class="reset-default-btn"
+              title="Reset to default (1.0)"
+              aria-label="Reset Grid thumbnail size factor to default"
+              style="background:none;border:none;padding:0;cursor:pointer;line-height:1;"
+            >
+              <span style="color:#FFC107; font-size:16px;">↩</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <label for="showControlPanelTextCheckbox">Show Button Labels:</label>
+          <input type="checkbox" id="showControlPanelTextCheckbox" />
+        </div>
+
+        {% if not album_locked %}
+        <div class="setting-row">
+          <label for="confirmDeleteCheckbox">Confirm before deleting images:</label>
+          <input type="checkbox" id="confirmDeleteCheckbox" />
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Search accordion -->
+    <div class="settings-accordion" data-section="search">
+      <button class="accordion-header" type="button" aria-expanded="false">
+        <span class="accordion-chevron">&#9654;</span>
+        Search
+      </button>
+      <div class="accordion-body">
+        <div class="setting-row">
+          <label for="minSearchScore">Minimum search score:</label>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <input
+              type="number"
+              id="minSearchScore"
+              min="0.0"
+              max="1.0"
+              step="0.01"
+              value="0.2"
+              style="width: 70px"
+            />
+            <button
+              id="minSearchScoreReset"
+              class="reset-default-btn"
+              title="Reset to default (0.20)"
+              aria-label="Reset Minimum search score to default"
+              style="background:none;border:none;padding:0;cursor:pointer;line-height:1;"
+            >
+              <span style="color:#FFC107; font-size:16px;">↩</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <label for="maxSearchResults">Maximum # of search results:</label>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <input
+              type="number"
+              id="maxSearchResults"
+              min="50"
+              max="500"
+              step="10"
+              value="100"
+              style="width: 70px"
+            />
+            <button
+              id="maxSearchResultsReset"
+              class="reset-default-btn"
+              title="Reset to default (100)"
+              aria-label="Reset Maximum # of search results to default"
+              style="background:none;border:none;padding:0;cursor:pointer;line-height:1;"
+            >
+              <span style="color:#FFC107; font-size:16px;">↩</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Integration accordion -->
+    {% if not album_locked %}
+    <div class="settings-accordion" data-section="api-integration">
+      <button class="accordion-header" type="button" aria-expanded="false">
+        <span class="accordion-chevron">&#9654;</span>
+        API Integration
+      </button>
+      <div class="accordion-body">
+        <form>
+          <div class="setting-row">
+            <label for="locationiqApiKeyInput">LocationIQ Map API Key:</label>
+            <input
+              type="password"
+              id="locationiqApiKeyInput"
+              placeholder="Enter your LocationIQ API key (optional)"
+              autocomplete="pk-xxxxxxxx"
+            />
+            <small
+              style="
+                color: #666;
+                font-size: 0.85em;
+                display: block;
+                margin-top: 4px;
+                grid-column: 2 / 3;
+              "
+            >
+              Optional: Enables location names and maps in EXIF data.
+              <a
+                href="https://locationiq.com"
+                target="_blank"
+                style="color: #007bff"
+                >Get a free key</a
+              >
+            </small>
+          </div>
+        </form>
+
+        <form autocomplete="off">
+          <div class="setting-row">
+            <label for="invokeaiUrlInput">InvokeAI Backend URL:</label>
+            <input
+              type="text"
+              id="invokeaiUrlInput"
+              placeholder="e.g. http://localhost:9090"
+              autocomplete="off"
+            />
+          </div>
+          <div class="setting-row">
+            <label for="invokeaiUsernameInput">InvokeAI Username:</label>
+            <input
+              type="text"
+              id="invokeaiUsernameInput"
+              placeholder="(optional)"
+              autocomplete="off"
+            />
+          </div>
+          <div class="setting-row">
+            <label for="invokeaiPasswordInput">InvokeAI Password:</label>
+            <input
+              type="password"
+              id="invokeaiPasswordInput"
+              placeholder="(optional)"
+              autocomplete="new-password"
+            />
+            <small
+              style="
+                color: #666;
+                font-size: 0.85em;
+                display: block;
+                margin-top: 4px;
+                grid-column: 2 / 3;
+              "
+            >
+              Optional: URL of a running InvokeAI server to enable the
+              <em>Recall</em> / <em>Remix</em> buttons in the metadata drawer.
+              Add a username and password if the InvokeAI server requires
+              authentication.
+            </small>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
   </div>
 </div>

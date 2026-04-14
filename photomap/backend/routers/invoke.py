@@ -149,7 +149,7 @@ async def recall_parameters(request: RecallRequest) -> dict:
     url = f"{base_url.rstrip('/')}/api/v1/recall/{request.queue_id}"
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, params={"strict": "true"})
     except httpx.RequestError as exc:
         logger.warning("InvokeAI recall request failed: %s", exc)
         raise HTTPException(
