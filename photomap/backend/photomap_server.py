@@ -23,6 +23,7 @@ from photomap.backend.routers.album import album_router, get_locked_albums
 from photomap.backend.routers.curation import router as curation_router
 from photomap.backend.routers.filetree import filetree_router
 from photomap.backend.routers.index import index_router
+from photomap.backend.routers.invoke import invoke_router
 from photomap.backend.routers.search import search_router
 from photomap.backend.routers.umap import umap_router
 from photomap.backend.routers.upgrade import upgrade_router
@@ -42,6 +43,7 @@ for router in [
     album_router,
     filetree_router,
     upgrade_router,
+    invoke_router,
 ]:
     app.include_router(router)
 

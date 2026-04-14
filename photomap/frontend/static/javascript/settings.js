@@ -27,6 +27,9 @@ function cacheElements() {
     slowerBtn: document.getElementById("slowerBtn"),
     fasterBtn: document.getElementById("fasterBtn"),
     locationiqApiKeyInput: document.getElementById("locationiqApiKeyInput"),
+    invokeaiUrlInput: document.getElementById("invokeaiUrlInput"),
+    invokeaiUsernameInput: document.getElementById("invokeaiUsernameInput"),
+    invokeaiPasswordInput: document.getElementById("invokeaiPasswordInput"),
     showControlPanelTextCheckbox: document.getElementById("showControlPanelTextCheckbox"),
     confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
@@ -175,6 +178,7 @@ async function populateModalFields() {
   }
 
   await loadLocationIQApiKey();
+  await loadInvokeAISettings();
 }
 
 // Event listener setup
@@ -285,6 +289,76 @@ async function saveLocationIQApiKey(apiKey) {
   } catch (error) {
     console.error("Failed to save LocationIQ API key:", error);
   }
+}
+
+async function loadInvokeAISettings() {
+  if (!elements.invokeaiUrlInput) {
+    return;
+  }
+  try {
+    const response = await fetch("invokeai/config");
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    elements.invokeaiUrlInput.value = data.url || "";
+    if (elements.invokeaiUsernameInput) {
+      elements.invokeaiUsernameInput.value = data.username || "";
+    }
+    if (elements.invokeaiPasswordInput) {
+      // Never echo passwords; indicate if one is stored.
+      elements.invokeaiPasswordInput.value = "";
+      elements.invokeaiPasswordInput.placeholder = data.has_password
+        ? "(password saved — leave blank to keep)"
+        : "(for future multi-user support)";
+    }
+  } catch (error) {
+    console.error("Failed to load InvokeAI settings:", error);
+  }
+}
+
+async function saveInvokeAISettings() {
+  if (!elements.invokeaiUrlInput) {
+    return;
+  }
+  const body = {
+    url: elements.invokeaiUrlInput.value,
+    username: elements.invokeaiUsernameInput ? elements.invokeaiUsernameInput.value : "",
+  };
+  // Only include password when the user actually typed one — otherwise the
+  // backend keeps the stored value.
+  if (elements.invokeaiPasswordInput && elements.invokeaiPasswordInput.value) {
+    body.password = elements.invokeaiPasswordInput.value;
+  }
+  try {
+    await fetch("invokeai/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    console.error("Failed to save InvokeAI settings:", error);
+  }
+}
+
+function setupInvokeAISettingsControls() {
+  if (!elements.invokeaiUrlInput) {
+    return;
+  }
+  const debounced = (fn) => {
+    let timeout = null;
+    return () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(fn, 600);
+    };
+  };
+  const debouncedSave = debounced(saveInvokeAISettings);
+  [elements.invokeaiUrlInput, elements.invokeaiUsernameInput, elements.invokeaiPasswordInput]
+    .filter(Boolean)
+    .forEach((input) => {
+      input.addEventListener("input", debouncedSave);
+      input.addEventListener("blur", saveInvokeAISettings);
+    });
 }
 
 function setupLocationIQApiKeyControl() {
@@ -421,6 +495,29 @@ function setupResetDefaultsControls() {
   }
 }
 
+// Accordion section toggle
+function setupAccordions() {
+  document.querySelectorAll(".settings-accordion .accordion-header").forEach((header) => {
+    const section = header.closest(".settings-accordion").dataset.section;
+    const body = header.nextElementSibling;
+    const storageKey = `settings-accordion-${section}`;
+
+    // Restore persisted open/closed state
+    const wasOpen = localStorage.getItem(storageKey) === "true";
+    if (wasOpen) {
+      header.setAttribute("aria-expanded", "true");
+      body.classList.add("open");
+    }
+
+    header.addEventListener("click", () => {
+      const expanded = header.getAttribute("aria-expanded") === "true";
+      header.setAttribute("aria-expanded", String(!expanded));
+      body.classList.toggle("open");
+      localStorage.setItem(storageKey, String(!expanded));
+    });
+  });
+}
+
 // MAIN INITIALIZATION FUNCTION
 async function initializeSettings() {
   cacheElements();
@@ -429,11 +526,13 @@ async function initializeSettings() {
   await loadAvailableAlbums();
 
   // Setup all controls
+  setupAccordions();
   setupDelayControls();
   setupModeControls();
   setupModalControls();
   setupAlbumSelector();
   setupLocationIQApiKeyControl();
+  setupInvokeAISettingsControls();
   setupConfirmDeleteControl();
   setupGridThumbSizeFactorControl();
   setupSearchSettingsControls();

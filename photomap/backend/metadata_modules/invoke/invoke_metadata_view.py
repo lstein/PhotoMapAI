@@ -253,6 +253,109 @@ class InvokeMetadataView:
             )
         return result
 
+    # ---- recall payload --------------------------------------------------
+
+    def to_recall_payload(self, include_seed: bool = True) -> dict:
+        """Build a payload suitable for InvokeAI's ``/api/v1/recall/{queue_id}``.
+
+        The returned dict follows the schema documented in the InvokeAI
+        ``RECALL_PARAMETERS`` docs. Fields that the current metadata does not
+        carry are simply omitted, so that the receiving InvokeAI backend only
+        overwrites values it has been given.
+
+        ``include_seed`` toggles whether the random seed is included. The UI
+        uses ``False`` for the "remix" action so that the receiving InvokeAI
+        backend re-randomizes the generation.
+        """
+        m = self.metadata
+        payload: dict = {}
+
+        positive = self.positive_prompt
+        if positive:
+            payload["positive_prompt"] = positive
+        negative = self.negative_prompt
+        if negative:
+            payload["negative_prompt"] = negative
+
+        model_name = self.model_name
+        if model_name:
+            payload["model"] = model_name
+
+        if include_seed and self.seed is not None:
+            payload["seed"] = int(self.seed)
+
+        # Numeric / scalar fields — only v3 and v5 carry these.
+        if not isinstance(m, GenerationMetadata2):
+            for attr, key in (
+                ("steps", "steps"),
+                ("cfg_scale", "cfg_scale"),
+                ("cfg_rescale_multiplier", "cfg_rescale_multiplier"),
+                ("guidance", "guidance"),
+                ("width", "width"),
+                ("height", "height"),
+                ("scheduler", "scheduler"),
+                ("clip_skip", "clip_skip"),
+                ("seamless_x", "seamless_x"),
+                ("seamless_y", "seamless_y"),
+            ):
+                value = getattr(m, attr, None)
+                if value is not None:
+                    payload[key] = value
+
+        # v5 carries refiner fields too.
+        if isinstance(m, GenerationMetadata5):
+            for attr, key in (
+                ("refiner_cfg_scale", "refiner_cfg_scale"),
+                ("refiner_steps", "refiner_steps"),
+                ("refiner_start", "refiner_denoise_start"),
+                ("refiner_positive_aesthetic_score", "refiner_positive_aesthetic_score"),
+                ("refiner_negative_aesthetic_score", "refiner_negative_aesthetic_score"),
+                ("strength", "denoise_strength"),
+            ):
+                value = getattr(m, attr, None)
+                if value is not None:
+                    payload[key] = value
+
+        loras = [
+            {"model_name": lora.model_name, "weight": float(lora.weight)}
+            for lora in self.loras
+            if lora.model_name
+        ]
+        if loras:
+            payload["loras"] = loras
+
+        control_layers: list[dict] = []
+        for layer in self.control_layers:
+            if not layer.model_name:
+                continue
+            entry: dict = {"model_name": layer.model_name}
+            if layer.image_name:
+                entry["image_name"] = layer.image_name
+            if isinstance(layer.weight, int | float):
+                entry["weight"] = float(layer.weight)
+            control_layers.append(entry)
+        if control_layers:
+            payload["control_layers"] = control_layers
+
+        ip_adapters: list[dict] = []
+        reference_images: list[dict] = []
+        for ref in self.reference_images:
+            if ref.model_name:
+                entry: dict = {"model_name": ref.model_name}
+                if ref.image_name:
+                    entry["image_name"] = ref.image_name
+                if isinstance(ref.weight, int | float):
+                    entry["weight"] = float(ref.weight)
+                ip_adapters.append(entry)
+            elif ref.image_name:
+                reference_images.append({"image_name": ref.image_name})
+        if ip_adapters:
+            payload["ip_adapters"] = ip_adapters
+        if reference_images:
+            payload["reference_images"] = reference_images
+
+        return payload
+
     # ---- raster images ---------------------------------------------------
 
     @property
