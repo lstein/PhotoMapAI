@@ -61,19 +61,37 @@ _REMIX_SVG = (
     "</svg>"
 )
 
+# Photo-frame icon — a rectangle with a small sun and a mountain inside,
+# drawn in the same stroked style as the remix icon so the three buttons
+# share a consistent visual language.
+_USE_REF_SVG = (
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" '
+    'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" '
+    'stroke-linejoin="round" aria-hidden="true">'
+    '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>'
+    '<circle cx="8.5" cy="8.5" r="1.5"/>'
+    '<polyline points="21 15 16 10 5 21"/>'
+    "</svg>"
+)
+
 
 def _recall_buttons_html() -> str:
-    """Render the recall / remix button group shown at the bottom of the drawer."""
+    """Render the recall / remix / use-ref button group shown at the bottom of the drawer."""
     return (
         '<div class="invoke-recall-controls" data-invoke-recall="1">'
+        '<button type="button" class="invoke-recall-btn" data-recall-mode="remix" '
+        'title="Remix (recall parameters without the seed) to InvokeAI">'
+        f'{_REMIX_SVG}<span class="invoke-recall-label">Remix</span>'
+        '<span class="invoke-recall-status" aria-live="polite"></span>'
+        "</button>"
         '<button type="button" class="invoke-recall-btn" data-recall-mode="recall" '
         'title="Recall parameters (including seed) to InvokeAI">'
         f'{_RECALL_SVG}<span class="invoke-recall-label">Recall</span>'
         '<span class="invoke-recall-status" aria-live="polite"></span>'
         "</button>"
-        '<button type="button" class="invoke-recall-btn" data-recall-mode="remix" '
-        'title="Remix (recall parameters without the seed) to InvokeAI">'
-        f'{_REMIX_SVG}<span class="invoke-recall-label">Remix</span>'
+        '<button type="button" class="invoke-recall-btn" data-recall-mode="use_ref" '
+        'title="Upload this image to InvokeAI and use it as a reference image">'
+        f'{_USE_REF_SVG}<span class="invoke-recall-label">Use as Ref Image</span>'
         '<span class="invoke-recall-status" aria-live="polite"></span>'
         "</button>"
         "</div>"

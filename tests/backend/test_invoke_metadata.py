@@ -892,5 +892,6 @@ class TestFormatInvokeRecallButtons:
         assert 'class="invoke-recall-controls"' in html
         assert 'data-recall-mode="recall"' in html
         assert 'data-recall-mode="remix"' in html
-        # Asterisk SVG is present for the recall button
-        assert html.count('class="invoke-recall-btn"') == 2
+        assert 'data-recall-mode="use_ref"' in html
+        assert "Use as Ref Image" in html
+        assert html.count('class="invoke-recall-btn"') == 3

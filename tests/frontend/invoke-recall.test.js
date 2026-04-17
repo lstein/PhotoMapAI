@@ -18,7 +18,8 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", (
 }));
 
 const { state } = await import("../../photomap/frontend/static/javascript/state.js");
-const { parseMetadataUrl, sendRecall } = await import("../../photomap/frontend/static/javascript/invoke-recall.js");
+const { parseMetadataUrl, sendRecall, sendUseRefImage } =
+  await import("../../photomap/frontend/static/javascript/invoke-recall.js");
 
 describe("invoke-recall.js", () => {
   describe("parseMetadataUrl", () => {
@@ -96,6 +97,34 @@ describe("invoke-recall.js", () => {
     });
   });
 
+  describe("sendUseRefImage", () => {
+    afterEach(() => {
+      delete global.fetch;
+    });
+
+    it("POSTs album_key / index to /invokeai/use_ref_image without include_seed", async () => {
+      const fetchMock = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true, uploaded_image_name: "abc.png" }),
+        })
+      );
+      global.fetch = fetchMock;
+
+      const result = await sendUseRefImage({ albumKey: "vacation", index: 3 });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, opts] = fetchMock.mock.calls[0];
+      expect(url).toBe("invokeai/use_ref_image");
+      expect(opts.method).toBe("POST");
+      expect(JSON.parse(opts.body)).toEqual({
+        album_key: "vacation",
+        index: 3,
+      });
+      expect(result.uploaded_image_name).toBe("abc.png");
+    });
+  });
+
   describe("button click handling", () => {
     beforeEach(() => {
       state.album = "fallback-album";
@@ -106,6 +135,9 @@ describe("invoke-recall.js", () => {
             <span class="invoke-recall-status"></span>
           </button>
           <button type="button" class="invoke-recall-btn" data-recall-mode="remix">
+            <span class="invoke-recall-status"></span>
+          </button>
+          <button type="button" class="invoke-recall-btn" data-recall-mode="use_ref">
             <span class="invoke-recall-status"></span>
           </button>
         </div>
@@ -161,6 +193,26 @@ describe("invoke-recall.js", () => {
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(body.include_seed).toBe(false);
+    });
+
+    it("posts to /invokeai/use_ref_image when the use_ref button is clicked", async () => {
+      const fetchMock = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        })
+      );
+      global.fetch = fetchMock;
+
+      document.querySelector('[data-recall-mode="use_ref"]').click();
+      await flushPromises();
+
+      const [url, opts] = fetchMock.mock.calls[0];
+      expect(url).toBe("invokeai/use_ref_image");
+      const body = JSON.parse(opts.body);
+      expect(body.album_key).toBe("my-album");
+      expect(body.index).toBe(5);
+      expect(body.include_seed).toBeUndefined();
     });
 
     it("shows a red X on failure", async () => {
