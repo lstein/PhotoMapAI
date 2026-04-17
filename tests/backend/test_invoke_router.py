@@ -26,6 +26,16 @@ def clear_invokeai_config():
     manager.set_invokeai_settings(url=None, username=None, password=None)
 
 
+@pytest.fixture
+def clear_token_cache():
+    """Wipe the module-level JWT cache before and after each test."""
+    from photomap.backend.routers import invoke as invoke_module
+
+    invoke_module._invalidate_token_cache()
+    yield
+    invoke_module._invalidate_token_cache()
+
+
 def test_get_config_empty(client, clear_invokeai_config):
     response = client.get("/invokeai/config")
     assert response.status_code == 200
@@ -202,6 +212,149 @@ def test_recall_remix_omits_seed(client, clear_invokeai_config, monkeypatch):
     assert "seed" not in captured["json"]
 
 
+def test_use_ref_image_requires_configured_url(client, clear_invokeai_config):
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "whatever", "index": 0},
+    )
+    assert response.status_code == 400
+    assert "not configured" in response.json()["detail"].lower()
+
+
+def test_use_ref_image_uploads_then_calls_recall_without_strict(
+    client, clear_invokeai_config, monkeypatch, tmp_path
+):
+    """Happy path — verify upload + recall ordering, payload, and no strict=true."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    # Create a real file on disk so _load_image_path + is_file() pass.
+    image_file = tmp_path / "pic.png"
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: image_file
+    )
+
+    calls: list[dict] = []
+
+    class _UploadResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"image_name": "uploaded-abc.png"}
+
+    class _RecallResponse:
+        status_code = 200
+        text = "{}"
+
+        def json(self):
+            return {"status": "success"}
+
+    class _StubClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, **kwargs):
+            call = {"url": url, "params": kwargs.get("params")}
+            if "files" in kwargs:
+                call["kind"] = "upload"
+                # Drain the file stream so httpx-style behavior is preserved.
+                kwargs["files"]["file"][1].read()
+                calls.append(call)
+                return _UploadResponse()
+            call["kind"] = "recall"
+            call["json"] = kwargs.get("json")
+            calls.append(call)
+            return _RecallResponse()
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["success"] is True
+    assert body["uploaded_image_name"] == "uploaded-abc.png"
+    assert body["sent"] == {
+        "reference_images": [{"image_name": "uploaded-abc.png"}]
+    }
+
+    # Two upstream calls, in the right order, to the right URLs.
+    assert len(calls) == 2
+    assert calls[0]["kind"] == "upload"
+    assert calls[0]["url"] == "http://localhost:9090/api/v1/images/upload"
+    assert calls[0]["params"] == {
+        "image_category": "user",
+        "is_intermediate": "false",
+    }
+    assert calls[1]["kind"] == "recall"
+    assert calls[1]["url"] == "http://localhost:9090/api/v1/recall/default"
+    # CRITICAL: no `strict=true` — sending it would reset every other
+    # parameter the user already has set up in InvokeAI.
+    assert calls[1]["params"] is None or "strict" not in (calls[1]["params"] or {})
+    assert calls[1]["json"] == {
+        "reference_images": [{"image_name": "uploaded-abc.png"}]
+    }
+
+
+def test_use_ref_image_upload_failure_returns_502(
+    client, clear_invokeai_config, monkeypatch, tmp_path
+):
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    image_file = tmp_path / "pic.png"
+    image_file.write_bytes(b"\x89PNG")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: image_file
+    )
+
+    class _FailedUpload:
+        status_code = 500
+        text = "disk full"
+
+        def json(self):
+            return {"detail": "disk full"}
+
+    class _StubClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, **kwargs):
+            if "files" in kwargs:
+                kwargs["files"]["file"][1].read()
+                return _FailedUpload()
+            raise AssertionError("Recall should not be attempted when upload fails")
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 502
+    assert "upload" in response.json()["detail"].lower()
+
+
 def test_recall_upstream_unreachable_returns_502(
     client, clear_invokeai_config, monkeypatch
 ):
@@ -241,3 +394,347 @@ def test_recall_upstream_unreachable_returns_502(
     )
     assert response.status_code == 502
     assert "Could not reach InvokeAI backend" in response.json()["detail"]
+
+
+# ── Auth fallback behavior ─────────────────────────────────────────────
+
+
+def _install_recall_stub(monkeypatch):
+    """Install a trivial metadata stub so recall requests don't need real embeddings."""
+    from photomap.backend.routers import invoke as invoke_module
+
+    raw_metadata = {
+        "metadata_version": 3,
+        "app_version": "3.5.0",
+        "positive_prompt": "x",
+        "model": {"model_name": "m", "base_model": "sd-1"},
+    }
+    monkeypatch.setattr(
+        invoke_module, "_load_raw_metadata", lambda album_key, index: raw_metadata
+    )
+
+
+class _ScriptedClient:
+    """An httpx.AsyncClient stub whose ``post`` returns the next scripted response.
+
+    Each call records the (url, headers) it saw so tests can assert on the
+    auth header progression across a retry cycle.
+    """
+
+    def __init__(self, script):
+        self._script = list(script)
+        self.calls: list[dict] = []
+
+    def __call__(self, *args, **kwargs):
+        # Invoked as ``httpx.AsyncClient(...)`` — return self so the ``async
+        # with`` context manager works.
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    async def post(self, url, **kwargs):
+        self.calls.append(
+            {
+                "url": url,
+                "headers": dict(kwargs.get("headers") or {}),
+                "json": kwargs.get("json"),
+            }
+        )
+        entry = self._script.pop(0)
+        if callable(entry):
+            entry = entry(url, kwargs)
+        return entry
+
+
+class _Resp:
+    def __init__(self, status_code=200, json_body=None, text="{}"):
+        self.status_code = status_code
+        self._json = json_body if json_body is not None else {}
+        self.text = text
+        self.headers = {"content-type": "application/json"}
+
+    def json(self):
+        return self._json
+
+
+def test_recall_first_tries_without_auth_then_logs_in_on_401(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    """Initial call is anonymous; a 401 response triggers login + retry with Bearer."""
+    client.post(
+        "/invokeai/config",
+        json={
+            "url": "http://localhost:9090",
+            "username": "alice",
+            "password": "secret",
+        },
+    )
+    _install_recall_stub(monkeypatch)
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    # Script the backend: first /recall returns 401, login returns a token,
+    # second /recall returns success. Dispatch by URL so we don't depend on
+    # call ordering between the recall client and the login client.
+    login_resp = _Resp(
+        200, json_body={"token": "abc-token", "expires_in": 3600}
+    )
+    recall_responses = [
+        _Resp(401, json_body={"detail": "Not authenticated"}, text="unauth"),
+        _Resp(200, json_body={"status": "success"}),
+    ]
+
+    def _route(url, kwargs):
+        if url.endswith("/auth/login"):
+            return login_resp
+        return recall_responses.pop(0)
+
+    script = [_route, _route, _route]  # may be invoked up to 3 times
+    stub = _ScriptedClient(script)
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/recall",
+        json={"album_key": "any", "index": 0, "include_seed": True},
+    )
+    assert response.status_code == 200, response.text
+
+    # First recall attempt must have been anonymous.
+    recall_calls = [c for c in stub.calls if c["url"].endswith("/recall/default")]
+    assert len(recall_calls) == 2
+    assert "Authorization" not in recall_calls[0]["headers"]
+    # Second recall attempt must carry the Bearer token from the login response.
+    assert recall_calls[1]["headers"].get("Authorization") == "Bearer abc-token"
+
+    # A login call must have been made between the two recall attempts.
+    login_calls = [c for c in stub.calls if c["url"].endswith("/auth/login")]
+    assert len(login_calls) == 1
+    assert login_calls[0]["json"] == {"email": "alice", "password": "secret"}
+
+
+def test_recall_sends_cached_token_on_subsequent_requests(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    """Once a token is cached, later calls should send it from the first attempt."""
+    client.post(
+        "/invokeai/config",
+        json={
+            "url": "http://localhost:9090",
+            "username": "alice",
+            "password": "secret",
+        },
+    )
+
+    # Pre-seed the token cache as though a previous login had succeeded.
+    import time as _time
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    invoke_module._cached_token = "cached-token"
+    invoke_module._token_expires_at = _time.monotonic() + 3600
+    invoke_module._token_base_url = "http://localhost:9090"
+    invoke_module._token_username = "alice"
+
+    _install_recall_stub(monkeypatch)
+
+    def _route(url, kwargs):
+        return _Resp(200, json_body={"status": "success"})
+
+    stub = _ScriptedClient([_route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/recall",
+        json={"album_key": "any", "index": 0, "include_seed": True},
+    )
+    assert response.status_code == 200
+
+    # First and only attempt carried the cached token — no login call needed.
+    assert len(stub.calls) == 1
+    assert stub.calls[0]["headers"].get("Authorization") == "Bearer cached-token"
+
+
+def test_recall_403_with_cached_token_retries_anonymously_and_forgets_token(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    """If the backend has switched to single-user mode the cached token must be
+    discarded and the request retried without auth."""
+    client.post(
+        "/invokeai/config",
+        json={
+            "url": "http://localhost:9090",
+            "username": "alice",
+            "password": "secret",
+        },
+    )
+
+    import time as _time
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    # Pre-seed a cached token.
+    invoke_module._cached_token = "stale-token"
+    invoke_module._token_expires_at = _time.monotonic() + 3600
+    invoke_module._token_base_url = "http://localhost:9090"
+    invoke_module._token_username = "alice"
+
+    _install_recall_stub(monkeypatch)
+
+    responses = [
+        _Resp(
+            403,
+            json_body={
+                "detail": "Multiuser mode is disabled. Authentication is not required."
+            },
+            text="forbidden",
+        ),
+        _Resp(200, json_body={"status": "success"}),
+    ]
+
+    def _route(url, kwargs):
+        assert url.endswith("/recall/default"), url  # no login expected
+        return responses.pop(0)
+
+    stub = _ScriptedClient([_route, _route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/recall",
+        json={"album_key": "any", "index": 0, "include_seed": True},
+    )
+    assert response.status_code == 200, response.text
+
+    # First attempt carried the stale token, second attempt was anonymous.
+    assert len(stub.calls) == 2
+    assert stub.calls[0]["headers"].get("Authorization") == "Bearer stale-token"
+    assert "Authorization" not in stub.calls[1]["headers"]
+
+    # Cache must have been cleared.
+    assert invoke_module._cached_token is None
+
+
+def test_recall_anonymous_403_is_not_retried(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    """A 403 on a call that was already anonymous just surfaces as-is — there
+    is nothing to retry without."""
+    # No credentials configured, so the first request is anonymous.
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    _install_recall_stub(monkeypatch)
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    def _route(url, kwargs):
+        return _Resp(403, json_body={"detail": "forbidden"}, text="forbidden")
+
+    stub = _ScriptedClient([_route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/recall",
+        json={"album_key": "any", "index": 0, "include_seed": True},
+    )
+    assert response.status_code == 502
+    assert len(stub.calls) == 1  # no retry, no login
+
+
+def test_use_ref_image_403_with_token_retries_anonymously(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch, tmp_path
+):
+    """The upload + recall flow must handle the same auth transition as /recall."""
+    client.post(
+        "/invokeai/config",
+        json={
+            "url": "http://localhost:9090",
+            "username": "alice",
+            "password": "secret",
+        },
+    )
+
+    import time as _time
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    invoke_module._cached_token = "stale-token"
+    invoke_module._token_expires_at = _time.monotonic() + 3600
+    invoke_module._token_base_url = "http://localhost:9090"
+    invoke_module._token_username = "alice"
+
+    image_file = tmp_path / "pic.png"
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: image_file
+    )
+
+    calls: list[dict] = []
+
+    class _ClientStub:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, **kwargs):
+            entry = {
+                "url": url,
+                "headers": dict(kwargs.get("headers") or {}),
+                "kind": "upload" if "files" in kwargs else "recall",
+                "json": kwargs.get("json"),
+            }
+            if "files" in kwargs:
+                kwargs["files"]["file"][1].read()
+            calls.append(entry)
+
+            if entry["kind"] == "upload":
+                # Upload returns 403 on the first attempt (with token), then
+                # succeeds anonymously.
+                if entry["headers"].get("Authorization"):
+                    return _Resp(
+                        403,
+                        json_body={"detail": "Multiuser mode is disabled."},
+                        text="forbidden",
+                    )
+                return _Resp(200, json_body={"image_name": "uploaded.png"})
+
+            # Recall also: 403 with token → anon success.
+            if entry["headers"].get("Authorization"):
+                return _Resp(
+                    403,
+                    json_body={"detail": "Multiuser mode is disabled."},
+                    text="forbidden",
+                )
+            return _Resp(200, json_body={"status": "success"})
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _ClientStub)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 200, response.text
+
+    upload_calls = [c for c in calls if c["kind"] == "upload"]
+    recall_calls = [c for c in calls if c["kind"] == "recall"]
+
+    # Upload retried anonymously.
+    assert len(upload_calls) == 2
+    assert upload_calls[0]["headers"].get("Authorization") == "Bearer stale-token"
+    assert "Authorization" not in upload_calls[1]["headers"]
+
+    # Recall also retried anonymously — and since the token was invalidated
+    # by the upload's 403, the very first recall attempt is already
+    # anonymous.  Either way the final recall succeeds without a token.
+    assert len(recall_calls) >= 1
+    assert "Authorization" not in recall_calls[-1]["headers"]
+
+    # Cache cleared.
+    assert invoke_module._cached_token is None

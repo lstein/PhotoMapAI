@@ -75,6 +75,21 @@ function showErrorMessage(button, message) {
   setTimeout(() => banner.remove(), STATUS_RESET_MS * 3);
 }
 
+async function _raiseForStatus(response) {
+  let message = `HTTP ${response.status}`;
+  try {
+    const body = await response.json();
+    if (body && body.detail) {
+      message = body.detail;
+    }
+  } catch {
+    // ignore JSON parse errors — fall back to the generic message
+  }
+  const err = new Error(message);
+  err.status = response.status;
+  throw err;
+}
+
 export async function sendRecall({ albumKey, index, includeSeed }) {
   const response = await fetch("invokeai/recall", {
     method: "POST",
@@ -86,18 +101,22 @@ export async function sendRecall({ albumKey, index, includeSeed }) {
     }),
   });
   if (!response.ok) {
-    let message = `HTTP ${response.status}`;
-    try {
-      const body = await response.json();
-      if (body && body.detail) {
-        message = body.detail;
-      }
-    } catch {
-      // ignore JSON parse errors — fall back to the generic message
-    }
-    const err = new Error(message);
-    err.status = response.status;
-    throw err;
+    await _raiseForStatus(response);
+  }
+  return response.json();
+}
+
+export async function sendUseRefImage({ albumKey, index }) {
+  const response = await fetch("invokeai/use_ref_image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      album_key: albumKey,
+      index,
+    }),
+  });
+  if (!response.ok) {
+    await _raiseForStatus(response);
   }
   return response.json();
 }
@@ -129,16 +148,21 @@ async function handleRecallClick(button) {
 
   button.disabled = true;
   try {
-    await sendRecall({
-      albumKey,
-      index: parsed.index,
-      includeSeed: mode !== "remix",
-    });
+    if (mode === "use_ref") {
+      await sendUseRefImage({ albumKey, index: parsed.index });
+    } else {
+      await sendRecall({
+        albumKey,
+        index: parsed.index,
+        includeSeed: mode !== "remix",
+      });
+    }
     showStatus(button, "success");
   } catch (err) {
     console.error("InvokeAI recall failed:", err);
     showStatus(button, "error");
-    showErrorMessage(button, err && err.message ? err.message : "Recall failed");
+    const fallback = mode === "use_ref" ? "Use as Ref Image failed" : "Recall failed";
+    showErrorMessage(button, err && err.message ? err.message : fallback);
   } finally {
     button.disabled = false;
   }
