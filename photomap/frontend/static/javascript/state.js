@@ -27,6 +27,7 @@ export const state = {
   umapShowHoverThumbnails: true, // Show hover thumbnails in UMAP
   umapExitFullscreenOnSelection: true, // Exit fullscreen when cluster is selected
   umapClickSelectsCluster: true, // Whether click selects cluster or single image
+  umapControlsVisible: true, // Whether the UMAP controls panel is visible
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -137,6 +138,11 @@ export async function restoreFromLocalStorage() {
   if (storedUmapClickSelectsCluster !== null) {
     state.umapClickSelectsCluster = storedUmapClickSelectsCluster === "true";
   }
+
+  const storedUmapControlsVisible = localStorage.getItem("umapControlsVisible");
+  if (storedUmapControlsVisible !== null) {
+    state.umapControlsVisible = storedUmapControlsVisible === "true";
+  }
 }
 
 // Save state to local storage
@@ -154,6 +160,7 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("umapShowHoverThumbnails", state.umapShowHoverThumbnails ? "true" : "false");
   localStorage.setItem("umapExitFullscreenOnSelection", state.umapExitFullscreenOnSelection ? "true" : "false");
   localStorage.setItem("umapClickSelectsCluster", state.umapClickSelectsCluster ? "true" : "false");
+  localStorage.setItem("umapControlsVisible", state.umapControlsVisible ? "true" : "false");
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
@@ -259,5 +266,13 @@ export function setUmapClickSelectsCluster(clickSelectsCluster) {
     window.dispatchEvent(
       new CustomEvent("settingsUpdated", { detail: { umapClickSelectsCluster: clickSelectsCluster } })
     );
+  }
+}
+
+export function setUmapControlsVisible(visible) {
+  if (state.umapControlsVisible !== visible) {
+    state.umapControlsVisible = visible;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { umapControlsVisible: visible } }));
   }
 }

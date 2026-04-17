@@ -1,18 +1,19 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-manager.js";
+import { CLUSTER_PALETTE } from "./cluster-utils.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import {
+  setUmapClickSelectsCluster,
+  setUmapControlsVisible,
   setUmapExitFullscreenOnSelection,
   setUmapShowHoverThumbnails,
   setUmapShowLandmarks,
-  setUmapClickSelectsCluster,
   state,
 } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
-import { CLUSTER_PALETTE } from "./cluster-utils.js";
 
 const UMAP_SIZES = {
   big: { width: 800, height: 590 },
@@ -238,9 +239,25 @@ export async function fetchUmapData() {
       scrollZoom: true,
     };
 
+    const isFirstRender = !mapExists;
+    // Save current plot dimensions before Plotly.newPlot resets them to the layout defaults.
+    const umapPlotDiv = document.getElementById("umapPlot");
+    const savedPlotWidth = parseInt(umapPlotDiv.style.width, 10);
+    const savedPlotHeight = parseInt(umapPlotDiv.style.height, 10);
     Plotly.newPlot("umapPlot", [allPointsTrace, currentImageTrace], layout, config).then(async (gd) => {
       document.getElementById("umapContent").style.display = "block";
-      setUmapWindowSize("fullscreen");
+      applyUmapControlsVisibility();
+      if (isFirstRender) {
+        setUmapWindowSize("fullscreen");
+      } else if (isShaded) {
+        setUmapWindowSize(lastUnshadedSize);
+      } else if (savedPlotWidth > 0 && savedPlotHeight > 0) {
+        // Recalculation: only resize the Plotly plot back to its pre-newPlot dimensions,
+        // leaving the window container size and position untouched.
+        Plotly.relayout(gd, { width: savedPlotWidth, height: savedPlotHeight });
+      } else {
+        setUmapWindowSize(lastUnshadedSize);
+      }
       hideUmapSpinner();
 
       window.dispatchEvent(new CustomEvent("umapRedrawn"));
@@ -1319,6 +1336,19 @@ async function handleImageClick(clickedIndex) {
 
 // -------------------- Window Management --------------------
 
+function applyUmapControlsVisibility() {
+  const controls = document.getElementById("umapControls");
+  const btn = document.getElementById("umapToggleControlsBtn");
+  const visible = state.umapControlsVisible;
+  if (controls) {
+    controls.style.display = visible ? "" : "none";
+  }
+  if (btn) {
+    btn.style.opacity = visible ? "1" : "0.35";
+    btn.title = visible ? "Hide controls" : "Show controls";
+  }
+}
+
 // --- Show/Hide UMAP Window ---
 export async function toggleUmapWindow(show = null) {
   const umapWindow = document.getElementById("umapFloatingWindow");
@@ -1331,6 +1361,7 @@ export async function toggleUmapWindow(show = null) {
     umapWindow.style.display = "none";
   } else {
     umapWindow.style.display = "block";
+    applyUmapControlsVisibility();
     ensureUmapWindowInView();
     if (!umapWindowHasBeenShown) {
       umapWindowHasBeenShown = true;
@@ -1363,6 +1394,14 @@ export async function toggleUmapWindow(show = null) {
 document.getElementById("showUmapBtn").onclick = () => toggleUmapWindow();
 document.getElementById("umapCloseBtn").onclick = () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
+};
+document.getElementById("umapToggleControlsBtn").onclick = () => {
+  setUmapControlsVisible(!state.umapControlsVisible);
+  applyUmapControlsVisibility();
+  if (!isShaded) {
+    saveCurrentPosition(); // anchor to current position before resizing
+    setUmapWindowSize(getCurrentWindowSize());
+  }
 };
 
 // --- Draggable Window ---
@@ -1480,19 +1519,26 @@ function setUmapWindowSize(sizeKey) {
     if (contentDiv) {
       contentDiv.style.display = "block";
     }
-    // controlsHeight: space reserved below plot for UMAP controls (~120px with radio buttons)
-    // plus clearance for bottom ControlPanel/SearchPanel (~110px)
-    const controlsHeight = 230;
+    // controlsHeight: space reserved below the plot for UMAP controls
+    const controlsHeight = state.umapControlsVisible ? 110 : 40;
+    // Measure how much vertical space the bottom Control/Search panels occupy.
+    // The window covers the full viewport; its dark background fills the dead zone behind the panels.
+    const bottomPanel = document.getElementById("controlPanel");
+    const panelReservedHeight = bottomPanel
+      ? Math.round(window.innerHeight - bottomPanel.getBoundingClientRect().top) + 16
+      : 96; // +16 ≈ 1em gap above the panels
+    const windowHeight = window.innerHeight;
     win.style.left = "0px";
     win.style.top = "0px";
     win.style.width = window.innerWidth + "px";
-    win.style.height = (narrowScreen ? window.innerHeight - 120 : window.innerHeight) + "px";
+    win.style.height = windowHeight + "px";
     win.style.minHeight = "200px";
     win.style.maxWidth = "100vw";
     win.style.maxHeight = "100vh";
     win.style.opacity = "1";
+    const plotHeight = windowHeight - controlsHeight - panelReservedHeight;
     plotDiv.style.width = window.innerWidth - 32 + "px";
-    plotDiv.style.height = window.innerHeight - controlsHeight + "px";
+    plotDiv.style.height = plotHeight + "px";
     if (narrowScreen) {
       // Change positioning of the controls
       contentDiv.style.position = "relative";
@@ -1504,7 +1550,7 @@ function setUmapWindowSize(sizeKey) {
     if (plotDiv.data && plotDiv.data.length > 0) {
       Plotly.relayout(plotDiv, {
         width: window.innerWidth - 32,
-        height: window.innerHeight - controlsHeight,
+        height: plotHeight,
         "xaxis.scaleanchor": "y",
       });
     }
@@ -1514,8 +1560,10 @@ function setUmapWindowSize(sizeKey) {
     }
     const { width, height } = UMAP_SIZES[sizeKey];
     const bottomPadding = 8; // add breathing room under plot
+    const extraWindowHeight = state.umapControlsVisible ? 130 : 60;
+    const desiredWindowHeight = height + extraWindowHeight + bottomPadding;
     win.style.width = width + 60 + "px";
-    win.style.height = height + 120 + bottomPadding + "px"; // window taller
+    win.style.height = Math.min(desiredWindowHeight, window.innerHeight - 20) + "px"; // window taller, capped at viewport
     win.style.minHeight = "200px";
     plotDiv.style.width = width + "px";
     plotDiv.style.height = height - bottomPadding + "px"; // plot area shorter
@@ -1638,6 +1686,68 @@ function toggleFullscreen(turnOn = null) {
 addButtonHandlers("umapResizeFullscreen", toggleFullscreen);
 addButtonHandlers("umapCloseBtn", () => {
   document.getElementById("umapFloatingWindow").style.display = "none";
+});
+
+// --- Cluster Info Modal ---
+function showClusterInfoModal() {
+  const modal = document.getElementById("umapClusterInfoModal");
+  if (!modal) {
+    return;
+  }
+
+  // Compute stats from the module-level points array
+  const eps = parseFloat(document.getElementById("umapEpsSpinner").value);
+  const clustered = points.filter((p) => p.cluster !== -1);
+  const clusterIds = [...new Set(clustered.map((p) => p.cluster))];
+  const clusterCount = clusterIds.length;
+  const unclusteredCount = points.length - clustered.length;
+
+  let largestSize = 0;
+  let smallestSize = Infinity;
+  for (const id of clusterIds) {
+    const size = points.filter((p) => p.cluster === id).length;
+    if (size > largestSize) {
+      largestSize = size;
+    }
+    if (size < smallestSize) {
+      smallestSize = size;
+    }
+  }
+  if (clusterCount === 0) {
+    largestSize = 0;
+    smallestSize = 0;
+  }
+
+  document.getElementById("umapInfoEps").textContent = isNaN(eps) ? "—" : eps.toFixed(2);
+  document.getElementById("umapInfoClusterCount").textContent =
+    clusterCount === 1 ? "1 cluster" : `${clusterCount} clusters`;
+  document.getElementById("umapInfoLargest").textContent = largestSize === 1 ? "1 image" : `${largestSize} images`;
+  document.getElementById("umapInfoSmallest").textContent = smallestSize === 1 ? "1 image" : `${smallestSize} images`;
+  document.getElementById("umapInfoUnclustered").textContent =
+    unclusteredCount === 1 ? "1 image" : `${unclusteredCount} images`;
+  document.getElementById("umapInfoTotal").textContent = points.length === 1 ? "1 image" : `${points.length} images`;
+
+  modal.classList.add("visible");
+}
+
+function hideClusterInfoModal() {
+  const modal = document.getElementById("umapClusterInfoModal");
+  if (modal) {
+    modal.classList.remove("visible");
+  }
+}
+
+document.getElementById("umapClusterInfoBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  showClusterInfoModal();
+});
+
+document.getElementById("umapClusterInfoClose").addEventListener("click", hideClusterInfoModal);
+
+document.getElementById("umapClusterInfoModal").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) {
+    hideClusterInfoModal();
+  }
 });
 
 window.addEventListener("resize", () => {

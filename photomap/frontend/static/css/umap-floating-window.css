@@ -23,9 +23,6 @@
   padding-bottom: 20px;
 }
 
-#umapColorModeContainer {
-  min-width: 180px;
-}
 
 .icon-btn {
   background: none;
@@ -116,6 +113,36 @@
 #umapEpsContainer,
 #umapColorModeContainer {
   font-size: 0.85em;
+}
+
+.umap-info-btn {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(10, 20, 55, 0.85);
+  border: 1.5px solid #4a9eff;
+  border-radius: 50%;
+  width: 1.3em;
+  height: 1.3em;
+  padding: 0;
+  cursor: pointer;
+  color: #4a9eff;
+  font-size: 0.85em;
+  font-style: italic;
+  font-weight: bold;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  transition: background 0.15s, color 0.15s;
+}
+
+.umap-info-btn:hover,
+.umap-info-btn:focus {
+  background: rgba(20, 50, 120, 0.9);
+  color: #80c0ff;
+  border-color: #80c0ff;
+  outline: none;
 }
 
 #umapClickBehaviorContainer {
