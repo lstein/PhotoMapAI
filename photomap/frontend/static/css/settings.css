@@ -152,6 +152,13 @@
 }
 
 
+#invokeaiUrlInput,
+#invokeaiUsernameInput,
+#invokeaiPasswordInput {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 #albumSelect {
   padding: 0.5em;
   border-radius: 4px;
@@ -198,5 +205,52 @@
   color: #fff;
   white-space: nowrap;
   margin-bottom: 0.5em;
+}
+
+/* ===== ACCORDION SECTIONS ===== */
+.settings-accordion {
+  margin-top: 1em;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.6em 0.8em;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  color: #faea0e;
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.accordion-header:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.accordion-chevron {
+  display: inline-block;
+  font-size: 0.7em;
+  transition: transform 0.2s ease;
+}
+
+.accordion-header[aria-expanded="true"] .accordion-chevron {
+  transform: rotate(90deg);
+}
+
+.accordion-body {
+  display: none;
+  padding: 0 0.8em 0.8em;
+}
+
+.accordion-body.open {
+  display: block;
 }
 

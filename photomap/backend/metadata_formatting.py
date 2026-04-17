@@ -44,7 +44,11 @@ def format_metadata(
         or "generation_mode" in metadata
         or "canvas_v2_metadata" in metadata
     ):
-        return format_invoke_metadata(result, metadata)
+        config_manager = get_config_manager()
+        invokeai_url = config_manager.get_invokeai_settings().get("url")
+        return format_invoke_metadata(
+            result, metadata, show_recall_buttons=bool(invokeai_url)
+        )
     else:
         config_manager = get_config_manager()
         api_key = config_manager.get_locationiq_api_key()

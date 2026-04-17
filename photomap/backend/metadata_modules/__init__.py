@@ -1,4 +1,3 @@
-
 from .exif_formatter import format_exif_metadata
 from .invoke_formatter import format_invoke_metadata
 from .slide_summary import SlideSummary
