@@ -6,12 +6,12 @@ import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import {
-    setUmapClickSelectsCluster,
-    setUmapControlsVisible,
-    setUmapExitFullscreenOnSelection,
-    setUmapShowHoverThumbnails,
-    setUmapShowLandmarks,
-    state,
+  setUmapClickSelectsCluster,
+  setUmapControlsVisible,
+  setUmapExitFullscreenOnSelection,
+  setUmapShowHoverThumbnails,
+  setUmapShowLandmarks,
+  state,
 } from "./state.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
 
@@ -1340,7 +1340,9 @@ function applyUmapControlsVisibility() {
   const controls = document.getElementById("umapControls");
   const btn = document.getElementById("umapToggleControlsBtn");
   const visible = state.umapControlsVisible;
-  if (controls) controls.style.display = visible ? "" : "none";
+  if (controls) {
+    controls.style.display = visible ? "" : "none";
+  }
   if (btn) {
     btn.style.opacity = visible ? "1" : "0.35";
     btn.title = visible ? "Hide controls" : "Show controls";
@@ -1689,7 +1691,9 @@ addButtonHandlers("umapCloseBtn", () => {
 // --- Cluster Info Modal ---
 function showClusterInfoModal() {
   const modal = document.getElementById("umapClusterInfoModal");
-  if (!modal) return;
+  if (!modal) {
+    return;
+  }
 
   // Compute stats from the module-level points array
   const eps = parseFloat(document.getElementById("umapEpsSpinner").value);
@@ -1702,8 +1706,12 @@ function showClusterInfoModal() {
   let smallestSize = Infinity;
   for (const id of clusterIds) {
     const size = points.filter((p) => p.cluster === id).length;
-    if (size > largestSize) largestSize = size;
-    if (size < smallestSize) smallestSize = size;
+    if (size > largestSize) {
+      largestSize = size;
+    }
+    if (size < smallestSize) {
+      smallestSize = size;
+    }
   }
   if (clusterCount === 0) {
     largestSize = 0;
@@ -1713,21 +1721,20 @@ function showClusterInfoModal() {
   document.getElementById("umapInfoEps").textContent = isNaN(eps) ? "—" : eps.toFixed(2);
   document.getElementById("umapInfoClusterCount").textContent =
     clusterCount === 1 ? "1 cluster" : `${clusterCount} clusters`;
-  document.getElementById("umapInfoLargest").textContent =
-    largestSize === 1 ? "1 image" : `${largestSize} images`;
-  document.getElementById("umapInfoSmallest").textContent =
-    smallestSize === 1 ? "1 image" : `${smallestSize} images`;
+  document.getElementById("umapInfoLargest").textContent = largestSize === 1 ? "1 image" : `${largestSize} images`;
+  document.getElementById("umapInfoSmallest").textContent = smallestSize === 1 ? "1 image" : `${smallestSize} images`;
   document.getElementById("umapInfoUnclustered").textContent =
     unclusteredCount === 1 ? "1 image" : `${unclusteredCount} images`;
-  document.getElementById("umapInfoTotal").textContent =
-    points.length === 1 ? "1 image" : `${points.length} images`;
+  document.getElementById("umapInfoTotal").textContent = points.length === 1 ? "1 image" : `${points.length} images`;
 
   modal.classList.add("visible");
 }
 
 function hideClusterInfoModal() {
   const modal = document.getElementById("umapClusterInfoModal");
-  if (modal) modal.classList.remove("visible");
+  if (modal) {
+    modal.classList.remove("visible");
+  }
 }
 
 document.getElementById("umapClusterInfoBtn").addEventListener("click", (e) => {
@@ -1738,9 +1745,10 @@ document.getElementById("umapClusterInfoBtn").addEventListener("click", (e) => {
 document.getElementById("umapClusterInfoClose").addEventListener("click", hideClusterInfoModal);
 
 document.getElementById("umapClusterInfoModal").addEventListener("click", (e) => {
-  if (e.target === e.currentTarget) hideClusterInfoModal();
+  if (e.target === e.currentTarget) {
+    hideClusterInfoModal();
+  }
 });
-
 
 window.addEventListener("resize", () => {
   // Only resize if UMAP window is in fullscreen mode
