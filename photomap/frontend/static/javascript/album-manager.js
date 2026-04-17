@@ -976,6 +976,12 @@ export class AlbumManager {
       return;
     }
 
+    // Provide immediate feedback while the indexing request is being processed
+    const createBtn = cardElement.querySelector(".create-index-btn");
+    const originalBtnText = createBtn.textContent;
+    createBtn.textContent = "Update Pending...";
+    createBtn.disabled = true;
+
     // Backend guard: check if indexing is already running
     try {
       const response = await fetch(`index_progress/${albumKey}`);
@@ -1003,12 +1009,16 @@ export class AlbumManager {
             ` Please remove the index file manually and try again.` +
             ` The path for the index file is: ${album.index}`
         );
+        createBtn.textContent = originalBtnText;
+        createBtn.disabled = false;
         await this.handleIndexingCompletion(albumKey, cardElement);
         return;
       }
     }
     const progress = await updateIndex(albumKey);
     if (!progress) {
+      createBtn.textContent = originalBtnText;
+      createBtn.disabled = false;
       return;
     }
     this.showProgressUIWithoutScroll(cardElement, progress);

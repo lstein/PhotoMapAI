@@ -81,6 +81,18 @@ class Config(BaseModel):
     locationiq_api_key: str | None = Field(
         default=None, description="LocationIQ API key for map services"
     )
+    invokeai_url: str | None = Field(
+        default=None,
+        description="Base URL of a running InvokeAI backend, e.g. http://localhost:9090",
+    )
+    invokeai_username: str | None = Field(
+        default=None,
+        description="Username for authenticating against InvokeAI (future use)",
+    )
+    invokeai_password: str | None = Field(
+        default=None,
+        description="Password for authenticating against InvokeAI (future use)",
+    )
 
     @field_validator("config_version")
     @classmethod
@@ -108,6 +120,9 @@ class Config(BaseModel):
             "config_version": self.config_version,
             "albums": {key: album.to_dict() for key, album in self.albums.items()},
             "locationiq_api_key": self.locationiq_api_key,
+            "invokeai_url": self.invokeai_url,
+            "invokeai_username": self.invokeai_username,
+            "invokeai_password": self.invokeai_password,
         }
 
 
@@ -163,6 +178,40 @@ class ConfigManager:
         # Clear cache after saving to ensure fresh reads
         self._config = None
 
+    def get_invokeai_settings(self) -> dict[str, str | None]:
+        """Return the configured InvokeAI connection settings."""
+        config = self.load_config()
+        return {
+            "url": config.invokeai_url,
+            "username": config.invokeai_username,
+            "password": config.invokeai_password,
+        }
+
+    def set_invokeai_settings(
+        self,
+        url: str | None = None,
+        username: str | None = None,
+        password: str | None = None,
+    ) -> None:
+        """Update the InvokeAI connection settings.
+
+        Empty strings are normalized to None so that the fields can be cleared.
+        """
+        config = self.load_config()
+
+        def _clean(value: str | None) -> str | None:
+            if value is None:
+                return None
+            value = value.strip()
+            return value or None
+
+        config.invokeai_url = _clean(url)
+        config.invokeai_username = _clean(username)
+        config.invokeai_password = _clean(password)
+        self._config = config
+        self.save_config()
+        self._config = None
+
     def load_config(self) -> Config:
         """Load configuration from YAML file."""
         if self._config is None:
@@ -186,6 +235,9 @@ class ConfigManager:
                         config_version=config_data.get("config_version", "1.0.0"),
                         albums=albums,
                         locationiq_api_key=config_data.get("locationiq_api_key"),
+                        invokeai_url=config_data.get("invokeai_url"),
+                        invokeai_username=config_data.get("invokeai_username"),
+                        invokeai_password=config_data.get("invokeai_password"),
                     )
 
                 except Exception as e:

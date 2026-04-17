@@ -43,7 +43,7 @@
   align-items: flex-start;
   justify-content: center;
   margin-bottom: 0;
-  padding: 1em 2em;
+  padding: 1em 2em 0;
 }
 
 .filenameRow {
@@ -122,7 +122,7 @@
   color: #faea0e;
   text-decoration: none;
   font-weight: bold;
-  font-size: 0.7em;
+  font-size: 1em;
 }
 
 .cluster-info-badge {
@@ -144,7 +144,7 @@
   border-collapse: collapse;
   border: 1px solid #bbb;
   width: 100%;
-  margin: 0.5em 0;
+  margin: 0.5em 0 0;
 }
 
 .invoke-metadata th,
@@ -153,6 +153,88 @@
 .invoke-tuples td {
   border: 1px solid #555;
   padding: 6px 10px;
+}
+
+/* ===== Recall / Remix buttons (pinned outside scrollable area) ===== */
+#recallButtonsContainer:empty {
+  display: none;
+}
+
+#recallButtonsContainer {
+  padding: 0 2em;
+}
+
+#metadataLinkContainer {
+  padding: 0.4em 2em 0.8em;
+}
+
+.invoke-recall-controls {
+  display: flex;
+  gap: 12px;
+  margin: 2px 0 4px 0;
+  align-items: center;
+}
+
+.invoke-recall-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #2a2a2a;
+  color: #faea0e;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  height: 32px;
+  box-sizing: border-box;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.invoke-recall-btn:hover:not(:disabled) {
+  background: #3a3a3a;
+  border-color: #faea0e;
+}
+
+.invoke-recall-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.invoke-recall-btn svg {
+  flex-shrink: 0;
+}
+
+.invoke-recall-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+  overflow: hidden;
+}
+
+.invoke-recall-status:empty {
+  display: none;
+}
+
+.invoke-recall-status.success {
+  color: #4caf50;
+}
+
+.invoke-recall-status.error {
+  color: #e53935;
+}
+
+.invoke-recall-error {
+  color: #e53935;
+  font-size: 12px;
+  margin-top: 4px;
+  word-break: break-word;
 }
 
 /* ===== BANNER DRAWER CONTAINER ===== */

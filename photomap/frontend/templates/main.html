@@ -3,10 +3,27 @@
 
 <head>
     <title id="slideshow_title">PhotoMap</title>
-    <!-- ... (Head content remains the same) ... -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="icon" type="image/x-icon" href="static/icons/favicon.ico" />
+
+    <!-- Detect legacy EdgeHTML (Edge ≤18 / Edge 44) before loading any ES2020 scripts.
+         window.StyleMedia is unique to EdgeHTML and absent from Chromium-based Edge.
+         window.location.replace() performs a full navigation so the original page
+         never finishes loading, which avoids the document.write() race condition. -->
+    <script>
+        (function () {
+            var isLegacyEdge = !!window.StyleMedia;
+            if (!isLegacyEdge) {
+                try { Function("x?.y"); } catch (e) { isLegacyEdge = true; }
+            }
+            if (isLegacyEdge) {
+                window.location.replace("/static/unsupported-browser.html");
+            }
+        }());
+    </script>
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
