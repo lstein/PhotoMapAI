@@ -40,7 +40,7 @@ def test_get_config_empty(client, clear_invokeai_config):
     response = client.get("/invokeai/config")
     assert response.status_code == 200
     body = response.json()
-    assert body == {"url": "", "username": "", "has_password": False}
+    assert body == {"url": "", "username": "", "has_password": False, "board_id": ""}
 
 
 def test_set_and_get_config(client, clear_invokeai_config):
@@ -415,10 +415,10 @@ def _install_recall_stub(monkeypatch):
 
 
 class _ScriptedClient:
-    """An httpx.AsyncClient stub whose ``post`` returns the next scripted response.
+    """An httpx.AsyncClient stub whose ``get``/``post`` return scripted responses.
 
-    Each call records the (url, headers) it saw so tests can assert on the
-    auth header progression across a retry cycle.
+    Each call records the (url, headers, method) it saw so tests can assert on
+    the auth header progression across a retry cycle.
     """
 
     def __init__(self, script):
@@ -437,10 +437,18 @@ class _ScriptedClient:
         return False
 
     async def post(self, url, **kwargs):
+        return await self._dispatch("POST", url, kwargs)
+
+    async def get(self, url, **kwargs):
+        return await self._dispatch("GET", url, kwargs)
+
+    async def _dispatch(self, method, url, kwargs):
         self.calls.append(
             {
+                "method": method,
                 "url": url,
                 "headers": dict(kwargs.get("headers") or {}),
+                "params": kwargs.get("params"),
                 "json": kwargs.get("json"),
             }
         )
@@ -738,3 +746,343 @@ def test_use_ref_image_403_with_token_retries_anonymously(
 
     # Cache cleared.
     assert invoke_module._cached_token is None
+
+
+# ── board_id round-trip + /invokeai/status + /invokeai/boards ──────────
+
+
+def test_config_round_trips_board_id(client, clear_invokeai_config):
+    client.post(
+        "/invokeai/config",
+        json={"url": "http://localhost:9090", "board_id": "board-uuid-1"},
+    )
+    body = client.get("/invokeai/config").json()
+    assert body["board_id"] == "board-uuid-1"
+
+
+def test_config_board_id_preserved_when_omitted(client, clear_invokeai_config):
+    client.post(
+        "/invokeai/config",
+        json={"url": "http://localhost:9090", "board_id": "keep-me"},
+    )
+    # Update another field without including board_id — it should survive.
+    client.post("/invokeai/config", json={"url": "http://localhost:9091"})
+    body = client.get("/invokeai/config").json()
+    assert body["board_id"] == "keep-me"
+
+
+def test_config_board_id_cleared_by_empty_string(client, clear_invokeai_config):
+    client.post(
+        "/invokeai/config",
+        json={"url": "http://localhost:9090", "board_id": "delete-me"},
+    )
+    client.post(
+        "/invokeai/config",
+        json={"url": "http://localhost:9090", "board_id": ""},
+    )
+    body = client.get("/invokeai/config").json()
+    assert body["board_id"] == ""
+
+
+def test_status_returns_unreachable_when_url_not_configured(
+    client, clear_invokeai_config
+):
+    response = client.get("/invokeai/status")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reachable"] is False
+    assert "no invokeai url configured" in body["detail"].lower()
+
+
+def test_status_returns_version_on_reachable_backend(
+    client, clear_invokeai_config, monkeypatch
+):
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    def _route(url, kwargs):
+        assert url == "http://localhost:9090/api/v1/app/version"
+        return _Resp(200, json_body={"version": "5.6.0"})
+
+    stub = _ScriptedClient([_route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    body = client.get("/invokeai/status").json()
+    assert body["reachable"] is True
+    assert body["version"] == "5.6.0"
+
+
+def test_status_marks_network_failure_as_unreachable(
+    client, clear_invokeai_config, monkeypatch
+):
+    client.post("/invokeai/config", json={"url": "http://localhost:9999"})
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    class _ExplodingClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kwargs):
+            raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _ExplodingClient)
+
+    body = client.get("/invokeai/status").json()
+    assert body["reachable"] is False
+    assert "could not reach" in body["detail"].lower()
+
+
+def test_status_rejects_non_invokeai_server(
+    client, clear_invokeai_config, monkeypatch
+):
+    """A random HTTP 200 without a ``version`` field should count as
+    unreachable so the settings UI doesn't reveal the auth rows."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    def _route(url, kwargs):
+        return _Resp(200, json_body={"hello": "world"})
+
+    stub = _ScriptedClient([_route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    body = client.get("/invokeai/status").json()
+    assert body["reachable"] is False
+
+
+def test_boards_returns_flat_list_on_success(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    def _route(url, kwargs):
+        assert url == "http://localhost:9090/api/v1/boards/"
+        assert kwargs.get("params") == {"all": "true"}
+        return _Resp(
+            200,
+            json_body=[
+                {"board_id": "abc", "board_name": "Landscapes"},
+                {"board_id": "def", "board_name": "Portraits"},
+                # Entries missing board_id are filtered out — they're not
+                # addressable in the upload endpoint.
+                {"board_name": "Missing id"},
+            ],
+        )
+
+    stub = _ScriptedClient([_route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    body = client.get("/invokeai/boards").json()
+    assert body == [
+        {"board_id": "abc", "board_name": "Landscapes"},
+        {"board_id": "def", "board_name": "Portraits"},
+    ]
+
+
+def test_boards_unwraps_paginated_response(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    """If the InvokeAI build ignores ?all=true we still want to use the items list."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    def _route(url, kwargs):
+        return _Resp(
+            200,
+            json_body={
+                "items": [{"board_id": "abc", "board_name": "Landscapes"}],
+                "offset": 0,
+                "total": 1,
+            },
+        )
+
+    stub = _ScriptedClient([_route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    body = client.get("/invokeai/boards").json()
+    assert body == [{"board_id": "abc", "board_name": "Landscapes"}]
+
+
+def test_boards_returns_502_on_upstream_failure(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    def _route(url, kwargs):
+        return _Resp(500, json_body={"detail": "server exploded"}, text="boom")
+
+    stub = _ScriptedClient([_route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.get("/invokeai/boards")
+    assert response.status_code == 502
+
+
+def test_use_ref_image_passes_configured_board_id(
+    client, clear_invokeai_config, monkeypatch, tmp_path
+):
+    client.post(
+        "/invokeai/config",
+        json={"url": "http://localhost:9090", "board_id": "my-board"},
+    )
+
+    image_file = tmp_path / "pic.png"
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: image_file
+    )
+
+    captured_upload_params: list[dict] = []
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, **kwargs):
+            if "files" in kwargs:
+                captured_upload_params.append(kwargs.get("params"))
+                kwargs["files"]["file"][1].read()
+
+                class _Up:
+                    status_code = 200
+                    text = ""
+
+                    def json(self_inner):
+                        return {"image_name": "uploaded.png"}
+
+                return _Up()
+
+            class _Rec:
+                status_code = 200
+                text = "{}"
+
+                def json(self_inner):
+                    return {"status": "success"}
+
+            return _Rec()
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "warning" not in body
+
+    assert len(captured_upload_params) == 1
+    params = captured_upload_params[0]
+    assert params == {
+        "image_category": "user",
+        "is_intermediate": "false",
+        "board_id": "my-board",
+    }
+
+
+def test_use_ref_image_falls_back_to_uncategorized_when_board_upload_fails(
+    client, clear_invokeai_config, monkeypatch, tmp_path
+):
+    """When the configured board rejects the upload, retry without it so the
+    image lands in Uncategorized — and surface a warning so the UI can say so."""
+    client.post(
+        "/invokeai/config",
+        json={"url": "http://localhost:9090", "board_id": "ghost-board"},
+    )
+
+    image_file = tmp_path / "pic.png"
+    image_file.write_bytes(b"\x89PNG")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: image_file
+    )
+
+    upload_params_seen: list[dict] = []
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, **kwargs):
+            if "files" in kwargs:
+                params = kwargs.get("params") or {}
+                upload_params_seen.append(params)
+                kwargs["files"]["file"][1].read()
+
+                if params.get("board_id"):
+                    # First attempt — board-scoped upload fails.
+                    class _BadBoard:
+                        status_code = 404
+                        text = '{"detail":"Board not found"}'
+
+                        def json(self_inner):
+                            return {"detail": "Board not found"}
+
+                    return _BadBoard()
+
+                # Retry without board_id succeeds.
+                class _OK:
+                    status_code = 200
+                    text = ""
+
+                    def json(self_inner):
+                        return {"image_name": "uploaded.png"}
+
+                return _OK()
+
+            class _Rec:
+                status_code = 200
+                text = "{}"
+
+                def json(self_inner):
+                    return {"status": "success"}
+
+            return _Rec()
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["uploaded_image_name"] == "uploaded.png"
+    assert "warning" in body
+    assert "uncategorized" in body["warning"].lower()
+
+    # Two upload attempts: one with the board, one without.
+    assert len(upload_params_seen) == 2
+    assert upload_params_seen[0].get("board_id") == "ghost-board"
+    assert "board_id" not in upload_params_seen[1]
