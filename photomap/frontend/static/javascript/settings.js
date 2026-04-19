@@ -14,7 +14,7 @@ const DELAY_CONFIG = {
 // Cache DOM elements to avoid repeated queries
 let elements = {};
 
-function cacheElements() {
+export function cacheElements() {
   elements = {
     settingsBtn: document.getElementById("settingsBtn"),
     settingsOverlay: document.getElementById("settingsOverlay"),
@@ -30,6 +30,9 @@ function cacheElements() {
     invokeaiUrlInput: document.getElementById("invokeaiUrlInput"),
     invokeaiUsernameInput: document.getElementById("invokeaiUsernameInput"),
     invokeaiPasswordInput: document.getElementById("invokeaiPasswordInput"),
+    invokeaiBoardSelect: document.getElementById("invokeaiBoardSelect"),
+    invokeaiAuthSection: document.getElementById("invokeaiAuthSection"),
+    invokeaiStatusHint: document.getElementById("invokeaiStatusHint"),
     showControlPanelTextCheckbox: document.getElementById("showControlPanelTextCheckbox"),
     confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
@@ -291,7 +294,11 @@ async function saveLocationIQApiKey(apiKey) {
   }
 }
 
-async function loadInvokeAISettings() {
+// Tracks the currently-selected board_id as returned by the backend so the
+// auth/url refresh flow can restore the dropdown selection after re-populating.
+let invokeaiSelectedBoardId = "";
+
+export async function loadInvokeAISettings() {
   if (!elements.invokeaiUrlInput) {
     return;
   }
@@ -310,11 +317,13 @@ async function loadInvokeAISettings() {
       elements.invokeaiPasswordInput.value = "";
       elements.invokeaiPasswordInput.placeholder = data.has_password
         ? "(password saved — leave blank to keep)"
-        : "(for future multi-user support)";
+        : "(optional, multi-user mode)";
     }
+    invokeaiSelectedBoardId = data.board_id || "";
   } catch (error) {
     console.error("Failed to load InvokeAI settings:", error);
   }
+  await refreshInvokeAIStatus();
 }
 
 async function saveInvokeAISettings() {
@@ -330,6 +339,9 @@ async function saveInvokeAISettings() {
   if (elements.invokeaiPasswordInput && elements.invokeaiPasswordInput.value) {
     body.password = elements.invokeaiPasswordInput.value;
   }
+  if (elements.invokeaiBoardSelect) {
+    body.board_id = elements.invokeaiBoardSelect.value || "";
+  }
   try {
     await fetch("invokeai/config", {
       method: "POST",
@@ -338,6 +350,88 @@ async function saveInvokeAISettings() {
     });
   } catch (error) {
     console.error("Failed to save InvokeAI settings:", error);
+  }
+}
+
+function setInvokeAIAuthSectionVisible(visible) {
+  if (!elements.invokeaiAuthSection) {
+    return;
+  }
+  elements.invokeaiAuthSection.hidden = !visible;
+}
+
+export async function refreshInvokeAIStatus() {
+  // Don't even try to probe when the URL is blank — keep the auth rows
+  // hidden so the UI stays calm for users who don't run InvokeAI.
+  if (!elements.invokeaiUrlInput || !elements.invokeaiUrlInput.value.trim()) {
+    setInvokeAIAuthSectionVisible(false);
+    return;
+  }
+  try {
+    const response = await fetch("invokeai/status");
+    if (!response.ok) {
+      setInvokeAIAuthSectionVisible(false);
+      return;
+    }
+    const data = await response.json();
+    const reachable = !!data.reachable;
+    setInvokeAIAuthSectionVisible(reachable);
+    if (reachable) {
+      await loadInvokeAIBoards();
+    }
+  } catch (error) {
+    console.error("Failed to probe InvokeAI status:", error);
+    setInvokeAIAuthSectionVisible(false);
+  }
+}
+
+function renderBoardOptions(boards, selectedId) {
+  const select = elements.invokeaiBoardSelect;
+  if (!select) {
+    return;
+  }
+  select.innerHTML = "";
+  // "Uncategorized" (no board_id) is always available as the default.
+  const uncategorized = document.createElement("option");
+  uncategorized.value = "";
+  uncategorized.textContent = "Uncategorized";
+  select.appendChild(uncategorized);
+
+  boards.forEach((board) => {
+    const option = document.createElement("option");
+    option.value = board.board_id;
+    option.textContent = board.board_name;
+    select.appendChild(option);
+  });
+  select.value = selectedId || "";
+  // If the saved selection isn't in the returned list (board was deleted),
+  // the value silently reverts to "" (Uncategorized) above — that's the
+  // right default given the runtime fallback behaviour.
+  select.disabled = false;
+}
+
+export async function loadInvokeAIBoards() {
+  if (!elements.invokeaiBoardSelect) {
+    return;
+  }
+  try {
+    const response = await fetch("invokeai/boards");
+    if (!response.ok) {
+      // Auth failure or upstream error — render a disabled dropdown so the
+      // user knows the list couldn't be fetched but can still see what the
+      // default (Uncategorized) will do.
+      elements.invokeaiBoardSelect.innerHTML = '<option value="">Uncategorized</option>';
+      elements.invokeaiBoardSelect.value = "";
+      elements.invokeaiBoardSelect.disabled = true;
+      return;
+    }
+    const boards = await response.json();
+    renderBoardOptions(boards, invokeaiSelectedBoardId);
+  } catch (error) {
+    console.error("Failed to load InvokeAI boards:", error);
+    elements.invokeaiBoardSelect.innerHTML = '<option value="">Uncategorized</option>';
+    elements.invokeaiBoardSelect.value = "";
+    elements.invokeaiBoardSelect.disabled = true;
   }
 }
 
@@ -352,13 +446,28 @@ function setupInvokeAISettingsControls() {
       timeout = setTimeout(fn, 600);
     };
   };
-  const debouncedSave = debounced(saveInvokeAISettings);
-  [elements.invokeaiUrlInput, elements.invokeaiUsernameInput, elements.invokeaiPasswordInput]
-    .filter(Boolean)
-    .forEach((input) => {
-      input.addEventListener("input", debouncedSave);
-      input.addEventListener("blur", saveInvokeAISettings);
+  // Every credential/URL edit has to save first and then probe status: the
+  // status endpoint reads the persisted config, not whatever's in the field.
+  const debouncedSaveAndRefresh = debounced(async () => {
+    await saveInvokeAISettings();
+    await refreshInvokeAIStatus();
+  });
+  const textInputs = [elements.invokeaiUrlInput, elements.invokeaiUsernameInput, elements.invokeaiPasswordInput].filter(
+    Boolean
+  );
+  textInputs.forEach((input) => {
+    input.addEventListener("input", debouncedSaveAndRefresh);
+    input.addEventListener("blur", async () => {
+      await saveInvokeAISettings();
+      await refreshInvokeAIStatus();
     });
+  });
+  if (elements.invokeaiBoardSelect) {
+    elements.invokeaiBoardSelect.addEventListener("change", async () => {
+      invokeaiSelectedBoardId = elements.invokeaiBoardSelect.value || "";
+      await saveInvokeAISettings();
+    });
+  }
 }
 
 function setupLocationIQApiKeyControl() {

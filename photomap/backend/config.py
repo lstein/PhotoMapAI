@@ -93,6 +93,13 @@ class Config(BaseModel):
         default=None,
         description="Password for authenticating against InvokeAI (future use)",
     )
+    invokeai_board_id: str | None = Field(
+        default=None,
+        description=(
+            "ID of the InvokeAI board that reference-image uploads should be "
+            "placed in. None means Uncategorized."
+        ),
+    )
 
     @field_validator("config_version")
     @classmethod
@@ -123,6 +130,7 @@ class Config(BaseModel):
             "invokeai_url": self.invokeai_url,
             "invokeai_username": self.invokeai_username,
             "invokeai_password": self.invokeai_password,
+            "invokeai_board_id": self.invokeai_board_id,
         }
 
 
@@ -185,6 +193,7 @@ class ConfigManager:
             "url": config.invokeai_url,
             "username": config.invokeai_username,
             "password": config.invokeai_password,
+            "board_id": config.invokeai_board_id,
         }
 
     def set_invokeai_settings(
@@ -192,6 +201,7 @@ class ConfigManager:
         url: str | None = None,
         username: str | None = None,
         password: str | None = None,
+        board_id: str | None = None,
     ) -> None:
         """Update the InvokeAI connection settings.
 
@@ -208,6 +218,7 @@ class ConfigManager:
         config.invokeai_url = _clean(url)
         config.invokeai_username = _clean(username)
         config.invokeai_password = _clean(password)
+        config.invokeai_board_id = _clean(board_id)
         self._config = config
         self.save_config()
         self._config = None
@@ -238,6 +249,7 @@ class ConfigManager:
                         invokeai_url=config_data.get("invokeai_url"),
                         invokeai_username=config_data.get("invokeai_username"),
                         invokeai_password=config_data.get("invokeai_password"),
+                        invokeai_board_id=config_data.get("invokeai_board_id"),
                     )
 
                 except Exception as e:

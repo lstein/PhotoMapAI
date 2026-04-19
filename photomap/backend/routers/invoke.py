@@ -116,7 +116,7 @@ def _invalidate_token_cache() -> None:
     _token_username = None
 
 
-async def _post_with_auth_fallback(
+async def _request_with_auth_fallback(
     base_url: str,
     username: str | None,
     password: str | None,
@@ -156,11 +156,12 @@ async def _post_with_auth_fallback(
 
 
 class InvokeAISettings(BaseModel):
-    """Mirrors the three config fields we expose via the settings panel."""
+    """Mirrors the config fields we expose via the settings panel."""
 
     url: str | None = None
     username: str | None = None
     password: str | None = None
+    board_id: str | None = None
 
 
 class RecallRequest(BaseModel):
@@ -195,6 +196,7 @@ async def get_invokeai_config() -> dict:
         "url": settings["url"] or "",
         "username": settings["username"] or "",
         "has_password": bool(settings["password"]),
+        "board_id": settings["board_id"] or "",
     }
 
 
@@ -202,17 +204,20 @@ async def get_invokeai_config() -> dict:
 async def set_invokeai_config(settings: InvokeAISettings) -> dict:
     """Persist the InvokeAI connection settings.
 
-    A password of ``None`` leaves the existing stored password untouched so
-    the settings panel can re-submit without clobbering what was saved.
+    A password or board_id of ``None`` leaves the existing stored value
+    untouched so the settings panel can PATCH individual fields without
+    clobbering what was saved.  Send an empty string to explicitly clear.
     """
     _invalidate_token_cache()
     existing = config_manager.get_invokeai_settings()
     password = settings.password if settings.password is not None else existing["password"]
+    board_id = settings.board_id if settings.board_id is not None else existing["board_id"]
     try:
         config_manager.set_invokeai_settings(
             url=settings.url,
             username=settings.username,
             password=password,
+            board_id=board_id,
         )
     except Exception as exc:
         logger.exception("Failed to persist InvokeAI settings")
@@ -220,6 +225,115 @@ async def set_invokeai_config(settings: InvokeAISettings) -> dict:
             status_code=500, detail=f"Failed to save settings: {exc}"
         ) from exc
     return {"success": True}
+
+
+@invoke_router.get("/status")
+async def invokeai_status() -> dict:
+    """Report whether the configured URL is reachable and looks like InvokeAI.
+
+    Probes the unauthenticated ``/api/v1/app/version`` endpoint.  A successful
+    JSON response with a ``version`` field is the signal the settings UI uses
+    to reveal the username/password/board rows.  Returns
+    ``{"reachable": False, "detail": ...}`` for any network or HTTP failure
+    rather than raising, so the frontend can render a neutral hint instead of
+    an error banner while the user is still typing.
+    """
+    settings = config_manager.get_invokeai_settings()
+    base_url = settings["url"]
+    if not base_url:
+        return {"reachable": False, "detail": "No InvokeAI URL configured"}
+
+    version_url = f"{base_url.rstrip('/')}/api/v1/app/version"
+    try:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+            resp = await client.get(version_url)
+    except httpx.RequestError as exc:
+        return {"reachable": False, "detail": f"Could not reach backend: {exc}"}
+
+    if resp.status_code != 200:
+        return {
+            "reachable": False,
+            "detail": f"Backend returned HTTP {resp.status_code}",
+        }
+    try:
+        payload = resp.json()
+    except ValueError:
+        return {"reachable": False, "detail": "Backend did not return JSON"}
+    version = payload.get("version")
+    if not version:
+        # A non-InvokeAI server happening to have /api/v1/app/version would
+        # almost certainly not return a version field.
+        return {"reachable": False, "detail": "Response missing version field"}
+    return {"reachable": True, "version": version}
+
+
+@invoke_router.get("/boards")
+async def invokeai_boards() -> list[dict]:
+    """Return the list of boards from the configured InvokeAI backend.
+
+    Uses the same auth-fallback pattern as the recall and upload endpoints.
+    Returns a flat ``[{"board_id": ..., "board_name": ...}]`` list — the
+    frontend populates its dropdown directly from this.  Any failure
+    (unreachable, auth, 5xx) raises 502; the frontend then renders a
+    disabled "Uncategorized" option.
+    """
+    settings = config_manager.get_invokeai_settings()
+    base_url = settings["url"]
+    if not base_url:
+        raise HTTPException(
+            status_code=400, detail="InvokeAI backend URL is not configured."
+        )
+
+    boards_url = f"{base_url.rstrip('/')}/api/v1/boards/"
+    username = settings["username"]
+    password = settings["password"]
+
+    try:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+
+            async def _do(headers: dict[str, str]) -> httpx.Response:
+                return await client.get(
+                    boards_url, params={"all": "true"}, headers=headers
+                )
+
+            response = await _request_with_auth_fallback(
+                base_url, username, password, _do
+            )
+    except httpx.RequestError as exc:
+        logger.warning("InvokeAI boards request failed: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach InvokeAI backend at {base_url}: {exc}",
+        ) from exc
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"InvokeAI backend returned {response.status_code}: "
+                f"{response.text[:200]}"
+            ),
+        )
+
+    try:
+        raw = response.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502, detail="Boards endpoint did not return JSON"
+        ) from exc
+
+    # ``?all=true`` returns a flat list; without it InvokeAI returns
+    # ``{"items": [...], "offset": ..., "total": ...}``.  Handle both shapes
+    # so an accidentally-paginated response doesn't blank out the dropdown.
+    items = raw if isinstance(raw, list) else raw.get("items", [])
+    return [
+        {
+            "board_id": item.get("board_id"),
+            "board_name": item.get("board_name") or "(unnamed board)",
+        }
+        for item in items
+        if isinstance(item, dict) and item.get("board_id")
+    ]
 
 
 def _load_raw_metadata(album_key: str, index: int) -> dict:
@@ -300,7 +414,7 @@ async def recall_parameters(request: RecallRequest) -> dict:
                     url, json=payload, params={"strict": "true"}, headers=headers
                 )
 
-            response = await _post_with_auth_fallback(
+            response = await _request_with_auth_fallback(
                 base_url, username, password, _do
             )
     except httpx.RequestError as exc:
@@ -339,25 +453,51 @@ async def _upload_image_to_invokeai(
     image_path: Path,
     username: str | None,
     password: str | None,
-) -> str:
-    """Upload ``image_path`` to InvokeAI and return the assigned ``image_name``.
+    board_id: str | None = None,
+) -> tuple[str, str | None]:
+    """Upload ``image_path`` to InvokeAI and return ``(image_name, warning)``.
+
+    If ``board_id`` is provided, the upload targets that board.  If that
+    attempt fails (board deleted, renamed, permission issue, etc.) the
+    upload is retried without the board so the file lands in Uncategorized
+    — that's the documented fallback behaviour.  When the fallback kicks in
+    a human-readable warning is returned alongside the image name so the
+    caller can surface it to the UI.
 
     Auth transitions (anonymous ↔ token) are handled transparently by
-    ``_post_with_auth_fallback``; the multipart stream is re-opened on each
-    retry since the previous one will have been consumed.
+    ``_request_with_auth_fallback``; the multipart stream is re-opened on
+    each retry since the previous one will have been consumed.
     """
     upload_url = f"{base_url.rstrip('/')}/api/v1/images/upload"
     mime_type = mimetypes.guess_type(image_path.name)[0] or "image/png"
-    params = {"image_category": "user", "is_intermediate": "false"}
+    base_params = {"image_category": "user", "is_intermediate": "false"}
 
-    async def _do(headers: dict[str, str]) -> httpx.Response:
-        with image_path.open("rb") as fh:
-            files = {"file": (image_path.name, fh, mime_type)}
-            return await client.post(
-                upload_url, files=files, params=params, headers=headers
+    async def _attempt(params: dict[str, str]) -> httpx.Response:
+        async def _do(headers: dict[str, str]) -> httpx.Response:
+            with image_path.open("rb") as fh:
+                files = {"file": (image_path.name, fh, mime_type)}
+                return await client.post(
+                    upload_url, files=files, params=params, headers=headers
+                )
+
+        return await _request_with_auth_fallback(base_url, username, password, _do)
+
+    warning: str | None = None
+    if board_id:
+        upload_resp = await _attempt({**base_params, "board_id": board_id})
+        if upload_resp.status_code >= 400:
+            logger.warning(
+                "InvokeAI upload to board %s failed (%s); falling back to Uncategorized",
+                board_id,
+                upload_resp.status_code,
             )
-
-    upload_resp = await _post_with_auth_fallback(base_url, username, password, _do)
+            warning = (
+                f"Upload to the selected board failed "
+                f"(HTTP {upload_resp.status_code}); image was placed in Uncategorized."
+            )
+            upload_resp = await _attempt(base_params)
+    else:
+        upload_resp = await _attempt(base_params)
 
     if upload_resp.status_code >= 400:
         raise HTTPException(
@@ -382,7 +522,7 @@ async def _upload_image_to_invokeai(
             status_code=502,
             detail="InvokeAI image upload response did not include image_name",
         )
-    return image_name
+    return image_name, warning
 
 
 @invoke_router.post("/use_ref_image")
@@ -413,13 +553,14 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
 
     username = settings["username"]
     password = settings["password"]
+    board_id = settings["board_id"]
 
     recall_url = f"{base_url.rstrip('/')}/api/v1/recall/{request.queue_id}"
 
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            image_name = await _upload_image_to_invokeai(
-                client, base_url, image_path, username, password
+            image_name, board_warning = await _upload_image_to_invokeai(
+                client, base_url, image_path, username, password, board_id=board_id
             )
 
             # Deliberately omit ``strict=true`` so that the recall only
@@ -431,7 +572,7 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
             async def _do_recall(headers: dict[str, str]) -> httpx.Response:
                 return await client.post(recall_url, json=payload, headers=headers)
 
-            response = await _post_with_auth_fallback(
+            response = await _request_with_auth_fallback(
                 base_url, username, password, _do_recall
             )
     except httpx.RequestError as exc:
@@ -460,9 +601,12 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
     except ValueError:
         remote = {"raw": response.text}
 
-    return {
+    result = {
         "success": True,
         "sent": payload,
         "uploaded_image_name": image_name,
         "response": remote,
     }
+    if board_warning:
+        result["warning"] = board_warning
+    return result

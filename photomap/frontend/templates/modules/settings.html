@@ -222,25 +222,8 @@
               placeholder="e.g. http://localhost:9090"
               autocomplete="off"
             />
-          </div>
-          <div class="setting-row">
-            <label for="invokeaiUsernameInput">InvokeAI Username:</label>
-            <input
-              type="text"
-              id="invokeaiUsernameInput"
-              placeholder="(optional)"
-              autocomplete="off"
-            />
-          </div>
-          <div class="setting-row">
-            <label for="invokeaiPasswordInput">InvokeAI Password:</label>
-            <input
-              type="password"
-              id="invokeaiPasswordInput"
-              placeholder="(optional)"
-              autocomplete="new-password"
-            />
             <small
+              id="invokeaiStatusHint"
               style="
                 color: #666;
                 font-size: 0.85em;
@@ -249,11 +232,48 @@
                 grid-column: 2 / 3;
               "
             >
-              Optional: URL of a running InvokeAI server to enable the
-              <em>Recall</em> / <em>Remix</em> buttons in the metadata drawer.
-              Add a username and password if the InvokeAI server requires
-              authentication.
+              URL of a running InvokeAI server to enable the
+              <em>Recall</em>, <em>Remix</em>, and <em>Use as Ref Image</em>
+              buttons in the metadata drawer.
             </small>
+          </div>
+          <div id="invokeaiAuthSection" hidden>
+            <div class="setting-row">
+              <label for="invokeaiUsernameInput">InvokeAI Username:</label>
+              <input
+                type="text"
+                id="invokeaiUsernameInput"
+                placeholder="(optional, multi-user mode)"
+                autocomplete="off"
+              />
+            </div>
+            <div class="setting-row">
+              <label for="invokeaiPasswordInput">InvokeAI Password:</label>
+              <input
+                type="password"
+                id="invokeaiPasswordInput"
+                placeholder="(optional, multi-user mode)"
+                autocomplete="new-password"
+              />
+            </div>
+            <div class="setting-row">
+              <label for="invokeaiBoardSelect">Upload to Image Board:</label>
+              <select id="invokeaiBoardSelect">
+                <option value="">Uncategorized</option>
+              </select>
+              <small
+                style="
+                  color: #666;
+                  font-size: 0.85em;
+                  display: block;
+                  margin-top: 4px;
+                  grid-column: 2 / 3;
+                "
+              >
+                Reference images uploaded via
+                <em>Use as Ref Image</em> are placed in this board.
+              </small>
+            </div>
           </div>
         </form>
       </div>
