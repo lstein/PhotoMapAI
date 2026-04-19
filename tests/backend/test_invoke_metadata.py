@@ -23,7 +23,10 @@ from photomap.backend.metadata_modules.invoke.invoke_metadata_view import (
     LoraTuple,
     ReferenceImageTuple,
 )
-from photomap.backend.metadata_modules.invoke_formatter import format_invoke_metadata
+from photomap.backend.metadata_modules.invoke_formatter import (
+    format_invoke_metadata,
+    use_ref_button_html,
+)
 from photomap.backend.metadata_modules.invokemetadata import GenerationMetadataAdapter
 from photomap.backend.metadata_modules.slide_summary import SlideSummary
 
@@ -895,3 +898,50 @@ class TestFormatInvokeRecallButtons:
         assert 'data-recall-mode="use_ref"' in html
         assert "Use as Ref Image" in html
         assert html.count('class="invoke-recall-btn"') == 3
+
+    def test_scalar_only_metadata_appends_use_ref_button_when_enabled(self):
+        """A flat-scalars custom-workflow image carries no recallable
+        parameters, but the image itself can still be uploaded as a reference.
+        """
+        metadata = {"Custom Field": "value", "Steps": 20}
+        html = format_invoke_metadata(
+            _slide(), metadata, show_recall_buttons=True
+        ).description
+        assert 'data-recall-mode="use_ref"' in html
+        # Recall and Remix make no sense without parsed parameters.
+        assert 'data-recall-mode="recall"' not in html
+        assert 'data-recall-mode="remix"' not in html
+        assert html.count('class="invoke-recall-btn"') == 1
+
+    def test_scalar_only_metadata_no_buttons_when_disabled(self):
+        metadata = {"Custom Field": "value"}
+        html = format_invoke_metadata(_slide(), metadata).description
+        assert "invoke-recall-controls" not in html
+
+    def test_unknown_invoke_format_appends_use_ref_button_when_enabled(self):
+        """Payloads that look like Invoke metadata but fail discriminator
+        validation should still expose the Use-as-Ref button (the file on
+        disk is fine even if its metadata makes no sense).
+        """
+        # ``metadata_version: 99`` is not a known discriminator, so parsing
+        # raises ValidationError and we fall into the "unknown format" branch.
+        # The nested dict also keeps us out of the "flat-scalars" fast path.
+        metadata = {
+            "metadata_version": 99,
+            "app_version": "9.9.9",
+            "model": {"wat": "not a recognizable model"},
+        }
+        html = format_invoke_metadata(
+            _slide(), metadata, show_recall_buttons=True
+        ).description
+        assert "Unknown invoke metadata format" in html
+        assert 'data-recall-mode="use_ref"' in html
+        assert 'data-recall-mode="recall"' not in html
+        assert 'data-recall-mode="remix"' not in html
+
+    def test_use_ref_button_html_renders_single_button(self):
+        html = use_ref_button_html()
+        assert 'class="invoke-recall-controls"' in html
+        assert 'data-recall-mode="use_ref"' in html
+        assert "Use as Ref Image" in html
+        assert html.count('class="invoke-recall-btn"') == 1
