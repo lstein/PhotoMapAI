@@ -9,7 +9,12 @@ import logging
 from pathlib import Path
 
 from .config import get_config_manager
-from .metadata_modules import SlideSummary, format_exif_metadata, format_invoke_metadata
+from .metadata_modules import (
+    SlideSummary,
+    format_exif_metadata,
+    format_invoke_metadata,
+    use_ref_button_html,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,23 +38,30 @@ def format_metadata(
         index=index,
         total=total_slides,
     )
-    if not metadata:
-        result.description = "<i>No metadata available.</i>"
-        return result
 
-    # This is a fragile heuristic. Better to infer the type of metadata when the embeddings are
-    # created, but this is a quick fix to avoid breaking existing metadata.
-    if (
+    config_manager = get_config_manager()
+    invokeai_configured = bool(config_manager.get_invokeai_settings().get("url"))
+
+    # The "Use as Ref Image" button only needs an image to upload — it works
+    # for any file regardless of metadata. The full Recall/Remix group, on the
+    # other hand, requires recallable Invoke generation parameters and is
+    # rendered by ``format_invoke_metadata`` itself.
+    is_invoke_metadata = bool(metadata) and (
         "app_version" in metadata
         or "generation_mode" in metadata
         or "canvas_v2_metadata" in metadata
-    ):
-        config_manager = get_config_manager()
-        invokeai_url = config_manager.get_invokeai_settings().get("url")
+    )
+
+    if not metadata:
+        result.description = "<i>No metadata available.</i>"
+    elif is_invoke_metadata:
         return format_invoke_metadata(
-            result, metadata, show_recall_buttons=bool(invokeai_url)
+            result, metadata, show_recall_buttons=invokeai_configured
         )
     else:
-        config_manager = get_config_manager()
         api_key = config_manager.get_locationiq_api_key()
-        return format_exif_metadata(result, metadata, api_key)
+        result = format_exif_metadata(result, metadata, api_key)
+
+    if invokeai_configured:
+        result.description = (result.description or "") + use_ref_button_html()
+    return result
