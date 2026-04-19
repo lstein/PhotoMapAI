@@ -75,6 +75,15 @@ _USE_REF_SVG = (
 )
 
 
+_USE_REF_BUTTON_HTML = (
+    '<button type="button" class="invoke-recall-btn" data-recall-mode="use_ref" '
+    'title="Upload this image to InvokeAI and use it as a reference image">'
+    f'{_USE_REF_SVG}<span class="invoke-recall-label">Use as Ref Image</span>'
+    '<span class="invoke-recall-status" aria-live="polite"></span>'
+    "</button>"
+)
+
+
 def _recall_buttons_html() -> str:
     """Render the recall / remix / use-ref button group shown at the bottom of the drawer."""
     return (
@@ -89,11 +98,22 @@ def _recall_buttons_html() -> str:
         f'{_RECALL_SVG}<span class="invoke-recall-label">Recall</span>'
         '<span class="invoke-recall-status" aria-live="polite"></span>'
         "</button>"
-        '<button type="button" class="invoke-recall-btn" data-recall-mode="use_ref" '
-        'title="Upload this image to InvokeAI and use it as a reference image">'
-        f'{_USE_REF_SVG}<span class="invoke-recall-label">Use as Ref Image</span>'
-        '<span class="invoke-recall-status" aria-live="polite"></span>'
-        "</button>"
+        f"{_USE_REF_BUTTON_HTML}"
+        "</div>"
+    )
+
+
+def use_ref_button_html() -> str:
+    """Render the standalone "Use as Ref Image" button.
+
+    The Recall and Remix buttons need recallable InvokeAI generation parameters
+    in the image metadata, but "Use as Ref Image" only needs the image itself —
+    so it is appended to non-Invoke metadata views as well, whenever an
+    InvokeAI backend is configured.
+    """
+    return (
+        '<div class="invoke-recall-controls" data-invoke-recall="1">'
+        f"{_USE_REF_BUTTON_HTML}"
         "</div>"
     )
 
@@ -119,14 +139,18 @@ def format_invoke_metadata(
         isinstance(value, str | int | float | bool | type(None))
         for value in metadata.values()
     ):
-        slide_data.description = _scalar_table(metadata)
+        slide_data.description = _scalar_table(metadata) + (
+            use_ref_button_html() if show_recall_buttons else ""
+        )
         return slide_data
 
     try:
         parsed = GenerationMetadataAdapter().parse(metadata)
     except ValidationError as exc:
         logger.warning("Failed to parse invoke metadata: %s", exc)
-        slide_data.description = "<i>Unknown invoke metadata format.</i>"
+        slide_data.description = "<i>Unknown invoke metadata format.</i>" + (
+            use_ref_button_html() if show_recall_buttons else ""
+        )
         return slide_data
 
     view = InvokeMetadataView(parsed)
