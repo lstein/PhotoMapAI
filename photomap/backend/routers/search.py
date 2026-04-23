@@ -7,6 +7,7 @@ and serving images and thumbnails.
 
 import base64
 import json
+import re
 import zipfile
 from io import BytesIO
 from logging import getLogger
@@ -28,6 +29,15 @@ from .album import (
 config_manager = get_config_manager()
 search_router = APIRouter()
 logger = getLogger(__name__)
+
+# The ``color`` query param is interpolated into the on-disk thumbnail
+# cache filename, so anything that survives here becomes a path segment.
+# Accept only a 6-digit hex literal (with or without ``#``) or an
+# ``r,g,b`` CSV of three 0-255 integers — reject everything else so a
+# value like ``../../evil`` cannot escape the thumbnail cache dir.
+_COLOR_RE = re.compile(r"\A#?[0-9A-Fa-f]{6}\Z|\A\d{1,3},\d{1,3},\d{1,3}\Z")
+_MAX_THUMB_SIZE = 2048
+_MAX_THUMB_RADIUS = 512
 
 
 # Response Models
@@ -181,6 +191,13 @@ async def serve_thumbnail(
     radius: int = 12,  # Add a radius parameter for rounded corners
 ) -> FileResponse:
     """Serve a reduced-size thumbnail for an image by index, with optional colored border."""
+    if size <= 0 or size > _MAX_THUMB_SIZE:
+        raise HTTPException(status_code=400, detail="Invalid thumbnail size")
+    if radius < 0 or radius > _MAX_THUMB_RADIUS:
+        raise HTTPException(status_code=400, detail="Invalid thumbnail radius")
+    if color is not None and not _COLOR_RE.match(color):
+        raise HTTPException(status_code=400, detail="Invalid color parameter")
+
     embeddings = get_embeddings_for_album(album_key)
     try:
         image_path = embeddings.get_image_path(index)

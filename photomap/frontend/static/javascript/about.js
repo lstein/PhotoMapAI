@@ -116,6 +116,7 @@ class AboutManager {
     try {
       const response = await fetch("version/update", {
         method: "POST",
+        headers: { "X-Requested-With": "photomap" },
       });
       const data = await response.json();
 
@@ -128,7 +129,10 @@ class AboutManager {
         if (data.restart_available) {
           setTimeout(async () => {
             try {
-              await fetch("version/restart", { method: "POST" });
+              await fetch("version/restart", {
+                method: "POST",
+                headers: { "X-Requested-With": "photomap" },
+              });
               updateStatus.textContent = "Server restarting... Waiting for server to come back online...";
 
               // Wait 5 seconds before starting to poll

@@ -30,6 +30,7 @@ import re
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -212,6 +213,44 @@ async def _invokeai_image_exists(
     return resp.status_code == 200
 
 
+def _validate_invokeai_url(url: str | None) -> str | None:
+    """Reject non-http(s) schemes so configured URLs cannot be used for SSRF.
+
+    The configured URL is later concatenated into outbound requests for
+    ``/status``, ``/boards``, ``/recall`` and ``/use_ref_image``; ``httpx``
+    already refuses non-http(s) schemes, but validating up front returns
+    a clean 400 to the settings panel rather than a 502 at call time, and
+    blocks obviously-wrong values like ``file://`` or ``javascript:`` from
+    ever reaching the config file.
+
+    Empty / None is allowed — that's "not configured yet".
+    """
+    if not url:
+        return url
+    try:
+        parts = urlsplit(url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid InvokeAI URL: {exc}"
+        ) from exc
+    if parts.scheme not in {"http", "https"}:
+        raise HTTPException(
+            status_code=400,
+            detail="InvokeAI URL must use http:// or https://",
+        )
+    if not parts.netloc:
+        raise HTTPException(
+            status_code=400, detail="InvokeAI URL must include a host"
+        )
+    return url
+
+
+# InvokeAI queue ids are short opaque tokens (e.g. ``default``); restrict
+# the pattern so a caller can't splice ``../`` into the outbound URL path
+# and reach an arbitrary endpoint on the configured backend.
+_QUEUE_ID_PATTERN = r"^[A-Za-z0-9_.-]{1,64}$"
+
+
 class InvokeAISettings(BaseModel):
     """Mirrors the config fields we expose via the settings panel."""
 
@@ -230,7 +269,11 @@ class RecallRequest(BaseModel):
         True,
         description="If False, omit the seed from the recall payload (remix mode)",
     )
-    queue_id: str = Field("default", description="InvokeAI queue id to target")
+    queue_id: str = Field(
+        "default",
+        description="InvokeAI queue id to target",
+        pattern=_QUEUE_ID_PATTERN,
+    )
 
 
 class UseRefImageRequest(BaseModel):
@@ -238,7 +281,11 @@ class UseRefImageRequest(BaseModel):
 
     album_key: str = Field(..., description="Album containing the image")
     index: int = Field(..., ge=0, description="Image index within the album")
-    queue_id: str = Field("default", description="InvokeAI queue id to target")
+    queue_id: str = Field(
+        "default",
+        description="InvokeAI queue id to target",
+        pattern=_QUEUE_ID_PATTERN,
+    )
 
 
 @invoke_router.get("/config")
@@ -265,13 +312,14 @@ async def set_invokeai_config(settings: InvokeAISettings) -> dict:
     untouched so the settings panel can PATCH individual fields without
     clobbering what was saved.  Send an empty string to explicitly clear.
     """
+    url = _validate_invokeai_url(settings.url)
     _invalidate_token_cache()
     existing = config_manager.get_invokeai_settings()
     password = settings.password if settings.password is not None else existing["password"]
     board_id = settings.board_id if settings.board_id is not None else existing["board_id"]
     try:
         config_manager.set_invokeai_settings(
-            url=settings.url,
+            url=url,
             username=settings.username,
             password=password,
             board_id=board_id,
