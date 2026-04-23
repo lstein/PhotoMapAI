@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel
 
 from ..config import get_config_manager
+from ..embeddings import SUPPORTED_EXTENSIONS
 from ..metadata_modules import SlideSummary
 from .album import (
     get_embeddings_for_album,
@@ -283,6 +284,14 @@ async def serve_image(album_key: str, path: str):
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Enforce the image-extension allowlist on any file-serving endpoint.
+    # ``add_album`` accepts arbitrary absolute ``image_paths``; without this
+    # check a caller could point an album at ``/etc`` and then read
+    # ``/images/<key>/passwd`` (the ``is_relative_to`` guard above only
+    # checks *location*, not type).
+    if image_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(status_code=403, detail="Unsupported image type")
+
     if not image_path.exists() or not image_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -362,6 +371,9 @@ async def get_image_by_name(album_key: str, filename: str) -> FileResponse:
     """
     Serve an image by its filename within the specified album.
     """
+    if Path(filename).suffix.lower() not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(status_code=403, detail="Unsupported image type")
+
     embeddings = get_embeddings_for_album(album_key)
     if not embeddings:
         raise HTTPException(status_code=404, detail="Album not found")
