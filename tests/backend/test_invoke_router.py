@@ -236,6 +236,11 @@ def test_use_ref_image_uploads_then_calls_recall_without_strict(
     monkeypatch.setattr(
         invoke_module, "_load_image_path", lambda album_key, index: image_file
     )
+    # Non-UUID filename + empty metadata means the existence probe is
+    # skipped — exercising the upload happy path.
+    monkeypatch.setattr(
+        invoke_module, "_load_raw_metadata", lambda album_key, index: {}
+    )
 
     calls: list[dict] = []
 
@@ -320,6 +325,9 @@ def test_use_ref_image_upload_failure_returns_502(
 
     monkeypatch.setattr(
         invoke_module, "_load_image_path", lambda album_key, index: image_file
+    )
+    monkeypatch.setattr(
+        invoke_module, "_load_raw_metadata", lambda album_key, index: {}
     )
 
     class _FailedUpload:
@@ -678,6 +686,9 @@ def test_use_ref_image_403_with_token_retries_anonymously(
     monkeypatch.setattr(
         invoke_module, "_load_image_path", lambda album_key, index: image_file
     )
+    monkeypatch.setattr(
+        invoke_module, "_load_raw_metadata", lambda album_key, index: {}
+    )
 
     calls: list[dict] = []
 
@@ -948,6 +959,9 @@ def test_use_ref_image_passes_configured_board_id(
     monkeypatch.setattr(
         invoke_module, "_load_image_path", lambda album_key, index: image_file
     )
+    monkeypatch.setattr(
+        invoke_module, "_load_raw_metadata", lambda album_key, index: {}
+    )
 
     captured_upload_params: list[dict] = []
 
@@ -1021,6 +1035,9 @@ def test_use_ref_image_falls_back_to_uncategorized_when_board_upload_fails(
     monkeypatch.setattr(
         invoke_module, "_load_image_path", lambda album_key, index: image_file
     )
+    monkeypatch.setattr(
+        invoke_module, "_load_raw_metadata", lambda album_key, index: {}
+    )
 
     upload_params_seen: list[dict] = []
 
@@ -1086,3 +1103,300 @@ def test_use_ref_image_falls_back_to_uncategorized_when_board_upload_fails(
     assert len(upload_params_seen) == 2
     assert upload_params_seen[0].get("board_id") == "ghost-board"
     assert "board_id" not in upload_params_seen[1]
+
+
+# ── Skip-upload when InvokeAI already has the image ────────────────────
+
+# A realistic InvokeAI-style UUID filename. The existence probe only fires
+# for files that look like they might have come from InvokeAI in the first
+# place — either because the filename still matches that shape, or because
+# the file carries Invoke generation metadata.
+_INVOKE_UUID_NAME = "a1b2c3d4-e5f6-7890-abcd-ef0123456789.png"
+
+
+def _install_use_ref_stubs(
+    invoke_module, monkeypatch, image_file, raw_metadata=None
+):
+    """Shared scaffold for use_ref_image tests that don't need a real album."""
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: image_file
+    )
+    monkeypatch.setattr(
+        invoke_module,
+        "_load_raw_metadata",
+        lambda album_key, index: raw_metadata or {},
+    )
+
+
+def test_use_ref_image_reuses_existing_when_uuid_filename_hits(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch, tmp_path
+):
+    """UUID-style filename + backend confirms it exists → skip upload, call recall."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    image_file = tmp_path / _INVOKE_UUID_NAME
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    _install_use_ref_stubs(invoke_module, monkeypatch, image_file)
+
+    calls: list[dict] = []
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kwargs):
+            calls.append({"method": "GET", "url": url})
+            return _Resp(200, json_body={"image_name": _INVOKE_UUID_NAME})
+
+        async def post(self, url, **kwargs):
+            calls.append(
+                {
+                    "method": "POST",
+                    "url": url,
+                    "kind": "upload" if "files" in kwargs else "recall",
+                    "json": kwargs.get("json"),
+                }
+            )
+            if "files" in kwargs:
+                raise AssertionError(
+                    "Upload must not happen when the image is already on the backend"
+                )
+            return _Resp(200, json_body={"status": "success"})
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["reused_existing"] is True
+    assert body["uploaded_image_name"] == _INVOKE_UUID_NAME
+    assert body["sent"] == {
+        "reference_images": [{"image_name": _INVOKE_UUID_NAME}]
+    }
+
+    # Exactly one probe GET (existence check) + one POST (recall). No upload.
+    get_calls = [c for c in calls if c["method"] == "GET"]
+    post_calls = [c for c in calls if c["method"] == "POST"]
+    assert len(get_calls) == 1
+    assert get_calls[0]["url"] == (
+        f"http://localhost:9090/api/v1/images/i/{_INVOKE_UUID_NAME}"
+    )
+    assert len(post_calls) == 1
+    assert post_calls[0]["kind"] == "recall"
+
+
+def test_use_ref_image_uploads_when_probe_returns_404(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch, tmp_path
+):
+    """UUID filename but backend doesn't recognize it → fall through to upload."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    image_file = tmp_path / _INVOKE_UUID_NAME
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    _install_use_ref_stubs(invoke_module, monkeypatch, image_file)
+
+    calls: list[dict] = []
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kwargs):
+            calls.append({"method": "GET", "url": url})
+            return _Resp(404, json_body={"detail": "Not found"}, text="not found")
+
+        async def post(self, url, **kwargs):
+            kind = "upload" if "files" in kwargs else "recall"
+            calls.append({"method": "POST", "url": url, "kind": kind})
+            if kind == "upload":
+                kwargs["files"]["file"][1].read()
+                return _Resp(200, json_body={"image_name": "uploaded-xyz.png"})
+            return _Resp(200, json_body={"status": "success"})
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["reused_existing"] is False
+    assert body["uploaded_image_name"] == "uploaded-xyz.png"
+
+    assert [c["method"] for c in calls] == ["GET", "POST", "POST"]
+    kinds = [c.get("kind") for c in calls if c["method"] == "POST"]
+    assert kinds == ["upload", "recall"]
+
+
+def test_use_ref_image_probes_when_metadata_looks_invoke(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch, tmp_path
+):
+    """Even a non-UUID filename triggers the probe when the image has
+    InvokeAI generation metadata — the user may have renamed the file."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    image_file = tmp_path / "my_portrait.png"
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    _install_use_ref_stubs(
+        invoke_module,
+        monkeypatch,
+        image_file,
+        raw_metadata={"app_version": "5.6.0", "positive_prompt": "anything"},
+    )
+
+    probe_urls: list[str] = []
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kwargs):
+            probe_urls.append(url)
+            # Backend doesn't recognize the renamed file — falls through.
+            return _Resp(404, json_body={"detail": "Not found"}, text="not found")
+
+        async def post(self, url, **kwargs):
+            if "files" in kwargs:
+                kwargs["files"]["file"][1].read()
+                return _Resp(200, json_body={"image_name": "uploaded.png"})
+            return _Resp(200, json_body={"status": "success"})
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["reused_existing"] is False
+
+    # Metadata signal alone is enough to make us probe.
+    assert len(probe_urls) == 1
+    assert probe_urls[0].endswith("/api/v1/images/i/my_portrait.png")
+
+
+def test_use_ref_image_skips_probe_for_non_invoke_image(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch, tmp_path
+):
+    """A normal filename with no Invoke metadata should go straight to upload
+    without ever calling GET /images/i/… — no point asking the backend about
+    a file it couldn't possibly know."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    image_file = tmp_path / "vacation.jpg"
+    image_file.write_bytes(b"\xff\xd8\xff\xe0fake")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    _install_use_ref_stubs(invoke_module, monkeypatch, image_file)
+
+    calls: list[dict] = []
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kwargs):
+            calls.append({"method": "GET", "url": url})
+            raise AssertionError("Existence probe should not run for non-invoke image")
+
+        async def post(self, url, **kwargs):
+            kind = "upload" if "files" in kwargs else "recall"
+            calls.append({"method": "POST", "url": url, "kind": kind})
+            if kind == "upload":
+                kwargs["files"]["file"][1].read()
+                return _Resp(200, json_body={"image_name": "uploaded.jpg"})
+            return _Resp(200, json_body={"status": "success"})
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["reused_existing"] is False
+    assert [c["method"] for c in calls] == ["POST", "POST"]
+
+
+def test_use_ref_image_probe_error_falls_through_to_upload(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch, tmp_path
+):
+    """If the existence check blows up for any reason, we must still upload —
+    the probe is an optimization, not a gate."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    image_file = tmp_path / _INVOKE_UUID_NAME
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    _install_use_ref_stubs(invoke_module, monkeypatch, image_file)
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kwargs):
+            raise httpx.ConnectError("flaky network")
+
+        async def post(self, url, **kwargs):
+            if "files" in kwargs:
+                kwargs["files"]["file"][1].read()
+                return _Resp(200, json_body={"image_name": "uploaded.png"})
+            return _Resp(200, json_body={"status": "success"})
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["reused_existing"] is False
+    assert body["uploaded_image_name"] == "uploaded.png"

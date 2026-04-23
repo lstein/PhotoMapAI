@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+import re
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -153,6 +154,62 @@ async def _request_with_auth_fallback(
         response = await request_fn({})
 
     return response
+
+
+# InvokeAI stores images on disk as ``{uuid}.{ext}``; a filename matching this
+# shape is a strong signal the file was originally produced by InvokeAI and
+# therefore a candidate for the "already uploaded?" probe.
+_INVOKE_UUID_FILENAME_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]+$",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_invoke_filename(name: str) -> bool:
+    return bool(_INVOKE_UUID_FILENAME_RE.match(name))
+
+
+def _has_invoke_metadata(raw_metadata: dict) -> bool:
+    """Cheap structural check for InvokeAI-shaped PNG metadata.
+
+    Mirrors the detection used in ``metadata_formatting.py`` so the two code
+    paths agree on what "this looks like an Invoke image" means.
+    """
+    if not raw_metadata:
+        return False
+    return (
+        "app_version" in raw_metadata
+        or "generation_mode" in raw_metadata
+        or "canvas_v2_metadata" in raw_metadata
+    )
+
+
+async def _invokeai_image_exists(
+    client: httpx.AsyncClient,
+    base_url: str,
+    image_name: str,
+    username: str | None,
+    password: str | None,
+) -> bool:
+    """Return True iff InvokeAI confirms it already has ``image_name``.
+
+    Probes ``GET /api/v1/images/i/{image_name}`` through the same auth
+    fallback used elsewhere so it works in single- and multi-user modes.
+    Any error — network, auth, unexpected status — is swallowed and treated
+    as "not present" so the existence check can never make use_ref_image
+    fail in a case that would otherwise have succeeded via upload.
+    """
+    url = f"{base_url.rstrip('/')}/api/v1/images/i/{image_name}"
+
+    async def _do(headers: dict[str, str]) -> httpx.Response:
+        return await client.get(url, headers=headers)
+
+    try:
+        resp = await _request_with_auth_fallback(base_url, username, password, _do)
+    except (httpx.RequestError, HTTPException) as exc:
+        logger.debug("InvokeAI existence check for %s failed: %s", image_name, exc)
+        return False
+    return resp.status_code == 200
 
 
 class InvokeAISettings(BaseModel):
@@ -551,6 +608,16 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
             status_code=404, detail=f"Image file not found on disk: {image_path.name}"
         )
 
+    # The existence probe is only worthwhile when there's a plausible chance
+    # the file came from InvokeAI in the first place: the on-disk filename
+    # still matches InvokeAI's ``{uuid}.{ext}`` convention, or the PNG
+    # carries Invoke generation metadata.  Loading the metadata here is the
+    # same lookup used by /invokeai/recall, so it's cheap and local.
+    raw_metadata = _load_raw_metadata(request.album_key, request.index)
+    filename_matches = _looks_like_invoke_filename(image_path.name)
+    metadata_matches = _has_invoke_metadata(raw_metadata)
+    should_probe = filename_matches or metadata_matches
+
     username = settings["username"]
     password = settings["password"]
     board_id = settings["board_id"]
@@ -559,9 +626,22 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
 
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            image_name, board_warning = await _upload_image_to_invokeai(
-                client, base_url, image_path, username, password, board_id=board_id
-            )
+            board_warning: str | None = None
+            reused_existing = False
+            image_name: str | None = None
+            if should_probe and await _invokeai_image_exists(
+                client, base_url, image_path.name, username, password
+            ):
+                image_name = image_path.name
+                reused_existing = True
+                logger.info(
+                    "Reusing existing InvokeAI image %s; skipping upload",
+                    image_name,
+                )
+            else:
+                image_name, board_warning = await _upload_image_to_invokeai(
+                    client, base_url, image_path, username, password, board_id=board_id
+                )
 
             # Deliberately omit ``strict=true`` so that the recall only
             # *adds* the reference image to whatever the user already has
@@ -605,6 +685,7 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
         "success": True,
         "sent": payload,
         "uploaded_image_name": image_name,
+        "reused_existing": reused_existing,
         "response": remote,
     }
     if board_warning:
