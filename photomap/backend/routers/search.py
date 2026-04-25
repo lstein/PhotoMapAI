@@ -7,6 +7,7 @@ and serving images and thumbnails.
 
 import base64
 import json
+import re
 import zipfile
 from io import BytesIO
 from logging import getLogger
@@ -18,6 +19,7 @@ from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel
 
 from ..config import get_config_manager
+from ..embeddings import SUPPORTED_EXTENSIONS
 from ..metadata_modules import SlideSummary
 from .album import (
     get_embeddings_for_album,
@@ -28,6 +30,15 @@ from .album import (
 config_manager = get_config_manager()
 search_router = APIRouter()
 logger = getLogger(__name__)
+
+# The ``color`` query param is interpolated into the on-disk thumbnail
+# cache filename, so anything that survives here becomes a path segment.
+# Accept only a 6-digit hex literal (with or without ``#``) or an
+# ``r,g,b`` CSV of three 0-255 integers — reject everything else so a
+# value like ``../../evil`` cannot escape the thumbnail cache dir.
+_COLOR_RE = re.compile(r"\A#?[0-9A-Fa-f]{6}\Z|\A\d{1,3},\d{1,3},\d{1,3}\Z")
+_MAX_THUMB_SIZE = 2048
+_MAX_THUMB_RADIUS = 512
 
 
 # Response Models
@@ -181,6 +192,13 @@ async def serve_thumbnail(
     radius: int = 12,  # Add a radius parameter for rounded corners
 ) -> FileResponse:
     """Serve a reduced-size thumbnail for an image by index, with optional colored border."""
+    if size <= 0 or size > _MAX_THUMB_SIZE:
+        raise HTTPException(status_code=400, detail="Invalid thumbnail size")
+    if radius < 0 or radius > _MAX_THUMB_RADIUS:
+        raise HTTPException(status_code=400, detail="Invalid thumbnail radius")
+    if color is not None and not _COLOR_RE.match(color):
+        raise HTTPException(status_code=400, detail="Invalid color parameter")
+
     embeddings = get_embeddings_for_album(album_key)
     try:
         image_path = embeddings.get_image_path(index)
@@ -266,6 +284,14 @@ async def serve_image(album_key: str, path: str):
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # Enforce the image-extension allowlist on any file-serving endpoint.
+    # ``add_album`` accepts arbitrary absolute ``image_paths``; without this
+    # check a caller could point an album at ``/etc`` and then read
+    # ``/images/<key>/passwd`` (the ``is_relative_to`` guard above only
+    # checks *location*, not type).
+    if image_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(status_code=403, detail="Unsupported image type")
+
     if not image_path.exists() or not image_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -345,6 +371,9 @@ async def get_image_by_name(album_key: str, filename: str) -> FileResponse:
     """
     Serve an image by its filename within the specified album.
     """
+    if Path(filename).suffix.lower() not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(status_code=403, detail="Unsupported image type")
+
     embeddings = get_embeddings_for_album(album_key)
     if not embeddings:
         raise HTTPException(status_code=404, detail="Album not found")

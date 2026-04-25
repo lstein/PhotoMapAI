@@ -326,9 +326,40 @@ export async function loadInvokeAISettings() {
   await refreshInvokeAIStatus();
 }
 
+// Captured lazily on first use so setInvokeAIUrlError can restore the original
+// hint after clearing a validation error. Has to be lazy because cacheElements()
+// runs after module import.
+let _defaultInvokeAIHintHTML = null;
+
+function setInvokeAIUrlError(message) {
+  const hint = elements.invokeaiStatusHint;
+  if (!hint) {
+    return;
+  }
+  if (_defaultInvokeAIHintHTML === null) {
+    _defaultInvokeAIHintHTML = hint.innerHTML;
+  }
+  if (message) {
+    hint.style.color = "#c0392b";
+    hint.setAttribute("role", "alert");
+    hint.textContent = "";
+    const icon = document.createElement("span");
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "⚠ ";
+    hint.appendChild(icon);
+    hint.appendChild(document.createTextNode(message));
+  } else {
+    hint.style.color = "#666";
+    hint.removeAttribute("role");
+    hint.innerHTML = _defaultInvokeAIHintHTML;
+  }
+}
+
+// Returns null on success, or the backend's error detail string on failure,
+// so the caller can render it inline under the URL field.
 async function saveInvokeAISettings() {
   if (!elements.invokeaiUrlInput) {
-    return;
+    return null;
   }
   const body = {
     url: elements.invokeaiUrlInput.value,
@@ -343,13 +374,27 @@ async function saveInvokeAISettings() {
     body.board_id = elements.invokeaiBoardSelect.value || "";
   }
   try {
-    await fetch("invokeai/config", {
+    const response = await fetch("invokeai/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (!response.ok) {
+      let detail = `Save failed (${response.status})`;
+      try {
+        const data = await response.json();
+        if (data && data.detail) {
+          detail = String(data.detail);
+        }
+      } catch {
+        // Non-JSON body — keep the generic message.
+      }
+      return detail;
+    }
+    return null;
   } catch (error) {
     console.error("Failed to save InvokeAI settings:", error);
+    return error.message || "Save failed";
   }
 }
 
@@ -362,26 +407,33 @@ function setInvokeAIAuthSectionVisible(visible) {
 
 export async function refreshInvokeAIStatus() {
   // Don't even try to probe when the URL is blank — keep the auth rows
-  // hidden so the UI stays calm for users who don't run InvokeAI.
+  // hidden so the UI stays calm for users who don't run InvokeAI. Also
+  // clear any stale error from a previous typing session.
   if (!elements.invokeaiUrlInput || !elements.invokeaiUrlInput.value.trim()) {
     setInvokeAIAuthSectionVisible(false);
+    setInvokeAIUrlError(null);
     return;
   }
   try {
     const response = await fetch("invokeai/status");
     if (!response.ok) {
       setInvokeAIAuthSectionVisible(false);
+      setInvokeAIUrlError(`Status check failed (HTTP ${response.status})`);
       return;
     }
     const data = await response.json();
     const reachable = !!data.reachable;
     setInvokeAIAuthSectionVisible(reachable);
     if (reachable) {
+      setInvokeAIUrlError(null);
       await loadInvokeAIBoards();
+    } else {
+      setInvokeAIUrlError(data.detail || "InvokeAI backend is not reachable");
     }
   } catch (error) {
     console.error("Failed to probe InvokeAI status:", error);
     setInvokeAIAuthSectionVisible(false);
+    setInvokeAIUrlError("Could not contact the status endpoint");
   }
 }
 
@@ -448,24 +500,29 @@ function setupInvokeAISettingsControls() {
   };
   // Every credential/URL edit has to save first and then probe status: the
   // status endpoint reads the persisted config, not whatever's in the field.
-  const debouncedSaveAndRefresh = debounced(async () => {
-    await saveInvokeAISettings();
-    await refreshInvokeAIStatus();
-  });
+  // If the save was rejected (e.g. invalid URL scheme), skip the probe — the
+  // persisted config still holds the previous value, so a probe would be
+  // misleading — and surface the error inline under the URL field instead.
+  const saveAndRefresh = async () => {
+    const error = await saveInvokeAISettings();
+    setInvokeAIUrlError(error);
+    if (!error) {
+      await refreshInvokeAIStatus();
+    }
+  };
+  const debouncedSaveAndRefresh = debounced(saveAndRefresh);
   const textInputs = [elements.invokeaiUrlInput, elements.invokeaiUsernameInput, elements.invokeaiPasswordInput].filter(
     Boolean
   );
   textInputs.forEach((input) => {
     input.addEventListener("input", debouncedSaveAndRefresh);
-    input.addEventListener("blur", async () => {
-      await saveInvokeAISettings();
-      await refreshInvokeAIStatus();
-    });
+    input.addEventListener("blur", saveAndRefresh);
   });
   if (elements.invokeaiBoardSelect) {
     elements.invokeaiBoardSelect.addEventListener("change", async () => {
       invokeaiSelectedBoardId = elements.invokeaiBoardSelect.value || "";
-      await saveInvokeAISettings();
+      const error = await saveInvokeAISettings();
+      setInvokeAIUrlError(error);
     });
   }
 }

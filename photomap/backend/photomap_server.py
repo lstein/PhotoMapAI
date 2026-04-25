@@ -202,7 +202,7 @@ def main():
         # Convert list of album keys to comma-separated string
         os.environ["PHOTOMAP_ALBUM_LOCKED"] = ",".join(args.album_locked)
 
-    os.environ["PHOTOMAP_INLINE_UPGRADE"] = "1" if args.inline_upgrade else "0"
+    os.environ.setdefault("PHOTOMAP_INLINE_UPGRADE", "1" if args.inline_upgrade else "0")
 
     app_url = get_app_url(host, port)
 

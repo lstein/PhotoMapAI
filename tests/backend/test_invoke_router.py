@@ -1400,3 +1400,65 @@ def test_use_ref_image_probe_error_falls_through_to_upload(
     body = response.json()
     assert body["reused_existing"] is False
     assert body["uploaded_image_name"] == "uploaded.png"
+
+
+# ── SSRF / URL-scheme hardening ───────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "bad_url",
+    [
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "ftp://example.com/",
+        "://no-scheme",
+        "http://",  # missing host
+    ],
+)
+def test_set_config_rejects_unsafe_url(client, clear_invokeai_config, bad_url):
+    response = client.post("/invokeai/config", json={"url": bad_url})
+    assert response.status_code == 400, response.text
+    # And nothing was persisted.
+    assert get_config_manager().get_invokeai_settings()["url"] is None
+
+
+@pytest.mark.parametrize(
+    "good_url",
+    [
+        "http://localhost:9090",
+        "https://invoke.example.com",
+        "http://127.0.0.1:9090/",
+    ],
+)
+def test_set_config_accepts_http_and_https(client, clear_invokeai_config, good_url):
+    response = client.post("/invokeai/config", json={"url": good_url})
+    assert response.status_code == 200, response.text
+    assert get_config_manager().get_invokeai_settings()["url"] == good_url
+
+
+@pytest.mark.parametrize(
+    "bad_queue",
+    ["../auth/login", "default/../foo", "has space", "with/slash", ""],
+)
+def test_recall_rejects_unsafe_queue_id(client, clear_invokeai_config, bad_queue):
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    response = client.post(
+        "/invokeai/recall",
+        json={"album_key": "any", "index": 0, "queue_id": bad_queue},
+    )
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.parametrize(
+    "bad_queue",
+    ["../auth/login", "default/../foo", "has space", "with/slash"],
+)
+def test_use_ref_image_rejects_unsafe_queue_id(
+    client, clear_invokeai_config, bad_queue
+):
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0, "queue_id": bad_queue},
+    )
+    assert response.status_code == 422, response.text
