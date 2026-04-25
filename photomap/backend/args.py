@@ -72,6 +72,6 @@ def get_args() -> argparse.Namespace:
         "--inline-upgrade",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Perform inline database upgrades",
+        help="Allow inline package upgrades from the About dialog (default: True). Overridden by PHOTOMAP_INLINE_UPGRADE env var.",
     )
     return parser.parse_args()
