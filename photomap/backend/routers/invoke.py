@@ -360,15 +360,16 @@ async def invokeai_status() -> dict:
             "reachable": False,
             "detail": f"Backend returned HTTP {resp.status_code}",
         }
+    not_invokeai = "Server is reachable but doesn't appear to be an InvokeAI backend"
     try:
         payload = resp.json()
     except ValueError:
-        return {"reachable": False, "detail": "Backend did not return JSON"}
+        return {"reachable": False, "detail": not_invokeai}
     version = payload.get("version")
     if not version:
         # A non-InvokeAI server happening to have /api/v1/app/version would
         # almost certainly not return a version field.
-        return {"reachable": False, "detail": "Response missing version field"}
+        return {"reachable": False, "detail": not_invokeai}
     return {"reachable": True, "version": version}
 
 
