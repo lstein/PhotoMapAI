@@ -2,7 +2,15 @@
 
 Rediscover your photo collection!
 
-PhotoMapAI is a fast, modern image browser and search tool for large photo collections. It uses the CLIP computer vision model to enable text and image-based search, image clustering, and interactive slideshows with a responsive web interface. Its unique feature is a "semantic map" that clusters and visualizes your images by their content. Browse the semantic map to find and explore thematically-related groups of photos, or use text and/or image similarity search to find specific people, places, events, styles and themes.
+PhotoMapAI is a fast, modern image browser and search tool for large
+photo collections. It uses the CLIP computer vision model to enable
+text and image-based search, image clustering, and interactive
+slideshows with a responsive web interface. Its unique feature is a
+"semantic map" that clusters and visualizes your images by their
+content. Browse the semantic map to find and explore
+thematically-related groups of photos, or use text and/or image
+similarity search to find specific people, places, events, styles and
+themes.
 
 <div class="try-demo-container">
  <span>Try it out here:</span>
@@ -24,6 +32,7 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 - Flexible album management
 - Responsive UI for desktop and mobile
 - Support for wide range of image formats, including Apple's HEIC
+- Integration with the InvokeAI image generation app.
 - Extensible backend (FastAPI)
 
 ## The Semantic Map

@@ -15,6 +15,7 @@ nav:
       - Configuration: user-guide/configuration.md
       - Semantic Map: user-guide/semantic-map.md
       - Image Dataset Curation: user-guide/curator-mode.md
+      - InvokeAI Integration: user-guide/invokeai-integration.md
       - Updating PhotoMapAI: user-guide/upgrading.md
       - Keyboard Shortcuts: user-guide/keyboard-shortcuts.md
   - Running from Docker: docker.md
@@ -30,6 +31,11 @@ theme:
     scheme: slate
   features:
     -content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details # Optional: allows for collapsible note boxes
+  - pymdownx.superfences # Recommended: allows nesting and complex content
 
 extra_css:
   - stylesheets/extra.css
