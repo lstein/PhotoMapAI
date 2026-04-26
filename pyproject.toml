@@ -63,9 +63,10 @@ testing = [
 ]
 development = [
     "build",
+    "mkdocs<1.6",
     "mkdocs-material",
-    "twine",
     "pymdown-extensions",
+    "twine",
     "pyinstaller",
     "ruff",
 ]
