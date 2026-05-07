@@ -219,8 +219,10 @@ def test_siglip_encode_text_uses_prompt_ensembling(monkeypatch):
     """
     import torch
 
+    from photomap.backend import encoders as encoders_module
     from photomap.backend.encoders import SIGLIP_PROMPT_TEMPLATES
 
+    monkeypatch.setattr(encoders_module, "SIGLIP_USE_PROMPT_ENSEMBLING", True)
     captured = {}
 
     class FakeProcessorOutput(dict):

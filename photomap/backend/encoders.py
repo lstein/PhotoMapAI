@@ -22,12 +22,15 @@ from PIL import Image
 
 DEFAULT_ENCODER_SPEC = "openai-clip:ViT-B/32"
 
-# Modality-spanning prompt templates ensembled by SigLIP at query time.
-# SigLIP's text encoder was trained on caption-shaped inputs, so a bare noun
-# like "woman" produces a less-specific embedding than "a photo of a woman"
-# would, and the model's narrow cosine band makes that difference matter.
-# Averaging across photo/drawing/illustration/painting templates also keeps
-# non-photo content in mixed-media libraries from being penalized.
+# When True, SigLIP's encode_text wraps each query in every entry of
+# SIGLIP_PROMPT_TEMPLATES, encodes them all, L2-normalizes each per-template
+# embedding, mean-pools across templates, and re-normalizes. Intended to make
+# bare-noun queries match better and to avoid penalizing non-photo content,
+# but the practical results are mixed — disabled by default while we evaluate.
+SIGLIP_USE_PROMPT_ENSEMBLING = False
+
+# Modality-spanning prompt templates ensembled by SigLIP at query time when
+# SIGLIP_USE_PROMPT_ENSEMBLING is True.
 SIGLIP_PROMPT_TEMPLATES = (
     "a photo of {}",
     "a drawing of {}",
@@ -221,19 +224,29 @@ class SiglipEncoder(ImageTextEncoder):
 
     @torch.no_grad()
     def encode_text(self, texts: list[str]) -> np.ndarray:
-        # Prompt ensembling: encode each input wrapped in every template,
-        # L2-normalize each per-template embedding so longer phrasings can't
-        # dominate via larger magnitudes, then mean-pool across templates and
-        # re-normalize. Standard zero-shot CLIP/SigLIP practice.
-        n_templates = len(SIGLIP_PROMPT_TEMPLATES)
-        expanded = [tpl.format(t) for t in texts for tpl in SIGLIP_PROMPT_TEMPLATES]
+        if SIGLIP_USE_PROMPT_ENSEMBLING:
+            # Prompt ensembling: encode each input wrapped in every template,
+            # L2-normalize each per-template embedding so longer phrasings
+            # can't dominate via larger magnitudes, then mean-pool across
+            # templates and re-normalize. Standard zero-shot CLIP/SigLIP
+            # practice.
+            n_templates = len(SIGLIP_PROMPT_TEMPLATES)
+            expanded = [
+                tpl.format(t) for t in texts for tpl in SIGLIP_PROMPT_TEMPLATES
+            ]
+            inputs = self._processor(
+                text=expanded, padding="max_length", truncation=True, return_tensors="pt"
+            ).to(self.device)
+            feats = _unwrap_pooled(self._model.get_text_features(**inputs))
+            feats = feats / feats.norm(dim=-1, keepdim=True)
+            feats = feats.view(len(texts), n_templates, -1).mean(dim=1)
+            return _normalize(feats)
+
         inputs = self._processor(
-            text=expanded, padding="max_length", truncation=True, return_tensors="pt"
+            text=texts, padding="max_length", truncation=True, return_tensors="pt"
         ).to(self.device)
-        feats = _unwrap_pooled(self._model.get_text_features(**inputs))
-        feats = feats / feats.norm(dim=-1, keepdim=True)
-        feats = feats.view(len(texts), n_templates, -1).mean(dim=1)
-        return _normalize(feats)
+        feats = self._model.get_text_features(**inputs)
+        return _normalize(_unwrap_pooled(feats))
 
     def calibrate_similarity(self, cosines: np.ndarray) -> np.ndarray:
         """Apply SigLIP's learned sigmoid calibration.
