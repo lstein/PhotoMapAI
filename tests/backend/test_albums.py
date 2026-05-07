@@ -133,3 +133,55 @@ def test_album_routes(client):
     assert response.status_code == 200
     albums = response.json()
     assert len(albums) == 0
+
+
+def test_encoder_spec_round_trips_through_available_albums(client, tmp_path):
+    """Regression: /available_albums/ used to strip encoder_spec, which
+    caused the album-manager edit form to always show the default encoder
+    even after the user had picked something else.
+    """
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+    spec = "siglip:google/siglip2-large-patch16-256"
+
+    response = client.post(
+        "/add_album/",
+        json={
+            "key": "siglip_album",
+            "name": "SigLIP Album",
+            "image_paths": [str(img_dir)],
+            "index": str(tmp_path / "siglip.npz"),
+            "umap_eps": 0.1,
+            "description": "",
+            "encoder_spec": spec,
+        },
+    )
+    assert response.status_code == 201
+
+    listing = client.get("/available_albums/").json()
+    siglip_albums = [a for a in listing if a["key"] == "siglip_album"]
+    assert len(siglip_albums) == 1
+    assert siglip_albums[0]["encoder_spec"] == spec
+
+    detail = client.get("/album/siglip_album/").json()
+    assert detail["encoder_spec"] == spec
+
+    # Edits via /update_album/ persist a new spec, and it shows up on the next listing.
+    new_spec = "open-clip:ViT-L-14/dfn2b_s39b"
+    response = client.post(
+        "/update_album/",
+        json={
+            "key": "siglip_album",
+            "name": "SigLIP Album",
+            "image_paths": [str(img_dir)],
+            "index": str(tmp_path / "siglip.npz"),
+            "encoder_spec": new_spec,
+        },
+    )
+    assert response.status_code == 200
+
+    listing = client.get("/available_albums/").json()
+    siglip_albums = [a for a in listing if a["key"] == "siglip_album"]
+    assert siglip_albums[0]["encoder_spec"] == new_spec
+
+    client.delete("/delete_album/siglip_album")

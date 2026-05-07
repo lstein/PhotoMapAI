@@ -93,6 +93,7 @@ async def get_available_albums() -> list[dict[str, Any]]:
                 "index": album.index,
                 "umap_eps": album.umap_eps,
                 "image_paths": album.image_paths,
+                "encoder_spec": album.encoder_spec,
             }
             for key, album in albums.items()
             if locked_albums is None or key in locked_albums
