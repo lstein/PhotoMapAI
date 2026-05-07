@@ -180,7 +180,7 @@ class SiglipEncoder(ImageTextEncoder):
             images=[img.convert("RGB") for img in images], return_tensors="pt"
         ).to(self.device)
         feats = self._model.get_image_features(**inputs)
-        return _normalize(feats)
+        return _normalize(_unwrap_pooled(feats))
 
     @torch.no_grad()
     def encode_text(self, texts: list[str]) -> np.ndarray:
@@ -188,13 +188,29 @@ class SiglipEncoder(ImageTextEncoder):
             text=texts, padding="max_length", truncation=True, return_tensors="pt"
         ).to(self.device)
         feats = self._model.get_text_features(**inputs)
-        return _normalize(feats)
+        return _normalize(_unwrap_pooled(feats))
 
     def close(self) -> None:
         for attr in ("_model", "_processor"):
             if hasattr(self, attr):
                 delattr(self, attr)
         _free_cuda(self.device)
+
+
+def _unwrap_pooled(feats: object) -> torch.Tensor:
+    """Extract a pooled-feature tensor from an HF model's output.
+
+    transformers >= 5 returns ``BaseModelOutputWithPooling`` from
+    ``Siglip{,2}Model.get_{image,text}_features``; older versions returned a
+    bare tensor. Accept either.
+    """
+    if isinstance(feats, torch.Tensor):
+        return feats
+    for attr in ("pooler_output", "image_embeds", "text_embeds", "last_hidden_state"):
+        value = getattr(feats, attr, None)
+        if isinstance(value, torch.Tensor):
+            return value
+    raise TypeError(f"Cannot extract pooled features from {type(feats).__name__}")
 
 
 def _normalize(feats: torch.Tensor) -> np.ndarray:
