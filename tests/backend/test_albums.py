@@ -5,6 +5,8 @@ Tests for the albums functionality of the PhotoMap application.
 
 from pathlib import Path
 
+import pytest
+
 from photomap.backend.config import Album, create_album, get_config_manager
 
 
@@ -185,3 +187,74 @@ def test_encoder_spec_round_trips_through_available_albums(client, tmp_path):
     assert siglip_albums[0]["encoder_spec"] == new_spec
 
     client.delete("/delete_album/siglip_album")
+
+
+def test_per_album_search_settings_round_trip(client, tmp_path):
+    """Per-album min_score / max_results / use_query_optimization round-trip
+    through add_album → /available_albums → /update_album.
+
+    Also locks in the encoder-aware default for min_search_score: SigLIP
+    albums default to 0.005 (its compressed-cosine band needs a much lower
+    threshold than CLIP), CLIP-style albums default to 0.2.
+    """
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+
+    # SigLIP album: omit min_search_score so we exercise the default.
+    response = client.post(
+        "/add_album/",
+        json={
+            "key": "siglip_defaults",
+            "name": "SigLIP defaults",
+            "image_paths": [str(img_dir)],
+            "index": str(tmp_path / "s.npz"),
+            "umap_eps": 0.1,
+            "encoder_spec": "siglip:google/siglip2-base-patch16-224",
+        },
+    )
+    assert response.status_code == 201
+
+    # CLIP album: omit too — different default.
+    response = client.post(
+        "/add_album/",
+        json={
+            "key": "clip_defaults",
+            "name": "CLIP defaults",
+            "image_paths": [str(img_dir)],
+            "index": str(tmp_path / "c.npz"),
+            "umap_eps": 0.1,
+            "encoder_spec": "openai-clip:ViT-B/32",
+        },
+    )
+    assert response.status_code == 201
+
+    listing = {a["key"]: a for a in client.get("/available_albums/").json()}
+    assert listing["siglip_defaults"]["min_search_score"] == pytest.approx(0.005)
+    assert listing["clip_defaults"]["min_search_score"] == pytest.approx(0.2)
+    assert listing["siglip_defaults"]["max_search_results"] == 100
+    assert listing["siglip_defaults"]["use_query_optimization"] is True
+
+    # Update through /update_album/ persists explicit values, including
+    # turning query_optimization off and bumping the threshold.
+    response = client.post(
+        "/update_album/",
+        json={
+            "key": "siglip_defaults",
+            "name": "SigLIP defaults",
+            "image_paths": [str(img_dir)],
+            "index": str(tmp_path / "s.npz"),
+            "min_search_score": 0.05,
+            "max_search_results": 250,
+            "use_query_optimization": False,
+            "encoder_spec": "siglip:google/siglip2-base-patch16-224",
+        },
+    )
+    assert response.status_code == 200
+
+    listing = {a["key"]: a for a in client.get("/available_albums/").json()}
+    assert listing["siglip_defaults"]["min_search_score"] == pytest.approx(0.05)
+    assert listing["siglip_defaults"]["max_search_results"] == 250
+    assert listing["siglip_defaults"]["use_query_optimization"] is False
+
+    client.delete("/delete_album/siglip_defaults")
+    client.delete("/delete_album/clip_defaults")
