@@ -14,7 +14,9 @@ import logging
 import os
 import sys
 import warnings
+from collections import deque
 from collections.abc import Callable, Generator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar
@@ -43,6 +45,12 @@ from .metadata_modules import SlideSummary
 from .progress import progress_tracker
 
 logger = logging.getLogger(__name__)
+
+# Production indexing pipeline defaults. Tuned via benchmark_encoders.py:
+# batch_size=8 saturates GPU on all three bundled encoders, num_workers=4
+# keeps it fed without hitting the GIL-contention regression seen at 8.
+DEFAULT_BATCH_SIZE = 8
+DEFAULT_NUM_WORKERS = 4
 register_heif_opener()  # Register HEIF opener for PIL
 SUPPORTED_EXTENSIONS = {
     ".jpg",
@@ -484,8 +492,33 @@ class Embeddings(BaseModel):
             # Otherwise, use the default cache directory
             return None
 
+    def _load_image(
+        self, image_path: Path
+    ) -> tuple[Image.Image, float, dict] | None:
+        """Open an image and extract modtime + metadata. Returns None on failure.
+
+        Thread-safe: PIL decoders release the GIL during native I/O and the
+        helpers used here don't share mutable state.
+        """
+        try:
+            pil = Image.open(image_path)
+            pil = ImageOps.exif_transpose(pil)
+            pil = pil.convert("RGB")
+            metadata = self.extract_image_metadata(pil)
+            modification_time = self._get_modification_time(metadata)
+            if modification_time is None:
+                modification_time = image_path.stat().st_mtime
+            return pil, modification_time, metadata
+        except Exception as e:
+            logger.error(f"Error processing {image_path}: {e}")
+            return None
+
     def _process_images_batch(
-        self, image_paths: list[Path], progress_callback: Callable | None = None
+        self,
+        image_paths: list[Path],
+        progress_callback: Callable | None = None,
+        batch_size: int = 1,
+        num_workers: int = 1,
     ) -> IndexResult:
         """
         Process a batch of images and return IndexResult.
@@ -493,34 +526,98 @@ class Embeddings(BaseModel):
         Args:
             image_paths: List of image paths to process
             progress_callback: Optional callback function(index, total, message) for progress updates
+            batch_size: Number of images encoded per forward pass. Default 1 preserves
+                the per-image behavior; larger values amortize per-call overhead but
+                use more GPU memory.
+            num_workers: Number of CPU threads loading and pre-extracting metadata in
+                parallel. Default 1 keeps the legacy serial path. >1 enables a
+                bounded producer/consumer pipeline so the GPU stays fed while images
+                decode concurrently.
         """
+        if batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1 (got {batch_size})")
+        if num_workers < 1:
+            raise ValueError(f"num_workers must be >= 1 (got {num_workers})")
+
         encoder = self._build_encoder()
         embedding_dim = encoder.embedding_dim
 
-        embeddings = []
-        filenames = []
-        modification_times = []
-        metadatas = []
-        bad_files = []
+        embeddings: list[np.ndarray] = []
+        filenames: list[str] = []
+        modification_times: list[float] = []
+        metadatas: list[dict] = []
+        bad_files: list[Path] = []
 
         total_images = len(image_paths)
 
+        buf_paths: list[Path] = []
+        buf_images: list[Image.Image] = []
+        buf_modtimes: list[float] = []
+        buf_metadatas: list[dict] = []
+
+        def flush() -> None:
+            if not buf_images:
+                return
+            try:
+                batch_emb = encoder.encode_images(buf_images)
+            except Exception as e:
+                logger.error(f"Error encoding batch of {len(buf_images)} images: {e}")
+                bad_files.extend(buf_paths)
+            else:
+                for j, path in enumerate(buf_paths):
+                    embeddings.append(batch_emb[j])
+                    filenames.append(path.resolve().as_posix())
+                    modification_times.append(buf_modtimes[j])
+                    metadatas.append(buf_metadatas[j])
+            buf_paths.clear()
+            buf_images.clear()
+            buf_modtimes.clear()
+            buf_metadatas.clear()
+
+        def consume(i: int, image_path: Path, loaded: tuple | None) -> None:
+            if progress_callback:
+                progress_callback(i, total_images, f"Processing {image_path.name}")
+            if loaded is None:
+                bad_files.append(image_path)
+                return
+            pil, modtime, metadata = loaded
+            buf_paths.append(image_path)
+            buf_images.append(pil)
+            buf_modtimes.append(modtime)
+            buf_metadatas.append(metadata)
+            if len(buf_images) >= batch_size:
+                flush()
+
         try:
-            for i, image_path in enumerate(image_paths):
-                if progress_callback:
-                    progress_callback(i, total_images, f"Processing {image_path.name}")
+            if num_workers == 1:
+                # Serial path — preserves legacy behavior exactly.
+                for i, image_path in enumerate(image_paths):
+                    consume(i, image_path, self._load_image(image_path))
+            else:
+                # Parallel CPU loaders feeding the (single) GPU consumer in order.
+                # Bounded sliding window keeps memory in check on huge collections.
+                queue_capacity = num_workers * 2 + batch_size
+                it = enumerate(image_paths)
+                window: deque[tuple[int, Path, Any]] = deque()
+                with ThreadPoolExecutor(
+                    max_workers=num_workers, thread_name_prefix="img-loader"
+                ) as pool:
+                    for _ in range(queue_capacity):
+                        try:
+                            i, path = next(it)
+                        except StopIteration:
+                            break
+                        window.append((i, path, pool.submit(self._load_image, path)))
 
-                embedding, mod_time, metadata = self._process_single_image(
-                    image_path, encoder
-                )
-
-                if embedding is not None:
-                    embeddings.append(embedding)
-                    filenames.append(image_path.resolve().as_posix())
-                    modification_times.append(mod_time)
-                    metadatas.append(metadata)
-                else:
-                    bad_files.append(image_path)
+                    while window:
+                        i, path, fut = window.popleft()
+                        consume(i, path, fut.result())
+                        try:
+                            ni, npath = next(it)
+                        except StopIteration:
+                            continue
+                        window.append((ni, npath, pool.submit(self._load_image, npath)))
+            flush()
         finally:
             device = encoder.device
             encoder.close()
@@ -542,55 +639,28 @@ class Embeddings(BaseModel):
         )
 
     async def _process_images_batch_async(
-        self, image_paths: list[Path], album_key: str, yield_interval: int = 10
+        self,
+        image_paths: list[Path],
+        album_key: str,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult:
+        """Run the batched/parallel pipeline off the event loop.
+
+        The sync :meth:`_process_images_batch` already overlaps CPU loading
+        across threads, so delegating to it via ``asyncio.to_thread`` keeps
+        the FastAPI event loop fully responsive while indexing runs.
         """
-        Async version of _process_images_batch with progress tracking.
-        """
-        encoder = self._build_encoder()
-        embedding_dim = encoder.embedding_dim
-        model_id = encoder.model_id
 
-        embeddings = []
-        filenames = []
-        modification_times = []
-        metadatas = []
-        bad_files = []
+        def progress_cb(i: int, total: int, message: str) -> None:
+            progress_tracker.update_progress(album_key, i, message)
 
-        try:
-            for i, image_path in enumerate(image_paths):
-                progress_tracker.update_progress(
-                    album_key, i, f"Processing {image_path.name}"
-                )
-
-                embedding, mod_time, metadata = self._process_single_image(
-                    image_path, encoder
-                )
-
-                if embedding is not None:
-                    embeddings.append(embedding)
-                    filenames.append(image_path.resolve().as_posix())
-                    modification_times.append(mod_time)
-                    metadatas.append(metadata)
-                else:
-                    bad_files.append(image_path)
-
-                # Yield control periodically
-                if i % yield_interval == 0:
-                    await asyncio.sleep(0.01)
-        finally:
-            device = encoder.device
-            encoder.close()
-            self._cleanup_cuda_memory(device)
-
-        return IndexResult(
-            embeddings=np.array(embeddings) if embeddings else np.empty((0, embedding_dim)),
-            filenames=np.array(filenames),
-            modification_times=np.array(modification_times),
-            metadata=np.array(metadatas, dtype=object),
-            bad_files=bad_files,
-            model_id=model_id,
-            embedding_dim=embedding_dim,
+        return await asyncio.to_thread(
+            self._process_images_batch,
+            image_paths,
+            progress_cb,
+            batch_size,
+            num_workers,
         )
 
     def _save_embeddings(self, index_result: IndexResult) -> None:
@@ -711,6 +781,8 @@ class Embeddings(BaseModel):
         self,
         image_paths_or_dir: list[Path] | Path,
         create_index: bool = True,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult:
         """Index images using CLIP and save their embeddings."""
         image_paths = self.get_image_files(image_paths_or_dir)
@@ -720,7 +792,10 @@ class Embeddings(BaseModel):
         logger.info(f"Creating index {self.embeddings_path}...")
         self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
         result = self._process_images_batch(
-            image_paths, progress_callback=progress_callback
+            image_paths,
+            progress_callback=progress_callback,
+            batch_size=batch_size,
+            num_workers=num_workers,
         )
 
         if create_index:
@@ -740,6 +815,8 @@ class Embeddings(BaseModel):
         image_paths_or_dir: list[Path] | Path,
         album_key: str,
         create_index: bool = True,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Asynchronously index images using CLIP with progress tracking."""
         logger.info("Starting asynchronous indexing operation")
@@ -767,7 +844,9 @@ class Embeddings(BaseModel):
 
         try:
             self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
-            result = await self._process_images_batch_async(image_paths, album_key)
+            result = await self._process_images_batch_async(
+                image_paths, album_key, batch_size=batch_size, num_workers=num_workers
+            )
             progress_tracker.update_progress(
                 album_key, total_images, "Saving index file"
             )
@@ -792,7 +871,10 @@ class Embeddings(BaseModel):
             raise
 
     def update_index(
-        self, image_paths_or_dir: list[Path] | Path
+        self,
+        image_paths_or_dir: list[Path] | Path,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Update existing embeddings with new images."""
         assert (
@@ -852,7 +934,9 @@ class Embeddings(BaseModel):
             )
 
             # Process new images
-            new_result = self._process_images_batch(list(new_image_paths))
+            new_result = self._process_images_batch(
+                list(new_image_paths), batch_size=batch_size, num_workers=num_workers
+            )
 
             new_files_indexed = new_result.embeddings.shape[0]
             old_files_removed = len(missing_image_paths)
@@ -897,7 +981,11 @@ class Embeddings(BaseModel):
             raise
 
     async def update_index_async(
-        self, image_paths_or_dir: list[Path] | Path, album_key: str
+        self,
+        image_paths_or_dir: list[Path] | Path,
+        album_key: str,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Asynchronously update existing embeddings with new images."""
         assert (
@@ -965,7 +1053,10 @@ class Embeddings(BaseModel):
 
             # Process new images
             new_result = await self._process_images_batch_async(
-                list(new_image_paths), album_key
+                list(new_image_paths),
+                album_key,
+                batch_size=batch_size,
+                num_workers=num_workers,
             )
 
             new_files_indexed = new_result.embeddings.shape[0]
