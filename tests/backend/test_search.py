@@ -186,3 +186,89 @@ def test_text_search(client, new_album, monkeypatch):
     assert (
         Path(TEST_NEG_FILE).name not in filenames
     ), "Text search returned unexpected image"
+
+
+def test_calibration_skipped_for_image_queries(tmp_path, monkeypatch):
+    """SigLIP's sigmoid calibration was crushing every image-image cosine to
+    1.0, returning 100 saturated matches. Calibration must only apply to
+    text-only queries.
+    """
+    import numpy as np
+    from PIL import Image
+
+    from photomap.backend import encoders as encoders_module
+    from photomap.backend.embeddings import Embeddings
+
+    # Build a tiny .npz with three known embeddings so the search code has
+    # something to score against.
+    embed_dim = 4
+    stored = np.array(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    npz_path = tmp_path / "stub.npz"
+    np.savez(
+        npz_path,
+        embeddings=stored,
+        filenames=np.array(["a.jpg", "b.jpg", "c.jpg"]),
+        modification_times=np.array([1.0, 2.0, 3.0]),
+        metadata=np.array([{}, {}, {}], dtype=object),
+        model_id=np.array("stub:test"),
+        embedding_dim=np.array(embed_dim),
+    )
+
+    class StubEncoder:
+        model_id = "stub:test"
+        embedding_dim = embed_dim
+        device = "cpu"
+        calibrate_calls = 0
+
+        def encode_images(self, images):
+            return stored[:1]  # closest to "a.jpg"
+
+        def encode_text(self, texts):
+            return stored[:1]
+
+        def calibrate_similarity(self, cosines):
+            type(self).calibrate_calls += 1
+            # Detectable transform: negate so we can prove it ran or didn't.
+            return -cosines
+
+        def close(self):
+            pass
+
+    encoders_module.clear_encoder_cache()
+    monkeypatch.setattr(encoders_module, "build_encoder", lambda *a, **k: StubEncoder())
+
+    emb = Embeddings(embeddings_path=npz_path, encoder_spec="stub:test")
+
+    # Pure-image query: calibration must NOT run.
+    StubEncoder.calibrate_calls = 0
+    indices, scores = emb.search_images_by_text_and_image(
+        query_image_data=Image.new("RGB", (8, 8), color="red"),
+        positive_query=None,
+        image_weight=1.0,
+        positive_weight=0.0,
+        top_k=3,
+        minimum_score=0.0,
+    )
+    assert StubEncoder.calibrate_calls == 0, "image-only query must not trigger calibration"
+    assert all(s >= 0 for s in scores), "raw cosines should not have been negated"
+
+    # Pure-text query: calibration MUST run.
+    StubEncoder.calibrate_calls = 0
+    emb.search_images_by_text_and_image(
+        query_image_data=None,
+        positive_query="anything",
+        image_weight=0.0,
+        positive_weight=1.0,
+        top_k=3,
+        minimum_score=-1.0,  # let everything through so we can inspect scores
+    )
+    assert StubEncoder.calibrate_calls == 1, "text-only query must apply calibration"
+
+    encoders_module.clear_encoder_cache()

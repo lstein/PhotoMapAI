@@ -1270,10 +1270,14 @@ class Embeddings(BaseModel):
             combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(torch.float32)
 
             similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
-            # Encoder-specific calibration: SigLIP applies its learned sigmoid
-            # so cosines land in a probability-like range comparable to CLIP.
-            # CLIP/OpenCLIP return cosines unchanged.
-            similarities = encoder.calibrate_similarity(similarities)
+            # Apply per-encoder calibration only for text-only queries. SigLIP's
+            # sigmoid was trained on image-text pairs; image-image cosines are
+            # already much higher than image-text cosines, and feeding them
+            # through ``sigmoid(cos * exp(scale) + bias)`` saturates everything
+            # to 1.0. CLIP/OpenCLIP define this as a no-op so the branch is
+            # effectively only meaningful for SigLIP.
+            if image_weight == 0.0:
+                similarities = encoder.calibrate_similarity(similarities)
             top_indices = similarities.argsort()[-top_k:][::-1]
             top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
 
