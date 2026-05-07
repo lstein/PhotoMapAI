@@ -1,6 +1,7 @@
 import shutil
 from pathlib import Path
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from fixtures import build_index, count_test_images
@@ -8,7 +9,7 @@ from fixtures import build_index, count_test_images
 from photomap.backend.config import get_config_manager
 
 # Import the cache function directly so we can inspect it
-from photomap.backend.embeddings import _open_npz_file
+from photomap.backend.embeddings import Embeddings, _open_npz_file
 
 TEST_IMAGE_COUNT = count_test_images()
 
@@ -358,3 +359,77 @@ def test_create_directory_already_exists(client: TestClient, tmp_path: Path):
     )
     assert response.status_code == 409
     assert "already exists" in response.json().get("detail", "").lower()
+
+
+class _DeterministicEncoder:
+    """Stand-in encoder that produces deterministic embeddings per image.
+
+    Returns an embedding that uniquely identifies the input image (mean pixel
+    value of the resized RGB), so we can verify that parallel decoding still
+    pairs the right embedding with the right input path.
+    """
+
+    model_id = "stub:deterministic"
+    embedding_dim = 4
+    device = "cpu"
+
+    def encode_images(self, images):
+        out = np.zeros((len(images), self.embedding_dim), dtype=np.float32)
+        for i, img in enumerate(images):
+            small = img.resize((8, 8))
+            arr = np.asarray(small, dtype=np.float32)
+            out[i, 0] = arr[..., 0].mean()
+            out[i, 1] = arr[..., 1].mean()
+            out[i, 2] = arr[..., 2].mean()
+            out[i, 3] = float(arr.size)
+        return out
+
+    def encode_text(self, texts):
+        return np.zeros((len(texts), self.embedding_dim), dtype=np.float32)
+
+    def close(self):
+        pass
+
+
+def test_parallel_workers_preserve_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Parallel CPU loaders must yield the same per-path embedding as the serial path.
+
+    Loading runs concurrently in worker threads; the consumer is responsible for
+    re-aligning futures with their submission order before each batch is sent
+    to the encoder. This test guards that alignment.
+    """
+    # Use the bundled test images and replicate them so we exercise multiple
+    # batches and have enough work for parallelism to actually shuffle timing.
+    src_images = sorted((Path(__file__).parent / "test_images").iterdir())
+    work_dir = tmp_path / "images"
+    work_dir.mkdir()
+    image_paths: list[Path] = []
+    for repeat in range(4):
+        for src in src_images:
+            dst = work_dir / f"{repeat:02d}_{src.name}"
+            shutil.copy(src, dst)
+            image_paths.append(dst)
+
+    emb = Embeddings(embeddings_path=tmp_path / "ignored.npz")
+
+    # Skip model loading and UMAP — we're testing the parallel pipeline,
+    # not the encoder backend or dimensionality reduction.
+    monkeypatch.setattr(Embeddings, "_build_encoder", lambda self: _DeterministicEncoder())
+    monkeypatch.setattr(
+        Embeddings,
+        "create_umap_index",
+        lambda self, embeddings: np.zeros((embeddings.shape[0], 2), dtype=np.float32),
+    )
+
+    serial = emb._process_images_batch(image_paths, batch_size=4, num_workers=1)
+    parallel = emb._process_images_batch(image_paths, batch_size=4, num_workers=4)
+
+    assert list(serial.filenames) == list(parallel.filenames)
+    assert list(serial.filenames) == [p.resolve().as_posix() for p in image_paths]
+    np.testing.assert_array_equal(serial.embeddings, parallel.embeddings)
+    np.testing.assert_array_equal(
+        serial.modification_times, parallel.modification_times
+    )
+    assert serial.bad_files == parallel.bad_files == []
