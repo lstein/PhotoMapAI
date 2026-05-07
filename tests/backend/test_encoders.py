@@ -35,7 +35,7 @@ def test_build_encoder_resolves_openai_clip(monkeypatch):
         self.device = "cpu"
 
     monkeypatch.setattr(OpenAIClipEncoder, "__init__", fake_init)
-    encoder = build_encoder("openai-clip:ViT-B/32", download_root="/tmp/x")
+    encoder = build_encoder("openai-clip:ViT-B/32", cache_dir="/tmp/x")
 
     assert isinstance(encoder, OpenAIClipEncoder)
     assert captured == {"variant": "ViT-B/32", "device": None, "download_root": "/tmp/x"}
@@ -48,15 +48,37 @@ def test_build_encoder_resolves_open_clip(monkeypatch):
     def fake_init(self, model_name, pretrained, device=None, cache_dir=None):
         captured["model_name"] = model_name
         captured["pretrained"] = pretrained
+        captured["cache_dir"] = cache_dir
         self.model_id = f"open-clip:{model_name}/{pretrained}"
         self.embedding_dim = 768
         self.device = "cpu"
 
     monkeypatch.setattr(OpenClipEncoder, "__init__", fake_init)
-    encoder = build_encoder("open-clip:ViT-L-14/dfn2b")
+    encoder = build_encoder("open-clip:ViT-L-14/dfn2b", cache_dir="/tmp/oc")
 
     assert isinstance(encoder, OpenClipEncoder)
-    assert captured == {"model_name": "ViT-L-14", "pretrained": "dfn2b"}
+    assert captured == {
+        "model_name": "ViT-L-14",
+        "pretrained": "dfn2b",
+        "cache_dir": "/tmp/oc",
+    }
+
+
+def test_build_encoder_siglip_ignores_cache_dir(monkeypatch):
+    """SigLIP uses HF's own cache and should silently ignore cache_dir."""
+    captured: dict[str, object] = {}
+
+    def fake_init(self, hf_id, device=None):
+        captured["hf_id"] = hf_id
+        self.model_id = f"siglip:{hf_id}"
+        self.embedding_dim = 1024
+        self.device = "cpu"
+
+    monkeypatch.setattr(SiglipEncoder, "__init__", fake_init)
+    encoder = build_encoder("siglip:google/siglip2-base", cache_dir="/tmp/ignored")
+
+    assert isinstance(encoder, SiglipEncoder)
+    assert captured == {"hf_id": "google/siglip2-base"}
 
 
 def test_build_encoder_open_clip_requires_pretrained():

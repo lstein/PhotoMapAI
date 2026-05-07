@@ -281,7 +281,7 @@ class Embeddings(BaseModel):
 
     def _build_encoder(self) -> ImageTextEncoder:
         """Construct the encoder for this album from its spec."""
-        return build_encoder(self.encoder_spec, download_root=self._clip_root())
+        return build_encoder(self.encoder_spec, cache_dir=self._clip_root())
 
     def _check_cache_compatibility(
         self, data: dict[str, Any], encoder: ImageTextEncoder

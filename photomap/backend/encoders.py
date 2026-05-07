@@ -207,7 +207,12 @@ def _free_cuda(device: str) -> None:
         torch.cuda.empty_cache()
 
 
-def build_encoder(spec: str | None = None, **kwargs) -> ImageTextEncoder:
+def build_encoder(
+    spec: str | None = None,
+    *,
+    cache_dir: str | None = None,
+    device: str | None = None,
+) -> ImageTextEncoder:
     """Resolve an encoder spec to a concrete encoder.
 
     Spec format is ``"<backend>:<model>"``. Supported backends:
@@ -215,6 +220,10 @@ def build_encoder(spec: str | None = None, **kwargs) -> ImageTextEncoder:
     - ``openai-clip:<variant>``         e.g. ``openai-clip:ViT-B/32``
     - ``open-clip:<model>/<pretrained>`` e.g. ``open-clip:ViT-L-14/dfn2b``
     - ``siglip:<hf_id>``                e.g. ``siglip:google/siglip2-large-patch16-256``
+
+    ``cache_dir`` is mapped to each backend's native option (``download_root``
+    for OpenAI CLIP, ``cache_dir`` for OpenCLIP). SigLIP uses the standard
+    Hugging Face cache (``HF_HOME``/``TRANSFORMERS_CACHE``) and ignores it.
 
     A ``None`` or empty spec resolves to ``DEFAULT_ENCODER_SPEC``.
     """
@@ -224,15 +233,17 @@ def build_encoder(spec: str | None = None, **kwargs) -> ImageTextEncoder:
         raise ValueError(f"Encoder spec {spec!r} is missing a model identifier")
 
     if backend == "openai-clip":
-        return OpenAIClipEncoder(variant=rest, **kwargs)
+        return OpenAIClipEncoder(variant=rest, device=device, download_root=cache_dir)
     if backend == "open-clip":
         name, _, pretrained = rest.partition("/")
         if not pretrained:
             raise ValueError(
                 f"open-clip spec must be 'open-clip:<model>/<pretrained>', got {spec!r}"
             )
-        return OpenClipEncoder(model_name=name, pretrained=pretrained, **kwargs)
+        return OpenClipEncoder(
+            model_name=name, pretrained=pretrained, device=device, cache_dir=cache_dir
+        )
     if backend == "siglip":
-        return SiglipEncoder(hf_id=rest, **kwargs)
+        return SiglipEncoder(hf_id=rest, device=device)
 
     raise ValueError(f"Unknown encoder backend in spec {spec!r}")
