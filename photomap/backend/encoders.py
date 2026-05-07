@@ -12,6 +12,8 @@ weights, so behavior is unchanged unless an album opts in to a different spec.
 
 from __future__ import annotations
 
+import math
+import threading
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -49,6 +51,16 @@ class ImageTextEncoder(ABC):
     @abstractmethod
     def encode_text(self, texts: list[str]) -> np.ndarray:
         """Encode a batch of strings. Returns ``(N, D)`` float32 L2-normalized array."""
+
+    def calibrate_similarity(self, cosines: np.ndarray) -> np.ndarray:
+        """Map raw cosine similarities to a comparable score in roughly ``[0, 1]``.
+
+        Default implementation is the identity, which is appropriate for CLIP-style
+        contrastive encoders whose cosine scores are already in a usable range.
+        SigLIP overrides this to apply the learned sigmoid calibration so a single
+        threshold (e.g. 0.2) produces sane recall across encoder choices.
+        """
+        return cosines
 
     def close(self) -> None:  # noqa: B027
         """Release model weights and free GPU memory.
@@ -172,6 +184,19 @@ class SiglipEncoder(ImageTextEncoder):
         self.model_id = f"siglip:{hf_id}"
         self.embedding_dim = int(self._model.config.text_config.hidden_size)
 
+        # SigLIP applies sigmoid(cos * exp(logit_scale) + logit_bias) to turn
+        # cosine similarities into calibrated match probabilities. Capture the
+        # learned scalars here so calibrate_similarity() can do the transform
+        # without holding a reference to the live model.
+        scale_param = getattr(self._model, "logit_scale", None)
+        bias_param = getattr(self._model, "logit_bias", None)
+        self._logit_scale = (
+            float(scale_param.detach().cpu().item()) if scale_param is not None else None
+        )
+        self._logit_bias = (
+            float(bias_param.detach().cpu().item()) if bias_param is not None else 0.0
+        )
+
     @torch.no_grad()
     def encode_images(self, images: list[Image.Image]) -> np.ndarray:
         inputs = self._processor(
@@ -187,6 +212,27 @@ class SiglipEncoder(ImageTextEncoder):
         ).to(self.device)
         feats = self._model.get_text_features(**inputs)
         return _normalize(_unwrap_pooled(feats))
+
+    def calibrate_similarity(self, cosines: np.ndarray) -> np.ndarray:
+        """Apply SigLIP's learned sigmoid calibration.
+
+        SigLIP's training objective produces image-text cosines of order 0.05-0.20
+        for matching pairs — much smaller than CLIP's 0.20-0.35 range. Without
+        calibration, a CLIP-tuned threshold like 0.2 filters out almost every
+        true match. The model's ``logit_scale`` and ``logit_bias`` recover
+        per-pair match probabilities via ``sigmoid(cos * exp(scale) + bias)``,
+        which restores comparable threshold semantics across encoders.
+        """
+        if self._logit_scale is None:
+            return cosines
+        scale = math.exp(self._logit_scale)
+        logits = cosines * scale + self._logit_bias
+        # Stable sigmoid that handles large negative logits without overflow.
+        return np.where(
+            logits >= 0,
+            1.0 / (1.0 + np.exp(-logits)),
+            np.exp(logits) / (1.0 + np.exp(logits)),
+        )
 
     def close(self) -> None:
         for attr in ("_model", "_processor"):
@@ -261,3 +307,44 @@ def build_encoder(
         return SiglipEncoder(hf_id=rest, device=device)
 
     raise ValueError(f"Unknown encoder backend in spec {spec!r}")
+
+
+# Module-level encoder cache for query/search workloads. Indexing builds and
+# closes its own short-lived encoder; search calls fire many times per session
+# and re-running ``AutoModel.from_pretrained`` on each request is both slow
+# (HF Hub HEAD checks per file) and noisy. We cache by (spec, cache_dir) and
+# leave eviction to ``clear_encoder_cache`` since the working set is small —
+# typically one encoder per album in active use.
+_search_encoder_cache: dict[tuple[str, str | None], ImageTextEncoder] = {}
+_search_encoder_lock = threading.Lock()
+
+
+def get_cached_encoder(
+    spec: str | None = None,
+    *,
+    cache_dir: str | None = None,
+    device: str | None = None,
+) -> ImageTextEncoder:
+    """Return a process-cached encoder suitable for repeated search queries.
+
+    The first call for a given ``(spec, cache_dir)`` builds the encoder; later
+    calls return the same instance. The caller MUST NOT call ``encoder.close()``
+    on the result — eviction is the cache's responsibility via
+    :func:`clear_encoder_cache`.
+    """
+    resolved_spec = spec or DEFAULT_ENCODER_SPEC
+    key = (resolved_spec, cache_dir)
+    with _search_encoder_lock:
+        encoder = _search_encoder_cache.get(key)
+        if encoder is None:
+            encoder = build_encoder(resolved_spec, cache_dir=cache_dir, device=device)
+            _search_encoder_cache[key] = encoder
+    return encoder
+
+
+def clear_encoder_cache() -> None:
+    """Free every cached search encoder. Mostly for tests and memory recovery."""
+    with _search_encoder_lock:
+        for encoder in _search_encoder_cache.values():
+            encoder.close()
+        _search_encoder_cache.clear()

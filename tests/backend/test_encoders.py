@@ -7,15 +7,22 @@ End-to-end indexing/search tests live elsewhere and exercise the default
 
 from __future__ import annotations
 
+import math
+
+import numpy as np
 import pytest
 
+from photomap.backend import encoders as encoders_module
 from photomap.backend.encoders import (
     DEFAULT_ENCODER_SPEC,
     EmbeddingCacheMismatch,
+    ImageTextEncoder,
     OpenAIClipEncoder,
     OpenClipEncoder,
     SiglipEncoder,
     build_encoder,
+    clear_encoder_cache,
+    get_cached_encoder,
 )
 
 
@@ -134,3 +141,115 @@ def test_embedding_cache_mismatch_message():
     assert "/tmp/cache.npz" in str(err)
     assert err.stored == "openai-clip:ViT-B/32"
     assert err.current == "siglip:foo"
+
+
+def test_default_calibration_is_identity():
+    """CLIP-style encoders should not transform raw cosines."""
+
+    class _Stub(ImageTextEncoder):
+        model_id = "stub:identity"
+        embedding_dim = 4
+        device = "cpu"
+
+        def encode_images(self, images):
+            raise NotImplementedError
+
+        def encode_text(self, texts):
+            raise NotImplementedError
+
+    cosines = np.array([-0.3, 0.0, 0.25, 0.7], dtype=np.float32)
+    out = _Stub().calibrate_similarity(cosines)
+    np.testing.assert_array_equal(out, cosines)
+
+
+def test_siglip_calibration_applies_learned_sigmoid(monkeypatch):
+    """SigLIP must apply sigmoid(cos * exp(scale) + bias) to recover probabilities.
+
+    The bug being guarded: raw SigLIP image-text cosines for matching pairs sit
+    around 0.05-0.20, well below a CLIP-tuned threshold like 0.2, so search
+    yielded zero hits. The learned scale/bias map them back into a CLIP-like
+    range.
+    """
+    monkeypatch.setattr(
+        SiglipEncoder,
+        "__init__",
+        lambda self, hf_id, device=None: (
+            setattr(self, "model_id", f"siglip:{hf_id}"),
+            setattr(self, "embedding_dim", 1024),
+            setattr(self, "device", "cpu"),
+            setattr(self, "_logit_scale", math.log(10.0)),  # exp(scale) == 10
+            setattr(self, "_logit_bias", -2.0),
+        )
+        and None,
+    )
+    encoder = SiglipEncoder(hf_id="google/siglip2-large-patch16-256")
+
+    cosines = np.array([0.0, 0.2, 0.5, 1.0], dtype=np.float64)
+    expected = 1.0 / (1.0 + np.exp(-(cosines * 10.0 + -2.0)))
+    np.testing.assert_allclose(encoder.calibrate_similarity(cosines), expected, atol=1e-7)
+
+    # A SigLIP-typical match cosine of 0.10 was filtering out at threshold 0.2;
+    # after calibration it lands above threshold.
+    boosted = encoder.calibrate_similarity(np.array([0.10]))[0]
+    assert boosted > 0.2, f"expected calibrated 0.10 cosine to clear 0.2 threshold, got {boosted}"
+
+
+def test_siglip_calibration_no_op_when_scale_missing(monkeypatch):
+    """Defensive: if the SigLIP model didn't expose logit_scale, fall back to identity."""
+    monkeypatch.setattr(
+        SiglipEncoder,
+        "__init__",
+        lambda self, hf_id, device=None: (
+            setattr(self, "model_id", f"siglip:{hf_id}"),
+            setattr(self, "embedding_dim", 1024),
+            setattr(self, "device", "cpu"),
+            setattr(self, "_logit_scale", None),
+            setattr(self, "_logit_bias", 0.0),
+        )
+        and None,
+    )
+    encoder = SiglipEncoder(hf_id="x")
+    cosines = np.array([0.1, 0.5])
+    np.testing.assert_array_equal(encoder.calibrate_similarity(cosines), cosines)
+
+
+def test_get_cached_encoder_reuses_instance(monkeypatch):
+    """Repeated search queries must reuse the same encoder instance."""
+    clear_encoder_cache()
+    call_count = {"n": 0}
+
+    def fake_build(spec=None, *, cache_dir=None, device=None):
+        call_count["n"] += 1
+        marker = object()
+        return type(
+            "FakeEncoder",
+            (),
+            {
+                "model_id": spec,
+                "embedding_dim": 4,
+                "device": "cpu",
+                "_marker": marker,
+                "close": lambda self: None,
+                "encode_images": lambda self, images: None,
+                "encode_text": lambda self, texts: None,
+                "calibrate_similarity": lambda self, cosines: cosines,
+            },
+        )()
+
+    monkeypatch.setattr(encoders_module, "build_encoder", fake_build)
+
+    a = get_cached_encoder("openai-clip:ViT-B/32", cache_dir="/tmp/x")
+    b = get_cached_encoder("openai-clip:ViT-B/32", cache_dir="/tmp/x")
+    assert a is b
+    assert call_count["n"] == 1
+
+    # Different spec -> different cached instance.
+    c = get_cached_encoder("siglip:google/siglip2-base-patch16-224")
+    assert c is not a
+    assert call_count["n"] == 2
+
+    clear_encoder_cache()
+    d = get_cached_encoder("openai-clip:ViT-B/32", cache_dir="/tmp/x")
+    assert d is not a
+    assert call_count["n"] == 3
+    clear_encoder_cache()

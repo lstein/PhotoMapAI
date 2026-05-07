@@ -38,6 +38,7 @@ from .encoders import (
     EmbeddingCacheMismatch,
     ImageTextEncoder,
     build_encoder,
+    get_cached_encoder,
 )
 from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
@@ -1206,7 +1207,10 @@ class Embeddings(BaseModel):
         filenames = data["filenames"]
         filename_map = data["filename_map"]
 
-        encoder = self._build_encoder()
+        # Search uses a cached encoder so repeated queries don't reload the
+        # model — especially important for SigLIP, which otherwise re-issues
+        # HF Hub HEAD checks for every search.
+        encoder = get_cached_encoder(self.encoder_spec, cache_dir=self._clip_root())
         device = encoder.device
 
         try:
@@ -1266,6 +1270,10 @@ class Embeddings(BaseModel):
             combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(torch.float32)
 
             similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
+            # Encoder-specific calibration: SigLIP applies its learned sigmoid
+            # so cosines land in a probability-like range comparable to CLIP.
+            # CLIP/OpenCLIP return cosines unchanged.
+            similarities = encoder.calibrate_similarity(similarities)
             top_indices = similarities.argsort()[-top_k:][::-1]
             top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
 
@@ -1278,7 +1286,8 @@ class Embeddings(BaseModel):
 
             return result_indices, result_similarities
         finally:
-            # Drop any local tensors before tearing down the encoder.
+            # Drop any local tensors so VRAM doesn't accumulate across queries.
+            # The encoder itself is cached and intentionally NOT closed here.
             for name in (
                 "image_embedding",
                 "pos_emb",
@@ -1291,7 +1300,6 @@ class Embeddings(BaseModel):
             ):
                 if name in locals():
                     del locals()[name]
-            encoder.close()
             self._cleanup_cuda_memory(device)
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):
