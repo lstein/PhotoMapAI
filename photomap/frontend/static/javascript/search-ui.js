@@ -1,6 +1,6 @@
 // search-ui.js
 // This file handles the search functionality for the Clipslide application.
-import { calculate_search_score_cutoff, searchImage, searchTextAndImage, setSearchResults } from "./search.js";
+import { searchImage, searchTextAndImage, setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
@@ -96,7 +96,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       showSpinner();
 
-      let new_results = await searchTextAndImage({
+      // The backend already filters by state.minSearchScore; trust that
+      // and don't second-guess the user's threshold here.
+      const new_results = await searchTextAndImage({
         image_file: imageFile,
         positive_query: positiveQuery,
         negative_query: negativeQuery,
@@ -104,18 +106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         positive_weight: posWeight,
         negative_weight: negWeight,
         album: state.album,
-        top_k: 500,
       });
-
-      const cutoff = calculate_search_score_cutoff(
-        imageFile,
-        imgWeight,
-        positiveQuery,
-        posWeight,
-        negativeQuery,
-        negWeight
-      );
-      new_results = new_results.filter((item) => item.score >= cutoff);
 
       setSearchResults(new_results, searchType);
       if (new_results.length > 0) {
@@ -356,8 +347,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 export async function searchWithImage(file) {
   try {
     showSpinner();
-    let results = await searchImage(file);
-    results = results.filter((item) => item.score >= 0.6);
+    // Backend honors state.minSearchScore; no second filter here.
+    const results = await searchImage(file);
     setSearchResults(results, "image");
   } catch (err) {
     console.error("Image search request failed:", err);

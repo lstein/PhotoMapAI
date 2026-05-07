@@ -3,9 +3,6 @@
 import { state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
-const IMAGE_SCORE_CUTOFF = 0.75; // Default image score cutoff
-const TEXT_SCORE_CUTOFF = 0.2; // Default text score cutoff
-
 // Call the server to fetch the image indicated by the index
 export async function fetchImageByIndex(index) {
   let response;
@@ -115,31 +112,4 @@ export async function getImagePath(album, index) {
     return null;
   }
   return await response.text();
-}
-
-// Guesstimate the best search score cutoff from the weights applied.
-export function calculate_search_score_cutoff(
-  imageFile,
-  imgWeight,
-  positiveQuery,
-  posWeight,
-  negativeQuery,
-  negWeight
-) {
-  let numerator = 0;
-  let denominator = 0;
-  if (imageFile !== null) {
-    numerator += imgWeight * IMAGE_SCORE_CUTOFF; // Image score cutoff
-    denominator += imgWeight;
-  }
-  if (positiveQuery !== "") {
-    numerator += posWeight * TEXT_SCORE_CUTOFF; // Positive
-    denominator += posWeight;
-  }
-  if (negativeQuery !== "") {
-    numerator += negWeight * TEXT_SCORE_CUTOFF; // Negative
-    denominator += negWeight;
-  }
-  const cutoff = numerator / denominator;
-  return cutoff;
 }
