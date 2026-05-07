@@ -196,6 +196,20 @@ def get_kmeans_indices_global(
     return [filenames[i] for i in final_global_indices]
 
 
+def peek_encoder_spec(embeddings_path: Path) -> str:
+    """Return the encoder model_id stored in an .npz, without loading heavy arrays.
+
+    Falls back to ``DEFAULT_ENCODER_SPEC`` for legacy caches that predate the
+    encoder swap layer. Not cached: the underlying file may be rewritten (e.g.,
+    after a re-index), and a stale read could mask an encoder swap.
+    """
+    embeddings_path = Path(embeddings_path)
+    with np.load(embeddings_path, allow_pickle=True) as data:
+        if "model_id" in data.files:
+            return str(data["model_id"])
+    return DEFAULT_ENCODER_SPEC
+
+
 @functools.lru_cache(maxsize=3)
 def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
     """
