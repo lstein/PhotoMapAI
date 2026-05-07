@@ -266,7 +266,10 @@ def get_embeddings_for_album(album_key: str) -> Embeddings:
     """Get embeddings instance for a given album."""
     check_album_lock(album_key)  # May raise a 403 exception
     album_config = validate_album_exists(album_key)
-    return Embeddings(embeddings_path=Path(album_config.index))
+    return Embeddings(
+        embeddings_path=Path(album_config.index),
+        encoder_spec=album_config.encoder_spec,
+    )
 
 
 def validate_image_access(album_config, image_path: Path) -> bool:

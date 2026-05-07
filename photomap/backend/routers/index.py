@@ -253,7 +253,10 @@ async def delete_image(album_key: str, index: int) -> JSONResponse:
     check_album_lock()  # May raise a 403 exception
     try:
         album_config = validate_album_exists(album_key)
-        embeddings = Embeddings(embeddings_path=Path(album_config.index))
+        embeddings = Embeddings(
+            embeddings_path=Path(album_config.index),
+            encoder_spec=album_config.encoder_spec,
+        )
         image_path = embeddings.get_image_path(index)
 
         if not validate_image_access(album_config, image_path):
@@ -286,7 +289,10 @@ async def move_images(album_key: str, req: MoveImagesRequest) -> JSONResponse:
     check_album_lock()  # May raise a 403 exception
     try:
         album_config = validate_album_exists(album_key)
-        embeddings = Embeddings(embeddings_path=Path(album_config.index))
+        embeddings = Embeddings(
+            embeddings_path=Path(album_config.index),
+            encoder_spec=album_config.encoder_spec,
+        )
 
         target_dir = Path(req.target_directory)
 
@@ -374,7 +380,10 @@ async def copy_images(album_key: str, req: CopyImagesRequest) -> JSONResponse:
     # Note: No album lock check - copying doesn't modify the album
     try:
         album_config = validate_album_exists(album_key)
-        embeddings = Embeddings(embeddings_path=Path(album_config.index))
+        embeddings = Embeddings(
+            embeddings_path=Path(album_config.index),
+            encoder_spec=album_config.encoder_spec,
+        )
 
         target_dir = Path(req.target_directory)
 
@@ -448,7 +457,10 @@ async def _update_index_background_async(album_key: str, album_config):
         image_paths = [Path(path) for path in album_config.image_paths]
         index_path = Path(album_config.index)
 
-        embeddings = Embeddings(embeddings_path=index_path)
+        embeddings = Embeddings(
+            embeddings_path=index_path,
+            encoder_spec=album_config.encoder_spec,
+        )
 
         if index_path.exists():
             logger.info(f"Updating existing index for album '{album_key}'...")

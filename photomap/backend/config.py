@@ -14,6 +14,8 @@ import yaml
 from platformdirs import user_config_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .encoders import DEFAULT_ENCODER_SPEC
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +30,15 @@ class Album(BaseModel):
     index: str = Field(..., description="Path to the embeddings index file")
     umap_eps: float = Field(default=0.2, description="UMAP epsilon parameter")
     description: str = Field(default="", description="Album description")
+    encoder_spec: str = Field(
+        default=DEFAULT_ENCODER_SPEC,
+        description=(
+            "Image/text encoder spec. Format: '<backend>:<model>'. "
+            "Examples: 'openai-clip:ViT-B/32' (default, legacy), "
+            "'open-clip:ViT-L-14/dfn2b', 'siglip:google/siglip2-large-patch16-256'. "
+            "Changing this requires re-indexing the album."
+        ),
+    )
 
     @field_validator("image_paths")
     @classmethod
@@ -56,6 +67,7 @@ class Album(BaseModel):
             "index": self.index,
             "umap_eps": self.umap_eps,
             "description": self.description,
+            "encoder_spec": self.encoder_spec,
         }
 
     @classmethod
@@ -68,6 +80,7 @@ class Album(BaseModel):
             index=data["index"],
             umap_eps=data.get("umap_eps", 0.07),
             description=data.get("description", ""),
+            encoder_spec=data.get("encoder_spec", DEFAULT_ENCODER_SPEC),
         )
 
 

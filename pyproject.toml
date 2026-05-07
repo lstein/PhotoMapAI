@@ -70,6 +70,8 @@ development = [
     "pyinstaller",
     "ruff",
 ]
+open-clip = ["open_clip_torch"]
+siglip = ["transformers"]
 
 [tool.setuptools.packages.find]
 where = ["."]  # Look in the current directory (repo root)
