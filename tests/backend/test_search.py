@@ -274,6 +274,88 @@ def test_calibration_skipped_for_image_queries(tmp_path, monkeypatch):
     encoders_module.clear_encoder_cache()
 
 
+def test_search_use_query_optimization_sets_encoder_flag(tmp_path, monkeypatch):
+    """The search method must propagate use_query_optimization to the cached
+    encoder's ``use_ensembling`` attribute before encoding text. The frontend
+    sources this value from the album's per-album toggle.
+    """
+    import numpy as np
+
+    from photomap.backend import encoders as encoders_module
+    from photomap.backend.embeddings import Embeddings
+
+    embed_dim = 4
+    npz_path = tmp_path / "stub.npz"
+    np.savez(
+        npz_path,
+        embeddings=np.eye(2, embed_dim, dtype=np.float32),
+        filenames=np.array(["a.jpg", "b.jpg"]),
+        modification_times=np.array([1.0, 2.0]),
+        metadata=np.array([{}, {}], dtype=object),
+        model_id=np.array("stub:test"),
+        embedding_dim=np.array(embed_dim),
+    )
+
+    class StubEncoder:
+        model_id = "stub:test"
+        embedding_dim = embed_dim
+        device = "cpu"
+        use_ensembling = True  # the encoder ships with this attribute
+
+        def encode_images(self, images):
+            return np.zeros((1, embed_dim), dtype=np.float32)
+
+        def encode_text(self, texts):
+            return np.array([[0.0, 1.0, 0.0, 0.0]], dtype=np.float32)
+
+        def calibrate_similarity(self, cosines):
+            return cosines
+
+        def close(self):
+            pass
+
+    encoders_module.clear_encoder_cache()
+    monkeypatch.setattr(encoders_module, "build_encoder", lambda *a, **k: StubEncoder())
+    emb = Embeddings(embeddings_path=npz_path, encoder_spec="stub:test")
+
+    # use_query_optimization=False must turn the encoder's flag off.
+    emb.search_images_by_text_and_image(
+        positive_query="anything",
+        image_weight=0.0,
+        positive_weight=1.0,
+        top_k=2,
+        minimum_score=-1.0,
+        use_query_optimization=False,
+    )
+    cached = next(iter(encoders_module._search_encoder_cache.values()))
+    assert cached.use_ensembling is False
+
+    # And turning it back on must flip the flag again.
+    emb.search_images_by_text_and_image(
+        positive_query="anything",
+        image_weight=0.0,
+        positive_weight=1.0,
+        top_k=2,
+        minimum_score=-1.0,
+        use_query_optimization=True,
+    )
+    assert cached.use_ensembling is True
+
+    # ``None`` means "leave it alone" — the encoder's current state stays.
+    cached.use_ensembling = False
+    emb.search_images_by_text_and_image(
+        positive_query="anything",
+        image_weight=0.0,
+        positive_weight=1.0,
+        top_k=2,
+        minimum_score=-1.0,
+        use_query_optimization=None,
+    )
+    assert cached.use_ensembling is False
+
+    encoders_module.clear_encoder_cache()
+
+
 def test_search_combines_modalities_in_score_space(tmp_path, monkeypatch):
     """Mixed-modality and negative queries combine cosines in score space:
     weighted average over positive (image + positive-text) contributions,

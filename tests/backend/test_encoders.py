@@ -222,7 +222,6 @@ def test_siglip_encode_text_uses_prompt_ensembling(monkeypatch):
     from photomap.backend import encoders as encoders_module
     from photomap.backend.encoders import SIGLIP_PROMPT_TEMPLATES
 
-    monkeypatch.setattr(encoders_module, "SIGLIP_USE_PROMPT_ENSEMBLING", True)
     captured = {}
 
     class FakeProcessorOutput(dict):
@@ -260,6 +259,7 @@ def test_siglip_encode_text_uses_prompt_ensembling(monkeypatch):
             setattr(self, "_logit_bias", 0.0),
             setattr(self, "_processor", FakeProcessor()),
             setattr(self, "_model", FakeModel()),
+            setattr(self, "use_ensembling", True),
         )
         and None,
     )

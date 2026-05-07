@@ -28,6 +28,7 @@ DEFAULT_ENCODER_SPEC = "openai-clip:ViT-B/32"
 # bare-noun queries match better and to avoid penalizing non-photo content,
 # but the practical results are mixed — disabled by default while we evaluate.
 SIGLIP_USE_PROMPT_ENSEMBLING = False
+#SIGLIP_USE_PROMPT_ENSEMBLING = True
 
 # Modality-spanning prompt templates ensembled by SigLIP at query time when
 # SIGLIP_USE_PROMPT_ENSEMBLING is True.
@@ -214,6 +215,13 @@ class SiglipEncoder(ImageTextEncoder):
             float(bias_param.detach().cpu().item()) if bias_param is not None else 0.0
         )
 
+        # Per-instance toggle for prompt ensembling. The search code mutates
+        # this from the album's ``use_query_optimization`` setting before
+        # calling encode_text, so different albums sharing this cached
+        # encoder still get the behavior they asked for. Defaults to the
+        # module-level flag for non-search callers (CLI tools, indexing).
+        self.use_ensembling = SIGLIP_USE_PROMPT_ENSEMBLING
+
     @torch.no_grad()
     def encode_images(self, images: list[Image.Image]) -> np.ndarray:
         inputs = self._processor(
@@ -224,7 +232,7 @@ class SiglipEncoder(ImageTextEncoder):
 
     @torch.no_grad()
     def encode_text(self, texts: list[str]) -> np.ndarray:
-        if SIGLIP_USE_PROMPT_ENSEMBLING:
+        if self.use_ensembling:
             # Prompt ensembling: encode each input wrapped in every template,
             # L2-normalize each per-template embedding so longer phrasings
             # can't dominate via larger magnitudes, then mean-pool across

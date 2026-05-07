@@ -69,6 +69,10 @@ class SearchWithTextAndImageRequest(BaseModel):
     negative_weight: float = 0.5
     min_search_score: float = 0.2
     max_search_results: int = 100
+    # Optional: per-request SigLIP prompt-ensembling toggle. Frontend sources
+    # this from the album's ``use_query_optimization`` setting. ``None`` keeps
+    # the encoder's existing state (module default for direct callers).
+    use_query_optimization: bool | None = None
 
 
 class DownloadImagesZipRequest(BaseModel):
@@ -108,6 +112,7 @@ async def search_with_text_and_image(
             negative_weight=req.negative_weight,
             minimum_score=req.min_search_score,
             top_k=req.max_search_results,
+            use_query_optimization=req.use_query_optimization,
         )
         return create_search_results(results, scores, album_key)
     finally:

@@ -1186,6 +1186,7 @@ class Embeddings(BaseModel):
         negative_weight: float = 0.5,
         top_k: int = 5,
         minimum_score: float = 0.2,
+        use_query_optimization: bool | None = None,
     ) -> tuple[list[int], list[float]]:
         """
         Search for images similar to a query image and a positive/negative text prompt, with separate weights.
@@ -1199,6 +1200,10 @@ class Embeddings(BaseModel):
             negative_weight (float): Weight for negative text embedding (should be positive; will be subtracted).
             top_k (int): Number of top results.
             minimum_score (float): Minimum similarity score.
+            use_query_optimization (bool or None): Per-album SigLIP toggle. When
+                set, controls prompt-template ensembling for SigLIP encoders.
+                Ignored by other backends. ``None`` keeps the encoder's current
+                setting (the module-level default, typically).
         Returns:
             tuple: (indexes, similarities)
         """
@@ -1212,6 +1217,11 @@ class Embeddings(BaseModel):
         # HF Hub HEAD checks for every search.
         encoder = get_cached_encoder(self.encoder_spec, cache_dir=self._clip_root())
         device = encoder.device
+
+        # Per-album SigLIP toggle for prompt ensembling. Other encoders ignore
+        # the attribute entirely.
+        if use_query_optimization is not None and hasattr(encoder, "use_ensembling"):
+            encoder.use_ensembling = use_query_optimization
 
         try:
             self._check_cache_compatibility(data, encoder)
