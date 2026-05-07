@@ -467,6 +467,7 @@ def create_album(
     index: str,
     umap_eps: float,
     description: str = "",
+    encoder_spec: str | None = None,
 ) -> Album:
     """Create a new Album instance with validation.
 
@@ -477,6 +478,8 @@ def create_album(
         index: Path to the embeddings index file
         umap_eps: UMAP epsilon parameter
         description: Album description
+        encoder_spec: Optional encoder spec; falls back to the Album default
+            when omitted so existing callers keep working.
 
     Returns:
         Validated Album instance
@@ -484,14 +487,17 @@ def create_album(
     # expand ~ in paths and resolve
     image_paths = [str(Path(x).expanduser().resolve()) for x in image_paths]
     index = str(Path(index).expanduser().resolve())
-    return Album(
-        key=key,
-        name=name,
-        image_paths=image_paths,
-        index=index,
-        umap_eps=umap_eps,
-        description=description,
-    )
+    fields: dict[str, object] = {
+        "key": key,
+        "name": name,
+        "image_paths": image_paths,
+        "index": index,
+        "umap_eps": umap_eps,
+        "description": description,
+    }
+    if encoder_spec is not None:
+        fields["encoder_spec"] = encoder_spec
+    return Album(**fields)
 
 
 @lru_cache(maxsize=1)

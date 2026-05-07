@@ -6,6 +6,50 @@ import { closeSettingsModal, loadAvailableAlbums, openSettingsModal } from "./se
 import { setAlbum, state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
+// Encoder backends offered in the album manager dropdown. Values must match
+// the spec format consumed by photomap.backend.encoders.build_encoder.
+export const ENCODER_OPTIONS = [
+  {
+    value: "openai-clip:ViT-B/32",
+    label: "OpenAI CLIP ViT-B/32 (legacy, fastest)",
+  },
+  {
+    value: "open-clip:ViT-L-14/dfn2b_s39b",
+    label: "OpenCLIP ViT-L-14 / DFN-2B (better recall)",
+  },
+  {
+    value: "siglip:google/siglip2-large-patch16-256",
+    label: "SigLIP 2 Large (calibrated similarity)",
+  },
+];
+const DEFAULT_ENCODER_SPEC = ENCODER_OPTIONS[0].value;
+
+function populateEncoderSelect(selectEl, currentValue) {
+  if (!selectEl) {
+    return;
+  }
+  const value = currentValue || DEFAULT_ENCODER_SPEC;
+  selectEl.innerHTML = "";
+  for (const opt of ENCODER_OPTIONS) {
+    const optionEl = document.createElement("option");
+    optionEl.value = opt.value;
+    optionEl.textContent = opt.label;
+    if (opt.value === value) {
+      optionEl.selected = true;
+    }
+    selectEl.appendChild(optionEl);
+  }
+  // If the album's stored spec isn't in our list (e.g. set via config.yaml),
+  // append it as an extra option so the dropdown still reflects reality.
+  if (!ENCODER_OPTIONS.some((o) => o.value === value)) {
+    const extra = document.createElement("option");
+    extra.value = value;
+    extra.textContent = `${value} (custom)`;
+    extra.selected = true;
+    selectEl.appendChild(extra);
+  }
+}
+
 export class AlbumManager {
   // Constants
   static POLL_INTERVAL = 1000;
@@ -36,6 +80,7 @@ export class AlbumManager {
       newAlbumName: document.getElementById("newAlbumName"),
       newAlbumDescription: document.getElementById("newAlbumDescription"),
       newAlbumPathsContainer: document.getElementById("newAlbumPathsContainer"), // Changed this line
+      newAlbumEncoder: document.getElementById("newAlbumEncoder"),
       albumSelect: document.getElementById("albumSelect"),
       slideshowTitle: document.getElementById("slideshow_title"),
       albumManagementContent: document.querySelector("#albumManagementContent"),
@@ -214,6 +259,7 @@ export class AlbumManager {
       name: this.elements.newAlbumName.value.trim(),
       description: this.elements.newAlbumDescription.value.trim(),
       paths: this.collectNewAlbumPathFields(), // Changed this line
+      encoder_spec: this.elements.newAlbumEncoder?.value || DEFAULT_ENCODER_SPEC,
     };
   }
 
@@ -226,6 +272,9 @@ export class AlbumManager {
     if (this.elements.newAlbumPathsContainer) {
       this.elements.newAlbumPathsContainer.innerHTML = "";
     }
+
+    // Reset encoder dropdown to the default
+    populateEncoderSelect(this.elements.newAlbumEncoder, DEFAULT_ENCODER_SPEC);
   }
 
   // Form management
@@ -236,6 +285,9 @@ export class AlbumManager {
 
     // Initialize path fields for the add album form
     this.initializeNewAlbumPathFields();
+
+    // Initialize encoder dropdown
+    populateEncoderSelect(this.elements.newAlbumEncoder, DEFAULT_ENCODER_SPEC);
 
     // Focus on the first input field
     this.elements.newAlbumKey.focus();
@@ -716,6 +768,7 @@ export class AlbumManager {
       index: indexPath,
       umap_eps: 0.1,
       description: formData.description,
+      encoder_spec: formData.encoder_spec,
     };
 
     try {
@@ -852,6 +905,9 @@ export class AlbumManager {
     // Initialize the dynamic path fields for THIS specific card
     this.initializePathFields(album.image_paths || [], cardElement);
 
+    // Initialize the encoder dropdown for THIS specific card
+    populateEncoderSelect(editForm.querySelector(".edit-album-encoder"), album.encoder_spec);
+
     // Show edit form
     albumInfo.style.display = "none";
     editForm.style.display = "block";
@@ -939,6 +995,7 @@ export class AlbumManager {
       description: editForm.querySelector(".edit-album-description").value,
       image_paths: updatedPaths,
       index: indexPath,
+      encoder_spec: editForm.querySelector(".edit-album-encoder")?.value || album.encoder_spec || DEFAULT_ENCODER_SPEC,
     };
 
     // Compare old and new paths (order and content)

@@ -149,6 +149,7 @@ async def update_album(album_data: dict) -> JSONResponse:
             index=album_data["index"],
             umap_eps=album_data.get("umap_eps", 0.07),
             description=album_data.get("description", ""),
+            encoder_spec=album_data.get("encoder_spec"),
         )
 
         logger.info(f"Updating album: {album.key} with index {album.index}")
