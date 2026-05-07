@@ -90,6 +90,7 @@ export async function searchTextAndImage({
     negative_weight,
     min_search_score: state.minSearchScore,
     max_search_results: state.maxSearchResults,
+    use_query_optimization: state.useQueryOptimization,
   };
 
   try {

@@ -27,8 +27,6 @@ function backupStateToSessionStorage() {
       gridViewActive: state.gridViewActive,
       suppressDeleteConfirm: state.suppressDeleteConfirm,
       gridThumbSizeFactor: state.gridThumbSizeFactor,
-      minSearchScore: state.minSearchScore,
-      maxSearchResults: state.maxSearchResults,
       umapShowLandmarks: state.umapShowLandmarks,
       umapShowHoverThumbnails: state.umapShowHoverThumbnails,
       umapExitFullscreenOnSelection: state.umapExitFullscreenOnSelection,
@@ -107,12 +105,6 @@ function restoreStateFromSessionStorage() {
         criticalState.gridThumbSizeFactor,
         "gridThumbSizeFactor",
         parseFloat
-      ) || restored;
-    restored =
-      restoreLocalStorageItem("minSearchScore", criticalState.minSearchScore, "minSearchScore", parseFloat) || restored;
-    restored =
-      restoreLocalStorageItem("maxSearchResults", criticalState.maxSearchResults, "maxSearchResults", (v) =>
-        parseInt(v, 10)
       ) || restored;
     restored =
       restoreLocalStorageItem(

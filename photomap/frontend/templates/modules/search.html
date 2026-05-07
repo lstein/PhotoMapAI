@@ -64,6 +64,33 @@
         </div>
       </div>
     </div>
+    <div class="search-tuning-row">
+      <label class="search-tuning-field">
+        <span>Min. score</span>
+        <input
+          id="searchMinScore"
+          type="number"
+          min="0.0"
+          max="1.0"
+          step="0.01"
+          inputmode="decimal"
+        />
+      </label>
+      <label class="search-tuning-field">
+        <span>Max. results</span>
+        <input
+          id="searchMaxResults"
+          type="number"
+          min="1"
+          step="10"
+          inputmode="numeric"
+        />
+      </label>
+      <label class="search-tuning-field search-tuning-checkbox">
+        <input id="searchUseQueryOptimization" type="checkbox" />
+        <span>Query optimization (SigLIP only)</span>
+      </label>
+    </div>
     <div class="search-bottom-row">
       <span class="search-upload-hint" style="color: white; font-size: 80%">
         Or paste, drag or

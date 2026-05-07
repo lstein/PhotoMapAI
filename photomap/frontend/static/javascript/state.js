@@ -19,9 +19,14 @@ export const state = {
   gridThumbSizeFactor: 1.0, // Scaling factor for grid thumbnails
   swiper: null, // backwards compatibility hack; contains the single_swiper.swiper instance
   albumLocked: false, // Whether album management is locked
-  // persisted search settings
+  // Per-album search settings — values are loaded from the album's config on
+  // album switch and persisted back via /update_album/ when the user edits
+  // them in the search dialog. Initial values are placeholders before the
+  // first album is loaded.
   minSearchScore: 0.2, // [0.0, 1.0]
-  maxSearchResults: 100, // [50, 500]
+  maxSearchResults: 100, // positive integer
+  useQueryOptimization: true, // SigLIP-only; ignored by other encoders
+  albumEncoderSpec: null, // mirrored from the active album's config
   // persisted UMAP settings
   umapShowLandmarks: true, // Show landmarks in UMAP
   umapShowHoverThumbnails: true, // Show hover thumbnails in UMAP
@@ -104,21 +109,6 @@ export async function restoreFromLocalStorage() {
     state.gridThumbSizeFactor = parseFloat(storedGridThumbSizeFactor);
   }
 
-  const storedMinSearchScore = localStorage.getItem("minSearchScore");
-  if (storedMinSearchScore !== null) {
-    const v = Math.max(0.0, Math.min(1.0, parseFloat(storedMinSearchScore)));
-    if (!Number.isNaN(v)) {
-      state.minSearchScore = v;
-    }
-  }
-  const storedMaxSearchResults = localStorage.getItem("maxSearchResults");
-  if (storedMaxSearchResults !== null) {
-    const v = Math.max(50, Math.min(500, parseInt(storedMaxSearchResults, 10)));
-    if (!Number.isNaN(v)) {
-      state.maxSearchResults = v;
-    }
-  }
-
   const storedUmapShowLandmarks = localStorage.getItem("umapShowLandmarks");
   if (storedUmapShowLandmarks !== null) {
     state.umapShowLandmarks = storedUmapShowLandmarks === "true";
@@ -154,8 +144,6 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
   localStorage.setItem("suppressDeleteConfirm", state.suppressDeleteConfirm ? "true" : "false");
   localStorage.setItem("gridThumbSizeFactor", state.gridThumbSizeFactor);
-  localStorage.setItem("minSearchScore", state.minSearchScore);
-  localStorage.setItem("maxSearchResults", state.maxSearchResults);
   localStorage.setItem("umapShowLandmarks", state.umapShowLandmarks ? "true" : "false");
   localStorage.setItem("umapShowHoverThumbnails", state.umapShowHoverThumbnails ? "true" : "false");
   localStorage.setItem("umapExitFullscreenOnSelection", state.umapExitFullscreenOnSelection ? "true" : "false");
@@ -172,6 +160,13 @@ export async function setAlbum(newAlbumKey, force = false) {
     state.dataChanged = true;
     saveSettingsToLocalStorage();
 
+    // Reload per-album search settings (min score / max results /
+    // SigLIP query optimization). Don't fail the album switch if this errors
+    // — just keep the previous values and log.
+    await applyAlbumSearchSettings(newAlbumKey).catch((err) =>
+      console.warn("Failed to load per-album search settings:", err)
+    );
+
     // dispatch an album changed event to system
     window.dispatchEvent(
       new CustomEvent("albumChanged", {
@@ -182,6 +177,81 @@ export async function setAlbum(newAlbumKey, force = false) {
       })
     );
   }
+}
+
+// Pulls per-album search settings from the backend and copies them into
+// state. Called on every album switch so the search dialog always reflects
+// the active album.
+async function applyAlbumSearchSettings(albumKey) {
+  const response = await fetch(`album/${encodeURIComponent(albumKey)}/`);
+  if (!response.ok) {
+    return;
+  }
+  const album = await response.json();
+  if (typeof album.min_search_score === "number") {
+    state.minSearchScore = album.min_search_score;
+  }
+  if (typeof album.max_search_results === "number") {
+    state.maxSearchResults = album.max_search_results;
+  }
+  if (typeof album.use_query_optimization === "boolean") {
+    state.useQueryOptimization = album.use_query_optimization;
+  }
+  if (typeof album.encoder_spec === "string") {
+    state.albumEncoderSpec = album.encoder_spec;
+  }
+  // Notify listeners (the search dialog) that values changed.
+  window.dispatchEvent(
+    new CustomEvent("albumSearchSettingsLoaded", {
+      detail: {
+        encoder_spec: album.encoder_spec,
+        min_search_score: album.min_search_score,
+        max_search_results: album.max_search_results,
+        use_query_optimization: album.use_query_optimization,
+      },
+    })
+  );
+}
+
+// Persist the current state's per-album search settings back to the active
+// album via /update_album/. Called from the search dialog onChange handlers.
+// Errors are logged but not surfaced — the in-memory state stays correct
+// even if the persistence write fails, and the next album switch will
+// reload from the backend.
+let _persistTimer = null;
+export function persistCurrentAlbumSearchSettings() {
+  if (!state.album) {
+    return;
+  }
+  // Debounce so rapid edits (slider drags, keystrokes) collapse to one
+  // network write at the end.
+  if (_persistTimer) {
+    clearTimeout(_persistTimer);
+  }
+  _persistTimer = setTimeout(async () => {
+    _persistTimer = null;
+    const albumKey = state.album;
+    try {
+      const response = await fetch(`album/${encodeURIComponent(albumKey)}/`);
+      if (!response.ok) {
+        return;
+      }
+      const album = await response.json();
+      const payload = {
+        ...album,
+        min_search_score: state.minSearchScore,
+        max_search_results: state.maxSearchResults,
+        use_query_optimization: state.useQueryOptimization,
+      };
+      await fetch("update_album/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      console.warn("Failed to persist album search settings:", err);
+    }
+  }, 400);
 }
 
 export function setMode(newMode) {
@@ -212,22 +282,30 @@ export function setDelay(newDelay) {
   }
 }
 
-// NEW: setters for search settings (persist + notify)
+// Per-album search-setting setters. The search dialog calls these on user
+// edit, then persists the change back to the active album via
+// /update_album/. Album switches overwrite these via setAlbum below.
 export function setMinSearchScore(newScore) {
   const clamped = Math.max(0.0, Math.min(1.0, parseFloat(newScore)));
   if (!Number.isNaN(clamped) && state.minSearchScore !== clamped) {
     state.minSearchScore = clamped;
-    saveSettingsToLocalStorage();
     window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { minSearchScore: clamped } }));
   }
 }
 
 export function setMaxSearchResults(newMax) {
-  const clamped = Math.max(50, Math.min(500, parseInt(newMax, 10)));
+  const clamped = Math.max(1, parseInt(newMax, 10));
   if (!Number.isNaN(clamped) && state.maxSearchResults !== clamped) {
     state.maxSearchResults = clamped;
-    saveSettingsToLocalStorage();
     window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { maxSearchResults: clamped } }));
+  }
+}
+
+export function setUseQueryOptimization(value) {
+  const bool = !!value;
+  if (state.useQueryOptimization !== bool) {
+    state.useQueryOptimization = bool;
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { useQueryOptimization: bool } }));
   }
 }
 
