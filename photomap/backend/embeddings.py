@@ -1216,68 +1216,75 @@ class Embeddings(BaseModel):
         try:
             self._check_cache_compatibility(data, encoder)
 
-            # Handle None queries: set weight to zero and skip embedding
+            # Drop weights for queries that aren't actually present.
             if query_image_data is None:
                 image_weight = 0.0
-                image_embedding = None
-            else:
+            if not positive_query:
+                positive_weight = 0.0
+            if not negative_query:
+                negative_weight = 0.0
+            if image_weight == 0.0 and positive_weight == 0.0 and negative_weight == 0.0:
+                return [], []
+
+            # Encode only the inputs that will actually contribute.
+            image_embedding = None
+            pos_emb = None
+            neg_emb = None
+            if image_weight > 0.0:
                 pil_image = ImageOps.exif_transpose(query_image_data).convert("RGB")
                 image_embedding = torch.from_numpy(
                     encoder.encode_images([pil_image])[0]
                 ).to(device)
-
-            if not positive_query:
-                positive_weight = 0.0
-                pos_emb = None
-            else:
+            if positive_weight > 0.0:
                 pos_emb = torch.from_numpy(
                     encoder.encode_text([positive_query])[0]
                 ).to(device)
-
-            if not negative_query:
-                negative_weight = 0.0
-                neg_emb = None
-            else:
+            if negative_weight > 0.0:
                 neg_emb = torch.from_numpy(
                     encoder.encode_text([negative_query])[0]
                 ).to(device)
 
-            # If all weights are zero, return empty result
-            if image_weight == 0.0 and positive_weight == 0.0 and negative_weight == 0.0:
-                return [], []
-
-            # Weighted combination: image + positive - negative
-            combined_embedding = None
-            if image_weight > 0.0 and image_embedding is not None:
-                combined_embedding = image_weight * image_embedding
-            if positive_weight > 0.0 and pos_emb is not None:
-                if combined_embedding is None:
-                    combined_embedding = positive_weight * pos_emb
-                else:
-                    combined_embedding = combined_embedding + positive_weight * pos_emb
-            if negative_weight > 0.0 and neg_emb is not None:
-                if combined_embedding is None:
-                    combined_embedding = -negative_weight * neg_emb
-                else:
-                    combined_embedding = combined_embedding - negative_weight * neg_emb
-
-            # Normalize. Stored embeddings produced by encoders.py are already
-            # unit-norm, but legacy caches and combined query vectors are not, so
-            # we normalize defensively.
+            # Stored embeddings produced by encoders.py are already unit-norm,
+            # but legacy caches may not be, so we normalize defensively.
             embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=device)
             norm_embeddings = F.normalize(embeddings_tensor, dim=-1)
-            assert combined_embedding is not None
-            combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(torch.float32)
 
-            similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
-            # Apply per-encoder calibration only for text-only queries. SigLIP's
-            # sigmoid was trained on image-text pairs; image-image cosines are
-            # already much higher than image-text cosines, and feeding them
-            # through ``sigmoid(cos * exp(scale) + bias)`` saturates everything
-            # to 1.0. CLIP/OpenCLIP define this as a no-op so the branch is
-            # effectively only meaningful for SigLIP.
-            if image_weight == 0.0:
-                similarities = encoder.calibrate_similarity(similarities)
+            # Score-space combine: compute per-modality cosines, calibrate the
+            # text ones (no-op for CLIP/OpenCLIP, sigmoid for SigLIP), and
+            # take a weighted average over the active positive contributions.
+            # The negative contribution is subtracted from that average so the
+            # negative weight acts as a penalty rather than diluting the
+            # positive direction. This makes the slider semantics honest:
+            # combining in embedding space (the previous approach) lets
+            # image-image cosines silently dominate image-text ones because
+            # the two live on different scales.
+            n = norm_embeddings.shape[0]
+            positive_score_sum = np.zeros(n, dtype=np.float32)
+            positive_weight_sum = 0.0
+
+            if image_embedding is not None:
+                cos_img = (norm_embeddings @ image_embedding).cpu().numpy()
+                positive_score_sum += image_weight * cos_img
+                positive_weight_sum += image_weight
+
+            if pos_emb is not None:
+                cos_pos = encoder.calibrate_similarity(
+                    (norm_embeddings @ pos_emb).cpu().numpy()
+                )
+                positive_score_sum += positive_weight * cos_pos
+                positive_weight_sum += positive_weight
+
+            if positive_weight_sum > 0.0:
+                similarities = positive_score_sum / positive_weight_sum
+            else:
+                similarities = positive_score_sum
+
+            if neg_emb is not None:
+                cos_neg = encoder.calibrate_similarity(
+                    (norm_embeddings @ neg_emb).cpu().numpy()
+                )
+                similarities = similarities - negative_weight * cos_neg
+
             top_indices = similarities.argsort()[-top_k:][::-1]
             top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
 
@@ -1296,10 +1303,12 @@ class Embeddings(BaseModel):
                 "image_embedding",
                 "pos_emb",
                 "neg_emb",
-                "combined_embedding",
-                "combined_embedding_norm",
                 "embeddings_tensor",
                 "norm_embeddings",
+                "cos_img",
+                "cos_pos",
+                "cos_neg",
+                "positive_score_sum",
                 "similarities",
             ):
                 if name in locals():
