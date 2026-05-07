@@ -118,8 +118,7 @@ class OpenClipEncoder(ImageTextEncoder):
             import open_clip  # type: ignore[import-not-found]
         except ImportError as e:
             raise ImportError(
-                "open-clip backend requires the `open_clip_torch` package. "
-                "Install it with: pip install photomap[open-clip]"
+                "open-clip backend requires the `open_clip_torch` package."
             ) from e
 
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -164,8 +163,7 @@ class SiglipEncoder(ImageTextEncoder):
             from transformers import AutoModel, AutoProcessor  # type: ignore[import-not-found]
         except ImportError as e:
             raise ImportError(
-                "siglip backend requires the `transformers` package. "
-                "Install it with: pip install photomap[siglip]"
+                "siglip backend requires the `transformers` package."
             ) from e
 
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
