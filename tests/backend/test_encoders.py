@@ -213,6 +213,71 @@ def test_siglip_calibration_no_op_when_scale_missing(monkeypatch):
     np.testing.assert_array_equal(encoder.calibrate_similarity(cosines), cosines)
 
 
+def test_siglip_encode_text_uses_prompt_ensembling(monkeypatch):
+    """SigLIP wraps each input in every template, encodes the batch, then
+    mean-pools across templates. The result must collapse back to ``(n_texts, D)``.
+    """
+    import torch
+
+    from photomap.backend.encoders import SIGLIP_PROMPT_TEMPLATES
+
+    captured = {}
+
+    class FakeProcessorOutput(dict):
+        def to(self, device):
+            return self
+
+    class FakeProcessor:
+        def __call__(self, *, text, **kwargs):
+            captured["text"] = list(text)
+            # Pretend each string tokenizes to a (B, L) input.
+            return FakeProcessorOutput(
+                input_ids=torch.zeros((len(text), 4), dtype=torch.long)
+            )
+
+    class FakeModel:
+        # ``get_text_features`` returns deterministic embeddings: one row per
+        # input string. Each row's first slot is the index of that input within
+        # the (n_texts * n_templates) batch, so the test can confirm which
+        # rows landed in which group after view+mean.
+        def get_text_features(self, **kwargs):
+            n = kwargs["input_ids"].shape[0]
+            out = torch.zeros((n, 8), dtype=torch.float32)
+            for i in range(n):
+                out[i, 0] = float(i + 1)
+            return out
+
+    monkeypatch.setattr(
+        SiglipEncoder,
+        "__init__",
+        lambda self, hf_id, device=None: (
+            setattr(self, "model_id", f"siglip:{hf_id}"),
+            setattr(self, "embedding_dim", 8),
+            setattr(self, "device", "cpu"),
+            setattr(self, "_logit_scale", None),
+            setattr(self, "_logit_bias", 0.0),
+            setattr(self, "_processor", FakeProcessor()),
+            setattr(self, "_model", FakeModel()),
+        )
+        and None,
+    )
+    encoder = SiglipEncoder(hf_id="x")
+
+    out = encoder.encode_text(["woman", "cat"])
+    assert out.shape == (2, 8)
+
+    # Templates were applied in input-major / template-minor order.
+    expected_strings = [
+        tpl.format(t) for t in ["woman", "cat"] for tpl in SIGLIP_PROMPT_TEMPLATES
+    ]
+    assert captured["text"] == expected_strings
+
+    # Final embeddings must be unit length so they're comparable with the
+    # stored image embeddings.
+    norms = np.linalg.norm(out, axis=-1)
+    np.testing.assert_allclose(norms, np.ones_like(norms), atol=1e-6)
+
+
 def test_get_cached_encoder_reuses_instance(monkeypatch):
     """Repeated search queries must reuse the same encoder instance."""
     clear_encoder_cache()

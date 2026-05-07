@@ -22,6 +22,20 @@ from PIL import Image
 
 DEFAULT_ENCODER_SPEC = "openai-clip:ViT-B/32"
 
+# Modality-spanning prompt templates ensembled by SigLIP at query time.
+# SigLIP's text encoder was trained on caption-shaped inputs, so a bare noun
+# like "woman" produces a less-specific embedding than "a photo of a woman"
+# would, and the model's narrow cosine band makes that difference matter.
+# Averaging across photo/drawing/illustration/painting templates also keeps
+# non-photo content in mixed-media libraries from being penalized.
+SIGLIP_PROMPT_TEMPLATES = (
+    "a photo of {}",
+    "a drawing of {}",
+    "an illustration of {}",
+    "a painting of {}",
+    "{}",
+)
+
 
 class EmbeddingCacheMismatch(RuntimeError):
     """Raised when an .npz cache was produced by a different encoder than the active one."""
@@ -207,11 +221,19 @@ class SiglipEncoder(ImageTextEncoder):
 
     @torch.no_grad()
     def encode_text(self, texts: list[str]) -> np.ndarray:
+        # Prompt ensembling: encode each input wrapped in every template,
+        # L2-normalize each per-template embedding so longer phrasings can't
+        # dominate via larger magnitudes, then mean-pool across templates and
+        # re-normalize. Standard zero-shot CLIP/SigLIP practice.
+        n_templates = len(SIGLIP_PROMPT_TEMPLATES)
+        expanded = [tpl.format(t) for t in texts for tpl in SIGLIP_PROMPT_TEMPLATES]
         inputs = self._processor(
-            text=texts, padding="max_length", truncation=True, return_tensors="pt"
+            text=expanded, padding="max_length", truncation=True, return_tensors="pt"
         ).to(self.device)
-        feats = self._model.get_text_features(**inputs)
-        return _normalize(_unwrap_pooled(feats))
+        feats = _unwrap_pooled(self._model.get_text_features(**inputs))
+        feats = feats / feats.norm(dim=-1, keepdim=True)
+        feats = feats.view(len(texts), n_templates, -1).mean(dim=1)
+        return _normalize(feats)
 
     def calibrate_similarity(self, cosines: np.ndarray) -> np.ndarray:
         """Apply SigLIP's learned sigmoid calibration.
