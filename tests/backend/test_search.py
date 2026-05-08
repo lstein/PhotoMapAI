@@ -186,3 +186,289 @@ def test_text_search(client, new_album, monkeypatch):
     assert (
         Path(TEST_NEG_FILE).name not in filenames
     ), "Text search returned unexpected image"
+
+
+def test_calibration_skipped_for_image_queries(tmp_path, monkeypatch):
+    """SigLIP's sigmoid calibration was crushing every image-image cosine to
+    1.0, returning 100 saturated matches. Calibration must only apply to
+    text-only queries.
+    """
+    import numpy as np
+    from PIL import Image
+
+    from photomap.backend import encoders as encoders_module
+    from photomap.backend.embeddings import Embeddings
+
+    # Build a tiny .npz with three known embeddings so the search code has
+    # something to score against.
+    embed_dim = 4
+    stored = np.array(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    npz_path = tmp_path / "stub.npz"
+    np.savez(
+        npz_path,
+        embeddings=stored,
+        filenames=np.array(["a.jpg", "b.jpg", "c.jpg"]),
+        modification_times=np.array([1.0, 2.0, 3.0]),
+        metadata=np.array([{}, {}, {}], dtype=object),
+        model_id=np.array("stub:test"),
+        embedding_dim=np.array(embed_dim),
+    )
+
+    class StubEncoder:
+        model_id = "stub:test"
+        embedding_dim = embed_dim
+        device = "cpu"
+        calibrate_calls = 0
+
+        def encode_images(self, images):
+            return stored[:1]  # closest to "a.jpg"
+
+        def encode_text(self, texts):
+            return stored[:1]
+
+        def calibrate_similarity(self, cosines):
+            type(self).calibrate_calls += 1
+            # Detectable transform: negate so we can prove it ran or didn't.
+            return -cosines
+
+        def close(self):
+            pass
+
+    encoders_module.clear_encoder_cache()
+    monkeypatch.setattr(encoders_module, "build_encoder", lambda *a, **k: StubEncoder())
+
+    emb = Embeddings(embeddings_path=npz_path, encoder_spec="stub:test")
+
+    # Pure-image query: calibration must NOT run.
+    StubEncoder.calibrate_calls = 0
+    indices, scores = emb.search_images_by_text_and_image(
+        query_image_data=Image.new("RGB", (8, 8), color="red"),
+        positive_query=None,
+        image_weight=1.0,
+        positive_weight=0.0,
+        top_k=3,
+        minimum_score=0.0,
+    )
+    assert StubEncoder.calibrate_calls == 0, "image-only query must not trigger calibration"
+    assert all(s >= 0 for s in scores), "raw cosines should not have been negated"
+
+    # Pure-text query: calibration MUST run.
+    StubEncoder.calibrate_calls = 0
+    emb.search_images_by_text_and_image(
+        query_image_data=None,
+        positive_query="anything",
+        image_weight=0.0,
+        positive_weight=1.0,
+        top_k=3,
+        minimum_score=-1.0,  # let everything through so we can inspect scores
+    )
+    assert StubEncoder.calibrate_calls == 1, "text-only query must apply calibration"
+
+    encoders_module.clear_encoder_cache()
+
+
+def test_search_use_query_optimization_sets_encoder_flag(tmp_path, monkeypatch):
+    """The search method must propagate use_query_optimization to the cached
+    encoder's ``use_ensembling`` attribute before encoding text. The frontend
+    sources this value from the album's per-album toggle.
+    """
+    import numpy as np
+
+    from photomap.backend import encoders as encoders_module
+    from photomap.backend.embeddings import Embeddings
+
+    embed_dim = 4
+    npz_path = tmp_path / "stub.npz"
+    np.savez(
+        npz_path,
+        embeddings=np.eye(2, embed_dim, dtype=np.float32),
+        filenames=np.array(["a.jpg", "b.jpg"]),
+        modification_times=np.array([1.0, 2.0]),
+        metadata=np.array([{}, {}], dtype=object),
+        model_id=np.array("stub:test"),
+        embedding_dim=np.array(embed_dim),
+    )
+
+    class StubEncoder:
+        model_id = "stub:test"
+        embedding_dim = embed_dim
+        device = "cpu"
+        use_ensembling = True  # the encoder ships with this attribute
+
+        def encode_images(self, images):
+            return np.zeros((1, embed_dim), dtype=np.float32)
+
+        def encode_text(self, texts):
+            return np.array([[0.0, 1.0, 0.0, 0.0]], dtype=np.float32)
+
+        def calibrate_similarity(self, cosines):
+            return cosines
+
+        def close(self):
+            pass
+
+    encoders_module.clear_encoder_cache()
+    monkeypatch.setattr(encoders_module, "build_encoder", lambda *a, **k: StubEncoder())
+    emb = Embeddings(embeddings_path=npz_path, encoder_spec="stub:test")
+
+    # use_query_optimization=False must turn the encoder's flag off.
+    emb.search_images_by_text_and_image(
+        positive_query="anything",
+        image_weight=0.0,
+        positive_weight=1.0,
+        top_k=2,
+        minimum_score=-1.0,
+        use_query_optimization=False,
+    )
+    cached = next(iter(encoders_module._search_encoder_cache.values()))
+    assert cached.use_ensembling is False
+
+    # And turning it back on must flip the flag again.
+    emb.search_images_by_text_and_image(
+        positive_query="anything",
+        image_weight=0.0,
+        positive_weight=1.0,
+        top_k=2,
+        minimum_score=-1.0,
+        use_query_optimization=True,
+    )
+    assert cached.use_ensembling is True
+
+    # ``None`` means "leave it alone" — the encoder's current state stays.
+    cached.use_ensembling = False
+    emb.search_images_by_text_and_image(
+        positive_query="anything",
+        image_weight=0.0,
+        positive_weight=1.0,
+        top_k=2,
+        minimum_score=-1.0,
+        use_query_optimization=None,
+    )
+    assert cached.use_ensembling is False
+
+    encoders_module.clear_encoder_cache()
+
+
+def test_search_combines_modalities_in_score_space(tmp_path, monkeypatch):
+    """Mixed-modality and negative queries combine cosines in score space:
+    weighted average over positive (image + positive-text) contributions,
+    minus the negative contribution. Text cosines are calibrated so they
+    sit on a comparable scale to image cosines (a no-op for CLIP, sigmoid
+    for SigLIP). This test uses a stub encoder whose calibrate halves text
+    cosines — a detectable transform that would also flip score ordering
+    between the new (score-space) and old (embedding-space) implementations.
+    """
+    import numpy as np
+    from PIL import Image
+
+    from photomap.backend import encoders as encoders_module
+    from photomap.backend.embeddings import Embeddings
+
+    embed_dim = 4
+    # Stored embeddings, each aligned with one basis direction.
+    stored = np.array(
+        [
+            [1.0, 0.0, 0.0, 0.0],  # img_match  — only the image query points here
+            [0.0, 1.0, 0.0, 0.0],  # pos_match  — only the positive-text query points here
+            [0.0, 0.0, 1.0, 0.0],  # neg_match  — only the negative-text query points here
+            [0.0, 0.0, 0.0, 1.0],  # nothing    — control
+        ],
+        dtype=np.float32,
+    )
+    npz_path = tmp_path / "stub.npz"
+    np.savez(
+        npz_path,
+        embeddings=stored,
+        filenames=np.array(["img.jpg", "pos.jpg", "neg.jpg", "none.jpg"]),
+        modification_times=np.array([1.0, 2.0, 3.0, 4.0]),
+        metadata=np.array([{}, {}, {}, {}], dtype=object),
+        model_id=np.array("stub:test"),
+        embedding_dim=np.array(embed_dim),
+    )
+
+    class StubEncoder:
+        model_id = "stub:test"
+        embedding_dim = embed_dim
+        device = "cpu"
+
+        def encode_images(self, images):
+            return np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32)
+
+        def encode_text(self, texts):
+            # Dispatch on input so positive vs negative produce distinct directions.
+            out = np.zeros((len(texts), embed_dim), dtype=np.float32)
+            for i, t in enumerate(texts):
+                out[i] = (
+                    [0.0, 0.0, 1.0, 0.0]
+                    if "neg" in t.lower()
+                    else [0.0, 1.0, 0.0, 0.0]
+                )
+            return out
+
+        def calibrate_similarity(self, cosines):
+            # Halve text cosines — detectable, monotonic, doesn't break ordering.
+            return cosines * 0.5
+
+        def close(self):
+            pass
+
+    encoders_module.clear_encoder_cache()
+    monkeypatch.setattr(encoders_module, "build_encoder", lambda *a, **k: StubEncoder())
+
+    emb = Embeddings(embeddings_path=npz_path, encoder_spec="stub:test")
+    sorted_filenames = ["img.jpg", "pos.jpg", "neg.jpg", "none.jpg"]
+
+    def scores_by_filename(indices, scores):
+        return {sorted_filenames[i]: s for i, s in zip(indices, scores, strict=False)}
+
+    # 50/50 image+positive query, no negative.
+    # Expected: positive_score = (image_w*cos_img + pos_w*calibrate(cos_pos)) / (image_w + pos_w)
+    #   For img.jpg:  (0.5*1.0 + 0.5*0.5*0.0) / 1.0 = 0.5
+    #   For pos.jpg:  (0.5*0.0 + 0.5*0.5*1.0) / 1.0 = 0.25
+    #   For neg.jpg:  0.0
+    #   For none.jpg: 0.0
+    # The new weighting is honest about image dominance (raw 1.0 > calibrated 0.5);
+    # the OLD embedding-space combine would have produced (cos_img + cos_pos)/sqrt(2) ≈ 0.707
+    # for both img.jpg and pos.jpg — a tied score that hid the modality scale gap.
+    indices, scores = emb.search_images_by_text_and_image(
+        query_image_data=Image.new("RGB", (8, 8), color="red"),
+        positive_query="positive query",
+        image_weight=0.5,
+        positive_weight=0.5,
+        top_k=4,
+        minimum_score=-1.0,
+    )
+    by_name = scores_by_filename(indices, scores)
+    assert by_name["img.jpg"] == pytest.approx(0.5, abs=1e-6)
+    assert by_name["pos.jpg"] == pytest.approx(0.25, abs=1e-6)
+    assert by_name["neg.jpg"] == pytest.approx(0.0, abs=1e-6)
+
+    # Positive + negative query, no image.
+    #   positive_score = calibrate(cos_pos) = 0.5 * cos_pos
+    #   final = positive_score - neg_w * calibrate(cos_neg)
+    # For pos.jpg:  0.5*1.0 - 0.5 * 0.5*0.0 = 0.5
+    # For neg.jpg:  0.5*0.0 - 0.5 * 0.5*1.0 = -0.25
+    # For img.jpg:  0
+    indices, scores = emb.search_images_by_text_and_image(
+        query_image_data=None,
+        positive_query="positive query",
+        negative_query="negative thing",
+        image_weight=0.0,
+        positive_weight=1.0,
+        negative_weight=0.5,
+        top_k=4,
+        minimum_score=-1.0,
+    )
+    by_name = scores_by_filename(indices, scores)
+    assert by_name["pos.jpg"] == pytest.approx(0.5, abs=1e-6)
+    assert by_name["neg.jpg"] == pytest.approx(-0.25, abs=1e-6)
+    assert by_name["img.jpg"] == pytest.approx(0.0, abs=1e-6)
+
+    encoders_module.clear_encoder_cache()

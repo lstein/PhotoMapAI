@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..config import get_config_manager
-from ..embeddings import Embeddings
+from ..embeddings import Embeddings, peek_encoder_spec
 from ..progress import progress_tracker
 from .album import check_album_lock, validate_album_exists, validate_image_access
 
@@ -253,7 +253,10 @@ async def delete_image(album_key: str, index: int) -> JSONResponse:
     check_album_lock()  # May raise a 403 exception
     try:
         album_config = validate_album_exists(album_key)
-        embeddings = Embeddings(embeddings_path=Path(album_config.index))
+        embeddings = Embeddings(
+            embeddings_path=Path(album_config.index),
+            encoder_spec=album_config.encoder_spec,
+        )
         image_path = embeddings.get_image_path(index)
 
         if not validate_image_access(album_config, image_path):
@@ -286,7 +289,10 @@ async def move_images(album_key: str, req: MoveImagesRequest) -> JSONResponse:
     check_album_lock()  # May raise a 403 exception
     try:
         album_config = validate_album_exists(album_key)
-        embeddings = Embeddings(embeddings_path=Path(album_config.index))
+        embeddings = Embeddings(
+            embeddings_path=Path(album_config.index),
+            encoder_spec=album_config.encoder_spec,
+        )
 
         target_dir = Path(req.target_directory)
 
@@ -374,7 +380,10 @@ async def copy_images(album_key: str, req: CopyImagesRequest) -> JSONResponse:
     # Note: No album lock check - copying doesn't modify the album
     try:
         album_config = validate_album_exists(album_key)
-        embeddings = Embeddings(embeddings_path=Path(album_config.index))
+        embeddings = Embeddings(
+            embeddings_path=Path(album_config.index),
+            encoder_spec=album_config.encoder_spec,
+        )
 
         target_dir = Path(req.target_directory)
 
@@ -448,11 +457,41 @@ async def _update_index_background_async(album_key: str, album_config):
         image_paths = [Path(path) for path in album_config.image_paths]
         index_path = Path(album_config.index)
 
-        embeddings = Embeddings(embeddings_path=index_path)
+        embeddings = Embeddings(
+            embeddings_path=index_path,
+            encoder_spec=album_config.encoder_spec,
+        )
 
         if index_path.exists():
-            logger.info(f"Updating existing index for album '{album_key}'...")
-            await embeddings.update_index_async(image_paths, album_key)
+            try:
+                stored_spec = peek_encoder_spec(index_path)
+            except Exception as e:
+                logger.warning(
+                    f"Could not read encoder spec from existing index {index_path}: {e}. "
+                    f"Treating as fresh index."
+                )
+                stored_spec = None
+
+            if stored_spec is not None and stored_spec != album_config.encoder_spec:
+                logger.warning(
+                    f"Encoder mismatch for album '{album_key}': existing index was built "
+                    f"with {stored_spec!r} but album is now configured for "
+                    f"{album_config.encoder_spec!r}. Deleting old index and rebuilding."
+                )
+                progress_tracker.start_operation(album_key, 0, "scanning")
+                progress_tracker.update_progress(
+                    album_key,
+                    0,
+                    f"Encoder changed ({stored_spec} → {album_config.encoder_spec}); rebuilding index from scratch",
+                )
+                index_path.unlink()
+                logger.info(f"Creating new index for album '{album_key}'...")
+                await embeddings.create_index_async(
+                    image_paths, album_key, create_index=True
+                )
+            else:
+                logger.info(f"Updating existing index for album '{album_key}'...")
+                await embeddings.update_index_async(image_paths, album_key)
         else:
             logger.info(f"Creating new index for album '{album_key}'...")
             await embeddings.create_index_async(

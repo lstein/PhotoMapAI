@@ -102,9 +102,9 @@ export class ScoreDisplay {
     if (score !== undefined && score !== null) {
       let text = "";
       if (index !== null && total !== null) {
-        text = `${index + 1}/${total} (score=${score.toFixed(3)})`;
+        text = `${index + 1}/${total} (score=${score.toFixed(4)})`;
       } else {
-        text = `score=${score.toFixed(3)}`;
+        text = `score=${score.toFixed(4)}`;
       }
       this.lastDisplayedText = text;
       this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
@@ -189,7 +189,7 @@ export class ScoreDisplay {
 
   update(score) {
     if (this.isVisible && score !== undefined && score !== null) {
-      const text = `score=${score.toFixed(3)}`;
+      const text = `score=${score.toFixed(4)}`;
       this.lastDisplayedText = text;
       this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
     }

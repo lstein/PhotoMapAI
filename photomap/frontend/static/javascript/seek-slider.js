@@ -227,7 +227,7 @@ class SeekSlider {
     let panelText = "";
     if (state.searchResults?.length > 0 && state.searchResults[0].score !== undefined) {
       const result = state.searchResults[value - 1];
-      panelText = result ? `Score: ${result.score.toFixed(3)}` : "";
+      panelText = result ? `Score: ${result.score.toFixed(4)}` : "";
     } else if (!state.searchResults || state.searchResults.length === 0) {
       try {
         const albumKey = state.album;
@@ -470,7 +470,7 @@ class SeekSlider {
       contextText = "Score";
       ticks = positions.map((idx) => {
         const result = state.searchResults[idx - 1];
-        return result ? result.score.toFixed(3) : "";
+        return result ? result.score.toFixed(4) : "";
       });
     } else if (state.searchResults.length > 0 && state.searchResults[0].cluster !== undefined) {
       contextText = "Cluster Position";

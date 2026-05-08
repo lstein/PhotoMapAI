@@ -221,6 +221,45 @@
   gap: 1em;
 }
 
+.search-tuning-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1em;
+  margin-top: 0.8em;
+  padding-top: 0.6em;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 12px;
+}
+
+.search-tuning-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.search-tuning-field input[type="number"] {
+  width: 70px;
+  padding: 0.25em 0.4em;
+  border-radius: 4px;
+  border: 1px solid #888;
+  background: #444;
+  color: #fff;
+  font-size: 12px;
+}
+
+.search-tuning-checkbox {
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.search-tuning-checkbox.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .weight-row {
   display: flex;
   align-items: center;
@@ -276,6 +315,10 @@
   gap: 0.5em 1em;
   align-items: start;
   width: 100%;
+  /* Reserve room on the right so the text inputs don't run under the
+     "X" close button anchored at top:0.7em right:0.7em. */
+  padding-right: 1.8em;
+  box-sizing: border-box;
 }
 
 .search-label {

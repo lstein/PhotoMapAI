@@ -14,6 +14,8 @@ import yaml
 from platformdirs import user_config_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .encoders import DEFAULT_ENCODER_SPEC, LEGACY_ENCODER_SPEC
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +30,41 @@ class Album(BaseModel):
     index: str = Field(..., description="Path to the embeddings index file")
     umap_eps: float = Field(default=0.2, description="UMAP epsilon parameter")
     description: str = Field(default="", description="Album description")
+    encoder_spec: str = Field(
+        default=DEFAULT_ENCODER_SPEC,
+        description=(
+            "Image/text encoder spec. Format: '<backend>:<model>'. "
+            "Examples: 'openai-clip:ViT-B/32' (default, legacy), "
+            "'open-clip:ViT-L-14/dfn2b', 'siglip:google/siglip2-large-patch16-256'. "
+            "Changing this requires re-indexing the album."
+        ),
+    )
+    # Per-album search controls. min_search_score defaults to None so a
+    # validator can resolve it from the encoder (0.005 for SigLIP's compressed
+    # cosine band, 0.2 for CLIP-style backends) at construction time.
+    min_search_score: float | None = Field(
+        default=None,
+        description="Minimum similarity score below which results are filtered out.",
+    )
+    max_search_results: int = Field(
+        default=100,
+        description="Maximum number of search results to return.",
+    )
+    use_query_optimization: bool = Field(
+        default=True,
+        description=(
+            "SigLIP only: ensemble text queries across modality templates. "
+            "Ignored by CLIP/OpenCLIP."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _resolve_min_search_score(self) -> "Album":
+        if self.min_search_score is None:
+            self.min_search_score = (
+                0.005 if self.encoder_spec.startswith("siglip:") else 0.2
+            )
+        return self
 
     @field_validator("image_paths")
     @classmethod
@@ -56,6 +93,10 @@ class Album(BaseModel):
             "index": self.index,
             "umap_eps": self.umap_eps,
             "description": self.description,
+            "encoder_spec": self.encoder_spec,
+            "min_search_score": self.min_search_score,
+            "max_search_results": self.max_search_results,
+            "use_query_optimization": self.use_query_optimization,
         }
 
     @classmethod
@@ -68,6 +109,14 @@ class Album(BaseModel):
             index=data["index"],
             umap_eps=data.get("umap_eps", 0.07),
             description=data.get("description", ""),
+            # Legacy YAML albums predate the encoder_spec field; their indexes
+            # were built with the original CLIP, so fall back to that to stay
+            # cache-compatible. New albums get DEFAULT_ENCODER_SPEC via the
+            # Album field default when the frontend creates them.
+            encoder_spec=data.get("encoder_spec", LEGACY_ENCODER_SPEC),
+            min_search_score=data.get("min_search_score"),
+            max_search_results=data.get("max_search_results", 100),
+            use_query_optimization=data.get("use_query_optimization", True),
         )
 
 
@@ -454,31 +503,35 @@ def create_album(
     index: str,
     umap_eps: float,
     description: str = "",
+    encoder_spec: str | None = None,
+    min_search_score: float | None = None,
+    max_search_results: int | None = None,
+    use_query_optimization: bool | None = None,
 ) -> Album:
     """Create a new Album instance with validation.
 
-    Args:
-        key: Unique album identifier
-        name: Display name for the album
-        image_paths: List of paths containing images
-        index: Path to the embeddings index file
-        umap_eps: UMAP epsilon parameter
-        description: Album description
-
-    Returns:
-        Validated Album instance
+    Each optional parameter falls through to the Album default when omitted,
+    so existing callers don't have to thread every field.
     """
-    # expand ~ in paths and resolve
     image_paths = [str(Path(x).expanduser().resolve()) for x in image_paths]
     index = str(Path(index).expanduser().resolve())
-    return Album(
-        key=key,
-        name=name,
-        image_paths=image_paths,
-        index=index,
-        umap_eps=umap_eps,
-        description=description,
-    )
+    fields: dict[str, object] = {
+        "key": key,
+        "name": name,
+        "image_paths": image_paths,
+        "index": index,
+        "umap_eps": umap_eps,
+        "description": description,
+    }
+    if encoder_spec is not None:
+        fields["encoder_spec"] = encoder_spec
+    if min_search_score is not None:
+        fields["min_search_score"] = min_search_score
+    if max_search_results is not None:
+        fields["max_search_results"] = max_search_results
+    if use_query_optimization is not None:
+        fields["use_query_optimization"] = use_query_optimization
+    return Album(**fields)
 
 
 @lru_cache(maxsize=1)

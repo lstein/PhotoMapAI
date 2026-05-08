@@ -34,8 +34,7 @@ The following JavaScript modules are covered by unit tests:
 - `getPercentile()` - Calculates percentile values from arrays
 - `setCheckmarkOnIcon()` - Adds/removes checkmark overlays on icons
 
-### search.js (10 tests)
-- `calculate_search_score_cutoff()` - Calculates weighted search score cutoffs
+### search.js
 - `setSearchResults()` - Sets search results and dispatches events
 
 ### slideshow.js (23 tests)

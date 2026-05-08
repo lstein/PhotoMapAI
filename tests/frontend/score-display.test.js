@@ -81,7 +81,7 @@ describe("score-display.js", () => {
       scoreDisplayInstance.setBookmarkStatus(1, false);
       scoreDisplayInstance.showSearchScore(0.8567);
 
-      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score=0.857");
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score=0.8567");
       expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score-star");
       expect(scoreDisplayInstance.scoreElement.style.display).toBe("flex");
       expect(scoreDisplayInstance.isVisible).toBe(true);
@@ -91,7 +91,7 @@ describe("score-display.js", () => {
       scoreDisplayInstance.setBookmarkStatus(1, false);
       scoreDisplayInstance.showSearchScore(0.5, 2, 10); // 0-based index 2 displays as 3
 
-      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("3/10 (score=0.500)");
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("3/10 (score=0.5000)");
     });
 
     it("should not display when score is undefined", () => {
@@ -295,7 +295,7 @@ describe("score-display.js", () => {
       scoreDisplayInstance.showSearchScore(0.5);
       scoreDisplayInstance.update(undefined);
 
-      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score=0.500");
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score=0.5000");
     });
 
     it("should not update with null score", () => {
@@ -303,7 +303,7 @@ describe("score-display.js", () => {
       scoreDisplayInstance.showSearchScore(0.5);
       scoreDisplayInstance.update(null);
 
-      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score=0.500");
+      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score=0.5000");
     });
   });
 

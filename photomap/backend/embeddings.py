@@ -1,10 +1,10 @@
 """
 embeddings.py
 
-Implement CLIP indexing and searching for images using the CLIP model.
-This script provides functionality to index images from a directory or a list of image paths,
-and to search for similar images using a query image. It uses the CLIP model from Hugging Face's Transformers library
-for image embeddings and similarity calculations.
+Implement image indexing and searching using a pluggable image/text encoder.
+The encoder is selected via an ``encoder_spec`` string and built through
+:func:`photomap.backend.encoders.build_encoder`. Defaults preserve the legacy
+OpenAI CLIP ``ViT-B/32`` behavior.
 """
 
 import asyncio
@@ -14,12 +14,13 @@ import logging
 import os
 import sys
 import warnings
+from collections import deque
 from collections.abc import Callable, Generator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
-import clip
 import networkx as nx
 import numpy as np
 import torch
@@ -32,12 +33,25 @@ from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 from umap import UMAP
 
+from .encoders import (
+    LEGACY_ENCODER_SPEC,
+    EmbeddingCacheMismatch,
+    ImageTextEncoder,
+    build_encoder,
+    get_cached_encoder,
+)
 from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
 from .progress import progress_tracker
 
 logger = logging.getLogger(__name__)
+
+# Production indexing pipeline defaults. Tuned via benchmark_encoders.py:
+# batch_size=8 saturates GPU on all three bundled encoders, num_workers=4
+# keeps it fed without hitting the GIL-contention regression seen at 8.
+DEFAULT_BATCH_SIZE = 8
+DEFAULT_NUM_WORKERS = 4
 register_heif_opener()  # Register HEIF opener for PIL
 SUPPORTED_EXTENSIONS = {
     ".jpg",
@@ -191,6 +205,21 @@ def get_kmeans_indices_global(
     return [filenames[i] for i in final_global_indices]
 
 
+def peek_encoder_spec(embeddings_path: Path) -> str:
+    """Return the encoder model_id stored in an .npz, without loading heavy arrays.
+
+    Falls back to ``LEGACY_ENCODER_SPEC`` for caches that predate the encoder
+    swap layer (the original CLIP was the only option then). Not cached: the
+    underlying file may be rewritten after a re-index, and a stale read could
+    mask an encoder swap.
+    """
+    embeddings_path = Path(embeddings_path)
+    with np.load(embeddings_path, allow_pickle=True) as data:
+        if "model_id" in data.files:
+            return str(data["model_id"])
+    return LEGACY_ENCODER_SPEC
+
+
 @functools.lru_cache(maxsize=3)
 def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
     """
@@ -208,6 +237,17 @@ def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
         raw_metadata = data["metadata"].copy()
         embeddings = data["embeddings"].copy()
         modification_times = data["modification_times"].copy()
+        # Older caches predate the encoder swap layer; treat them as the legacy default.
+        model_id = (
+            str(data["model_id"])
+            if "model_id" in data.files
+            else LEGACY_ENCODER_SPEC
+        )
+        embedding_dim = (
+            int(data["embedding_dim"])
+            if "embedding_dim" in data.files
+            else (int(embeddings.shape[1]) if embeddings.ndim == 2 and embeddings.size else 512)
+        )
 
     # Pre-compute sorted order
     sorted_indices = np.argsort(modification_times)
@@ -223,6 +263,8 @@ def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
         "sorted_filenames": sorted_filenames,
         "sorted_metadata": raw_metadata[sorted_indices],
         "filename_map": filename_map,
+        "model_id": model_id,
+        "embedding_dim": embedding_dim,
     }
 
 
@@ -240,6 +282,11 @@ class IndexResult(BaseModel):
     modification_times: np.ndarray
     metadata: np.ndarray
     bad_files: list[Path] = []
+    # Default to the legacy spec because IndexResult.model_id is also the
+    # value stamped into .npz files, and an unspecified value here typically
+    # means we're constructing one from a legacy cache that has no model_id.
+    model_id: str = LEGACY_ENCODER_SPEC
+    embedding_dim: int = 512
 
 
 class Embeddings(BaseModel):
@@ -251,12 +298,32 @@ class Embeddings(BaseModel):
     minimum_image_size: ClassVar[int] = 100 * 1024  # Minimum image size in bytes (100K)
 
     embeddings_path: Path = Path("clip_image_embeddings.npz")
+    # Embeddings is normally constructed by the router with an explicit
+    # encoder_spec from the album config. The default only applies when
+    # callers (tests, scripts) instantiate it bare; in that case they're
+    # almost certainly trying to read existing data, which on this codebase
+    # means a legacy-CLIP cache.
+    encoder_spec: str = LEGACY_ENCODER_SPEC
 
     def __init__(self, **data):
         """Ensure embeddings_path is always resolved to prevent cache key mismatches."""
         if "embeddings_path" in data:
             data["embeddings_path"] = Path(data["embeddings_path"]).resolve()
         super().__init__(**data)
+
+    def _build_encoder(self) -> ImageTextEncoder:
+        """Construct the encoder for this album from its spec."""
+        return build_encoder(self.encoder_spec, cache_dir=self._clip_root())
+
+    def _check_cache_compatibility(
+        self, data: dict[str, Any], encoder: ImageTextEncoder
+    ) -> None:
+        """Raise EmbeddingCacheMismatch if the .npz was built with a different encoder."""
+        stored = str(data.get("model_id", LEGACY_ENCODER_SPEC))
+        if stored != encoder.model_id:
+            raise EmbeddingCacheMismatch(
+                stored, encoder.model_id, str(self.embeddings_path)
+            )
 
     @staticmethod
     def _cleanup_cuda_memory(device: str) -> None:
@@ -394,7 +461,7 @@ class Embeddings(BaseModel):
         return None
 
     def _process_single_image(
-        self, image_path: Path, model, preprocess, device: str
+        self, image_path: Path, encoder: ImageTextEncoder
     ) -> tuple[np.ndarray | None, float | None, dict | None]:
         """
         Process a single image and return its embedding, modification time, and metadata.
@@ -415,10 +482,7 @@ class Embeddings(BaseModel):
             if modification_time is None:
                 modification_time = image_path.stat().st_mtime
 
-            # Create the CLIP embedding
-            image = preprocess(pil_image).unsqueeze(0).to(device)
-            with torch.no_grad():
-                embedding = model.encode_image(image).cpu().numpy().flatten()
+            embedding = encoder.encode_images([pil_image])[0]
 
             return embedding, modification_time, metadata
         except Exception as e:
@@ -438,8 +502,33 @@ class Embeddings(BaseModel):
             # Otherwise, use the default cache directory
             return None
 
+    def _load_image(
+        self, image_path: Path
+    ) -> tuple[Image.Image, float, dict] | None:
+        """Open an image and extract modtime + metadata. Returns None on failure.
+
+        Thread-safe: PIL decoders release the GIL during native I/O and the
+        helpers used here don't share mutable state.
+        """
+        try:
+            pil = Image.open(image_path)
+            pil = ImageOps.exif_transpose(pil)
+            pil = pil.convert("RGB")
+            metadata = self.extract_image_metadata(pil)
+            modification_time = self._get_modification_time(metadata)
+            if modification_time is None:
+                modification_time = image_path.stat().st_mtime
+            return pil, modification_time, metadata
+        except Exception as e:
+            logger.error(f"Error processing {image_path}: {e}")
+            return None
+
     def _process_images_batch(
-        self, image_paths: list[Path], progress_callback: Callable | None = None
+        self,
+        image_paths: list[Path],
+        progress_callback: Callable | None = None,
+        batch_size: int = 1,
+        num_workers: int = 1,
     ) -> IndexResult:
         """
         Process a batch of images and return IndexResult.
@@ -447,109 +536,142 @@ class Embeddings(BaseModel):
         Args:
             image_paths: List of image paths to process
             progress_callback: Optional callback function(index, total, message) for progress updates
+            batch_size: Number of images encoded per forward pass. Default 1 preserves
+                the per-image behavior; larger values amortize per-call overhead but
+                use more GPU memory.
+            num_workers: Number of CPU threads loading and pre-extracting metadata in
+                parallel. Default 1 keeps the legacy serial path. >1 enables a
+                bounded producer/consumer pipeline so the GPU stays fed while images
+                decode concurrently.
         """
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        model, preprocess = clip.load("ViT-B/32", device=device, download_root=self._clip_root())  # type: ignore
+        if batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1 (got {batch_size})")
+        if num_workers < 1:
+            raise ValueError(f"num_workers must be >= 1 (got {num_workers})")
 
-        embeddings = []
-        filenames = []
-        modification_times = []
-        metadatas = []
-        bad_files = []
+        encoder = self._build_encoder()
+        embedding_dim = encoder.embedding_dim
+
+        embeddings: list[np.ndarray] = []
+        filenames: list[str] = []
+        modification_times: list[float] = []
+        metadatas: list[dict] = []
+        bad_files: list[Path] = []
 
         total_images = len(image_paths)
 
-        for i, image_path in enumerate(image_paths):
+        buf_paths: list[Path] = []
+        buf_images: list[Image.Image] = []
+        buf_modtimes: list[float] = []
+        buf_metadatas: list[dict] = []
+
+        def flush() -> None:
+            if not buf_images:
+                return
+            try:
+                batch_emb = encoder.encode_images(buf_images)
+            except Exception as e:
+                logger.error(f"Error encoding batch of {len(buf_images)} images: {e}")
+                bad_files.extend(buf_paths)
+            else:
+                for j, path in enumerate(buf_paths):
+                    embeddings.append(batch_emb[j])
+                    filenames.append(path.resolve().as_posix())
+                    modification_times.append(buf_modtimes[j])
+                    metadatas.append(buf_metadatas[j])
+            buf_paths.clear()
+            buf_images.clear()
+            buf_modtimes.clear()
+            buf_metadatas.clear()
+
+        def consume(i: int, image_path: Path, loaded: tuple | None) -> None:
             if progress_callback:
                 progress_callback(i, total_images, f"Processing {image_path.name}")
-
-            embedding, mod_time, metadata = self._process_single_image(
-                image_path, model, preprocess, device
-            )
-
-            if embedding is not None:
-                embeddings.append(embedding)
-                filenames.append(image_path.resolve().as_posix())
-                modification_times.append(mod_time)
-                metadatas.append(metadata)
-            else:
+            if loaded is None:
                 bad_files.append(image_path)
+                return
+            pil, modtime, metadata = loaded
+            buf_paths.append(image_path)
+            buf_images.append(pil)
+            buf_modtimes.append(modtime)
+            buf_metadatas.append(metadata)
+            if len(buf_images) >= batch_size:
+                flush()
+
+        try:
+            if num_workers == 1:
+                # Serial path — preserves legacy behavior exactly.
+                for i, image_path in enumerate(image_paths):
+                    consume(i, image_path, self._load_image(image_path))
+            else:
+                # Parallel CPU loaders feeding the (single) GPU consumer in order.
+                # Bounded sliding window keeps memory in check on huge collections.
+                queue_capacity = num_workers * 2 + batch_size
+                it = enumerate(image_paths)
+                window: deque[tuple[int, Path, Any]] = deque()
+                with ThreadPoolExecutor(
+                    max_workers=num_workers, thread_name_prefix="img-loader"
+                ) as pool:
+                    for _ in range(queue_capacity):
+                        try:
+                            i, path = next(it)
+                        except StopIteration:
+                            break
+                        window.append((i, path, pool.submit(self._load_image, path)))
+
+                    while window:
+                        i, path, fut = window.popleft()
+                        consume(i, path, fut.result())
+                        try:
+                            ni, npath = next(it)
+                        except StopIteration:
+                            continue
+                        window.append((ni, npath, pool.submit(self._load_image, npath)))
+            flush()
+        finally:
+            device = encoder.device
+            encoder.close()
+            self._cleanup_cuda_memory(device)
 
         umap_embeddings = self.create_umap_index(
-            np.array(embeddings) if embeddings else np.empty((0, 512))
+            np.array(embeddings) if embeddings else np.empty((0, embedding_dim))
         )
 
-        result = IndexResult(
-            embeddings=np.array(embeddings) if embeddings else np.empty((0, 512)),
+        return IndexResult(
+            embeddings=np.array(embeddings) if embeddings else np.empty((0, embedding_dim)),
             filenames=np.array(filenames),
             modification_times=np.array(modification_times),
             metadata=np.array(metadatas, dtype=object),
             umap_embeddings=umap_embeddings,
             bad_files=bad_files,
+            model_id=encoder.model_id,
+            embedding_dim=embedding_dim,
         )
-
-        # Clean up GPU memory after batch processing
-        # Delete model references to completely free VRAM
-        del model, preprocess
-        self._cleanup_cuda_memory(device)
-
-        return result
 
     async def _process_images_batch_async(
-        self, image_paths: list[Path], album_key: str, yield_interval: int = 10
+        self,
+        image_paths: list[Path],
+        album_key: str,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult:
+        """Run the batched/parallel pipeline off the event loop.
+
+        The sync :meth:`_process_images_batch` already overlaps CPU loading
+        across threads, so delegating to it via ``asyncio.to_thread`` keeps
+        the FastAPI event loop fully responsive while indexing runs.
         """
-        Async version of _process_images_batch with progress tracking.
-        """
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        model, preprocess = clip.load(
-            "ViT-B/32", device=device, download_root=self._clip_root()
+
+        def progress_cb(i: int, total: int, message: str) -> None:
+            progress_tracker.update_progress(album_key, i, message)
+
+        return await asyncio.to_thread(
+            self._process_images_batch,
+            image_paths,
+            progress_cb,
+            batch_size,
+            num_workers,
         )
-
-        embeddings = []
-        filenames = []
-        modification_times = []
-        metadatas = []
-        bad_files = []
-
-        len(image_paths)
-
-        for i, image_path in enumerate(image_paths):
-            # Update progress
-            progress_tracker.update_progress(
-                album_key, i, f"Processing {image_path.name}"
-            )
-
-            embedding, mod_time, metadata = self._process_single_image(
-                image_path, model, preprocess, device
-            )
-
-            if embedding is not None:
-                embeddings.append(embedding)
-                filenames.append(image_path.resolve().as_posix())
-                modification_times.append(mod_time)
-                metadatas.append(metadata)
-            else:
-                bad_files.append(image_path)
-
-            # Yield control periodically
-            if i % yield_interval == 0:
-                await asyncio.sleep(0.01)
-
-        result = IndexResult(
-            embeddings=np.array(embeddings) if embeddings else np.empty((0, 512)),
-            filenames=np.array(filenames),
-            modification_times=np.array(modification_times),
-            metadata=np.array(metadatas, dtype=object),
-            bad_files=bad_files,
-        )
-
-        # Clean up GPU memory after async batch processing
-        # Delete model references to completely free VRAM
-        del model, preprocess
-        self._cleanup_cuda_memory(device)
-
-        return result
 
     def _save_embeddings(self, index_result: IndexResult) -> None:
         """Save embeddings to disk and clear cache."""
@@ -562,6 +684,8 @@ class Embeddings(BaseModel):
             filenames=index_result.filenames,
             modification_times=index_result.modification_times,
             metadata=index_result.metadata,
+            model_id=np.array(index_result.model_id),
+            embedding_dim=np.array(index_result.embedding_dim),
         )
 
         # Clear cache after saving
@@ -593,8 +717,15 @@ class Embeddings(BaseModel):
         existing_filenames: np.ndarray,
         existing_modtimes: np.ndarray,
         existing_metadatas: np.ndarray,
+        model_id: str = LEGACY_ENCODER_SPEC,
+        embedding_dim: int | None = None,
     ) -> IndexResult:
         """Remove missing images from existing arrays."""
+        resolved_dim = embedding_dim or (
+            int(existing_embeddings.shape[1])
+            if existing_embeddings.ndim == 2 and existing_embeddings.size
+            else 512
+        )
         if not missing_image_paths:
             return IndexResult(
                 embeddings=existing_embeddings,
@@ -602,6 +733,8 @@ class Embeddings(BaseModel):
                 modification_times=existing_modtimes,
                 metadata=existing_metadatas,
                 bad_files=[],
+                model_id=model_id,
+                embedding_dim=resolved_dim,
             )
 
         logger.warning(
@@ -626,6 +759,8 @@ class Embeddings(BaseModel):
             modification_times=existing_modtimes[mask],
             metadata=existing_metadatas[mask],
             bad_files=[],
+            model_id=model_id,
+            embedding_dim=resolved_dim,
         )
 
     def _combine_index_results(
@@ -648,12 +783,16 @@ class Embeddings(BaseModel):
             ),
             metadata=np.concatenate((existing_result.metadata, new_result.metadata)),
             bad_files=existing_result.bad_files + new_result.bad_files,
+            model_id=new_result.model_id,
+            embedding_dim=new_result.embedding_dim,
         )
 
     def create_index(
         self,
         image_paths_or_dir: list[Path] | Path,
         create_index: bool = True,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult:
         """Index images using CLIP and save their embeddings."""
         image_paths = self.get_image_files(image_paths_or_dir)
@@ -663,7 +802,10 @@ class Embeddings(BaseModel):
         logger.info(f"Creating index {self.embeddings_path}...")
         self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
         result = self._process_images_batch(
-            image_paths, progress_callback=progress_callback
+            image_paths,
+            progress_callback=progress_callback,
+            batch_size=batch_size,
+            num_workers=num_workers,
         )
 
         if create_index:
@@ -683,6 +825,8 @@ class Embeddings(BaseModel):
         image_paths_or_dir: list[Path] | Path,
         album_key: str,
         create_index: bool = True,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Asynchronously index images using CLIP with progress tracking."""
         logger.info("Starting asynchronous indexing operation")
@@ -710,7 +854,9 @@ class Embeddings(BaseModel):
 
         try:
             self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
-            result = await self._process_images_batch_async(image_paths, album_key)
+            result = await self._process_images_batch_async(
+                image_paths, album_key, batch_size=batch_size, num_workers=num_workers
+            )
             progress_tracker.update_progress(
                 album_key, total_images, "Saving index file"
             )
@@ -735,7 +881,10 @@ class Embeddings(BaseModel):
             raise
 
     def update_index(
-        self, image_paths_or_dir: list[Path] | Path
+        self,
+        image_paths_or_dir: list[Path] | Path,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Update existing embeddings with new images."""
         assert (
@@ -749,6 +898,20 @@ class Embeddings(BaseModel):
             existing_filenames = data["filenames"]
             existing_modtimes = data["modification_times"]
             existing_metadatas = data["metadata"]
+            existing_model_id = (
+                str(data["model_id"]) if "model_id" in data.files else LEGACY_ENCODER_SPEC
+            )
+            existing_dim = (
+                int(data["embedding_dim"])
+                if "embedding_dim" in data.files
+                else (int(existing_embeddings.shape[1]) if existing_embeddings.size else 512)
+            )
+
+            # Refuse to mix encoders within a single index file.
+            if existing_model_id != self.encoder_spec:
+                raise EmbeddingCacheMismatch(
+                    existing_model_id, self.encoder_spec, str(self.embeddings_path)
+                )
 
             # Identify new and missing images
             logger.info(f"Scanning for new images in {image_paths_or_dir}...")
@@ -764,6 +927,8 @@ class Embeddings(BaseModel):
                 existing_filenames,
                 existing_modtimes,
                 existing_metadatas,
+                model_id=existing_model_id,
+                embedding_dim=existing_dim,
             )
 
             if len(filtered_existing.filenames) == 0 and len(new_image_paths) == 0:
@@ -779,7 +944,9 @@ class Embeddings(BaseModel):
             )
 
             # Process new images
-            new_result = self._process_images_batch(list(new_image_paths))
+            new_result = self._process_images_batch(
+                list(new_image_paths), batch_size=batch_size, num_workers=num_workers
+            )
 
             new_files_indexed = new_result.embeddings.shape[0]
             old_files_removed = len(missing_image_paths)
@@ -799,6 +966,8 @@ class Embeddings(BaseModel):
                     metadata=filtered_existing.metadata,
                     umap_embeddings=self.umap_embeddings,
                     bad_files=new_result.bad_files,
+                    model_id=filtered_existing.model_id,
+                    embedding_dim=filtered_existing.embedding_dim,
                 )
 
             # Final progress update
@@ -822,7 +991,11 @@ class Embeddings(BaseModel):
             raise
 
     async def update_index_async(
-        self, image_paths_or_dir: list[Path] | Path, album_key: str
+        self,
+        image_paths_or_dir: list[Path] | Path,
+        album_key: str,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Asynchronously update existing embeddings with new images."""
         assert (
@@ -836,6 +1009,19 @@ class Embeddings(BaseModel):
             existing_filenames = data["filenames"]
             existing_modtimes = data["modification_times"]
             existing_metadatas = data["metadata"]
+            existing_model_id = (
+                str(data["model_id"]) if "model_id" in data.files else LEGACY_ENCODER_SPEC
+            )
+            existing_dim = (
+                int(data["embedding_dim"])
+                if "embedding_dim" in data.files
+                else (int(existing_embeddings.shape[1]) if existing_embeddings.size else 512)
+            )
+
+            if existing_model_id != self.encoder_spec:
+                raise EmbeddingCacheMismatch(
+                    existing_model_id, self.encoder_spec, str(self.embeddings_path)
+                )
 
             # Start scanning phase
             progress_tracker.start_operation(album_key, 0, "scanning")
@@ -861,6 +1047,8 @@ class Embeddings(BaseModel):
                 existing_filenames,
                 existing_modtimes,
                 existing_metadatas,
+                model_id=existing_model_id,
+                embedding_dim=existing_dim,
             )
 
             if len(filtered_existing.filenames) == 0 and len(new_image_paths) == 0:
@@ -875,7 +1063,10 @@ class Embeddings(BaseModel):
 
             # Process new images
             new_result = await self._process_images_batch_async(
-                list(new_image_paths), album_key
+                list(new_image_paths),
+                album_key,
+                batch_size=batch_size,
+                num_workers=num_workers,
             )
 
             new_files_indexed = new_result.embeddings.shape[0]
@@ -899,6 +1090,8 @@ class Embeddings(BaseModel):
                     metadata=filtered_existing.metadata,
                     umap_embeddings=self.umap_embeddings,
                     bad_files=new_result.bad_files,
+                    model_id=filtered_existing.model_id,
+                    embedding_dim=filtered_existing.embedding_dim,
                 )
 
             # Final progress update
@@ -1002,6 +1195,7 @@ class Embeddings(BaseModel):
         negative_weight: float = 0.5,
         top_k: int = 5,
         minimum_score: float = 0.2,
+        use_query_optimization: bool | None = None,
     ) -> tuple[list[int], list[float]]:
         """
         Search for images similar to a query image and a positive/negative text prompt, with separate weights.
@@ -1015,6 +1209,10 @@ class Embeddings(BaseModel):
             negative_weight (float): Weight for negative text embedding (should be positive; will be subtracted).
             top_k (int): Number of top results.
             minimum_score (float): Minimum similarity score.
+            use_query_optimization (bool or None): Per-album SigLIP toggle. When
+                set, controls prompt-template ensembling for SigLIP encoders.
+                Ignored by other backends. ``None`` keeps the encoder's current
+                setting (the module-level default, typically).
         Returns:
             tuple: (indexes, similarities)
         """
@@ -1023,69 +1221,89 @@ class Embeddings(BaseModel):
         filenames = data["filenames"]
         filename_map = data["filename_map"]
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        model, preprocess = clip.load(
-            "ViT-B/32", device=device, download_root=self._clip_root()
-        )
+        # Search uses a cached encoder so repeated queries don't reload the
+        # model — especially important for SigLIP, which otherwise re-issues
+        # HF Hub HEAD checks for every search.
+        encoder = get_cached_encoder(self.encoder_spec, cache_dir=self._clip_root())
+        device = encoder.device
+
+        # Per-album SigLIP toggle for prompt ensembling. Other encoders ignore
+        # the attribute entirely.
+        if use_query_optimization is not None and hasattr(encoder, "use_ensembling"):
+            encoder.use_ensembling = use_query_optimization
 
         try:
-            # Handle None queries: set weight to zero and skip embedding
+            self._check_cache_compatibility(data, encoder)
+
+            # Drop weights for queries that aren't actually present.
             if query_image_data is None:
                 image_weight = 0.0
-                image_embedding = None
-            else:
-                pil_image = ImageOps.exif_transpose(query_image_data)
-                pil_image = pil_image.convert("RGB")
-                image_tensor: torch.Tensor = preprocess(pil_image)  # type: ignore
-                image_tensor = image_tensor.unsqueeze(0).to(device)
-                with torch.no_grad():
-                    image_embedding = model.encode_image(image_tensor).squeeze(0)
-
             if not positive_query:
                 positive_weight = 0.0
-                pos_emb = None
-            else:
-                tokens = clip.tokenize([positive_query]).to(device)
-                with torch.no_grad():
-                    pos_emb = model.encode_text(tokens).squeeze(0)
-
             if not negative_query:
                 negative_weight = 0.0
-                neg_emb = None
-            else:
-                tokens = clip.tokenize([negative_query]).to(device)
-                with torch.no_grad():
-                    neg_emb = model.encode_text(tokens).squeeze(0)
-
-            # If all weights are zero, return empty result
             if image_weight == 0.0 and positive_weight == 0.0 and negative_weight == 0.0:
                 return [], []
 
-            # Weighted combination: image + positive - negative
-            combined_embedding = None
-            if image_weight > 0.0 and image_embedding is not None:
-                combined_embedding = image_weight * image_embedding
-            if positive_weight > 0.0 and pos_emb is not None:
-                if combined_embedding is None:
-                    combined_embedding = positive_weight * pos_emb
-                else:
-                    combined_embedding += positive_weight * pos_emb
-            if negative_weight > 0.0 and neg_emb is not None:
-                if combined_embedding is None:
-                    combined_embedding = -negative_weight * neg_emb
-                else:
-                    combined_embedding -= negative_weight * neg_emb
+            # Encode only the inputs that will actually contribute.
+            image_embedding = None
+            pos_emb = None
+            neg_emb = None
+            if image_weight > 0.0:
+                pil_image = ImageOps.exif_transpose(query_image_data).convert("RGB")
+                image_embedding = torch.from_numpy(
+                    encoder.encode_images([pil_image])[0]
+                ).to(device)
+            if positive_weight > 0.0:
+                pos_emb = torch.from_numpy(
+                    encoder.encode_text([positive_query])[0]
+                ).to(device)
+            if negative_weight > 0.0:
+                neg_emb = torch.from_numpy(
+                    encoder.encode_text([negative_query])[0]
+                ).to(device)
 
-            # Normalize
+            # Stored embeddings produced by encoders.py are already unit-norm,
+            # but legacy caches may not be, so we normalize defensively.
             embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=device)
-            norm_embeddings = F.normalize(embeddings_tensor, dim=-1).to(torch.float32)
-            assert combined_embedding is not None
-            combined_embedding_norm = F.normalize(combined_embedding, dim=-1).to(
-                torch.float32
-            )
+            norm_embeddings = F.normalize(embeddings_tensor, dim=-1)
 
-            # Similarity
-            similarities = (norm_embeddings @ combined_embedding_norm).cpu().numpy()
+            # Score-space combine: compute per-modality cosines, calibrate the
+            # text ones (no-op for CLIP/OpenCLIP, sigmoid for SigLIP), and
+            # take a weighted average over the active positive contributions.
+            # The negative contribution is subtracted from that average so the
+            # negative weight acts as a penalty rather than diluting the
+            # positive direction. This makes the slider semantics honest:
+            # combining in embedding space (the previous approach) lets
+            # image-image cosines silently dominate image-text ones because
+            # the two live on different scales.
+            n = norm_embeddings.shape[0]
+            positive_score_sum = np.zeros(n, dtype=np.float32)
+            positive_weight_sum = 0.0
+
+            if image_embedding is not None:
+                cos_img = (norm_embeddings @ image_embedding).cpu().numpy()
+                positive_score_sum += image_weight * cos_img
+                positive_weight_sum += image_weight
+
+            if pos_emb is not None:
+                cos_pos = encoder.calibrate_similarity(
+                    (norm_embeddings @ pos_emb).cpu().numpy()
+                )
+                positive_score_sum += positive_weight * cos_pos
+                positive_weight_sum += positive_weight
+
+            if positive_weight_sum > 0.0:
+                similarities = positive_score_sum / positive_weight_sum
+            else:
+                similarities = positive_score_sum
+
+            if neg_emb is not None:
+                cos_neg = encoder.calibrate_similarity(
+                    (norm_embeddings @ neg_emb).cpu().numpy()
+                )
+                similarities = similarities - negative_weight * cos_neg
+
             top_indices = similarities.argsort()[-top_k:][::-1]
             top_indices = [i for i in top_indices if similarities[i] >= minimum_score]
 
@@ -1098,34 +1316,22 @@ class Embeddings(BaseModel):
 
             return result_indices, result_similarities
         finally:
-            # Clean up GPU memory after search (always executed)
-            # Delete all GPU tensors and model references to completely free VRAM
-            try:
-                del model, preprocess
-                # Delete any tensors that may still be around
-                if 'image_tensor' in locals():
-                    del image_tensor
-                if 'tokens' in locals():
-                    del tokens
-                if 'embeddings_tensor' in locals():
-                    del embeddings_tensor
-                if 'norm_embeddings' in locals():
-                    del norm_embeddings
-                if 'combined_embedding' in locals():
-                    del combined_embedding
-                if 'combined_embedding_norm' in locals():
-                    del combined_embedding_norm
-                if 'similarities' in locals():
-                    del similarities
-                if 'image_embedding' in locals():
-                    del image_embedding
-                if 'pos_emb' in locals():
-                    del pos_emb
-                if 'neg_emb' in locals():
-                    del neg_emb
-            except (NameError, UnboundLocalError):
-                # Variables may not be defined if early return
-                pass
+            # Drop any local tensors so VRAM doesn't accumulate across queries.
+            # The encoder itself is cached and intentionally NOT closed here.
+            for name in (
+                "image_embedding",
+                "pos_emb",
+                "neg_emb",
+                "embeddings_tensor",
+                "norm_embeddings",
+                "cos_img",
+                "cos_pos",
+                "cos_neg",
+                "positive_score_sum",
+                "similarities",
+            ):
+                if name in locals():
+                    del locals()[name]
             self._cleanup_cuda_memory(device)
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):

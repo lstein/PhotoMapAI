@@ -33,6 +33,7 @@ dependencies = [
     "jinja2",
     "networkx",
     "numpy",
+    "open_clip_torch",  # OpenCLIP encoder backend
     "pandas",
     "pillow-heif",
     "platformdirs",
@@ -42,8 +43,9 @@ dependencies = [
     "requests",
     "scikit-learn",
     "setuptools<67",  # Avoid deprecation warning from CLIP dependency
-    "torch",
+    "torch ~= 2.9.0",
     "tqdm",
+    "transformers",  # SigLIP encoder backend
     "umap-learn",
     "uvicorn",
     "psutil",  # Add this for process management
@@ -70,7 +72,6 @@ development = [
     "pyinstaller",
     "ruff",
 ]
-
 [tool.setuptools.packages.find]
 where = ["."]  # Look in the current directory (repo root)
 include = ["photomap*"]  # Include photomap package and subpackages

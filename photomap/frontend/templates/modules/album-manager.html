@@ -57,6 +57,15 @@
         <div id="newAlbumPathsContainer" class="edit-album-paths-container"></div>
       </div>
 
+      <div class="form-group">
+        <label>Encoder</label>
+        <select id="newAlbumEncoder" class="encoder-select"></select>
+        <small class="form-hint">
+          Picks the embedding model used for search. Changing it later will
+          rebuild the index from scratch on the next index update.
+        </small>
+      </div>
+
       <div class="form-buttons">
         <button id="addAlbumBtn" class="btn-primary">Add Album</button>
         <button id="cancelAddAlbumBtn2" class="btn-secondary">Cancel</button>
@@ -127,6 +136,14 @@
       <div class="form-group">
         <label>Image Folder(s)</label>
         <div class="edit-album-paths-container"></div>
+      </div>
+      <div class="form-group">
+        <label>Encoder</label>
+        <select class="edit-album-encoder encoder-select"></select>
+        <small class="form-hint">
+          Changing the encoder rebuilds the index from scratch on the next
+          index update.
+        </small>
       </div>
       <div class="form-buttons">
         <button class="save-album-btn btn-primary">Save Changes</button>

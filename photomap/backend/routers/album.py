@@ -93,6 +93,10 @@ async def get_available_albums() -> list[dict[str, Any]]:
                 "index": album.index,
                 "umap_eps": album.umap_eps,
                 "image_paths": album.image_paths,
+                "encoder_spec": album.encoder_spec,
+                "min_search_score": album.min_search_score,
+                "max_search_results": album.max_search_results,
+                "use_query_optimization": album.use_query_optimization,
             }
             for key, album in albums.items()
             if locked_albums is None or key in locked_albums
@@ -149,6 +153,10 @@ async def update_album(album_data: dict) -> JSONResponse:
             index=album_data["index"],
             umap_eps=album_data.get("umap_eps", 0.07),
             description=album_data.get("description", ""),
+            encoder_spec=album_data.get("encoder_spec"),
+            min_search_score=album_data.get("min_search_score"),
+            max_search_results=album_data.get("max_search_results"),
+            use_query_optimization=album_data.get("use_query_optimization"),
         )
 
         logger.info(f"Updating album: {album.key} with index {album.index}")
@@ -266,7 +274,10 @@ def get_embeddings_for_album(album_key: str) -> Embeddings:
     """Get embeddings instance for a given album."""
     check_album_lock(album_key)  # May raise a 403 exception
     album_config = validate_album_exists(album_key)
-    return Embeddings(embeddings_path=Path(album_config.index))
+    return Embeddings(
+        embeddings_path=Path(album_config.index),
+        encoder_spec=album_config.encoder_spec,
+    )
 
 
 def validate_image_access(album_config, image_path: Path) -> bool:

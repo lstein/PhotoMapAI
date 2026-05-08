@@ -21,6 +21,7 @@ To add an album, press the green <span class="green-button-text">Add Album</span
 - **Display Name** - This is the name of the album that will be displayed in the settings Album popup menu and the browser tab window title.
 - **Description** (optional) - A description of the album.
 - **Image Folder(s)** - One or more filesystem paths to the folders that contain image files to incorporate into the album.
+- **Encoder** - The vision-language model that will be used to index and search this album. New albums default to OpenCLIP ViT-L-14 / DFN-2B, which is a good general-purpose pick. If your album contains primarily clean single-subject content (such as AI-generated images), or you want the smallest/fastest legacy option, see [Encoders](encoders.md) for guidance on the alternatives. Pick the encoder *before* pressing **Add Album** so the initial indexing uses your choice. Changing the encoder later will automatically rebuild the index from scratch on the next **Update Index**.
 
 <img src="../../img/photomap_album_add.png" width="640" class="img-hover-zoom">
 
@@ -42,7 +43,7 @@ When you add or remove image files from an album's image directory, you will nee
 
 ## Editing an Album
 
-To make changes to an album's definition, including changing its display name, description or paths, click the orange <span class="orange-button-text">Edit</span> button next to the album's entry in the Album Manager dialogue. Note that you cannot change the album key once the Album is initialized.
+To make changes to an album's definition, including changing its display name, description, paths, or encoder, click the orange <span class="orange-button-text">Edit</span> button next to the album's entry in the Album Manager dialogue. Note that you cannot change the album key once the Album is initialized. Changing the encoder will trigger an automatic from-scratch rebuild on the next **Update Index** — see [Encoders](encoders.md) for the implications.
 
 ## Deleting an Album
 

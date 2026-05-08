@@ -33,8 +33,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", (
 const { state } = await import("../../photomap/frontend/static/javascript/state.js");
 
 // Import the functions we want to test
-const { calculate_search_score_cutoff, setSearchResults } =
-  await import("../../photomap/frontend/static/javascript/search.js");
+const { setSearchResults } = await import("../../photomap/frontend/static/javascript/search.js");
 
 describe("search.js", () => {
   beforeEach(() => {
@@ -42,86 +41,6 @@ describe("search.js", () => {
     state.searchResults = [];
     state.searchType = null;
     jest.clearAllMocks();
-  });
-
-  describe("calculate_search_score_cutoff", () => {
-    const IMAGE_SCORE_CUTOFF = 0.75;
-    const TEXT_SCORE_CUTOFF = 0.2;
-
-    it("should return image cutoff when only image is provided", () => {
-      const result = calculate_search_score_cutoff(
-        { name: "test.jpg" }, // imageFile
-        1.0, // imgWeight
-        "", // positiveQuery
-        0.5, // posWeight
-        "", // negativeQuery
-        0.5 // negWeight
-      );
-      expect(result).toBe(IMAGE_SCORE_CUTOFF);
-    });
-
-    it("should return text cutoff when only positive query is provided", () => {
-      const result = calculate_search_score_cutoff(
-        null, // imageFile
-        0.5, // imgWeight
-        "cats", // positiveQuery
-        1.0, // posWeight
-        "", // negativeQuery
-        0.5 // negWeight
-      );
-      expect(result).toBe(TEXT_SCORE_CUTOFF);
-    });
-
-    it("should return text cutoff when only negative query is provided", () => {
-      const result = calculate_search_score_cutoff(
-        null, // imageFile
-        0.5, // imgWeight
-        "", // positiveQuery
-        0.5, // posWeight
-        "dogs", // negativeQuery
-        1.0 // negWeight
-      );
-      expect(result).toBe(TEXT_SCORE_CUTOFF);
-    });
-
-    it("should calculate weighted average when image and positive query are provided", () => {
-      const result = calculate_search_score_cutoff(
-        { name: "test.jpg" }, // imageFile
-        0.5, // imgWeight
-        "cats", // positiveQuery
-        0.5, // posWeight
-        "", // negativeQuery
-        0.5 // negWeight
-      );
-      // (0.5 * 0.75 + 0.5 * 0.2) / (0.5 + 0.5) = 0.475
-      expect(result).toBeCloseTo(0.475, 5);
-    });
-
-    it("should calculate weighted average when all inputs are provided", () => {
-      const result = calculate_search_score_cutoff(
-        { name: "test.jpg" }, // imageFile
-        0.6, // imgWeight
-        "cats", // positiveQuery
-        0.3, // posWeight
-        "dogs", // negativeQuery
-        0.1 // negWeight
-      );
-      // (0.6 * 0.75 + 0.3 * 0.2 + 0.1 * 0.2) / (0.6 + 0.3 + 0.1) = (0.45 + 0.06 + 0.02) / 1.0 = 0.53
-      expect(result).toBeCloseTo(0.53, 5);
-    });
-
-    it("should handle equal weights", () => {
-      const result = calculate_search_score_cutoff(
-        { name: "test.jpg" }, // imageFile
-        1.0, // imgWeight
-        "cats", // positiveQuery
-        1.0, // posWeight
-        "", // negativeQuery
-        0.5 // negWeight
-      );
-      // (1.0 * 0.75 + 1.0 * 0.2) / (1.0 + 1.0) = 0.475
-      expect(result).toBeCloseTo(0.475, 5);
-    });
   });
 
   describe("setSearchResults", () => {
