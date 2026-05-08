@@ -34,7 +34,7 @@ from tqdm import tqdm
 from umap import UMAP
 
 from .encoders import (
-    DEFAULT_ENCODER_SPEC,
+    LEGACY_ENCODER_SPEC,
     EmbeddingCacheMismatch,
     ImageTextEncoder,
     build_encoder,
@@ -208,15 +208,16 @@ def get_kmeans_indices_global(
 def peek_encoder_spec(embeddings_path: Path) -> str:
     """Return the encoder model_id stored in an .npz, without loading heavy arrays.
 
-    Falls back to ``DEFAULT_ENCODER_SPEC`` for legacy caches that predate the
-    encoder swap layer. Not cached: the underlying file may be rewritten (e.g.,
-    after a re-index), and a stale read could mask an encoder swap.
+    Falls back to ``LEGACY_ENCODER_SPEC`` for caches that predate the encoder
+    swap layer (the original CLIP was the only option then). Not cached: the
+    underlying file may be rewritten after a re-index, and a stale read could
+    mask an encoder swap.
     """
     embeddings_path = Path(embeddings_path)
     with np.load(embeddings_path, allow_pickle=True) as data:
         if "model_id" in data.files:
             return str(data["model_id"])
-    return DEFAULT_ENCODER_SPEC
+    return LEGACY_ENCODER_SPEC
 
 
 @functools.lru_cache(maxsize=3)
@@ -240,7 +241,7 @@ def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
         model_id = (
             str(data["model_id"])
             if "model_id" in data.files
-            else DEFAULT_ENCODER_SPEC
+            else LEGACY_ENCODER_SPEC
         )
         embedding_dim = (
             int(data["embedding_dim"])
@@ -281,7 +282,10 @@ class IndexResult(BaseModel):
     modification_times: np.ndarray
     metadata: np.ndarray
     bad_files: list[Path] = []
-    model_id: str = DEFAULT_ENCODER_SPEC
+    # Default to the legacy spec because IndexResult.model_id is also the
+    # value stamped into .npz files, and an unspecified value here typically
+    # means we're constructing one from a legacy cache that has no model_id.
+    model_id: str = LEGACY_ENCODER_SPEC
     embedding_dim: int = 512
 
 
@@ -294,7 +298,12 @@ class Embeddings(BaseModel):
     minimum_image_size: ClassVar[int] = 100 * 1024  # Minimum image size in bytes (100K)
 
     embeddings_path: Path = Path("clip_image_embeddings.npz")
-    encoder_spec: str = DEFAULT_ENCODER_SPEC
+    # Embeddings is normally constructed by the router with an explicit
+    # encoder_spec from the album config. The default only applies when
+    # callers (tests, scripts) instantiate it bare; in that case they're
+    # almost certainly trying to read existing data, which on this codebase
+    # means a legacy-CLIP cache.
+    encoder_spec: str = LEGACY_ENCODER_SPEC
 
     def __init__(self, **data):
         """Ensure embeddings_path is always resolved to prevent cache key mismatches."""
@@ -310,7 +319,7 @@ class Embeddings(BaseModel):
         self, data: dict[str, Any], encoder: ImageTextEncoder
     ) -> None:
         """Raise EmbeddingCacheMismatch if the .npz was built with a different encoder."""
-        stored = str(data.get("model_id", DEFAULT_ENCODER_SPEC))
+        stored = str(data.get("model_id", LEGACY_ENCODER_SPEC))
         if stored != encoder.model_id:
             raise EmbeddingCacheMismatch(
                 stored, encoder.model_id, str(self.embeddings_path)
@@ -708,7 +717,7 @@ class Embeddings(BaseModel):
         existing_filenames: np.ndarray,
         existing_modtimes: np.ndarray,
         existing_metadatas: np.ndarray,
-        model_id: str = DEFAULT_ENCODER_SPEC,
+        model_id: str = LEGACY_ENCODER_SPEC,
         embedding_dim: int | None = None,
     ) -> IndexResult:
         """Remove missing images from existing arrays."""
@@ -890,7 +899,7 @@ class Embeddings(BaseModel):
             existing_modtimes = data["modification_times"]
             existing_metadatas = data["metadata"]
             existing_model_id = (
-                str(data["model_id"]) if "model_id" in data.files else DEFAULT_ENCODER_SPEC
+                str(data["model_id"]) if "model_id" in data.files else LEGACY_ENCODER_SPEC
             )
             existing_dim = (
                 int(data["embedding_dim"])
@@ -1001,7 +1010,7 @@ class Embeddings(BaseModel):
             existing_modtimes = data["modification_times"]
             existing_metadatas = data["metadata"]
             existing_model_id = (
-                str(data["model_id"]) if "model_id" in data.files else DEFAULT_ENCODER_SPEC
+                str(data["model_id"]) if "model_id" in data.files else LEGACY_ENCODER_SPEC
             )
             existing_dim = (
                 int(data["embedding_dim"])

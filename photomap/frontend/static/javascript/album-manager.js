@@ -8,18 +8,20 @@ import { hideSpinner, showSpinner } from "./utils.js";
 
 // Encoder backends offered in the album manager dropdown. Values must match
 // the spec format consumed by photomap.backend.encoders.build_encoder.
+// The first entry is the default selection for new albums and must stay in
+// sync with backend ``DEFAULT_ENCODER_SPEC`` (encoders.py).
 export const ENCODER_OPTIONS = [
   {
-    value: "openai-clip:ViT-B/32",
-    label: "OpenAI CLIP ViT-B/32 (legacy, fastest)",
-  },
-  {
     value: "open-clip:ViT-L-14/dfn2b_s39b",
-    label: "OpenCLIP ViT-L-14 / DFN-2B (better recall)",
+    label: "OpenCLIP ViT-L-14 / DFN-2B (recommended, best general purpose)",
   },
   {
     value: "siglip:google/siglip2-large-patch16-256",
-    label: "SigLIP 2 Large (calibrated similarity)",
+    label: "SigLIP 2 Large (best for clean subjects, less forgiving)",
+  },
+  {
+    value: "openai-clip:ViT-B/32",
+    label: "OpenAI CLIP ViT-B/32 (legacy, fastest, weakest)",
   },
 ];
 const DEFAULT_ENCODER_SPEC = ENCODER_OPTIONS[0].value;

@@ -38,6 +38,10 @@ def new_album(client, tmp_path) -> dict:
         "index": (temp_img_dir / "embeddings.npz").as_posix(),
         "umap_eps": 0.1,
         "description": "A test album",
+        # Pin the test fixture to legacy CLIP so search-threshold and
+        # cosine-distribution assertions stay stable even when the codebase's
+        # DEFAULT_ENCODER_SPEC for new albums changes.
+        "encoder_spec": "openai-clip:ViT-B/32",
     }
     response = client.post("/add_album/", json=album_data)
     assert response.status_code == 201

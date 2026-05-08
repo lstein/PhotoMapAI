@@ -20,7 +20,19 @@ import numpy as np
 import torch
 from PIL import Image
 
-DEFAULT_ENCODER_SPEC = "openai-clip:ViT-B/32"
+# Default encoder for *new* albums. OpenCLIP-DFN ViT-L-14 is the best
+# general-purpose pick across our three backends: noticeably stronger recall
+# than legacy CLIP, with CLIP-style cosine semantics that work well on
+# cluttered real-world photos (where SigLIP's steeper calibration tends to
+# misfire).
+DEFAULT_ENCODER_SPEC = "open-clip:ViT-L-14/dfn2b_s39b"
+
+# Encoder assumed when a legacy ``.npz`` cache or pre-swap-layer YAML album
+# omits the ``model_id`` / ``encoder_spec`` field. Before the encoder swap
+# layer existed, legacy CLIP was the only option, so any cache that predates
+# the field was unambiguously built with this spec. Don't change this — it's
+# a compatibility marker, not a tunable.
+LEGACY_ENCODER_SPEC = "openai-clip:ViT-B/32"
 
 # When True, SigLIP's encode_text wraps each query in every entry of
 # SIGLIP_PROMPT_TEMPLATES, encodes them all, L2-normalizes each per-template

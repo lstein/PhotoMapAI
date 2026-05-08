@@ -14,7 +14,7 @@ import yaml
 from platformdirs import user_config_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .encoders import DEFAULT_ENCODER_SPEC
+from .encoders import DEFAULT_ENCODER_SPEC, LEGACY_ENCODER_SPEC
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,11 @@ class Album(BaseModel):
             index=data["index"],
             umap_eps=data.get("umap_eps", 0.07),
             description=data.get("description", ""),
-            encoder_spec=data.get("encoder_spec", DEFAULT_ENCODER_SPEC),
+            # Legacy YAML albums predate the encoder_spec field; their indexes
+            # were built with the original CLIP, so fall back to that to stay
+            # cache-compatible. New albums get DEFAULT_ENCODER_SPEC via the
+            # Album field default when the frontend creates them.
+            encoder_spec=data.get("encoder_spec", LEGACY_ENCODER_SPEC),
             min_search_score=data.get("min_search_score"),
             max_search_results=data.get("max_search_results", 100),
             use_query_optimization=data.get("use_query_optimization", True),

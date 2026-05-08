@@ -15,6 +15,7 @@ import pytest
 from photomap.backend import encoders as encoders_module
 from photomap.backend.encoders import (
     DEFAULT_ENCODER_SPEC,
+    LEGACY_ENCODER_SPEC,
     EmbeddingCacheMismatch,
     ImageTextEncoder,
     OpenAIClipEncoder,
@@ -26,8 +27,17 @@ from photomap.backend.encoders import (
 )
 
 
-def test_default_spec_is_legacy_clip():
-    assert DEFAULT_ENCODER_SPEC == "openai-clip:ViT-B/32"
+def test_default_spec_for_new_albums():
+    """New albums default to OpenCLIP-DFN ViT-L-14 (best general-purpose pick)."""
+    assert DEFAULT_ENCODER_SPEC == "open-clip:ViT-L-14/dfn2b_s39b"
+
+
+def test_legacy_spec_unchanged():
+    """LEGACY_ENCODER_SPEC is a compatibility marker for caches that predate
+    the encoder swap layer. Don't change this — it's pinned to the original
+    CLIP variant that was the only option before the swap layer existed.
+    """
+    assert LEGACY_ENCODER_SPEC == "openai-clip:ViT-B/32"
 
 
 def test_build_encoder_resolves_openai_clip(monkeypatch):
@@ -120,14 +130,18 @@ def test_build_encoder_missing_model_raises():
 
 
 def test_build_encoder_none_uses_default(monkeypatch):
-    """A None spec should resolve to the legacy default, not error out."""
+    """A None spec must resolve to DEFAULT_ENCODER_SPEC, not error out.
+
+    The default is now ``open-clip:ViT-L-14/dfn2b_s39b``, so the mock has
+    to patch OpenClipEncoder rather than OpenAIClipEncoder.
+    """
     monkeypatch.setattr(
-        OpenAIClipEncoder,
+        OpenClipEncoder,
         "__init__",
-        lambda self, variant, device=None, download_root=None: setattr(
-            self, "model_id", f"openai-clip:{variant}"
+        lambda self, model_name, pretrained, device=None, cache_dir=None: setattr(
+            self, "model_id", f"open-clip:{model_name}/{pretrained}"
         )
-        or setattr(self, "embedding_dim", 512)
+        or setattr(self, "embedding_dim", 1024)
         or setattr(self, "device", "cpu"),
     )
     encoder = build_encoder(None)
