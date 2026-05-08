@@ -426,7 +426,7 @@ def test_search_combines_modalities_in_score_space(tmp_path, monkeypatch):
     sorted_filenames = ["img.jpg", "pos.jpg", "neg.jpg", "none.jpg"]
 
     def scores_by_filename(indices, scores):
-        return {sorted_filenames[i]: s for i, s in zip(indices, scores)}
+        return {sorted_filenames[i]: s for i, s in zip(indices, scores, strict=False)}
 
     # 50/50 image+positive query, no negative.
     # Expected: positive_score = (image_w*cos_img + pos_w*calibrate(cos_pos)) / (image_w + pos_w)

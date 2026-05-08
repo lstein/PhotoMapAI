@@ -233,7 +233,6 @@ def test_siglip_encode_text_uses_prompt_ensembling(monkeypatch):
     """
     import torch
 
-    from photomap.backend import encoders as encoders_module
     from photomap.backend.encoders import SIGLIP_PROMPT_TEMPLATES
 
     captured = {}
