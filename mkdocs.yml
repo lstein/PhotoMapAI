@@ -12,6 +12,7 @@ nav:
       - Search: user-guide/search.md
       - Bookmarks: user-guide/bookmarks.md
       - Albums: user-guide/albums.md
+      - Encoders: user-guide/encoders.md
       - Configuration: user-guide/configuration.md
       - Semantic Map: user-guide/semantic-map.md
       - Image Dataset Curation: user-guide/curator-mode.md

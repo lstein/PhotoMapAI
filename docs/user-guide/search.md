@@ -33,6 +33,8 @@ To search PhotoMapAI by image similarity:
 
 The screenshot below shows the results of an image search on a photo of a generic mountain found in Google Images. The match score, a value ranging from 0.0 (no match) to 1.0 (perfect match), appears at the top left. The seek slider at the top lets you select images with particular score ranges. A bit counterintuitively, images with the strongest matches (highest scores) appear earlier to the left, and those with the weakest scores appear later.
 
+The exact distribution of scores depends on which [encoder](encoders.md) the album was indexed with. Classic CLIP-style encoders (OpenAI CLIP, OpenCLIP) put strong matches around 0.20–0.40; SigLIP produces calibrated probabilities that put strong matches near 0.5+ but compresses everything else toward zero, so its useful threshold is much lower. The defaults are set per-encoder, but you can override them per album in the search dialog — see [Tuning Search Per-Album](#tuning-search-per-album) below.
+
 <img src="../../img/photomap_search_2.png" width="480" alt="Image Search Result" class="img-hover-zoom">
 
 ## Search by Text
@@ -41,9 +43,19 @@ Open the search **By Text** magnifying glass icon and type your search term into
 
 ## Search by a Combination of Text and Image
 
-An advanced use of the search interface allows you to search simultaneously on images and text. You can also provide "negative text" to avoid the appearance of certain themes or subjects. Be aware that it may take some trial and error to get the search to perform in the way you desire. One issue is that images typically match with a higher similarity score than text. Another issue is that negative text can often lower the overall match score and lead to no hits. To get more control over the process, each of the three search fields is accompanied by a *weight* slider (see circled area in the screenshot below) that allows you to adjust the relative weighting of each of the three criteria. The relative values of the three sliders controls how much each criterion will contribute to the search. I typically set the image and negative text fields to have weights that are less than half the weight of the positive text search and then adjust until I get the spread of search results I expect. 
+An advanced use of the search interface allows you to search simultaneously on images and text. You can also provide "negative text" to avoid the appearance of certain themes or subjects. Each of the three search fields is accompanied by a *weight* slider (see circled area in the screenshot below) that controls how much that criterion contributes to the final score. PhotoMapAI computes a similarity score for each modality (image, positive text, negative text) separately, normalizes the text scores so they sit on a comparable scale to image-image similarity, and then takes a weighted average — so the slider values mean what they say: equal weights produce roughly equal contributions.
 
 <img src="../../img/photomap_search_3.png" width="480" alt="Image Search Weights" class="img-hover-zoom">
+
+The negative weight is subtracted from the combined score, so it acts as a penalty rather than diluting the positive contribution. A useful starting point is equal positive-image and positive-text weights with the negative weight set lower; tune from there until the spread of results matches what you expect. Note that negative text alone (no positive query) is not a meaningful search and will return nothing.
+
+## Tuning Search Per-Album
+
+The search dialog has three tuning controls below the prompt area, all stored per-album in the album's configuration. Their values are loaded automatically when you switch albums and persist back to the album's config when you change them.
+
+- **Min. score.** Results below this similarity score are filtered out. Defaults are encoder-aware: 0.2 for CLIP and OpenCLIP albums, 0.005 for SigLIP albums. SigLIP's calibrated probability distribution is much more compressed than CLIP cosines, so its sensible threshold is roughly 40× lower. If you're seeing zero hits where you expect matches, try lowering the threshold first; if you're seeing too many weak matches, raise it.
+- **Max. results.** Caps how many top-scoring results are returned. Default is 100. Increase this if you want to see the long tail of borderline matches; decrease it if you only want to see the strongest hits.
+- **Query optimization (SigLIP only).** When enabled, SigLIP wraps each text query in five modality-spanning templates (`"a photo of …"`, `"a drawing of …"`, `"an illustration of …"`, `"a painting of …"`, and the bare query), encodes them all, and averages the resulting embeddings. The intent is to make bare-noun queries (like `"woman"`) match more strongly and to avoid systematically penalizing non-photo content (drawings, illustrations) in mixed-media albums. Effects vary by album — for some it improves recall on short queries; for others it lowers per-image cosines just enough to push everything below the SigLIP calibration cliff. Try both settings on your library; the toggle is greyed out for non-SigLIP albums where it has no effect.
 
 ## Search by Map
 
