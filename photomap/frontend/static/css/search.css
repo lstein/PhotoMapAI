@@ -315,6 +315,10 @@
   gap: 0.5em 1em;
   align-items: start;
   width: 100%;
+  /* Reserve room on the right so the text inputs don't run under the
+     "X" close button anchored at top:0.7em right:0.7em. */
+  padding-right: 1.8em;
+  box-sizing: border-box;
 }
 
 .search-label {
