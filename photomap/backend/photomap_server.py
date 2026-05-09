@@ -8,6 +8,7 @@ import os
 import signal
 import subprocess
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -19,6 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from photomap.backend.args import get_args, get_version
 from photomap.backend.config import get_config_manager
 from photomap.backend.constants import get_package_resource_path
+from photomap.backend.encoders import start_idle_watcher, stop_idle_watcher
 from photomap.backend.routers.album import album_router, get_locked_albums
 from photomap.backend.routers.curation import router as curation_router
 from photomap.backend.routers.filetree import filetree_router
@@ -32,8 +34,25 @@ from photomap.backend.util import get_app_url
 # Initialize logging
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage process-wide background services tied to the server lifetime.
+
+    Currently: the encoder idle watcher, which moves cached search encoders
+    from VRAM to RAM after a configurable period of inactivity. Disabled when
+    ``encoder_idle_timeout_seconds`` is ``0``.
+    """
+    timeout = get_config_manager().load_config().encoder_idle_timeout_seconds
+    start_idle_watcher(timeout)
+    try:
+        yield
+    finally:
+        stop_idle_watcher()
+
+
 # Initialize FastAPI app
-app = FastAPI(title="PhotoMapAI")
+app = FastAPI(title="PhotoMapAI", lifespan=lifespan)
 
 # Include routers
 for router in [

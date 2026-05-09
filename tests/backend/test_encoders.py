@@ -293,6 +293,169 @@ def test_siglip_encode_text_uses_prompt_ensembling(monkeypatch):
     np.testing.assert_allclose(norms, np.ones_like(norms), atol=1e-6)
 
 
+class _FakeModel:
+    """Stand-in for a torch nn.Module that records device transitions."""
+
+    def __init__(self, initial_device: str = "cuda"):
+        self.device_history: list[str] = [initial_device]
+
+    @property
+    def current_device(self) -> str:
+        return self.device_history[-1]
+
+    def to(self, device: str) -> _FakeModel:
+        self.device_history.append(device)
+        return self
+
+
+def _make_test_encoder(device: str = "cuda") -> ImageTextEncoder:
+    """Build a minimal ImageTextEncoder for offload/reload tests.
+
+    The bundled encoders all share ``self._model`` and ``self.device`` so the
+    base-class offload helpers operate on either; this fake exposes the same
+    surface without pulling in torch model weights.
+    """
+
+    class _TestEncoder(ImageTextEncoder):
+        model_id = "test:fake"
+        embedding_dim = 4
+
+        def __init__(self, device: str):
+            self.device = device
+            self._model = _FakeModel(initial_device=device)
+
+        def encode_images(self, images):
+            self._ensure_on_device()
+            return np.zeros((len(images), self.embedding_dim), dtype=np.float32)
+
+        def encode_text(self, texts):
+            self._ensure_on_device()
+            return np.zeros((len(texts), self.embedding_dim), dtype=np.float32)
+
+    return _TestEncoder(device)
+
+
+def test_offload_moves_model_to_cpu_and_reload_returns_to_device(monkeypatch):
+    """offload() moves the model to CPU and the next encode reloads it."""
+    # _free_cuda calls torch.cuda.empty_cache(); short-circuit so the test is
+    # device-agnostic.
+    monkeypatch.setattr(encoders_module, "_free_cuda", lambda device: None)
+
+    encoder = _make_test_encoder(device="cuda")
+    assert not encoder.is_offloaded
+    encoder.offload()
+    assert encoder.is_offloaded
+    assert encoder._model.current_device == "cpu"
+
+    encoder.encode_text(["x"])
+    assert not encoder.is_offloaded
+    assert encoder._model.current_device == "cuda"
+
+
+def test_offload_is_noop_on_cpu_device():
+    """When the encoder is already on CPU, offload should be a cheap no-op."""
+    encoder = _make_test_encoder(device="cpu")
+    encoder.offload()
+    assert not encoder.is_offloaded
+    assert encoder._model.device_history == ["cpu"]
+
+
+def test_offload_idempotent(monkeypatch):
+    """Calling offload() twice does not move the model twice."""
+    monkeypatch.setattr(encoders_module, "_free_cuda", lambda device: None)
+    encoder = _make_test_encoder(device="cuda")
+    encoder.offload()
+    encoder.offload()
+    assert encoder._model.device_history == ["cuda", "cpu"]
+
+
+def test_idle_watcher_offloads_stale_entries(monkeypatch):
+    """Watcher should call offload() on cached entries past the timeout."""
+    import time as time_module
+
+    monkeypatch.setattr(encoders_module, "_free_cuda", lambda device: None)
+    clear_encoder_cache()
+
+    encoder = _make_test_encoder(device="cuda")
+
+    def fake_build(spec=None, *, cache_dir=None, device=None):
+        return encoder
+
+    monkeypatch.setattr(encoders_module, "build_encoder", fake_build)
+
+    cached = get_cached_encoder("test:fake")
+    assert cached is encoder
+    # Backdate the last-access timestamp so the entry is immediately "stale".
+    key = ("test:fake", None)
+    encoders_module._search_encoder_last_access[key] = time_module.monotonic() - 100.0
+
+    encoders_module.start_idle_watcher(timeout_seconds=0.05, poll_interval=0.05)
+    try:
+        # Wait long enough for one wake-up. Polled rather than sleeping a fixed
+        # interval so the test still passes if the scheduler is slow.
+        deadline = time_module.monotonic() + 2.0
+        while not encoder.is_offloaded and time_module.monotonic() < deadline:
+            time_module.sleep(0.02)
+    finally:
+        encoders_module.stop_idle_watcher()
+
+    assert encoder.is_offloaded
+    assert encoder._model.current_device == "cpu"
+    clear_encoder_cache()
+
+
+def test_idle_watcher_skips_recent_entries(monkeypatch):
+    """A recently-touched entry must NOT be offloaded by the watcher."""
+    import time as time_module
+
+    monkeypatch.setattr(encoders_module, "_free_cuda", lambda device: None)
+    clear_encoder_cache()
+
+    encoder = _make_test_encoder(device="cuda")
+    monkeypatch.setattr(
+        encoders_module, "build_encoder", lambda *a, **kw: encoder
+    )
+
+    get_cached_encoder("test:fake")  # Sets timestamp to now.
+
+    encoders_module.start_idle_watcher(timeout_seconds=5.0, poll_interval=0.05)
+    try:
+        time_module.sleep(0.25)  # Several poll cycles, all well under timeout.
+    finally:
+        encoders_module.stop_idle_watcher()
+
+    assert not encoder.is_offloaded
+    clear_encoder_cache()
+
+
+def test_start_idle_watcher_zero_timeout_disables(monkeypatch):
+    """timeout_seconds == 0 must skip starting the watcher thread."""
+    encoders_module.stop_idle_watcher()
+    encoders_module.start_idle_watcher(timeout_seconds=0)
+    assert encoders_module._idle_watcher_thread is None
+
+
+def test_get_cached_encoder_updates_last_access(monkeypatch):
+    """Each get_cached_encoder() call should refresh the entry's timestamp."""
+    import time as time_module
+
+    clear_encoder_cache()
+    monkeypatch.setattr(
+        encoders_module,
+        "build_encoder",
+        lambda spec=None, *, cache_dir=None, device=None: _make_test_encoder("cpu"),
+    )
+
+    get_cached_encoder("test:fake")
+    key = ("test:fake", None)
+    first = encoders_module._search_encoder_last_access[key]
+    time_module.sleep(0.02)
+    get_cached_encoder("test:fake")
+    second = encoders_module._search_encoder_last_access[key]
+    assert second > first
+    clear_encoder_cache()
+
+
 def test_get_cached_encoder_reuses_instance(monkeypatch):
     """Repeated search queries must reuse the same encoder instance."""
     clear_encoder_cache()

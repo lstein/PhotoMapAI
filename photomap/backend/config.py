@@ -149,6 +149,21 @@ class Config(BaseModel):
             "placed in. None means Uncategorized."
         ),
     )
+    encoder_idle_timeout_seconds: float = Field(
+        default=30.0,
+        description=(
+            "Seconds of search inactivity before the cached encoder is moved "
+            "from GPU VRAM to system RAM. Reload from RAM on the next query is "
+            "fast (no disk/network fetch). Set to 0 to disable offloading."
+        ),
+    )
+
+    @field_validator("encoder_idle_timeout_seconds")
+    @classmethod
+    def validate_encoder_idle_timeout_seconds(cls, v: float) -> float:
+        if v < 0:
+            raise ValueError("encoder_idle_timeout_seconds must be >= 0")
+        return float(v)
 
     @field_validator("config_version")
     @classmethod
@@ -180,6 +195,7 @@ class Config(BaseModel):
             "invokeai_username": self.invokeai_username,
             "invokeai_password": self.invokeai_password,
             "invokeai_board_id": self.invokeai_board_id,
+            "encoder_idle_timeout_seconds": self.encoder_idle_timeout_seconds,
         }
 
 
@@ -291,6 +307,11 @@ class ConfigManager:
                     for key, album_data in config_data.get("albums", {}).items():
                         albums[key] = Album.from_dict(key, album_data)
 
+                    extra: dict[str, Any] = {}
+                    if "encoder_idle_timeout_seconds" in config_data:
+                        extra["encoder_idle_timeout_seconds"] = config_data[
+                            "encoder_idle_timeout_seconds"
+                        ]
                     self._config = Config(
                         config_version=config_data.get("config_version", "1.0.0"),
                         albums=albums,
@@ -299,6 +320,7 @@ class ConfigManager:
                         invokeai_username=config_data.get("invokeai_username"),
                         invokeai_password=config_data.get("invokeai_password"),
                         invokeai_board_id=config_data.get("invokeai_board_id"),
+                        **extra,
                     )
 
                 except Exception as e:
