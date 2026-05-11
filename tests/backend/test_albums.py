@@ -19,6 +19,38 @@ def test_config():
     assert manager.get_albums() == {}
 
 
+def test_encoder_idle_timeout_default_and_round_trip(tmp_path):
+    """The new encoder_idle_timeout_seconds field must default to 30s and
+    round-trip through YAML so changes in config.yaml take effect on restart.
+    """
+    import yaml
+
+    from photomap.backend.config import Config, ConfigManager
+
+    # Default applies when the YAML file omits the field.
+    cfg = Config()
+    assert cfg.encoder_idle_timeout_seconds == 30.0
+
+    # Negative values are rejected so a typo can't silently disable the feature
+    # forever (0 is the explicit "off" value).
+    with pytest.raises(ValueError):
+        Config(encoder_idle_timeout_seconds=-1.0)
+
+    # Round-trip through ConfigManager.save_config / load_config.
+    config_path = tmp_path / "config.yaml"
+    manager = ConfigManager(config_path=config_path)
+    cfg = manager.load_config()
+    cfg.encoder_idle_timeout_seconds = 90.0
+    manager._config = cfg
+    manager.save_config()
+
+    raw = yaml.safe_load(config_path.read_text())
+    assert raw["encoder_idle_timeout_seconds"] == 90.0
+
+    fresh = ConfigManager(config_path=config_path)
+    assert fresh.load_config().encoder_idle_timeout_seconds == 90.0
+
+
 def test_add_delete_album():
     manager = get_config_manager()
     album = create_album(
