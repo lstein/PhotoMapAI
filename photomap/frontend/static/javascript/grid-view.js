@@ -364,7 +364,7 @@ class GridViewManager {
       // add some context slides before and after
       await this.loadBatch(targetIndex + this.slidesPerBatch, true);
       if (targetIndex > 0) {
-        await this.loadBatch(targetIndex - this.slidesPerBatch, false);
+        await this.loadBatch(targetIndex - this.slidesPerBatch, false, false);
       }
     } catch (err) {
       console.warn(err);
@@ -374,7 +374,7 @@ class GridViewManager {
     this.resetInProgress = false;
   }
 
-  async loadBatch(startIndex = null, append = true) {
+  async loadBatch(startIndex = null, append = true, animatePrepend = true) {
     const topLeftIndex = Math.floor(startIndex / this.slidesPerBatch) * this.slidesPerBatch;
 
     const placeholderSlides = [];
@@ -411,12 +411,14 @@ class GridViewManager {
         // Use a microtask (Promise) to ensure prepend DOM changes are committed
         Promise.resolve().then(() => {
           if (this.swiper && !this.swiper.destroyed) {
-            // Use default speed (300ms) for smooth animation, but suppress slide change event
-            this.swiper.slideTo(this.currentColumns, 300, false);
-            // Reset suppressSlideChange after transition completes
-            setTimeout(() => {
-              this.suppressSlideChange = false;
-            }, 350); // Slightly longer than animation duration
+            const speed = animatePrepend ? 300 : 0;
+            this.swiper.slideTo(this.currentColumns, speed, false);
+            setTimeout(
+              () => {
+                this.suppressSlideChange = false;
+              },
+              animatePrepend ? 350 : 0
+            );
           }
         });
       }
