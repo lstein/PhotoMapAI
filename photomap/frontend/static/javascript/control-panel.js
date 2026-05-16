@@ -161,39 +161,39 @@ async function confirmDelete(filepath, globalIndex) {
 }
 
 async function handleSuccessfulDelete(globalIndex, searchIndex) {
-  // synchronize the album information
   const metadata = await getIndexMetadata(state.album);
+  slideState.totalAlbumImages = metadata?.filename_count || 0;
 
-  // remove from search results, and adjust subsequent global indices downward by 1
+  // Drop the deleted entry from search results and decrement subsequent global indices.
+  // Stay on the same search position so the next result fills the slot; clamp at the end.
   if (slideState.isSearchMode && slideState.searchResults?.length > 0) {
     slideState.searchResults.splice(searchIndex, 1);
-    for (let i = 0; i < slideState.searchResults.length; i++) {
-      if (slideState.searchResults[i].index > globalIndex) {
-        slideState.searchResults[i].index -= 1;
+    for (const result of slideState.searchResults) {
+      if (result.index > globalIndex) {
+        result.index -= 1;
       }
+    }
+    if (slideState.searchResults.length === 0) {
+      slideState.exitSearchMode();
+    } else {
+      slideState.currentSearchIndex = Math.min(slideState.currentSearchIndex, slideState.searchResults.length - 1);
+      slideState.currentGlobalIndex = slideState.searchResults[slideState.currentSearchIndex].index;
     }
   }
 
-  // If the current globalIndex is after the deleted index, decrement it
-  if (slideState.currentGlobalIndex > globalIndex) {
-    slideState.currentGlobalIndex -= 1;
-  }
-
-  // Update total images
-  slideState.totalAlbumImages = metadata.filename_count || 0;
-
-  // TO DO: What happens when the last image is removed?!
-
-  // Update the current swiper.
-  const removedSlideIndex = state.swiper.slides.findIndex((slide) => {
-    return parseInt(slide.dataset.globalIndex, 10) === globalIndex;
-  });
-  if (removedSlideIndex === -1) {
-    console.warn("Deleted slide not found in swiper slides.");
+  // Backend re-indexes after deletion: the slide that was at globalIndex+1 is now at globalIndex,
+  // so keeping currentGlobalIndex unchanged naturally advances to the next image. Clamp so that
+  // deleting the last image lands on the new last image.
+  if (slideState.totalAlbumImages > 0) {
+    slideState.currentGlobalIndex = Math.min(slideState.currentGlobalIndex, slideState.totalAlbumImages - 1);
+  } else {
+    slideState.currentGlobalIndex = 0;
+    state.swiper.removeAllSlides();
     return;
   }
-  await state.swiper.removeSlide(removedSlideIndex);
-  slideState.navigateByOffset(0); // Stay on the same index, which is now the next image
+
+  // Full rebuild — neighbor slides' dataset.globalIndex values are now stale after backend reindexing.
+  await state.single_swiper.resetAllSlides();
 }
 
 // Setup button event listeners
