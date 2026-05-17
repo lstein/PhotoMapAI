@@ -169,10 +169,12 @@ jobs:
 
       - name: Create archive (Windows)
         if: runner.os == 'Windows'
+        # Use 7z instead of Compress-Archive: the latter throws
+        # "Stream was too long" on archives above ~2 GB, which the cu129 build hits.
         run: |
           $version = "${{ steps.get_version_win.outputs.version }}"
           $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$version"
-          Compress-Archive -Path "dist\$archiveName" -DestinationPath "dist\$archiveName.zip" -Force
+          7z a -tzip "dist\$archiveName.zip" "dist\$archiveName"
         shell: pwsh
 
       - name: Debug - List dist contents
