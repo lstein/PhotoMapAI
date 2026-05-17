@@ -552,6 +552,7 @@ class SwiperManager {
     }
 
     setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
+    window.dispatchEvent(new CustomEvent("slidesReset"));
   }
 
   enforceHighWaterMark(backward = false) {
