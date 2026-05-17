@@ -2,8 +2,13 @@ name: Deploy Release
 
 on:
   workflow_dispatch:
-  release: 
+  release:
     types: [published]
+
+env:
+  # Force JS actions to run under Node 24; the v4/v5 majors of the
+  # actions/* family still ship Node 20 entrypoints as of mid-2026.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   tag-release: 
