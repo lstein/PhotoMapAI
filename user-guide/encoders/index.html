@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../semantic-map/">
+        <link rel="prev" href="../albums/">
       
       
-        <link rel="next" href="../invokeai-integration/">
+        <link rel="next" href="../configuration/">
       
       
         
@@ -23,7 +23,7 @@
     
     
       
-        <title>Image Dataset Curation - PhotoMapAI</title>
+        <title>Encoders - PhotoMapAI</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dataset-curation" class="md-skip">
+        <a href="#encoders" class="md-skip">
           Skip to content
         </a>
       
@@ -110,7 +110,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Image Dataset Curation
+              Encoders
             
           </span>
         </div>
@@ -553,10 +553,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../encoders/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Encoders
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -572,6 +599,98 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-encoders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Three Encoders
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Three Encoders">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#openclip-vit-l-14-dfn-2b-recommended-default-for-new-albums" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenCLIP ViT-L-14 / DFN-2B (recommended, default for new albums)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#siglip-2-large" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SigLIP 2 Large
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openai-clip-vit-b32-legacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAI CLIP ViT-B/32 (legacy)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setting-the-encoder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setting the Encoder
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning-for-effective-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning for Effective Search
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -637,37 +756,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Image Dataset Curation
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../curator-mode/" class="md-nav__link">
         
   
   
@@ -683,187 +775,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#accessing-the-curator" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Accessing the Curator
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#selection-algorithms" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Selection Algorithms
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Selection Algorithms">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#diversity-fps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Diversity (FPS)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#blocks-k-means" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Blocks (K-Means)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#workflow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Workflow
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Workflow">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#stability-heatmap" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Stability Heatmap
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#refinement-exclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Refinement &amp; Exclusion
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#recommended-workflows" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recommended Workflows
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Recommended Workflows">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#scenario-a-cleaning-a-dataset-removing-garbage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario A: Cleaning a Dataset (Removing Garbage)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scenario-b-generating-a-training-set" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario B: Generating a Training Set
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#exporting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exporting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#for-more-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        For More Information
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1179,33 +1090,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#accessing-the-curator" class="md-nav__link">
+  <a href="#the-three-encoders" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Accessing the Curator
+        The Three Encoders
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#selection-algorithms" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Selection Algorithms
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Selection Algorithms">
+    <nav class="md-nav" aria-label="The Three Encoders">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#diversity-fps" class="md-nav__link">
+  <a href="#openclip-vit-l-14-dfn-2b-recommended-default-for-new-albums" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Diversity (FPS)
+        OpenCLIP ViT-L-14 / DFN-2B (recommended, default for new albums)
       
     </span>
   </a>
@@ -1213,10 +1113,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#blocks-k-means" class="md-nav__link">
+  <a href="#siglip-2-large" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Blocks (K-Means)
+        SigLIP 2 Large
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openai-clip-vit-b32-legacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAI CLIP ViT-B/32 (legacy)
       
     </span>
   </a>
@@ -1229,38 +1140,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#workflow" class="md-nav__link">
+  <a href="#setting-the-encoder" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Workflow
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Workflow">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#stability-heatmap" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Stability Heatmap
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#refinement-exclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Refinement &amp; Exclusion
+        Setting the Encoder
       
     </span>
   </a>
@@ -1268,71 +1151,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#recommended-workflows" class="md-nav__link">
+  <a href="#tuning-for-effective-search" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Recommended Workflows
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Recommended Workflows">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#scenario-a-cleaning-a-dataset-removing-garbage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario A: Cleaning a Dataset (Removing Garbage)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scenario-b-generating-a-training-set" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario B: Generating a Training Set
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#exporting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exporting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#for-more-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        For More Information
+        Tuning for Effective Search
       
     </span>
   </a>
@@ -1359,147 +1181,43 @@
   
 
 
-<h1 id="dataset-curation">Dataset Curation</h1>
-<p>The <strong>Dataset Curator</strong> is a powerful feature in PhotoMapAI designed to help you select a diverse or representative subset of images from a large album. This is particularly useful for creating training datasets for LoRA (Low-Rank Adaptation) image generation/classification models or simply reducing the redundancy in a large collection of images.</p>
-<p><img alt="Curator Mode Panel" src="../../img/curator-panel.png" /></p>
-<h2 id="accessing-the-curator">Accessing the Curator</h2>
-<ol>
-<li>Open an album in the grid or semantic map view.</li>
-<li>Click the <strong>Favorites</strong> menu button (⭐) in the bottom-right of the window.</li>
-<li>Select <strong>Curate</strong> (pencil icon 📝) from the dropdown menu.</li>
-</ol>
-<p>The curator panel will appear and can be repositioned by dragging its title bar.</p>
-<h2 id="selection-algorithms">Selection Algorithms</h2>
-<p>The curator offers two distinct algorithms for selecting images, selectable via radio buttons:</p>
-<h3 id="diversity-fps">Diversity (FPS)</h3>
-<p><strong>Farthest Point Sampling</strong> selects images that are as different from each other as possible.</p>
+<h1 id="encoders">Encoders</h1>
+<p>Every PhotoMapAI album is indexed by an <em>encoder</em> — a vision-language model that converts each image, and any text query you type later, into a numeric vector. Search and the semantic map are both built on those vectors. The choice of encoder controls how similar two things look to PhotoMapAI: how well it matches a query word like <em>"sunset"</em> against an actual photo of a sunset, how forgiving it is of cluttered or stylistically varied images, and how the similarity scores you see in the UI are distributed.</p>
+<p>Three encoders are bundled with PhotoMapAI. They have different strengths, and the right pick depends on the kind of images in your album.</p>
+<h2 id="the-three-encoders">The Three Encoders</h2>
+<h3 id="openclip-vit-l-14-dfn-2b-recommended-default-for-new-albums">OpenCLIP ViT-L-14 / DFN-2B  <em>(recommended, default for new albums)</em></h3>
+<p>A larger, better-trained successor to the original CLIP. Apple released the <code>DFN-2B</code> weights in 2023, retrained on a heavily filtered 2-billion image-caption dataset. It scores meaningfully higher than legacy CLIP on virtually every published benchmark and behaves robustly across messy real-world photo collections.</p>
 <ul>
-<li>
-<p><strong>Best for:</strong> Ensuring your dataset covers the widest possible range of visual concepts, lighting conditions, and angles. Use it for:</p>
+<li><strong>Strengths.</strong> Best general-purpose match for typical photo libraries — family snapshots, vacations, mixed media. Cosine similarities are in a familiar range (matching pairs around 0.20–0.35), so a threshold of 0.2 catches most legitimate hits without flooding the results with false positives. Threshold semantics are predictable and don't need per-album tuning.</li>
+<li><strong>Weaknesses.</strong> Larger model than legacy CLIP — ~600 MB to download and slower per image to index. First-time indexing of a big album takes noticeably longer than the legacy CLIP option.</li>
+<li><strong>Pick this if</strong> you don't have a strong reason to pick something else.</li>
+</ul>
+<h3 id="siglip-2-large">SigLIP 2 Large</h3>
+<p>Google's 2024–25 update to SigLIP, trained with a sigmoid loss instead of CLIP's batch-softmax. This means SigLIP's similarity scores are <em>calibrated</em>: PhotoMapAI passes them through SigLIP's learned sigmoid to recover something close to "this is an X% match" probabilities, which can be more interpretable than raw cosines.</p>
 <ul>
-<li>
-<p><strong>High Quality Data:</strong> FPS seeks outliers. In a "dirty" dataset, outliers are often blurry or broken images. In a "clean" dataset, outliers are your rare concepts (side profiles, dramatic lighting).</p>
-</li>
-<li>
-<p><strong>Unbalanced Data:</strong> If you have 50 full-body images and 10 close-ups, FPS will prioritize the close-ups to ensure the AI learns the rare concept, rather than just the common one.</p>
-</li>
+<li><strong>Strengths.</strong> Excellent at clean, single-subject images with caption-shaped queries. Particularly good for AI-generated content (InvokeAI exports, Stable Diffusion outputs, illustration-style work) where the subject is the whole image and queries describe it directly. The calibrated scores make a confident match very obviously different from a non-match — you'll see probabilities near 0.5+ for good hits and near 0.001 for misses, with little in between.</li>
+<li><strong>Weaknesses.</strong> That sharp calibration is a double-edged sword. SigLIP's matching cosines for a typical query land in the 0.05–0.15 range, and the calibration <em>cliff</em> sits at raw cosine ≈ 0.14. Cluttered family photos and abstract bare-noun queries (<code>"woman"</code>, <code>"flower"</code>) tend to produce raw cosines just <em>below</em> that cliff, which makes their calibrated probabilities collapse toward zero. Default thresholds for SigLIP are therefore much lower (0.005) than for CLIP-style encoders, and you'll spend more time tuning per album.</li>
+<li><strong>Pick this if</strong> your album is mostly clean, single-subject content where you want the most confident possible matches and you're willing to tune.</li>
 </ul>
-</li>
-<li>
-<p><strong>How it works:</strong> It starts with a random image (or your excluded selection) and iteratively picks the image whose feature vector is farthest from the current set.</p>
-</li>
-</ul>
-<h3 id="blocks-k-means">Blocks (K-Means)</h3>
-<p><strong>K-Means Clustering</strong> groups images into clusters and picks a representative image from each cluster.</p>
+<h3 id="openai-clip-vit-b32-legacy">OpenAI CLIP ViT-B/32  <em>(legacy)</em></h3>
+<p>The original 2021 CLIP — the model PhotoMapAI used for everything before the encoder layer was added. It's the smallest of the three (~150 MB, fastest to index) and uses a familiar contrastive cosine similarity.</p>
 <ul>
-<li>
-<p><strong>Best for:</strong> Reducing redundancy while maintaining the overall distribution of the dataset (Representative Sampling). Use it for:</p>
-<ul>
-<li><strong>Balanced Distribution:</strong> If you have 50 full-body images and 10 close-ups, K-Means will select roughly 5 full-body images for every 1 close-up, preserving the original ratios of your dataset.</li>
+<li><strong>Strengths.</strong> Fastest indexing, smallest disk footprint, well-understood threshold behavior.</li>
+<li><strong>Weaknesses.</strong> Substantially weaker than the newer alternatives across published benchmarks (e.g. ~63% ImageNet zero-shot vs. 82% for OpenCLIP-DFN). Recall on photo-style content is noticeably worse, and false positives are more frequent.</li>
+<li><strong>Pick this if</strong> you're constrained on disk or time, or you want to keep a legacy album working without re-indexing it. Albums created before the encoder layer existed default to this, and re-indexing isn't required just because a newer option is available.</li>
 </ul>
-</li>
-<li>
-<p><strong>How it works:</strong> It divides your images into N clusters (where N is your target count) and selects the image closest to the mathematical center of each cluster.</p>
-</li>
-</ul>
-<h2 id="workflow">Workflow</h2>
-<p><img src="../../img/curator-setup.png" width="480" alt="Curator Panel Setup" class="img-hover-zoom"></p>
-<ol>
-<li><strong>Setup your UI</strong>: <ul>
-<li>When the curator panel opens, the UMAP visualization automatically switches to grey mode - all points turn grey to make the colored selection overlays more visible.</li>
-<li>Unclustered points (normally very faint) increase in opacity to match clustered points, providing a uniform background.</li>
-<li>It is recommended to turn off "Show landmarks" and "Show hover thumbnails" in the UMAP controls for a cleaner view.</li>
-</ul>
-</li>
-<li><strong>Set Target Count</strong>: Choose how many images you want in your final set (e.g., 50, 150).</li>
-<li><strong>Set Iterations</strong>: <ul>
-<li>Algorithms like FPS can be sensitive to the starting point. Running multiple iterations (Monte Carlo simulation) helps identify the "consensus" selections—images that are statistically important regardless of the random start.</li>
-<li><strong>Recommendation:</strong> Set to 20 iterations for analysis.</li>
-</ul>
-</li>
-<li><strong>Run Selection</strong>: Click <strong>Select Images</strong> (circled button) to select a diverse distribution of images.<ul>
-<li>A yellow-and-white progress bar appears below the title, showing the progress of the selected algorithm.</li>
-</ul>
-</li>
-</ol>
-<p><img src="../../img/curator-preview.png" width="480" alt="After selecting images" class="img-hover-zoom"></p>
-<h3 id="stability-heatmap">Stability Heatmap</h3>
-<p>The results are displayed as a Stability Heatmap:</p>
-<ul>
-<li>🟣 <strong>Magenta</strong>: Core Outliers (Selected in &gt;90% of runs). These are your most mathematically unique images.</li>
-<li>🔵 <strong>Cyan</strong>: Stable (Selected in &gt;70% of runs).</li>
-<li>🟢 <strong>Green</strong>: Variable (Selected in &lt;70% of runs). Edge cases that usually fill gaps.</li>
-</ul>
-<p>If you now open the grid view (by hiding or minimizing the semantic map window) you will see the selected images at full brightness, while others will be dimmed. Press the "Clear" button on the curator panel or the "X" button on the bottom right of the main window, in order to clear the search and return to the normal view.</p>
-<h2 id="refinement-exclusion">Refinement &amp; Exclusion</h2>
-<p>You can manually refine the selection by excluding images. Excluding an image removes it from calculations and exports. This is commonly needed when your collection contains "garbage", such as blank or blurry images, that appear to the algorithm as interesting outliers.</p>
-<p>This allows for a "Drill Down" workflow:</p>
-<ol>
-<li>
-<p>Run the analysis.</p>
-</li>
-<li>
-<p>If the top results (🟣 <strong>Magenta</strong>) are garbage, exclude them.</p>
-</li>
-<li>
-<p>Run <strong>Select Images</strong> again. The algorithm will be forced to ignore the excluded images and find the next best candidates.</p>
-<ul>
-<li><strong>Click-to-Exclude</strong>: Toggle this mode and click images in the grid (or UMAP) to exclude/include them. Excluded images appear as solid 🔴 <strong>Red</strong> circles. (See image below. Yellow arrows added for emphasis.)</li>
-<li><strong>Exclude Matches</strong>: Bulk-exclude all images that meet a certain frequency threshold (e.g., &gt;90%).</li>
-<li><strong>Clear Exclusions</strong>: Clear all exclusions in order to start over.</li>
-</ul>
-</li>
-</ol>
-<p><img src="../../img/curator-exclusion.png" width="480" alt="After excluding garbage" class="img-hover-zoom"></p>
-<h2 id="recommended-workflows">Recommended Workflows</h2>
-<h3 id="scenario-a-cleaning-a-dataset-removing-garbage">Scenario A: Cleaning a Dataset (Removing Garbage)</h3>
-<ol>
-<li>Set <strong>Target Count</strong> to 20. Set <strong>Iterations</strong> to 20.</li>
-<li>Click <strong>Select Training Set</strong> (FPS).</li>
-<li>Look at the <strong>Magenta</strong> (&gt;90%) results. Since FPS hunts for outliers, these will be your "weirdest" images.</li>
-<li>If they are broken/blurry, click <strong>Exclude Matches</strong> (or exclude manually).</li>
-<li>Repeat until the selection shows only high-quality images.<ul>
-<li><em>Note: Do not export yet. You are just identifying what to ignore.</em></li>
-</ul>
-</li>
-</ol>
-<h3 id="scenario-b-generating-a-training-set">Scenario B: Generating a Training Set</h3>
-<ol>
-<li>Clear any previous selections (keep exclusions if you identified garbage in Scenario A).</li>
-<li>Set <strong>Target Count</strong> to your desired training size (e.g., 150).</li>
-<li>Set <strong>Iterations</strong> to 20.</li>
-<li>Click <strong>Select Training Set</strong>.</li>
-<li>Review the selection. If you see images you don't want in your training set, <strong>Exclude</strong> them and run <strong>Select Images</strong> again to replace them with fresh alternatives.</li>
-<li>Repeat as needed.</li>
-</ol>
-<h2 id="exporting">Exporting</h2>
-<p>Once you are satisfied with your selection:</p>
-<ol>
-<li>
-<p>Click the folder icon (📁) next to the <strong>Export Path</strong> field to browse for a destination folder.</p>
-<ul>
-<li>The selected path is saved in your browser and persists across sessions.</li>
-</ul>
-</li>
-<li>
-<p>Click <strong>Export Dataset</strong>.</p>
-</li>
-<li>
-<p>The system will copy the selected images (and associated text files, see below) to the folder. The original images will remain in place.</p>
-</li>
-<li>
-<p>Click the <strong>CSV</strong> button to export a tab-delimited inventory of the included and excluded files.</p>
-</li>
-</ol>
-<p>At any point, you may also click the <strong>Set Favorites</strong> button (⭐) to replace your current favorites with the curated selection. This allows you to show and hide the selection conveniently using the <strong>Favorites</strong> menu, as well as to move the selected images to a new folder while preserving them in the index.</p>
-<h2 id="notes">Notes</h2>
-<ul>
-<li>*Text files are also exported! If you have 0001.jpg and 0001.txt in the album, they will be exported together. This is useful for maintaining external text annotations of images.</li>
-<li>*Excluded (Red) images are NOT exported.</li>
-<li>*Filename collisions (e.g. apple/01.jpg vs orange/01.jpg) are automatically handled by renaming.</li>
-</ul>
-<h2 id="for-more-information">For More Information</h2>
-<p>Contact <em>/u/AcadiaVivid</em> on reddit or <em>NMWave</em> on github for assistance and information.</p>
+<h2 id="setting-the-encoder">Setting the Encoder</h2>
+<p>The encoder is a per-album setting and lives in the <strong>Album Manager</strong>. Open it from the <strong>Settings</strong> gear icon → <strong>Manage Albums</strong>. On both the <em>Add Album</em> form and the <em>Edit Album</em> form for an existing album, you'll find an <strong>Encoder</strong> dropdown listing the three options above.</p>
+<p>The choice you make on this dropdown determines what model will be used the next time the album's index is built or updated. Pick it <em>before</em> you press the <strong>Add Album</strong> button (or <strong>Save Changes</strong> for an existing album), and indexing will use your selection from the start.</p>
+<p>If you change the encoder on an album that already has an index, PhotoMapAI will detect the mismatch the next time you press <strong>Update Index</strong> for that album. It will warn you in the indexing status, delete the old index, and rebuild the album from scratch under the new encoder. This is automatic — you don't have to manage stale index files yourself — but a re-index of a large album can take significant time, so don't change the encoder casually.</p>
+<p>If you don't see an encoder option you want, you can also set it manually in <code>config.yaml</code> (see <a href="../configuration/">Configuration</a>) as the album's <code>encoder_spec</code> field. The supported formats are:</p>
+<div class="highlight"><pre><span></span><code>openai-clip:ViT-B/32
+open-clip:ViT-L-14/dfn2b_s39b
+siglip:google/siglip2-large-patch16-256
+</code></pre></div>
+<p>Other OpenCLIP <code>model/pretrained</code> pairs and other SigLIP HuggingFace IDs will work too, as long as the underlying packages support them. Custom values appear in the dropdown labeled "(custom)" so they're not silently overwritten when you edit the album.</p>
+<h2 id="tuning-for-effective-search">Tuning for Effective Search</h2>
+<p>After picking the encoder and indexing, the next step is search tuning. Each album also stores a <em>minimum search score</em>, a <em>maximum results</em> count, and a <em>query optimization</em> toggle, all editable from the search dialog itself. See <a href="../search/#tuning-search-per-album">Search</a> for the details — the right values can vary substantially by encoder and by the kind of images in the album.</p>
 
 
 

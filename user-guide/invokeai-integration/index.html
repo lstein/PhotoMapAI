@@ -9,10 +9,10 @@
       
       
       
-        <link rel="prev" href="../semantic-map/">
+        <link rel="prev" href="../curator-mode/">
       
       
-        <link rel="next" href="../invokeai-integration/">
+        <link rel="next" href="../upgrading/">
       
       
         
@@ -23,7 +23,7 @@
     
     
       
-        <title>Image Dataset Curation - PhotoMapAI</title>
+        <title>InvokeAI Integration - PhotoMapAI</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#dataset-curation" class="md-skip">
+        <a href="#invokeai-integration" class="md-skip">
           Skip to content
         </a>
       
@@ -110,7 +110,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Image Dataset Curation
+              InvokeAI Integration
             
           </span>
         </div>
@@ -637,6 +637,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../curator-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Image Dataset Curation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -656,7 +684,7 @@
   <span class="md-ellipsis">
     
   
-    Image Dataset Curation
+    InvokeAI Integration
   
 
     
@@ -674,7 +702,7 @@
   <span class="md-ellipsis">
     
   
-    Image Dataset Curation
+    InvokeAI Integration
   
 
     
@@ -700,10 +728,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#accessing-the-curator" class="md-nav__link">
+  <a href="#background" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Accessing the Curator
+        Background
       
     </span>
   </a>
@@ -711,22 +739,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#selection-algorithms" class="md-nav__link">
+  <a href="#creating-an-invokeai-album" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Selection Algorithms
+        Creating an InvokeAI Album
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Selection Algorithms">
+    <nav class="md-nav" aria-label="Creating an InvokeAI Album">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#diversity-fps" class="md-nav__link">
+  <a href="#creating-a-comprehensive-album" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Diversity (FPS)
+        Creating a Comprehensive Album
       
     </span>
   </a>
@@ -734,10 +762,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#blocks-k-means" class="md-nav__link">
+  <a href="#selectively-indexing-invokeai-image-boards" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Blocks (K-Means)
+        Selectively Indexing InvokeAI Image Boards
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#viewing-invokeai-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Viewing InvokeAI Metadata
       
     </span>
   </a>
@@ -750,22 +789,55 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#workflow" class="md-nav__link">
+  <a href="#enabling-remix-and-reference-images" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Workflow
+        Enabling Remix and Reference Images
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Workflow">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recall-remix-and-reference-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recall, Remix and Reference Image
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recall, Remix and Reference Image">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#stability-heatmap" class="md-nav__link">
+  <a href="#use-as-ref-image" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Stability Heatmap
+        Use as Ref Image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recall
       
     </span>
   </a>
@@ -778,44 +850,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#refinement-exclusion" class="md-nav__link">
+  <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Refinement &amp; Exclusion
+        Troubleshooting
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#recommended-workflows" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recommended Workflows
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Recommended Workflows">
+    <nav class="md-nav" aria-label="Troubleshooting">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#scenario-a-cleaning-a-dataset-removing-garbage" class="md-nav__link">
+  <a href="#photomapai-and-invokeai-on-different-machines" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario A: Cleaning a Dataset (Removing Garbage)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scenario-b-generating-a-training-set" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario B: Generating a Training Set
+        PhotoMapAI and InvokeAI on different machines
       
     </span>
   </a>
@@ -824,39 +874,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#exporting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exporting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#for-more-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        For More Information
-      
-    </span>
-  </a>
   
 </li>
       
@@ -864,34 +881,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../invokeai-integration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    InvokeAI Integration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -1179,10 +1168,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#accessing-the-curator" class="md-nav__link">
+  <a href="#background" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Accessing the Curator
+        Background
       
     </span>
   </a>
@@ -1190,22 +1179,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#selection-algorithms" class="md-nav__link">
+  <a href="#creating-an-invokeai-album" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Selection Algorithms
+        Creating an InvokeAI Album
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Selection Algorithms">
+    <nav class="md-nav" aria-label="Creating an InvokeAI Album">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#diversity-fps" class="md-nav__link">
+  <a href="#creating-a-comprehensive-album" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Diversity (FPS)
+        Creating a Comprehensive Album
       
     </span>
   </a>
@@ -1213,10 +1202,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#blocks-k-means" class="md-nav__link">
+  <a href="#selectively-indexing-invokeai-image-boards" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Blocks (K-Means)
+        Selectively Indexing InvokeAI Image Boards
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#viewing-invokeai-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Viewing InvokeAI Metadata
       
     </span>
   </a>
@@ -1229,22 +1229,55 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#workflow" class="md-nav__link">
+  <a href="#enabling-remix-and-reference-images" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Workflow
+        Enabling Remix and Reference Images
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Workflow">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recall-remix-and-reference-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recall, Remix and Reference Image
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recall, Remix and Reference Image">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#stability-heatmap" class="md-nav__link">
+  <a href="#use-as-ref-image" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Stability Heatmap
+        Use as Ref Image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recall" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recall
       
     </span>
   </a>
@@ -1257,44 +1290,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#refinement-exclusion" class="md-nav__link">
+  <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Refinement &amp; Exclusion
+        Troubleshooting
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#recommended-workflows" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recommended Workflows
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Recommended Workflows">
+    <nav class="md-nav" aria-label="Troubleshooting">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#scenario-a-cleaning-a-dataset-removing-garbage" class="md-nav__link">
+  <a href="#photomapai-and-invokeai-on-different-machines" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario A: Cleaning a Dataset (Removing Garbage)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scenario-b-generating-a-training-set" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario B: Generating a Training Set
+        PhotoMapAI and InvokeAI on different machines
       
     </span>
   </a>
@@ -1303,39 +1314,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#exporting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Exporting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#for-more-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        For More Information
-      
-    </span>
-  </a>
   
 </li>
       
@@ -1359,147 +1337,185 @@
   
 
 
-<h1 id="dataset-curation">Dataset Curation</h1>
-<p>The <strong>Dataset Curator</strong> is a powerful feature in PhotoMapAI designed to help you select a diverse or representative subset of images from a large album. This is particularly useful for creating training datasets for LoRA (Low-Rank Adaptation) image generation/classification models or simply reducing the redundancy in a large collection of images.</p>
-<p><img alt="Curator Mode Panel" src="../../img/curator-panel.png" /></p>
-<h2 id="accessing-the-curator">Accessing the Curator</h2>
-<ol>
-<li>Open an album in the grid or semantic map view.</li>
-<li>Click the <strong>Favorites</strong> menu button (⭐) in the bottom-right of the window.</li>
-<li>Select <strong>Curate</strong> (pencil icon 📝) from the dropdown menu.</li>
-</ol>
-<p>The curator panel will appear and can be repositioned by dragging its title bar.</p>
-<h2 id="selection-algorithms">Selection Algorithms</h2>
-<p>The curator offers two distinct algorithms for selecting images, selectable via radio buttons:</p>
-<h3 id="diversity-fps">Diversity (FPS)</h3>
-<p><strong>Farthest Point Sampling</strong> selects images that are as different from each other as possible.</p>
+<h1 id="invokeai-integration">InvokeAI Integration</h1>
+<p>PhotoMapAI works well as a browser for AI images generated by
+<a href="https://invoke-ai.github.io/InvokeAI/">InvokeAI</a>, the popular
+open-source generative-image application. When browsing a directory
+containing InvokeAI images, PhotoMapAI gives you easy access to the
+image's generation parameters, including the prompt, model and other
+parameters. You can also connect PhotoMapAI to a running InvokeAI
+backend to enable PhotoMapAI to send images back into InvokeAI for
+further work.</p>
+<h2 id="background">Background</h2>
+<p>InvokeAI is a free, locally-hosted text-to-image generator built
+around Stable Diffusion and related models. You can download it from
+the <a href="https://github.com/invoke-ai/InvokeAI">InvokeAI project
+page</a>. PhotoMapAI does not
+require InvokeAI to be installed — every feature described elsewhere
+in the User Guide works on any folder of images — but if you do
+generate images with InvokeAI, the integration described here lets you
+index, search, and remix that gallery from the same interface.</p>
+<p><img src="../../img/photomap_invokeai_overview.png" width="480" class="img-hover-zoom" alt="PhotoMapAI displaying an InvokeAI gallery"></p>
+<h2 id="creating-an-invokeai-album">Creating an InvokeAI Album</h2>
+<p>You can point PhotoMapAI directly at InvokeAI's internal image storage
+to create a comprehensive album of the contents of all InvokeAI's
+image boards, or you can selectively download images from InvokeAI and
+store them in an external directory for a curated experience.</p>
+<h3 id="creating-a-comprehensive-album">Creating a Comprehensive Album</h3>
+<p>InvokeAI stores every finished image under its <strong>InvokeAI root</strong>, in a
+folder named <code>outputs/images/</code>. The location of the root depends on
+how you installed InvokeAI:</p>
 <ul>
 <li>
-<p><strong>Best for:</strong> Ensuring your dataset covers the widest possible range of visual concepts, lighting conditions, and angles. Use it for:</p>
-<ul>
-<li>
-<p><strong>High Quality Data:</strong> FPS seeks outliers. In a "dirty" dataset, outliers are often blurry or broken images. In a "clean" dataset, outliers are your rare concepts (side profiles, dramatic lighting).</p>
+<p><strong>Launcher / community edition (default)</strong> — the launcher prompts
+  you for the root directory the first time it runs and remembers your
+  choice. On Windows it is typically <code>C:\Users\&lt;you&gt;\invokeai</code>; on
+  macOS and Linux it is typically <code>~/invokeai</code>.</p>
 </li>
 <li>
-<p><strong>Unbalanced Data:</strong> If you have 50 full-body images and 10 close-ups, FPS will prioritize the close-ups to ensure the AI learns the rare concept, rather than just the common one.</p>
+<p><strong>Manual installs</strong> — whatever path you passed via <code>--root</code> or
+  <code>INVOKEAI_ROOT</code>. You can confirm the path from the InvokeAI web UI
+  under <strong>Settings → Application</strong>.</p>
 </li>
 </ul>
-</li>
-<li>
-<p><strong>How it works:</strong> It starts with a random image (or your excluded selection) and iteratively picks the image whose feature vector is farthest from the current set.</p>
-</li>
-</ul>
-<h3 id="blocks-k-means">Blocks (K-Means)</h3>
-<p><strong>K-Means Clustering</strong> groups images into clusters and picks a representative image from each cluster.</p>
-<ul>
-<li>
-<p><strong>Best for:</strong> Reducing redundancy while maintaining the overall distribution of the dataset (Representative Sampling). Use it for:</p>
-<ul>
-<li><strong>Balanced Distribution:</strong> If you have 50 full-body images and 10 close-ups, K-Means will select roughly 5 full-body images for every 1 close-up, preserving the original ratios of your dataset.</li>
-</ul>
-</li>
-<li>
-<p><strong>How it works:</strong> It divides your images into N clusters (where N is your target count) and selects the image closest to the mathematical center of each cluster.</p>
-</li>
-</ul>
-<h2 id="workflow">Workflow</h2>
-<p><img src="../../img/curator-setup.png" width="480" alt="Curator Panel Setup" class="img-hover-zoom"></p>
-<ol>
-<li><strong>Setup your UI</strong>: <ul>
-<li>When the curator panel opens, the UMAP visualization automatically switches to grey mode - all points turn grey to make the colored selection overlays more visible.</li>
-<li>Unclustered points (normally very faint) increase in opacity to match clustered points, providing a uniform background.</li>
-<li>It is recommended to turn off "Show landmarks" and "Show hover thumbnails" in the UMAP controls for a cleaner view.</li>
-</ul>
-</li>
-<li><strong>Set Target Count</strong>: Choose how many images you want in your final set (e.g., 50, 150).</li>
-<li><strong>Set Iterations</strong>: <ul>
-<li>Algorithms like FPS can be sensitive to the starting point. Running multiple iterations (Monte Carlo simulation) helps identify the "consensus" selections—images that are statistically important regardless of the random start.</li>
-<li><strong>Recommendation:</strong> Set to 20 iterations for analysis.</li>
-</ul>
-</li>
-<li><strong>Run Selection</strong>: Click <strong>Select Images</strong> (circled button) to select a diverse distribution of images.<ul>
-<li>A yellow-and-white progress bar appears below the title, showing the progress of the selected algorithm.</li>
-</ul>
-</li>
-</ol>
-<p><img src="../../img/curator-preview.png" width="480" alt="After selecting images" class="img-hover-zoom"></p>
-<h3 id="stability-heatmap">Stability Heatmap</h3>
-<p>The results are displayed as a Stability Heatmap:</p>
-<ul>
-<li>🟣 <strong>Magenta</strong>: Core Outliers (Selected in &gt;90% of runs). These are your most mathematically unique images.</li>
-<li>🔵 <strong>Cyan</strong>: Stable (Selected in &gt;70% of runs).</li>
-<li>🟢 <strong>Green</strong>: Variable (Selected in &lt;70% of runs). Edge cases that usually fill gaps.</li>
-</ul>
-<p>If you now open the grid view (by hiding or minimizing the semantic map window) you will see the selected images at full brightness, while others will be dimmed. Press the "Clear" button on the curator panel or the "X" button on the bottom right of the main window, in order to clear the search and return to the normal view.</p>
-<h2 id="refinement-exclusion">Refinement &amp; Exclusion</h2>
-<p>You can manually refine the selection by excluding images. Excluding an image removes it from calculations and exports. This is commonly needed when your collection contains "garbage", such as blank or blurry images, that appear to the algorithm as interesting outliers.</p>
-<p>This allows for a "Drill Down" workflow:</p>
+<p>Once you know the root, point a new PhotoMapAI album at the <code>outputs/images/</code> subfolder:</p>
 <ol>
 <li>
-<p>Run the analysis.</p>
+<p>Open <strong>Settings → Manage Albums</strong> and press <span class="green-button-text">Add Album</span>.</p>
 </li>
 <li>
-<p>If the top results (🟣 <strong>Magenta</strong>) are garbage, exclude them.</p>
+<p>Give the album a key (for example <code>invokeai</code>) and a display name
+   (for example <code>InvokeAI Gallery</code>).</p>
 </li>
 <li>
-<p>Run <strong>Select Images</strong> again. The algorithm will be forced to ignore the excluded images and find the next best candidates.</p>
-<ul>
-<li><strong>Click-to-Exclude</strong>: Toggle this mode and click images in the grid (or UMAP) to exclude/include them. Excluded images appear as solid 🔴 <strong>Red</strong> circles. (See image below. Yellow arrows added for emphasis.)</li>
-<li><strong>Exclude Matches</strong>: Bulk-exclude all images that meet a certain frequency threshold (e.g., &gt;90%).</li>
-<li><strong>Clear Exclusions</strong>: Clear all exclusions in order to start over.</li>
-</ul>
+<p>In <strong>Image Folder(s)</strong>, enter the full path to <code>&lt;invokeai-root&gt;/outputs/images</code>.</p>
+</li>
+<li>
+<p>Save the album. PhotoMapAI will index every image it finds; see
+   <a href="../albums/#indexing-albums">Managing Albums</a> for what to expect
+   during indexing.</p>
 </li>
 </ol>
-<p><img src="../../img/curator-exclusion.png" width="480" alt="After excluding garbage" class="img-hover-zoom"></p>
-<h2 id="recommended-workflows">Recommended Workflows</h2>
-<h3 id="scenario-a-cleaning-a-dataset-removing-garbage">Scenario A: Cleaning a Dataset (Removing Garbage)</h3>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>PhotoMapAI does not watch the InvokeAI gallery for new
+files. Whenever you have generated a batch of images you want to
+browse or search, return to the Album Manager, select the album, and
+press the blue <span class="blue-button-text">Update Index</span>
+button. Only the new and removed files are processed, so the update is
+much faster than the initial indexing pass.</p>
+</div>
+<h3 id="selectively-indexing-invokeai-image-boards">Selectively Indexing InvokeAI Image Boards</h3>
+<p>When you index the entire InvokeAI internal images directory, the
+resulting album will be a mixture of images from all InvokeAI boards,
+including uploaded assets. For a more controlled experience, you can
+selectively download InvokeAI image boards, save the images to an
+external directory, and add that directory to your album.</p>
 <ol>
-<li>Set <strong>Target Count</strong> to 20. Set <strong>Iterations</strong> to 20.</li>
-<li>Click <strong>Select Training Set</strong> (FPS).</li>
-<li>Look at the <strong>Magenta</strong> (&gt;90%) results. Since FPS hunts for outliers, these will be your "weirdest" images.</li>
-<li>If they are broken/blurry, click <strong>Exclude Matches</strong> (or exclude manually).</li>
-<li>Repeat until the selection shows only high-quality images.<ul>
-<li><em>Note: Do not export yet. You are just identifying what to ignore.</em></li>
-</ul>
-</li>
+<li>Open InvokeAI in a browser.</li>
+<li>Right click on a board you wish to add to PhotoMapAI.</li>
+<li>Select "Download Board" to download the images as a zip file.</li>
+<li>Unpack the zip file in a folder that PhotoMapAI has access to.</li>
+<li>Create/add this folder to the PhotoMapAI album of your choice.</li>
 </ol>
-<h3 id="scenario-b-generating-a-training-set">Scenario B: Generating a Training Set</h3>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>When you update a board, you will have to repeat this
+procedure. PhotoMapAI remembers which images were previously indexed
+and only indexes new images that it finds. Check back for a fuller
+integration of PhotoMapAI with Invoke's image boards that is in the
+planning phase.*</p>
+</div>
+<h3 id="viewing-invokeai-metadata">Viewing InvokeAI Metadata</h3>
+<p>When an InvokeAI-generated image is selected in the PhotoMap browser,
+a summary of its metadata will appear in the metadata drawer (see
+below).  The drawer will show key generation parameters, including the
+date generated, the positive and negative prompts, the AI model used,
+the seed, the init image, and any LoRAs or reference images attached
+to the generation. Most fields have an icon next to them that lets you
+copy their values into the system clipboard.</p>
+<p>Click on "View Metadata" to see the full metadata with all generation
+parameters listed.</p>
+<p><img src="../../img/invokeai_metadata.png" width="320" class="img-hover-zoom" alt="PhotoMapAI summarizing the metadata from an InvokeAI image">
+<img src="../../img/invokeai_metadata_full.png" width="320" class="img-hover-zoom" alt="Complete InvokeAI metadata"></p>
+<hr />
+<h2 id="enabling-remix-and-reference-images">Enabling Remix and Reference Images</h2>
+<p>For fuller integration, you may configure PhotoMapAI so that it can
+send images and generation parameters to a running InvokeAI backend.
+This allows you to regenerate and remix previously-generated images,
+as well as to send completely new images to InvokeAI for editing.</p>
+<p>The configuration is as follows:</p>
 <ol>
-<li>Clear any previous selections (keep exclusions if you identified garbage in Scenario A).</li>
-<li>Set <strong>Target Count</strong> to your desired training size (e.g., 150).</li>
-<li>Set <strong>Iterations</strong> to 20.</li>
-<li>Click <strong>Select Training Set</strong>.</li>
-<li>Review the selection. If you see images you don't want in your training set, <strong>Exclude</strong> them and run <strong>Select Images</strong> again to replace them with fresh alternatives.</li>
-<li>Repeat as needed.</li>
+<li>Make sure InvokeAI is running and note the URL it reports on startup (by default <code>http://localhost:9090</code>).</li>
+<li>In PhotoMapAI, open <strong>Settings</strong> and scroll to the <strong>InvokeAI Backend URL</strong> field.</li>
+<li>Enter the full URL — including the <code>http://</code> or <code>https://</code> prefix and the port.</li>
 </ol>
-<h2 id="exporting">Exporting</h2>
-<p>Once you are satisfied with your selection:</p>
+<p>PhotoMapAI saves the value as you type and immediately probes the
+backend. If the URL is reachable and looks like InvokeAI, the
+<strong>InvokeAI Username</strong>, <strong>InvokeAI Password</strong>, and <strong>Upload to Image
+Board</strong> rows appear underneath. If the field underneath the URL turns
+red with a warning icon, see <a href="#troubleshooting">Troubleshooting</a> for
+what each message means.</p>
+<p>If your InvokeAI server is running in <strong>multi-user mode</strong>, fill in the
+<strong>InvokeAI Username</strong> and <strong>InvokeAI Password</strong> fields with the
+credentials you use to log in to InvokeAI itself. The password is
+stored in PhotoMapAI's user-config directory and is never echoed back
+to the browser. For single-user installs (the default) leave both
+fields blank.</p>
+<p>Once a valid InvokeAI URL is entered, the <strong>Upload to Image Board</strong>
+dropdown menu will appear.  This lists the InvokeAI boards you have
+access to. Choose the board you wish to upload new image assets into.</p>
+<p><img src="../../img/invokeai_photomap_settings.png" width="320" class="img-hover-zoom" alt="Settings dialog for InvokeAI backend"></p>
+<hr />
+<h2 id="recall-remix-and-reference-image">Recall, Remix and Reference Image</h2>
+<p>Three actions appear in the metadata drawer when an InvokeAI backend
+is configure.  Which ones are available depends on the image that is
+currently selected.</p>
+<h3 id="use-as-ref-image">Use as Ref Image</h3>
+<p>Any image — generated by InvokeAI or not — can be sent to InvokeAI as
+a <strong>reference image</strong>. PhotoMapAI uploads the image bytes to your
+InvokeAI gallery (in the board you selected above) so you can
+immediately drop it into a Reference Image / IP-Adapter / ControlNet
+layer. This is the only button that appears for non-InvokeAI images,
+since there is no generation metadata to recall.</p>
+<!-- TODO: replace with screenshot of the metadata drawer for a non-InvokeAI image, showing only the "Use as Ref Image" button. -->
+<p><img src="../../img/photomap_invokeai_use_ref_only.png" width="320" class="img-hover-zoom" alt="Metadata drawer showing only the Use as Ref Image button"></p>
+<h3 id="remix">Remix</h3>
+<p>For images that contain InvokeAI generation metadata, <strong>Remix</strong> sends
+every parameter — the prompt, model, LoRAs, scheduler, dimensions,
+reference layers, and so on — back to InvokeAI, but <strong>omits the
+seed</strong>. Pressing <em>Invoke</em> in InvokeAI then produces a new image that
+is stylistically similar to the original but unique. Use this when you
+want a variation rather than a re-creation.</p>
+<h3 id="recall">Recall</h3>
+<p><strong>Recall</strong> is identical to Remix except that the <strong>seed is
+preserved</strong>. With the same model, LoRAs, prompts, and seed, InvokeAI
+will reproduce the original image bit-for-bit (assuming the underlying
+model files have not changed). This is useful when you want to start
+from a known image and edit one parameter at a time.</p>
+<p>See <a href="#viewing-invokeai-metadata">Viewing InvokeAI Metadata</a> for screenshots.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>If something goes wrong while saving the InvokeAI URL or probing the backend, the hint underneath the URL field turns red and shows one of the following messages:</p>
+<ul>
+<li><strong>InvokeAI URL must use http:// or https://</strong> — the URL you typed uses an unsupported scheme. PhotoMapAI rejects anything other than <code>http</code> and <code>https</code> (for example, <code>file://</code> is not allowed).</li>
+<li><strong>InvokeAI URL must include a host</strong> — the URL is syntactically valid but has no host portion. Add a host name or IP address (for example <code>http://localhost:9090</code>).</li>
+<li><strong>Could not reach backend</strong> — the URL is well-formed but PhotoMapAI could not connect to the server. Check that InvokeAI is running, that the port matches, and (for remote servers) that no firewall is blocking the connection.</li>
+<li><strong>Server is reachable but doesn't appear to be an InvokeAI backend</strong> — PhotoMapAI got an HTTP response but it was not what InvokeAI's <code>/api/v1/app/version</code> endpoint returns. Double-check the URL and port; you may have pointed PhotoMapAI at a different service running on the same machine.</li>
+</ul>
+<p>A few situations are not surfaced inline and are worth knowing about:</p>
+<ul>
+<li><strong>Boards dropdown is empty or stuck on <em>Uncategorized</em></strong> — usually means authentication failed silently. If your InvokeAI is in multi-user mode, fill in the username and password and re-enter the URL to retrigger the probe.</li>
+<li><strong>Recall / Remix succeeds but no image queues in InvokeAI</strong> — switch to InvokeAI's browser tab. The recalled parameters land in the canvas/generation panel; you still have to press <em>Invoke</em> to start the queue.</li>
+<li><strong>Buttons stay greyed out for an InvokeAI-generated image</strong> — the image was probably produced by an InvokeAI version PhotoMapAI does not yet recognise. Check the <em>Show full metadata</em> link at the bottom of the drawer to confirm the metadata is present, and please <a href="https://github.com/lstein/PhotoMapAI/issues">open an issue</a> so we can add support for the new schema.</li>
+</ul>
+<h3 id="photomapai-and-invokeai-on-different-machines">PhotoMapAI and InvokeAI on different machines</h3>
+<p>The integration is designed for a single workstation but works across machines too. The important thing to remember is that <strong>only the PhotoMapAI <em>server</em> talks to InvokeAI</strong> — your browser does not need to be able to reach the InvokeAI port. Concretely:</p>
 <ol>
-<li>
-<p>Click the folder icon (📁) next to the <strong>Export Path</strong> field to browse for a destination folder.</p>
-<ul>
-<li>The selected path is saved in your browser and persists across sessions.</li>
-</ul>
-</li>
-<li>
-<p>Click <strong>Export Dataset</strong>.</p>
-</li>
-<li>
-<p>The system will copy the selected images (and associated text files, see below) to the folder. The original images will remain in place.</p>
-</li>
-<li>
-<p>Click the <strong>CSV</strong> button to export a tab-delimited inventory of the included and excluded files.</p>
-</li>
+<li>Start InvokeAI with a non-loopback bind address (for example <code>--host 0.0.0.0</code>) so the PhotoMapAI machine can reach it.</li>
+<li>In PhotoMapAI's <strong>InvokeAI Backend URL</strong> field, use the LAN address or hostname of the InvokeAI machine, not <code>localhost</code> (for example <code>http://10.0.0.42:9090</code>).</li>
+<li>The album path you configured in <em>Creating an InvokeAI Album</em> must be readable by the PhotoMapAI server. If InvokeAI's <code>outputs/images/</code> lives on the InvokeAI machine, mount it on the PhotoMapAI machine over SMB / NFS / SSHFS and point the album at the mount point.</li>
 </ol>
-<p>At any point, you may also click the <strong>Set Favorites</strong> button (⭐) to replace your current favorites with the curated selection. This allows you to show and hide the selection conveniently using the <strong>Favorites</strong> menu, as well as to move the selected images to a new folder while preserving them in the index.</p>
-<h2 id="notes">Notes</h2>
-<ul>
-<li>*Text files are also exported! If you have 0001.jpg and 0001.txt in the album, they will be exported together. This is useful for maintaining external text annotations of images.</li>
-<li>*Excluded (Red) images are NOT exported.</li>
-<li>*Filename collisions (e.g. apple/01.jpg vs orange/01.jpg) are automatically handled by renaming.</li>
-</ul>
-<h2 id="for-more-information">For More Information</h2>
-<p>Contact <em>/u/AcadiaVivid</em> on reddit or <em>NMWave</em> on github for assistance and information.</p>
+<p>The <strong>Use as Ref Image</strong> action uploads the image bytes over the wire and works regardless of where the file lives. <strong>Recall</strong> and <strong>Remix</strong> only send metadata, so they also work cross-machine — but the receiving InvokeAI server must have the same models, LoRAs, and embeddings installed for the recalled parameters to produce the expected result.</p>
 
 
 
