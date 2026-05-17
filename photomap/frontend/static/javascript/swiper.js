@@ -4,7 +4,7 @@ import { albumManager } from "./album-manager.js";
 import { toggleGridSwiperView } from "./events.js";
 import { updateMetadataOverlay } from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
-import { getCurrentSlideIndex, slideState } from "./slide-state.js";
+import { slideState } from "./slide-state.js";
 import { slideShowRunning, updateSlideshowButtonIcon } from "./slideshow.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
@@ -193,27 +193,21 @@ class SwiperManager {
     });
 
     this.swiper.on("slidePrevTransitionEnd", () => {
-      const [globalIndex] = getCurrentSlideIndex();
-      if (this.swiper.activeIndex === 0 && globalIndex > 0) {
+      if (this.swiper.activeIndex === 0) {
         const { globalIndex: prevGlobal, searchIndex: prevSearch } = slideState.resolveOffset(-1);
         if (prevGlobal !== null) {
-          const prevExists = Array.from(this.swiper.slides).some(
-            (el) => parseInt(el.dataset.globalIndex, 10) === prevGlobal
-          );
-          if (!prevExists) {
-            this.isPrepending = true;
-            this.swiper.allowSlidePrev = false;
-            this.addSlideByIndex(prevGlobal, prevSearch, true)
-              .then(() => {
-                this.swiper.slideTo(1, 0);
-                this.isPrepending = false;
-                this.swiper.allowSlidePrev = true;
-              })
-              .catch(() => {
-                this.isPrepending = false;
-                this.swiper.allowSlidePrev = true;
-              });
-          }
+          this.isPrepending = true;
+          this.swiper.allowSlidePrev = false;
+          this.addSlideByIndex(prevGlobal, prevSearch, true)
+            .then(() => {
+              this.swiper.slideTo(1, 0);
+              this.isPrepending = false;
+              this.swiper.allowSlidePrev = true;
+            })
+            .catch(() => {
+              this.isPrepending = false;
+              this.swiper.allowSlidePrev = true;
+            });
         }
       }
     });
@@ -400,11 +394,14 @@ class SwiperManager {
       const selected = this.selectRandomSlideIndex();
       globalIndex = selected.globalIndex;
       searchIndex = selected.searchIndex;
-    }
-
-    const exists = Array.from(this.swiper.slides).some((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
-    if (exists) {
-      return;
+      // Shuffle mode must not show duplicates: if selectRandomSlideIndex
+      // exhausted its attempts in a small pool, the index might already be loaded.
+      // Linear navigation deliberately allows duplicates so wrap-around can
+      // re-append a globalIndex that appeared earlier in the swiper.
+      const exists = Array.from(this.swiper.slides).some((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
+      if (exists) {
+        return;
+      }
     }
 
     let currentScore, currentCluster, currentColor;

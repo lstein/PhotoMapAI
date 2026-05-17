@@ -170,17 +170,39 @@ class SlideStateManager {
    * @returns {{globalIndex: number, searchIndex: number|null}}
    */
   resolveOffset(offset) {
+    const wrap = !!state.wrapNavigation;
     if (this.isSearchMode && this.searchResults.length > 0) {
-      const searchIndex = (this.currentSearchIndex + offset) % this.searchResults.length;
-      if (searchIndex < 0 || searchIndex >= this.searchResults.length) {
-        return { globalIndex: null, searchIndex: null }; // Out of bounds
+      const total = this.searchResults.length;
+      const raw = this.currentSearchIndex + offset;
+      let searchIndex;
+      if (wrap) {
+        if (total <= 1) {
+          return { globalIndex: null, searchIndex: null };
+        }
+        searchIndex = ((raw % total) + total) % total;
+      } else if (raw < 0 || raw >= total) {
+        return { globalIndex: null, searchIndex: null };
+      } else {
+        searchIndex = raw;
       }
       const globalIndex = this.searchResults[searchIndex]?.index;
       return { globalIndex, searchIndex };
     } else {
-      const globalIndex = (this.currentGlobalIndex + offset) % this.totalAlbumImages;
-      if (globalIndex < 0 || globalIndex >= this.totalAlbumImages) {
-        return { globalIndex: null, searchIndex: null }; // Out of bounds
+      const total = this.totalAlbumImages;
+      if (total <= 0) {
+        return { globalIndex: null, searchIndex: null };
+      }
+      const raw = this.currentGlobalIndex + offset;
+      let globalIndex;
+      if (wrap) {
+        if (total <= 1) {
+          return { globalIndex: null, searchIndex: null };
+        }
+        globalIndex = ((raw % total) + total) % total;
+      } else if (raw < 0 || raw >= total) {
+        return { globalIndex: null, searchIndex: null };
+      } else {
+        globalIndex = raw;
       }
       return { globalIndex, searchIndex: null };
     }
