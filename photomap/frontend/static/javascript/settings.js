@@ -3,6 +3,7 @@
 import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
 import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
+import { hideSpinner, showSpinner } from "./utils.js";
 
 // Constants
 const DELAY_CONFIG = {
@@ -93,10 +94,31 @@ function triggerSetupMode() {
 
 // Album switching logic
 export async function switchAlbum(newAlbum) {
-  const album = await albumManager.getAlbum(newAlbum);
-  exitSearchMode("switchAlbum");
-  setAlbum(newAlbum, true);
-  updatePageTitle(album.name);
+  showSpinner();
+  // Resolves when the swiper has finished rebuilding for the new album.
+  // Listener attached before setAlbum so we don't miss the event for fast switches.
+  const slidesReady = new Promise((resolve) => {
+    const handler = () => {
+      window.removeEventListener("slidesReset", handler);
+      clearTimeout(safetyTimer);
+      resolve();
+    };
+    window.addEventListener("slidesReset", handler);
+    // Safety net: if anything in the rebuild errors out, we still hide the spinner.
+    const safetyTimer = setTimeout(() => {
+      window.removeEventListener("slidesReset", handler);
+      resolve();
+    }, 8000);
+  });
+  try {
+    const album = await albumManager.getAlbum(newAlbum);
+    exitSearchMode("switchAlbum");
+    await setAlbum(newAlbum, true);
+    updatePageTitle(album.name);
+    await slidesReady;
+  } finally {
+    hideSpinner();
+  }
 }
 
 // Update the page title based on the current album
