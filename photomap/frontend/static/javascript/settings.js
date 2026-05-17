@@ -2,7 +2,7 @@
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
-import { saveSettingsToLocalStorage, setAlbum, state } from "./state.js";
+import { saveSettingsToLocalStorage, setAlbum, setWrapNavigation, state } from "./state.js";
 
 // Constants
 const DELAY_CONFIG = {
@@ -35,6 +35,7 @@ export function cacheElements() {
     invokeaiStatusHint: document.getElementById("invokeaiStatusHint"),
     showControlPanelTextCheckbox: document.getElementById("showControlPanelTextCheckbox"),
     confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
+    wrapNavigationCheckbox: document.getElementById("wrapNavigationCheckbox"),
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
     gridThumbSizeFactorReset: document.getElementById("gridThumbSizeFactorReset"),
   };
@@ -163,6 +164,10 @@ async function populateModalFields() {
     elements.confirmDeleteCheckbox.checked = !state.suppressDeleteConfirm;
   }
 
+  if (elements.wrapNavigationCheckbox) {
+    elements.wrapNavigationCheckbox.checked = !!state.wrapNavigation;
+  }
+
   // Set the grid thumbnail size factor spinner value
   if (elements.gridThumbSizeFactor) {
     elements.gridThumbSizeFactor.value = state.gridThumbSizeFactor;
@@ -242,6 +247,18 @@ function setupConfirmDeleteControl() {
   elements.confirmDeleteCheckbox.addEventListener("change", function () {
     state.suppressDeleteConfirm = !this.checked;
     saveSettingsToLocalStorage();
+  });
+}
+
+function setupWrapNavigationControl() {
+  if (!elements.wrapNavigationCheckbox) {
+    return;
+  }
+  elements.wrapNavigationCheckbox.addEventListener("change", function () {
+    setWrapNavigation(this.checked);
+    // Rebuild around the current image so stale wrap-neighbors are dropped
+    // (turning wrap off) or wrap-neighbors are loaded (turning wrap on).
+    state.single_swiper?.resetAllSlides();
   });
 }
 
@@ -614,6 +631,7 @@ async function initializeSettings() {
   setupLocationIQApiKeyControl();
   setupInvokeAISettingsControls();
   setupConfirmDeleteControl();
+  setupWrapNavigationControl();
   setupGridThumbSizeFactorControl();
   setupResetDefaultsControls();
 }

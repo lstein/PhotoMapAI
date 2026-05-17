@@ -16,6 +16,7 @@ export const state = {
   availableAlbums: [], // List of available albums
   dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
   suppressDeleteConfirm: false, // Flag to suppress delete confirmation dialogs
+  wrapNavigation: false, // Whether scrolling past first/last image wraps to the other end
   gridThumbSizeFactor: 1.0, // Scaling factor for grid thumbnails
   swiper: null, // backwards compatibility hack; contains the single_swiper.swiper instance
   albumLocked: false, // Whether album management is locked
@@ -104,6 +105,11 @@ export async function restoreFromLocalStorage() {
     state.suppressDeleteConfirm = storedSuppressDeleteConfirm === "true";
   }
 
+  const storedWrapNavigation = localStorage.getItem("wrapNavigation");
+  if (storedWrapNavigation !== null) {
+    state.wrapNavigation = storedWrapNavigation === "true";
+  }
+
   const storedGridThumbSizeFactor = localStorage.getItem("gridThumbSizeFactor");
   if (storedGridThumbSizeFactor !== null) {
     state.gridThumbSizeFactor = parseFloat(storedGridThumbSizeFactor);
@@ -143,6 +149,7 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("showControlPanelText", state.showControlPanelText || "");
   localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
   localStorage.setItem("suppressDeleteConfirm", state.suppressDeleteConfirm ? "true" : "false");
+  localStorage.setItem("wrapNavigation", state.wrapNavigation ? "true" : "false");
   localStorage.setItem("gridThumbSizeFactor", state.gridThumbSizeFactor);
   localStorage.setItem("umapShowLandmarks", state.umapShowLandmarks ? "true" : "false");
   localStorage.setItem("umapShowHoverThumbnails", state.umapShowHoverThumbnails ? "true" : "false");
@@ -306,6 +313,15 @@ export function setUseQueryOptimization(value) {
   if (state.useQueryOptimization !== bool) {
     state.useQueryOptimization = bool;
     window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { useQueryOptimization: bool } }));
+  }
+}
+
+export function setWrapNavigation(wrap) {
+  const bool = !!wrap;
+  if (state.wrapNavigation !== bool) {
+    state.wrapNavigation = bool;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { wrapNavigation: bool } }));
   }
 }
 
