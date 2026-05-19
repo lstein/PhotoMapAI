@@ -562,11 +562,13 @@ export function initializeMetadataDrawer() {
       const swiperSlide = document.querySelector(`[data-global-index="${currentSlide.globalIndex}"]`);
       if (swiperSlide && swiperSlide.dataset) {
         updateClusterInfo(swiperSlide.dataset);
+        updateImageLabel(swiperSlide.dataset);
         updateCurrentImageScore(swiperSlide.dataset);
       } else {
         // In grid view or if slide element not found, construct minimal metadata
         const metadata = { globalIndex: currentSlide.globalIndex };
         updateClusterInfo(metadata);
+        updateImageLabel(metadata);
       }
     }
   });
