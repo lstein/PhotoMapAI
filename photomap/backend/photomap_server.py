@@ -22,6 +22,7 @@ from photomap.backend.config import get_config_manager
 from photomap.backend.constants import get_package_resource_path
 from photomap.backend.encoders import start_idle_watcher, stop_idle_watcher
 from photomap.backend.routers.album import album_router, get_locked_albums
+from photomap.backend.routers.cluster_labels import cluster_labels_router
 from photomap.backend.routers.curation import router as curation_router
 from photomap.backend.routers.filetree import filetree_router
 from photomap.backend.routers.index import index_router
@@ -57,6 +58,7 @@ app = FastAPI(title="PhotoMapAI", lifespan=lifespan)
 # Include routers
 for router in [
     umap_router,
+    cluster_labels_router,
     search_router,
     index_router,
     album_router,
