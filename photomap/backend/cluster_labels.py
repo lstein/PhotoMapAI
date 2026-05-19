@@ -15,6 +15,7 @@ and DBSCAN parameter changes.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.resources
 import logging
 import threading
@@ -222,6 +223,23 @@ def _vocab_sources_max_mtime(vocab_path: Path) -> float:
     return max(mtimes)
 
 
+def vocab_fingerprint(phrases: list[str] | None = None) -> str:
+    """Stable hash of the loaded phrase set.
+
+    Why: mtime-only invalidation can't detect when the user extras file is
+    deleted or renamed — the bundled vocab's mtime is unchanged, so the cache
+    looks fresh while the phrase list has actually shrunk. Comparing a content
+    fingerprint catches add/remove/rename regardless of mtime direction.
+    """
+    if phrases is None:
+        phrases = load_vocab_phrases()
+    h = hashlib.sha256()
+    for p in sorted(set(phrases)):
+        h.update(p.encode("utf-8"))
+        h.update(b"\n")
+    return h.hexdigest()
+
+
 def _read_cached_vocab(
     cache_path: Path,
     vocab_path: Path,
@@ -254,6 +272,19 @@ def _read_cached_vocab(
         )
         return None
     phrases = [str(p) for p in data["phrases"]]
+    # Mtime check above can miss two cases:
+    #   - User extras file deleted/renamed: bundled mtime stays the same, but
+    #     the phrase set just shrank.
+    #   - User extras file added back with an mtime older than the cache.
+    # Compare actual phrase sets to catch both.
+    current_phrases = load_vocab_phrases(vocab_path)
+    if set(phrases) != set(current_phrases):
+        logger.info(
+            "Vocab cache phrase set changed (cached=%d, current=%d); will rebuild",
+            len(phrases),
+            len(current_phrases),
+        )
+        return None
     embeddings = np.asarray(data["embeddings"], dtype=np.float32)
     return phrases, embeddings
 
@@ -269,7 +300,9 @@ def get_or_build_vocab_embeddings(
     L2-normalized after template-ensemble mean-pooling. The cache rebuilds when:
 
     - the file is missing,
-    - the bundled `cluster_vocab.txt` has been edited since the cache was written,
+    - either vocab source file has been edited since the cache was written,
+    - the stored phrase set differs from what's on disk now (catches user
+      extras file deletion/rename, which mtime alone misses),
     - the stamped encoder spec doesn't match (defensive against filename collisions),
     - `len(PROMPT_TEMPLATES)` has changed since the cache was written.
 
@@ -444,8 +477,20 @@ def _read_cached_labels(
         medoids = (
             [int(m) for m in data["medoids"]] if "medoids" in data.files else [None] * len(cluster_ids)
         )
+        # Vocab fingerprint was added to catch phrase-set changes the mtime
+        # check misses (e.g., the user extras file was deleted). Legacy caches
+        # written before the fingerprint existed could be silently stale, so
+        # we force a one-time rebuild on encounter — after that, all caches
+        # are stamped.
+        stored_fingerprint = str(data["vocab_fingerprint"]) if "vocab_fingerprint" in data.files else None
     except (OSError, KeyError, ValueError) as err:
         logger.warning("Labels cache at %s unreadable (%s); will rebuild", cache_path, err)
+        return None
+    if stored_fingerprint is None:
+        logger.info("Labels cache missing vocab fingerprint (pre-upgrade file); will rebuild")
+        return None
+    if stored_fingerprint != vocab_fingerprint():
+        logger.info("Labels cache vocab fingerprint changed; will rebuild")
         return None
 
     out: dict[int, dict] = {}
@@ -497,6 +542,7 @@ def _save_labels(cache_path: Path, labels_dict: dict[int, dict]) -> None:
             alternates=alternates_arr,
             scores=scores_arr,
             medoids=medoids_arr,
+            vocab_fingerprint=np.array(vocab_fingerprint()),
         )
     tmp_path.replace(cache_path)
 
