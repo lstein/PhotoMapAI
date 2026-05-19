@@ -59,6 +59,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/metadata-dra
   replaceReferenceImagesWithLinks: jest.fn(() => ""),
   updateCurrentImageScore: jest.fn(),
   updateClusterInfo: jest.fn(),
+  updateImageLabel: jest.fn(),
 }));
 
 // Mock slide-state.js
