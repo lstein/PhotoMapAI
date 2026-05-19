@@ -55,9 +55,13 @@ VOCAB_FILENAME = "cluster_vocab.txt"
 # users who installed via pip and don't have a checkout of the source tree.
 USER_VOCAB_FILENAME = "cluster_vocab_extra.txt"
 
-# Phrases per encoder batch — each call encodes phrases * len(PROMPT_TEMPLATES)
-# strings. 128 * 7 ≈ 900 texts per batch, which fits comfortably on a single GPU.
-VOCAB_BATCH_PHRASES = 128
+# Phrases per encoder batch. Each batch encodes `phrases * len(PROMPT_TEMPLATES)`
+# strings — for SigLIP-large at max_length=64, batch=32 means ~1 GiB of forward
+# activations, which fits even on a 16 GiB GPU shared with other workloads.
+# Was 128 before; that produced ~4 GiB activations and OOM'd on repeated calls
+# because PyTorch's allocator fragments between forward passes. We also retry
+# with a halved batch in `_encode_phrases_ensembled` if an OOM slips through.
+VOCAB_BATCH_PHRASES = 32
 
 
 def vocab_file_path() -> Path:
@@ -129,22 +133,81 @@ def vocab_cache_path(encoder_spec: str) -> Path:
     return base / f"{_sanitize_spec(encoder_spec)}.npz"
 
 
+def _is_cuda_oom(err: Exception) -> bool:
+    """True if `err` is a CUDA out-of-memory error from torch.
+
+    Tolerates older torch versions where the exception class differs by checking
+    the message as a fallback. Imported lazily so this module doesn't pull torch
+    in when used from tests with a fake encoder.
+    """
+    try:
+        import torch
+    except ImportError:
+        return False
+    oom_cls = getattr(torch, "OutOfMemoryError", None)
+    if oom_cls is not None and isinstance(err, oom_cls):
+        return True
+    return isinstance(err, RuntimeError) and "out of memory" in str(err).lower()
+
+
+def _try_cuda_empty_cache() -> None:
+    """Defragment torch's CUDA allocator if torch+CUDA are available, else no-op."""
+    try:
+        import torch
+    except ImportError:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def _encode_phrases_ensembled(encoder, phrases: list[str]) -> np.ndarray:
-    """Encode each phrase as the L2-normalized mean of its template variants."""
+    """Encode each phrase as the L2-normalized mean of its template variants.
+
+    Adaptively halves the batch size when a CUDA OOM is raised — vocab building
+    is a hot spot for OOM with large text encoders (SigLIP-large at batch=128
+    can need ~4 GiB of activation memory per forward), and PyTorch's allocator
+    fragments across repeated calls.
+    """
     if not phrases:
         return np.zeros((0, encoder.embedding_dim), dtype=np.float32)
 
+    # Defragment before we start — earlier calls may have left the allocator
+    # holding blocks too small to satisfy the activation tensors we need.
+    _try_cuda_empty_cache()
+
     n_templates = len(PROMPT_TEMPLATES)
     out = np.zeros((len(phrases), encoder.embedding_dim), dtype=np.float32)
-    for start in range(0, len(phrases), VOCAB_BATCH_PHRASES):
-        chunk = phrases[start : start + VOCAB_BATCH_PHRASES]
+    current_batch = VOCAB_BATCH_PHRASES
+    start = 0
+    while start < len(phrases):
+        chunk = phrases[start : start + current_batch]
         expanded = [tpl.format(p) for p in chunk for tpl in PROMPT_TEMPLATES]
-        # encode_text returns (len(expanded), D), already L2-normalized per row.
-        feats = encoder.encode_text(expanded)
+        try:
+            # encode_text returns (len(expanded), D), already L2-normalized per row.
+            feats = encoder.encode_text(expanded)
+        except Exception as err:
+            if not _is_cuda_oom(err) or current_batch <= 1:
+                raise
+            new_batch = max(1, current_batch // 2)
+            logger.warning(
+                "Vocab encode hit CUDA OOM at batch=%d; retrying at batch=%d",
+                current_batch,
+                new_batch,
+            )
+            _try_cuda_empty_cache()
+            current_batch = new_batch
+            continue  # same start, smaller chunk on next loop
+
         pooled = feats.reshape(len(chunk), n_templates, -1).mean(axis=1)
         norms = np.linalg.norm(pooled, axis=1, keepdims=True)
         norms = np.where(norms > 0, norms, 1.0)  # avoid div-by-zero on a zero row
         out[start : start + len(chunk)] = (pooled / norms).astype(np.float32)
+        start += len(chunk)
+
+    # Release activation memory back to the allocator pool so it's available to
+    # the next caller (label compute, search query, etc.) without growing total
+    # process VRAM.
+    _try_cuda_empty_cache()
     return out
 
 

@@ -137,6 +137,54 @@ def test_user_vocab_filename_constant():
     assert real_path.parent == expected_parent
 
 
+class OomThenSucceedEncoder(FakeEncoder):
+    """Raises a CUDA-OOM-shaped RuntimeError for the first N batches at the
+    initial size, then encodes normally once the caller halves the batch."""
+
+    def __init__(self, spec: str, fail_when_size_at_least: int):
+        super().__init__(spec)
+        self.fail_threshold = fail_when_size_at_least
+
+    def encode_text(self, texts):
+        if len(texts) >= self.fail_threshold:
+            raise RuntimeError(
+                "CUDA out of memory. Tried to allocate 4.38 GiB. (fake)"
+            )
+        return super().encode_text(texts)
+
+
+def test_encode_retries_with_smaller_batch_on_oom(tiny_vocab, monkeypatch):
+    """The OOM-retry path should halve the batch until the encode succeeds."""
+    spec = "fake:oom-once"
+    instance = OomThenSucceedEncoder(spec, fail_when_size_at_least=20)
+    monkeypatch.setattr(
+        cluster_labels, "get_cached_encoder", lambda s, **kw: instance
+    )
+    # Five phrases × 7 templates = 35-string initial batch (above the threshold).
+    # The retry halves: 35 → fails. Halve to phrases=2 → 14 strings, succeeds.
+    monkeypatch.setattr(cluster_labels, "VOCAB_BATCH_PHRASES", 5)
+
+    phrases, emb = cluster_labels.get_or_build_vocab_embeddings(spec)
+    assert len(phrases) == 5
+    assert emb.shape == (5, FakeEncoder.embedding_dim)
+    np.testing.assert_allclose(np.linalg.norm(emb, axis=1), 1.0, rtol=1e-5)
+
+
+def test_encode_propagates_non_oom_errors(tiny_vocab, monkeypatch):
+    """A non-OOM error must not trigger the retry loop."""
+
+    class BoomEncoder(FakeEncoder):
+        def encode_text(self, texts):
+            raise ValueError("not an OOM, should propagate")
+
+    spec = "fake:boom"
+    monkeypatch.setattr(
+        cluster_labels, "get_cached_encoder", lambda s, **kw: BoomEncoder(spec)
+    )
+    with pytest.raises(ValueError, match="not an OOM"):
+        cluster_labels.get_or_build_vocab_embeddings(spec)
+
+
 def test_vocab_cache_invalidates_on_user_file_edit(
     tiny_vocab, isolated_cache, fake_encoder, monkeypatch, tmp_path
 ):
