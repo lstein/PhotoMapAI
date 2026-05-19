@@ -24,24 +24,27 @@
     </div>
     <!-- Scrollable Content Area -->
     <div class="filenameDescContainer">
-      <div id="clusterInfoContainer" style="display: none; margin-top: 0.5em;">
-        <span id="clusterInfoBadge" class="cluster-info-badge" style="cursor: pointer;"></span>
+      <div id="clusterInfoContainer" style="display: none; margin-top: 0.5em">
+        <span id="clusterInfoBadge" class="cluster-info-badge" style="cursor: pointer"></span>
       </div>
-      <div id="imageLabelContainer" class="image-label-row" style="display: none;">
-        <span id="imageLabelText"></span>
+      <div id="imageLabelContainer" class="image-label-row" style="display: none">
+        Tags for this image: <span id="imageLabelText"></span>
       </div>
-      <div id="descriptionText"></div>
+      <div class="metadata-fields-accordion">
+        <button id="metadataFieldsHeader" class="accordion-header" type="button" aria-expanded="false">
+          <span class="accordion-chevron">&#9654;</span>
+          Image Details
+        </button>
+        <div id="metadataFieldsBody" class="accordion-body">
+          <div id="descriptionText"></div>
+        </div>
+      </div>
     </div>
     <!-- Recall/Remix buttons (below scrollable area, always visible) -->
     <div id="recallButtonsContainer"></div>
     <!-- Metadata link (below buttons, always visible) -->
     <div id="metadataLinkContainer">
-      <a
-        id="metadataLink"
-        href="#"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="metadata-link"
+      <a id="metadataLink" href="#" target="_blank" rel="noopener noreferrer" class="metadata-link"
         >View Metadata (JSON)</a
       >
     </div>

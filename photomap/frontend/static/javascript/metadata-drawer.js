@@ -3,7 +3,7 @@
 import { bookmarkManager } from "./bookmarks.js";
 import { scoreDisplay } from "./score-display.js";
 import { slideState } from "./slide-state.js";
-import { state } from "./state.js";
+import { state, setShowMetadataFields } from "./state.js";
 import { setSearchResults } from "./search.js";
 import { isColorLight } from "./utils.js";
 import {
@@ -94,6 +94,14 @@ export function updateMetadataOverlay(slide) {
   const referenceImages = slide.dataset.reference_images || [];
   const processedDescription = replaceReferenceImagesWithLinks(rawDescription, referenceImages, state.album);
 
+  // Park the View Metadata (JSON) link in its standalone container before
+  // the innerHTML rewrite below — on the previous slide it may have been
+  // moved into the table, where rewriting descriptionText would destroy it
+  // (and its click listener) along with the table.
+  const metadataLink = document.getElementById("metadataLink");
+  const linkContainer = document.getElementById("metadataLinkContainer");
+  linkContainer.appendChild(metadataLink);
+
   document.getElementById("descriptionText").innerHTML = processedDescription;
 
   // Inject filepath as first row of the metadata table
@@ -120,7 +128,27 @@ export function updateMetadataOverlay(slide) {
   }
 
   document.getElementById("filenameText").textContent = slide.dataset.filename || "";
-  document.getElementById("metadataLink").href = slide.dataset.metadata_url || "#";
+  metadataLink.href = slide.dataset.metadata_url || "#";
+
+  // When a details table is present (Invoke's .invoke-metadata or EXIF's
+  // .exif-metadata table), tuck the View Metadata link into a full-width
+  // cell at the bottom. Otherwise leave it in the standalone container so
+  // it's still reachable for no-metadata images.
+  const detailsTable =
+    document.querySelector("#descriptionText .invoke-metadata") ||
+    document.querySelector("#descriptionText .exif-metadata table");
+  if (detailsTable) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 2;
+    cell.className = "details-link-cell";
+    cell.appendChild(metadataLink);
+    row.appendChild(cell);
+    (detailsTable.tBodies[0] || detailsTable).appendChild(row);
+    linkContainer.style.display = "none";
+  } else {
+    linkContainer.style.display = "";
+  }
 
   // Update cluster information display
   updateClusterInfo(slide.dataset);
@@ -144,23 +172,34 @@ export function updateClusterInfo(metadata) {
   if (clusterInfo && clusterInfo.cluster !== null && clusterInfo.cluster !== undefined) {
     const { cluster, color, size } = clusterInfo;
 
-    // Create label. When the vocabulary endpoint has supplied a phrase for
-    // this cluster, splice it in. Gated by SHOW_CLUSTER_LABELS_IN_BADGES so
-    // the whole addition can be backed out with one flag flip.
-    let clusterLabel = cluster === -1 ? `Unclustered (size=${size})` : `Cluster ${cluster} (size=${size})`;
+    // Build badge contents. When the vocabulary endpoint has supplied a phrase
+    // for this cluster, splice it in as an italicized tag value. Gated by
+    // SHOW_CLUSTER_LABELS_IN_BADGES so the whole addition can be backed out
+    // with one flag flip.
     let titleAttr = null;
+    let labelInfo = null;
     if (SHOW_CLUSTER_LABELS_IN_BADGES && cluster !== -1) {
-      const labelInfo = getClusterLabelInfo(cluster);
-      if (labelInfo) {
-        clusterLabel = `Cluster ${cluster} · ${labelInfo.label} (size=${size})`;
-        if (labelInfo.alternates?.length) {
-          titleAttr = `also: ${labelInfo.alternates.join(", ")}`;
-        }
+      labelInfo = getClusterLabelInfo(cluster);
+      if (labelInfo?.alternates?.length) {
+        titleAttr = `also: ${labelInfo.alternates.join(", ")}`;
       }
     }
 
-    // Set badge text and colors
-    clusterInfoBadge.textContent = clusterLabel;
+    clusterInfoBadge.replaceChildren();
+    if (cluster === -1) {
+      clusterInfoBadge.appendChild(document.createTextNode(`Unclustered (size=${size})`));
+    } else if (labelInfo) {
+      clusterInfoBadge.appendChild(document.createTextNode(`Cluster ${cluster} · `));
+      const valSpan = document.createElement("span");
+      valSpan.className = "tag-value";
+      valSpan.textContent = labelInfo.label;
+      clusterInfoBadge.appendChild(valSpan);
+      clusterInfoBadge.appendChild(document.createTextNode(` (size=${size})`));
+    } else {
+      clusterInfoBadge.appendChild(document.createTextNode(`Cluster ${cluster} (size=${size})`));
+    }
+
+    // Set badge colors
     clusterInfoBadge.style.backgroundColor = color;
     clusterInfoBadge.style.color = isColorLight(color) ? "#222" : "#fff";
     if (titleAttr) {
@@ -244,8 +283,17 @@ export async function updateImageLabel(metadata) {
     container.style.display = "none";
     return;
   }
-  const altSuffix = info.alternates?.length ? ` (also: ${info.alternates.join(", ")})` : "";
-  textSpan.textContent = `image: ${info.label}${altSuffix}`;
+  textSpan.replaceChildren();
+  const tags = [info.label, ...(info.alternates || [])].slice(0, 3);
+  tags.forEach((tag, idx) => {
+    if (idx > 0) {
+      textSpan.appendChild(document.createTextNode(", "));
+    }
+    const span = document.createElement("span");
+    span.className = "tag-value";
+    span.textContent = tag;
+    textSpan.appendChild(span);
+  });
   container.style.display = "block";
 }
 
@@ -552,6 +600,24 @@ function setupOverlayButtons() {
 // Initialize metadata drawer - sets up all event listeners
 export function initializeMetadataDrawer() {
   setupOverlayButtons();
+
+  // Metadata-fields accordion: mirrors the open/closed pattern used by the
+  // Settings dialog accordions, with the open state persisted in
+  // state.showMetadataFields (and therefore in localStorage).
+  const header = document.getElementById("metadataFieldsHeader");
+  const body = document.getElementById("metadataFieldsBody");
+  if (header && body) {
+    const setOpen = (open) => {
+      header.setAttribute("aria-expanded", String(open));
+      body.classList.toggle("open", open);
+    };
+    setOpen(state.showMetadataFields);
+    header.addEventListener("click", () => {
+      const open = header.getAttribute("aria-expanded") !== "true";
+      setOpen(open);
+      setShowMetadataFields(open);
+    });
+  }
 
   // Listen for UMAP data loaded event to refresh cluster info for the current slide
   window.addEventListener("umapDataLoaded", () => {

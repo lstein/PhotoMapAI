@@ -887,7 +887,6 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   // Falls back gracefully when the labels endpoint hasn't populated this
   // cluster (or is unavailable).
   const labelInfo = getClusterLabelInfo(cluster);
-  const clusterLabel = labelInfo ? `${labelInfo.label} — ${sizeStr}` : sizeStr;
   const textIsDark = isColorLight(clusterColor) ? "#222" : "#fff";
   const textShadow = isColorLight(clusterColor) ? "0 1px 2px #fff, 0 0px 8px #fff" : "0 1px 2px #000, 0 0px 8px #000";
 
@@ -913,25 +912,33 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   fnameDiv.style.textShadow = textShadow;
   umapThumbnailDiv.appendChild(fnameDiv);
 
-  // Cluster label
+  // Cluster line: identifier + size only. Tag phrases moved to their own row.
   const clusterDiv = document.createElement("div");
   clusterDiv.className = "umap-thumbnail-cluster";
-  clusterDiv.textContent = clusterLabel;
+  clusterDiv.textContent = sizeStr;
   clusterDiv.style.color = textIsDark;
   clusterDiv.style.textShadow = textShadow;
   umapThumbnailDiv.appendChild(clusterDiv);
 
-  // Alternates row, only when present. Inline rather than title=
-  // since the popup disappears on mouse move (no chance to hover it).
-  if (labelInfo?.alternates?.length) {
-    const altDiv = document.createElement("div");
-    altDiv.className = "umap-thumbnail-cluster-alternates";
-    altDiv.textContent = `also: ${labelInfo.alternates.join(", ")}`;
-    altDiv.style.color = textIsDark;
-    altDiv.style.textShadow = textShadow;
-    altDiv.style.fontSize = "0.85em";
-    altDiv.style.opacity = "0.75";
-    umapThumbnailDiv.appendChild(altDiv);
+  // Tags row, only when the labels endpoint has populated this cluster.
+  // Inline rather than title= since the popup disappears on mouse move.
+  if (labelInfo) {
+    const tags = [labelInfo.label, ...(labelInfo.alternates || [])].slice(0, 3);
+    const tagsDiv = document.createElement("div");
+    tagsDiv.className = "umap-thumbnail-tags";
+    tagsDiv.style.color = textIsDark;
+    tagsDiv.style.textShadow = textShadow;
+    tagsDiv.appendChild(document.createTextNode("Tags for this cluster: "));
+    tags.forEach((tag, idx) => {
+      if (idx > 0) {
+        tagsDiv.appendChild(document.createTextNode(", "));
+      }
+      const span = document.createElement("span");
+      span.className = "tag-value";
+      span.textContent = tag;
+      tagsDiv.appendChild(span);
+    });
+    umapThumbnailDiv.appendChild(tagsDiv);
   }
 
   document.body.appendChild(umapThumbnailDiv);

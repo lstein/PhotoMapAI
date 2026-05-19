@@ -99,30 +99,24 @@
 }
 
 .exif-metadata table {
-  margin: 0 !important;
-  padding: 0 !important;
-  border-spacing: 0;
   border-collapse: collapse;
+  border: 1px solid #bbb;
+  width: 100%;
+  margin: 0;
 }
 
 .exif-metadata th,
 .exif-metadata td {
-  padding: 2px 6px !important;
-  margin: 0 !important;
-  font-size: 0.98em;
+  border: 1px solid #555;
+  padding: 6px 10px;
   vertical-align: top;
-}
-
-.exif-metadata tr {
-  margin: 0 !important;
-  padding: 0 !important;
 }
 
 .metadata-link {
   color: #faea0e;
   text-decoration: none;
   font-weight: bold;
-  font-size: 1em;
+  font-size: 14px;
 }
 
 .cluster-info-badge {
@@ -155,6 +149,10 @@
   padding: 6px 10px;
 }
 
+.details-link-cell {
+  text-align: right;
+}
+
 /* ===== Recall / Remix buttons (pinned outside scrollable area) ===== */
 #recallButtonsContainer:empty {
   display: none;
@@ -166,6 +164,7 @@
 
 #metadataLinkContainer {
   padding: 0.4em 2em 0.8em;
+  text-align: right;
 }
 
 .invoke-recall-controls {
@@ -394,6 +393,26 @@
 .image-label-row {
   margin-top: 0.35em;
   font-size: 0.9em;
-  opacity: 0.85;
+  font-weight: bold;
+}
+
+.tag-value {
   font-style: italic;
+  font-weight: normal;
+}
+
+.image-label-row .tag-value:first-of-type {
+  font-weight: bold;
+}
+
+/* Visual frame mirrors .settings-accordion from settings.css but without
+   the class — settings.js setupAccordions() binds a competing click handler
+   to anything matching `.settings-accordion .accordion-header`, which
+   cancelled this drawer's own toggle. */
+.metadata-fields-accordion {
+  margin-top: 1em;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  overflow: hidden;
 }
