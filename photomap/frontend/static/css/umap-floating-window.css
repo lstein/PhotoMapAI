@@ -23,7 +23,6 @@
   padding-bottom: 20px;
 }
 
-
 .icon-btn {
   background: none;
   border: none;
@@ -40,7 +39,9 @@
 }
 
 .icon-btn.active {
-  box-shadow: 0 0 8px 2px #4caf50, 0 0 16px 4px #2196f3;
+  box-shadow:
+    0 0 8px 2px #4caf50,
+    0 0 16px 4px #2196f3;
   background: rgba(76, 175, 80, 0.1);
   border: 2px solid #4caf50;
   z-index: 2;
@@ -110,6 +111,18 @@
   margin-top: 2px;
 }
 
+.umap-thumbnail-tags {
+  font-size: 1.05em;
+  font-weight: bold;
+  width: 100%;
+  text-align: center;
+  padding: 4px 8px 6px 8px;
+}
+
+.umap-thumbnail-tags .tag-value:first-of-type {
+  font-weight: bold;
+}
+
 #umapEpsContainer,
 #umapColorModeContainer {
   font-size: 0.85em;
@@ -134,7 +147,9 @@
   align-items: center;
   justify-content: center;
   vertical-align: middle;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .umap-info-btn:hover,
@@ -157,4 +172,3 @@
 #umapClickBehaviorContainer input[type="radio"] {
   cursor: pointer;
 }
-

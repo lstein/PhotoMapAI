@@ -78,7 +78,7 @@ _USE_REF_SVG = (
 _USE_REF_BUTTON_HTML = (
     '<button type="button" class="invoke-recall-btn" data-recall-mode="use_ref" '
     'title="Upload this image to InvokeAI and use it as a reference image">'
-    f'{_USE_REF_SVG}<span class="invoke-recall-label">Use as Ref Image</span>'
+    f'{_USE_REF_SVG}<span class="invoke-recall-label">Send to InvokeAI</span>'
     '<span class="invoke-recall-status" aria-live="polite"></span>'
     "</button>"
 )
