@@ -563,9 +563,13 @@ def test_get_or_build_invalidates_on_embeddings_touch(synthetic_album, monkeypat
     cluster_labels.get_or_build_cluster_labels(
         synthetic_album, cluster_eps=1.0, cluster_min_samples=3
     )
-    # Bump source mtime forward
+    # Bump embeddings.npz forward to invalidate the labels cache. Also bump
+    # umap.npz to the same mtime — otherwise Embeddings.umap_embeddings sees
+    # umap.npz as older than embeddings.npz and triggers a real UMAP refit,
+    # which dominates this test's runtime (~5s even on 30 vectors).
     future = time.time() + 5
     os.utime(synthetic_album.embeddings_path, (future, future))
+    os.utime(synthetic_album.embeddings_path.parent / "umap.npz", (future, future))
     cluster_labels.get_or_build_cluster_labels(
         synthetic_album, cluster_eps=1.0, cluster_min_samples=3
     )

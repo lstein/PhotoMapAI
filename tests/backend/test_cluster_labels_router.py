@@ -4,6 +4,8 @@ These tests mock the compute layer at the boundary so they're fast (no CLIP
 weights loaded). A real-encoder smoke test belongs in checkpoint 6.
 """
 
+import pytest
+
 
 def test_endpoint_returns_labels_dict(client, new_album, monkeypatch):
     fake_labels = {
@@ -105,13 +107,16 @@ def test_image_label_endpoint_404_for_missing_album(client):
     assert response.status_code == 404
 
 
+@pytest.mark.slow
 def test_endpoint_smoke_with_real_encoder(client, new_album, monkeypatch, tmp_path, capsys):
     """End-to-end smoke test: real CLIP encoder, real vocab, real cluster labels.
 
-    Slow (~30-60s cold; CLIP weight load + 6685 text encodings). Isolates the
-    vocab embedding cache to tmp_path so a regression in vocab building isn't
-    masked by a prior cache. Album weights themselves use the standard CLIP
-    cache so we don't redownload them.
+    Slow (~30-60s cold locally; several minutes on CI with cold CLIP download
+    and CPU-only inference). Marked ``slow`` so CI excludes it via
+    ``pytest -m 'not slow'``; run locally before pushing real-encoder changes.
+    Isolates the vocab embedding cache to tmp_path so a regression in vocab
+    building isn't masked by a prior cache. Album weights themselves use the
+    standard CLIP cache so we don't redownload them.
     """
     from fixtures import build_index
 
