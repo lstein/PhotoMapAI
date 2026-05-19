@@ -78,3 +78,53 @@ def test_endpoint_handles_empty_result(client, new_album, monkeypatch):
 def test_endpoint_404_for_missing_album(client):
     response = client.get("/cluster_labels/does_not_exist")
     assert response.status_code == 404
+
+
+def test_endpoint_smoke_with_real_encoder(client, new_album, monkeypatch, tmp_path, capsys):
+    """End-to-end smoke test: real CLIP encoder, real vocab, real cluster labels.
+
+    Slow (~30-60s cold; CLIP weight load + 6685 text encodings). Isolates the
+    vocab embedding cache to tmp_path so a regression in vocab building isn't
+    masked by a prior cache. Album weights themselves use the standard CLIP
+    cache so we don't redownload them.
+    """
+    from fixtures import build_index
+
+    from photomap.backend import cluster_labels
+
+    # Isolate vocab cache so each run actually exercises the build path.
+    isolated = tmp_path / "vocab_cache"
+
+    def _isolated_path(spec):
+        return isolated / f"{cluster_labels._sanitize_spec(spec)}.npz"
+
+    monkeypatch.setattr(cluster_labels, "vocab_cache_path", _isolated_path)
+
+    build_index(client, new_album, monkeypatch)
+
+    # Relax DBSCAN to ensure at least one cluster forms over the 9 test images
+    # (defaults of min_samples=10 would put everything in noise with n=9).
+    response = client.get(
+        f"/cluster_labels/{new_album['key']}?cluster_eps=5&cluster_min_samples=2"
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "labels" in body
+    labels = body["labels"]
+    assert len(labels) >= 1, "expected at least one cluster from the 9 themed test images"
+
+    vocab_phrases = set(cluster_labels.load_vocab_phrases())
+    for cid, info in labels.items():
+        assert isinstance(cid, str)
+        assert info["label"] in vocab_phrases, f"cluster {cid} label {info['label']!r} not in vocab"
+        assert -1.0 <= info["score"] <= 1.0
+        for alt in info["alternates"]:
+            assert alt in vocab_phrases
+
+    # Surface the result so a human running this test sees what the labeler picked.
+    with capsys.disabled():
+        print(f"\nSmoke test produced {len(labels)} cluster(s):")
+        for cid in sorted(labels.keys(), key=int):
+            info = labels[cid]
+            alts = ", ".join(info["alternates"]) or "—"
+            print(f"  cluster {cid}: {info['label']!r}  score={info['score']:.3f}  alts=[{alts}]")

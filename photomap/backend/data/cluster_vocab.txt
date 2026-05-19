@@ -964,4 +964,3 @@ zucchini
 
 # CURATED — hand-added phrases below this line are preserved across re-runs. One phrase per line, lowercase; empty lines and # comments are OK.
 
-dad's '67 mustang
