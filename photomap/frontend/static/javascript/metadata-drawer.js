@@ -217,14 +217,6 @@ let _imageLabelFetchToken = 0;
 export async function updateImageLabel(metadata) {
   const container = document.getElementById("imageLabelContainer");
   const textSpan = document.getElementById("imageLabelText");
-  console.log("[updateImageLabel] called", {
-    metadata,
-    globalIndex: metadata?.globalIndex,
-    album: state.album,
-    flag: SHOW_CLUSTER_LABELS_IN_BADGES,
-    container: !!container,
-    textSpan: !!textSpan,
-  });
   if (!container || !textSpan) {
     return;
   }
@@ -234,7 +226,6 @@ export async function updateImageLabel(metadata) {
   }
   const index = parseInt(metadata.globalIndex, 10);
   if (!Number.isFinite(index)) {
-    console.log("[updateImageLabel] bad index, hiding");
     container.style.display = "none";
     return;
   }
@@ -245,7 +236,6 @@ export async function updateImageLabel(metadata) {
   _imageLabelFetchToken += 1;
   const myToken = _imageLabelFetchToken;
   const info = await getImageLabelInfo(state.album, index);
-  console.log("[updateImageLabel] fetch returned", { index, myToken, currentToken: _imageLabelFetchToken, info });
   if (myToken !== _imageLabelFetchToken) {
     return;
   }
