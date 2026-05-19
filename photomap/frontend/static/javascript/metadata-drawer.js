@@ -6,7 +6,12 @@ import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { setSearchResults } from "./search.js";
 import { isColorLight } from "./utils.js";
-import { getClusterInfoForImage, getClusterColorFromPoints } from "./cluster-utils.js";
+import {
+  getClusterColorFromPoints,
+  getClusterInfoForImage,
+  getClusterLabelInfo,
+  SHOW_CLUSTER_LABELS_IN_BADGES,
+} from "./cluster-utils.js";
 
 // Set up the bookmark toggle callback for the star icon
 scoreDisplay.setToggleBookmarkCallback((globalIndex) => {
@@ -137,13 +142,30 @@ export function updateClusterInfo(metadata) {
   if (clusterInfo && clusterInfo.cluster !== null && clusterInfo.cluster !== undefined) {
     const { cluster, color, size } = clusterInfo;
 
-    // Create label
-    const clusterLabel = cluster === -1 ? `Unclustered (size=${size})` : `Cluster ${cluster} (size=${size})`;
+    // Create label. When the vocabulary endpoint has supplied a phrase for
+    // this cluster, splice it in. Gated by SHOW_CLUSTER_LABELS_IN_BADGES so
+    // the whole addition can be backed out with one flag flip.
+    let clusterLabel = cluster === -1 ? `Unclustered (size=${size})` : `Cluster ${cluster} (size=${size})`;
+    let titleAttr = null;
+    if (SHOW_CLUSTER_LABELS_IN_BADGES && cluster !== -1) {
+      const labelInfo = getClusterLabelInfo(cluster);
+      if (labelInfo) {
+        clusterLabel = `Cluster ${cluster} · ${labelInfo.label} (size=${size})`;
+        if (labelInfo.alternates?.length) {
+          titleAttr = `also: ${labelInfo.alternates.join(", ")}`;
+        }
+      }
+    }
 
     // Set badge text and colors
     clusterInfoBadge.textContent = clusterLabel;
     clusterInfoBadge.style.backgroundColor = color;
     clusterInfoBadge.style.color = isColorLight(color) ? "#222" : "#fff";
+    if (titleAttr) {
+      clusterInfoBadge.title = titleAttr;
+    } else {
+      clusterInfoBadge.removeAttribute("title");
+    }
 
     // Store current cluster value in data attribute for the click handler
     clusterInfoBadge.dataset.currentCluster = cluster;

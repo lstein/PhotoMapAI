@@ -26,11 +26,24 @@
   justify-content: flex-start;
   gap: 6px;
   white-space: nowrap;
+  /* Clip long labels (e.g. "Cluster 234 · indoor general store") rather than
+     letting them spill past the 260px max-width. The inner #scoreText handles
+     the ellipsis. Hover the badge to see the full text via its title attr. */
+  overflow: hidden;
   pointer-events: auto;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   z-index: 1000;
   opacity: 0.7;
+}
+
+/* Allow the text span to shrink below its content size inside the flex
+   container, and ellipsize whatever doesn't fit. */
+.fixed-score-display #scoreText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Star icon styling within score display */
