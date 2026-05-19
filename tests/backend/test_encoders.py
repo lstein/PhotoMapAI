@@ -428,6 +428,48 @@ def test_idle_watcher_skips_recent_entries(monkeypatch):
     clear_encoder_cache()
 
 
+def test_idle_watcher_respects_encode_activity(monkeypatch):
+    """An encoder being actively used in an encode loop must NOT be offloaded
+    even when its cache-keyed last_access timestamp ages past the timeout.
+
+    Regression: long vocab builds called get_cached_encoder ONCE then
+    encode_text many times. Cache stamp went stale; watcher offloaded the
+    encoder mid-loop; next batch's _ensure_on_device reloaded it; ~10s
+    thrash per cycle. Fix: encoders stamp their own _last_use_monotonic
+    on every encode and the watcher consults that too.
+    """
+    import time as time_module
+
+    monkeypatch.setattr(encoders_module, "_free_cuda", lambda device: None)
+    clear_encoder_cache()
+
+    encoder = _make_test_encoder(device="cuda")
+    monkeypatch.setattr(encoders_module, "build_encoder", lambda *a, **kw: encoder)
+
+    get_cached_encoder("test:fake")  # last_access = now
+    # Backdate the cache stamp — simulates a long encode loop where the cache
+    # lookup happened well in the past but encodes are still running.
+    key = ("test:fake", None)
+    encoders_module._search_encoder_last_access[key] = time_module.monotonic() - 100.0
+
+    # Recent encode keeps the encoder hot via the per-instance stamp.
+    encoder.encode_text(["x"])
+
+    encoders_module.start_idle_watcher(timeout_seconds=0.05, poll_interval=0.05)
+    try:
+        # Poll a few cycles, simulating the watcher seeing fresh encodes
+        # arrive between its wake-ups.
+        deadline = time_module.monotonic() + 0.5
+        while time_module.monotonic() < deadline:
+            encoder.encode_text(["x"])  # keeps _last_use_monotonic fresh
+            time_module.sleep(0.05)
+    finally:
+        encoders_module.stop_idle_watcher()
+
+    assert not encoder.is_offloaded, "encoder offloaded mid-loop despite recent encodes"
+    clear_encoder_cache()
+
+
 def test_start_idle_watcher_zero_timeout_disables(monkeypatch):
     """timeout_seconds == 0 must skip starting the watcher thread."""
     encoders_module.stop_idle_watcher()
