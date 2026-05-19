@@ -383,6 +383,69 @@ def test_per_eps_caches_are_independent(synthetic_album):
     assert p2 != p3
 
 
+# ---------------------------------------------------------------------------
+# rebuild_cluster_labels CLI
+# ---------------------------------------------------------------------------
+
+
+def test_cli_dispatch_to_do_rebuild_cluster_labels(monkeypatch):
+    """`main()` must route the 'rebuild_cluster_labels' script name correctly."""
+    import sys
+
+    from photomap.backend import imagetool
+
+    called = {"n": 0}
+    monkeypatch.setattr(
+        imagetool, "do_rebuild_cluster_labels", lambda: called.__setitem__("n", called["n"] + 1)
+    )
+    monkeypatch.setattr(sys, "argv", ["rebuild_cluster_labels"])
+    imagetool.main()
+    assert called["n"] == 1
+
+
+def test_cli_missing_file_raises(monkeypatch, tmp_path):
+    import sys
+
+    from photomap.backend import imagetool
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["rebuild_cluster_labels", "--embeddings", str(tmp_path / "does_not_exist.npz")],
+    )
+    try:
+        imagetool.do_rebuild_cluster_labels()
+    except FileNotFoundError as e:
+        assert "does not exist" in str(e)
+    else:  # pragma: no cover - failure path
+        raise AssertionError("expected FileNotFoundError")
+
+
+def test_cli_end_to_end_writes_label_cache(synthetic_album, monkeypatch, capsys):
+    """do_rebuild_cluster_labels should produce a cache file next to umap.npz."""
+    import sys
+
+    from photomap.backend import imagetool
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "rebuild_cluster_labels",
+            "--embeddings", str(synthetic_album.embeddings_path),
+            "--encoder-spec", "fake:test-encoder",
+            "--eps", "1.0",
+            "--min-samples", "3",
+        ],
+    )
+    imagetool.do_rebuild_cluster_labels()
+
+    cache_path = cluster_labels.labels_cache_path(synthetic_album, 1.0, 3)
+    assert cache_path.exists()
+    out = capsys.readouterr().out
+    assert "labels for 3 clusters" in out
+
+
 def test_empty_cluster_result_is_cached(synthetic_album, monkeypatch):
     call_count = {"n": 0}
     real_compute = cluster_labels.compute_cluster_labels
