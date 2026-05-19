@@ -156,6 +156,15 @@ def write_vocab(
         f"{CURATED_SENTINEL} — hand-added phrases below this line are preserved across re-runs. "
         "One phrase per line, lowercase; empty lines and # comments are OK."
     )
+    parts.append(
+        "# End users who installed via pip can add extra phrases without editing"
+    )
+    parts.append(
+        "# this file by creating cluster_vocab_extra.txt in the photomap config"
+    )
+    parts.append(
+        "# directory (e.g. ~/.config/photomap/ on Linux, sibling of config.yaml)."
+    )
     if curated_lines:
         parts += curated_lines
     else:

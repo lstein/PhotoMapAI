@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-from platformdirs import user_cache_dir
+from platformdirs import user_cache_dir, user_config_dir
 from sklearn.cluster import DBSCAN
 
 from .encoders import get_cached_encoder
@@ -49,6 +49,12 @@ PROMPT_TEMPLATES: tuple[str, ...] = (
 VOCAB_PACKAGE = "photomap.backend.data"
 VOCAB_FILENAME = "cluster_vocab.txt"
 
+# User-editable vocabulary file in the platform config dir (sibling of
+# config.yaml). Optional — when present, its phrases are unioned with the
+# bundled vocab. This is the recommended place for hand-curated additions for
+# users who installed via pip and don't have a checkout of the source tree.
+USER_VOCAB_FILENAME = "cluster_vocab_extra.txt"
+
 # Phrases per encoder batch — each call encodes phrases * len(PROMPT_TEMPLATES)
 # strings. 128 * 7 ≈ 900 texts per batch, which fits comfortably on a single GPU.
 VOCAB_BATCH_PHRASES = 128
@@ -60,19 +66,50 @@ def vocab_file_path() -> Path:
     return Path(str(resource))
 
 
-def load_vocab_phrases(path: Path | None = None) -> list[str]:
-    """Read `cluster_vocab.txt`, return deduped non-empty non-comment phrases."""
-    target = path or vocab_file_path()
-    seen: set[str] = set()
+def user_vocab_file_path() -> Path:
+    """Filesystem path to the user-editable extra vocab file.
+
+    Lives next to `config.yaml` under `platformdirs.user_config_dir`. May not
+    exist — callers must handle that case. We never auto-create it; absence is
+    the natural "no user additions" state.
+    """
+    return Path(user_config_dir("photomap", "photomap")) / USER_VOCAB_FILENAME
+
+
+def _read_vocab_file(path: Path) -> list[str]:
+    """Lowercase, strip, drop blanks and `#` comments. Does NOT dedupe."""
     out: list[str] = []
-    for raw in target.read_text(encoding="utf-8").splitlines():
+    for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        norm = line.lower()
-        if norm not in seen:
-            seen.add(norm)
-            out.append(norm)
+        out.append(line.lower())
+    return out
+
+
+def load_vocab_phrases(
+    path: Path | None = None,
+    user_path: Path | None = None,
+) -> list[str]:
+    """Return deduped phrases from the bundled vocab plus any user extras.
+
+    `path` overrides the bundled vocab location; `user_path` overrides the
+    user file location. Defaults read both standard locations; the user file
+    is optional and silently skipped when absent.
+    """
+    target = path or vocab_file_path()
+    user_target = user_path or user_vocab_file_path()
+
+    phrases = _read_vocab_file(target)
+    if user_target.exists():
+        phrases.extend(_read_vocab_file(user_target))
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in phrases:
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
     return out
 
 
@@ -111,6 +148,15 @@ def _encode_phrases_ensembled(encoder, phrases: list[str]) -> np.ndarray:
     return out
 
 
+def _vocab_sources_max_mtime(vocab_path: Path) -> float:
+    """Max mtime across the bundled vocab and (if present) the user extras file."""
+    mtimes = [vocab_path.stat().st_mtime]
+    user_path = user_vocab_file_path()
+    if user_path.exists():
+        mtimes.append(user_path.stat().st_mtime)
+    return max(mtimes)
+
+
 def _read_cached_vocab(
     cache_path: Path,
     vocab_path: Path,
@@ -119,7 +165,7 @@ def _read_cached_vocab(
     """Return cached (phrases, embeddings) if valid, else None to signal rebuild."""
     if not cache_path.exists():
         return None
-    if cache_path.stat().st_mtime < vocab_path.stat().st_mtime:
+    if cache_path.stat().st_mtime < _vocab_sources_max_mtime(vocab_path):
         return None
     try:
         data = np.load(cache_path, allow_pickle=False)
@@ -319,8 +365,9 @@ def _read_cached_labels(
     # Vocab edits change the candidate label strings (and, indirectly, the chosen
     # top-1 once vocab embeddings rebuild). Without this check, a vocab refresh
     # would silently leave every album's labels stale until the album reindexes.
+    # Both the bundled vocab and the user extras file count as sources.
     vocab_path = vocab_file_path()
-    if vocab_path.exists() and cache_mtime < vocab_path.stat().st_mtime:
+    if vocab_path.exists() and cache_mtime < _vocab_sources_max_mtime(vocab_path):
         return None
     try:
         data = np.load(cache_path, allow_pickle=False)

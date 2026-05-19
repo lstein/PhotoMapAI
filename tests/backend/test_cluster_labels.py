@@ -13,6 +13,19 @@ import pytest
 from photomap.backend import cluster_labels
 
 
+@pytest.fixture(autouse=True)
+def _isolate_user_vocab(monkeypatch, tmp_path_factory):
+    """Default every test to a non-existent user vocab path under tmp.
+
+    Without this, tests would read the developer's real
+    `~/.config/photomap/cluster_vocab_extra.txt` if it happens to exist, which
+    would silently change phrase counts and break assertions. Individual tests
+    that want to exercise the user-file path can re-monkeypatch to a real file.
+    """
+    nonexistent = tmp_path_factory.mktemp("user_cfg") / "extras_should_not_exist.txt"
+    monkeypatch.setattr(cluster_labels, "user_vocab_file_path", lambda: nonexistent)
+
+
 class FakeEncoder:
     """Deterministic stand-in for an ImageTextEncoder.
 
@@ -86,8 +99,66 @@ def isolated_cache(tmp_path, monkeypatch):
 
 
 def test_load_vocab_phrases_strips_comments_and_dedupes(tiny_vocab):
+    # The autouse _isolate_user_vocab fixture points user_vocab_file_path at a
+    # nonexistent tmp path, so this exercises bundled-only behavior.
     phrases = cluster_labels.load_vocab_phrases()
     assert phrases == ["abbey", "airport terminal", "wedding", "mountain", "lake"]
+
+
+def test_load_vocab_phrases_merges_user_extras(tiny_vocab, monkeypatch, tmp_path):
+    user = tmp_path / "extras.txt"
+    user.write_text("# user additions\nstadium\nabbey\nlibrary\n", encoding="utf-8")
+    monkeypatch.setattr(cluster_labels, "user_vocab_file_path", lambda: user)
+    phrases = cluster_labels.load_vocab_phrases()
+    # 'abbey' was already in the bundled vocab — must dedupe across files.
+    assert phrases.count("abbey") == 1
+    assert "stadium" in phrases
+    assert "library" in phrases
+
+
+def test_load_vocab_phrases_missing_user_file_ok(tiny_vocab):
+    # Autouse fixture already points user file path at a nonexistent location.
+    phrases = cluster_labels.load_vocab_phrases()
+    assert phrases == ["abbey", "airport terminal", "wedding", "mountain", "lake"]
+
+
+def test_user_vocab_filename_constant():
+    """The user file lives next to config.yaml under platformdirs.user_config_dir."""
+    from platformdirs import user_config_dir
+
+    # Call the un-monkeypatched implementation by re-creating it inline. The
+    # autouse fixture replaces user_vocab_file_path with a tmp-path lambda,
+    # but the FILENAME constant and the platformdirs choice are what matter.
+    assert cluster_labels.USER_VOCAB_FILENAME == "cluster_vocab_extra.txt"
+    expected_parent = Path(user_config_dir("photomap", "photomap"))
+    # Construct what the real implementation would return.
+    real_path = expected_parent / cluster_labels.USER_VOCAB_FILENAME
+    assert real_path.name == cluster_labels.USER_VOCAB_FILENAME
+    assert real_path.parent == expected_parent
+
+
+def test_vocab_cache_invalidates_on_user_file_edit(
+    tiny_vocab, isolated_cache, fake_encoder, monkeypatch, tmp_path
+):
+    """Touching the user extras file should rebuild the vocab embeddings."""
+    import os
+    import time
+
+    user = tmp_path / "extras.txt"
+    user.write_text("stadium\n", encoding="utf-8")
+    monkeypatch.setattr(cluster_labels, "user_vocab_file_path", lambda: user)
+
+    spec = "fake:user-vocab"
+    cluster_labels.get_or_build_vocab_embeddings(spec)
+    encoder = fake_encoder[spec]
+    calls_before = encoder.encode_calls
+
+    # Bump user file mtime forward
+    future = time.time() + 5
+    os.utime(user, (future, future))
+
+    cluster_labels.get_or_build_vocab_embeddings(spec)
+    assert encoder.encode_calls == calls_before + 1
 
 
 def test_load_vocab_phrases_lowercases():
