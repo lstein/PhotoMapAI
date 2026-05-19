@@ -137,6 +137,61 @@ def test_user_vocab_filename_constant():
     assert real_path.parent == expected_parent
 
 
+# ---------------------------------------------------------------------------
+# Per-image labels
+# ---------------------------------------------------------------------------
+
+
+def test_compute_image_label_scores_against_vocab(synthetic_album):
+    """An image whose embedding was built near vocab[k] should get phrase k."""
+    # Synthetic data: cluster 0 sits near vocab[0]="abbey", cluster 1 near
+    # vocab[1]="wedding", cluster 2 near vocab[2]="mountain". Image 0 is the
+    # first member of cluster 0, so its top-1 label should be "abbey".
+    result = cluster_labels.compute_image_label(synthetic_album, 0, top_k=3)
+    assert result["label"] == "abbey"
+    assert len(result["alternates"]) == 2
+    assert 0.0 < result["score"] <= 1.0
+
+    # Image 20 is in cluster 2 → "mountain".
+    result20 = cluster_labels.compute_image_label(synthetic_album, 20, top_k=3)
+    assert result20["label"] == "mountain"
+
+
+def test_compute_image_label_out_of_bounds(synthetic_album):
+    assert cluster_labels.compute_image_label(synthetic_album, -1) == {}
+    assert cluster_labels.compute_image_label(synthetic_album, 9999) == {}
+
+
+def test_compute_image_label_caches_within_process(synthetic_album, monkeypatch):
+    """Second call for the same image hits the LRU cache, not the vocab embed."""
+    # Wrap get_or_build_vocab_embeddings to count invocations.
+    call_count = {"n": 0}
+    original = cluster_labels.get_or_build_vocab_embeddings
+
+    def counting_get_or_build(*args, **kwargs):
+        call_count["n"] += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(cluster_labels, "get_or_build_vocab_embeddings", counting_get_or_build)
+    # Clear any prior cache contents
+    cluster_labels._IMAGE_LABEL_CACHE.clear()
+
+    cluster_labels.compute_image_label(synthetic_album, 5)
+    assert call_count["n"] == 1
+    cluster_labels.compute_image_label(synthetic_album, 5)
+    assert call_count["n"] == 1  # cached — vocab not re-fetched
+
+
+def test_compute_image_label_cache_evicts_past_max(synthetic_album, monkeypatch):
+    monkeypatch.setattr(cluster_labels, "_IMAGE_LABEL_CACHE_MAX", 3)
+    cluster_labels._IMAGE_LABEL_CACHE.clear()
+
+    for i in range(5):
+        cluster_labels.compute_image_label(synthetic_album, i)
+    # Only the most-recent 3 survive.
+    assert len(cluster_labels._IMAGE_LABEL_CACHE) == 3
+
+
 class OomThenSucceedEncoder(FakeEncoder):
     """Raises a CUDA-OOM-shaped RuntimeError for the first N batches at the
     initial size, then encodes normally once the caller halves the batch."""

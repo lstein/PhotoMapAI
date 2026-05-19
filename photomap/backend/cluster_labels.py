@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import importlib.resources
 import logging
+import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -527,4 +529,93 @@ def get_or_build_cluster_labels(
         top_k=top_k,
     )
     _save_labels(cache_path, result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Per-image labels (lazy, used by the metadata drawer)
+# ---------------------------------------------------------------------------
+
+# Bounded in-memory LRU. Per-image scoring is microseconds (one vector dot the
+# vocab matrix, ~1M FLOPs), but we still cache because the frontend re-opens
+# the drawer for the same image often during navigation. Key includes the
+# vocab mtime so edits to either vocab file naturally bypass stale entries.
+_IMAGE_LABEL_CACHE: OrderedDict[tuple, dict] = OrderedDict()
+_IMAGE_LABEL_CACHE_MAX = 1024
+_image_label_cache_lock = threading.Lock()
+
+
+def _image_label_cache_get(key: tuple) -> dict | None:
+    with _image_label_cache_lock:
+        val = _IMAGE_LABEL_CACHE.get(key)
+        if val is not None:
+            _IMAGE_LABEL_CACHE.move_to_end(key)
+        return val
+
+
+def _image_label_cache_put(key: tuple, val: dict) -> None:
+    with _image_label_cache_lock:
+        _IMAGE_LABEL_CACHE[key] = val
+        _IMAGE_LABEL_CACHE.move_to_end(key)
+        while len(_IMAGE_LABEL_CACHE) > _IMAGE_LABEL_CACHE_MAX:
+            _IMAGE_LABEL_CACHE.popitem(last=False)
+
+
+def compute_image_label(
+    embeddings: Embeddings,
+    sorted_index: int,
+    *,
+    top_k: int = 3,
+) -> dict:
+    """Score a single image's embedding against the vocabulary.
+
+    `sorted_index` is the frontend-facing index (mtime-sorted order, same as
+    the one /umap_data and /retrieve_image use). Returns `{label, alternates,
+    score}` or `{}` when no vocab is available or the index is out of bounds.
+    Cached in-process by (embeddings_path, sorted_index, vocab_mtime).
+    """
+    cached = embeddings.open_cached_embeddings(embeddings.embeddings_path)
+    sorted_filenames = cached["sorted_filenames"]
+    if sorted_index < 0 or sorted_index >= len(sorted_filenames):
+        return {}
+
+    vocab_path = vocab_file_path()
+    vocab_mtime = _vocab_sources_max_mtime(vocab_path) if vocab_path.exists() else 0.0
+    cache_key = (str(embeddings.embeddings_path), int(sorted_index), vocab_mtime)
+    hit = _image_label_cache_get(cache_key)
+    if hit is not None:
+        return hit
+
+    phrases, vocab_emb = get_or_build_vocab_embeddings(
+        embeddings.encoder_spec, cache_dir=embeddings._clip_root()
+    )
+    if not phrases:
+        return {}
+
+    # sorted_index → raw row index in the .npz. The embeddings array is in raw
+    # order (the order images were ingested); sorted_filenames[N] gives the
+    # filename of the Nth slide, and the matching raw index is its position in
+    # the unsorted filenames array.
+    filename = sorted_filenames[sorted_index]
+    filenames = cached["filenames"]
+    raw_matches = np.where(filenames == filename)[0]
+    if raw_matches.size == 0:
+        return {}
+    raw_idx = int(raw_matches[0])
+
+    vec = cached["embeddings"][raw_idx].astype(np.float32)
+    norm = float(np.linalg.norm(vec))
+    if norm > 0:
+        vec = vec / norm
+
+    scores = vec @ vocab_emb.T  # (V,)
+    k = min(top_k, len(phrases))
+    top_idx = np.argsort(-scores)[:k]
+    top_phrases = [phrases[int(j)] for j in top_idx]
+    result = {
+        "label": top_phrases[0],
+        "alternates": top_phrases[1:],
+        "score": float(scores[int(top_idx[0])]),
+    }
+    _image_label_cache_put(cache_key, result)
     return result

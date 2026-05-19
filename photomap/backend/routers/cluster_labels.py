@@ -14,7 +14,7 @@ import asyncio
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from ..cluster_labels import get_or_build_cluster_labels
+from ..cluster_labels import compute_image_label, get_or_build_cluster_labels
 from .album import get_embeddings_for_album
 
 cluster_labels_router = APIRouter()
@@ -51,3 +51,34 @@ async def get_cluster_labels(
     )
     # FastAPI will stringify the int cluster IDs in the JSON keys.
     return JSONResponse({"labels": labels})
+
+
+@cluster_labels_router.get("/image_label/{album_key}/{index}", tags=["UMAP"])
+async def get_image_label(
+    album_key: str,
+    index: int,
+    top_k: int = 3,
+) -> JSONResponse:
+    """Return one vocabulary label for a single image.
+
+    The cluster's label (from `/cluster_labels`) describes the cluster's
+    overall centroid, which can drift from any individual member when the
+    cluster is heterogeneous. This endpoint scores the image's own embedding
+    against the vocab so the metadata drawer can show what *that picture*
+    looks like, independent of its cluster's aggregate label.
+
+    Args:
+        album_key: Album to score against.
+        index: Sorted (frontend-facing) image index — same coordinate system
+            as `/umap_data` and `/retrieve_image/{index}`.
+        top_k: How many alternates to return.
+
+    Returns:
+        `{"label": str, "alternates": [str, ...], "score": float}` on success,
+        or `{}` when no vocab is available or the index is out of bounds.
+    """
+    embeddings = get_embeddings_for_album(album_key)
+    result = await asyncio.to_thread(
+        compute_image_label, embeddings, index, top_k=top_k
+    )
+    return JSONResponse(result)

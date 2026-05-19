@@ -10,6 +10,7 @@ import {
   getClusterColorFromPoints,
   getClusterInfoForImage,
   getClusterLabelInfo,
+  getImageLabelInfo,
   SHOW_CLUSTER_LABELS_IN_BADGES,
 } from "./cluster-utils.js";
 
@@ -123,6 +124,7 @@ export function updateMetadataOverlay(slide) {
 
   // Update cluster information display
   updateClusterInfo(slide.dataset);
+  updateImageLabel(slide.dataset);
   updateCurrentImageScore(slide.dataset);
 }
 
@@ -205,6 +207,46 @@ export function updateClusterInfo(metadata) {
     // Hide cluster info if no cluster
     clusterInfoContainer.style.display = "none";
   }
+}
+
+// Lazily fetch and display the per-image vocabulary label. Independent of the
+// cluster label so a heterogeneous cluster's aggregate label doesn't have to
+// match the individual image. Gated by the same SHOW_CLUSTER_LABELS_IN_BADGES
+// flag as the cluster badge for one-flag rollback consistency.
+let _imageLabelFetchToken = 0;
+export async function updateImageLabel(metadata) {
+  const container = document.getElementById("imageLabelContainer");
+  const textSpan = document.getElementById("imageLabelText");
+  if (!container || !textSpan) {
+    return;
+  }
+  if (!SHOW_CLUSTER_LABELS_IN_BADGES || !state.album) {
+    container.style.display = "none";
+    return;
+  }
+  const index = parseInt(metadata.globalIndex, 10);
+  if (!Number.isFinite(index)) {
+    container.style.display = "none";
+    return;
+  }
+
+  // Token guards against stale responses: if the user navigates to a new
+  // image before this fetch resolves, the response from the older request
+  // gets ignored rather than overwriting the new image's label.
+  _imageLabelFetchToken += 1;
+  const myToken = _imageLabelFetchToken;
+  const info = await getImageLabelInfo(state.album, index);
+  if (myToken !== _imageLabelFetchToken) {
+    return;
+  }
+
+  if (!info) {
+    container.style.display = "none";
+    return;
+  }
+  const altSuffix = info.alternates?.length ? ` (also: ${info.alternates.join(", ")})` : "";
+  textSpan.textContent = `image: ${info.label}${altSuffix}`;
+  container.style.display = "block";
 }
 
 export async function updateCurrentImageScore(metadata) {

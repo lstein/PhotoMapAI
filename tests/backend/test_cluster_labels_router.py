@@ -80,6 +80,31 @@ def test_endpoint_404_for_missing_album(client):
     assert response.status_code == 404
 
 
+def test_image_label_endpoint_returns_label(client, new_album, monkeypatch):
+    monkeypatch.setattr(
+        "photomap.backend.routers.cluster_labels.compute_image_label",
+        lambda emb, idx, *, top_k: {"label": "vase", "alternates": ["jar"], "score": 0.42},
+    )
+    response = client.get(f"/image_label/{new_album['key']}/7")
+    assert response.status_code == 200
+    assert response.json() == {"label": "vase", "alternates": ["jar"], "score": 0.42}
+
+
+def test_image_label_endpoint_empty_when_no_label(client, new_album, monkeypatch):
+    monkeypatch.setattr(
+        "photomap.backend.routers.cluster_labels.compute_image_label",
+        lambda emb, idx, *, top_k: {},
+    )
+    response = client.get(f"/image_label/{new_album['key']}/0")
+    assert response.status_code == 200
+    assert response.json() == {}
+
+
+def test_image_label_endpoint_404_for_missing_album(client):
+    response = client.get("/image_label/does_not_exist/0")
+    assert response.status_code == 404
+
+
 def test_endpoint_smoke_with_real_encoder(client, new_album, monkeypatch, tmp_path, capsys):
     """End-to-end smoke test: real CLIP encoder, real vocab, real cluster labels.
 
