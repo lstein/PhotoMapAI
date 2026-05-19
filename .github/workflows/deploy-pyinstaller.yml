@@ -4,6 +4,9 @@ on:
   workflow_call:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     strategy:
@@ -36,10 +39,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -169,10 +172,12 @@ jobs:
 
       - name: Create archive (Windows)
         if: runner.os == 'Windows'
+        # Use 7z instead of Compress-Archive: the latter throws
+        # "Stream was too long" on archives above ~2 GB, which the cu129 build hits.
         run: |
           $version = "${{ steps.get_version_win.outputs.version }}"
           $archiveName = "photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v$version"
-          Compress-Archive -Path "dist\$archiveName" -DestinationPath "dist\$archiveName.zip" -Force
+          7z a -tzip "dist\$archiveName.zip" "dist\$archiveName"
         shell: pwsh
 
       - name: Debug - List dist contents
@@ -186,7 +191,7 @@ jobs:
         if: runner.os == 'Windows'
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}
           path: dist/photomap-${{ matrix.platform }}-${{ matrix.torch_variant }}-v${{ steps.get_version_unix.outputs.version || steps.get_version_win.outputs.version }}${{ matrix.archive_ext }}
