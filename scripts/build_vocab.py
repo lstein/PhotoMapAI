@@ -55,7 +55,13 @@ def normalize(phrase: str) -> str | None:
 
 
 def parse_places365(text: str) -> list[str]:
-    """Lines look like '/a/abbey 0' or '/c/childs_room 100'."""
+    """Lines look like '/a/abbey 0' or '/c/childs_room 100'.
+
+    Places365 uses ``base/modifier`` suffixes for variants of the same scene
+    category (``church/indoor``, ``arena/hockey``, ``apartment building/outdoor``).
+    These read awkwardly as labels — swap to ``modifier base`` so the hover
+    popup shows ``indoor church`` instead of ``church/indoor``.
+    """
     out = []
     for line in text.splitlines():
         line = line.strip()
@@ -68,8 +74,12 @@ def parse_places365(text: str) -> list[str]:
             continue
         label = parts[1]
         phrase = normalize(label)
-        if phrase:
-            out.append(phrase)
+        if not phrase:
+            continue
+        if "/" in phrase:
+            base, _, modifier = phrase.partition("/")
+            phrase = f"{modifier} {base}".strip()
+        out.append(phrase)
     return out
 
 

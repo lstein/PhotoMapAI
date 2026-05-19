@@ -1,6 +1,27 @@
 // cluster-utils.js
 // Shared utilities for cluster color management and calculations
 
+// Feature flag: when false, the cluster vocabulary label is shown ONLY in the
+// UMAP hover popup (the original opt-in surface). When true, the label is also
+// spliced into the score-display pill and the metadata-drawer badge. Flip to
+// false to back out the score-display + metadata-drawer additions without
+// touching their call sites.
+export const SHOW_CLUSTER_LABELS_IN_BADGES = true;
+
+// Module-level cache of {cluster_id: {label, alternates, score, medoid_index}}
+// populated by umap.js's fetchUmapData. Other modules read it via
+// getClusterLabelInfo() — they shouldn't import the umap module directly.
+let clusterLabels = {};
+
+export function setClusterLabels(labels) {
+  clusterLabels = labels || {};
+}
+
+export function getClusterLabelInfo(cluster) {
+  // JSON keys are strings; the rest of the app passes ints. Coerce here.
+  return clusterLabels[String(cluster)] || null;
+}
+
 // Standard cluster color palette used across the application
 export const CLUSTER_PALETTE = [
   "#e41a1c",

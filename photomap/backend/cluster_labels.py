@@ -215,19 +215,38 @@ def labels_cache_path(
     )
 
 
-def _cluster_centroids(
-    high_dim: np.ndarray, labels: np.ndarray, cluster_ids: list[int]
-) -> np.ndarray:
-    """Mean of each cluster's high-dim embeddings, L2-normalized. Shape: (C, D)."""
+def _cluster_centroids_and_medoids(
+    high_dim: np.ndarray,
+    labels: np.ndarray,
+    cluster_ids: list[int],
+    filenames: np.ndarray,
+    filename_map: dict[str, int],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per cluster: L2-normalized centroid, and the sorted-frame index of the medoid.
+
+    The medoid is the real cluster member whose high-dim embedding has the
+    highest cosine similarity to the cluster centroid — i.e. the most
+    representative image in the cluster. Indices are returned in the same
+    coordinate system the frontend uses (``filename_map`` lookup), so the
+    frontend can pass them directly to ``thumbnails/{album}/{index}``.
+    """
     centroids = np.zeros((len(cluster_ids), high_dim.shape[1]), dtype=np.float32)
+    medoid_indices = np.zeros(len(cluster_ids), dtype=np.int32)
     for i, cid in enumerate(cluster_ids):
-        members = high_dim[labels == cid]
+        member_mask = labels == cid
+        members = high_dim[member_mask]
         mean = members.mean(axis=0)
         norm = float(np.linalg.norm(mean))
         if norm > 0:
             mean = mean / norm
         centroids[i] = mean.astype(np.float32)
-    return centroids
+        # Pick the medoid: argmax of cosine sim to the centroid. Both sides are
+        # L2-normalized, so a dot product is the cosine.
+        sims = members @ mean
+        member_raw_indices = np.where(member_mask)[0]
+        medoid_raw_idx = int(member_raw_indices[int(np.argmax(sims))])
+        medoid_indices[i] = int(filename_map[filenames[medoid_raw_idx]])
+    return centroids, medoid_indices
 
 
 def compute_cluster_labels(
@@ -265,7 +284,9 @@ def compute_cluster_labels(
 
     cached = embeddings.open_cached_embeddings(embeddings.embeddings_path)
     high_dim = cached["embeddings"]
-    centroids = _cluster_centroids(high_dim, labels, cluster_ids)
+    centroids, medoid_indices = _cluster_centroids_and_medoids(
+        high_dim, labels, cluster_ids, cached["filenames"], cached["filename_map"]
+    )
 
     scores = centroids @ vocab_emb.T  # (C, V)
     k = min(top_k, len(phrases))
@@ -279,6 +300,7 @@ def compute_cluster_labels(
             "label": top_phrases[0],
             "alternates": top_phrases[1:],
             "score": float(scores[i, int(top_idx[i, 0])]),
+            "medoid_index": int(medoid_indices[i]),
         }
     return out
 
@@ -286,7 +308,7 @@ def compute_cluster_labels(
 def _read_cached_labels(
     cache_path: Path, umap_path: Path, embeddings_path: Path
 ) -> dict[int, dict] | None:
-    """Return cached labels if newer than both UMAP and source embeddings, else None."""
+    """Return cached labels if newer than UMAP, source embeddings, and vocab, else None."""
     if not cache_path.exists():
         return None
     cache_mtime = cache_path.stat().st_mtime
@@ -294,12 +316,22 @@ def _read_cached_labels(
         return None
     if cache_mtime < embeddings_path.stat().st_mtime:
         return None
+    # Vocab edits change the candidate label strings (and, indirectly, the chosen
+    # top-1 once vocab embeddings rebuild). Without this check, a vocab refresh
+    # would silently leave every album's labels stale until the album reindexes.
+    vocab_path = vocab_file_path()
+    if vocab_path.exists() and cache_mtime < vocab_path.stat().st_mtime:
+        return None
     try:
         data = np.load(cache_path, allow_pickle=False)
         cluster_ids = [int(c) for c in data["cluster_ids"]]
         labels = [str(x) for x in data["labels"]]
         alternates_arr = data["alternates"]
         scores = [float(s) for s in data["scores"]]
+        # Medoid array was added later; older caches omit it.
+        medoids = (
+            [int(m) for m in data["medoids"]] if "medoids" in data.files else [None] * len(cluster_ids)
+        )
     except (OSError, KeyError, ValueError) as err:
         logger.warning("Labels cache at %s unreadable (%s); will rebuild", cache_path, err)
         return None
@@ -309,7 +341,11 @@ def _read_cached_labels(
         row = alternates_arr[i] if alternates_arr.ndim == 2 else []
         # Filter padding empty strings introduced during save.
         alts = [str(x) for x in row if str(x) != ""]
-        out[cid] = {"label": labels[i], "alternates": alts, "score": scores[i]}
+        entry: dict = {"label": labels[i], "alternates": alts, "score": scores[i]}
+        # -1 sentinel marks "no medoid known" — drop it so the frontend can apply its fallback.
+        if medoids[i] is not None and medoids[i] >= 0:
+            entry["medoid_index"] = medoids[i]
+        out[cid] = entry
     return out
 
 
@@ -321,6 +357,7 @@ def _save_labels(cache_path: Path, labels_dict: dict[int, dict]) -> None:
         labels_arr = np.array([], dtype="U1")
         alternates_arr = np.zeros((0, 0), dtype="U1")
         scores_arr = np.array([], dtype=np.float32)
+        medoids_arr = np.array([], dtype=np.int32)
     else:
         cids = sorted(labels_dict.keys())
         ids_arr = np.array(cids, dtype=np.int32)
@@ -334,6 +371,10 @@ def _save_labels(cache_path: Path, labels_dict: dict[int, dict]) -> None:
             ]
         )
         scores_arr = np.array([labels_dict[c]["score"] for c in cids], dtype=np.float32)
+        # medoid_index may be absent for back-compat reads; sentinel -1 marks "unknown".
+        medoids_arr = np.array(
+            [labels_dict[c].get("medoid_index", -1) for c in cids], dtype=np.int32
+        )
 
     tmp_path = cache_path.with_name(cache_path.name + ".tmp")
     with tmp_path.open("wb") as fh:
@@ -343,6 +384,7 @@ def _save_labels(cache_path: Path, labels_dict: dict[int, dict]) -> None:
             labels=labels_arr,
             alternates=alternates_arr,
             scores=scores_arr,
+            medoids=medoids_arr,
         )
     tmp_path.replace(cache_path)
 

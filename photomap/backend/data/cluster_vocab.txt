@@ -12,32 +12,24 @@ alley
 amphitheater
 amusement arcade
 amusement park
-apartment building/outdoor
 aquarium
 aqueduct
 arcade
 arch
 archaelogical excavation
 archive
-arena/hockey
-arena/performance
-arena/rodeo
 army base
 art gallery
 art school
 art studio
 artists loft
+asia temple
 assembly line
-athletic field/outdoor
-atrium/public
 attic
 auditorium
 auto factory
 auto showroom
 badlands
-bakery/shop
-balcony/exterior
-balcony/interior
 ball pit
 ballroom
 bamboo forest
@@ -47,11 +39,9 @@ bar
 barn
 barndoor
 baseball field
+baseball stadium
 basement
-basketball court/indoor
 bathroom
-bazaar/indoor
-bazaar/outdoor
 beach
 beach house
 beauty salon
@@ -65,25 +55,20 @@ boardwalk
 boat deck
 boathouse
 bookstore
-booth/indoor
 botanical garden
-bow window/indoor
 bowling alley
 boxing ring
 bridge
+broadleaf forest
 building facade
 bullring
 burial chamber
 bus interior
-bus station/indoor
 butchers shop
 butte
-cabin/outdoor
 cafeteria
 campsite
 campus
-canal/natural
-canal/urban
 candy store
 canyon
 car interior
@@ -94,8 +79,6 @@ cemetery
 chalet
 chemistry lab
 childs room
-church/indoor
-church/outdoor
 classroom
 clean room
 cliff
@@ -117,17 +100,15 @@ courtyard
 creek
 crevasse
 crosswalk
+cultivated field
 dam
 delicatessen
 department store
 desert road
-desert/sand
-desert/vegetation
-diner/outdoor
 dining hall
 dining room
 discotheque
-doorway/outdoor
+door elevator
 dorm room
 downtown
 dressing room
@@ -135,89 +116,92 @@ driveway
 drugstore
 elevator lobby
 elevator shaft
-elevator/door
 embassy
 engine room
 entrance hall
-escalator/indoor
 excavation
+exterior balcony
+exterior gazebo
 fabric store
 farm
 fastfood restaurant
 field road
-field/cultivated
-field/wild
 fire escape
 fire station
 fishpond
-flea market/indoor
-florist shop/indoor
 food court
 football field
+football stadium
 forest path
 forest road
-forest/broadleaf
 formal garden
 fountain
 galley
-garage/indoor
-garage/outdoor
 gas station
-gazebo/exterior
-general store/indoor
-general store/outdoor
 gift shop
 glacier
 golf course
-greenhouse/indoor
-greenhouse/outdoor
 grotto
-gymnasium/indoor
-hangar/indoor
-hangar/outdoor
 harbor
 hardware store
 hayfield
 heliport
 highway
+hockey arena
 home office
 home theater
 hospital
 hospital room
 hot spring
 hotel room
-hotel/outdoor
 house
-hunting lodge/outdoor
 ice cream parlor
 ice floe
 ice shelf
-ice skating rink/indoor
-ice skating rink/outdoor
 iceberg
 igloo
+indoor basketball court
+indoor bazaar
+indoor booth
+indoor bow window
+indoor bus station
+indoor church
+indoor escalator
+indoor flea market
+indoor florist shop
+indoor garage
+indoor general store
+indoor greenhouse
+indoor gymnasium
+indoor hangar
+indoor ice skating rink
+indoor jacuzzi
+indoor library
+indoor market
+indoor movie theater
+indoor museum
+indoor parking garage
+indoor pub
+indoor shopping mall
+indoor stage
+indoor swimming pool
 industrial area
-inn/outdoor
+interior balcony
 islet
-jacuzzi/indoor
 jail cell
 japanese garden
 jewelry shop
 junkyard
 kasbah
-kennel/outdoor
 kindergarden classroom
 kitchen
 lagoon
-lake/natural
 landfill
 landing deck
 laundromat
 lawn
 lecture room
 legislative chamber
-library/indoor
-library/outdoor
 lighthouse
 living room
 loading dock
@@ -226,28 +210,24 @@ lock chamber
 locker room
 mansion
 manufactured home
-market/indoor
-market/outdoor
 marsh
 martial arts gym
 mausoleum
 medina
 mezzanine
-moat/water
-mosque/outdoor
 motel
 mountain
 mountain path
 mountain snowy
-movie theater/indoor
-museum/indoor
-museum/outdoor
 music studio
+natural canal
 natural history museum
+natural lake
 nursery
 nursing home
 oast house
 ocean
+ocean deep underwater
 office
 office building
 office cubicles
@@ -255,16 +235,40 @@ oilrig
 operating room
 orchard
 orchestra pit
+outdoor apartment building
+outdoor athletic field
+outdoor bazaar
+outdoor cabin
+outdoor church
+outdoor diner
+outdoor doorway
+outdoor garage
+outdoor general store
+outdoor greenhouse
+outdoor hangar
+outdoor hotel
+outdoor hunting lodge
+outdoor ice skating rink
+outdoor inn
+outdoor kennel
+outdoor library
+outdoor market
+outdoor mosque
+outdoor museum
+outdoor parking garage
+outdoor stage
+outdoor swimming pool
+outdoor synagogue
+outdoor volleyball court
 pagoda
 palace
 pantry
 park
-parking garage/indoor
-parking garage/outdoor
 parking lot
 pasture
 patio
 pavilion
+performance arena
 pet shop
 pharmacy
 phone booth
@@ -272,13 +276,15 @@ physics laboratory
 picnic area
 pier
 pizzeria
+platform subway station
+platform train station
 playground
 playroom
 plaza
 pond
 porch
 promenade
-pub/indoor
+public atrium
 racecourse
 raceway
 raft
@@ -294,10 +300,12 @@ restaurant patio
 rice paddy
 river
 rock arch
+rodeo arena
 roof garden
 rope bridge
 ruin
 runway
+sand desert
 sandbox
 sauna
 schoolhouse
@@ -305,8 +313,8 @@ science museum
 server room
 shed
 shoe shop
+shop bakery
 shopfront
-shopping mall/indoor
 shower
 ski resort
 ski slope
@@ -315,48 +323,39 @@ skyscraper
 slum
 snowfield
 soccer field
+soccer stadium
 stable
-stadium/baseball
-stadium/football
-stadium/soccer
-stage/indoor
-stage/outdoor
 staircase
 storage room
 street
-subway station/platform
 supermarket
 sushi bar
 swamp
 swimming hole
-swimming pool/indoor
-swimming pool/outdoor
-synagogue/outdoor
 television room
 television studio
-temple/asia
 throne room
 ticket booth
 topiary garden
 tower
 toyshop
 train interior
-train station/platform
 tree farm
 tree house
 trench
 tundra
-underwater/ocean deep
+urban canal
 utility room
 valley
 vegetable garden
+vegetation desert
 veterinarians office
 viaduct
 village
 vineyard
 volcano
-volleyball court/outdoor
 waiting room
+water moat
 water park
 water tower
 waterfall
@@ -364,6 +363,7 @@ watering hole
 wave
 wet bar
 wheat field
+wild field
 wind farm
 windmill
 yard

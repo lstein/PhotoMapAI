@@ -296,6 +296,55 @@ def test_compute_cluster_labels_excludes_noise(tmp_path, monkeypatch):
     assert result == {}
 
 
+def test_compute_cluster_labels_includes_medoid_index(synthetic_album):
+    """Each non-noise cluster should report a medoid_index that's an actual member."""
+    result = cluster_labels.compute_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3, top_k=3
+    )
+    # Synthetic data: 10 images per cluster, in contiguous ranges 0-9, 10-19, 20-29.
+    # modification_times = arange(30), so sorted index == raw index. The medoid
+    # for cluster k must therefore land in [k*10, (k+1)*10).
+    for cid in (0, 1, 2):
+        assert "medoid_index" in result[cid]
+        m = result[cid]["medoid_index"]
+        assert isinstance(m, int)
+        assert cid * 10 <= m < (cid + 1) * 10, (
+            f"cluster {cid} medoid {m} not in its member range [{cid*10}, {(cid+1)*10})"
+        )
+
+
+def test_cached_labels_round_trip_medoid(synthetic_album):
+    """Saved medoid survives the cache round-trip with no drift."""
+    fresh = cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    reloaded = cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    for cid, info in fresh.items():
+        assert reloaded[cid]["medoid_index"] == info["medoid_index"]
+
+
+def test_legacy_cache_without_medoid_still_loads(synthetic_album):
+    """A cache file written before medoid support should still deserialize."""
+    # Build a cache, then strip the medoids field to simulate a pre-medoid file.
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    cache_path = cluster_labels.labels_cache_path(synthetic_album, 1.0, 3)
+    data = dict(np.load(cache_path, allow_pickle=False))
+    data.pop("medoids", None)
+    np.savez(cache_path, **data)
+
+    reloaded = cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    # All three clusters should still be present; medoid_index just omitted.
+    assert set(reloaded.keys()) == {0, 1, 2}
+    for info in reloaded.values():
+        assert "medoid_index" not in info
+
+
 def test_compute_cluster_labels_top_k_one(synthetic_album):
     result = cluster_labels.compute_cluster_labels(
         synthetic_album, cluster_eps=1.0, cluster_min_samples=3, top_k=1
@@ -343,6 +392,36 @@ def test_get_or_build_invalidates_on_embeddings_touch(synthetic_album, monkeypat
     # Bump source mtime forward
     future = time.time() + 5
     os.utime(synthetic_album.embeddings_path, (future, future))
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    assert call_count["n"] == 2
+
+
+def test_get_or_build_invalidates_on_vocab_touch(synthetic_album, monkeypatch, tmp_path):
+    """Editing cluster_vocab.txt must invalidate every per-album labels cache."""
+    import os
+    import time
+
+    # Synthetic vocab file so we can bump its mtime in isolation.
+    vocab = tmp_path / "vocab.txt"
+    vocab.write_text("abbey\nwedding\nmountain\nkitchen\ncar\n", encoding="utf-8")
+    monkeypatch.setattr(cluster_labels, "vocab_file_path", lambda: vocab)
+
+    call_count = {"n": 0}
+    real_compute = cluster_labels.compute_cluster_labels
+
+    def counting_compute(*args, **kwargs):
+        call_count["n"] += 1
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(cluster_labels, "compute_cluster_labels", counting_compute)
+
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    future = time.time() + 5
+    os.utime(vocab, (future, future))
     cluster_labels.get_or_build_cluster_labels(
         synthetic_album, cluster_eps=1.0, cluster_min_samples=3
     )
