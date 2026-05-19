@@ -1,6 +1,76 @@
 // cluster-utils.js
 // Shared utilities for cluster color management and calculations
 
+// Feature flag: when false, the cluster vocabulary label is shown ONLY in the
+// UMAP hover popup (the original opt-in surface). When true, the label is also
+// spliced into the score-display pill and the metadata-drawer badge. Flip to
+// false to back out the score-display + metadata-drawer additions without
+// touching their call sites.
+export const SHOW_CLUSTER_LABELS_IN_BADGES = true;
+
+// Module-level cache of {cluster_id: {label, alternates, score, medoid_index}}
+// populated by umap.js's fetchUmapData. Other modules read it via
+// getClusterLabelInfo() — they shouldn't import the umap module directly.
+let clusterLabels = {};
+
+export function setClusterLabels(labels) {
+  clusterLabels = labels || {};
+}
+
+export function getClusterLabelInfo(cluster) {
+  // JSON keys are strings; the rest of the app passes ints. Coerce here.
+  return clusterLabels[String(cluster)] || null;
+}
+
+// Per-image label cache + in-flight deduper for the /image_label endpoint.
+// Bounded LRU so navigating large albums doesn't grow unboundedly. The
+// backend also caches; this is a session-local layer so repeated drawer
+// opens for the same image don't even do a network round trip.
+const imageLabelCache = new Map();
+const imageLabelInFlight = new Map();
+const IMAGE_LABEL_CACHE_MAX = 1024;
+
+export function getImageLabelInfo(album, index) {
+  const key = `${album}:${index}`;
+  if (imageLabelCache.has(key)) {
+    const val = imageLabelCache.get(key);
+    imageLabelCache.delete(key);
+    imageLabelCache.set(key, val); // LRU bump
+    return Promise.resolve(val);
+  }
+  if (imageLabelInFlight.has(key)) {
+    return imageLabelInFlight.get(key);
+  }
+  const promise = (async () => {
+    try {
+      const resp = await fetch(`image_label/${encodeURIComponent(album)}/${index}`);
+      if (!resp.ok) {
+        return null;
+      }
+      const body = await resp.json();
+      const value = body && body.label ? body : null;
+      imageLabelCache.set(key, value);
+      while (imageLabelCache.size > IMAGE_LABEL_CACHE_MAX) {
+        const firstKey = imageLabelCache.keys().next().value;
+        imageLabelCache.delete(firstKey);
+      }
+      return value;
+    } catch (err) {
+      console.warn("image_label fetch failed:", err);
+      return null;
+    } finally {
+      imageLabelInFlight.delete(key);
+    }
+  })();
+  imageLabelInFlight.set(key, promise);
+  return promise;
+}
+
+export function clearImageLabelCache() {
+  imageLabelCache.clear();
+  imageLabelInFlight.clear();
+}
+
 // Standard cluster color palette used across the application
 export const CLUSTER_PALETTE = [
   "#e41a1c",

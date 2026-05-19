@@ -155,6 +155,75 @@ def do_duplicate_search():
     # find_similar_images_fast(args.embeddings)
     embeddings.find_duplicate_clusters()
 
+
+def do_rebuild_cluster_labels():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Pre-build the cluster label cache (and vocab embeddings) for an album.",
+    )
+    parser.add_argument(
+        "--embeddings",
+        type=str,
+        required=True,
+        help="Path to the album's .npz embeddings file.",
+    )
+    parser.add_argument(
+        "--eps", type=float, default=0.07, help="DBSCAN eps (default: 0.07).",
+    )
+    parser.add_argument(
+        "--min-samples", type=int, default=10, help="DBSCAN min_samples (default: 10).",
+    )
+    parser.add_argument(
+        "--top-k", type=int, default=3,
+        help="Number of candidate labels stored per cluster (default: 3).",
+    )
+    parser.add_argument(
+        "--encoder-spec", type=str, default=None,
+        help="Encoder spec override. Defaults to the spec stamped in the .npz, "
+             "falling back to the legacy CLIP spec if unstamped.",
+    )
+
+    args = parser.parse_args()
+
+    from .cluster_labels import get_or_build_cluster_labels
+    from .embeddings import peek_encoder_spec
+    from .encoders import LEGACY_ENCODER_SPEC
+
+    embeddings_path = Path(args.embeddings)
+    if not embeddings_path.exists():
+        raise FileNotFoundError(f"Embeddings file {embeddings_path} does not exist.")
+
+    if args.encoder_spec:
+        spec = args.encoder_spec
+    else:
+        try:
+            spec = peek_encoder_spec(embeddings_path)
+        except Exception:
+            spec = LEGACY_ENCODER_SPEC
+
+    embeddings = Embeddings(embeddings_path=embeddings_path, encoder_spec=spec)
+
+    print(f"Building cluster labels for {embeddings_path}")
+    print(f"  encoder_spec: {spec}")
+    print(f"  eps:          {args.eps}")
+    print(f"  min_samples:  {args.min_samples}")
+
+    labels = get_or_build_cluster_labels(
+        embeddings,
+        cluster_eps=args.eps,
+        cluster_min_samples=args.min_samples,
+        top_k=args.top_k,
+    )
+
+    print(f"Done — labels for {len(labels)} clusters.")
+    for cid in sorted(labels.keys())[:5]:
+        info = labels[cid]
+        print(f"  cluster {cid}: {info['label']!r}  (score={info['score']:.3f})")
+    if len(labels) > 5:
+        print(f"  ... and {len(labels) - 5} more")
+
+
 def main():
     prog = Path(sys.argv[0]).name
     if prog == "index_images":
@@ -167,12 +236,15 @@ def main():
         do_update_images()
     elif prog == "find_duplicate_images":
         do_duplicate_search()
+    elif prog == "rebuild_cluster_labels":
+        do_rebuild_cluster_labels()
 
     else:
-        print("Usage: index_images, search_images, or search_text")
         print(
-            "Run 'index_images --help', 'search_images --help', or 'search_text --help' for more information."
+            "Usage: index_images, update_images, search_images, search_text, "
+            "find_duplicate_images, or rebuild_cluster_labels"
         )
+        print("Run any of the above with --help for more information.")
 
 
 if __name__ == "__main__":
