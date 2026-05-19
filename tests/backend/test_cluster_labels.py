@@ -264,6 +264,63 @@ def test_vocab_cache_invalidates_on_user_file_edit(
     assert encoder.encode_calls == calls_before + 1
 
 
+def test_vocab_cache_invalidates_when_user_file_removed(
+    tiny_vocab, isolated_cache, fake_encoder, monkeypatch, tmp_path
+):
+    """Deleting the user extras file should rebuild — the phrase set shrank.
+
+    mtime-only invalidation would miss this: the bundled vocab's mtime doesn't
+    change, and the cache's own mtime is newer than that, so a naive check
+    would keep returning a stale cache that still has the user's extra phrases
+    baked in.
+    """
+    user = tmp_path / "extras.txt"
+    user.write_text("stadium\nlibrary\n", encoding="utf-8")
+    monkeypatch.setattr(cluster_labels, "user_vocab_file_path", lambda: user)
+
+    spec = "fake:user-removed"
+    phrases_before, _ = cluster_labels.get_or_build_vocab_embeddings(spec)
+    assert "stadium" in phrases_before
+    encoder = fake_encoder[spec]
+    calls_before = encoder.encode_calls
+
+    user.unlink()
+
+    phrases_after, _ = cluster_labels.get_or_build_vocab_embeddings(spec)
+    assert "stadium" not in phrases_after
+    assert "library" not in phrases_after
+    assert encoder.encode_calls == calls_before + 1  # rebuilt
+
+
+def test_vocab_cache_invalidates_when_user_file_added(
+    tiny_vocab, isolated_cache, fake_encoder, monkeypatch, tmp_path
+):
+    """Adding a user extras file later should rebuild even if its mtime is old.
+
+    A user may copy/restore an extras file with `cp -p` or `touch -r` such that
+    its mtime ends up older than the existing vocab cache. The fingerprint
+    check catches this where mtime alone would not.
+    """
+    import os
+
+    spec = "fake:user-added"
+    cluster_labels.get_or_build_vocab_embeddings(spec)  # build cache, no user file
+    encoder = fake_encoder[spec]
+    calls_before = encoder.encode_calls
+
+    # Create the user file but back-date it to before the cache was written.
+    user = tmp_path / "extras.txt"
+    user.write_text("stadium\n", encoding="utf-8")
+    cache_path = cluster_labels.vocab_cache_path(spec)
+    past = cache_path.stat().st_mtime - 60
+    os.utime(user, (past, past))
+    monkeypatch.setattr(cluster_labels, "user_vocab_file_path", lambda: user)
+
+    phrases, _ = cluster_labels.get_or_build_vocab_embeddings(spec)
+    assert "stadium" in phrases
+    assert encoder.encode_calls == calls_before + 1
+
+
 def test_load_vocab_phrases_lowercases():
     p = Path(__file__).parent / "fixtures_vocab.txt"
     p.write_text("UPPERCASE\nMixedCase Phrase\n", encoding="utf-8")
@@ -600,6 +657,82 @@ def test_get_or_build_invalidates_on_vocab_touch(synthetic_album, monkeypatch, t
     )
     future = time.time() + 5
     os.utime(vocab, (future, future))
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    assert call_count["n"] == 2
+
+
+def test_get_or_build_invalidates_when_user_vocab_removed(
+    synthetic_album, monkeypatch, tmp_path
+):
+    """Removing the user extras file should invalidate per-album labels caches.
+
+    Mtime-only invalidation misses this case (bundled vocab mtime is unchanged
+    and cache is newer than that), so the fingerprint check is what catches it.
+    """
+    call_count = {"n": 0}
+    real_compute = cluster_labels.compute_cluster_labels
+
+    def counting_compute(*args, **kwargs):
+        call_count["n"] += 1
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(cluster_labels, "compute_cluster_labels", counting_compute)
+
+    # Point user_vocab_file_path at a real user file with extras.
+    user = tmp_path / "extras.txt"
+    user.write_text("stadium\nlibrary\n", encoding="utf-8")
+    monkeypatch.setattr(cluster_labels, "user_vocab_file_path", lambda: user)
+
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    assert call_count["n"] == 1
+
+    # Now remove the user file — phrase set shrinks, fingerprint changes.
+    user.unlink()
+
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    assert call_count["n"] == 2  # rebuilt
+
+
+def test_legacy_labels_cache_without_fingerprint_rebuilds(synthetic_album, monkeypatch):
+    """A cache file written before fingerprint support is force-rebuilt once.
+
+    Before the fingerprint stamp existed, the only invalidation signal was
+    mtime — which can't detect user-vocab file removal. We can't tell whether a
+    fingerprint-less cache was built under the buggy regime, so we always
+    rebuild to be safe. After this one rebuild the cache gets stamped and the
+    normal fingerprint path takes over.
+    """
+    import numpy as np
+
+    call_count = {"n": 0}
+    real_compute = cluster_labels.compute_cluster_labels
+
+    def counting_compute(*args, **kwargs):
+        call_count["n"] += 1
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(cluster_labels, "compute_cluster_labels", counting_compute)
+
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    cache_path = cluster_labels.labels_cache_path(synthetic_album, 1.0, 3)
+    data = dict(np.load(cache_path, allow_pickle=False))
+    data.pop("vocab_fingerprint", None)
+    np.savez(cache_path, **data)
+
+    reloaded = cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    assert call_count["n"] == 2  # legacy file forced a rebuild
+    assert set(reloaded.keys()) == {0, 1, 2}
+    # After rebuild the fingerprint is back, so a third call hits the cache.
     cluster_labels.get_or_build_cluster_labels(
         synthetic_album, cluster_eps=1.0, cluster_min_samples=3
     )
