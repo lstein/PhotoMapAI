@@ -1,5 +1,6 @@
 // score-display.js
 // This file manages the score display functionality, showing and hiding the score overlay.
+import { getClusterLabelInfo, SHOW_CLUSTER_LABELS_IN_BADGES } from "./cluster-utils.js";
 import { isColorLight } from "./utils.js"; // Utility function to check if a color is light
 
 // Star SVG icons for favorites display
@@ -147,7 +148,20 @@ export class ScoreDisplay {
    */
   showCluster(cluster, color, index = null, total = null) {
     if (cluster !== undefined && cluster !== null) {
-      const clusterText = cluster === "unclustered" ? "unclustered" : `Cluster ${cluster}`;
+      let clusterText = cluster === "unclustered" ? "unclustered" : `Cluster ${cluster}`;
+      // Splice in the vocabulary label when available — gated by
+      // SHOW_CLUSTER_LABELS_IN_BADGES so this whole addition can be backed out
+      // with a single flag flip in cluster-utils.js.
+      let alternatesLine = null;
+      if (SHOW_CLUSTER_LABELS_IN_BADGES) {
+        const labelInfo = cluster === "unclustered" ? null : getClusterLabelInfo(cluster);
+        if (labelInfo) {
+          clusterText = `${clusterText} · ${labelInfo.label}`;
+          if (labelInfo.alternates?.length) {
+            alternatesLine = `also: ${labelInfo.alternates.join(", ")}`;
+          }
+        }
+      }
       let text = "";
       if (index !== null && total !== null) {
         text = `${index + 1}/${total} (${clusterText})`;
@@ -156,6 +170,20 @@ export class ScoreDisplay {
       }
       this.lastDisplayedText = text;
       this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
+      // The pill is max-width-clipped, so always surface the full text in the
+      // tooltip when a label is shown. Alternates ride along on a second line.
+      const titleParts = [];
+      if (SHOW_CLUSTER_LABELS_IN_BADGES) {
+        titleParts.push(text);
+        if (alternatesLine) {
+          titleParts.push(alternatesLine);
+        }
+      }
+      if (titleParts.length) {
+        this.scoreElement.title = titleParts.join("\n");
+      } else {
+        this.scoreElement.removeAttribute("title");
+      }
       this.scoreElement.style.display = "flex";
       this.scoreElement.classList.add("visible");
       this.scoreElement.classList.remove("hidden");

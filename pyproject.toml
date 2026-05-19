@@ -43,7 +43,7 @@ dependencies = [
     "requests",
     "scikit-learn",
     "setuptools<67",  # Avoid deprecation warning from CLIP dependency
-    "torch ~= 2.9.0",
+    "torch",
     "tqdm",
     "transformers",  # SigLIP encoder backend
     "umap-learn",
@@ -79,6 +79,7 @@ include = ["photomap*"]  # Include photomap package and subpackages
 # Include package data files
 [tool.setuptools.package-data]
 "photomap.frontend" = ["static/**", "templates/**"]
+"photomap.backend" = ["data/*.txt", "data/*.md"]
 
 [project.scripts]
 index_images = "photomap.backend.imagetool:main"
@@ -86,6 +87,7 @@ update_images = "photomap.backend.imagetool:main"
 search_images = "photomap.backend.imagetool:main"
 search_text = "photomap.backend.imagetool:main"
 find_duplicate_images = "photomap.backend.imagetool:main"
+rebuild_cluster_labels = "photomap.backend.imagetool:main"
 start_photomap = "photomap.backend.photomap_server:main"
 
 [tool.ruff]

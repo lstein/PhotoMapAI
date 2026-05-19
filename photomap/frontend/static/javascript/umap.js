@@ -1,7 +1,7 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-manager.js";
-import { CLUSTER_PALETTE } from "./cluster-utils.js";
+import { CLUSTER_PALETTE, getClusterLabelInfo, setClusterLabels } from "./cluster-utils.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
@@ -130,8 +130,31 @@ export async function fetchUmapData() {
   showUmapSpinner();
   try {
     const eps = parseFloat(document.getElementById("umapEpsSpinner").value) || 0.07;
-    const response = await fetch(`umap_data/${encodeURIComponent(state.album)}?cluster_eps=${eps}`);
+    const album = encodeURIComponent(state.album);
+    // Fetch UMAP data and cluster labels in parallel. Labels are best-effort:
+    // a failure leaves clusterLabels empty and the hover popup falls back to
+    // the bare "Cluster N (size=K)" string. The endpoint compute itself can
+    // be slow on first call (vocab build), but it runs in a thread pool on
+    // the server side so the umap_data response isn't blocked.
+    const [response, labelsResponse] = await Promise.all([
+      fetch(`umap_data/${album}?cluster_eps=${eps}`),
+      fetch(`cluster_labels/${album}?cluster_eps=${eps}`).catch((err) => {
+        console.warn("Cluster labels fetch failed:", err);
+        return null;
+      }),
+    ]);
     points = await response.json();
+    if (labelsResponse?.ok) {
+      try {
+        const body = await labelsResponse.json();
+        setClusterLabels(body.labels || {});
+      } catch (err) {
+        console.warn("Cluster labels parse failed:", err);
+        setClusterLabels({});
+      }
+    } else {
+      setClusterLabels({});
+    }
 
     // Compute clusters and colors
     clusters = [...new Set(points.map((p) => p.cluster))];
@@ -285,8 +308,7 @@ export async function fetchUmapData() {
             let index, cluster;
             if (landmarkCluster !== null) {
               const clusterPoints = points.filter((p) => p.cluster === landmarkCluster);
-              const landmarkPoint = getLandmarkForCluster(clusterPoints);
-              index = landmarkPoint.index;
+              index = getLandmarkImageIndex(landmarkCluster, clusterPoints);
               cluster = landmarkCluster;
             } else {
               index = ptIndex;
@@ -394,16 +416,16 @@ export async function fetchUmapData() {
       const clickedLandmarkCluster = findLandmarkCluster(data.points[0]);
 
       if (clickedLandmarkCluster !== null) {
-        // Get all points in this cluster
+        // Get all points in this cluster, then click through to whatever image
+        // we showed as the landmark thumbnail (medoid when available, else the
+        // 2D-position pick). Keeps display and navigation consistent.
         const clusterPoints = points.filter((p) => p.cluster === clickedLandmarkCluster);
-        // Use the landmark placement algorithm to get the landmark point
-        const landmarkPoint = getLandmarkForCluster(clusterPoints);
-        if (landmarkPoint) {
-          // Check if we should select cluster or image
+        if (clusterPoints.length > 0) {
+          const targetIndex = getLandmarkImageIndex(clickedLandmarkCluster, clusterPoints);
           if (state.umapClickSelectsCluster) {
-            await handleClusterClick(landmarkPoint.index);
+            await handleClusterClick(targetIndex);
           } else {
-            await handleImageClick(landmarkPoint.index);
+            await handleImageClick(targetIndex);
           }
         }
       } else {
@@ -861,7 +883,11 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   // Find cluster color and calculate cluster size
   const clusterColor = getClusterColor(cluster);
   const clusterSize = points.filter((p) => p.cluster === cluster).length;
-  const clusterLabel = cluster === -1 ? "Unclustered" : `Cluster ${cluster} (size=${clusterSize})`;
+  const sizeStr = cluster === -1 ? "Unclustered" : `Cluster ${cluster} (size=${clusterSize})`;
+  // Falls back gracefully when the labels endpoint hasn't populated this
+  // cluster (or is unavailable).
+  const labelInfo = getClusterLabelInfo(cluster);
+  const clusterLabel = labelInfo ? `${labelInfo.label} — ${sizeStr}` : sizeStr;
   const textIsDark = isColorLight(clusterColor) ? "#222" : "#fff";
   const textShadow = isColorLight(clusterColor) ? "0 1px 2px #fff, 0 0px 8px #fff" : "0 1px 2px #000, 0 0px 8px #000";
 
@@ -894,6 +920,19 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   clusterDiv.style.color = textIsDark;
   clusterDiv.style.textShadow = textShadow;
   umapThumbnailDiv.appendChild(clusterDiv);
+
+  // Alternates row, only when present. Inline rather than title=
+  // since the popup disappears on mouse move (no chance to hover it).
+  if (labelInfo?.alternates?.length) {
+    const altDiv = document.createElement("div");
+    altDiv.className = "umap-thumbnail-cluster-alternates";
+    altDiv.textContent = `also: ${labelInfo.alternates.join(", ")}`;
+    altDiv.style.color = textIsDark;
+    altDiv.style.textShadow = textShadow;
+    altDiv.style.fontSize = "0.85em";
+    altDiv.style.opacity = "0.75";
+    umapThumbnailDiv.appendChild(altDiv);
+  }
 
   document.body.appendChild(umapThumbnailDiv);
 
@@ -970,6 +1009,20 @@ function updateUmapColorModeAvailability(searchResults = []) {
 
 // ------------- Handling Landmark Thumbnails -------------
 
+// Picks the image index to display (and navigate to) for a cluster's landmark.
+// The cluster's medoid — the real image whose CLIP embedding is closest to the
+// cluster centroid — is more semantically representative than the 2D-position
+// pick from getLandmarkForCluster, so prefer it when /cluster_labels supplied
+// one. Position of the landmark (the triangle marker) is unaffected; only the
+// thumbnail and click target change.
+function getLandmarkImageIndex(cluster, clusterPoints) {
+  const labelInfo = getClusterLabelInfo(cluster);
+  if (labelInfo && typeof labelInfo.medoid_index === "number") {
+    return labelInfo.medoid_index;
+  }
+  return getLandmarkForCluster(clusterPoints).index;
+}
+
 // Landmark placement algorithm
 function getLandmarkForCluster(pts) {
   // 1. Find X center
@@ -1024,7 +1077,9 @@ function getLargestClustersInView(maxLandmarks = 10) {
       clustersInView.push({
         cluster,
         center: { x: landmark.x, y: landmark.y },
-        representative: landmark.index,
+        // Position from the 2D landmark algorithm; image from the medoid when
+        // the labels endpoint provided one (semantically more representative).
+        representative: getLandmarkImageIndex(cluster, pts),
         color: getClusterColor(cluster),
         size: pts.length,
       });

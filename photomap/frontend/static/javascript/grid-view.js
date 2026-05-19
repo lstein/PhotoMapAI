@@ -1,6 +1,11 @@
 import { addBookmarkIconToSlide } from "./bookmarks.js";
 import { toggleGridSwiperView } from "./events.js";
-import { replaceReferenceImagesWithLinks, updateCurrentImageScore, updateClusterInfo } from "./metadata-drawer.js";
+import {
+  replaceReferenceImagesWithLinks,
+  updateClusterInfo,
+  updateCurrentImageScore,
+  updateImageLabel,
+} from "./metadata-drawer.js";
 import { fetchImageByIndex } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
@@ -709,6 +714,7 @@ class GridViewManager {
 
     // Update cluster information display
     updateClusterInfo(data);
+    updateImageLabel(data);
   }
 
   // These functions act as a semaphore to prevent overlapping batch loads
