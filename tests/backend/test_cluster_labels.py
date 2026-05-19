@@ -191,3 +191,214 @@ def test_empty_vocab(tmp_path, isolated_cache, fake_encoder, monkeypatch):
     phrases, emb = cluster_labels.get_or_build_vocab_embeddings("fake:empty")
     assert phrases == []
     assert emb.shape == (0, FakeEncoder.embedding_dim)
+
+
+# ---------------------------------------------------------------------------
+# Cluster label computation
+# ---------------------------------------------------------------------------
+
+
+D = 16
+SYNTHETIC_PHRASES = ["abbey", "wedding", "mountain", "kitchen", "car"]
+
+
+def _make_synthetic_vocab(seed: int = 0) -> tuple[list[str], np.ndarray]:
+    """Five distinct L2-normalized vectors, one per phrase."""
+    rng = np.random.default_rng(seed)
+    vecs = rng.standard_normal((len(SYNTHETIC_PHRASES), D)).astype(np.float32)
+    vecs /= np.linalg.norm(vecs, axis=1, keepdims=True)
+    return list(SYNTHETIC_PHRASES), vecs
+
+
+def _make_synthetic_album(tmp_path: Path, vocab_vecs: np.ndarray):
+    """Build an embeddings.npz + umap.npz forming 3 clean clusters.
+
+    Cluster k has 10 members whose high-dim mean is exactly vocab_vecs[k]
+    (plus tiny noise) and whose 2D coords sit in a tight blob at (k*5, k*5).
+    """
+    from photomap.backend.embeddings import Embeddings
+
+    rng = np.random.default_rng(42)
+    rows_per_cluster = 10
+    n_clusters = 3
+    n = rows_per_cluster * n_clusters
+
+    high_dim = np.zeros((n, D), dtype=np.float32)
+    umap_coords = np.zeros((n, 2), dtype=np.float32)
+    filenames = np.empty(n, dtype=object)
+    for k in range(n_clusters):
+        start = k * rows_per_cluster
+        end = start + rows_per_cluster
+        members = vocab_vecs[k] + 0.05 * rng.standard_normal((rows_per_cluster, D)).astype(np.float32)
+        members /= np.linalg.norm(members, axis=1, keepdims=True)
+        high_dim[start:end] = members
+        umap_coords[start:end] = np.array([k * 5.0, k * 5.0]) + 0.1 * rng.standard_normal((rows_per_cluster, 2))
+        for j in range(rows_per_cluster):
+            filenames[start + j] = f"cluster{k}_img{j}.jpg"
+
+    embeddings_path = tmp_path / "embeddings.npz"
+    np.savez(
+        embeddings_path,
+        embeddings=high_dim,
+        filenames=filenames,
+        metadata=np.array([{}] * n, dtype=object),
+        modification_times=np.arange(n, dtype=np.float64),
+        model_id="fake:test-encoder",
+        embedding_dim=D,
+    )
+    np.savez(tmp_path / "umap.npz", umap=umap_coords)
+
+    return Embeddings(embeddings_path=embeddings_path, encoder_spec="fake:test-encoder")
+
+
+@pytest.fixture
+def synthetic_album(tmp_path, monkeypatch):
+    """An Embeddings instance over 3-cluster synthetic data, with vocab patched in."""
+    phrases, vocab_vecs = _make_synthetic_vocab()
+    monkeypatch.setattr(
+        cluster_labels,
+        "get_or_build_vocab_embeddings",
+        lambda spec, **kw: (phrases, vocab_vecs),
+    )
+    return _make_synthetic_album(tmp_path, vocab_vecs)
+
+
+def test_compute_cluster_labels_assigns_expected_phrases(synthetic_album):
+    result = cluster_labels.compute_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3, top_k=3
+    )
+    # Three clusters expected, no -1 key
+    assert set(result.keys()) == {0, 1, 2}
+    # Each cluster's top phrase should be the one its centroid was constructed near.
+    # DBSCAN labels in 2D-space order: (0,0) -> cid 0, (5,5) -> cid 1, (10,10) -> cid 2
+    for cid in (0, 1, 2):
+        assert result[cid]["label"] == SYNTHETIC_PHRASES[cid], (
+            f"Cluster {cid} got label {result[cid]['label']!r}; "
+            f"expected {SYNTHETIC_PHRASES[cid]!r}"
+        )
+        assert len(result[cid]["alternates"]) == 2
+        assert SYNTHETIC_PHRASES[cid] not in result[cid]["alternates"]
+        assert 0.0 < result[cid]["score"] <= 1.0
+
+
+def test_compute_cluster_labels_excludes_noise(tmp_path, monkeypatch):
+    phrases, vocab_vecs = _make_synthetic_vocab()
+    monkeypatch.setattr(
+        cluster_labels,
+        "get_or_build_vocab_embeddings",
+        lambda spec, **kw: (phrases, vocab_vecs),
+    )
+    emb = _make_synthetic_album(tmp_path, vocab_vecs)
+    # min_samples high enough that no cluster forms -> all noise -> empty result
+    result = cluster_labels.compute_cluster_labels(
+        emb, cluster_eps=0.01, cluster_min_samples=999, top_k=3
+    )
+    assert result == {}
+
+
+def test_compute_cluster_labels_top_k_one(synthetic_album):
+    result = cluster_labels.compute_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3, top_k=1
+    )
+    for cid in result:
+        assert result[cid]["alternates"] == []
+
+
+def test_get_or_build_caches_and_reuses(synthetic_album, monkeypatch):
+    call_count = {"n": 0}
+    real_compute = cluster_labels.compute_cluster_labels
+
+    def counting_compute(*args, **kwargs):
+        call_count["n"] += 1
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(cluster_labels, "compute_cluster_labels", counting_compute)
+
+    a = cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    b = cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    assert call_count["n"] == 1, "second call should hit the cache"
+    assert a == b
+
+
+def test_get_or_build_invalidates_on_embeddings_touch(synthetic_album, monkeypatch):
+    import os
+    import time
+
+    call_count = {"n": 0}
+    real_compute = cluster_labels.compute_cluster_labels
+
+    def counting_compute(*args, **kwargs):
+        call_count["n"] += 1
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(cluster_labels, "compute_cluster_labels", counting_compute)
+
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    # Bump source mtime forward
+    future = time.time() + 5
+    os.utime(synthetic_album.embeddings_path, (future, future))
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    assert call_count["n"] == 2
+
+
+def test_get_or_build_invalidates_on_umap_touch(synthetic_album, monkeypatch):
+    import os
+    import time
+
+    call_count = {"n": 0}
+    real_compute = cluster_labels.compute_cluster_labels
+
+    def counting_compute(*args, **kwargs):
+        call_count["n"] += 1
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(cluster_labels, "compute_cluster_labels", counting_compute)
+
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    future = time.time() + 5
+    umap_path = synthetic_album.embeddings_path.parent / "umap.npz"
+    os.utime(umap_path, (future, future))
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    assert call_count["n"] == 2
+
+
+def test_per_eps_caches_are_independent(synthetic_album):
+    p1 = cluster_labels.labels_cache_path(synthetic_album, 1.0, 3)
+    p2 = cluster_labels.labels_cache_path(synthetic_album, 0.5, 3)
+    p3 = cluster_labels.labels_cache_path(synthetic_album, 1.0, 5)
+    assert p1 != p2
+    assert p1 != p3
+    assert p2 != p3
+
+
+def test_empty_cluster_result_is_cached(synthetic_album, monkeypatch):
+    call_count = {"n": 0}
+    real_compute = cluster_labels.compute_cluster_labels
+
+    def counting_compute(*args, **kwargs):
+        call_count["n"] += 1
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(cluster_labels, "compute_cluster_labels", counting_compute)
+
+    # No clusters form (min_samples too high) — but the empty result should still cache.
+    a = cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=999
+    )
+    b = cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=999
+    )
+    assert a == {} and b == {}
+    assert call_count["n"] == 1, "empty result should be cached, not recomputed"
