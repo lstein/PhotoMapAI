@@ -371,6 +371,7 @@ function onDrawerMouseDown(e) {
     const rect = container.getBoundingClientRect();
     initialLeft = rect.left;
     initialTop = rect.top;
+    container.classList.add("dragging");
 
     document.body.style.userSelect = "none";
     e.preventDefault();
@@ -394,7 +395,11 @@ function onDrawerMouseMove(e) {
 }
 
 function onDrawerMouseUp() {
+  if (!isDraggingDrawer) {
+    return;
+  }
   isDraggingDrawer = false;
+  document.getElementById("bannerDrawerContainer")?.classList.remove("dragging");
   document.body.style.userSelect = "";
 }
 
@@ -417,6 +422,7 @@ function onDrawerTouchStart(e) {
     const rect = container.getBoundingClientRect();
     initialLeft = rect.left;
     initialTop = rect.top;
+    container.classList.add("dragging");
 
     document.body.style.userSelect = "none";
     e.preventDefault();
@@ -440,7 +446,11 @@ function onDrawerTouchMove(e) {
 }
 
 function onDrawerTouchEnd() {
+  if (!isDraggingDrawer) {
+    return;
+  }
   isDraggingDrawer = false;
+  document.getElementById("bannerDrawerContainer")?.classList.remove("dragging");
   document.body.style.userSelect = "";
 }
 
