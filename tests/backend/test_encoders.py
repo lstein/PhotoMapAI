@@ -455,14 +455,17 @@ def test_idle_watcher_respects_encode_activity(monkeypatch):
     # Recent encode keeps the encoder hot via the per-instance stamp.
     encoder.encode_text(["x"])
 
-    encoders_module.start_idle_watcher(timeout_seconds=0.05, poll_interval=0.05)
+    # Timeout must be comfortably larger than the encode cadence so a slow
+    # scheduler (notably macOS GHA runners) doesn't put the watcher tick more
+    # than `timeout_seconds` after the last encode. The watcher also clamps
+    # poll_interval to a 0.1s floor, so the encode cadence must stay well
+    # under both bounds.
+    encoders_module.start_idle_watcher(timeout_seconds=0.5, poll_interval=0.05)
     try:
-        # Poll a few cycles, simulating the watcher seeing fresh encodes
-        # arrive between its wake-ups.
-        deadline = time_module.monotonic() + 0.5
+        deadline = time_module.monotonic() + 1.0
         while time_module.monotonic() < deadline:
             encoder.encode_text(["x"])  # keeps _last_use_monotonic fresh
-            time_module.sleep(0.05)
+            time_module.sleep(0.02)
     finally:
         encoders_module.stop_idle_watcher()
 
