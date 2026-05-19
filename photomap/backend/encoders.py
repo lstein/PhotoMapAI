@@ -153,6 +153,13 @@ class ImageTextEncoder(ABC):
 
     def _ensure_on_device(self) -> None:
         """If offloaded, move model weights back to ``self.device`` for the next encode."""
+        # Stamp every encode call's timestamp so the idle watcher sees activity
+        # mid-loop. Without this, `_search_encoder_last_access` only ticks on
+        # `get_cached_encoder` calls — a long vocab build does ONE cache lookup
+        # then many encodes, so the watcher thinks the encoder is idle and
+        # offloads it between batches, forcing a reload on the next encode
+        # (~10s thrash cycle observed during 30+ batch vocab rebuilds).
+        self.__dict__["_last_use_monotonic"] = time.monotonic()
         if not self.is_offloaded:
             return
         with self._device_lock():
@@ -518,6 +525,13 @@ def _idle_watcher_loop(timeout_seconds: float, poll_interval: float) -> None:
             ]
         for _key, encoder in stale:
             if encoder.is_offloaded:
+                continue
+            # The cache-keyed timestamp only ticks on get_cached_encoder calls,
+            # but encoders also update their own `_last_use_monotonic` on every
+            # encode (via _ensure_on_device). A long encode loop holds the
+            # encoder hot via the latter even though the cache stamp is stale.
+            last_use = getattr(encoder, "_last_use_monotonic", 0.0)
+            if now - last_use < timeout_seconds:
                 continue
             try:
                 encoder.offload()

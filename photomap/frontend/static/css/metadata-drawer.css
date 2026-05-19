@@ -386,3 +386,14 @@
   opacity: 1;
   filter: brightness(1.2);
 }
+
+/* Per-image vocabulary label, lazy-fetched from /image_label and rendered
+   beneath the cluster info badge. Distinct from the cluster label (which
+   describes the cluster's overall centroid). Smaller and dimmer because
+   it's secondary information. */
+.image-label-row {
+  margin-top: 0.35em;
+  font-size: 0.9em;
+  opacity: 0.85;
+  font-style: italic;
+}
