@@ -25,6 +25,11 @@ import './javascript/utils.js';
 import './javascript/curation.js';
 
 backStack.setNavigator((entry) => {
-  slideState.navigateToIndex(entry.globalIndex, entry.isSearchMode);
+  // Always restore by global index. Passing isSearchIndex=true would make
+  // setCurrentIndex treat entry.globalIndex as a search-results index and
+  // clamp it to the search size (which would always land on the last result).
+  // With isSearchIndex=false, setCurrentIndex sets the global position and
+  // resolves the matching search index if one exists in the active search.
+  slideState.navigateToIndex(entry.globalIndex, false);
 });
 backStack.init();
