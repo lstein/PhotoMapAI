@@ -1,7 +1,56 @@
 """
 This module provides utility functions for the PhotoMap application."""
 
+import os
 import socket
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+
+def atomic_savez(path: Path, **arrays: Any) -> None:
+    """Write a ``.npz`` archive to ``path`` atomically.
+
+    Writes to a sibling ``<name>.tmp`` and then ``Path.replace``s into place,
+    so a crash or concurrent reader never sees a half-written file. Callers
+    that previously called ``np.savez(path, ...)`` directly risked leaving a
+    truncated index that the next read would fail to load.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(path.name + ".tmp")
+    try:
+        with tmp_path.open("wb") as fh:
+            np.savez(fh, **arrays)
+        os.replace(tmp_path, path)
+    except BaseException:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        raise
+
+
+def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Write ``text`` to ``path`` atomically via a ``.tmp`` rename.
+
+    Used for long-lived config files where a partial write would leave the
+    user unable to reload the app.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(path.name + ".tmp")
+    try:
+        with tmp_path.open("w", encoding=encoding) as fh:
+            fh.write(text)
+        os.replace(tmp_path, path)
+    except BaseException:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        raise
 
 
 def get_public_ip_and_hostname():

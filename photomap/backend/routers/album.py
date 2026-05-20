@@ -291,6 +291,18 @@ def validate_image_access(album_config, image_path: Path) -> bool:
     # The resolve() calls shouldn't really be necessary here, but they fix problems arising
     # on mapped Windows network drive paths.
     check_album_lock(album_config.key)  # May raise a 403 exception
+
+    # Reject symlinks outright. ``resolve()`` + ``is_relative_to`` already
+    # blocks symlinks whose target lives outside the album, but a flat reject
+    # also closes a TOCTOU window between this check and the eventual file
+    # open, and shields against attacks that swap a regular file for a
+    # symlink after indexing.
+    try:
+        if image_path.is_symlink():
+            return False
+    except OSError:
+        return False
+
     return any(
         [
             image_path.resolve().is_relative_to(Path(p).resolve())

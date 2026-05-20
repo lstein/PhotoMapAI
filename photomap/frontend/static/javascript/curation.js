@@ -578,7 +578,11 @@ function setupEventListeners() {
       const response = await fetch("api/curation/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filenames: filesToExport, output_folder: path }),
+        body: JSON.stringify({
+          album: state.album,
+          filenames: filesToExport,
+          output_folder: path,
+        }),
       });
       const data = await response.json();
       alert(`Exported ${data.exported} files.`);

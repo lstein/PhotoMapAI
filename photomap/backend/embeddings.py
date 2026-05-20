@@ -44,6 +44,7 @@ from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
 from .progress import progress_tracker
+from .util import atomic_savez
 
 logger = logging.getLogger(__name__)
 
@@ -675,10 +676,8 @@ class Embeddings(BaseModel):
 
     def _save_embeddings(self, index_result: IndexResult) -> None:
         """Save embeddings to disk and clear cache."""
-        # Ensure directory exists
         logger.info(f"Saving embeddings to {self.embeddings_path}")
-        self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
-        np.savez(
+        atomic_savez(
             self.embeddings_path,
             embeddings=index_result.embeddings,
             filenames=index_result.filenames,
@@ -1150,7 +1149,7 @@ class Embeddings(BaseModel):
 
         cache_file = self.embeddings_path.parent / "umap.npz"
         umap_embeddings = np.asarray(umap_embeddings)
-        np.savez(cache_file, umap=umap_embeddings)
+        atomic_savez(cache_file, umap=umap_embeddings)
         logger.info(f"UMAP embeddings shape: {umap_embeddings.shape}")
         return umap_embeddings
 
@@ -1440,18 +1439,11 @@ class Embeddings(BaseModel):
             # 4. Clear Cache immediately (Before touching disk)
             _open_npz_file.cache_clear()
 
-            # 5. Force Delete the old file to prevent Windows locking issues
-            if self.embeddings_path.exists():
-                try:
-                    self.embeddings_path.unlink()
-                except PermissionError:
-                    logger.warning(
-                        f"File locked, attempting overwrite: {self.embeddings_path}"
-                    )
-
-            # 6. Save updated data
-            self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
-            np.savez(
+            # 5. Atomically replace the on-disk index. The previous version
+            # unlinked first and then wrote, which lost the entire index if
+            # the subsequent write failed; ``atomic_savez`` writes to a
+            # ``.tmp`` and renames into place instead.
+            atomic_savez(
                 self.embeddings_path,
                 embeddings=embeddings,
                 filenames=filenames,
@@ -1459,7 +1451,7 @@ class Embeddings(BaseModel):
                 metadata=metadata,
             )
 
-            # 7. Re-prime the cache immediately to verify the write
+            # 6. Re-prime the cache immediately to verify the write
             _open_npz_file(self.embeddings_path)
 
         except Exception as e:
@@ -1506,9 +1498,9 @@ class Embeddings(BaseModel):
             # Update the filename in the original array
             filenames[original_idx] = new_path_str
 
-            # Save updated data
-            self.embeddings_path.parent.mkdir(parents=True, exist_ok=True)
-            np.savez(
+            # Save updated data atomically so a partial write never leaves
+            # the index unloadable.
+            atomic_savez(
                 self.embeddings_path,
                 embeddings=embeddings,
                 filenames=filenames,

@@ -44,7 +44,12 @@ def get_windows_drives():
 
 
 def is_path_safe(path_str: str) -> bool:
-    """Check if path is safe to access"""
+    """Check if path is safe to access.
+
+    On Unix, the path must resolve inside ``ROOT_DIR`` (default ``/``).
+    Operators who tighten ``PHOTOMAP_ALBUM_ROOT`` to a subdirectory rely on
+    this check to keep the file-tree browser fenced in.
+    """
     if platform.system() == "Windows":
         # On Windows, allow any valid drive path
         try:
@@ -54,18 +59,15 @@ def is_path_safe(path_str: str) -> bool:
         except Exception:
             return False
     else:
-        # On Unix, check if it's within ROOT_DIR or if it's an absolute path we want to allow
         try:
             path = Path(path_str).resolve()
 
-            # If ROOT_DIR is set, check if path is within it
-            if ROOT_DIR:
-                root_path = Path(ROOT_DIR).resolve()
-                # Allow paths within ROOT_DIR or absolute paths for browsing
-                return path.is_relative_to(root_path) or path.exists()
-            else:
-                # If no ROOT_DIR restriction, allow any existing absolute path
+            # If ROOT_DIR is unset/empty, allow any existing absolute path.
+            if not ROOT_DIR:
                 return path.exists()
+
+            root_path = Path(ROOT_DIR).resolve()
+            return path.is_relative_to(root_path)
         except Exception:
             return False
 

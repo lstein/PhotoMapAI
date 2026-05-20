@@ -15,6 +15,7 @@ from platformdirs import user_config_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .encoders import DEFAULT_ENCODER_SPEC, LEGACY_ENCODER_SPEC
+from .util import atomic_write_text
 
 logger = logging.getLogger(__name__)
 
@@ -336,12 +337,10 @@ class ConfigManager:
             raise RuntimeError("No configuration loaded")
 
         try:
-            self.config_path.parent.mkdir(parents=True, exist_ok=True)
-
-            with open(self.config_path, "w") as f:
-                yaml.safe_dump(
-                    self._config.to_dict(), f, default_flow_style=False, indent=2
-                )
+            payload = yaml.safe_dump(
+                self._config.to_dict(), default_flow_style=False, indent=2
+            )
+            atomic_write_text(self.config_path, payload)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to save configuration to {self.config_path}: {e}"
