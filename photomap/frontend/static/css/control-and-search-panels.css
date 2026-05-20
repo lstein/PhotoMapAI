@@ -55,6 +55,40 @@
   opacity: 1;
 }
 
+#controlPanel button.back-nav-disabled,
+#controlPanel button.back-nav-disabled:hover {
+  opacity: 0.25;
+  cursor: default;
+}
+
+#backNavFlyout {
+  position: fixed;
+  background: rgba(30, 30, 30, 0.95);
+  border: 1px solid #444;
+  padding: 8px;
+  border-radius: 6px;
+  z-index: 10000;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 360px;
+}
+
+#backNavFlyout .back-nav-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s;
+  background: #111;
+}
+
+#backNavFlyout .back-nav-thumb:hover {
+  border-color: #fff;
+}
+
 /* Drag-over highlight for search panel */
 #searchPanel.drag-over {
   border: 2px dashed #00ff99;

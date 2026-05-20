@@ -4,6 +4,7 @@
 // present in the current album. Filenames not in the album are left as the
 // plain text the formatter already rendered.
 
+import { backStack } from "./back-stack.js";
 import { slideState } from "./slide-state.js";
 
 // Parse the slide dataset's reference_images attribute (a JSON-stringified
@@ -147,6 +148,7 @@ export function registerReferenceThumbnailClickHandler() {
     e.preventDefault();
     const index = parseInt(thumb.dataset.globalIndex, 10);
     if (Number.isFinite(index)) {
+      backStack.markNextAsJump("reference");
       slideState.navigateToIndex(index, false);
     }
   });

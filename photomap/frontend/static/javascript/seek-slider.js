@@ -1,3 +1,4 @@
+import { backStack } from "./back-stack.js";
 import { bookmarkManager } from "./bookmarks.js";
 import { ScoreDisplay } from "./score-display.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
@@ -303,6 +304,7 @@ class SeekSlider {
     // Update hover strip with final slider position
     this.updateHoverStripProgress(targetIndex + 1);
     this.isUserSeeking = true;
+    backStack.markNextAsJump("seek");
     slideState.navigateToIndex(targetIndex, slideState.isSearchMode);
     setTimeout(() => {
       this.isUserSeeking = false;

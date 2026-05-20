@@ -3,6 +3,8 @@
 // including keyboard shortcuts and cross-component coordination.
 import { aboutManager } from "./about.js";
 import { checkAlbumIndex } from "./album-manager.js";
+import { initializeBackButton } from "./back-button.js";
+import { backStack } from "./back-stack.js";
 import { toggleCurrentBookmark } from "./bookmarks.js";
 import { initializeControlPanel, toggleFullscreen } from "./control-panel.js";
 import { initializeGridSwiper } from "./grid-view.js";
@@ -33,6 +35,7 @@ async function initializeEvents() {
   initializeControlPanel(); // Initialize control panel buttons
   initializeMetadataDrawer(); // Initialize metadata drawer events
   initializeSlideshowControls(); // Initialize slideshow controls
+  initializeBackButton(); // Initialize Back button (in-app history)
   setupGlobalEventListeners();
   setupAccessibility();
   checkAlbumIndex(); // Check if the album index exists before proceeding
@@ -66,7 +69,14 @@ const KEYBOARD_SHORTCUTS = {
   b: () => toggleCurrentBookmark(),
   B: () => toggleCurrentBookmark(),
   " ": (e) => handleSpacebarToggle(e),
+  Backspace: (e) => handleBackKey(e),
 };
+
+function handleBackKey(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  backStack.popOne();
+}
 
 // Toggle the play/pause state using the spacebar
 function handleSpacebarToggle(e) {

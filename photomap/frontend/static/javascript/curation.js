@@ -1,3 +1,4 @@
+import { backStack } from "./back-stack.js";
 import { bookmarkManager } from "./bookmarks.js";
 import { createSimpleDirectoryPicker } from "./filetree.js";
 import { updateSearchCheckmarks } from "./search-ui.js";
@@ -32,6 +33,7 @@ window.toggleCurationPanel = function () {
     if (isOpen) {
       // When panel is open, clicking UMAP points should navigate to that image
       setUmapClickCallback((index) => {
+        backStack.markNextAsJump("curation");
         slideState.navigateToIndex(index, false);
       });
     } else {
