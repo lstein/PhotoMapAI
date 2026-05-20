@@ -32,6 +32,14 @@ npm run format:check         # CI check
 
 # Docs
 make docs                    # mkdocs serve on :8000
+
+# Creating a branch for features/bugfixes
+# Always use worktrees unless explicitly asked not to
+git worktree add -b lstein/{fix,feature,chore}/<branch-name> ../photomap-worktrees/lstein-{fix,feature,chore}-<branch-name>
+cd ../photomap_worktrees/lstein-{fix,feature,chore}-<branch-name>
+python3 -mvenv .venv --prompt 'photomap-<branch-name>'
+source .venv/bin/activate
+pip install -e .[dev,test]
 ```
 
 Ruff is configured for line-length 120, target py310, rules E/W/F/I/UP/B (see pyproject.toml). Jest runs in jsdom with experimental ESM (the project is `"type": "module"`).
