@@ -3,6 +3,12 @@
 import { state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
+// Tracks the AbortController of the in-flight search request so a newer
+// query can cancel an older one. Without this, a slower response wins and
+// overwrites the latest search results — confusing the user and breaking
+// the swiper state.
+let _activeSearchController = null;
+
 // Call the server to fetch the image indicated by the index
 export async function fetchImageByIndex(index) {
   let response;
@@ -93,17 +99,33 @@ export async function searchTextAndImage({
     use_query_optimization: state.useQueryOptimization,
   };
 
+  // Cancel any in-flight search so the most recent query wins.
+  if (_activeSearchController) {
+    _activeSearchController.abort();
+  }
+  const controller = new AbortController();
+  _activeSearchController = controller;
+
   try {
     const response = await fetch(`search_with_text_and_image/${encodeURIComponent(state.album)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
     const result = await response.json();
     return result.results || [];
   } catch (err) {
+    if (err.name === "AbortError") {
+      // Superseded by a newer search — fall through silently.
+      return [];
+    }
     console.error("search_with_text_and_image request failed:", err);
     return [];
+  } finally {
+    if (_activeSearchController === controller) {
+      _activeSearchController = null;
+    }
   }
 }
 

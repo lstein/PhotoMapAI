@@ -523,20 +523,29 @@ def _idle_watcher_loop(timeout_seconds: float, poll_interval: float) -> None:
                 for key, ts in _search_encoder_last_access.items()
                 if key in _search_encoder_cache and now - ts >= timeout_seconds
             ]
-        for _key, encoder in stale:
-            if encoder.is_offloaded:
-                continue
-            # The cache-keyed timestamp only ticks on get_cached_encoder calls,
-            # but encoders also update their own `_last_use_monotonic` on every
-            # encode (via _ensure_on_device). A long encode loop holds the
-            # encoder hot via the latter even though the cache stamp is stale.
-            last_use = getattr(encoder, "_last_use_monotonic", 0.0)
-            if now - last_use < timeout_seconds:
-                continue
-            try:
-                encoder.offload()
-            except Exception:
-                logger.exception("Idle watcher failed to offload encoder")
+        for key, encoder in stale:
+            # Re-acquire the cache lock around the offload to keep
+            # ``clear_encoder_cache`` from concurrently calling ``encoder.close()``
+            # on a model the idle watcher is still moving off the GPU. If the
+            # encoder is no longer the live cache entry (e.g. the user reloaded
+            # an album with a new spec, evicting the old encoder), skip — closing
+            # an already-closed model would NPE on ``self._model``.
+            with _search_encoder_lock:
+                if _search_encoder_cache.get(key) is not encoder:
+                    continue
+                if encoder.is_offloaded:
+                    continue
+                # The cache-keyed timestamp only ticks on get_cached_encoder calls,
+                # but encoders also update their own `_last_use_monotonic` on every
+                # encode (via _ensure_on_device). A long encode loop holds the
+                # encoder hot via the latter even though the cache stamp is stale.
+                last_use = getattr(encoder, "_last_use_monotonic", 0.0)
+                if now - last_use < timeout_seconds:
+                    continue
+                try:
+                    encoder.offload()
+                except Exception:
+                    logger.exception("Idle watcher failed to offload encoder")
 
 
 def start_idle_watcher(timeout_seconds: float, poll_interval: float | None = None) -> None:

@@ -39,7 +39,7 @@ git worktree add -b lstein/{fix,feature,chore}/<branch-name> ../photomap-worktre
 cd ../photomap_worktrees/lstein-{fix,feature,chore}-<branch-name>
 python3 -mvenv .venv --prompt 'photomap-<branch-name>'
 source .venv/bin/activate
-pip install -e .[dev,test]
+pip install -e .[development,testing]
 ```
 
 Ruff is configured for line-length 120, target py310, rules E/W/F/I/UP/B (see pyproject.toml). Jest runs in jsdom with experimental ESM (the project is `"type": "module"`).

@@ -44,6 +44,7 @@ export default [
         Element: 'readonly',
         Node: 'readonly',
         NodeList: 'readonly',
+        AbortController: 'readonly',
         Blob: 'readonly',
         File: 'readonly',
         FileReader: 'readonly',

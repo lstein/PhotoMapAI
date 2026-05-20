@@ -2,6 +2,7 @@ import logging
 import os
 import random
 import shutil
+import threading
 import uuid
 from collections import Counter
 from pathlib import Path
@@ -19,8 +20,11 @@ from .index import check_album_lock
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Store results for completed curation jobs
+# Store results for completed curation jobs. The background task writes here
+# from a worker thread while request handlers read in the event-loop thread,
+# so guard accesses with a lock to keep the dict from being mutated mid-read.
 _curation_results: dict[str, Any] = {}
+_curation_results_lock = threading.Lock()
 
 class CurationRequest(BaseModel):
     """
@@ -127,7 +131,8 @@ def _run_curation_task(job_id: str, request: CurationRequest):
         }
 
         # Store result
-        _curation_results[job_id] = result
+        with _curation_results_lock:
+            _curation_results[job_id] = result
 
         # Mark as completed
         progress_tracker.complete_operation(job_id, "Curation completed")
@@ -136,10 +141,11 @@ def _run_curation_task(job_id: str, request: CurationRequest):
     except Exception as e:
         logger.error(f"Curation Job {job_id}: Error - {str(e)}")
         progress_tracker.set_error(job_id, str(e))
-        _curation_results[job_id] = {
-            "status": "error",
-            "error": str(e)
-        }
+        with _curation_results_lock:
+            _curation_results[job_id] = {
+                "status": "error",
+                "error": str(e)
+            }
 
 @router.post("/curate")
 async def run_curation(request: CurationRequest, background_tasks: BackgroundTasks):
@@ -185,10 +191,12 @@ async def get_curation_progress(job_id: str):
 
     if progress is None:
         # Check if we have a completed result
-        if job_id in _curation_results:
+        with _curation_results_lock:
+            cached = _curation_results.get(job_id)
+        if cached is not None:
             return {
                 "status": "completed",
-                "result": _curation_results[job_id]
+                "result": cached
             }
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -200,7 +208,8 @@ async def get_curation_progress(job_id: str):
 
     if progress.status == IndexStatus.COMPLETED:
         # Return result if available
-        result = _curation_results.get(job_id, {})
+        with _curation_results_lock:
+            result = _curation_results.get(job_id, {})
         return {
             "status": "completed",
             "result": result

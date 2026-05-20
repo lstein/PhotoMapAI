@@ -28,6 +28,17 @@ class SwiperManager {
     this.isAppending = false;
     this.isInternalSlideChange = false;
 
+    // Single-flight gate for resetAllSlides. albumChanged, searchResultsChanged,
+    // and swiperModeChanged can all fire in quick succession (e.g. switching
+    // album while a search is in flight). Without coordination, two concurrent
+    // resets each call removeAllSlides + addSlideByIndex + slideTo and race
+    // for the DOM. ``_resetInFlight`` holds the active rebuild and
+    // ``_resetPending`` records that another reset is queued; we coalesce so
+    // at most one rebuild runs at a time and a second is run once on top of
+    // the latest slideState.
+    this._resetInFlight = null;
+    this._resetPending = false;
+
     // Store event listeners for cleanup
     this.eventListeners = [];
 
@@ -237,17 +248,15 @@ class SwiperManager {
       }
     });
 
-    // Reset slide show when the album changes
+    // Reset slide show when the album, search results, or mode changes.
+    // All three go through the single-flight resetAllSlides so they coalesce
+    // instead of racing for the DOM if more than one fires in the same tick.
     this.addEventListener(window, "albumChanged", () => {
       this.resetAllSlides();
     });
-
-    // Reset slide show when the search results change
     this.addEventListener(window, "searchResultsChanged", () => {
       this.resetAllSlides();
     });
-
-    // Handle slideshow mode changes
     this.addEventListener(window, "swiperModeChanged", () => {
       this.resetAllSlides();
     });
@@ -507,6 +516,37 @@ class SwiperManager {
   // The random_nextslide parameter is a hack that will make the preloaded next slide a random one
   // It is a hack that should be fixed.
   async resetAllSlides(random_nextslide = false) {
+    // Single-flight: if a rebuild is already running, mark that we want
+    // another rebuild after it finishes and await the eventual completion.
+    // Otherwise kick off a rebuild that loops until no further reset is
+    // pending. Coalescing this way means three quickly-fired events become
+    // at most two sequential rebuilds — one in flight, one that catches the
+    // latest slideState afterwards.
+    if (this._resetInFlight) {
+      this._resetPending = true;
+      try {
+        await this._resetInFlight;
+      } catch {
+        // Errors are logged by the underlying rebuild; don't propagate.
+      }
+      return;
+    }
+
+    const runner = (async () => {
+      try {
+        do {
+          this._resetPending = false;
+          await this._doResetAllSlides(random_nextslide);
+        } while (this._resetPending);
+      } finally {
+        this._resetInFlight = null;
+      }
+    })();
+    this._resetInFlight = runner;
+    await runner;
+  }
+
+  async _doResetAllSlides(random_nextslide = false) {
     if (!this.swiper) {
       return;
     }
