@@ -86,6 +86,12 @@ class SlideStateManager {
    */
   navigateToIndex(index, isSearchIndex = null) {
     this.setCurrentIndex(index, isSearchIndex);
+    // Announce the change so listeners (seek slider, UMAP marker, back stack)
+    // stay in sync, then issue the swiper command. The swiper suppresses its
+    // own slideChange handler when seeking to an already-loaded slide and
+    // during the rebuild path, so this is the only reliable signal that the
+    // active position changed via programmatic navigation.
+    this.notifySlideChanged();
     this.seekToSlideIndex();
   }
 

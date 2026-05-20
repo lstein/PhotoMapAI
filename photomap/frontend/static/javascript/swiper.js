@@ -601,38 +601,50 @@ class SwiperManager {
       }
     }
 
-    this.swiper.removeAllSlides();
+    // Suppress swiper.slideChange while the rebuild is in progress. Without
+    // this, the intermediate active-slide transitions during removeAllSlides /
+    // appendSlide / slideTo would each invoke updateFromExternal and dispatch
+    // slideChanged with transient globalIndex values — none of which represent
+    // a slide the user actually viewed. slideState was already set to the
+    // target by navigateToIndex's setCurrentIndex, so suppressing here is
+    // safe (and mirrors what the nearby branch already does).
+    this.isInternalSlideChange = true;
+    try {
+      this.swiper.removeAllSlides();
 
-    let origin = -2;
-    const slides_to_add = 5;
-    if (globalIndex + origin < 0) {
-      origin = 0;
-    }
-
-    const swiperContainer = document.getElementById("singleSwiper");
-    swiperContainer.style.visibility = "hidden";
-
-    for (let i = origin; i < slides_to_add; i++) {
-      if (searchIndex + i >= totalCount) {
-        break;
+      let origin = -2;
+      const slides_to_add = 5;
+      if (globalIndex + origin < 0) {
+        origin = 0;
       }
-      if (globalIndex + i < 0) {
-        continue;
-      }
-      if (globalIndex + i >= slideState.totalAlbumImages) {
-        break;
-      }
-      await this.addSlideByIndex(globalIndex + i, searchIndex + i, false, false);
-    }
 
-    slideEls = this.swiper.slides;
-    let targetSlideIdx = Array.from(slideEls).findIndex((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
-    if (targetSlideIdx === -1) {
-      targetSlideIdx = 0;
-    }
-    this.swiper.slideTo(targetSlideIdx, 0);
+      const swiperContainer = document.getElementById("singleSwiper");
+      swiperContainer.style.visibility = "hidden";
 
-    swiperContainer.style.visibility = "visible";
-    updateMetadataOverlay(this.currentSlide());
+      for (let i = origin; i < slides_to_add; i++) {
+        if (searchIndex + i >= totalCount) {
+          break;
+        }
+        if (globalIndex + i < 0) {
+          continue;
+        }
+        if (globalIndex + i >= slideState.totalAlbumImages) {
+          break;
+        }
+        await this.addSlideByIndex(globalIndex + i, searchIndex + i, false, false);
+      }
+
+      slideEls = this.swiper.slides;
+      let targetSlideIdx = Array.from(slideEls).findIndex((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
+      if (targetSlideIdx === -1) {
+        targetSlideIdx = 0;
+      }
+      this.swiper.slideTo(targetSlideIdx, 0);
+
+      swiperContainer.style.visibility = "visible";
+      updateMetadataOverlay(this.currentSlide());
+    } finally {
+      this.isInternalSlideChange = false;
+    }
   }
 }

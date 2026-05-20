@@ -1,6 +1,7 @@
 // umap.js
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-manager.js";
+import { backStack } from "./back-stack.js";
 import { CLUSTER_PALETTE, getClusterLabelInfo, setClusterLabels } from "./cluster-utils.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
@@ -1387,6 +1388,7 @@ async function handleImageClick(clickedIndex) {
   exitSearchMode();
 
   // Navigate directly to the clicked image without entering search mode
+  backStack.markNextAsJump("cluster");
   slideState.navigateToIndex(clickedIndex, false);
 
   // Exit fullscreen mode if enabled

@@ -1,6 +1,8 @@
 // touch.js
 // This file handles touch events for the slideshow, allowing tap and swipe gestures to control navigation and overlays.
 
+import { showBackFlyout } from "./back-button.js";
+import { backStack } from "./back-stack.js";
 import { showSlideshowModeMenu, toggleSlideshowWithIndicator } from "./slideshow.js";
 import { state } from "./state.js";
 
@@ -166,6 +168,49 @@ if (slideshowBtn) {
   });
 
   slideshowBtn.addEventListener("touchcancel", () => {
+    clearTimeout(longTouchTimer);
+    touchStartPos = null;
+  });
+}
+
+// Long-touch handler for Back button — opens the recent-positions flyout.
+const backNavBtn = document.getElementById("backNavBtn");
+if (backNavBtn) {
+  let longTouchTimer = null;
+  let touchStartPos = null;
+
+  backNavBtn.addEventListener("touchstart", (e) => {
+    touchStartPos = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+
+    longTouchTimer = setTimeout(() => {
+      if (touchStartPos && backStack.size() >= 2) {
+        e.preventDefault();
+        showBackFlyout(touchStartPos.x + 6, touchStartPos.y + 6);
+        touchStartPos = null;
+      }
+    }, 500);
+  });
+
+  backNavBtn.addEventListener("touchmove", (e) => {
+    if (touchStartPos) {
+      const dx = e.touches[0].clientX - touchStartPos.x;
+      const dy = e.touches[0].clientY - touchStartPos.y;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        clearTimeout(longTouchTimer);
+        touchStartPos = null;
+      }
+    }
+  });
+
+  backNavBtn.addEventListener("touchend", () => {
+    clearTimeout(longTouchTimer);
+    touchStartPos = null;
+  });
+
+  backNavBtn.addEventListener("touchcancel", () => {
     clearTimeout(longTouchTimer);
     touchStartPos = null;
   });
