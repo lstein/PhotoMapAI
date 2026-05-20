@@ -13,6 +13,9 @@ import {
   getImageLabelInfo,
   SHOW_CLUSTER_LABELS_IN_BADGES,
 } from "./cluster-utils.js";
+import { enhanceReferenceImageThumbnails, registerReferenceThumbnailClickHandler } from "./reference-thumbnails.js";
+
+export { enhanceReferenceImageThumbnails };
 
 // Set up the bookmark toggle callback for the star icon
 scoreDisplay.setToggleBookmarkCallback((globalIndex) => {
@@ -47,62 +50,19 @@ export function toggleMetadataOverlay() {
   }
 }
 
-// Function to replace reference image filenames with clickable links
-export function replaceReferenceImagesWithLinks(description, referenceImages, albumKey) {
-  if (!description || !referenceImages || !albumKey) {
-    return description || "";
-  }
-
-  let processedDescription = description;
-
-  // Parse reference_images if it's a JSON string
-  let imageList = [];
-  try {
-    if (typeof referenceImages === "string") {
-      imageList = JSON.parse(referenceImages);
-    } else if (Array.isArray(referenceImages)) {
-      imageList = referenceImages;
-    }
-  } catch (e) {
-    console.warn("Failed to parse reference_images:", e);
-    return description;
-  }
-
-  // Replace each reference image filename with a link
-  imageList.forEach((imageName) => {
-    if (imageName && typeof imageName === "string") {
-      // Create a case-insensitive global regex to find all instances
-      const regex = new RegExp(imageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-      const link = `<a href="image_by_name/${encodeURIComponent(albumKey)}/${encodeURIComponent(
-        imageName
-      )}" target="_blank" style="color: #faea0e;">${imageName}</a>`;
-      processedDescription = processedDescription.replace(regex, link);
-    }
-  });
-
-  return processedDescription;
-}
-
 // Update banner with current slide's metadata
 export function updateMetadataOverlay(slide) {
   if (!slide) {
     return;
   }
 
-  // Process description with reference image links
   const rawDescription = slide.dataset.description || "";
   const referenceImages = slide.dataset.reference_images || [];
-  const processedDescription = replaceReferenceImagesWithLinks(rawDescription, referenceImages, state.album);
+  const metadataUrl = slide.dataset.metadata_url || "#";
 
-  // Park the View Metadata (JSON) link in its standalone container before
-  // the innerHTML rewrite below — on the previous slide it may have been
-  // moved into the table, where rewriting descriptionText would destroy it
-  // (and its click listener) along with the table.
-  const metadataLink = document.getElementById("metadataLink");
-  const linkContainer = document.getElementById("metadataLinkContainer");
-  linkContainer.appendChild(metadataLink);
-
-  document.getElementById("descriptionText").innerHTML = processedDescription;
+  const descriptionText = document.getElementById("descriptionText");
+  descriptionText.innerHTML = rawDescription;
+  enhanceReferenceImageThumbnails(descriptionText, referenceImages, state.album);
 
   // Inject filepath as first row of the metadata table
   const filepath = slide.dataset.filepath || "";
@@ -128,25 +88,40 @@ export function updateMetadataOverlay(slide) {
   }
 
   document.getElementById("filenameText").textContent = slide.dataset.filename || "";
-  metadataLink.href = slide.dataset.metadata_url || "#";
 
-  // When a details table is present (Invoke's .invoke-metadata or EXIF's
-  // .exif-metadata table), tuck the View Metadata link into a full-width
-  // cell at the bottom. Otherwise leave it in the standalone container so
-  // it's still reachable for no-metadata images.
+  // Two metadata-link slots: the master sits in #metadataLinkContainer below
+  // the scrollable description and never moves; a clone is inserted into the
+  // bottom of the details table. The clone shares the .metadata-link class so
+  // the document-level delegated click handler activates it. Cloning instead
+  // of moving the master means an innerHTML wipe of descriptionText (by this
+  // function or by grid-view's equivalent) can never destroy the only
+  // metadata link in the page.
+  const masterLink = document.getElementById("metadataLink");
+  if (masterLink) {
+    masterLink.href = metadataUrl;
+  }
   const detailsTable =
     document.querySelector("#descriptionText .invoke-metadata") ||
     document.querySelector("#descriptionText .exif-metadata table");
+  const linkContainer = document.getElementById("metadataLinkContainer");
   if (detailsTable) {
+    const cloneLink = document.createElement("a");
+    cloneLink.className = "metadata-link";
+    cloneLink.href = metadataUrl;
+    cloneLink.target = "_blank";
+    cloneLink.rel = "noopener noreferrer";
+    cloneLink.textContent = "View Metadata (JSON)";
     const row = document.createElement("tr");
     const cell = document.createElement("td");
     cell.colSpan = 2;
     cell.className = "details-link-cell";
-    cell.appendChild(metadataLink);
+    cell.appendChild(cloneLink);
     row.appendChild(cell);
     (detailsTable.tBodies[0] || detailsTable).appendChild(row);
-    linkContainer.style.display = "none";
-  } else {
+    if (linkContainer) {
+      linkContainer.style.display = "none";
+    }
+  } else if (linkContainer) {
     linkContainer.style.display = "";
   }
 
@@ -340,19 +315,24 @@ export async function updateCurrentImageScore(metadata) {
 const metadataModal = document.getElementById("metadataModal");
 const metadataTextArea = document.getElementById("metadataTextArea");
 const closeMetadataModalBtn = document.getElementById("closeMetadataModalBtn");
-const metadataLink = document.getElementById("metadataLink");
 
-// Show modal and fetch metadata
-metadataLink.addEventListener("click", async (e) => {
+// Delegated click on any .metadata-link (the master in #metadataLinkContainer
+// and any per-table clone) — using delegation rather than binding to a single
+// element lets updateMetadataOverlay clone the link into the details table
+// without losing the handler if the table is later wiped by innerHTML.
+document.addEventListener("click", async (e) => {
+  const link = e.target.closest(".metadata-link");
+  if (!link) {
+    return;
+  }
   e.preventDefault();
   if (!metadataModal || !metadataTextArea) {
     return;
   }
   metadataModal.classList.add("visible");
 
-  // Fetch JSON metadata from the link's href
   try {
-    const resp = await fetch(metadataLink.href);
+    const resp = await fetch(link.href);
     if (resp.ok) {
       const text = await resp.text();
       metadataTextArea.value = text;
@@ -600,6 +580,7 @@ function setupOverlayButtons() {
 // Initialize metadata drawer - sets up all event listeners
 export function initializeMetadataDrawer() {
   setupOverlayButtons();
+  registerReferenceThumbnailClickHandler();
 
   // Metadata-fields accordion: mirrors the open/closed pattern used by the
   // Settings dialog accordions, with the open state persisted in

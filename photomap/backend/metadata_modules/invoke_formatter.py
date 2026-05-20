@@ -236,10 +236,11 @@ def _tuple_table(
     * **Column** — a column that is empty across *all* surviving rows is
       dropped entirely, so a table of reference images with no IP adapter
       model names, for example, renders without a model column at all.
-    * **Weight fallback** — when the ``weight`` column survives because at
-      least one row carries a weight, rows that are missing a weight are
-      rendered as ``1.0`` (the effective default InvokeAI uses when the
-      field is absent) rather than as a ragged empty cell.
+
+    Rows missing a value in a surviving column render an empty cell. (We
+    used to substitute ``1.0`` for missing weights on the theory it matched
+    InvokeAI's default, but v5 Flux reference images legitimately carry no
+    weight, so the fallback was misleading rather than helpful.)
     """
     rows_data = [
         tup
@@ -258,13 +259,11 @@ def _tuple_table(
     html_rows: list[str] = []
     for tup in rows_data:
         cells: list[str] = []
-        for idx, field_name in enumerate(fields):
+        for idx in range(len(fields)):
             if not keep_column[idx]:
                 continue
             value = tup[idx]
-            if field_name == "weight" and (value is None or value == ""):
-                value = 1.0
-            elif value is None:
+            if value is None:
                 value = ""
             cells.append(f"<td>{value}</td>")
         html_rows.append(f"<tr>{''.join(cells)}</tr>")

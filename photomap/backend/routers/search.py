@@ -367,6 +367,46 @@ async def get_image_path(album_key: str, index: int) -> str:
         ) from e
 
 
+class ImageIndexLookupRequest(BaseModel):
+    filenames: list[str]
+
+
+class ImageIndexLookupResponse(BaseModel):
+    # Maps each requested filename to its album index, or null if not present.
+    indices: dict[str, int | None]
+
+
+@search_router.post(
+    "/image_indices/{album_key}",
+    response_model=ImageIndexLookupResponse,
+    tags=["Search"],
+)
+async def lookup_image_indices(
+    album_key: str,
+    req: ImageIndexLookupRequest,
+) -> ImageIndexLookupResponse:
+    """Resolve album indices for a batch of filenames (by basename).
+
+    Used by the metadata drawer to decide which reference-image filenames
+    correspond to images present in the current album, so they can be rendered
+    as clickable thumbnails. Filenames not found in the album map to ``null``.
+    Duplicate basenames in the album resolve to the first matching index.
+    """
+    embeddings = get_embeddings_for_album(album_key)
+    if not embeddings:
+        raise HTTPException(status_code=404, detail="Album not found")
+
+    sorted_filenames = embeddings.indexes["sorted_filenames"]
+    basename_to_index: dict[str, int] = {}
+    for idx, full_path in enumerate(sorted_filenames):
+        basename = Path(full_path).name
+        basename_to_index.setdefault(basename, idx)
+
+    return ImageIndexLookupResponse(
+        indices={name: basename_to_index.get(name) for name in req.filenames}
+    )
+
+
 @search_router.get(
     "/image_by_name/{album_key}/{filename:path}",
     response_class=FileResponse,

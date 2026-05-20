@@ -1,7 +1,7 @@
 import { addBookmarkIconToSlide } from "./bookmarks.js";
 import { toggleGridSwiperView } from "./events.js";
 import {
-  replaceReferenceImagesWithLinks,
+  enhanceReferenceImageThumbnails,
   updateClusterInfo,
   updateCurrentImageScore,
   updateImageLabel,
@@ -674,6 +674,13 @@ class GridViewManager {
   }
 
   updateMetadataOverlay() {
+    // When grid view isn't the active mode, the swiper view owns the shared
+    // descriptionText element. Touching it from here would wipe the details
+    // table the swiper just installed.
+    if (!state.gridViewActive) {
+      return;
+    }
+
     const globalIndex = slideState.getCurrentSlide().globalIndex;
     const data = this.slideData[globalIndex];
     if (!data) {
@@ -682,9 +689,10 @@ class GridViewManager {
 
     const rawDescription = data["description"] || "";
     const referenceImages = data["reference_images"] || [];
-    const processedDescription = replaceReferenceImagesWithLinks(rawDescription, referenceImages, state.album);
 
-    document.getElementById("descriptionText").innerHTML = processedDescription;
+    const descriptionText = document.getElementById("descriptionText");
+    descriptionText.innerHTML = rawDescription;
+    enhanceReferenceImageThumbnails(descriptionText, referenceImages, state.album);
 
     // Inject filepath as first row of the metadata table
     const filepath = data["filepath"] || "";
@@ -710,7 +718,17 @@ class GridViewManager {
     }
 
     document.getElementById("filenameText").textContent = data["filename"] || "";
-    document.getElementById("metadataLink").href = data["metadata_url"] || "#";
+    const masterLink = document.getElementById("metadataLink");
+    if (masterLink) {
+      masterLink.href = data["metadata_url"] || "#";
+    }
+    // Make sure the link is visible — a prior swiper render may have set
+    // linkContainer.style.display = "none" when it cloned the link into
+    // its details table.
+    const linkContainer = document.getElementById("metadataLinkContainer");
+    if (linkContainer) {
+      linkContainer.style.display = "";
+    }
 
     // Update cluster information display
     updateClusterInfo(data);

@@ -164,10 +164,19 @@ class InvokeMetadataView:
     def _refimage_to_tuple(ref: RefImage) -> ReferenceImageTuple:
         cfg = ref.config
         model_name = cfg.model.name if cfg.model else ""
+        # Weight is only meaningful for IP-adapter references. Reference
+        # images that attach directly to the model (Flux2, Qwen, etc.) have
+        # no IP adapter — ``cfg.model`` is None — and any ``weight`` value
+        # InvokeAI serializes for them is an internal default rather than
+        # a user-set value, so suppress it.
+        if cfg.model is None:
+            weight: float | str | None = None
+        else:
+            weight = _effective_weight(cfg.weight, cfg.image_influence)
         return ReferenceImageTuple(
             model_name=model_name,
             image_name=_image_name(cfg.image),
-            weight=_effective_weight(cfg.weight, cfg.image_influence),
+            weight=weight,
         )
 
     @staticmethod
