@@ -69,6 +69,44 @@ def _get_indexing_semaphore() -> asyncio.Semaphore:
     return _indexing_semaphore
 
 
+def _l2_normalize(x: np.ndarray, axis: int = -1, eps: float = 1e-12) -> np.ndarray:
+    """L2-normalize ``x`` along ``axis`` with an epsilon guard against zero vectors.
+
+    Several call sites previously open-coded ``x / (norm + 1e-10)`` (or worse,
+    no epsilon at all in ``find_duplicate_clusters``, which would NaN on any
+    all-zero embedding). Funneling through one helper makes the epsilon
+    consistent and the intent obvious.
+    """
+    norms = np.linalg.norm(x, axis=axis, keepdims=True)
+    return x / (norms + eps)
+
+
+def _normalized_filtered_embeddings(
+    embeddings_path: Path,
+    ignore_indices: list[int] | None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Open the .npz, drop ``ignore_indices``, and L2-normalize the survivors.
+
+    Returns ``(normalized_vectors, valid_global_indices, filenames)``. When
+    every row is masked out, ``normalized_vectors`` is empty (shape ``(0,)``)
+    and the caller is expected to return early.
+    """
+    data = _open_npz_file(embeddings_path)
+    embeddings = data["embeddings"]
+    filenames = data["filenames"]
+
+    valid_mask = np.ones(len(embeddings), dtype=bool)
+    if ignore_indices:
+        valid_mask[ignore_indices] = False
+    valid_global_indices = np.where(valid_mask)[0]
+    filtered = embeddings[valid_global_indices]
+
+    if len(filtered) == 0:
+        return filtered, valid_global_indices, filenames
+
+    return _l2_normalize(filtered, axis=1), valid_global_indices, filenames
+
+
 register_heif_opener()  # Register HEIF opener for PIL
 SUPPORTED_EXTENSIONS = {
     ".jpg",
@@ -104,32 +142,14 @@ def get_fps_indices_global(
     Returns:
         List of selected filenames.
     """
-    data = _open_npz_file(embeddings_path)
-    embeddings = data["embeddings"]
-    filenames = data["filenames"]
-
-    n_total = len(embeddings)
-
-    # Create a mask of VALID indices (True = Keep, False = Ignore)
-    valid_mask = np.ones(n_total, dtype=bool)
-    if ignore_indices:
-        valid_mask[ignore_indices] = False
-
-    # Get the indices that are actually available
-    valid_global_indices = np.where(valid_mask)[0]
-
-    # Filter embeddings to only valid ones
-    filtered_embeddings = embeddings[valid_global_indices]
-
-    n_samples = len(filtered_embeddings)
+    vectors, valid_global_indices, filenames = _normalized_filtered_embeddings(
+        embeddings_path, ignore_indices
+    )
+    n_samples = len(vectors)
     if n_samples == 0:
         return []
     if n_target >= n_samples:
         return filenames[valid_global_indices].tolist()
-
-    # Normalize
-    norms = np.linalg.norm(filtered_embeddings, axis=1, keepdims=True)
-    vectors = filtered_embeddings / (norms + 1e-10)
 
     # Standard FPS Logic on the FILTERED set
     rng = np.random.RandomState(seed)
@@ -175,28 +195,14 @@ def get_kmeans_indices_global(
     Returns:
         List of selected filenames.
     """
-    data = _open_npz_file(embeddings_path)
-    embeddings = data["embeddings"]
-    filenames = data["filenames"]
-
-    n_total = len(embeddings)
-
-    valid_mask = np.ones(n_total, dtype=bool)
-    if ignore_indices:
-        valid_mask[ignore_indices] = False
-
-    valid_global_indices = np.where(valid_mask)[0]
-    filtered_embeddings = embeddings[valid_global_indices]
-
-    n_samples = len(filtered_embeddings)
+    vectors, valid_global_indices, filenames = _normalized_filtered_embeddings(
+        embeddings_path, ignore_indices
+    )
+    n_samples = len(vectors)
     if n_samples == 0:
         return []
     if n_target >= n_samples:
         return filenames[valid_global_indices].tolist()
-
-    # Normalize
-    norms = np.linalg.norm(filtered_embeddings, axis=1, keepdims=True)
-    vectors = filtered_embeddings / (norms + 1e-10)
 
     # Cluster
     kmeans = KMeans(n_clusters=n_target, random_state=seed, n_init=10)
@@ -1363,10 +1369,9 @@ class Embeddings(BaseModel):
         embeddings = data["embeddings"]
         filenames = data["filenames"]
 
-        # Normalize embeddings
-        norm_embeddings = embeddings / np.linalg.norm(
-            embeddings, axis=-1, keepdims=True
-        )
+        # Normalize embeddings. ``_l2_normalize`` carries an epsilon guard so
+        # an all-zero row can't produce NaN here.
+        norm_embeddings = _l2_normalize(embeddings, axis=-1)
         assert isinstance(
             norm_embeddings, np.ndarray
         ), "Normalization failed, expected np.ndarray"

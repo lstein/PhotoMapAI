@@ -931,29 +931,6 @@ export class AlbumManager {
   }
 
   // Path field methods
-  createPathField(path = "", cardElement) {
-    const container = cardElement.querySelector(".edit-album-paths-container");
-    return this._createAlbumPathRow({
-      path,
-      container,
-      onAddRow: () => this.addPathField("", cardElement),
-      onRemoveRow: () => {
-        if (container && container.children.length === 0) {
-          this.addPathField("", cardElement);
-        }
-      },
-      onFolderPick: (currentPath, setPath) => {
-        createSimpleDirectoryPicker(
-          (selectedPath) => {
-            setPath(selectedPath);
-          },
-          currentPath,
-          { showCreateFolder: true }
-        );
-      },
-    });
-  }
-
   addPathField(path = "", cardElement) {
     const container = cardElement.querySelector(".edit-album-paths-container");
     if (container) {
