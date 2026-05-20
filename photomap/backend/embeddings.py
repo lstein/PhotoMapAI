@@ -53,6 +53,22 @@ logger = logging.getLogger(__name__)
 # keeps it fed without hitting the GIL-contention regression seen at 8.
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_NUM_WORKERS = 4
+
+# Process-wide gate around the GPU-using portion of indexing. Two concurrent
+# albums each spinning up a CLIP/SigLIP encoder will OOM a typical 8-12 GiB
+# card; this serializes them so the second album waits its turn. Created
+# lazily on first use because asyncio.Semaphore wants a running event loop
+# (the module imports cleanly into CLI tools that never start one).
+_indexing_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_indexing_semaphore() -> asyncio.Semaphore:
+    global _indexing_semaphore
+    if _indexing_semaphore is None:
+        _indexing_semaphore = asyncio.Semaphore(1)
+    return _indexing_semaphore
+
+
 register_heif_opener()  # Register HEIF opener for PIL
 SUPPORTED_EXTENSIONS = {
     ".jpg",
@@ -661,18 +677,22 @@ class Embeddings(BaseModel):
         The sync :meth:`_process_images_batch` already overlaps CPU loading
         across threads, so delegating to it via ``asyncio.to_thread`` keeps
         the FastAPI event loop fully responsive while indexing runs.
+
+        Serialized by :data:`_indexing_semaphore` so two concurrent album
+        indexes don't both hold an encoder in VRAM at the same time.
         """
 
         def progress_cb(i: int, total: int, message: str) -> None:
             progress_tracker.update_progress(album_key, i, message)
 
-        return await asyncio.to_thread(
-            self._process_images_batch,
-            image_paths,
-            progress_cb,
-            batch_size,
-            num_workers,
-        )
+        async with _get_indexing_semaphore():
+            return await asyncio.to_thread(
+                self._process_images_batch,
+                image_paths,
+                progress_cb,
+                batch_size,
+                num_workers,
+            )
 
     def _save_embeddings(self, index_result: IndexResult) -> None:
         """Save embeddings to disk and clear cache."""
@@ -1467,15 +1487,17 @@ class Embeddings(BaseModel):
             new_path: The new path to the image file
         """
         try:
-            # Use optimized version for O(1) lookup
-            data = self.open_cached_embeddings(self.embeddings_path)
-
-            # Load the raw data for modification
-            sorted_filenames = data["sorted_filenames"]
-            filenames = data["filenames"]
-            embeddings = data["embeddings"]
-            modtimes = data["modification_times"]
-            metadata = data["metadata"]
+            # Load fresh copies of the raw arrays. We must NOT operate on the
+            # `_open_npz_file` cache here — concurrent readers share that dict,
+            # and mutating ``filenames`` in place would expose a half-edited
+            # array to anyone reading mid-update.
+            with np.load(self.embeddings_path, allow_pickle=True) as data:
+                filenames = data["filenames"].copy()
+                embeddings = data["embeddings"].copy()
+                modtimes = data["modification_times"].copy()
+                metadata = data["metadata"].copy()
+                sorted_indices = np.argsort(modtimes)
+                sorted_filenames = filenames[sorted_indices]
 
             current_filename = sorted_filenames[index]
 
@@ -1495,8 +1517,13 @@ class Embeddings(BaseModel):
                     new_max_len = max(len(new_path_str), max_len) + 50  # Add buffer
                     filenames = filenames.astype(f"<U{new_max_len}")
 
-            # Update the filename in the original array
+            # Update the filename in the now-private copy
             filenames[original_idx] = new_path_str
+
+            # Invalidate the shared cache BEFORE the write so any concurrent
+            # reader gets the on-disk version (old or new) rather than a stale
+            # cached object whose backing arrays we just rewrote.
+            _open_npz_file.cache_clear()
 
             # Save updated data atomically so a partial write never leaves
             # the index unloadable.
@@ -1513,7 +1540,8 @@ class Embeddings(BaseModel):
             logger.error(f"Failed to update image path in embeddings: {e}")
             raise
 
-        # Clear the LRU cache since the file has changed
+        # Re-clear after the write so any reader that primed the cache mid-flight
+        # is also invalidated.
         _open_npz_file.cache_clear()
 
     # This is not used in the current implementation, but can be useful for testing.

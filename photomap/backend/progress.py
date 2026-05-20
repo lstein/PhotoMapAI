@@ -5,6 +5,7 @@ allowing for tracking the status, progress, and estimated time remaining
 for each album being processed."""
 
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -52,75 +53,91 @@ class ProgressInfo:
 
 
 class ProgressTracker:
-    """Global progress tracker for indexing operations."""
+    """Global progress tracker for indexing operations.
+
+    Mutators run on FastAPI background threads (one per active index/curation)
+    while readers come from the request thread, so every method that touches
+    ``self._progress`` takes ``self._lock`` to avoid torn reads of
+    ``ProgressInfo`` fields and lost writes when two batches update the same
+    album concurrently.
+    """
 
     def __init__(self):
         self._progress: dict[str, ProgressInfo] = {}
+        self._lock = threading.Lock()
 
     def start_operation(self, album_key: str, total_images: int, operation_type: str):
         """Start tracking progress for an album."""
-        self._progress[album_key] = ProgressInfo(
-            album_key=album_key,
-            status=IndexStatus(operation_type),
-            current_step=f"Starting {operation_type}",
-            images_processed=0,
-            total_images=total_images,
-            start_time=time.time(),
-        )
+        with self._lock:
+            self._progress[album_key] = ProgressInfo(
+                album_key=album_key,
+                status=IndexStatus(operation_type),
+                current_step=f"Starting {operation_type}",
+                images_processed=0,
+                total_images=total_images,
+                start_time=time.time(),
+            )
 
     def update_total_images(self, album_key: str, total_images: int):
         """Update the total number of images for an operation."""
-        if album_key in self._progress:
-            self._progress[album_key].total_images = total_images
+        with self._lock:
+            if album_key in self._progress:
+                self._progress[album_key].total_images = total_images
 
     def update_progress(
         self, album_key: str, images_processed: int, current_step: str = ""
     ):
         """Update progress for an album."""
-        if album_key in self._progress:
-            progress = self._progress[album_key]
-            progress.images_processed = images_processed
-            progress.current_step = current_step
-            if (
-                images_processed >= progress.total_images
-                and progress.status != IndexStatus.SCANNING
-            ):
-                progress.status = IndexStatus.COMPLETED
+        with self._lock:
+            if album_key in self._progress:
+                progress = self._progress[album_key]
+                progress.images_processed = images_processed
+                progress.current_step = current_step
+                if (
+                    images_processed >= progress.total_images
+                    and progress.status != IndexStatus.SCANNING
+                ):
+                    progress.status = IndexStatus.COMPLETED
 
     def set_error(self, album_key: str, error_message: str):
         """Set error status for an album."""
-        if album_key in self._progress:
-            progress = self._progress[album_key]
-            progress.status = IndexStatus.ERROR
-            progress.error_message = error_message
+        with self._lock:
+            if album_key in self._progress:
+                progress = self._progress[album_key]
+                progress.status = IndexStatus.ERROR
+                progress.error_message = error_message
 
     def get_progress(self, album_key: str) -> ProgressInfo | None:
         """Get progress info for an album."""
-        return self._progress.get(album_key)
+        with self._lock:
+            return self._progress.get(album_key)
 
     def remove_progress(self, album_key: str):
         """Remove progress tracking for an album."""
-        self._progress.pop(album_key, None)
+        with self._lock:
+            self._progress.pop(album_key, None)
 
     def is_running(self, album_key: str) -> bool:
         """Check if an operation is currently running for an album."""
-        progress = self._progress.get(album_key)
-        return progress is not None and progress.status in [
-            IndexStatus.SCANNING,
-            IndexStatus.INDEXING,
-            IndexStatus.UMAPPING,
-            IndexStatus.CURATING,
-        ]
+        with self._lock:
+            progress = self._progress.get(album_key)
+            return progress is not None and progress.status in [
+                IndexStatus.SCANNING,
+                IndexStatus.INDEXING,
+                IndexStatus.UMAPPING,
+                IndexStatus.CURATING,
+            ]
 
     def complete_operation(
         self, album_key: str, message: str = "Operation completed"
     ) -> None:
         """Mark an operation as completed."""
-        if album_key in self._progress:
-            progress = self._progress[album_key]
-            progress.status = IndexStatus.COMPLETED
-            progress.current_step = message
-            progress.images_processed = progress.total_images
+        with self._lock:
+            if album_key in self._progress:
+                progress = self._progress[album_key]
+                progress.status = IndexStatus.COMPLETED
+                progress.current_step = message
+                progress.images_processed = progress.total_images
 
 
 # Global instance

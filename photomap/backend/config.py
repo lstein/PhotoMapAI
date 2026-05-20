@@ -6,6 +6,7 @@ It uses a YAML file to store album details and provides methods to manipulate al
 """
 import logging
 import os
+import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -211,6 +212,11 @@ class ConfigManager:
         """
         self.config_path = config_path or self._get_default_config_path()
         self._config: Config | None = None
+        # Re-entrant so a mutator can call load_config() and save_config()
+        # inside the same critical section. Without this lock, two concurrent
+        # API requests can clobber each other's writes when both read-modify-
+        # write the YAML config.
+        self._lock = threading.RLock()
 
     def _get_default_config_path(self) -> Path:
         """Get platform-specific default configuration file path."""
@@ -242,15 +248,16 @@ class ConfigManager:
             "PHOTOMAP_ALBUM_LOCKED"
         ):  # In locked-down environments, do not allow changing the locationIQ key
             raise PermissionError("Album configuration is locked.")
-        config = self.load_config()
-        # Strip whitespace and treat empty strings as None
-        config.locationiq_api_key = (
-            api_key.strip() if api_key and api_key.strip() else None
-        )
-        self._config = config
-        self.save_config()
-        # Clear cache after saving to ensure fresh reads
-        self._config = None
+        with self._lock:
+            config = self.load_config()
+            # Strip whitespace and treat empty strings as None
+            config.locationiq_api_key = (
+                api_key.strip() if api_key and api_key.strip() else None
+            )
+            self._config = config
+            self.save_config()
+            # Clear cache after saving to ensure fresh reads
+            self._config = None
 
     def get_invokeai_settings(self) -> dict[str, str | None]:
         """Return the configured InvokeAI connection settings."""
@@ -273,7 +280,6 @@ class ConfigManager:
 
         Empty strings are normalized to None so that the fields can be cleared.
         """
-        config = self.load_config()
 
         def _clean(value: str | None) -> str | None:
             if value is None:
@@ -281,70 +287,74 @@ class ConfigManager:
             value = value.strip()
             return value or None
 
-        config.invokeai_url = _clean(url)
-        config.invokeai_username = _clean(username)
-        config.invokeai_password = _clean(password)
-        config.invokeai_board_id = _clean(board_id)
-        self._config = config
-        self.save_config()
-        self._config = None
+        with self._lock:
+            config = self.load_config()
+            config.invokeai_url = _clean(url)
+            config.invokeai_username = _clean(username)
+            config.invokeai_password = _clean(password)
+            config.invokeai_board_id = _clean(board_id)
+            self._config = config
+            self.save_config()
+            self._config = None
 
     def load_config(self) -> Config:
         """Load configuration from YAML file."""
-        if self._config is None:
-            if not self.config_path.exists():
-                self._config = Config(
-                    config_version="1.0.0",
-                    albums={},
-                    locationiq_api_key=None,
-                )
-            else:
-                try:
-                    with open(self.config_path) as f:
-                        config_data = yaml.safe_load(f)
-
-                    # Convert album dictionaries to Album objects
-                    albums = {}
-                    for key, album_data in config_data.get("albums", {}).items():
-                        albums[key] = Album.from_dict(key, album_data)
-
-                    extra: dict[str, Any] = {}
-                    if "encoder_idle_timeout_seconds" in config_data:
-                        extra["encoder_idle_timeout_seconds"] = config_data[
-                            "encoder_idle_timeout_seconds"
-                        ]
+        with self._lock:
+            if self._config is None:
+                if not self.config_path.exists():
                     self._config = Config(
-                        config_version=config_data.get("config_version", "1.0.0"),
-                        albums=albums,
-                        locationiq_api_key=config_data.get("locationiq_api_key"),
-                        invokeai_url=config_data.get("invokeai_url"),
-                        invokeai_username=config_data.get("invokeai_username"),
-                        invokeai_password=config_data.get("invokeai_password"),
-                        invokeai_board_id=config_data.get("invokeai_board_id"),
-                        **extra,
+                        config_version="1.0.0",
+                        albums={},
+                        locationiq_api_key=None,
                     )
+                else:
+                    try:
+                        with open(self.config_path) as f:
+                            config_data = yaml.safe_load(f)
 
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Failed to load configuration from {self.config_path}: {e}"
-                    ) from e
+                        # Convert album dictionaries to Album objects
+                        albums = {}
+                        for key, album_data in config_data.get("albums", {}).items():
+                            albums[key] = Album.from_dict(key, album_data)
 
-        return self._config
+                        extra: dict[str, Any] = {}
+                        if "encoder_idle_timeout_seconds" in config_data:
+                            extra["encoder_idle_timeout_seconds"] = config_data[
+                                "encoder_idle_timeout_seconds"
+                            ]
+                        self._config = Config(
+                            config_version=config_data.get("config_version", "1.0.0"),
+                            albums=albums,
+                            locationiq_api_key=config_data.get("locationiq_api_key"),
+                            invokeai_url=config_data.get("invokeai_url"),
+                            invokeai_username=config_data.get("invokeai_username"),
+                            invokeai_password=config_data.get("invokeai_password"),
+                            invokeai_board_id=config_data.get("invokeai_board_id"),
+                            **extra,
+                        )
+
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Failed to load configuration from {self.config_path}: {e}"
+                        ) from e
+
+            return self._config
 
     def save_config(self):
         """Save current configuration to file."""
-        if self._config is None:
-            raise RuntimeError("No configuration loaded")
+        with self._lock:
+            if self._config is None:
+                raise RuntimeError("No configuration loaded")
 
-        try:
-            payload = yaml.safe_dump(
-                self._config.to_dict(), default_flow_style=False, indent=2
-            )
-            atomic_write_text(self.config_path, payload)
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to save configuration to {self.config_path}: {e}"
-            ) from e
+            try:
+                payload = yaml.safe_dump(
+                    self._config.to_dict(), default_flow_style=False, indent=2
+                )
+                atomic_write_text(self.config_path, payload)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to save configuration to {self.config_path}: {e}"
+                ) from e
 
     def get_albums(self) -> dict[str, Album]:
         """Get all albums."""
@@ -365,16 +375,17 @@ class ConfigManager:
         Returns:
             True if added successfully, False if key already exists
         """
-        config = self.load_config()
+        with self._lock:
+            config = self.load_config()
 
-        if album.key in config.albums:
-            return False
+            if album.key in config.albums:
+                return False
 
-        config.albums[album.key] = album
-        self._config = config
-        self.save_config()
-        self._config = None  # Clear cache to ensure fresh reads
-        return True
+            config.albums[album.key] = album
+            self._config = config
+            self.save_config()
+            self._config = None  # Clear cache to ensure fresh reads
+            return True
 
     def update_album(self, album: Album) -> bool:
         """Update an existing album.
@@ -385,16 +396,17 @@ class ConfigManager:
         Returns:
             True if updated successfully, False if key doesn't exist
         """
-        config = self.load_config()
+        with self._lock:
+            config = self.load_config()
 
-        if album.key not in config.albums:
-            return False
+            if album.key not in config.albums:
+                return False
 
-        config.albums[album.key] = album
-        self._config = config
-        self.save_config()
-        self._config = None  # Clear cache to ensure fresh reads
-        return True
+            config.albums[album.key] = album
+            self._config = config
+            self.save_config()
+            self._config = None  # Clear cache to ensure fresh reads
+            return True
 
     def delete_album(self, key: str) -> bool:
         """Delete an album by key.
@@ -405,16 +417,17 @@ class ConfigManager:
         Returns:
             True if deleted successfully, False if key doesn't exist
         """
-        config = self.load_config()
+        with self._lock:
+            config = self.load_config()
 
-        if key not in config.albums:
-            return False
+            if key not in config.albums:
+                return False
 
-        del config.albums[key]
-        self._config = config
-        self.save_config()
-        self._config = None  # Clear cache to ensure fresh reads
-        return True
+            del config.albums[key]
+            self._config = config
+            self.save_config()
+            self._config = None  # Clear cache to ensure fresh reads
+            return True
 
     def get_photo_albums_dict(self) -> dict[str, str]:
         """Get albums in the old PHOTO_ALBUMS format for backward compatibility.
