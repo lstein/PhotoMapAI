@@ -4,10 +4,17 @@
 // UMAP cluster click, reference-thumbnail click). Slide-by-slide navigation
 // is recorded in memory only — only jumps are pushed onto the browser's
 // history stack, keeping the browser back button at a useful granularity.
+//
+// _entries is a timeline (NOT a stack): forward history is preserved when
+// the user backs up, so browser Forward can redo a jump that was undone.
+// _cursor points to the user's current position in the timeline. A new push
+// after a back-action truncates the forward portion of the timeline
+// (text-editor undo/redo semantics).
 
 const MAX_ENTRIES = 50;
 const HISTORY_MARKER = "photomap-nav";
 const STEP_KIND = "step";
+const ANCHOR_ID = "anchor";
 
 function isJumpKind(kind) {
   return !!kind && kind !== STEP_KIND;
@@ -16,6 +23,13 @@ function isJumpKind(kind) {
 class BackStack {
   constructor() {
     this._entries = [];
+    this._cursor = -1;
+    // Parallel to the browser's history stack: each entry mirrors one
+    // history.pushState call (plus the anchor from init's replaceState).
+    // anchor's entryIdx is null; jump entries point at the _entries index
+    // where that jump landed the user.
+    this._historyStates = [{ id: ANCHOR_ID, entryIdx: null }];
+    this._currentHistoryIdx = 0;
     this._pendingJumpKind = null;
     this._navigator = null;
     this._anchored = false;
@@ -46,15 +60,13 @@ class BackStack {
     this._anchored = true;
     if (typeof window !== "undefined" && window.history?.replaceState) {
       try {
-        window.history.replaceState({ [HISTORY_MARKER]: "anchor" }, "");
+        window.history.replaceState({ [HISTORY_MARKER]: ANCHOR_ID }, "");
       } catch {
         // ignore — non-fatal
       }
     }
   }
 
-  // Wire the actual slide navigator. Called once during app startup.
-  // The function receives an entry and should move the swiper to that position.
   setNavigator(fn) {
     this._navigator = fn;
   }
@@ -66,67 +78,55 @@ class BackStack {
     this._pendingJumpKind = kind;
   }
 
+  // Number of entries up to and including the current cursor — i.e., how
+  // far back the user could pop. Forward history (entries above the cursor)
+  // is not counted.
   size() {
-    return this._entries.length;
+    return this._cursor + 1;
   }
 
-  // Latest entry is the user's current position. peek(1) returns that;
-  // peek(2) returns the slide before it (the "back" target), and so on.
+  // peek(1) is the user's current position, peek(2) the previous, etc.
   peek(n = 1) {
-    return this._entries[this._entries.length - n] || null;
+    const idx = this._cursor - (n - 1);
+    if (idx < 0) {
+      return null;
+    }
+    return this._entries[idx] || null;
   }
 
-  // Returns the most recent `limit` entries that the back button could pop to,
-  // newest first, excluding the user's current position.
+  // Up to `limit` entries the Back button could pop to, newest first,
+  // excluding the user's current position. Does NOT include forward history.
   recent(limit = 10) {
-    const end = this._entries.length - 1;
+    if (this._cursor <= 0) {
+      return [];
+    }
+    const end = this._cursor;
     const start = Math.max(0, end - limit);
     return this._entries.slice(start, end).reverse();
   }
 
-  // Pop the current position, navigate to the previous one. Returns true if
-  // a back navigation was performed.
+  // Move cursor one step back. Does not touch _entries (preserves forward
+  // history for browser Forward).
   popOne() {
-    if (this._entries.length < 2 || !this._navigator) {
+    if (this._cursor <= 0 || !this._navigator) {
       return false;
     }
-    this._entries.pop();
-    const target = this._entries[this._entries.length - 1];
+    this._cursor--;
+    const target = this._entries[this._cursor];
     this._notifyChanged();
     this._navigator(target);
     return true;
   }
 
-  // Truncate the stack so the entry with the given id becomes the top, then
-  // navigate to it. Used by the thumbnail flyout where the user selects a
-  // specific prior position to jump back to.
+  // Move cursor to the entry with the given id (must be at or below the
+  // current cursor — the flyout only surfaces back-able entries).
   popToEntry(entryId) {
     const idx = this._entries.findIndex((e) => e.id === entryId);
-    if (idx < 0 || !this._navigator) {
+    if (idx < 0 || idx > this._cursor || !this._navigator) {
       return false;
     }
-    this._entries.length = idx + 1;
+    this._cursor = idx;
     const target = this._entries[idx];
-    this._notifyChanged();
-    this._navigator(target);
-    return true;
-  }
-
-  // Pop the stack until just past the most recent jump entry, then navigate
-  // there. This is the browser-back semantic.
-  popToPreviousJump() {
-    let jumpIdx = -1;
-    for (let i = this._entries.length - 1; i >= 0; i--) {
-      if (isJumpKind(this._entries[i].kind)) {
-        jumpIdx = i;
-        break;
-      }
-    }
-    if (jumpIdx <= 0 || !this._navigator) {
-      return false;
-    }
-    this._entries.splice(jumpIdx);
-    const target = this._entries[this._entries.length - 1];
     this._notifyChanged();
     this._navigator(target);
     return true;
@@ -141,20 +141,23 @@ class BackStack {
     const kind = this._pendingJumpKind || STEP_KIND;
     this._pendingJumpKind = null;
 
-    const last = this._entries[this._entries.length - 1];
-    if (last && last.globalIndex === globalIndex && last.isSearchMode === !!isSearchMode) {
-      // Same position re-emitted — handles two cases:
-      // 1. Restore: a popOne/popToEntry just landed here and the swiper has
-      //    now reported the new active slide; dedup absorbs the re-push.
-      // 2. A jump-tagged event for the same slide upgrades kind to jump so
-      //    the browser-back boundary lands here.
-      if (isJumpKind(kind) && !isJumpKind(last.kind)) {
-        last.kind = kind;
-        this._pushHistory(last);
+    const current = this._cursor >= 0 ? this._entries[this._cursor] : null;
+    if (current && current.globalIndex === globalIndex && current.isSearchMode === !!isSearchMode) {
+      // Same position re-emitted — common after a restore (the swiper echoes
+      // a slideChanged when it actually moves) or when a jump-tagged event
+      // re-fires for the same slide. Upgrade kind to jump if needed so the
+      // browser-back boundary lands here.
+      if (isJumpKind(kind) && !isJumpKind(current.kind)) {
+        current.kind = kind;
+        this._pushHistory(current);
         this._notifyChanged();
       }
       return;
     }
+
+    // New entry: truncate the forward portion of the timeline and append.
+    this._entries.length = this._cursor + 1;
+    this._truncateHistoryStatesAboveCursor();
 
     const entry = {
       globalIndex,
@@ -164,8 +167,17 @@ class BackStack {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     };
     this._entries.push(entry);
+    this._cursor = this._entries.length - 1;
+
     if (this._entries.length > MAX_ENTRIES) {
-      this._entries.splice(0, this._entries.length - MAX_ENTRIES);
+      const drop = this._entries.length - MAX_ENTRIES;
+      this._entries.splice(0, drop);
+      this._cursor -= drop;
+      // Shift entryIdx in _historyStates and drop any that fell off the front.
+      this._historyStates = this._historyStates
+        .map((s) => (s.entryIdx === null ? s : { ...s, entryIdx: s.entryIdx - drop }))
+        .filter((s) => s.entryIdx === null || s.entryIdx >= 0);
+      this._currentHistoryIdx = Math.min(this._currentHistoryIdx, this._historyStates.length - 1);
     }
 
     if (isJumpKind(kind)) {
@@ -175,13 +187,17 @@ class BackStack {
   }
 
   _onAlbumChanged(detail) {
-    // Deletion: filter entries pointing at deleted indices and shift the rest.
     if (detail && detail.changeType === "deletion" && Array.isArray(detail.deletedIndices)) {
       const deleted = new Set(detail.deletedIndices);
       const sorted = [...detail.deletedIndices].sort((a, b) => a - b);
       const filtered = [];
-      for (const e of this._entries) {
+      let newCursor = this._cursor;
+      for (let i = 0; i < this._entries.length; i++) {
+        const e = this._entries[i];
         if (deleted.has(e.globalIndex)) {
+          if (i <= this._cursor) {
+            newCursor--;
+          }
           continue;
         }
         let before = 0;
@@ -195,11 +211,21 @@ class BackStack {
         filtered.push({ ...e, globalIndex: e.globalIndex - before });
       }
       this._entries = filtered;
+      this._cursor = filtered.length === 0 ? -1 : Math.max(0, Math.min(newCursor, filtered.length - 1));
+      // Browser history entries with the old entryIdx mapping are now stale;
+      // dropping all of them is simpler than re-deriving — the user remains
+      // in the same album and only loses browser back/forward across
+      // pre-deletion jumps.
+      this._historyStates = [this._historyStates[0]];
+      this._currentHistoryIdx = 0;
       this._notifyChanged();
       return;
     }
     // Album switch / move / index change: cross-album back doesn't make sense.
     this._entries = [];
+    this._cursor = -1;
+    this._historyStates = [this._historyStates[0]];
+    this._currentHistoryIdx = 0;
     this._pendingJumpKind = "jump";
     this._notifyChanged();
   }
@@ -210,11 +236,48 @@ class BackStack {
       // Not one of ours — leave it alone.
       return;
     }
-    // Whether this is one of our jump entries or the anchor (the original
-    // entry created by replaceState on init), the user has moved one step
-    // back in browser history. Rewind the stack to the position before the
-    // most recent jump.
-    this.popToPreviousJump();
+    const stateId = st[HISTORY_MARKER];
+    const newHistIdx = stateId === ANCHOR_ID ? 0 : this._historyStates.findIndex((s) => s.id === stateId);
+    if (newHistIdx < 0) {
+      // Orphan: the matching entry was truncated when the user took a new
+      // action after backing up. Skip silently.
+      return;
+    }
+    if (newHistIdx === this._currentHistoryIdx) {
+      return;
+    }
+
+    let targetCursor;
+    if (newHistIdx < this._currentHistoryIdx) {
+      // Back: rewind to the slide just before the jump we're leaving.
+      const leaving = this._historyStates[this._currentHistoryIdx];
+      if (leaving.entryIdx === null) {
+        // Shouldn't happen — the anchor lives at index 0, you can't leave it
+        // by going backwards.
+        return;
+      }
+      targetCursor = leaving.entryIdx - 1;
+    } else {
+      // Forward: land at the jump we're arriving at.
+      const arriving = this._historyStates[newHistIdx];
+      if (arriving.entryIdx === null) {
+        return;
+      }
+      targetCursor = arriving.entryIdx;
+    }
+
+    this._currentHistoryIdx = newHistIdx;
+
+    if (targetCursor >= 0 && targetCursor < this._entries.length && this._navigator) {
+      this._cursor = targetCursor;
+      const target = this._entries[this._cursor];
+      this._notifyChanged();
+      this._navigator(target);
+    } else {
+      // Notify even when we don't navigate (e.g., backed to the anchor) so
+      // the UI can refresh its enabled/disabled state.
+      this._notifyChanged();
+    }
   }
 
   _pushHistory(entry) {
@@ -226,21 +289,46 @@ class BackStack {
     } catch {
       // ignore — non-fatal
     }
+    // Browser truncates forward history on pushState; mirror that in our
+    // parallel array.
+    this._historyStates.length = this._currentHistoryIdx + 1;
+    this._historyStates.push({ id: entry.id, entryIdx: this._cursor });
+    this._currentHistoryIdx = this._historyStates.length - 1;
+  }
+
+  _truncateHistoryStatesAboveCursor() {
+    // Drop _historyStates entries that reference entries beyond the cursor.
+    // The anchor (entryIdx === null) is always preserved.
+    for (let i = this._historyStates.length - 1; i > 0; i--) {
+      const s = this._historyStates[i];
+      if (s.entryIdx !== null && s.entryIdx > this._cursor) {
+        this._historyStates.splice(i, 1);
+        if (i <= this._currentHistoryIdx) {
+          this._currentHistoryIdx--;
+        }
+      }
+    }
+    if (this._currentHistoryIdx >= this._historyStates.length) {
+      this._currentHistoryIdx = this._historyStates.length - 1;
+    }
   }
 
   _notifyChanged() {
     if (typeof window === "undefined") {
       return;
     }
-    window.dispatchEvent(new CustomEvent("backStackChanged", { detail: { size: this._entries.length } }));
+    window.dispatchEvent(new CustomEvent("backStackChanged", { detail: { size: this.size() } }));
   }
 
   // Test hook.
   _reset() {
     this._entries = [];
+    this._cursor = -1;
+    this._historyStates = [{ id: ANCHOR_ID, entryIdx: null }];
+    this._currentHistoryIdx = 0;
     this._pendingJumpKind = null;
   }
 }
 
 export const backStack = new BackStack();
-export const __TEST__ = { MAX_ENTRIES, HISTORY_MARKER };
+export const __TEST__ = { MAX_ENTRIES, HISTORY_MARKER, ANCHOR_ID };

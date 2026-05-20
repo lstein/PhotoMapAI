@@ -164,80 +164,122 @@ describe("back-stack.js", () => {
     });
   });
 
-  describe("popToPreviousJump (browser back)", () => {
-    it("returns false when there's no prior jump", () => {
+  describe("popstate handling (browser back / forward)", () => {
+    // Helper: read the most recent state object captured by the spy. Since
+    // back-stack calls window.history.pushState, the spy receives the same
+    // arguments the browser would persist in the history entry.
+    function lastPushedState() {
+      const calls = pushStateSpy.mock.calls;
+      return calls[calls.length - 1]?.[0] || null;
+    }
+
+    function fakePopState(state) {
+      window.dispatchEvent(new window.PopStateEvent("popstate", { state }));
+    }
+
+    it("ignores popstate events that aren't ours", () => {
       emitSlideChanged(0);
-      emitSlideChanged(1);
-      expect(backStack.popToPreviousJump()).toBe(false);
+      backStack.markNextAsJump("search");
+      emitSlideChanged(50);
+      navigator.mockClear();
+      fakePopState({ unrelated: true });
+      expect(navigator).not.toHaveBeenCalled();
     });
 
-    it("pops past the most recent jump and navigates to the step before it", () => {
+    it("ignores popstate with an orphan id (entry was truncated)", () => {
+      emitSlideChanged(0);
+      backStack.markNextAsJump("search");
+      emitSlideChanged(50);
+      navigator.mockClear();
+      fakePopState({ [HISTORY_MARKER]: "no-such-id" });
+      expect(navigator).not.toHaveBeenCalled();
+    });
+
+    it("back from a jump navigates to the slide just before it", () => {
       emitSlideChanged(0);
       emitSlideChanged(1);
       backStack.markNextAsJump("search");
       emitSlideChanged(50);
       emitSlideChanged(51);
       emitSlideChanged(52);
-      expect(backStack.popToPreviousJump()).toBe(true);
+      navigator.mockClear();
+      // Browser back from the search-pushed history entry lands on the anchor.
+      fakePopState({ [HISTORY_MARKER]: "anchor" });
       expect(navigator).toHaveBeenCalledWith(expect.objectContaining({ globalIndex: 1 }));
       expect(backStack.size()).toBe(2);
     });
 
-    it("popstate triggers popToPreviousJump", () => {
-      emitSlideChanged(0);
-      emitSlideChanged(1);
-      backStack.markNextAsJump("search");
-      emitSlideChanged(99);
-      window.dispatchEvent(
-        new window.PopStateEvent("popstate", {
-          state: { [HISTORY_MARKER]: "some-id", kind: "jump" },
-        })
-      );
-      expect(navigator).toHaveBeenCalledWith(expect.objectContaining({ globalIndex: 1 }));
-    });
-
-    it("ignores popstate events that aren't ours", () => {
+    it("forward to a jump navigates AT the jump entry", () => {
       emitSlideChanged(0);
       emitSlideChanged(1);
       backStack.markNextAsJump("search");
       emitSlideChanged(50);
+      const searchState = lastPushedState();
+      // Back once.
+      fakePopState({ [HISTORY_MARKER]: "anchor" });
+      expect(navigator).toHaveBeenLastCalledWith(expect.objectContaining({ globalIndex: 1 }));
+      // Forward — we should land at the search target itself.
       navigator.mockClear();
-      window.dispatchEvent(new window.PopStateEvent("popstate", { state: { unrelated: true } }));
-      expect(navigator).not.toHaveBeenCalled();
+      fakePopState(searchState);
+      expect(navigator).toHaveBeenCalledWith(expect.objectContaining({ globalIndex: 50 }));
+      expect(backStack.size()).toBe(3);
     });
 
-    it("treats an anchor popstate as a back-one-jump signal too", () => {
-      // Reaching the anchor means the user has hit back enough times to
-      // pop the last jump entry off the browser history; we should still
-      // rewind the in-memory stack.
-      emitSlideChanged(0);
-      backStack.markNextAsJump("search");
-      emitSlideChanged(10);
-      navigator.mockClear();
-      window.dispatchEvent(new window.PopStateEvent("popstate", { state: { [HISTORY_MARKER]: "anchor" } }));
-      expect(navigator).toHaveBeenCalledWith(expect.objectContaining({ globalIndex: 0 }));
-    });
-
-    it("handles multiple browser-back hops through stacked jumps", () => {
-      // Mirrors the user-reported scenario: ref-image click then search,
-      // then two browser-backs should land back at the original slide.
+    it("multi-hop back through stacked jumps lands at the slide before the most recent jump", () => {
+      // Reference-click then search, then back twice.
       emitSlideChanged(1);
       backStack.markNextAsJump("reference");
       emitSlideChanged(2);
+      const refState = lastPushedState();
       backStack.markNextAsJump("search");
       emitSlideChanged(3);
 
-      // 1st browser back: state is the reference jump's entry.
-      window.dispatchEvent(
-        new window.PopStateEvent("popstate", {
-          state: { [HISTORY_MARKER]: "ref-id", kind: "reference" },
-        })
-      );
+      // 1st back: leave the search jump, land before it (at the reference jump).
+      fakePopState(refState);
       expect(navigator).toHaveBeenLastCalledWith(expect.objectContaining({ globalIndex: 2 }));
-
-      // 2nd browser back: state is the anchor.
-      window.dispatchEvent(new window.PopStateEvent("popstate", { state: { [HISTORY_MARKER]: "anchor" } }));
+      // 2nd back: leave the reference jump, land before it.
+      fakePopState({ [HISTORY_MARKER]: "anchor" });
       expect(navigator).toHaveBeenLastCalledWith(expect.objectContaining({ globalIndex: 1 }));
+    });
+
+    it("forward redoes a jump that was undone", () => {
+      // Mirror native browser back/forward symmetry.
+      emitSlideChanged(1);
+      backStack.markNextAsJump("reference");
+      emitSlideChanged(2);
+      const refState = lastPushedState();
+      backStack.markNextAsJump("search");
+      emitSlideChanged(3);
+      const searchState = lastPushedState();
+
+      fakePopState(refState); // back: leaves search jump, lands at 2.
+      fakePopState({ [HISTORY_MARKER]: "anchor" }); // back: leaves reference jump, lands at 1.
+      navigator.mockClear();
+      fakePopState(refState); // forward: arrives at reference jump (entry 2).
+      expect(navigator).toHaveBeenLastCalledWith(expect.objectContaining({ globalIndex: 2 }));
+      fakePopState(searchState); // forward: arrives at search jump (entry 3).
+      expect(navigator).toHaveBeenLastCalledWith(expect.objectContaining({ globalIndex: 3 }));
+    });
+
+    it("a new action after back truncates forward history", () => {
+      emitSlideChanged(1);
+      backStack.markNextAsJump("reference");
+      emitSlideChanged(2);
+      const refState = lastPushedState();
+      backStack.markNextAsJump("search");
+      emitSlideChanged(3);
+      // Back once.
+      fakePopState(refState);
+      expect(backStack.size()).toBe(2);
+      // New action while on entry 2: the search entry should be dropped.
+      emitSlideChanged(99);
+      expect(backStack.size()).toBe(3);
+      expect(backStack.peek(1).globalIndex).toBe(99);
+      // Old search state is now orphaned.
+      const previousSearchId = "id-no-longer-valid";
+      navigator.mockClear();
+      fakePopState({ [HISTORY_MARKER]: previousSearchId });
+      expect(navigator).not.toHaveBeenCalled();
     });
   });
 
