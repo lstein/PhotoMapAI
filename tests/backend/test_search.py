@@ -188,6 +188,64 @@ def test_text_search(client, new_album, monkeypatch):
     ), "Text search returned unexpected image"
 
 
+def test_image_indices_lookup(client, new_album, monkeypatch):
+    """The batch /image_indices endpoint resolves album basenames to their
+    indices and returns null for filenames not present in the album. Powers
+    the metadata drawer's reference-image-thumbnail enhancement.
+    """
+    from photomap.backend.embeddings import Embeddings
+
+    monkeypatch.setattr(Embeddings, "minimum_image_size", 10 * 1024)
+
+    response = client.post("/update_index_async", json={"album_key": new_album["key"]})
+    assert response.status_code == 202
+    try:
+        poll_during_indexing(client, new_album["key"])
+    except TimeoutError as e:
+        pytest.fail(f"Indexing did not complete: {str(e)}")
+
+    known = fetch_filename(client, new_album["key"], 0)
+    response = client.post(
+        f"/image_indices/{quote(new_album['key'])}",
+        json={"filenames": [known, "definitely-not-in-album.png", "another-missing.jpg"]},
+    )
+    assert response.status_code == 200
+    indices = response.json()["indices"]
+    assert indices[known] == 0
+    assert indices["definitely-not-in-album.png"] is None
+    assert indices["another-missing.jpg"] is None
+
+
+def test_image_indices_empty_request(client, new_album, monkeypatch):
+    """An empty filenames list returns an empty mapping (not an error)."""
+    from photomap.backend.embeddings import Embeddings
+
+    monkeypatch.setattr(Embeddings, "minimum_image_size", 10 * 1024)
+
+    response = client.post("/update_index_async", json={"album_key": new_album["key"]})
+    assert response.status_code == 202
+    try:
+        poll_during_indexing(client, new_album["key"])
+    except TimeoutError as e:
+        pytest.fail(f"Indexing did not complete: {str(e)}")
+
+    response = client.post(
+        f"/image_indices/{quote(new_album['key'])}",
+        json={"filenames": []},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"indices": {}}
+
+
+def test_image_indices_unknown_album(client):
+    """Unknown album keys yield a 404 rather than an empty success."""
+    response = client.post(
+        "/image_indices/nonexistent_album",
+        json={"filenames": ["any.png"]},
+    )
+    assert response.status_code == 404
+
+
 def test_calibration_skipped_for_image_queries(tmp_path, monkeypatch):
     """SigLIP's sigmoid calibration was crushing every image-image cosine to
     1.0, returning 100 saturated matches. Calibration must only apply to

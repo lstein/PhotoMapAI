@@ -672,11 +672,10 @@ class TestFormatInvokeMetadataEmptyFields:
         assert "<td>0.6</td>" in html
         assert "Medium" not in html
 
-    def test_mixed_weight_column_defaults_missing_weights_to_1_0(self):
-        """Regression for the ragged-row bug: when some ref_images have an
-        explicit weight and others don't, every row renders with a weight
-        cell and missing weights default to 1.0 instead of leaving a blank
-        column on the first row.
+    def test_mixed_weight_column_leaves_missing_weights_blank(self):
+        """When some IP-adapter refs carry an explicit weight and others do
+        not, the column survives (one row has data) and rows without a
+        weight render as an empty cell rather than a synthesized 1.0.
         """
         metadata = {
             "metadata_version": 5,
@@ -690,8 +689,9 @@ class TestFormatInvokeMetadataEmptyFields:
                     "isEnabled": True,
                     "config": {
                         "type": "ipAdapter",
+                        "model": {"name": "ipa"},
                         "image": {"image_name": "first.png"},
-                        # no weight — should render as 1.0 in a surviving column
+                        # no weight — column survives, this cell stays empty
                     },
                 },
                 {
@@ -699,6 +699,7 @@ class TestFormatInvokeMetadataEmptyFields:
                     "isEnabled": True,
                     "config": {
                         "type": "ipAdapter",
+                        "model": {"name": "ipa"},
                         "image": {"image_name": "second.png"},
                         "weight": 0.7,
                     },
@@ -709,14 +710,62 @@ class TestFormatInvokeMetadataEmptyFields:
         start = html.index("<table class='invoke-tuples'>")
         end = html.index("</table>", start)
         tuple_table = html[start:end]
-        # model_name column is empty on every row → dropped.
-        # Two surviving columns (image, weight) × two rows → 4 <td>s total.
+        # All three columns survive (model, image, weight) × 2 rows → 6 <td>s.
         assert tuple_table.count("<tr>") == 2
-        assert tuple_table.count("<td>") == 4
+        assert tuple_table.count("<td>") == 6
         assert "<td>first.png</td>" in tuple_table
         assert "<td>second.png</td>" in tuple_table
-        assert "<td>1.0</td>" in tuple_table
+        # First row has an empty weight cell — no synthesized 1.0.
         assert "<td>0.7</td>" in tuple_table
+        assert "<td>1.0</td>" not in tuple_table
+        assert "<td></td>" in tuple_table
+
+    def test_refs_without_ip_adapter_suppress_weight_column(self):
+        """Reference images that attach directly to the model (Flux2, Qwen,
+        etc.) have no IP adapter — ``cfg.model`` is None — and any weight
+        InvokeAI serializes for them is an internal default, not a user
+        value. The column should drop entirely so a stray serialized 1.0
+        on one row doesn't make the user think the other ref has no weight
+        while this one does.
+        """
+        metadata = {
+            "metadata_version": 5,
+            "app_version": "6.12.0",
+            "positive_prompt": "x",
+            "seed": 1,
+            "model": {"name": "m"},
+            "ref_images": [
+                {
+                    "id": "r1",
+                    "isEnabled": True,
+                    "config": {
+                        "type": "flux2_reference_image",
+                        "image": {"image_name": "first.png"},
+                        # no weight at all
+                    },
+                },
+                {
+                    "id": "r2",
+                    "isEnabled": True,
+                    "config": {
+                        "type": "flux2_reference_image",
+                        "image": {"image_name": "second.png"},
+                        "model": None,
+                        "weight": 1,  # serialized internal default
+                    },
+                },
+            ],
+        }
+        html = format_invoke_metadata(_slide(), metadata).description
+        start = html.index("<table class='invoke-tuples'>")
+        end = html.index("</table>", start)
+        tuple_table = html[start:end]
+        # Only the image-name column survives → 1 cell per row.
+        assert tuple_table.count("<tr>") == 2
+        assert tuple_table.count("<td>") == 2
+        assert "<td>first.png</td>" in tuple_table
+        assert "<td>second.png</td>" in tuple_table
+        assert "1" not in tuple_table.replace("first.png", "").replace("second.png", "")
 
     def test_ref_images_list_of_lists_is_flattened(self):
         """Some legacy metadata wraps ref_images in an outer list. The v5
