@@ -110,6 +110,7 @@ def test_filetree_create_directory_locked(client, setup_album_lock):
 def test_curation_export_locked(client, setup_album_lock):
     """Test that /api/curation/export is disabled when album is locked."""
     response = client.post("/api/curation/export", json={
+        "album": "any-key",
         "filenames": ["test.jpg"],
         "output_folder": "/tmp/export"
     })

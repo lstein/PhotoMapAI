@@ -5,6 +5,7 @@ Format EXIF metadata for images, including human-readable tags.
 Returns an HTML representation of the EXIF data.
 """
 
+import html
 from logging import getLogger
 
 import requests
@@ -12,6 +13,17 @@ import requests
 from .slide_summary import SlideSummary
 
 logger = getLogger(__name__)
+
+
+def _esc(value: object) -> str:
+    """Escape ``value`` for safe interpolation into HTML.
+
+    EXIF and LocationIQ payloads are not trusted — every value crossing into
+    the rendered drawer table must pass through here.
+    """
+    if value is None:
+        return ""
+    return html.escape(str(value), quote=True)
 
 
 def format_exif_metadata(
@@ -37,7 +49,7 @@ def format_exif_metadata(
     gps_lon = metadata.get("GPSLongitudeDecimal")
 
     # Build HTML table
-    html = """
+    html_doc = """
     <div class='exif-metadata' style="display: flex; align-items: flex-start; gap: 18px; margin: 0; padding: 0;">
     """
 
@@ -70,26 +82,26 @@ def format_exif_metadata(
             </div>
             """
         elif locationiq_api_key and not api_key_valid:
-            map_html = f'<div style="font-size:0.9em; color:#888; font-style:italic;">Map unavailable ({error_msg})</div>'
+            map_html = f'<div style="font-size:0.9em; color:#888; font-style:italic;">Map unavailable ({_esc(error_msg)})</div>'
         else:
             map_html = '<div style="font-size:0.9em; color:#888; font-style:italic;">Map unavailable (no API key)</div>'
 
-        html += f"""
+        html_doc += f"""
         <div class='gps-info' style="min-width:180px; max-width:220px; margin:0; padding:0; text-align:left; vertical-align:top;">
             <div style="font-weight: bold; margin-bottom: 4px;">📍 Location</div>
             <div style="display: flex; flex-direction: column; align-items: flex-end; font-size: 0.98em; margin-bottom: 6px;">
                     <a href="{google_maps_link}" target="_blank" style="color: white; text-decoration: none"
-                       onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" style="text-align: left;">{coord_str}</a>
+                       onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" style="text-align: left;">{_esc(coord_str)}</a>
             </div>
             {map_html}
         </div>
         """
     else:
         # Still need a left column for alignment, even if empty
-        html += "<div class='gps-info' style='min-width:0px;'></div>"
+        html_doc += "<div class='gps-info' style='min-width:0px;'></div>"
 
     # Right column: EXIF table
-    html += "<div style='flex:1;'><table class='exif-table'>"
+    html_doc += "<div style='flex:1;'><table class='exif-table'>"
 
     # Prioritize important fields
     priority_fields = {
@@ -111,15 +123,17 @@ def format_exif_metadata(
         "GPSTimeStamp": "GPS Time",
     }
 
-    # Add priority fields first
+    # Add priority fields first. display_name comes from the hardcoded
+    # priority_fields dict above, so it's already trusted; value comes from
+    # the image's EXIF and must be escaped.
     for field, display_name in priority_fields.items():
         if field in metadata:
             value = _format_field_value(field, metadata[field])
-            html += f"<tr><th>{display_name}</th><td>{value}</td></tr>"
+            html_doc += f"<tr><th>{display_name}</th><td>{_esc(value)}</td></tr>"
 
-    html += "</table></div></div>"  # Close right column and flex container
+    html_doc += "</table></div></div>"  # Close right column and flex container
 
-    slide_data.description = html
+    slide_data.description = html_doc
     return slide_data
 
 

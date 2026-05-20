@@ -4,7 +4,7 @@
   "description": "PhotoMapAI Frontend JavaScript Tests",
   "type": "module",
   "scripts": {
-    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
     "lint": "eslint photomap/frontend/static/javascript/**/*.js tests/frontend/**/*.js",
     "lint:fix": "eslint --fix photomap/frontend/static/javascript/**/*.js tests/frontend/**/*.js",
     "format": "prettier --write 'photomap/frontend/static/javascript/**/*.js' 'tests/frontend/**/*.js'",

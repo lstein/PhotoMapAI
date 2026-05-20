@@ -277,6 +277,7 @@ def test_export_endpoint(client, new_album, monkeypatch, tmp_path):
         response = client.post(
             "/api/curation/export",
             json={
+                "album": new_album["key"],
                 "filenames": selected_files,
                 "output_folder": str(export_folder)
             }
@@ -295,10 +296,13 @@ def test_export_endpoint(client, new_album, monkeypatch, tmp_path):
 
 def test_export_validation(client, tmp_path):
     """Test validation of export parameters."""
+    # Output-folder validation runs before album resolution, so a dummy
+    # album key is fine here.
     # Test empty output folder
     response = client.post(
         "/api/curation/export",
         json={
+            "album": "any-key",
             "filenames": ["some_file.jpg"],
             "output_folder": ""
         }
@@ -309,6 +313,7 @@ def test_export_validation(client, tmp_path):
     response = client.post(
         "/api/curation/export",
         json={
+            "album": "any-key",
             "filenames": ["some_file.jpg"],
             "output_folder": "/\x00invalid"
         }
@@ -318,10 +323,11 @@ def test_export_validation(client, tmp_path):
 
 def test_export_path_traversal_protection(client):
     """Test that export prevents path traversal attacks."""
-    # Try to export to system directory outside user home
+    # Output-folder validation runs before album resolution.
     response = client.post(
         "/api/curation/export",
         json={
+            "album": "any-key",
             "filenames": ["some_file.jpg"],
             "output_folder": "/etc"
         }
@@ -329,7 +335,7 @@ def test_export_path_traversal_protection(client):
     assert response.status_code == 400
 
 
-def test_export_nonexistent_files(client):
+def test_export_nonexistent_files(client, new_album):
     """Test export with nonexistent files."""
     with tempfile.TemporaryDirectory(dir=Path.home()) as temp_dir:
         export_folder = Path(temp_dir) / "export_test"
@@ -337,6 +343,7 @@ def test_export_nonexistent_files(client):
         response = client.post(
             "/api/curation/export",
             json={
+                "album": new_album["key"],
                 "filenames": ["/nonexistent/file1.jpg", "/nonexistent/file2.jpg"],
                 "output_folder": str(export_folder)
             }

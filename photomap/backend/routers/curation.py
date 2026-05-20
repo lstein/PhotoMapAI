@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from ..config import get_config_manager
 from ..embeddings import _open_npz_file, get_fps_indices_global, get_kmeans_indices_global
 from ..progress import IndexStatus, progress_tracker
+from .album import validate_album_exists, validate_image_access
 from .index import check_album_lock
 
 router = APIRouter()
@@ -35,6 +36,7 @@ class ExportRequest(BaseModel):
     """
     Request model for the export endpoint.
     """
+    album: str
     filenames: list[str]
     output_folder: str
 
@@ -355,6 +357,12 @@ async def export_dataset(request: ExportRequest):
     if not is_within_base_dir(output_dir, base_dir):
         raise HTTPException(status_code=400, detail="Output folder is outside the allowed export directory")
 
+    # Resolve the album so we can verify each source path lives inside it —
+    # otherwise a caller could ask us to copy /etc/passwd into their export
+    # dir. Validated after the output-folder checks so cheap input errors
+    # surface as 400 even when the album key is bogus.
+    album_config = validate_album_exists(request.album)
+
     if not output_dir.exists():
         try:
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -366,11 +374,21 @@ async def export_dataset(request: ExportRequest):
 
     for img_path in request.filenames:
         try:
-            if not os.path.exists(img_path):
+            src_path = Path(img_path)
+            if not src_path.exists():
                 continue
 
-            original_filename = os.path.basename(img_path)
-            parent_folder = os.path.basename(os.path.dirname(img_path))
+            # Reject any source that doesn't live inside one of the album's
+            # configured image_paths. ``validate_image_access`` resolves both
+            # sides and uses ``is_relative_to``, which blocks ``..``-style
+            # escapes; the explicit ``is_symlink`` guard blocks a symlink
+            # planted inside the album from pointing at an arbitrary file.
+            if src_path.is_symlink() or not validate_image_access(album_config, src_path):
+                errors.append(f"Access denied: {img_path}")
+                continue
+
+            original_filename = src_path.name
+            parent_folder = src_path.parent.name
             name_stem, name_ext = os.path.splitext(original_filename)
 
             candidate_name = original_filename
@@ -386,14 +404,14 @@ async def export_dataset(request: ExportRequest):
                 dest_path = output_dir / candidate_name
                 counter += 1
 
-            shutil.copy2(img_path, dest_path)
+            shutil.copy2(src_path, dest_path)
 
-            base_src = os.path.splitext(img_path)[0]
-            base_dest = os.path.splitext(str(dest_path))[0]
+            base_src = src_path.with_suffix("")
+            base_dest = dest_path.with_suffix("")
             for ext in ['.txt', '.caption', '.json']:
-                txt_src = base_src + ext
-                if os.path.exists(txt_src):
-                    shutil.copy2(txt_src, base_dest + ext)
+                sidecar_src = base_src.with_name(base_src.name + ext)
+                if sidecar_src.exists() and not sidecar_src.is_symlink():
+                    shutil.copy2(sidecar_src, base_dest.with_name(base_dest.name + ext))
             success_count += 1
         except Exception as e:
             errors.append(f"Copy failed: {e}")

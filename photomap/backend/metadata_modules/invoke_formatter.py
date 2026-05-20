@@ -9,6 +9,7 @@ v2 / v3 / v5 InvokeAI metadata. The formatter itself does not know anything
 about the underlying metadata version layout.
 """
 
+import html
 import logging
 from collections.abc import Iterable
 from datetime import datetime
@@ -26,6 +27,17 @@ from .invokemetadata import GenerationMetadataAdapter
 from .slide_summary import SlideSummary
 
 logger = logging.getLogger(__name__)
+
+
+def _esc(value: object) -> str:
+    """Escape ``value`` for safe interpolation into HTML.
+
+    PNG tEXt chunks are attacker-controllable, so every metadata-derived
+    string crossing into the rendered drawer table must pass through here.
+    """
+    if value is None:
+        return ""
+    return html.escape(str(value), quote=True)
 
 
 _COPY_SVG = (
@@ -167,27 +179,28 @@ def format_invoke_metadata(
 
     rows: list[str] = []
     if modification_time:
-        rows.append(f"<tr><th>Date</th><td>{modification_time}</td></tr>")
+        rows.append(f"<tr><th>Date</th><td>{_esc(modification_time)}</td></tr>")
     rows.append(
         f'<tr><th>Positive Prompt</th><td class="copyme">'
-        f"{positive_prompt}{_COPY_SVG if positive_prompt else ''}</td></tr>"
+        f"{_esc(positive_prompt)}{_COPY_SVG if positive_prompt else ''}</td></tr>"
     )
     if negative_prompt:
         rows.append(
             f'<tr><th>Negative Prompt</th><td class="copyme">'
-            f"{negative_prompt}{_COPY_SVG}</td></tr>"
+            f"{_esc(negative_prompt)}{_COPY_SVG}</td></tr>"
         )
     if model:
-        rows.append(f"<tr><th>Model</th><td>{model}</td></tr>")
+        rows.append(f"<tr><th>Model</th><td>{_esc(model)}</td></tr>")
     if seed is not None:
         rows.append(
-            f'<tr><th>Seed</th><td class="copyme">{seed}{_COPY_SVG}</td></tr>'
+            f'<tr><th>Seed</th><td class="copyme">{_esc(seed)}{_COPY_SVG}</td></tr>'
         )
     if loras and (lora_html := _tuple_table(loras)):
         rows.append(f"<tr><th>Loras</th><td>{lora_html}</td></tr>")
     if raster_images:
         rows.append(
-            f"<tr><th>Raster Images</th><td>{', '.join(raster_images)}</td></tr>"
+            "<tr><th>Raster Images</th><td>"
+            f"{', '.join(_esc(name) for name in raster_images)}</td></tr>"
         )
     if reference_images and (ref_html := _tuple_table(reference_images)):
         rows.append(f"<tr><th>Reference Images</th><td>{ref_html}</td></tr>")
@@ -210,7 +223,8 @@ def format_invoke_metadata(
 
 def _scalar_table(metadata: dict) -> str:
     rows = "".join(
-        f"<tr><th>{key}</th><td>{value}</td></tr>" for key, value in metadata.items()
+        f"<tr><th>{_esc(key)}</th><td>{_esc(value)}</td></tr>"
+        for key, value in metadata.items()
     )
     return f"<table class='invoke-metadata'>{rows}</table>"
 
@@ -262,10 +276,7 @@ def _tuple_table(
         for idx in range(len(fields)):
             if not keep_column[idx]:
                 continue
-            value = tup[idx]
-            if value is None:
-                value = ""
-            cells.append(f"<td>{value}</td>")
+            cells.append(f"<td>{_esc(tup[idx])}</td>")
         html_rows.append(f"<tr>{''.join(cells)}</tr>")
 
     return "<table class='invoke-tuples'>" + "".join(html_rows) + "</table>"
