@@ -16,7 +16,12 @@ from pydantic import BaseModel
 from ..config import get_config_manager
 from ..embeddings import Embeddings, peek_encoder_spec
 from ..progress import progress_tracker
-from .album import check_album_lock, validate_album_exists, validate_image_access
+from .album import (
+    check_album_lock,
+    get_embeddings_for_album,
+    validate_album_exists,
+    validate_image_access,
+)
 
 index_router = APIRouter()
 
@@ -253,10 +258,7 @@ async def delete_image(album_key: str, index: int) -> JSONResponse:
     check_album_lock()  # May raise a 403 exception
     try:
         album_config = validate_album_exists(album_key)
-        embeddings = Embeddings(
-            embeddings_path=Path(album_config.index),
-            encoder_spec=album_config.encoder_spec,
-        )
+        embeddings = get_embeddings_for_album(album_key)
         image_path = embeddings.get_image_path(index)
 
         if not validate_image_access(album_config, image_path):
@@ -289,10 +291,7 @@ async def move_images(album_key: str, req: MoveImagesRequest) -> JSONResponse:
     check_album_lock()  # May raise a 403 exception
     try:
         album_config = validate_album_exists(album_key)
-        embeddings = Embeddings(
-            embeddings_path=Path(album_config.index),
-            encoder_spec=album_config.encoder_spec,
-        )
+        embeddings = get_embeddings_for_album(album_key)
 
         target_dir = Path(req.target_directory)
 
@@ -380,10 +379,7 @@ async def copy_images(album_key: str, req: CopyImagesRequest) -> JSONResponse:
     # Note: No album lock check - copying doesn't modify the album
     try:
         album_config = validate_album_exists(album_key)
-        embeddings = Embeddings(
-            embeddings_path=Path(album_config.index),
-            encoder_spec=album_config.encoder_spec,
-        )
+        embeddings = get_embeddings_for_album(album_key)
 
         target_dir = Path(req.target_directory)
 

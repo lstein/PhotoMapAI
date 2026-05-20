@@ -1,6 +1,6 @@
 import { backStack } from "./back-stack.js";
 import { bookmarkManager } from "./bookmarks.js";
-import { ScoreDisplay } from "./score-display.js";
+import { scoreDisplay } from "./score-display.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { debounce } from "./utils.js";
@@ -35,7 +35,10 @@ class SeekSlider {
     this.sliderContainer = document.getElementById("sliderWithTicksContainer");
     this.scoreDisplayElement = document.getElementById("fixedScoreDisplay");
     this.scoreSliderRow = document.getElementById("scoreSliderRow");
-    this.scoreDisplayObj = new ScoreDisplay();
+    // Share the singleton from score-display.js. Constructing a second
+    // instance double-binds the star click handler on #scoreText, so a
+    // bookmark toggle would fire twice and immediately cancel itself.
+    this.scoreDisplayObj = scoreDisplay;
     this.hoverStrip = document.getElementById("sliderHoverStrip");
 
     this.scoreText = document.getElementById("scoreText");
