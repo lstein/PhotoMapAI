@@ -255,6 +255,10 @@
   transform: translateX(0);
 }
 
+.banner-drawer-container.dragging {
+  transition: none;
+}
+
 .banner-drawer-container.hidden-fullscreen {
   opacity: 0 !important;
   visibility: hidden !important;
