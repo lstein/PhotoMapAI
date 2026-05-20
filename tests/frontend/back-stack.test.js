@@ -242,6 +242,30 @@ describe("back-stack.js", () => {
       expect(navigator).toHaveBeenLastCalledWith(expect.objectContaining({ globalIndex: 1 }));
     });
 
+    it("forward restores the cursor position the user was at when they pressed back", () => {
+      // User does: seek (#2), seek (#3), arrow-step (#4). Browser-back from
+      // slide #4 should land at slide #2 (before the second seek). Then
+      // browser-forward should return to slide #4 — the actual position
+      // when back was pressed — NOT slide #3 (the seek target).
+      emitSlideChanged(0); // slide #1
+      backStack.markNextAsJump("seek");
+      emitSlideChanged(1); // slide #2 (seek)
+      const seek2State = lastPushedState();
+      backStack.markNextAsJump("seek");
+      emitSlideChanged(2); // slide #3 (seek)
+      const seek3State = lastPushedState();
+      emitSlideChanged(3); // slide #4 (arrow-step)
+
+      // Browser back: leaving the seek-#3 state, land at slide #2.
+      fakePopState(seek2State);
+      expect(navigator).toHaveBeenLastCalledWith(expect.objectContaining({ globalIndex: 1 }));
+
+      // Browser forward: should restore slide #4, not slide #3.
+      navigator.mockClear();
+      fakePopState(seek3State);
+      expect(navigator).toHaveBeenLastCalledWith(expect.objectContaining({ globalIndex: 3 }));
+    });
+
     it("forward redoes a jump that was undone", () => {
       // Mirror native browser back/forward symmetry.
       emitSlideChanged(1);
@@ -292,13 +316,17 @@ describe("back-stack.js", () => {
       expect(backStack.size()).toBe(0);
     });
 
-    it("marks the post-switch first slide as a jump", () => {
+    it("does NOT mark the post-switch first slide as a jump", () => {
+      // Album-load isn't a user action that can be undone. If we pushed it
+      // to browser history, browser-back from any post-album navigation
+      // would arrive at the anchor with no slide to navigate to, leaving
+      // the user stuck.
       emitSlideChanged(5);
       emitAlbumChanged({ album: "other", totalImages: 100 });
       pushStateSpy.mockClear();
       emitSlideChanged(0);
-      expect(backStack.peek(1).kind).toBe("jump");
-      expect(pushStateSpy).toHaveBeenCalledTimes(1);
+      expect(backStack.peek(1).kind).toBe("step");
+      expect(pushStateSpy).not.toHaveBeenCalled();
     });
 
     it("filters and reindexes entries on deletion", () => {

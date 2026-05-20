@@ -222,11 +222,16 @@ class BackStack {
       return;
     }
     // Album switch / move / index change: cross-album back doesn't make sense.
+    // The next slideChanged is recorded as a plain step (NOT a jump), so the
+    // album load itself doesn't create a browser-history entry. If we did
+    // push it, browser-back from any post-album navigation would arrive at
+    // the anchor and try to navigate to "the slide before the album existed"
+    // — a non-position — and silently do nothing, leaving the user stuck.
     this._entries = [];
     this._cursor = -1;
     this._historyStates = [this._historyStates[0]];
     this._currentHistoryIdx = 0;
-    this._pendingJumpKind = "jump";
+    this._pendingJumpKind = null;
     this._notifyChanged();
   }
 
@@ -256,14 +261,28 @@ class BackStack {
         // by going backwards.
         return;
       }
+      // Record where the user was on this state so a future forward can
+      // restore them there (instead of the jump's original landing position,
+      // which may be behind their actual cursor if they took steps after
+      // the jump).
+      leaving.lastCursorBeforeLeaving = this._cursor;
       targetCursor = leaving.entryIdx - 1;
     } else {
-      // Forward: land at the jump we're arriving at.
+      // Forward: prefer the cursor the user was at when they last left this
+      // state (saved during the back-popstate that landed us here), so steps
+      // taken after the original jump are restored too. Fall back to the
+      // jump's original entryIdx if no leaving-cursor was recorded or if
+      // it's been invalidated by a truncation.
       const arriving = this._historyStates[newHistIdx];
       if (arriving.entryIdx === null) {
         return;
       }
-      targetCursor = arriving.entryIdx;
+      const restored = arriving.lastCursorBeforeLeaving;
+      if (typeof restored === "number" && restored >= 0 && restored < this._entries.length) {
+        targetCursor = restored;
+      } else {
+        targetCursor = arriving.entryIdx;
+      }
     }
 
     this._currentHistoryIdx = newHistIdx;
