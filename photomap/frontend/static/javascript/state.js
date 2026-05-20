@@ -34,6 +34,7 @@ export const state = {
   umapExitFullscreenOnSelection: true, // Exit fullscreen when cluster is selected
   umapClickSelectsCluster: true, // Whether click selects cluster or single image
   umapControlsVisible: true, // Whether the UMAP controls panel is visible
+  showMetadataFields: true, // Whether the metadata-drawer fields table is shown
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -139,6 +140,11 @@ export async function restoreFromLocalStorage() {
   if (storedUmapControlsVisible !== null) {
     state.umapControlsVisible = storedUmapControlsVisible === "true";
   }
+
+  const storedShowMetadataFields = localStorage.getItem("showMetadataFields");
+  if (storedShowMetadataFields !== null) {
+    state.showMetadataFields = storedShowMetadataFields === "true";
+  }
 }
 
 // Save state to local storage
@@ -156,6 +162,7 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("umapExitFullscreenOnSelection", state.umapExitFullscreenOnSelection ? "true" : "false");
   localStorage.setItem("umapClickSelectsCluster", state.umapClickSelectsCluster ? "true" : "false");
   localStorage.setItem("umapControlsVisible", state.umapControlsVisible ? "true" : "false");
+  localStorage.setItem("showMetadataFields", state.showMetadataFields ? "true" : "false");
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
@@ -368,5 +375,14 @@ export function setUmapControlsVisible(visible) {
     state.umapControlsVisible = visible;
     saveSettingsToLocalStorage();
     window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { umapControlsVisible: visible } }));
+  }
+}
+
+export function setShowMetadataFields(visible) {
+  const bool = !!visible;
+  if (state.showMetadataFields !== bool) {
+    state.showMetadataFields = bool;
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { showMetadataFields: bool } }));
   }
 }
