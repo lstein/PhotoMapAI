@@ -39,7 +39,12 @@ OPENIMAGES_VAL_LABELS_URL = (
 REPO_ROOT = Path(__file__).resolve().parent.parent
 VOCAB_FILE = REPO_ROOT / "photomap" / "backend" / "data" / "cluster_vocab.txt"
 
-CURATED_SENTINEL = "# CURATED"
+CURATED_SENTINEL = "# CURATED LABELS"
+# Tolerant prefix for detecting the sentinel when reading: matches both the
+# current `# CURATED LABELS` form and any older `# CURATED — …` files still
+# in flight. Safe because nothing else in an auto-generated section starts
+# with `# CURATED`.
+CURATED_DETECT_PREFIX = "# CURATED"
 MIN_LEN = 3
 MAX_LEN = 60
 
@@ -188,7 +193,7 @@ def read_curated_section(path: Path) -> list[str]:
         return []
     lines = path.read_text(encoding="utf-8").splitlines()
     try:
-        idx = next(i for i, line in enumerate(lines) if line.startswith(CURATED_SENTINEL))
+        idx = next(i for i, line in enumerate(lines) if line.startswith(CURATED_DETECT_PREFIX))
     except StopIteration:
         return []
     # Everything after the sentinel line
@@ -241,12 +246,12 @@ def write_vocab(
             "",
         ]
 
-    # The "End users…" guidance and the sentinel itself are part of the
-    # auto-generated header — they sit ABOVE the sentinel line so that
-    # read_curated_section() (which slices everything after the sentinel)
-    # captures only true user-added phrases. Putting them below would cause
-    # them to be re-read as curated content and re-emitted on every run,
-    # growing the file by one copy of the comments per build.
+    # The "End users…" guidance, the round-trip note, and the sentinel itself
+    # are part of the auto-generated header — they sit ABOVE the sentinel line
+    # so that read_curated_section() (which slices everything after the
+    # sentinel) captures only true user-added phrases. Putting them below
+    # would cause them to be re-read as curated content and re-emitted on
+    # every run, growing the file by one copy of the comments per build.
     parts.append(
         "# End users who installed via pip can add extra phrases without editing"
     )
@@ -256,10 +261,16 @@ def write_vocab(
     parts.append(
         "# directory (e.g. ~/.config/photomap/ on Linux, sibling of config.yaml)."
     )
+    # Blank lines + a leading instruction comment make the sentinel visually
+    # prominent in an editor, so a maintainer scrolling to the end of the file
+    # sees the boundary clearly.
+    parts.append("")
+    parts.append("")
     parts.append(
-        f"{CURATED_SENTINEL} — hand-added phrases below this line are preserved across re-runs. "
+        "# Hand-added phrases below the next line are preserved across re-runs. "
         "One phrase per line, lowercase; empty lines and # comments are OK."
     )
+    parts.append(CURATED_SENTINEL)
     if curated_lines:
         parts += curated_lines
     else:
