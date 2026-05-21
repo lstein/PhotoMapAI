@@ -14,6 +14,7 @@ import {
   setUmapShowLandmarks,
   state,
 } from "./state.js";
+import { findLandmarkClusterAt } from "./umap-helpers.js";
 import { debounce, getPercentile, isColorLight } from "./utils.js";
 
 const UMAP_SIZES = {
@@ -486,14 +487,7 @@ function findLandmarkCluster(point) {
   const landmarkYs = landmarkTrace.y;
   const landmarkClusters = landmarkTrace.customdata || [];
 
-  let foundLandmark = null;
-  for (let i = 0; i < landmarkXs.length; i++) {
-    if (Math.abs(point.x - landmarkXs[i]) <= halfSizeX && Math.abs(point.y - landmarkYs[i]) <= halfSizeY) {
-      foundLandmark = landmarkClusters[i] || null;
-      break;
-    }
-  }
-  return foundLandmark;
+  return findLandmarkClusterAt(point, landmarkXs, landmarkYs, landmarkClusters, halfSizeX, halfSizeY);
 }
 
 const plotDiv = document.getElementById("umapPlot");
