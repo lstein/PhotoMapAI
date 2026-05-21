@@ -241,10 +241,12 @@ def write_vocab(
             "",
         ]
 
-    parts.append(
-        f"{CURATED_SENTINEL} — hand-added phrases below this line are preserved across re-runs. "
-        "One phrase per line, lowercase; empty lines and # comments are OK."
-    )
+    # The "End users…" guidance and the sentinel itself are part of the
+    # auto-generated header — they sit ABOVE the sentinel line so that
+    # read_curated_section() (which slices everything after the sentinel)
+    # captures only true user-added phrases. Putting them below would cause
+    # them to be re-read as curated content and re-emitted on every run,
+    # growing the file by one copy of the comments per build.
     parts.append(
         "# End users who installed via pip can add extra phrases without editing"
     )
@@ -253,6 +255,10 @@ def write_vocab(
     )
     parts.append(
         "# directory (e.g. ~/.config/photomap/ on Linux, sibling of config.yaml)."
+    )
+    parts.append(
+        f"{CURATED_SENTINEL} — hand-added phrases below this line are preserved across re-runs. "
+        "One phrase per line, lowercase; empty lines and # comments are OK."
     )
     if curated_lines:
         parts += curated_lines
