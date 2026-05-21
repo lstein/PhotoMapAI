@@ -1,5 +1,9 @@
 // cluster-utils.js
 // Shared utilities for cluster color management and calculations
+//
+// Note: this module is deliberately import-free so it stays cheap to pull
+// into tests. The autotagging-enabled flag is pushed in from state.js via
+// setAutotaggingEnabledInLabels() rather than read from state directly.
 
 // Feature flag: when false, the cluster vocabulary label is shown ONLY in the
 // UMAP hover popup (the original opt-in surface). When true, the label is also
@@ -30,7 +34,23 @@ const imageLabelCache = new Map();
 const imageLabelInFlight = new Map();
 const IMAGE_LABEL_CACHE_MAX = 1024;
 
+// Module-local mirror of state.autotaggingEnabled — pushed in from state.js's
+// setAutotaggingEnabled() and on initial restore. Defaults to false to match
+// the state default, so any call before state restores is also safely gated.
+let autotaggingEnabled = false;
+
+export function setAutotaggingEnabledInLabels(enabled) {
+  autotaggingEnabled = !!enabled;
+}
+
 export function getImageLabelInfo(album, index) {
+  // When autotagging is disabled, never hit the endpoint — the first request
+  // would trigger the vocab embedding build server-side, which is the exact
+  // thing the toggle exists to prevent. Don't cache the null either, so
+  // turning the setting back on works without a manual cache reset.
+  if (!autotaggingEnabled) {
+    return Promise.resolve(null);
+  }
   const key = `${album}:${index}`;
   if (imageLabelCache.has(key)) {
     const val = imageLabelCache.get(key);
