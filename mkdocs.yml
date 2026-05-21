@@ -15,6 +15,7 @@ nav:
       - Encoders: user-guide/encoders.md
       - Configuration: user-guide/configuration.md
       - Semantic Map: user-guide/semantic-map.md
+      - Autotagging: user-guide/autotagging.md
       - Image Dataset Curation: user-guide/curator-mode.md
       - InvokeAI Integration: user-guide/invokeai-integration.md
       - Updating PhotoMapAI: user-guide/upgrading.md
