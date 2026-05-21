@@ -16,7 +16,6 @@ from ..config import get_config_manager
 from ..embeddings import _open_npz_file, get_fps_indices_global, get_kmeans_indices_global
 from ..progress import IndexStatus, progress_tracker
 from .album import validate_album_exists, validate_image_access
-from .index import check_album_lock
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
