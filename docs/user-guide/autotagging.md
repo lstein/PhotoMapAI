@@ -16,7 +16,7 @@ To turn it on:
 2. Expand the **Autotagging** section.
 3. Tick **Activate autotagging**.
 
-Changes take effect the next time the Semantic Map is loaded — typically the next album switch or page reload. With a GPU available, the first build takes a few seconds. Without one, expect the first map open to pause for one to several minutes while the vocabulary is encoded. The result is cached on disk per encoder, so subsequent map opens for the same album (or any album using the same encoder) are instant.
+Changes take effect the next time the Semantic Map is loaded — typically the next album switch or page reload. With a GPU available, the first build takes 10-20s. Without one, expect the first map open to pause for one to several minutes while the vocabulary is encoded. The result is cached on disk per encoder, so subsequent map opens for the same album (or any album using the same encoder) are instant.
 
 To turn it off, untick the box. Any labels currently shown in the UI are cleared immediately; the cached vocabulary embeddings stay on disk so that re-enabling later does not require another build.
 
@@ -35,9 +35,11 @@ Autotagging produces two related but distinct kinds of label.
 
 ### Cluster tags
 
-A **cluster tag** describes a whole DBSCAN cluster on the Semantic Map — that is, a group of images PhotoMapAI has decided are semantically similar. The tag is chosen by averaging the embeddings of every image in the cluster and finding the vocabulary phrase whose embedding sits closest to that average. The result is one short phrase that summarizes the cluster's centroid.
+A **cluster tag** describes a whole cluster on the Semantic Map — that is, a group of images PhotoMapAI has decided are semantically similar. The tag is chosen by averaging the embeddings of every image in the cluster and finding the vocabulary phrase whose embedding sits closest to that average. The result is one short phrase that summarizes the cluster's centroid.
 
-Cluster tags appear in the hover popup over any colored cluster on the Semantic Map (e.g. `Cluster 3 (size=412) — "mountain landscape"`).
+Cluster tags appear in the hover popup over any colored cluster on the Semantic Map (e.g. `Cluster 106 (size=212) — "portrait photography"`).
+
+<img src="/img/cluster_with_tagging.png" width="380px" alt="Cluster tagging on the Semantic Map" class="img-hover-zoom">
 
 Because the tag describes the cluster's *aggregate* content, it can drift from any one image inside the cluster — especially when the cluster is heterogeneous. A cluster whose centroid is best described as "outdoor portrait" may still contain individual photos that are pure landscape or pure close-up.
 
@@ -45,10 +47,9 @@ Because the tag describes the cluster's *aggregate* content, it can drift from a
 
 An **image tag** is computed against a single image's embedding rather than a cluster centroid. It answers "what does *this picture* look like?" independent of how the picture happens to cluster with its neighbors.
 
-Image tags appear in two places in the UI:
+Image tags appear at the top of the **metadata drawer**, alongside the image name, camera settings, image generation parameters, and other image metadata.
 
-- The **score-display pill** that overlays the active image in the slideshow.
-- The **metadata drawer**, alongside the EXIF and generator-metadata fields.
+<img src="/img/metadata_with_tagging.png" width="380px" alt="Metadata drawer for a tagged image" class="img-hover-zoom">
 
 When a cluster is uniform, the image tag and the cluster tag usually match. When the cluster is mixed, they may diverge — and that divergence is itself useful information about how confident the clustering is for that particular image.
 
