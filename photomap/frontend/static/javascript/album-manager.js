@@ -4,7 +4,7 @@ import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
 import { exitSearchMode } from "./search-ui.js";
 import { closeSettingsModal, loadAvailableAlbums, openSettingsModal } from "./settings.js";
 import { setAlbum, state } from "./state.js";
-import { hideSpinner, showSpinner } from "./utils.js";
+import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 // Encoder backends offered in the album manager dropdown. Values must match
 // the spec format consumed by photomap.backend.encoders.build_encoder.
@@ -228,13 +228,11 @@ export class AlbumManager {
 
   // Utility methods
   async fetchAvailableAlbums() {
-    const response = await fetch("available_albums/");
-    return await response.json();
+    return await fetchJson("available_albums/");
   }
 
   async getAlbum(albumKey) {
-    const response = await fetch(`album/${albumKey}/`);
-    return await response.json();
+    return await fetchJson(`album/${albumKey}/`);
   }
 
   async refreshAlbumsAndDropdown() {
@@ -780,20 +778,11 @@ export class AlbumManager {
     };
 
     try {
-      const response = await fetch("add_album/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newAlbum),
-      });
-
-      if (response.ok) {
-        await this.handleSuccessfulAlbumAdd(formData.key);
-      } else {
-        alert(`Failed to add album: ${response.statusText}`);
-      }
+      await fetchJson("add_album/", { json: newAlbum });
+      await this.handleSuccessfulAlbumAdd(formData.key);
     } catch (error) {
       console.error("Failed to add album:", error);
-      alert("Failed to add album");
+      alert(`Failed to add album: ${error.statusText || error.message}`);
     }
   }
 
@@ -863,20 +852,11 @@ export class AlbumManager {
     }
 
     try {
-      const response = await fetch(`delete_album/${albumKey}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      if (response.ok) {
-        const isCurrentAlbum = state.album === albumKey;
-        await this.refreshAlbumsAndDropdown();
-
-        if (isCurrentAlbum) {
-          await this.handleDeletedCurrentAlbum();
-        }
-      } else {
-        alert("Failed to delete album");
+      await fetchJson(`delete_album/${albumKey}`, { method: "DELETE" });
+      const isCurrentAlbum = state.album === albumKey;
+      await this.refreshAlbumsAndDropdown();
+      if (isCurrentAlbum) {
+        await this.handleDeletedCurrentAlbum();
       }
     } catch (error) {
       console.error("Failed to delete album:", error);
@@ -1009,21 +989,10 @@ export class AlbumManager {
     const pathsChanged = oldPaths.length !== updatedPaths.length || oldPaths.some((p, i) => p !== updatedPaths[i]);
 
     try {
-      const response = await fetch("update_album/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedAlbum),
-      });
-
-      if (response.ok) {
-        await this.refreshAlbumsAndDropdown();
-        // --- Begin new code ---
-        if (pathsChanged) {
-          this.send_update_index_event(updatedAlbum.key);
-        }
-        // --- End new code ---
-      } else {
-        alert("Failed to update album");
+      await fetchJson("update_album/", { json: updatedAlbum });
+      await this.refreshAlbumsAndDropdown();
+      if (pathsChanged) {
+        this.send_update_index_event(updatedAlbum.key);
       }
     } catch (error) {
       console.error("Failed to update album:", error);
@@ -1047,15 +1016,12 @@ export class AlbumManager {
 
     // Backend guard: check if indexing is already running
     try {
-      const response = await fetch(`index_progress/${albumKey}`);
-      if (response.ok) {
-        const progress = await response.json();
-        if (progress.status === "indexing" || progress.status === "scanning" || progress.status === "mapping") {
-          console.log(`Backend reports indexing already in progress for album: ${albumKey}`);
-          this.showProgressUIWithoutScroll(cardElement, progress);
-          this.startProgressPolling(albumKey, cardElement);
-          return;
-        }
+      const progress = await fetchJson(`index_progress/${albumKey}`);
+      if (progress.status === "indexing" || progress.status === "scanning" || progress.status === "mapping") {
+        console.log(`Backend reports indexing already in progress for album: ${albumKey}`);
+        this.showProgressUIWithoutScroll(cardElement, progress);
+        this.startProgressPolling(albumKey, cardElement);
+        return;
       }
     } catch {
       console.debug(`Could not check backend indexing status for album: ${albumKey}`);
@@ -1142,8 +1108,7 @@ export class AlbumManager {
 
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`index_progress/${albumKey}`);
-        const progress = await response.json();
+        const progress = await fetchJson(`index_progress/${albumKey}`);
 
         this.updateProgress(cardElement, progress);
 
@@ -1312,23 +1277,18 @@ export class AlbumManager {
 
   async cancelIndexing(albumKey, cardElement) {
     try {
-      const response = await fetch(`cancel_index/${albumKey}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        // Stop polling
-        if (this.progressPollers.has(albumKey)) {
-          clearInterval(this.progressPollers.get(albumKey));
-          this.progressPollers.delete(albumKey);
-        }
-
-        this.hideProgressUI(cardElement);
-
-        const status = cardElement.querySelector(".index-status");
-        status.className = AlbumManager.STATUS_CLASSES.DEFAULT;
-        status.textContent = "Operation cancelled";
+      await fetchJson(`cancel_index/${albumKey}`, { method: "DELETE" });
+      // Stop polling
+      if (this.progressPollers.has(albumKey)) {
+        clearInterval(this.progressPollers.get(albumKey));
+        this.progressPollers.delete(albumKey);
       }
+
+      this.hideProgressUI(cardElement);
+
+      const status = cardElement.querySelector(".index-status");
+      status.className = AlbumManager.STATUS_CLASSES.DEFAULT;
+      status.textContent = "Operation cancelled";
     } catch (error) {
       console.error("Failed to cancel indexing:", error);
     }
@@ -1344,20 +1304,16 @@ export class AlbumManager {
       const albumKey = cardElement.dataset.albumKey;
 
       try {
-        const response = await fetch(`index_progress/${albumKey}`);
+        const progress = await fetchJson(`index_progress/${albumKey}`);
 
-        if (response.ok) {
-          const progress = await response.json();
+        if (progress.status === "indexing" || progress.status === "scanning") {
+          console.log(`Restoring progress UI for ongoing operation: ${albumKey} (${progress.status})`);
 
-          if (progress.status === "indexing" || progress.status === "scanning") {
-            console.log(`Restoring progress UI for ongoing operation: ${albumKey} (${progress.status})`);
+          this.showProgressUIWithoutScroll(cardElement, progress);
+          this.startProgressPolling(albumKey, cardElement);
+          this.updateProgress(cardElement, progress);
 
-            this.showProgressUIWithoutScroll(cardElement, progress);
-            this.startProgressPolling(albumKey, cardElement);
-            this.updateProgress(cardElement, progress);
-
-            return { albumKey, restored: true };
-          }
+          return { albumKey, restored: true };
         }
       } catch {
         console.debug(`No ongoing operation for album: ${albumKey}`);
@@ -1452,8 +1408,7 @@ export class AlbumManager {
     }
 
     // Fetch albums from the backend
-    const response = await fetch("available_albums/");
-    const albums = await response.json();
+    const albums = await fetchJson("available_albums/");
 
     // Find the album with the matching key
     const album = albums.find((a) => a.key === albumKey);
@@ -1473,8 +1428,7 @@ export async function checkAlbumIndex() {
   }
 
   // Fetch album info from backend
-  const response = await fetch("available_albums/");
-  const albums = await response.json();
+  const albums = await fetchJson("available_albums/");
   const album = albums.find((a) => a.key === albumKey);
 
   if (!album) {
@@ -1482,9 +1436,7 @@ export async function checkAlbumIndex() {
   }
 
   // Check if index file exists (ask backend or check album.index)
-  const indexExists = await fetch(`index_exists/${albumKey}`)
-    .then((r) => r.json())
-    .then((j) => j.exists);
+  const indexExists = (await fetchJson(`index_exists/${albumKey}`)).exists;
 
   if (!indexExists) {
     alert("This album needs to be indexed before you can use it. Please build/update the index.");

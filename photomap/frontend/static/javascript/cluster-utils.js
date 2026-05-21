@@ -1,9 +1,12 @@
 // cluster-utils.js
 // Shared utilities for cluster color management and calculations
 //
-// Note: this module is deliberately import-free so it stays cheap to pull
-// into tests. The autotagging-enabled flag is pushed in from state.js via
+// Note: the only dependency here is on utils.js (for fetchJson, which has no
+// further imports), so this module stays cheap to pull into tests. The
+// autotagging-enabled flag is pushed in from state.js via
 // setAutotaggingEnabledInLabels() rather than read from state directly.
+
+import { fetchJson } from "./utils.js";
 
 // Feature flag: when false, the cluster vocabulary label is shown ONLY in the
 // UMAP hover popup (the original opt-in surface). When true, the label is also
@@ -63,11 +66,7 @@ export function getImageLabelInfo(album, index) {
   }
   const promise = (async () => {
     try {
-      const resp = await fetch(`image_label/${encodeURIComponent(album)}/${index}`);
-      if (!resp.ok) {
-        return null;
-      }
-      const body = await resp.json();
+      const body = await fetchJson(`image_label/${encodeURIComponent(album)}/${index}`).catch(() => null);
       const value = body && body.label ? body : null;
       imageLabelCache.set(key, value);
       while (imageLabelCache.size > IMAGE_LABEL_CACHE_MAX) {

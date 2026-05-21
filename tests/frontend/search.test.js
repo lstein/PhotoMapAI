@@ -27,6 +27,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/index.js", (
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", () => ({
   showSpinner: jest.fn(),
   hideSpinner: jest.fn(),
+  fetchJson: jest.fn(),
 }));
 
 // Now import state with our mock

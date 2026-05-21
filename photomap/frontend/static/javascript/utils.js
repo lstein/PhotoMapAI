@@ -9,6 +9,71 @@ export function hideSpinner() {
   document.getElementById("spinner").style.display = "none";
 }
 
+/**
+ * Error thrown by ``fetchJson`` when the server returns a non-2xx status.
+ * Carries ``status`` and ``url`` so call sites can branch on specific codes
+ * (e.g. ``err.status === 404``) without re-parsing the message.
+ *
+ * ``body`` holds the parsed response body when the server sent JSON (FastAPI
+ * surfaces validation / HTTPException details as ``{"detail": "..."}``),
+ * else the raw text. Either may be ``undefined`` if reading the body failed.
+ */
+export class HttpError extends Error {
+  constructor(status, statusText, url, body) {
+    super(`HTTP ${status}${statusText ? " " + statusText : ""} for ${url}`);
+    this.name = "HttpError";
+    this.status = status;
+    this.statusText = statusText;
+    this.url = url;
+    this.body = body;
+  }
+}
+
+/**
+ * Thin wrapper around ``fetch`` + ``response.json()`` that throws
+ * :class:`HttpError` on non-2xx and returns the parsed body on 2xx.
+ *
+ * ``options.json`` is a shorthand for the most common POST shape — pass an
+ * object and the helper sets ``method: "POST"``, the JSON Content-Type
+ * header, and ``JSON.stringify(body)`` for you. ``options.method`` and
+ * ``options.headers`` still override if specified explicitly.
+ *
+ * Callers that want "null on failure" should append ``.catch(() => null)`` —
+ * keep the conversion explicit at the call site so silent fallbacks are
+ * visible in code review. AbortError propagates through unchanged so
+ * AbortController-based cancellation still works.
+ */
+export async function fetchJson(url, options = {}) {
+  const { json, headers, ...rest } = options;
+  const init = { ...rest };
+  if (json !== undefined) {
+    init.method = init.method || "POST";
+    init.headers = { "Content-Type": "application/json", ...(headers || {}) };
+    init.body = JSON.stringify(json);
+  } else if (headers) {
+    init.headers = headers;
+  }
+  const response = await fetch(url, init);
+  if (!response.ok) {
+    // Try to surface the server's error body to callers — FastAPI sends
+    // ``{"detail": "..."}`` for HTTPException, which downstream UIs show
+    // in error alerts. Tolerate non-JSON bodies (plain text, empty).
+    let body;
+    try {
+      const text = await response.text();
+      try {
+        body = text ? JSON.parse(text) : undefined;
+      } catch {
+        body = text;
+      }
+    } catch {
+      body = undefined;
+    }
+    throw new HttpError(response.status, response.statusText, url, body);
+  }
+  return await response.json();
+}
+
 export function joinPath(dir, relpath) {
   if (dir.endsWith("/")) {
     dir = dir.slice(0, -1);
