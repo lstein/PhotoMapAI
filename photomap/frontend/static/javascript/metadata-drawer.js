@@ -5,7 +5,7 @@ import { scoreDisplay } from "./score-display.js";
 import { slideState } from "./slide-state.js";
 import { state, setShowMetadataFields } from "./state.js";
 import { setSearchResults } from "./search.js";
-import { isColorLight } from "./utils.js";
+import { isColorLight, makeDraggable } from "./utils.js";
 import {
   getClusterColorFromPoints,
   getClusterInfoForImage,
@@ -418,10 +418,9 @@ if (copyMetadataBtn && metadataTextArea) {
   });
 }
 
-let isDraggingDrawer = false;
-let startX, startY, initialLeft, initialTop;
-
-// Helper to get/set drawer position
+// Helper to set/reset drawer position. ``setDrawerPosition`` is passed to
+// ``makeDraggable`` below as a custom writer so it can also clear the CSS
+// ``transform`` that originally centered the drawer.
 function setDrawerPosition(left, top) {
   const container = document.getElementById("bannerDrawerContainer");
   container.style.left = `${left}px`;
@@ -436,126 +435,30 @@ function resetDrawerPosition() {
   container.style.transform = ""; // Restore original transform
 }
 
-// Helper function to get coordinates from event (mouse or touch)
-const getEventCoords = (e) => {
-  if (e.touches && e.touches.length > 0) {
-    return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  }
-  return { x: e.clientX, y: e.clientY };
-};
-
-// Mouse/touch drag handlers
-function onDrawerMouseDown(e) {
-  // Only drag if clicking on the titlebar, but not on the copy button
-  const isTitlebar =
-    e.target.id === "filenameTitlebar" ||
-    e.target.classList.contains("filename-titlebar") ||
-    e.target.id === "filenameText";
-  const isCopyButton = e.target.id === "copyTextBtn" || e.target.closest("#copyTextBtn");
-
-  if (isTitlebar && !isCopyButton) {
-    isDraggingDrawer = true;
-    const coords = getEventCoords(e);
-    startX = coords.x;
-    startY = coords.y;
-
-    const container = document.getElementById("bannerDrawerContainer");
-    const rect = container.getBoundingClientRect();
-    initialLeft = rect.left;
-    initialTop = rect.top;
-    container.classList.add("dragging");
-
-    document.body.style.userSelect = "none";
-    e.preventDefault();
-  }
-}
-
-function onDrawerMouseMove(e) {
-  if (!isDraggingDrawer) {
-    return;
-  }
-
-  const coords = getEventCoords(e);
-  const deltaX = coords.x - startX;
-  const deltaY = coords.y - startY;
-
-  const left = initialLeft + deltaX;
-  const top = initialTop + deltaY;
-  setDrawerPosition(left, top);
-
-  e.preventDefault();
-}
-
-function onDrawerMouseUp() {
-  if (!isDraggingDrawer) {
-    return;
-  }
-  isDraggingDrawer = false;
-  document.getElementById("bannerDrawerContainer")?.classList.remove("dragging");
-  document.body.style.userSelect = "";
-}
-
-// Touch support
-function onDrawerTouchStart(e) {
-  // Only drag if clicking on the titlebar, but not on the copy button
-  const isTitlebar =
-    e.target.id === "filenameTitlebar" ||
-    e.target.classList.contains("filename-titlebar") ||
-    e.target.id === "filenameText";
-  const isCopyButton = e.target.id === "copyTextBtn" || e.target.closest("#copyTextBtn");
-
-  if (isTitlebar && !isCopyButton) {
-    isDraggingDrawer = true;
-    const coords = getEventCoords(e);
-    startX = coords.x;
-    startY = coords.y;
-
-    const container = document.getElementById("bannerDrawerContainer");
-    const rect = container.getBoundingClientRect();
-    initialLeft = rect.left;
-    initialTop = rect.top;
-    container.classList.add("dragging");
-
-    document.body.style.userSelect = "none";
-    e.preventDefault();
-  }
-}
-
-function onDrawerTouchMove(e) {
-  if (!isDraggingDrawer) {
-    return;
-  }
-
-  const coords = getEventCoords(e);
-  const deltaX = coords.x - startX;
-  const deltaY = coords.y - startY;
-
-  const left = initialLeft + deltaX;
-  const top = initialTop + deltaY;
-  setDrawerPosition(left, top);
-
-  e.preventDefault();
-}
-
-function onDrawerTouchEnd() {
-  if (!isDraggingDrawer) {
-    return;
-  }
-  isDraggingDrawer = false;
-  document.getElementById("bannerDrawerContainer")?.classList.remove("dragging");
-  document.body.style.userSelect = "";
-}
-
-// Attach event listeners
+// Wire up the drawer's titlebar to the shared `makeDraggable` helper.
 const drawer = document.getElementById("bannerDrawerContainer");
 if (drawer) {
-  drawer.addEventListener("mousedown", onDrawerMouseDown);
-  window.addEventListener("mousemove", onDrawerMouseMove);
-  window.addEventListener("mouseup", onDrawerMouseUp);
-
-  drawer.addEventListener("touchstart", onDrawerTouchStart, { passive: false });
-  window.addEventListener("touchmove", onDrawerTouchMove, { passive: false });
-  window.addEventListener("touchend", onDrawerTouchEnd);
+  makeDraggable(drawer, drawer, {
+    // The drawer is its own handle — restrict to the titlebar region and
+    // exclude the copy button so its click still works.
+    shouldDrag: (e) => {
+      const isTitlebar =
+        e.target.id === "filenameTitlebar" ||
+        e.target.classList.contains("filename-titlebar") ||
+        e.target.id === "filenameText";
+      const isCopyButton = e.target.id === "copyTextBtn" || e.target.closest("#copyTextBtn");
+      return isTitlebar && !isCopyButton;
+    },
+    setPosition: setDrawerPosition,
+    onDragStart: () => {
+      drawer.classList.add("dragging");
+      document.body.style.userSelect = "none";
+    },
+    onDragEnd: () => {
+      drawer.classList.remove("dragging");
+      document.body.style.userSelect = "";
+    },
+  });
 }
 
 // 2. Snap back when handle is clicked
