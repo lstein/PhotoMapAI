@@ -39,6 +39,108 @@ export const state = {
   autotaggingEnabled: false, // Whether to build the vocab index and show cluster/image labels
 };
 
+// ---------------------------------------------------------------------------
+// Persisted-setting registry
+// ---------------------------------------------------------------------------
+// Each entry is the source of truth for: how to parse the stored string back
+// into a state value, how to serialize it again, and which side-effects fire
+// on change. The auto-generated setter and the restore/save loops both
+// consult this table — there's deliberately no second source of truth.
+//
+// `album` is *not* listed here. Its restore needs an async server roundtrip
+// (the dropdown must be validated against the current album list) and its
+// setter does much more than store-and-dispatch (loads per-album search
+// settings, fetches index metadata, fires `albumChanged`). It stays as the
+// hand-written `setAlbum` below, and its localStorage round trip is handled
+// inline in `restoreFromLocalStorage` / `saveSettingsToLocalStorage`.
+//
+// `minSearchScore` / `maxSearchResults` / `useQueryOptimization` are also
+// excluded — they live on the album config (not localStorage) and have
+// clamp/coerce rules that don't fit the generic shape.
+
+/**
+ * @typedef {Object} SettingSpec
+ * @property {string} key            State property name (also localStorage key).
+ * @property {"bool"|"int"|"float"|"string"} type  How to parse / serialize.
+ * @property {*} [default]           Fallback when nothing valid is in storage.
+ * @property {() => any} [dynamicDefault]
+ *                                   Called once when no stored value exists;
+ *                                   wins over `default`. Used by
+ *                                   `showControlPanelText` which derives its
+ *                                   default from screen width.
+ * @property {(value: any) => void} [onSet]
+ *                                   Extra side-effect after assignment;
+ *                                   fires from both `restoreFromLocalStorage`
+ *                                   and the generated setter so the side-effect
+ *                                   matches the in-memory state.
+ */
+
+/** @type {SettingSpec[]} */
+const PERSISTED_SETTINGS = [
+  { key: "currentDelay", type: "int", default: 5 },
+  { key: "mode", type: "string", default: "chronological" },
+  {
+    key: "showControlPanelText",
+    type: "bool",
+    default: true,
+    dynamicDefault: () => window.innerWidth >= 600,
+  },
+  { key: "gridViewActive", type: "bool", default: false },
+  { key: "suppressDeleteConfirm", type: "bool", default: false },
+  { key: "wrapNavigation", type: "bool", default: false },
+  { key: "gridThumbSizeFactor", type: "float", default: 1.0 },
+  { key: "umapShowLandmarks", type: "bool", default: true },
+  { key: "umapShowHoverThumbnails", type: "bool", default: true },
+  { key: "umapExitFullscreenOnSelection", type: "bool", default: true },
+  { key: "umapClickSelectsCluster", type: "bool", default: true },
+  { key: "umapControlsVisible", type: "bool", default: true },
+  { key: "showMetadataFields", type: "bool", default: true },
+  {
+    key: "autotaggingEnabled",
+    type: "bool",
+    default: false,
+    onSet: (value) => setAutotaggingEnabledInLabels(value),
+  },
+];
+
+function _parseStored(raw, type) {
+  if (raw === null) {
+    return undefined;
+  }
+  if (type === "bool") {
+    return raw === "true";
+  }
+  if (type === "int") {
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  if (type === "float") {
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return raw;
+}
+
+function _coerce(value, type) {
+  if (type === "bool") {
+    return !!value;
+  }
+  if (type === "int") {
+    return parseInt(value, 10);
+  }
+  if (type === "float") {
+    return parseFloat(value);
+  }
+  return String(value);
+}
+
+function _serialize(value, type) {
+  if (type === "bool") {
+    return value ? "true" : "false";
+  }
+  return String(value);
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   await restoreFromLocalStorage();
   initializeFromServer();
@@ -67,112 +169,90 @@ export function initializeFromServer() {
 
 // Restore state from local storage
 export async function restoreFromLocalStorage() {
-  const storedCurrentDelay = localStorage.getItem("currentDelay");
-  if (storedCurrentDelay !== null) {
-    state.currentDelay = parseInt(storedCurrentDelay, 10);
+  // Generic specs: parse-or-default, then run any onSet side-effects so the
+  // app boots in a consistent state.
+  for (const spec of PERSISTED_SETTINGS) {
+    const raw = localStorage.getItem(spec.key);
+    const parsed = _parseStored(raw, spec.type);
+    if (parsed !== undefined) {
+      state[spec.key] = parsed;
+    } else if (raw === null && spec.dynamicDefault) {
+      state[spec.key] = spec.dynamicDefault();
+    }
+    // If parsing failed (corrupt value), the existing default on `state`
+    // stays in place. Either way, surface the resolved value to onSet.
+    if (spec.onSet) {
+      spec.onSet(state[spec.key]);
+    }
   }
 
-  const storedMode = localStorage.getItem("mode");
-  if (storedMode) {
-    state.mode = storedMode;
-  }
-
-  const storedShowControlPanelText = localStorage.getItem("showControlPanelText");
-  if (storedShowControlPanelText !== null) {
-    state.showControlPanelText = storedShowControlPanelText === "true";
-  } else {
-    state.showControlPanelText = window.innerWidth >= 600; // Default to true on larger screens;
-  }
-
-  let storedAlbum = localStorage.getItem("album");
+  // Album is special: pick whichever stored key still exists in the live
+  // album list, else fall back to the first available album.
+  const storedAlbum = localStorage.getItem("album");
   const albumList = await albumManager.fetchAvailableAlbums();
   if (!albumList || albumList.length === 0) {
     return;
-  } // No albums available, do not set album
-  if (storedAlbum) {
-    // check that this is a valid album
-    const validAlbum = albumList.find((album) => album.key === storedAlbum);
-    if (!validAlbum) {
-      storedAlbum = null;
-    }
   }
-  state.album = storedAlbum || albumList[0].key;
-
-  const storedGridViewActive = localStorage.getItem("gridViewActive");
-  if (storedGridViewActive !== null) {
-    state.gridViewActive = storedGridViewActive === "true";
-  }
-
-  const storedSuppressDeleteConfirm = localStorage.getItem("suppressDeleteConfirm");
-  if (storedSuppressDeleteConfirm !== null) {
-    state.suppressDeleteConfirm = storedSuppressDeleteConfirm === "true";
-  }
-
-  const storedWrapNavigation = localStorage.getItem("wrapNavigation");
-  if (storedWrapNavigation !== null) {
-    state.wrapNavigation = storedWrapNavigation === "true";
-  }
-
-  const storedGridThumbSizeFactor = localStorage.getItem("gridThumbSizeFactor");
-  if (storedGridThumbSizeFactor !== null) {
-    state.gridThumbSizeFactor = parseFloat(storedGridThumbSizeFactor);
-  }
-
-  const storedUmapShowLandmarks = localStorage.getItem("umapShowLandmarks");
-  if (storedUmapShowLandmarks !== null) {
-    state.umapShowLandmarks = storedUmapShowLandmarks === "true";
-  }
-
-  const storedUmapShowHoverThumbnails = localStorage.getItem("umapShowHoverThumbnails");
-  if (storedUmapShowHoverThumbnails !== null) {
-    state.umapShowHoverThumbnails = storedUmapShowHoverThumbnails === "true";
-  }
-
-  const storedUmapExitFullscreenOnSelection = localStorage.getItem("umapExitFullscreenOnSelection");
-  if (storedUmapExitFullscreenOnSelection !== null) {
-    state.umapExitFullscreenOnSelection = storedUmapExitFullscreenOnSelection === "true";
-  }
-
-  const storedUmapClickSelectsCluster = localStorage.getItem("umapClickSelectsCluster");
-  if (storedUmapClickSelectsCluster !== null) {
-    state.umapClickSelectsCluster = storedUmapClickSelectsCluster === "true";
-  }
-
-  const storedUmapControlsVisible = localStorage.getItem("umapControlsVisible");
-  if (storedUmapControlsVisible !== null) {
-    state.umapControlsVisible = storedUmapControlsVisible === "true";
-  }
-
-  const storedShowMetadataFields = localStorage.getItem("showMetadataFields");
-  if (storedShowMetadataFields !== null) {
-    state.showMetadataFields = storedShowMetadataFields === "true";
-  }
-
-  const storedAutotaggingEnabled = localStorage.getItem("autotaggingEnabled");
-  if (storedAutotaggingEnabled !== null) {
-    state.autotaggingEnabled = storedAutotaggingEnabled === "true";
-  }
-  setAutotaggingEnabledInLabels(state.autotaggingEnabled);
+  const validAlbum = storedAlbum && albumList.find((album) => album.key === storedAlbum) ? storedAlbum : null;
+  state.album = validAlbum || albumList[0].key;
 }
 
-// Save state to local storage
+// Save state to local storage. Any localStorage exception (private mode,
+// quota exceeded) is logged but doesn't break the calling setter — the
+// in-memory state stays correct and the next session just loses persistence.
 export function saveSettingsToLocalStorage() {
-  localStorage.setItem("currentDelay", state.currentDelay);
-  localStorage.setItem("mode", state.mode);
-  localStorage.setItem("album", state.album);
-  localStorage.setItem("showControlPanelText", state.showControlPanelText || "");
-  localStorage.setItem("gridViewActive", state.gridViewActive ? "true" : "false");
-  localStorage.setItem("suppressDeleteConfirm", state.suppressDeleteConfirm ? "true" : "false");
-  localStorage.setItem("wrapNavigation", state.wrapNavigation ? "true" : "false");
-  localStorage.setItem("gridThumbSizeFactor", state.gridThumbSizeFactor);
-  localStorage.setItem("umapShowLandmarks", state.umapShowLandmarks ? "true" : "false");
-  localStorage.setItem("umapShowHoverThumbnails", state.umapShowHoverThumbnails ? "true" : "false");
-  localStorage.setItem("umapExitFullscreenOnSelection", state.umapExitFullscreenOnSelection ? "true" : "false");
-  localStorage.setItem("umapClickSelectsCluster", state.umapClickSelectsCluster ? "true" : "false");
-  localStorage.setItem("umapControlsVisible", state.umapControlsVisible ? "true" : "false");
-  localStorage.setItem("showMetadataFields", state.showMetadataFields ? "true" : "false");
-  localStorage.setItem("autotaggingEnabled", state.autotaggingEnabled ? "true" : "false");
+  try {
+    for (const spec of PERSISTED_SETTINGS) {
+      localStorage.setItem(spec.key, _serialize(state[spec.key], spec.type));
+    }
+    if (state.album !== null && state.album !== undefined) {
+      localStorage.setItem("album", state.album);
+    }
+  } catch (err) {
+    console.warn("Failed to persist settings to localStorage:", err);
+  }
 }
+
+// Generate a setter for a persisted setting. The setter compares, assigns,
+// runs the spec's onSet side-effect, saves, and dispatches `settingsUpdated`
+// — the same five-step shape that the 11 hand-written setters used to repeat.
+function _makeSetter(spec) {
+  return function (value) {
+    const coerced = _coerce(value, spec.type);
+    if ((spec.type === "int" || spec.type === "float") && !Number.isFinite(coerced)) {
+      // Refuse NaN / Infinity rather than clobbering a valid state value.
+      return;
+    }
+    if (state[spec.key] === coerced) {
+      return;
+    }
+    state[spec.key] = coerced;
+    if (spec.onSet) {
+      spec.onSet(coerced);
+    }
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { [spec.key]: coerced } }));
+  };
+}
+
+// Build setters once and re-export under the names the rest of the app
+// already imports. ESM can't emit `export const set${name}` from a loop, so
+// the export list stays explicit — but each body is the same one-liner, so
+// adding a new persisted setting needs only one new line in
+// PERSISTED_SETTINGS plus one new export here.
+const _setters = Object.fromEntries(PERSISTED_SETTINGS.map((spec) => [spec.key, _makeSetter(spec)]));
+
+export const setDelay = _setters.currentDelay;
+export const setMode = _setters.mode;
+export const setShowControlPanelText = _setters.showControlPanelText;
+export const setWrapNavigation = _setters.wrapNavigation;
+export const setUmapShowLandmarks = _setters.umapShowLandmarks;
+export const setUmapShowHoverThumbnails = _setters.umapShowHoverThumbnails;
+export const setUmapExitFullscreenOnSelection = _setters.umapExitFullscreenOnSelection;
+export const setUmapClickSelectsCluster = _setters.umapClickSelectsCluster;
+export const setUmapControlsVisible = _setters.umapControlsVisible;
+export const setShowMetadataFields = _setters.showMetadataFields;
+export const setAutotaggingEnabled = _setters.autotaggingEnabled;
 
 export async function setAlbum(newAlbumKey, force = false) {
   if (force || state.album !== newAlbumKey) {
@@ -277,37 +357,9 @@ export function persistCurrentAlbumSearchSettings() {
   }, 400);
 }
 
-export function setMode(newMode) {
-  if (state.mode !== newMode) {
-    state.mode = newMode;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { mode: newMode } }));
-  }
-}
-
-export function setShowControlPanelText(showText) {
-  if (state.showControlPanelText !== showText) {
-    state.showControlPanelText = showText;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", {
-        detail: { showControlPanelText: showText },
-      })
-    );
-  }
-}
-
-export function setDelay(newDelay) {
-  if (state.currentDelay !== newDelay) {
-    state.currentDelay = newDelay;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { delay: newDelay } }));
-  }
-}
-
 // Per-album search-setting setters. The search dialog calls these on user
 // edit, then persists the change back to the active album via
-// /update_album/. Album switches overwrite these via setAlbum below.
+// /update_album/. Album switches overwrite these via setAlbum above.
 export function setMinSearchScore(newScore) {
   const clamped = Math.max(0.0, Math.min(1.0, parseFloat(newScore)));
   if (!Number.isNaN(clamped) && state.minSearchScore !== clamped) {
@@ -329,79 +381,5 @@ export function setUseQueryOptimization(value) {
   if (state.useQueryOptimization !== bool) {
     state.useQueryOptimization = bool;
     window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { useQueryOptimization: bool } }));
-  }
-}
-
-export function setWrapNavigation(wrap) {
-  const bool = !!wrap;
-  if (state.wrapNavigation !== bool) {
-    state.wrapNavigation = bool;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { wrapNavigation: bool } }));
-  }
-}
-
-export function setUmapShowLandmarks(showLandmarks) {
-  if (state.umapShowLandmarks !== showLandmarks) {
-    state.umapShowLandmarks = showLandmarks;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { umapShowLandmarks: showLandmarks } }));
-  }
-}
-
-export function setUmapShowHoverThumbnails(showHoverThumbnails) {
-  if (state.umapShowHoverThumbnails !== showHoverThumbnails) {
-    state.umapShowHoverThumbnails = showHoverThumbnails;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { umapShowHoverThumbnails: showHoverThumbnails } })
-    );
-  }
-}
-
-export function setUmapExitFullscreenOnSelection(exitFullscreenOnSelection) {
-  if (state.umapExitFullscreenOnSelection !== exitFullscreenOnSelection) {
-    state.umapExitFullscreenOnSelection = exitFullscreenOnSelection;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { umapExitFullscreenOnSelection: exitFullscreenOnSelection } })
-    );
-  }
-}
-
-export function setUmapClickSelectsCluster(clickSelectsCluster) {
-  if (state.umapClickSelectsCluster !== clickSelectsCluster) {
-    state.umapClickSelectsCluster = clickSelectsCluster;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(
-      new CustomEvent("settingsUpdated", { detail: { umapClickSelectsCluster: clickSelectsCluster } })
-    );
-  }
-}
-
-export function setUmapControlsVisible(visible) {
-  if (state.umapControlsVisible !== visible) {
-    state.umapControlsVisible = visible;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { umapControlsVisible: visible } }));
-  }
-}
-
-export function setShowMetadataFields(visible) {
-  const bool = !!visible;
-  if (state.showMetadataFields !== bool) {
-    state.showMetadataFields = bool;
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { showMetadataFields: bool } }));
-  }
-}
-
-export function setAutotaggingEnabled(enabled) {
-  const bool = !!enabled;
-  if (state.autotaggingEnabled !== bool) {
-    state.autotaggingEnabled = bool;
-    setAutotaggingEnabledInLabels(bool);
-    saveSettingsToLocalStorage();
-    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { autotaggingEnabled: bool } }));
   }
 }
