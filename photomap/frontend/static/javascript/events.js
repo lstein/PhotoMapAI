@@ -58,9 +58,17 @@ function cacheElements() {
 }
 
 // Constants
+//
+// Per CLAUDE.md, ``events.js`` owns global keyboard shortcuts. New
+// shortcuts go here, *not* into per-feature modules — Swiper's built-in
+// arrow-key handler still does the slide-change itself; the entries
+// below just pause autoplay so the user's manual nav doesn't fight the
+// slideshow timer.
 const KEYBOARD_SHORTCUTS = {
   ArrowUp: () => showMetadataOverlay(),
   ArrowDown: () => hideMetadataOverlay(),
+  ArrowLeft: () => pauseSlideshow(),
+  ArrowRight: () => pauseSlideshow(),
   i: () => toggleMetadataOverlay(),
   Escape: () => hideMetadataOverlay(),
   f: () => toggleFullscreen(),
@@ -71,6 +79,10 @@ const KEYBOARD_SHORTCUTS = {
   " ": (e) => handleSpacebarToggle(e),
   Backspace: (e) => handleBackKey(e),
 };
+
+function pauseSlideshow() {
+  state.single_swiper?.pauseSlideshow();
+}
 
 function handleBackKey(e) {
   e.preventDefault();
