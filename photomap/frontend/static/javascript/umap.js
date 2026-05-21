@@ -137,12 +137,17 @@ export async function fetchUmapData() {
     // the bare "Cluster N (size=K)" string. The endpoint compute itself can
     // be slow on first call (vocab build), but it runs in a thread pool on
     // the server side so the umap_data response isn't blocked.
+    // When autotagging is disabled in settings, skip the labels fetch entirely
+    // so the server-side vocab embedding index is never built.
+    const labelsPromise = state.autotaggingEnabled
+      ? fetch(`cluster_labels/${album}?cluster_eps=${eps}`).catch((err) => {
+          console.warn("Cluster labels fetch failed:", err);
+          return null;
+        })
+      : Promise.resolve(null);
     const [response, labelsResponse] = await Promise.all([
       fetch(`umap_data/${album}?cluster_eps=${eps}`),
-      fetch(`cluster_labels/${album}?cluster_eps=${eps}`).catch((err) => {
-        console.warn("Cluster labels fetch failed:", err);
-        return null;
-      }),
+      labelsPromise,
     ]);
     points = await response.json();
     if (labelsResponse?.ok) {

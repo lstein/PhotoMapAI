@@ -1,6 +1,7 @@
 // state.js
 // This file manages the state of the application, including slide management and metadata handling.
 import { albumManager } from "./album-manager.js";
+import { setAutotaggingEnabledInLabels } from "./cluster-utils.js";
 import { getIndexMetadata } from "./index.js";
 
 // TO DO - CONVERT THIS INTO A CLASS
@@ -35,6 +36,7 @@ export const state = {
   umapClickSelectsCluster: true, // Whether click selects cluster or single image
   umapControlsVisible: true, // Whether the UMAP controls panel is visible
   showMetadataFields: true, // Whether the metadata-drawer fields table is shown
+  autotaggingEnabled: false, // Whether to build the vocab index and show cluster/image labels
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -145,6 +147,12 @@ export async function restoreFromLocalStorage() {
   if (storedShowMetadataFields !== null) {
     state.showMetadataFields = storedShowMetadataFields === "true";
   }
+
+  const storedAutotaggingEnabled = localStorage.getItem("autotaggingEnabled");
+  if (storedAutotaggingEnabled !== null) {
+    state.autotaggingEnabled = storedAutotaggingEnabled === "true";
+  }
+  setAutotaggingEnabledInLabels(state.autotaggingEnabled);
 }
 
 // Save state to local storage
@@ -163,6 +171,7 @@ export function saveSettingsToLocalStorage() {
   localStorage.setItem("umapClickSelectsCluster", state.umapClickSelectsCluster ? "true" : "false");
   localStorage.setItem("umapControlsVisible", state.umapControlsVisible ? "true" : "false");
   localStorage.setItem("showMetadataFields", state.showMetadataFields ? "true" : "false");
+  localStorage.setItem("autotaggingEnabled", state.autotaggingEnabled ? "true" : "false");
 }
 
 export async function setAlbum(newAlbumKey, force = false) {
@@ -384,5 +393,15 @@ export function setShowMetadataFields(visible) {
     state.showMetadataFields = bool;
     saveSettingsToLocalStorage();
     window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { showMetadataFields: bool } }));
+  }
+}
+
+export function setAutotaggingEnabled(enabled) {
+  const bool = !!enabled;
+  if (state.autotaggingEnabled !== bool) {
+    state.autotaggingEnabled = bool;
+    setAutotaggingEnabledInLabels(bool);
+    saveSettingsToLocalStorage();
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: { autotaggingEnabled: bool } }));
   }
 }
