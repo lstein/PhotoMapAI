@@ -22,8 +22,8 @@ from ..config import get_config_manager
 from ..embeddings import SUPPORTED_EXTENSIONS
 from ..metadata_modules import SlideSummary
 from .album import (
-    get_embeddings_for_album,
-    validate_album_exists,
+    AlbumDep,
+    EmbeddingsDep,
     validate_image_access,
 )
 
@@ -87,6 +87,7 @@ class DownloadImagesZipRequest(BaseModel):
 async def search_with_text_and_image(
     album_key: str,
     req: SearchWithTextAndImageRequest,
+    embeddings: EmbeddingsDep,
 ) -> SearchResultsResponse:
     """
     Search for images using a combination of image (as base64), positive text, and negative text queries with separate weights.
@@ -99,7 +100,6 @@ async def search_with_text_and_image(
             image_bytes = base64.b64decode(req.image_data.split(",")[-1])
             query_image_data = Image.open(BytesIO(image_bytes))
 
-        embeddings = get_embeddings_for_album(album_key)
         logger.info(
             f"Search request: {req.min_search_score=}, {req.max_search_results=}"
         )
@@ -129,9 +129,9 @@ async def search_with_text_and_image(
 async def retrieve_image(
     album_key: str,
     index: int,
+    embeddings: EmbeddingsDep,
 ) -> SlideSummary:
     """Retrieve metadata for a specific image."""
-    embeddings = get_embeddings_for_album(album_key)
     slide_metadata = embeddings.retrieve_image(index)
     create_slide_url(slide_metadata, album_key)
     return slide_metadata
@@ -146,9 +146,9 @@ async def retrieve_image(
 async def image_info(
     album_key: str,
     index: int,
+    embeddings: EmbeddingsDep,
 ) -> ImageData:
     """Retrieve basic metadata on an image."""
-    embeddings = get_embeddings_for_album(album_key)
     data = embeddings.indexes
     sorted_filenames = data["sorted_filenames"]
     filename_map = data["filename_map"]
@@ -172,13 +172,10 @@ async def image_info(
     "/get_metadata/{album_key}/{index}",
     tags=["Search"],
 )
-async def get_metadata(album_key: str, index: int):
+async def get_metadata(album_key: str, index: int, embeddings: EmbeddingsDep):
     """
     Download the JSON-formatted metadata for an image by album key and index.
     """
-    embeddings = get_embeddings_for_album(album_key)
-    if not embeddings:
-        raise HTTPException(status_code=404, detail="Album not found")
     indexes = embeddings.indexes
     metadata = indexes["sorted_metadata"]
     if index < 0 or index >= len(metadata):
@@ -192,6 +189,8 @@ async def get_metadata(album_key: str, index: int):
 async def serve_thumbnail(
     album_key: str,
     index: int,
+    album_config: AlbumDep,
+    embeddings: EmbeddingsDep,
     size: int = 256,
     color: str | None = None,
     radius: int = 12,  # Add a radius parameter for rounded corners
@@ -204,7 +203,6 @@ async def serve_thumbnail(
     if color is not None and not _COLOR_RE.match(color):
         raise HTTPException(status_code=400, detail="Invalid color parameter")
 
-    embeddings = get_embeddings_for_album(album_key)
     try:
         image_path = embeddings.get_image_path(index)
     except Exception as e:
@@ -212,7 +210,6 @@ async def serve_thumbnail(
             status_code=404, detail=f"Image not found for index {index}: {e}"
         ) from e
 
-    album_config = validate_album_exists(album_key)
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -278,13 +275,11 @@ async def serve_thumbnail(
 # or a converted stream and FastAPI refuses to work with Union types
 # in response_model.
 @search_router.get("/images/{album_key}/{path:path}", tags=["Search"])
-async def serve_image(album_key: str, path: str):
+async def serve_image(album_key: str, path: str, album_config: AlbumDep):
     """Serve images from diffe rent albums dynamically."""
     image_path = config_manager.find_image_in_album(album_key, path)
     if not image_path:
         raise HTTPException(status_code=404, detail="Image not found")
-
-    album_config = validate_album_exists(album_key)
 
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
@@ -313,13 +308,12 @@ async def serve_image(album_key: str, path: str):
 async def download_images_zip(
     album_key: str,
     req: DownloadImagesZipRequest,
+    album_config: AlbumDep,
+    embeddings: EmbeddingsDep,
 ) -> StreamingResponse:
     """
     Download multiple images as a ZIP file.
     """
-    embeddings = get_embeddings_for_album(album_key)
-    album_config = validate_album_exists(album_key)
-
     # Create ZIP file in memory
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -353,11 +347,10 @@ async def download_images_zip(
     response_class=PlainTextResponse,
     tags=["Search"],
 )
-async def get_image_path(album_key: str, index: int) -> str:
+async def get_image_path(album_key: str, index: int, embeddings: EmbeddingsDep) -> str:
     """
     Return the image path for a given index in the album.
     """
-    embeddings = get_embeddings_for_album(album_key)
     try:
         image_path = embeddings.get_image_path(index)
         return image_path.as_posix()
@@ -384,6 +377,7 @@ class ImageIndexLookupResponse(BaseModel):
 async def lookup_image_indices(
     album_key: str,
     req: ImageIndexLookupRequest,
+    embeddings: EmbeddingsDep,
 ) -> ImageIndexLookupResponse:
     """Resolve album indices for a batch of filenames (by basename).
 
@@ -392,10 +386,6 @@ async def lookup_image_indices(
     as clickable thumbnails. Filenames not found in the album map to ``null``.
     Duplicate basenames in the album resolve to the first matching index.
     """
-    embeddings = get_embeddings_for_album(album_key)
-    if not embeddings:
-        raise HTTPException(status_code=404, detail="Album not found")
-
     sorted_filenames = embeddings.indexes["sorted_filenames"]
     basename_to_index: dict[str, int] = {}
     for idx, full_path in enumerate(sorted_filenames):
@@ -412,16 +402,18 @@ async def lookup_image_indices(
     response_class=FileResponse,
     tags=["Search"],
 )
-async def get_image_by_name(album_key: str, filename: str) -> FileResponse:
+async def get_image_by_name(
+    album_key: str,
+    filename: str,
+    album_config: AlbumDep,
+    embeddings: EmbeddingsDep,
+) -> FileResponse:
     """
     Serve an image by its filename within the specified album.
     """
     if Path(filename).suffix.lower() not in SUPPORTED_EXTENSIONS:
         raise HTTPException(status_code=403, detail="Unsupported image type")
 
-    embeddings = get_embeddings_for_album(album_key)
-    if not embeddings:
-        raise HTTPException(status_code=404, detail="Album not found")
     indexes = embeddings.indexes
     # inefficient linear search for the filename, but still pretty quick!
     absolute_paths = [
@@ -435,7 +427,6 @@ async def get_image_by_name(album_key: str, filename: str) -> FileResponse:
     image_path = config_manager.find_image_in_album(album_key, absolute_paths[0])
     if not image_path:
         raise HTTPException(status_code=404, detail="Image not found in album")
-    album_config = validate_album_exists(album_key)
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
     if not image_path.exists() or not image_path.is_file():
