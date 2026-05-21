@@ -682,15 +682,21 @@ export class AlbumManager {
           timeStyle: "short",
         });
         const fileCount = metadata.filename_count;
+        // Reset the className so any leftover ``.indexing`` (orange,
+        // !important in CSS) from a prior showProgressUI doesn't override
+        // the inline color set below.
+        status.className = "index-status";
         status.textContent = `Index updated ${modDate} (${fileCount} images)`;
         status.style.color = "green";
         createBtn.textContent = "Update Index";
       } else {
+        status.className = "index-status";
         status.textContent = "No index present";
         status.style.color = "red";
         createBtn.textContent = "Create Index";
       }
     } catch {
+      status.className = "index-status";
       status.textContent = "No index present";
       status.style.color = "red";
       createBtn.textContent = "Create Index";
@@ -821,13 +827,34 @@ export class AlbumManager {
       (card) => card.dataset.albumKey === albumKey
     );
 
-    if (albumCard) {
-      // Don't start indexing again - it's already running
-      // Just show the progress UI and let the existing polling handle updates
-      setTimeout(() => {
-        this.showProgressUI(albumCard); // This will scroll into view
-      }, AlbumManager.AUTO_INDEXING_DELAY);
+    if (!albumCard) {
+      return;
     }
+
+    // Kick off indexing for the freshly-added album. We can't rely on the
+    // ``albumIndexError`` event from ``getIndexMetadata`` to start it
+    // because the chosen image directory may already contain a stale
+    // ``photomap_index/embeddings.npz`` from a prior session — in that
+    // case the metadata fetch succeeds, no error event fires, and without
+    // this call the new album would just inherit the old index (the bug
+    // surfaced as "Index updated …" in orange with 0% completion that
+    // never advances).
+    //
+    // ``startIndexing`` itself is idempotent — its backend-progress probe
+    // attaches to an in-flight indexing run instead of starting a second
+    // one, so the no-prior-index path (where the event listener also
+    // calls ``startIndexing``) still only triggers one backend POST.
+    setTimeout(() => {
+      const indexingSection = albumCard.querySelector(".indexing-section");
+      if (indexingSection) {
+        indexingSection.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "nearest",
+        });
+      }
+      this.startIndexing(albumKey, albumCard);
+    }, AlbumManager.AUTO_INDEXING_DELAY);
   }
 
   async deleteAlbum(albumKey) {
@@ -931,29 +958,6 @@ export class AlbumManager {
   }
 
   // Path field methods
-  createPathField(path = "", cardElement) {
-    const container = cardElement.querySelector(".edit-album-paths-container");
-    return this._createAlbumPathRow({
-      path,
-      container,
-      onAddRow: () => this.addPathField("", cardElement),
-      onRemoveRow: () => {
-        if (container && container.children.length === 0) {
-          this.addPathField("", cardElement);
-        }
-      },
-      onFolderPick: (currentPath, setPath) => {
-        createSimpleDirectoryPicker(
-          (selectedPath) => {
-            setPath(selectedPath);
-          },
-          currentPath,
-          { showCreateFolder: true }
-        );
-      },
-    });
-  }
-
   addPathField(path = "", cardElement) {
     const container = cardElement.querySelector(".edit-album-paths-container");
     if (container) {

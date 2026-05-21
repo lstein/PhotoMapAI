@@ -2,7 +2,8 @@
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
-import { saveSettingsToLocalStorage, setAlbum, setWrapNavigation, state } from "./state.js";
+import { saveSettingsToLocalStorage, setAlbum, setAutotaggingEnabled, setWrapNavigation, state } from "./state.js";
+import { clearImageLabelCache, setClusterLabels } from "./cluster-utils.js";
 import { hideSpinner, showSpinner } from "./utils.js";
 
 // Constants
@@ -39,6 +40,7 @@ export function cacheElements() {
     wrapNavigationCheckbox: document.getElementById("wrapNavigationCheckbox"),
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
     gridThumbSizeFactorReset: document.getElementById("gridThumbSizeFactorReset"),
+    autotaggingEnabledCheckbox: document.getElementById("autotaggingEnabledCheckbox"),
   };
 }
 
@@ -190,6 +192,10 @@ async function populateModalFields() {
     elements.wrapNavigationCheckbox.checked = !!state.wrapNavigation;
   }
 
+  if (elements.autotaggingEnabledCheckbox) {
+    elements.autotaggingEnabledCheckbox.checked = !!state.autotaggingEnabled;
+  }
+
   // Set the grid thumbnail size factor spinner value
   if (elements.gridThumbSizeFactor) {
     elements.gridThumbSizeFactor.value = state.gridThumbSizeFactor;
@@ -281,6 +287,20 @@ function setupWrapNavigationControl() {
     // Rebuild around the current image so stale wrap-neighbors are dropped
     // (turning wrap off) or wrap-neighbors are loaded (turning wrap on).
     state.single_swiper?.resetAllSlides();
+  });
+}
+
+function setupAutotaggingControl() {
+  if (!elements.autotaggingEnabledCheckbox) {
+    return;
+  }
+  elements.autotaggingEnabledCheckbox.addEventListener("change", function () {
+    setAutotaggingEnabled(this.checked);
+    // Drop any cluster/image labels currently in memory so the UI stops
+    // showing them immediately when toggled off. On toggle-on, the caches
+    // start fresh; new labels are fetched on the next album switch.
+    setClusterLabels({});
+    clearImageLabelCache();
   });
 }
 
@@ -656,6 +676,7 @@ async function initializeSettings() {
   setupWrapNavigationControl();
   setupGridThumbSizeFactorControl();
   setupResetDefaultsControls();
+  setupAutotaggingControl();
 }
 
 // Initialize settings from the server and local storage

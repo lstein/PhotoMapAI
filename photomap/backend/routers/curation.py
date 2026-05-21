@@ -5,6 +5,7 @@ import shutil
 import threading
 import uuid
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,6 @@ from ..config import get_config_manager
 from ..embeddings import _open_npz_file, get_fps_indices_global, get_kmeans_indices_global
 from ..progress import IndexStatus, progress_tracker
 from .album import validate_album_exists, validate_image_access
-from .index import check_album_lock
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,97 +44,120 @@ class ExportRequest(BaseModel):
     filenames: list[str]
     output_folder: str
 
+def _validate_curation_request(request: CurationRequest) -> None:
+    """Clamp / reject obviously bad inputs. Shared by the async and sync endpoints."""
+    if request.target_count <= 0:
+        raise HTTPException(status_code=400, detail="target_count must be positive")
+    if request.target_count > 100000:
+        raise HTTPException(status_code=400, detail="target_count exceeds reasonable limit")
+    if request.iterations < 1:
+        request.iterations = 1
+    if request.iterations > 30:
+        request.iterations = 30
+
+
+def _compute_curation(
+    request: CurationRequest,
+    on_iteration: Callable[[int], None] | None = None,
+) -> dict[str, Any]:
+    """Run the Monte Carlo curation and build the structured response dict.
+
+    ``on_iteration(i)`` (1-indexed) fires after each Monte Carlo iteration so
+    the async endpoint can advance its ProgressTracker; the sync endpoint
+    passes ``None`` and just runs to completion.
+
+    Raises ``LookupError`` if the album key doesn't resolve — callers decide
+    whether that surfaces as a 404 (sync endpoint) or a ProgressTracker error
+    (background task).
+    """
+    config_manager = get_config_manager()
+    album_config = config_manager.get_album(request.album)
+    if not album_config:
+        raise LookupError("Album not found")
+
+    index_path = Path(album_config.index)
+    vote_counter: Counter = Counter()
+
+    for i in range(request.iterations):
+        run_seed = random.randint(0, 1000000)
+        if request.method == "kmeans":
+            selected_files = get_kmeans_indices_global(
+                index_path, request.target_count, run_seed, request.excluded_indices
+            )
+        else:
+            selected_files = get_fps_indices_global(
+                index_path, request.target_count, run_seed, request.excluded_indices
+            )
+        vote_counter.update(selected_files)
+        if on_iteration is not None:
+            on_iteration(i + 1)
+
+    data = _open_npz_file(index_path)
+    filename_map = data["filename_map"]
+    norm_map = {os.path.normpath(k).lower(): v for k, v in filename_map.items()}
+
+    # Every image that received a vote goes into the analysis table; the
+    # exclusion check defends against algorithms that returned an excluded
+    # index (e.g. from index drift after a recent re-index).
+    analysis_results = []
+    for filepath, count in vote_counter.most_common():
+        f_norm = os.path.normpath(filepath).lower()
+        if f_norm in norm_map:
+            idx = int(norm_map[f_norm])
+            if idx in request.excluded_indices:
+                continue
+
+            analysis_results.append({
+                "filename": os.path.basename(filepath),
+                "subfolder": os.path.basename(os.path.dirname(filepath)),
+                "filepath": filepath,
+                "index": idx,
+                "count": count,
+                "frequency": round((count / request.iterations) * 100, 1),
+            })
+
+    # Top-N consensus winners.
+    consensus_files = [x["filepath"] for x in analysis_results[: request.target_count]]
+    selected_indices: list[int] = []
+    final_file_list: list[str] = []
+    for f in consensus_files:
+        f_norm = os.path.normpath(f).lower()
+        if f_norm in norm_map:
+            selected_indices.append(int(norm_map[f_norm]))
+            final_file_list.append(f)
+
+    return {
+        "status": "success",
+        "count": len(selected_indices),
+        "target_count": request.target_count,
+        "selected_indices": selected_indices,
+        "selected_files": final_file_list,
+        "analysis_results": analysis_results,
+    }
+
+
 def _run_curation_task(job_id: str, request: CurationRequest):
     """
     Background task to run curation process with progress tracking.
     """
     try:
-        # Start progress tracking
         progress_tracker.start_operation(job_id, request.iterations, "curating")
-
-        config_manager = get_config_manager()
-        album_config = config_manager.get_album(request.album)
-        if not album_config:
-            progress_tracker.set_error(job_id, "Album not found")
-            return
-
-        index_path = Path(album_config.index)
         logger.info(f"Curation Job {job_id}: Running {request.method.upper()} x{request.iterations}...")
 
-        vote_counter = Counter()
-
-        # Run Monte Carlo with progress updates
-        for i in range(request.iterations):
-            run_seed = random.randint(0, 1000000)
-            if request.method == "kmeans":
-                selected_files = get_kmeans_indices_global(
-                    index_path, request.target_count, run_seed, request.excluded_indices
-                )
-            else:
-                selected_files = get_fps_indices_global(
-                    index_path, request.target_count, run_seed, request.excluded_indices
-                )
-            vote_counter.update(selected_files)
-
-            # Update progress after each iteration
+        def _on_iter(i: int) -> None:
             progress_tracker.update_progress(
-                job_id,
-                i + 1,
-                f"Iteration {i + 1}/{request.iterations}"
+                job_id, i, f"Iteration {i}/{request.iterations}"
             )
 
-        # Prepare Data needed for mapping
-        data = _open_npz_file(index_path)
-        filename_map = data["filename_map"]
-        norm_map = {os.path.normpath(k).lower(): v for k, v in filename_map.items()}
+        try:
+            result = _compute_curation(request, on_iteration=_on_iter)
+        except LookupError as exc:
+            progress_tracker.set_error(job_id, str(exc))
+            return
 
-        # Generate CSV Data (Analysis Results)
-        analysis_results = []
-        for filepath, count in vote_counter.most_common():
-            f_norm = os.path.normpath(filepath).lower()
-            if f_norm in norm_map:
-                idx = int(norm_map[f_norm])
-
-                if idx in request.excluded_indices:
-                    continue
-
-                subfolder = os.path.basename(os.path.dirname(filepath))
-
-                analysis_results.append({
-                    "filename": os.path.basename(filepath),
-                    "subfolder": subfolder,
-                    "filepath": filepath,
-                    "index": idx,
-                    "count": count,
-                    "frequency": round((count / request.iterations) * 100, 1)
-                })
-
-        # Generate Selection (top N winners)
-        consensus_files = [x['filepath'] for x in analysis_results[:request.target_count]]
-
-        selected_indices = []
-        final_file_list = []
-
-        for f in consensus_files:
-            f_norm = os.path.normpath(f).lower()
-            if f_norm in norm_map:
-                selected_indices.append(int(norm_map[f_norm]))
-                final_file_list.append(f)
-
-        result = {
-            "status": "success",
-            "count": len(selected_indices),
-            "target_count": request.target_count,
-            "selected_indices": selected_indices,
-            "selected_files": final_file_list,
-            "analysis_results": analysis_results
-        }
-
-        # Store result
         with _curation_results_lock:
             _curation_results[job_id] = result
 
-        # Mark as completed
         progress_tracker.complete_operation(job_id, "Curation completed")
         logger.info(f"Curation Job {job_id}: Completed successfully")
 
@@ -154,17 +177,7 @@ async def run_curation(request: CurationRequest, background_tasks: BackgroundTas
     Returns a job_id that can be used to poll for progress and results.
     """
     try:
-        # Validate target_count parameter
-        if request.target_count <= 0:
-            raise HTTPException(status_code=400, detail="target_count must be positive")
-        if request.target_count > 100000:
-            raise HTTPException(status_code=400, detail="target_count exceeds reasonable limit")
-
-        # Validate and cap iterations
-        if request.iterations < 1:
-            request.iterations = 1
-        if request.iterations > 30:
-            request.iterations = 30
+        _validate_curation_request(request)
 
         # Generate unique job ID
         job_id = f"curation_{uuid.uuid4().hex[:8]}"
@@ -178,6 +191,8 @@ async def run_curation(request: CurationRequest, background_tasks: BackgroundTas
             "iterations": request.iterations
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to start curation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -239,90 +254,14 @@ async def run_curation_sync(request: CurationRequest):
         JSON response with status, selected indices, files, and analysis results.
     """
     try:
-        # Validate target_count parameter
-        if request.target_count <= 0:
-            raise HTTPException(status_code=400, detail="target_count must be positive")
-        if request.target_count > 100000:
-            raise HTTPException(status_code=400, detail="target_count exceeds reasonable limit")
-
-        # Validate and cap iterations
-        if request.iterations < 1:
-            request.iterations = 1
-        if request.iterations > 30:
-            request.iterations = 30
-
-        config_manager = get_config_manager()
-        album_config = config_manager.get_album(request.album)
-        if not album_config:
-            raise HTTPException(status_code=404, detail="Album not found")
-        index_path = Path(album_config.index)
-
+        _validate_curation_request(request)
         logger.info(f"Curation: Running {request.method.upper()} x{request.iterations}...")
+        return _compute_curation(request)
 
-        vote_counter = Counter()
-
-        # 1. Run Monte Carlo
-        for _i in range(request.iterations):
-            run_seed = random.randint(0, 1000000)
-            if request.method == "kmeans":
-                selected_files = get_kmeans_indices_global(
-                    index_path, request.target_count, run_seed, request.excluded_indices
-                )
-            else:
-                selected_files = get_fps_indices_global(
-                    index_path, request.target_count, run_seed, request.excluded_indices
-                )
-            vote_counter.update(selected_files)
-
-        # 2. Prepare Data needed for mapping
-        data = _open_npz_file(index_path)
-        filename_map = data["filename_map"]
-        norm_map = {os.path.normpath(k).lower(): v for k, v in filename_map.items()}
-
-        # 3. Generate CSV Data (Analysis Results) - Includes EVERY image that got a vote
-        analysis_results = []
-        for filepath, count in vote_counter.most_common():
-            f_norm = os.path.normpath(filepath).lower()
-            if f_norm in norm_map:
-                idx = int(norm_map[f_norm])
-
-                # CRITICAL FIX: Strictly enforce exclusion.
-                # Even if the algo returned it (e.g. due to index drift), we MUST drop it here.
-                if idx in request.excluded_indices:
-                    continue
-
-                subfolder = os.path.basename(os.path.dirname(filepath))
-
-                analysis_results.append({
-                    "filename": os.path.basename(filepath),
-                    "subfolder": subfolder,
-                    "filepath": filepath,
-                    "index": idx,
-                    "count": count,
-                    "frequency": round((count / request.iterations) * 100, 1)
-                })
-
-        # 4. Generate Selection (Green Dots) - Just the top N winners
-        consensus_files = [x['filepath'] for x in analysis_results[:request.target_count]]
-
-        selected_indices = []
-        final_file_list = []
-
-        for f in consensus_files:
-            f_norm = os.path.normpath(f).lower()
-            if f_norm in norm_map:
-                selected_indices.append(int(norm_map[f_norm]))
-                final_file_list.append(f)
-
-        return {
-            "status": "success",
-            "count": len(selected_indices),
-            "target_count": request.target_count,
-            "selected_indices": selected_indices,
-            "selected_files": final_file_list,
-            "analysis_results": analysis_results
-        }
-
+    except HTTPException:
+        raise
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Curation Error: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -338,8 +277,8 @@ async def export_dataset(request: ExportRequest):
     Returns:
         JSON response with success count and any errors.
     """
-    check_album_lock()  # May raise a 403 exception
-    # Validate and sanitize the output folder to prevent path traversal
+    # Export is not a destructive album-management operation; the per-album
+    # lock check is already handled inside validate_album_exists() below.
     if not request.output_folder:
         raise HTTPException(status_code=400, detail="Output folder required")
 
@@ -350,26 +289,11 @@ async def export_dataset(request: ExportRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid output folder: {e}") from e
 
-    # Define the base directory under which exports are allowed
-    # Use user's home directory as the base to prevent system-wide access
-    base_dir = Path.home().resolve()
-
-    # Ensure the export directory is within the allowed base directory
-    def is_within_base_dir(target_dir: Path, base: Path) -> bool:
-        """Check if target directory is within the base directory."""
-        if os.name == "nt":
-            # On Windows, also ensure the drive matches
-            return target_dir.drive.lower() == base.drive.lower() and (target_dir == base or base in target_dir.parents)
-        else:
-            return target_dir == base or base in target_dir.parents
-
-    if not is_within_base_dir(output_dir, base_dir):
-        raise HTTPException(status_code=400, detail="Output folder is outside the allowed export directory")
-
     # Resolve the album so we can verify each source path lives inside it —
     # otherwise a caller could ask us to copy /etc/passwd into their export
-    # dir. Validated after the output-folder checks so cheap input errors
-    # surface as 400 even when the album key is bogus.
+    # dir. Source-path security is handled by validate_image_access(); no
+    # home-dir restriction is placed on the destination so users can export
+    # to external drives, network mounts, etc.
     album_config = validate_album_exists(request.album)
 
     if not output_dir.exists():
