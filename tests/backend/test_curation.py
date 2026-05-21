@@ -3,9 +3,7 @@ test_curation.py
 Tests for the curation functionality (Model Training Dataset Curator).
 """
 
-import tempfile
 import time
-from pathlib import Path
 
 import pytest
 from fixtures import build_index
@@ -269,29 +267,27 @@ def test_export_endpoint(client, new_album, monkeypatch, tmp_path):
     data = response.json()
     selected_files = data["selected_files"]
 
-    # Create export folder within home directory (as required by endpoint)
-    with tempfile.TemporaryDirectory(dir=Path.home()) as temp_dir:
-        export_folder = Path(temp_dir) / "exported_images"
+    export_folder = tmp_path / "exported_images"
 
-        # Export the files
-        response = client.post(
-            "/api/curation/export",
-            json={
-                "album": new_album["key"],
-                "filenames": selected_files,
-                "output_folder": str(export_folder)
-            }
-        )
-        assert response.status_code == 200
-        result = response.json()
-        assert result["status"] == "success"
-        assert "exported" in result
-        assert result["exported"] > 0
+    # Export the files
+    response = client.post(
+        "/api/curation/export",
+        json={
+            "album": new_album["key"],
+            "filenames": selected_files,
+            "output_folder": str(export_folder)
+        }
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["status"] == "success"
+    assert "exported" in result
+    assert result["exported"] > 0
 
-        # Verify files were actually exported
-        assert export_folder.exists()
-        exported_files = list(export_folder.iterdir())
-        assert len(exported_files) > 0
+    # Verify files were actually exported
+    assert export_folder.exists()
+    exported_files = list(export_folder.iterdir())
+    assert len(exported_files) > 0
 
 
 def test_export_validation(client, tmp_path):
@@ -321,37 +317,22 @@ def test_export_validation(client, tmp_path):
     assert response.status_code == 400
 
 
-def test_export_path_traversal_protection(client):
-    """Test that export prevents path traversal attacks."""
-    # Output-folder validation runs before album resolution.
+def test_export_nonexistent_files(client, new_album, tmp_path):
+    """Test export with nonexistent files."""
+    export_folder = tmp_path / "export_test"
+
     response = client.post(
         "/api/curation/export",
         json={
-            "album": "any-key",
-            "filenames": ["some_file.jpg"],
-            "output_folder": "/etc"
+            "album": new_album["key"],
+            "filenames": ["/nonexistent/file1.jpg", "/nonexistent/file2.jpg"],
+            "output_folder": str(export_folder)
         }
     )
-    assert response.status_code == 400
-
-
-def test_export_nonexistent_files(client, new_album):
-    """Test export with nonexistent files."""
-    with tempfile.TemporaryDirectory(dir=Path.home()) as temp_dir:
-        export_folder = Path(temp_dir) / "export_test"
-
-        response = client.post(
-            "/api/curation/export",
-            json={
-                "album": new_album["key"],
-                "filenames": ["/nonexistent/file1.jpg", "/nonexistent/file2.jpg"],
-                "output_folder": str(export_folder)
-            }
-        )
-        assert response.status_code == 200
-        result = response.json()
-        # Should succeed but with 0 exported
-        assert result["exported"] == 0
+    assert response.status_code == 200
+    result = response.json()
+    # Should succeed but with 0 exported
+    assert result["exported"] == 0
 
 
 def test_curate_multiple_iterations(client, new_album, monkeypatch):

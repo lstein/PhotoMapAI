@@ -585,11 +585,15 @@ function setupEventListeners() {
         }),
       });
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || `Export failed (${response.status})`);
+      }
       alert(`Exported ${data.exported} files.`);
       setStatus("Export Complete.", "success");
     } catch (e) {
       console.error(e);
       alert("Export failed: " + e.message);
+      setStatus("Export failed.", "error");
     }
   };
 

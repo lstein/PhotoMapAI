@@ -124,6 +124,34 @@
       </div>
     </div>
 
+    <!-- Autotagging accordion -->
+    <div class="settings-accordion" data-section="autotagging">
+      <button class="accordion-header" type="button" aria-expanded="false">
+        <span class="accordion-chevron">&#9654;</span>
+        Autotagging
+      </button>
+      <div class="accordion-body">
+        <div class="setting-row">
+          <label for="autotaggingEnabledCheckbox">Activate autotagging:</label>
+          <input type="checkbox" id="autotaggingEnabledCheckbox" />
+          <small
+            style="
+              color: #666;
+              font-size: 0.85em;
+              display: block;
+              margin-top: 4px;
+              grid-column: 2 / 3;
+            "
+          >
+            Suggests content labels for UMAP clusters and individual images by
+            building a vocabulary embedding index. The first build takes
+            several minutes on machines without a GPU. Changes take effect on
+            the next album switch or page reload.
+          </small>
+        </div>
+      </div>
+    </div>
+
     <!-- API Integration accordion -->
     {% if not album_locked %}
     <div class="settings-accordion" data-section="api-integration">

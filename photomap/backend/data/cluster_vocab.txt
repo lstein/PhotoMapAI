@@ -962,8 +962,733 @@ wrench
 zebra
 zucchini
 
-# CURATED — hand-added phrases below this line are preserved across re-runs. One phrase per line, lowercase; empty lines and # comments are OK.
+# === OpenImages V7 top-1000 by validation-set human-verified frequency (Google, CC-BY 4.0) ===
+abdomen
+active undergarment
+adolescent
+adult
+adventure
+advertising
+aeolian landform
+aerial photography
+aerospace engineering
+agriculture
+air force
+air show
+air sports
+air travel
+aircraft engine
+airline
+airliner
+airplane
+alcoholic beverage
+amber (color)
+amphibian
+ancient history
+ancient roman architecture
+animal sports
+annual plant
+antique
+antique car
+aqua
+archaeological site
+architecture
+arecales
+army
+art
+arthropod
+asphalt
+astronomical object
+astronomy
+athlete
+athletics
+audi
+audience
+auto racing
+auto show
+automotive design
+automotive exterior
+automotive tire
+aviation
+azure
+baby
+backyard
+bag
+baking
+ball game
+bangs
+banner
+barechested
+baseball (sport)
+basket
+bat-and-ball games
+bay
+beak
+beauty
+bedrock
+beige
+bell peppers and chili peppers
+berry
+bicycle frame
+bicycle racing
+big cats
+bikini
+biome
+bird of prey
+birthday cake
+bitter orange
+bivalve
+black
+black hair
+black-and-white
+blond
+blossom
+blue
+bmw (brand)
+board game
+boardsport
+boating
+body of water
+bouquet
+bovine
+branch
+brand
+brass instrument
+breakfast
+brick
+bridge (structure)
+brown
+brown hair
+brunch
+bucatini
+bud
+bulldog
+bumper
+buttercream
+button
+cactus
+cadillac (brand)
+caffeine
+caffè macchiato
+café au lait
+cage
+cake decorating
+camera lens
+cameras & optics
+canal
+cap
+cappuccino
+carbonara
+carpet
+cartoon
+carving
+cave
+ceiling
+ceramic
+championship
+channel
+charadriiformes
+cheek
+chevrolet
+child
+chili pepper
+chin
+chinese noodles
+chocolate
+chocolate cake
+chordophone
+choreography
+chow mein
+ciabatta
+circle
+citrus
+city
+city car
+classic car
+classical music
+clergy
+close-up
+cloud
+cockapoo
+cocktail dress
+coffee milk
+cold weapon
+collage
+collar (apparel)
+college baseball
+column
+combat sport
+commercial vehicle
+communication device
+compact car
+compact sport utility vehicle
+competition event
+computer hardware
+concept car
+confectionery
+contact sport
+convertible
+cookies and crackers
+cooking
+coral
+coral reef
+coral reef fish
+costume
+coupé
+cream (drink)
+crop (plant)
+crossover suv
+crowd
+crustacean
+cuisine
+cup
+currency
+curry
+cycle sport
+cycling
+dance
+danish pastry
+darkness
+decor
+desert
+design
+diagram
+digital camera
+dinner
+dish
+display device
+distilled beverage
+document
+dog breed
+dog sports
+domestic long-haired cat
+domestic rabbit
+domestic short-haired cat
+drawing
+drinkware
+duathlon
+east siberian laika
+education
+electricity
+electronic device
+electronic instrument
+electronics
+emberizidae
+endurance sports
+english bulldog
+entertainment
+equestrian sport
+equestrianism
+espresso
+estate
+european shorthair
+evening
+event
+evergreen
+executive car
+exercise
+exhibition
+extreme sport
+eyebrow
+eyelash
+facade
+facial hair
+factory
+family car
+fashion
+fashion design
+fauna
+fell
+fence
+ferrari s.p.a.
+festival
+fictional character
+field
+fighter aircraft
+figurine
+finch
+finger
+fire
+firearm
+fish (food)
+fishing
+flame
+flatbread
+flight
+flightless bird
+floor
+flooring
+flora
+floral design
+floribunda
+floristry
+flower arranging
+flowering plant
+font
+food grain
+football player
+ford
+forehead
+forest
+formal wear
+formation
+fowl
+freezing
+fried food
+frigate
+full-size car
+fungus
+gadget
+galliformes
+game
+garden
+garden roses
+gemstone
+geology
+glacial landform
+glass
+glass bottle
+glen of imaal terrier
+golf
+gown
+grass
+grass family
+grassland
+gravy
+grazing
+green
+greenland dog
+grey
+grille
+grilling
+grocery store
+guard dog
+gun
+hair coloring
+hairstyle
+handwriting
+hardwood
+hatchback
+havanese
+headgear
+helicopter rotor
+heptathlon
+herb
+herd
+highland
+hill
+historic site
+history
+hockey
+home
+honda
+horizon
+horn (animal)
+horse harness
+hot rod
+hound
+human
+hut
+ice
+ice skating
+icing
+illustration
+individual sport
+indoor games and sports
+industry
+infrastructure
+interaction
+interior design
+iron (material)
+island
+jar
+jeep
+jet aircraft
+jewellery
+jungle
+junk food
+keyboard
+kitten
+labrador retriever
+lady
+lake
+lamborghini
+lamborghini (brand)
+landmark
+landscape
+lane
+latte
+lavender (color)
+layered hair
+leaf
+leaf vegetable
+learning
+leather
+leg
+leisure
+light
+light aircraft
+light commercial vehicle
+light fixture
+lighting
+lilac (color)
+limb
+line
+lip
+liqueur
+loch
+logo
+long hair
+lunch
+luxury vehicle
+machine
+macro photography
+magenta
+male person
+mane
+map
+mare
+marine biology
+market
+marketplace
+maroon
+martial arts
+mask
+mast
+meadow
+meal
+meat
+medical
+medicinal mushroom
+membrane-winged insect
+mercedes-benz
+metal
+metropolitan area
+microcontroller
+mid-size car
+military
+military aircraft
+military helicopter
+military officer
+military person
+military vehicle
+miniature poodle
+minibus
+mode of transport
+model
+model car
+modern art
+modern dance
+molluscs
+monastery
+money
+monochrome
+monochrome photography
+monoplane
+monument
+morning
+motor ship
+motor vehicle
+motorcycling
+motorsport
+mountain range
+multimedia
+muscle
+muscle car
+music
+musical theatre
+musician
+mythology
+nail (body part)
+narrow-body aircraft
+natural environment
+nature
+nature reserve
+naval ship
+navy
+neck
+neighbourhood
+new world monkey
+night
+nissan
+noodle
+noodle soup
+number
+off-road vehicle
+off-roading
+official
+old english bulldog
+old world monkey
+open-wheel car
+orange (color)
+organ (biology)
+organism
+outdoor recreation
+outdoor shoe
+outdoor structure
+outer space
+outerwear
+pack animal
+paint
+painting
+paper
+pattern
+people
+perching bird
+percussion
+performance
+performance art
+performance car
+performing arts
+personal computer hardware
+personal luxury car
+personal protective equipment
+pest
+pet
+petal
+photo shoot
+photograph
+physical fitness
+pickup truck
+pink
+pizza cheese
+place of worship
+plain
+plant stem
+plantation
+plateau
+play
+player
+pollinator
+poodle crossbreed
+porcelain
+porsche
+portrait
+portrait photography
+prairie
+priest
+produce
+propeller (aircraft)
+propeller-driven aircraft
+property
+public space
+public transport
+puppy
+purple
+rabbits and hares
+race car
+race track
+racing
+racquet sport
+railway
+rallycross
+rallying
+rapid
+real estate
+recreation
+recreational fishing
+red
+reef
+reflection
+reflex camera
+rein
+religion
+reservoir
+residential area
+retail
+rice
+ridge
+rim
+road
+road bicycle
+road cycling
+road surface
+roasting
+rock
+rodent
+rolling stock
+roof
+room
+rope
+ruins
+running
+runway (aviation)
+rural area
+saarlooswolfdog
+safari
+sail
+sailboat
+sailing
+sailing ship
+sand
+savanna
+scaled reptile
+schnoodle
+screenshot
+sea
+seabird
+sedan
+senior citizen
+shack
+shell
+ship
+shoe
+shooting
+shore
+shorebird
+shrub (plant)
+sign
+signage
+silver
+sirloin steak
+sitting
+skating
+sketch
+skin
+sleeve
+small to medium-sized cats
+smartphone
+smile
+smoke
+sneakers
+snout
+snow
+soccer
+social group
+soft drink
+soil
+soldier
+soup
+space
+spaghetti
+spaghetti aglio e olio
+spaniel
+speech
+speedboat
+sport utility vehicle
+sports
+sports car
+sports sedan
+sports venue
+spring (season)
+stadium
+stage
+stallion
+star
+statue
+steak
+steamed rice
+steppe
+stew
+stick and ball games
+stock car racing
+stone carving
+stream
+string instrument
+subcompact car
+subshrub
+sugar paste
+summit
+sunlight
+supercar
+supermini
+supper
+surface water sports
+sweetness
+swimmer
+swimming
+symbol
+symmetry
+t-shirt
+tabby cat
+tabletop game
+takeoff
+tan
+tarmac
+team
+team sport
+temple
+temple (body part)
+tennis
+terrain
+terrier
+text
+textile
+thigh
+thorax
+tile
+toddler
+toe
+torso
+tourism
+tourist attraction
+tournament
+town
+toyota
+track
+track and field athletics
+tractor
+tradition
+transport
+troop
+trunk (tree)
+twig
+ultralight aviation
+undergarment
+underwater
+uniform
+vacation
+vegetarian food
+vegetation
+vintage car
+violet (color)
+volkswagen
+volkswagen golf
+volvo cars
+wadi
+walking
+walkway
+wall
+water
+water bird
+water feature
+water sport
+watercourse
+watercraft rowing
+waterway
+wave (noun)
+wetland
+whipped cream
+whiskers
+white
+wide-body aircraft
+wild cat
+wilderness
+wildflower
+wildlife
+wind
+wind instrument
+wind wave
+windsport
+wing
+winter
+winter sport
+wire
+wolfdog
+wood
+wood stain
+woodland
+wool
+writing
+yellow
+youth
+zoo
+
 # End users who installed via pip can add extra phrases without editing
 # this file by creating cluster_vocab_extra.txt in the photomap config
 # directory (e.g. ~/.config/photomap/ on Linux, sibling of config.yaml).
+
+
+# Hand-added phrases below the next line are preserved across re-runs. One phrase per line, lowercase; empty lines and # comments are OK.
+# CURATED LABELS
 

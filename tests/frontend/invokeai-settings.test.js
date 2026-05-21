@@ -17,6 +17,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/search-ui.js
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   saveSettingsToLocalStorage: jest.fn(),
   setAlbum: jest.fn(),
+  setAutotaggingEnabled: jest.fn(),
   setMaxSearchResults: jest.fn(),
   setMinSearchScore: jest.fn(),
   setWrapNavigation: jest.fn(),
@@ -27,6 +28,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", (
     showControlPanelText: true,
     suppressDeleteConfirm: false,
     wrapNavigation: false,
+    autotaggingEnabled: false,
     gridThumbSizeFactor: 1,
     minSearchScore: 0,
     maxSearchResults: 10,
