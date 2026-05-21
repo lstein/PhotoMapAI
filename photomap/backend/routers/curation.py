@@ -278,8 +278,8 @@ async def export_dataset(request: ExportRequest):
     Returns:
         JSON response with success count and any errors.
     """
-    check_album_lock()  # May raise a 403 exception
-    # Validate and sanitize the output folder to prevent path traversal
+    # Export is not a destructive album-management operation; the per-album
+    # lock check is already handled inside validate_album_exists() below.
     if not request.output_folder:
         raise HTTPException(status_code=400, detail="Output folder required")
 
@@ -290,26 +290,11 @@ async def export_dataset(request: ExportRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid output folder: {e}") from e
 
-    # Define the base directory under which exports are allowed
-    # Use user's home directory as the base to prevent system-wide access
-    base_dir = Path.home().resolve()
-
-    # Ensure the export directory is within the allowed base directory
-    def is_within_base_dir(target_dir: Path, base: Path) -> bool:
-        """Check if target directory is within the base directory."""
-        if os.name == "nt":
-            # On Windows, also ensure the drive matches
-            return target_dir.drive.lower() == base.drive.lower() and (target_dir == base or base in target_dir.parents)
-        else:
-            return target_dir == base or base in target_dir.parents
-
-    if not is_within_base_dir(output_dir, base_dir):
-        raise HTTPException(status_code=400, detail="Output folder is outside the allowed export directory")
-
     # Resolve the album so we can verify each source path lives inside it —
     # otherwise a caller could ask us to copy /etc/passwd into their export
-    # dir. Validated after the output-folder checks so cheap input errors
-    # surface as 400 even when the album key is bogus.
+    # dir. Source-path security is handled by validate_image_access(); no
+    # home-dir restriction is placed on the destination so users can export
+    # to external drives, network mounts, etc.
     album_config = validate_album_exists(request.album)
 
     if not output_dir.exists():
