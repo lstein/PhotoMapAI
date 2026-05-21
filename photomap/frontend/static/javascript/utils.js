@@ -261,3 +261,55 @@ export function makeDraggable(handle, target, options = {}) {
     onEnd();
   };
 }
+
+/**
+ * Fire ``onLongPress`` when the user touches ``el`` and holds for ``ms``.
+ *
+ * Movement past ``moveThreshold`` (px on either axis) cancels the press —
+ * mirrors what users expect from a long-press gesture vs a swipe.
+ *
+ * The callback receives ``(touchstartEvent, { x, y })``. Callers handle
+ * their own ``event.preventDefault()`` and conditional bail-out (e.g.
+ * "only fire when there's something to navigate back to") so the helper
+ * stays neutral about both.
+ */
+export function attachLongPress(el, onLongPress, options = {}) {
+  const { ms = 500, moveThreshold = 10 } = options;
+  let timer = null;
+  let startPos = null;
+
+  function cancel() {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    startPos = null;
+  }
+
+  el.addEventListener("touchstart", (e) => {
+    if (!e.touches || e.touches.length !== 1) {
+      return;
+    }
+    startPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    timer = setTimeout(() => {
+      if (startPos) {
+        onLongPress(e, { ...startPos });
+        startPos = null;
+      }
+    }, ms);
+  });
+
+  el.addEventListener("touchmove", (e) => {
+    if (!startPos || !e.touches || e.touches.length !== 1) {
+      return;
+    }
+    const dx = e.touches[0].clientX - startPos.x;
+    const dy = e.touches[0].clientY - startPos.y;
+    if (Math.abs(dx) > moveThreshold || Math.abs(dy) > moveThreshold) {
+      cancel();
+    }
+  });
+
+  el.addEventListener("touchend", cancel);
+  el.addEventListener("touchcancel", cancel);
+}

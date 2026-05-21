@@ -5,6 +5,7 @@ import { showBackFlyout } from "./back-button.js";
 import { backStack } from "./back-stack.js";
 import { showSlideshowModeMenu, toggleSlideshowWithIndicator } from "./slideshow.js";
 import { state } from "./state.js";
+import { attachLongPress } from "./utils.js";
 
 // Touch events
 let touchStartY = null;
@@ -129,90 +130,25 @@ function handleTouchEnd(e) {
   touchStartTime = null;
 }
 
-// Long-touch handler for slideshow button
+// Long-press on the slideshow button opens the slideshow-mode menu.
 const slideshowBtn = document.getElementById("startStopSlideshowBtn");
 if (slideshowBtn) {
-  let longTouchTimer = null;
-  let touchStartPos = null;
-
-  slideshowBtn.addEventListener("touchstart", (e) => {
-    touchStartPos = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
-    };
-
-    longTouchTimer = setTimeout(() => {
-      if (touchStartPos) {
-        e.preventDefault();
-        showSlideshowModeMenu(touchStartPos.x + 6, touchStartPos.y + 6);
-        touchStartPos = null;
-      }
-    }, 500); // 500ms for long touch
-  });
-
-  slideshowBtn.addEventListener("touchmove", (e) => {
-    // Cancel long touch if finger moves too much
-    if (touchStartPos) {
-      const dx = e.touches[0].clientX - touchStartPos.x;
-      const dy = e.touches[0].clientY - touchStartPos.y;
-      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-        clearTimeout(longTouchTimer);
-        touchStartPos = null;
-      }
-    }
-  });
-
-  slideshowBtn.addEventListener("touchend", () => {
-    clearTimeout(longTouchTimer);
-    touchStartPos = null;
-  });
-
-  slideshowBtn.addEventListener("touchcancel", () => {
-    clearTimeout(longTouchTimer);
-    touchStartPos = null;
+  attachLongPress(slideshowBtn, (e, { x, y }) => {
+    e.preventDefault();
+    showSlideshowModeMenu(x + 6, y + 6);
   });
 }
 
-// Long-touch handler for Back button — opens the recent-positions flyout.
+// Long-press on the Back button opens the recent-positions flyout, but only
+// when there's somewhere to navigate back to.
 const backNavBtn = document.getElementById("backNavBtn");
 if (backNavBtn) {
-  let longTouchTimer = null;
-  let touchStartPos = null;
-
-  backNavBtn.addEventListener("touchstart", (e) => {
-    touchStartPos = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
-    };
-
-    longTouchTimer = setTimeout(() => {
-      if (touchStartPos && backStack.size() >= 2) {
-        e.preventDefault();
-        showBackFlyout(touchStartPos.x + 6, touchStartPos.y + 6);
-        touchStartPos = null;
-      }
-    }, 500);
-  });
-
-  backNavBtn.addEventListener("touchmove", (e) => {
-    if (touchStartPos) {
-      const dx = e.touches[0].clientX - touchStartPos.x;
-      const dy = e.touches[0].clientY - touchStartPos.y;
-      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-        clearTimeout(longTouchTimer);
-        touchStartPos = null;
-      }
+  attachLongPress(backNavBtn, (e, { x, y }) => {
+    if (backStack.size() < 2) {
+      return;
     }
-  });
-
-  backNavBtn.addEventListener("touchend", () => {
-    clearTimeout(longTouchTimer);
-    touchStartPos = null;
-  });
-
-  backNavBtn.addEventListener("touchcancel", () => {
-    clearTimeout(longTouchTimer);
-    touchStartPos = null;
+    e.preventDefault();
+    showBackFlyout(x + 6, y + 6);
   });
 }
 
