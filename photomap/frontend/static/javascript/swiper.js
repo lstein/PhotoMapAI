@@ -241,12 +241,8 @@ class SwiperManager {
       });
     });
 
-    // Pause slideshow on arrow key navigation
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        this.pauseSlideshow();
-      }
-    });
+    // (Arrow-key pause lives in events.js's KEYBOARD_SHORTCUTS table —
+    // events.js owns global shortcuts per the CLAUDE.md contract.)
 
     // Reset slide show when the album, search results, or mode changes.
     // All three go through the single-flight resetAllSlides so they coalesce
