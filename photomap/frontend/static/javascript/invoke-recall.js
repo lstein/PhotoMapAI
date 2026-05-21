@@ -5,6 +5,7 @@
 // the configured InvokeAI backend.
 
 import { state } from "./state.js";
+import { fetchJson } from "./utils.js";
 
 const STATUS_RESET_MS = 2000;
 
@@ -75,50 +76,39 @@ function showErrorMessage(button, message) {
   setTimeout(() => banner.remove(), STATUS_RESET_MS * 3);
 }
 
-async function _raiseForStatus(response) {
-  let message = `HTTP ${response.status}`;
-  try {
-    const body = await response.json();
-    if (body && body.detail) {
-      message = body.detail;
+// Rewrap an HttpError so ``err.message`` is the backend's ``detail`` string
+// (what the drawer's error banner shows). Other error types pass through.
+function _withDetailMessage(err) {
+  if (err && err.name === "HttpError") {
+    const detail = err.body?.detail;
+    if (detail) {
+      const wrapped = new Error(String(detail));
+      wrapped.status = err.status;
+      wrapped.body = err.body;
+      return wrapped;
     }
-  } catch {
-    // ignore JSON parse errors — fall back to the generic message
   }
-  const err = new Error(message);
-  err.status = response.status;
-  throw err;
+  return err;
 }
 
 export async function sendRecall({ albumKey, index, includeSeed }) {
-  const response = await fetch("invokeai/recall", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      album_key: albumKey,
-      index,
-      include_seed: includeSeed,
-    }),
-  });
-  if (!response.ok) {
-    await _raiseForStatus(response);
+  try {
+    return await fetchJson("invokeai/recall", {
+      json: { album_key: albumKey, index, include_seed: includeSeed },
+    });
+  } catch (err) {
+    throw _withDetailMessage(err);
   }
-  return response.json();
 }
 
 export async function sendUseRefImage({ albumKey, index }) {
-  const response = await fetch("invokeai/use_ref_image", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      album_key: albumKey,
-      index,
-    }),
-  });
-  if (!response.ok) {
-    await _raiseForStatus(response);
+  try {
+    return await fetchJson("invokeai/use_ref_image", {
+      json: { album_key: albumKey, index },
+    });
+  } catch (err) {
+    throw _withDetailMessage(err);
   }
-  return response.json();
 }
 
 function getMetadataUrlFromDrawer() {

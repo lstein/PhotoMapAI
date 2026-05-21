@@ -12,9 +12,34 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/album-manage
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/index.js", () => ({
   getIndexMetadata: jest.fn(() => Promise.resolve({ filename_count: 0 })),
 }));
+// Provide a real fetchJson implementation that delegates to global.fetch —
+// the sendRecall / sendUseRefImage tests stub global.fetch and assert what
+// went over the wire, so the helper has to actually call it.
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", () => ({
   showSpinner: jest.fn(),
   hideSpinner: jest.fn(),
+  async fetchJson(url, options = {}) {
+    const { json, headers, ...rest } = options;
+    const init = { ...rest };
+    if (json !== undefined) {
+      init.method = init.method || "POST";
+      init.headers = { "Content-Type": "application/json", ...(headers || {}) };
+      init.body = JSON.stringify(json);
+    }
+    const response = await global.fetch(url, init);
+    if (!response.ok) {
+      const err = new Error(`HTTP ${response.status}`);
+      err.name = "HttpError";
+      err.status = response.status;
+      try {
+        err.body = await response.json();
+      } catch {
+        err.body = undefined;
+      }
+      throw err;
+    }
+    return await response.json();
+  },
 }));
 
 const { state } = await import("../../photomap/frontend/static/javascript/state.js");

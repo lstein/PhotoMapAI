@@ -8,7 +8,7 @@ import { showConfirmModal } from "./modal-utils.js";
 import { setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
-import { hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
+import { fetchJson, hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
 // SVG icons for bookmark actions
 const BOOKMARK_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -459,16 +459,11 @@ class BookmarkManager {
   }
 
   async downloadSingleImage(globalIndex) {
-    const response = await fetch(`retrieve_image/${encodeURIComponent(state.album)}/${globalIndex}`);
-    if (!response.ok) {
-      throw new Error("Failed to fetch image info");
-    }
-
-    const data = await response.json();
+    const data = await fetchJson(`retrieve_image/${encodeURIComponent(state.album)}/${globalIndex}`);
     const imageUrl = data.image_url;
     const filename = data.filename || `image_${globalIndex}.jpg`;
 
-    // Fetch the actual image
+    // Fetch the actual image (binary, not JSON — fetch directly)
     const imageResponse = await fetch(imageUrl);
     if (!imageResponse.ok) {
       throw new Error("Failed to fetch image");
@@ -536,11 +531,11 @@ class BookmarkManager {
       const sortedIndices = [...indices].sort((a, b) => b - a);
 
       for (const globalIndex of sortedIndices) {
-        const response = await fetch(`delete_image/${encodeURIComponent(state.album)}/${globalIndex}`, {
-          method: "DELETE",
-        });
-
-        if (!response.ok) {
+        try {
+          await fetchJson(`delete_image/${encodeURIComponent(state.album)}/${globalIndex}`, {
+            method: "DELETE",
+          });
+        } catch {
           console.warn(`Failed to delete image at index ${globalIndex}`);
         }
       }
@@ -644,21 +639,15 @@ class BookmarkManager {
         showSpinner();
       }
 
-      const response = await fetch(`move_images/${encodeURIComponent(state.album)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          indices: indices,
-          target_directory: targetDirectory,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Server error: ${response.status}`);
+      let result;
+      try {
+        result = await fetchJson(`move_images/${encodeURIComponent(state.album)}`, {
+          json: { indices: indices, target_directory: targetDirectory },
+        });
+      } catch (err) {
+        const detail = err.body?.detail;
+        throw new Error(detail || `Server error: ${err.status || err.message}`);
       }
-
-      const result = await response.json();
 
       // Build confirmation message
       let message = "";
@@ -757,21 +746,15 @@ class BookmarkManager {
     showSpinner();
 
     try {
-      const response = await fetch(`copy_images/${encodeURIComponent(state.album)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          indices: indices,
-          target_directory: targetDirectory,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Server error: ${response.status}`);
+      let result;
+      try {
+        result = await fetchJson(`copy_images/${encodeURIComponent(state.album)}`, {
+          json: { indices: indices, target_directory: targetDirectory },
+        });
+      } catch (err) {
+        const detail = err.body?.detail;
+        throw new Error(detail || `Server error: ${err.status || err.message}`);
       }
-
-      const result = await response.json();
 
       // Build confirmation message
       let message = "";
@@ -803,11 +786,11 @@ class BookmarkManager {
    * Get the current album configuration
    */
   async getAlbumConfig() {
-    const response = await fetch(`album/${encodeURIComponent(state.album)}/`);
-    if (!response.ok) {
+    try {
+      return await fetchJson(`album/${encodeURIComponent(state.album)}/`);
+    } catch {
       throw new Error("Failed to get album configuration");
     }
-    return await response.json();
   }
 
   /**
@@ -816,20 +799,18 @@ class BookmarkManager {
   async addFolderToAlbum(folderPath, albumConfig) {
     const updatedPaths = [...albumConfig.image_paths, folderPath];
 
-    const response = await fetch("update_album/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        key: albumConfig.key,
-        name: albumConfig.name,
-        image_paths: updatedPaths,
-        index: albumConfig.index,
-        umap_eps: albumConfig.umap_eps || 0.07,
-        description: albumConfig.description || "",
-      }),
-    });
-
-    if (!response.ok) {
+    try {
+      await fetchJson("update_album/", {
+        json: {
+          key: albumConfig.key,
+          name: albumConfig.name,
+          image_paths: updatedPaths,
+          index: albumConfig.index,
+          umap_eps: albumConfig.umap_eps || 0.07,
+          description: albumConfig.description || "",
+        },
+      });
+    } catch {
       throw new Error("Failed to add folder to album");
     }
 

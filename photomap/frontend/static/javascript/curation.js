@@ -5,7 +5,7 @@ import { updateSearchCheckmarks } from "./search-ui.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { highlightCurationSelection, setCurationMode, setUmapClickCallback, updateCurrentImageMarker } from "./umap.js";
-import { hideSpinner, showSpinner } from "./utils.js";
+import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 let currentSelectionIndices = new Set();
 const excludedIndices = new Set();
@@ -395,22 +395,15 @@ function setupEventListeners() {
       showSpinner();
 
       // Start the curation job
-      const startResponse = await fetch("api/curation/curate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const startData = await fetchJson("api/curation/curate", {
+        json: {
           target_count: targetCount,
           iterations: iter,
           album: state.album,
           method: method,
           excluded_indices: Array.from(excludedIndices),
-        }),
+        },
       });
-
-      if (!startResponse.ok) {
-        throw new Error(await startResponse.text());
-      }
-      const startData = await startResponse.json();
 
       if (startData.status !== "started") {
         throw new Error("Failed to start curation job");
@@ -421,13 +414,7 @@ function setupEventListeners() {
       // Poll for progress
       const pollInterval = setInterval(async () => {
         try {
-          const progressResponse = await fetch(`api/curation/curate/progress/${jobId}`);
-          if (!progressResponse.ok) {
-            clearInterval(pollInterval);
-            throw new Error("Failed to get progress");
-          }
-
-          const progressData = await progressResponse.json();
+          const progressData = await fetchJson(`api/curation/curate/progress/${jobId}`);
 
           if (progressData.status === "running" && progressData.progress) {
             // Update progress bar with real progress
@@ -575,24 +562,20 @@ function setupEventListeners() {
 
     setStatus(`Exporting ${filesToExport.length} files...`, "loading");
     try {
-      const response = await fetch("api/curation/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await fetchJson("api/curation/export", {
+        json: {
           album: state.album,
           filenames: filesToExport,
           output_folder: path,
-        }),
+        },
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail || `Export failed (${response.status})`);
-      }
       alert(`Exported ${data.exported} files.`);
       setStatus("Export Complete.", "success");
     } catch (e) {
       console.error(e);
-      alert("Export failed: " + e.message);
+      const detail = e.body?.detail;
+      const message = detail || (e.status ? `Export failed (${e.status})` : e.message);
+      alert("Export failed: " + message);
       setStatus("Export failed.", "error");
     }
   };

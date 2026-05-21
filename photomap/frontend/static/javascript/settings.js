@@ -4,7 +4,7 @@ import { albumManager } from "./album-manager.js";
 import { exitSearchMode } from "./search-ui.js";
 import { saveSettingsToLocalStorage, setAlbum, setAutotaggingEnabled, setWrapNavigation, state } from "./state.js";
 import { clearImageLabelCache, setClusterLabels } from "./cluster-utils.js";
-import { hideSpinner, showSpinner } from "./utils.js";
+import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 // Constants
 const DELAY_CONFIG = {
@@ -47,8 +47,7 @@ export function cacheElements() {
 // Export the function so other modules can use it
 export async function loadAvailableAlbums() {
   try {
-    const response = await fetch("available_albums/");
-    const albums = await response.json();
+    const albums = await fetchJson("available_albums/");
     if (!elements.albumSelect) {
       return;
     } // If album selection is locked, skip
@@ -309,8 +308,7 @@ async function loadLocationIQApiKey() {
     if (!elements.locationiqApiKeyInput) {
       return;
     } // If album selection is locked, skip
-    const response = await fetch("locationiq_key/");
-    const data = await response.json();
+    const data = await fetchJson("locationiq_key/");
 
     if (data.has_key) {
       elements.locationiqApiKeyInput.placeholder = `Current key: ${data.key}`;
@@ -324,15 +322,7 @@ async function loadLocationIQApiKey() {
 
 async function saveLocationIQApiKey(apiKey) {
   try {
-    const response = await fetch("locationiq_key/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ key: apiKey }),
-    });
-
-    const result = await response.json();
+    const result = await fetchJson("locationiq_key/", { json: { key: apiKey } });
     if (!result.success) {
       console.error("Failed to save API key:", result.message);
     }
@@ -349,12 +339,21 @@ export async function loadInvokeAISettings() {
   if (!elements.invokeaiUrlInput) {
     return;
   }
+  let data;
   try {
-    const response = await fetch("invokeai/config");
-    if (!response.ok) {
+    data = await fetchJson("invokeai/config");
+  } catch (error) {
+    // Network/parse failures fall through to refreshInvokeAIStatus(); a
+    // non-2xx HTTP response short-circuits before that, matching the
+    // pre-refactor behaviour of bailing out without probing the URL.
+    if (error.name === "HttpError") {
       return;
     }
-    const data = await response.json();
+    console.error("Failed to load InvokeAI settings:", error);
+    await refreshInvokeAIStatus();
+    return;
+  }
+  try {
     elements.invokeaiUrlInput.value = data.url || "";
     if (elements.invokeaiUsernameInput) {
       elements.invokeaiUsernameInput.value = data.username || "";
@@ -421,25 +420,13 @@ async function saveInvokeAISettings() {
     body.board_id = elements.invokeaiBoardSelect.value || "";
   }
   try {
-    const response = await fetch("invokeai/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-      let detail = `Save failed (${response.status})`;
-      try {
-        const data = await response.json();
-        if (data && data.detail) {
-          detail = String(data.detail);
-        }
-      } catch {
-        // Non-JSON body — keep the generic message.
-      }
-      return detail;
-    }
+    await fetchJson("invokeai/config", { json: body });
     return null;
   } catch (error) {
+    if (error.name === "HttpError") {
+      const detail = error.body?.detail;
+      return detail ? String(detail) : `Save failed (${error.status})`;
+    }
     console.error("Failed to save InvokeAI settings:", error);
     return error.message || "Save failed";
   }
@@ -461,14 +448,21 @@ export async function refreshInvokeAIStatus() {
     setInvokeAIUrlError(null);
     return;
   }
+  let data;
   try {
-    const response = await fetch("invokeai/status");
-    if (!response.ok) {
+    data = await fetchJson("invokeai/status");
+  } catch (error) {
+    if (error.name === "HttpError") {
       setInvokeAIAuthSectionVisible(false);
-      setInvokeAIUrlError(`Status check failed (HTTP ${response.status})`);
+      setInvokeAIUrlError(`Status check failed (HTTP ${error.status})`);
       return;
     }
-    const data = await response.json();
+    console.error("Failed to probe InvokeAI status:", error);
+    setInvokeAIAuthSectionVisible(false);
+    setInvokeAIUrlError("Could not contact the status endpoint");
+    return;
+  }
+  try {
     const reachable = !!data.reachable;
     setInvokeAIAuthSectionVisible(reachable);
     if (reachable) {
@@ -514,20 +508,15 @@ export async function loadInvokeAIBoards() {
     return;
   }
   try {
-    const response = await fetch("invokeai/boards");
-    if (!response.ok) {
-      // Auth failure or upstream error — render a disabled dropdown so the
-      // user knows the list couldn't be fetched but can still see what the
-      // default (Uncategorized) will do.
-      elements.invokeaiBoardSelect.innerHTML = '<option value="">Uncategorized</option>';
-      elements.invokeaiBoardSelect.value = "";
-      elements.invokeaiBoardSelect.disabled = true;
-      return;
-    }
-    const boards = await response.json();
+    const boards = await fetchJson("invokeai/boards");
     renderBoardOptions(boards, invokeaiSelectedBoardId);
   } catch (error) {
-    console.error("Failed to load InvokeAI boards:", error);
+    // Auth failure or upstream error — render a disabled dropdown so the
+    // user knows the list couldn't be fetched but can still see what the
+    // default (Uncategorized) will do.
+    if (error.name !== "HttpError") {
+      console.error("Failed to load InvokeAI boards:", error);
+    }
     elements.invokeaiBoardSelect.innerHTML = '<option value="">Uncategorized</option>';
     elements.invokeaiBoardSelect.value = "";
     elements.invokeaiBoardSelect.disabled = true;

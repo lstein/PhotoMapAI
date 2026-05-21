@@ -3,6 +3,7 @@
 import { albumManager } from "./album-manager.js";
 import { setAutotaggingEnabledInLabels } from "./cluster-utils.js";
 import { getIndexMetadata } from "./index.js";
+import { fetchJson } from "./utils.js";
 
 // TO DO - CONVERT THIS INTO A CLASS
 export const state = {
@@ -286,11 +287,10 @@ export async function setAlbum(newAlbumKey, force = false) {
 // state. Called on every album switch so the search dialog always reflects
 // the active album.
 async function applyAlbumSearchSettings(albumKey) {
-  const response = await fetch(`album/${encodeURIComponent(albumKey)}/`);
-  if (!response.ok) {
+  const album = await fetchJson(`album/${encodeURIComponent(albumKey)}/`).catch(() => null);
+  if (!album) {
     return;
   }
-  const album = await response.json();
   if (typeof album.min_search_score === "number") {
     state.minSearchScore = album.min_search_score;
   }
@@ -335,22 +335,14 @@ export function persistCurrentAlbumSearchSettings() {
     _persistTimer = null;
     const albumKey = state.album;
     try {
-      const response = await fetch(`album/${encodeURIComponent(albumKey)}/`);
-      if (!response.ok) {
-        return;
-      }
-      const album = await response.json();
+      const album = await fetchJson(`album/${encodeURIComponent(albumKey)}/`);
       const payload = {
         ...album,
         min_search_score: state.minSearchScore,
         max_search_results: state.maxSearchResults,
         use_query_optimization: state.useQueryOptimization,
       };
-      await fetch("update_album/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      await fetchJson("update_album/", { json: payload });
     } catch (err) {
       console.warn("Failed to persist album search settings:", err);
     }

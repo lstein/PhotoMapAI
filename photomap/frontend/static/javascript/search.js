@@ -1,7 +1,7 @@
 // search.js
 // This file contains functions to interact with the backend API to search and retrieve images.
 import { state } from "./state.js";
-import { hideSpinner, showSpinner } from "./utils.js";
+import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 // Tracks the AbortController of the in-flight search request so a newer
 // query can cancel an older one. Without this, a slower response wins and
@@ -11,7 +11,6 @@ let _activeSearchController = null;
 
 // Call the server to fetch the image indicated by the index
 export async function fetchImageByIndex(index) {
-  let response;
   if (!state.album) {
     return null;
   } // No album set, cannot fetch image
@@ -19,26 +18,14 @@ export async function fetchImageByIndex(index) {
   const spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
 
   try {
-    // Album and index go into path
     const url = `retrieve_image/${encodeURIComponent(state.album)}/${encodeURIComponent(index)}`;
-
-    response = await fetch(url, {
-      method: "GET",
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    clearTimeout(spinnerTimeout);
-    hideSpinner();
-    return data;
+    return await fetchJson(url);
   } catch (e) {
-    clearTimeout(spinnerTimeout);
-    hideSpinner();
     console.warn("Failed to load image.");
     throw e;
+  } finally {
+    clearTimeout(spinnerTimeout);
+    hideSpinner();
   }
 }
 
@@ -107,13 +94,10 @@ export async function searchTextAndImage({
   _activeSearchController = controller;
 
   try {
-    const response = await fetch(`search_with_text_and_image/${encodeURIComponent(state.album)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    const result = await fetchJson(`search_with_text_and_image/${encodeURIComponent(state.album)}`, {
+      json: payload,
       signal: controller.signal,
     });
-    const result = await response.json();
     return result.results || [];
   } catch (err) {
     if (err.name === "AbortError") {
