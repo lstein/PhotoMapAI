@@ -15,7 +15,7 @@ import {
   state,
 } from "./state.js";
 import { findLandmarkClusterAt } from "./umap-helpers.js";
-import { debounce, getPercentile, isColorLight } from "./utils.js";
+import { debounce, getPercentile, isColorLight, makeDraggable } from "./utils.js";
 
 const UMAP_SIZES = {
   big: { width: 800, height: 590 },
@@ -1468,64 +1468,25 @@ document.getElementById("umapToggleControlsBtn").onclick = () => {
 };
 
 // --- Draggable Window ---
-function makeDraggable(dragHandleId, windowId) {
+// Wire the UMAP floating window's titlebar to the shared `makeDraggable` helper.
+// The right/bottom/position overrides keep the win element from snapping back
+// to its CSS-defined corner when its layout was originally anchored that way.
+function setupUmapWindowDrag(dragHandleId, windowId) {
   const dragHandle = document.getElementById(dragHandleId);
   const win = document.getElementById(windowId);
-  let offsetX = 0,
-    offsetY = 0,
-    dragging = false;
-
-  dragHandle.addEventListener("mousedown", startDrag);
-  dragHandle.addEventListener("touchstart", startDrag, { passive: false });
-
-  function startDrag(e) {
-    // Prevent drag if touching a button in the titlebar
-    if (e.target.closest(".icon-btn") || e.target.id === "umapCloseBtn") {
-      return; // Don't start drag
-    }
-    dragging = true;
-    const rect = win.getBoundingClientRect();
-    if (e.type === "touchstart") {
-      offsetX = e.touches[0].clientX - rect.left;
-      offsetY = e.touches[0].clientY - rect.top;
-      document.addEventListener("touchmove", onDrag, { passive: false });
-      document.addEventListener("touchend", stopDrag);
-    } else {
-      offsetX = e.clientX - rect.left;
-      offsetY = e.clientY - rect.top;
-      document.addEventListener("mousemove", onDrag);
-      document.addEventListener("mouseup", stopDrag);
-    }
-    e.preventDefault();
+  if (!dragHandle || !win) {
+    return;
   }
-
-  function onDrag(e) {
-    if (!dragging) {
-      return;
-    }
-    let clientX, clientY;
-    if (e.type === "touchmove") {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-    win.style.left = `${clientX - offsetX}px`;
-    win.style.top = `${clientY - offsetY}px`;
-    win.style.right = "auto"; // Prevent CSS conflicts
-    win.style.bottom = "auto";
-    win.style.position = "fixed";
-    e.preventDefault();
-  }
-
-  function stopDrag() {
-    dragging = false;
-    document.removeEventListener("mousemove", onDrag);
-    document.removeEventListener("mouseup", stopDrag);
-    document.removeEventListener("touchmove", onDrag);
-    document.removeEventListener("touchend", stopDrag);
-  }
+  makeDraggable(dragHandle, win, {
+    shouldDrag: (e) => !e.target.closest(".icon-btn") && e.target.id !== "umapCloseBtn",
+    setPosition: (left, top) => {
+      win.style.left = `${left}px`;
+      win.style.top = `${top}px`;
+      win.style.right = "auto";
+      win.style.bottom = "auto";
+      win.style.position = "fixed";
+    },
+  });
 }
 
 function setActiveResizeIcon(sizeKey) {
@@ -1666,7 +1627,7 @@ function setUmapWindowSize(sizeKey) {
 // Initialize draggable UMAP window a fter DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
   updateUmapColorModeAvailability();
-  makeDraggable("umapTitlebar", "umapFloatingWindow");
+  setupUmapWindowDrag("umapTitlebar", "umapFloatingWindow");
   toggleUmapWindow();
 });
 

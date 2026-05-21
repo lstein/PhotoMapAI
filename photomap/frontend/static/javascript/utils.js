@@ -156,3 +156,160 @@ export function debounce(fn, delay) {
     timer = setTimeout(() => fn.apply(this, args), delay);
   };
 }
+
+/**
+ * Make ``target`` draggable by mousedown/touchstart on ``handle``.
+ *
+ * Handles both mouse and touch, captures the initial pointer offset, and
+ * registers document-level move/end listeners only while a drag is active
+ * (so listeners don't outlive detached nodes the way ``window``-scoped
+ * ones did in the per-module copies this replaces).
+ *
+ * ``options``:
+ *
+ * - ``shouldDrag(event)`` — return ``false`` to skip starting a drag for
+ *   the current pointer event (e.g. clicks on a close button inside the
+ *   handle). Defaults to always-true.
+ *
+ * - ``setPosition(left, top)`` — override the default
+ *   ``target.style.left/top = '${n}px'`` writer. Use when the target
+ *   needs additional CSS resets (``transform: none``, ``right: auto``,
+ *   ``bottom: auto``) or has to flow through a setter that also
+ *   notifies other code.
+ *
+ * - ``onDragStart()`` / ``onDragEnd()`` — fire after a drag begins / ends.
+ *   Useful for ``classList.add('dragging')`` and toggling
+ *   ``document.body.style.userSelect``.
+ *
+ * Returns a teardown function that removes the handle listeners and any
+ * still-attached document listeners.
+ */
+export function makeDraggable(handle, target, options = {}) {
+  const { shouldDrag = () => true, setPosition = null, onDragStart = null, onDragEnd = null } = options;
+
+  let startX = 0;
+  let startY = 0;
+  let initialLeft = 0;
+  let initialTop = 0;
+
+  function getCoords(e) {
+    if (e.touches && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+  }
+
+  function writePosition(left, top) {
+    if (setPosition) {
+      setPosition(left, top);
+    } else {
+      target.style.left = `${left}px`;
+      target.style.top = `${top}px`;
+    }
+  }
+
+  function onMove(e) {
+    const { x, y } = getCoords(e);
+    writePosition(initialLeft + (x - startX), initialTop + (y - startY));
+    e.preventDefault();
+  }
+
+  function onEnd() {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onEnd);
+    document.removeEventListener("touchmove", onMove);
+    document.removeEventListener("touchend", onEnd);
+    document.removeEventListener("touchcancel", onEnd);
+    if (onDragEnd) {
+      onDragEnd();
+    }
+  }
+
+  function onStart(e) {
+    if (!shouldDrag(e)) {
+      return;
+    }
+    const { x, y } = getCoords(e);
+    startX = x;
+    startY = y;
+    const rect = target.getBoundingClientRect();
+    initialLeft = rect.left;
+    initialTop = rect.top;
+
+    if (e.type === "touchstart") {
+      document.addEventListener("touchmove", onMove, { passive: false });
+      document.addEventListener("touchend", onEnd);
+      document.addEventListener("touchcancel", onEnd);
+    } else {
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onEnd);
+    }
+
+    if (onDragStart) {
+      onDragStart();
+    }
+    e.preventDefault();
+  }
+
+  handle.addEventListener("mousedown", onStart);
+  handle.addEventListener("touchstart", onStart, { passive: false });
+
+  return function teardown() {
+    handle.removeEventListener("mousedown", onStart);
+    handle.removeEventListener("touchstart", onStart);
+    // Drop any in-flight document listeners (no-op if no drag is active).
+    onEnd();
+  };
+}
+
+/**
+ * Fire ``onLongPress`` when the user touches ``el`` and holds for ``ms``.
+ *
+ * Movement past ``moveThreshold`` (px on either axis) cancels the press —
+ * mirrors what users expect from a long-press gesture vs a swipe.
+ *
+ * The callback receives ``(touchstartEvent, { x, y })``. Callers handle
+ * their own ``event.preventDefault()`` and conditional bail-out (e.g.
+ * "only fire when there's something to navigate back to") so the helper
+ * stays neutral about both.
+ */
+export function attachLongPress(el, onLongPress, options = {}) {
+  const { ms = 500, moveThreshold = 10 } = options;
+  let timer = null;
+  let startPos = null;
+
+  function cancel() {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    startPos = null;
+  }
+
+  el.addEventListener("touchstart", (e) => {
+    if (!e.touches || e.touches.length !== 1) {
+      return;
+    }
+    startPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    timer = setTimeout(() => {
+      if (startPos) {
+        onLongPress(e, { ...startPos });
+        startPos = null;
+      }
+    }, ms);
+  });
+
+  el.addEventListener("touchmove", (e) => {
+    if (!startPos || !e.touches || e.touches.length !== 1) {
+      return;
+    }
+    const dx = e.touches[0].clientX - startPos.x;
+    const dy = e.touches[0].clientY - startPos.y;
+    if (Math.abs(dx) > moveThreshold || Math.abs(dy) > moveThreshold) {
+      cancel();
+    }
+  });
+
+  el.addEventListener("touchend", cancel);
+  el.addEventListener("touchcancel", cancel);
+}

@@ -5,7 +5,7 @@ import { updateSearchCheckmarks } from "./search-ui.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { highlightCurationSelection, setCurationMode, setUmapClickCallback, updateCurrentImageMarker } from "./umap.js";
-import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
+import { fetchJson, hideSpinner, makeDraggable, showSpinner } from "./utils.js";
 
 let currentSelectionIndices = new Set();
 const excludedIndices = new Set();
@@ -59,68 +59,16 @@ function makePanelDraggable() {
     return;
   }
 
-  let isDragging = false;
-  let startX, startY, initialLeft, initialTop;
-
-  // Helper function to get coordinates from event (mouse or touch)
-  const getEventCoords = (e) => {
-    if (e.touches && e.touches.length > 0) {
-      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    }
-    return { x: e.clientX, y: e.clientY };
-  };
-
-  // Start dragging (mouse or touch)
-  const startDrag = (e) => {
-    // Don't drag if clicking the close button
-    if (e.target.classList.contains("close-icon")) {
-      return;
-    }
-
-    isDragging = true;
-    const coords = getEventCoords(e);
-    startX = coords.x;
-    startY = coords.y;
-
-    const rect = panel.getBoundingClientRect();
-    initialLeft = rect.left;
-    initialTop = rect.top;
-
-    e.preventDefault();
-  };
-
-  // Handle dragging movement (mouse or touch)
-  const handleDrag = (e) => {
-    if (!isDragging) {
-      return;
-    }
-
-    const coords = getEventCoords(e);
-    const deltaX = coords.x - startX;
-    const deltaY = coords.y - startY;
-
-    panel.style.left = initialLeft + deltaX + "px";
-    panel.style.top = initialTop + deltaY + "px";
-    panel.style.bottom = "auto"; // Remove bottom positioning
-
-    e.preventDefault(); // Prevent scrolling while dragging on touch devices
-  };
-
-  // End dragging (mouse or touch)
-  const endDrag = () => {
-    isDragging = false;
-  };
-
-  // Mouse events
-  header.addEventListener("mousedown", startDrag);
-  document.addEventListener("mousemove", handleDrag);
-  document.addEventListener("mouseup", endDrag);
-
-  // Touch events
-  header.addEventListener("touchstart", startDrag, { passive: false });
-  document.addEventListener("touchmove", handleDrag, { passive: false });
-  document.addEventListener("touchend", endDrag);
-  document.addEventListener("touchcancel", endDrag);
+  makeDraggable(header, panel, {
+    shouldDrag: (e) => !e.target.classList.contains("close-icon"),
+    setPosition: (left, top) => {
+      panel.style.left = `${left}px`;
+      panel.style.top = `${top}px`;
+      // Remove bottom positioning so the panel doesn't get pinned to the
+      // bottom edge of the viewport once the user moves it.
+      panel.style.bottom = "auto";
+    },
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
