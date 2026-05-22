@@ -3,10 +3,63 @@ This module provides utility functions for the PhotoMap application."""
 
 import os
 import socket
+import threading
+from collections import OrderedDict
+from collections.abc import Hashable
 from pathlib import Path
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 import numpy as np
+
+K = TypeVar("K", bound=Hashable)
+V = TypeVar("V")
+
+
+class BoundedLRU(Generic[K, V]):
+    """Thread-safe LRU cache capped at ``maxsize`` entries.
+
+    Replaces ad-hoc per-module ``dict``s that previously had no eviction
+    policy (e.g. ``_curation_results`` accumulating one entry per curation
+    job for the life of the server). Get / put are O(1) and serialized by
+    an internal lock — fine for the modest hit rates these caches see.
+
+    Hits move-to-end (most-recently-used). Inserts evict the
+    least-recently-used entry once ``maxsize`` is exceeded.
+    """
+
+    def __init__(self, maxsize: int) -> None:
+        if maxsize <= 0:
+            raise ValueError(f"maxsize must be positive (got {maxsize})")
+        self._maxsize = maxsize
+        self._data: OrderedDict[K, V] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, key: K, default: V | None = None) -> V | None:
+        with self._lock:
+            value = self._data.get(key)
+            if value is None and key not in self._data:
+                return default
+            self._data.move_to_end(key)
+            return value
+
+    def put(self, key: K, value: V) -> None:
+        with self._lock:
+            self._data[key] = value
+            self._data.move_to_end(key)
+            while len(self._data) > self._maxsize:
+                self._data.popitem(last=False)
+
+    def __contains__(self, key: K) -> bool:
+        with self._lock:
+            return key in self._data
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._data)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._data.clear()
 
 
 def atomic_savez(path: Path, **arrays: Any) -> None:

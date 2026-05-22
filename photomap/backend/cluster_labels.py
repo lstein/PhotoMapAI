@@ -18,8 +18,6 @@ from __future__ import annotations
 import hashlib
 import importlib.resources
 import logging
-import threading
-from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,6 +26,7 @@ from platformdirs import user_cache_dir, user_config_dir
 from sklearn.cluster import DBSCAN
 
 from .encoders import get_cached_encoder
+from .util import BoundedLRU
 
 if TYPE_CHECKING:
     from .embeddings import Embeddings
@@ -584,27 +583,12 @@ def get_or_build_cluster_labels(
 
 # Bounded in-memory LRU. Per-image scoring is microseconds (one vector dot the
 # vocab matrix, ~1M FLOPs), but we still cache because the frontend re-opens
-# the drawer for the same image often during navigation. Key includes the
-# vocab mtime so edits to either vocab file naturally bypass stale entries.
-_IMAGE_LABEL_CACHE: OrderedDict[tuple, dict] = OrderedDict()
-_IMAGE_LABEL_CACHE_MAX = 1024
-_image_label_cache_lock = threading.Lock()
-
-
-def _image_label_cache_get(key: tuple) -> dict | None:
-    with _image_label_cache_lock:
-        val = _IMAGE_LABEL_CACHE.get(key)
-        if val is not None:
-            _IMAGE_LABEL_CACHE.move_to_end(key)
-        return val
-
-
-def _image_label_cache_put(key: tuple, val: dict) -> None:
-    with _image_label_cache_lock:
-        _IMAGE_LABEL_CACHE[key] = val
-        _IMAGE_LABEL_CACHE.move_to_end(key)
-        while len(_IMAGE_LABEL_CACHE) > _IMAGE_LABEL_CACHE_MAX:
-            _IMAGE_LABEL_CACHE.popitem(last=False)
+# the drawer for the same image often during navigation. The cache key carries
+# the embeddings .npz mtime AND the vocab mtime so that re-indexing the album
+# (which can change which raw row corresponds to a given sorted_index) and
+# vocab edits both invalidate stale entries — the previous version omitted the
+# npz mtime and could serve stale labels until the vocab was touched.
+_IMAGE_LABEL_CACHE: BoundedLRU[tuple, dict] = BoundedLRU(maxsize=1024)
 
 
 def compute_image_label(
@@ -627,8 +611,17 @@ def compute_image_label(
 
     vocab_path = vocab_file_path()
     vocab_mtime = _vocab_sources_max_mtime(vocab_path) if vocab_path.exists() else 0.0
-    cache_key = (str(embeddings.embeddings_path), int(sorted_index), vocab_mtime)
-    hit = _image_label_cache_get(cache_key)
+    try:
+        npz_mtime = embeddings.embeddings_path.stat().st_mtime
+    except OSError:
+        npz_mtime = 0.0
+    cache_key = (
+        str(embeddings.embeddings_path),
+        int(sorted_index),
+        npz_mtime,
+        vocab_mtime,
+    )
+    hit = _IMAGE_LABEL_CACHE.get(cache_key)
     if hit is not None:
         return hit
 
@@ -663,5 +656,5 @@ def compute_image_label(
         "alternates": top_phrases[1:],
         "score": float(scores[int(top_idx[0])]),
     }
-    _image_label_cache_put(cache_key, result)
+    _IMAGE_LABEL_CACHE.put(cache_key, result)
     return result
