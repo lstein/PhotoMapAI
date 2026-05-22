@@ -19,7 +19,7 @@ from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Any, ClassVar, NamedTuple
+from typing import Any, NamedTuple
 
 import networkx as nx
 import numpy as np
@@ -333,8 +333,6 @@ class Embeddings(BaseModel):
     This class provides methods to index images, update embeddings, and search for similar images.
     """
 
-    minimum_image_size: ClassVar[int] = 100 * 1024  # Minimum image size in bytes (100K)
-
     embeddings_path: Path = Path("clip_image_embeddings.npz")
     # Embeddings is normally constructed by the router with an explicit
     # encoder_spec from the album config. The default only applies when
@@ -342,6 +340,11 @@ class Embeddings(BaseModel):
     # almost certainly trying to read existing data, which on this codebase
     # means a legacy-CLIP cache.
     encoder_spec: str = LEGACY_ENCODER_SPEC
+    # Minimum width AND height (in pixels) for an image to be indexed; smaller
+    # images are treated as thumbnails and skipped during the scan. 256 is the
+    # smallest patch grid the bundled CLIP/SigLIP variants encode without
+    # heavy upscaling. Default mirrors the Album field default in config.py.
+    min_image_dimension: int = 256
 
     def __init__(self, **data):
         """Ensure embeddings_path is always resolved to prevent cache key mismatches."""
@@ -392,6 +395,26 @@ class Embeddings(BaseModel):
                 # Log but don't crash if CUDA operations fail
                 logger.warning(f"CUDA cleanup failed: {e}")
 
+    def _passes_dimension_gate(self, path: Path) -> bool:
+        """Return True if ``path``'s pixel dimensions are >= ``min_image_dimension``.
+
+        Reads only the image header via ``Image.open(...).size`` — PIL does
+        not decode pixels until they're accessed, so this is a few-KB read
+        per file. Unreadable / corrupt files return False and are logged at
+        debug level (they'd fail at encoding time anyway and would land in
+        ``bad_files`` there; here we just keep the scan log quiet).
+        """
+        min_dim = self.min_image_dimension
+        if min_dim <= 1:
+            return True
+        try:
+            with Image.open(path) as im:
+                width, height = im.size
+        except Exception as e:
+            logger.debug(f"Skipping unreadable image during scan: {path}: {e}")
+            return False
+        return width >= min_dim and height >= min_dim
+
     def get_image_files_from_directory(
         self,
         directory: Path,
@@ -402,6 +425,11 @@ class Embeddings(BaseModel):
         """
         Recursively collect all image files from a directory.
 
+        Each candidate file's header is opened to read pixel dimensions;
+        images with either dimension below ``self.min_image_dimension`` are
+        skipped. The header read is a few KB per file, so a scan of 10k
+        files typically adds 10-30s on SSD — small next to encoding time.
+
         Args:
             directory: Directory to scan
             exts: File extensions to include
@@ -411,6 +439,7 @@ class Embeddings(BaseModel):
         logger.info(f"Scanning directory {directory} for image files...")
         image_files = []
         files_checked = 0
+        skipped_too_small = 0
 
         for root, dirs, files in os.walk(directory):
             # Remove 'photomap_index' from dirs so os.walk skips it and its subdirs
@@ -418,13 +447,13 @@ class Embeddings(BaseModel):
             for file in [Path(x) for x in files]:
                 files_checked += 1
 
-                # Check if the file has a valid image extension
-                # and that it's length is > minimum_image_size (i.e. not a thumbnail)
-                if (
-                    file.suffix.lower() in exts
-                    and os.path.getsize(Path(root, file)) > self.minimum_image_size
-                ):
-                    image_files.append(Path(root, file).resolve())
+                if file.suffix.lower() not in exts:
+                    continue
+                full = Path(root, file)
+                if self._passes_dimension_gate(full):
+                    image_files.append(full.resolve())
+                else:
+                    skipped_too_small += 1
 
                 # Provide progress updates at regular intervals
                 if progress_callback and files_checked % update_interval == 0:
@@ -432,6 +461,12 @@ class Embeddings(BaseModel):
                         len(image_files),
                         f"Traversing image files... {len(image_files)} found",
                     )
+
+        if skipped_too_small:
+            logger.info(
+                f"Skipped {skipped_too_small} image(s) under "
+                f"{self.min_image_dimension}px in either dimension."
+            )
 
         # Final update with total count
         if progress_callback:
@@ -471,7 +506,7 @@ class Embeddings(BaseModel):
                     images.extend(
                         self.get_image_files_from_directory(p, exts, progress_callback)
                     )
-                elif p.suffix.lower() in exts:
+                elif p.suffix.lower() in exts and self._passes_dimension_gate(p):
                     images.append(p)
         else:
             raise ValueError("Input must be a Path object or a list of Paths.")

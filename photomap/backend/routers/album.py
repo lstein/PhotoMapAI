@@ -101,6 +101,7 @@ def get_embeddings_for_album(album_key: str) -> Embeddings:
     return Embeddings(
         embeddings_path=Path(album_config.index),
         encoder_spec=album_config.encoder_spec,
+        min_image_dimension=album_config.min_image_dimension,
     )
 
 

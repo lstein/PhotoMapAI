@@ -59,6 +59,16 @@ class Album(BaseModel):
             "Ignored by CLIP/OpenCLIP."
         ),
     )
+    min_image_dimension: int = Field(
+        default=256,
+        ge=1,
+        description=(
+            "Minimum image dimension (in pixels) for an image to be indexed. "
+            "An image is kept only if both its width and height are >= this "
+            "value. Filters out thumbnails and tiny images that contribute "
+            "little to semantic search."
+        ),
+    )
 
     @model_validator(mode="after")
     def _resolve_min_search_score(self) -> "Album":
@@ -99,6 +109,7 @@ class Album(BaseModel):
             "min_search_score": self.min_search_score,
             "max_search_results": self.max_search_results,
             "use_query_optimization": self.use_query_optimization,
+            "min_image_dimension": self.min_image_dimension,
         }
 
     @classmethod
@@ -119,6 +130,7 @@ class Album(BaseModel):
             min_search_score=data.get("min_search_score"),
             max_search_results=data.get("max_search_results", 100),
             use_query_optimization=data.get("use_query_optimization", True),
+            min_image_dimension=data.get("min_image_dimension", 256),
         )
 
 
