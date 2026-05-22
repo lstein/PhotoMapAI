@@ -20,6 +20,34 @@ const lowFreqIndices = new Set(); // < 70%
 // Metadata Map for Persistent CSV Export (Index -> {filename, subfolder, frequency, count})
 const globalMetadataMap = new Map();
 
+// Grid-highlight refresh interval. Runs only while the curation panel is
+// visible — previously this was a perma-setInterval(1000) started at module
+// init time that woke up every second forever, even with the panel closed.
+let _gridHighlightInterval = null;
+
+function _startGridHighlightInterval() {
+  if (_gridHighlightInterval !== null) {
+    return;
+  }
+  _gridHighlightInterval = setInterval(() => {
+    const gridContainer = document.getElementById("gridViewContainer");
+    if (
+      (currentSelectionIndices.size > 0 || excludedIndices.size > 0) &&
+      gridContainer &&
+      gridContainer.style.display !== "none"
+    ) {
+      applyGridHighlights();
+    }
+  }, 1000);
+}
+
+function _stopGridHighlightInterval() {
+  if (_gridHighlightInterval !== null) {
+    clearInterval(_gridHighlightInterval);
+    _gridHighlightInterval = null;
+  }
+}
+
 window.toggleCurationPanel = function () {
   const panel = document.getElementById("curationPanel");
   if (panel) {
@@ -36,9 +64,11 @@ window.toggleCurationPanel = function () {
         backStack.markNextAsJump("curation");
         slideState.navigateToIndex(index, false);
       });
+      _startGridHighlightInterval();
     } else {
       // When panel is closed, restore default cluster selection behavior
       setUmapClickCallback(null);
+      _stopGridHighlightInterval();
     }
 
     // Force update of current image marker (yellow dot) to show it
@@ -570,16 +600,9 @@ function setupEventListeners() {
     };
   }
 
-  setInterval(() => {
-    const gridContainer = document.getElementById("gridViewContainer");
-    if (
-      (currentSelectionIndices.size > 0 || excludedIndices.size > 0) &&
-      gridContainer &&
-      gridContainer.style.display !== "none"
-    ) {
-      applyGridHighlights();
-    }
-  }, 1000);
+  // (The grid-highlight refresh interval is now driven by ``toggleCurationPanel``
+  // so it only runs while the panel is actually visible.)
+
   // Listen for UMAP redraws (e.g. Cluster Strength change) to restore curation highlights
   window.addEventListener("umapRedrawn", () => {
     const panel = document.getElementById("curationPanel");

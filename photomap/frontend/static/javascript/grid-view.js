@@ -566,7 +566,10 @@ class GridViewManager {
         if (this.gridGeometryChanged(newGeometry)) {
           const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
 
-          this.resetAllSlides();
+          // ``resetAllSlides`` is async — without awaiting, the next line's
+          // ``initializeGridSwiper`` would destroy the swiper while the reset
+          // was still mid-await, leading to flickers and stale slide DOM.
+          await this.resetAllSlides();
           this.initializeGridSwiper();
           this.setBatchLoading(true);
           await this.loadBatch(currentGlobalIndex);
