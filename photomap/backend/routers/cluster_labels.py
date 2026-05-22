@@ -15,7 +15,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from ..cluster_labels import compute_image_label, get_or_build_cluster_labels
-from .album import get_embeddings_for_album
+from .album import EmbeddingsDep
 
 cluster_labels_router = APIRouter()
 
@@ -23,6 +23,7 @@ cluster_labels_router = APIRouter()
 @cluster_labels_router.get("/cluster_labels/{album_key}", tags=["UMAP"])
 async def get_cluster_labels(
     album_key: str,
+    embeddings: EmbeddingsDep,
     cluster_eps: float = 0.07,
     cluster_min_samples: int = 10,
     top_k: int = 3,
@@ -41,7 +42,6 @@ async def get_cluster_labels(
         `{"labels": {"<cluster_id>": {"label": str, "alternates": [str, ...],
         "score": float}, ...}}`. Cluster `-1` (DBSCAN noise) is omitted.
     """
-    embeddings = get_embeddings_for_album(album_key)
     labels = await asyncio.to_thread(
         get_or_build_cluster_labels,
         embeddings,
@@ -57,6 +57,7 @@ async def get_cluster_labels(
 async def get_image_label(
     album_key: str,
     index: int,
+    embeddings: EmbeddingsDep,
     top_k: int = 3,
 ) -> JSONResponse:
     """Return one vocabulary label for a single image.
@@ -77,7 +78,6 @@ async def get_image_label(
         `{"label": str, "alternates": [str, ...], "score": float}` on success,
         or `{}` when no vocab is available or the index is out of bounds.
     """
-    embeddings = get_embeddings_for_album(album_key)
     result = await asyncio.to_thread(
         compute_image_label, embeddings, index, top_k=top_k
     )
