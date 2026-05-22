@@ -84,8 +84,19 @@ class BookmarkManager {
   }
 
   setupEventListeners() {
-    // Listen for album changes to load bookmarks for the new album
-    window.addEventListener("albumChanged", () => {
+    // ``albumChanged`` covers both album switches and intra-album deletions.
+    // Switches reload the new album's bookmark set from localStorage;
+    // deletions adjust the existing in-memory set to match the backend's
+    // post-delete renumbering (subsequent indices shift down). Without the
+    // deletion branch, bookmarks would silently point at the wrong images
+    // after a single-image delete from control-panel.js.
+    window.addEventListener("albumChanged", (e) => {
+      const detail = e.detail || {};
+      if (detail.changeType === "deletion" && Array.isArray(detail.deletedIndices)) {
+        this.handleDeletion(detail.deletedIndices);
+        this.updateAllBookmarkIcons();
+        return;
+      }
       this.loadBookmarks();
       this.isShowingBookmarks = false;
       this.previousSearchResults = null;
@@ -161,6 +172,18 @@ class BookmarkManager {
       const indices = Array.from(this.bookmarks);
       localStorage.setItem(key, JSON.stringify(indices));
     } catch (e) {
+      // Quota exceeded or private-mode write rejection — the in-memory set
+      // is still correct for this session, but won't persist across reload.
+      // Tell the user once so they're not surprised when bookmarks "vanish"
+      // after refresh; suppress subsequent alerts so a rapid sequence of
+      // toggles doesn't spam.
+      const isQuota = e && (e.name === "QuotaExceededError" || e.code === 22);
+      if (isQuota && !this._quotaAlerted) {
+        this._quotaAlerted = true;
+        alert(
+          "Bookmark save failed: browser storage is full. Bookmarks won't persist after reload until storage is freed."
+        );
+      }
       console.warn("Failed to save bookmarks:", e);
     }
 
@@ -242,23 +265,41 @@ class BookmarkManager {
   }
 
   /**
-   * Remove a bookmark (used when image is deleted)
+   * Reconcile bookmark indices after one or more images were deleted from
+   * the album. Bookmarks pointing at deleted images are removed; bookmarks
+   * pointing at later images shift down by the count of deleted indices
+   * below them — same renumbering the backend performs on delete.
+   *
+   * Called from the ``albumChanged`` listener with ``changeType: "deletion"``
+   * — single-image deletes (control-panel.js) and multi-image deletes
+   * (deleteBookmarkedImages, which then clears the lot) both flow through
+   * the same event.
    */
-  removeBookmark(globalIndex) {
-    if (this.bookmarks.has(globalIndex)) {
-      this.bookmarks.delete(globalIndex);
-      // Adjust indices for images after the deleted one
-      const newBookmarks = new Set();
-      for (const idx of this.bookmarks) {
-        if (idx > globalIndex) {
-          newBookmarks.add(idx - 1);
+  handleDeletion(deletedIndices) {
+    if (!deletedIndices || deletedIndices.length === 0 || this.bookmarks.size === 0) {
+      return;
+    }
+    const deletedSet = new Set(deletedIndices);
+    const sortedDeleted = [...deletedIndices].sort((a, b) => a - b);
+    const newBookmarks = new Set();
+    for (const idx of this.bookmarks) {
+      if (deletedSet.has(idx)) {
+        continue; // bookmark itself was deleted
+      }
+      // Count deletions strictly below ``idx`` — small N on both sides, so a
+      // linear scan beats the bookkeeping of binary search here.
+      let shift = 0;
+      for (const d of sortedDeleted) {
+        if (d < idx) {
+          shift += 1;
         } else {
-          newBookmarks.add(idx);
+          break;
         }
       }
-      this.bookmarks = newBookmarks;
-      this.saveBookmarks();
+      newBookmarks.add(idx - shift);
     }
+    this.bookmarks = newBookmarks;
+    this.saveBookmarks();
   }
 
   /**
