@@ -70,14 +70,13 @@ def poll_during_indexing(client, album_key, timeout=60):
         time.sleep(1)  # Wait before polling again
 
 
-def build_index(client, new_album, monkeypatch):
-    """Helper function to build the index for the album."""
-    from photomap.backend.embeddings import Embeddings
+def build_index(client, new_album):
+    """Helper function to build the index for the album.
 
-    monkeypatch.setattr(
-        Embeddings, "minimum_image_size", 10 * 1024
-    )  # Set minimum image size to 10K for testing
-
+    Bundled test images are all 384x512 / 512x384, well above the default
+    256px ``min_image_dimension`` gate, so no per-test threshold tweaking
+    is needed.
+    """
     response = client.post("/update_index_async", json={"album_key": new_album["key"]})
     assert response.status_code == 202
     task_id = response.json().get("task_id")

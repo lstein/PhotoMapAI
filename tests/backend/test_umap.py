@@ -5,7 +5,7 @@ from fixtures import build_index, fetch_filename
 
 def test_umap_construction(client, new_album, monkeypatch):
     """Test the ability to retrieve an image URL using the /retrieve_image/ API."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     album_key = new_album["key"]
     response = client.get(f"umap_data/{new_album['key']}")

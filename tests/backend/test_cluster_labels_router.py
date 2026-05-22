@@ -130,7 +130,7 @@ def test_endpoint_smoke_with_real_encoder(client, new_album, monkeypatch, tmp_pa
 
     monkeypatch.setattr(cluster_labels, "vocab_cache_path", _isolated_path)
 
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     # Relax DBSCAN to ensure at least one cluster forms over the 9 test images
     # (defaults of min_samples=10 would put everything in noise with n=9).

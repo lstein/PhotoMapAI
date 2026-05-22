@@ -477,6 +477,7 @@ async def _update_index_background_async(album_key: str, album_config):
         embeddings = Embeddings(
             embeddings_path=index_path,
             encoder_spec=album_config.encoder_spec,
+            min_image_dimension=album_config.min_image_dimension,
         )
 
         if index_path.exists():

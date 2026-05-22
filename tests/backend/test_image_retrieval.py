@@ -7,7 +7,7 @@ TEST_IMAGE_COUNT = count_test_images()
 
 def test_retrieve_slide(client, new_album, monkeypatch):
     """Test the ability to retrieve an image URL using the /retrieve_image/ API."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     # Retrieve the list of indexed images from the album config
     album_key = new_album["key"]
@@ -27,7 +27,7 @@ def test_retrieve_slide(client, new_album, monkeypatch):
 
 def test_retrieve_image(client, new_album, monkeypatch):
     """Test retrieving an image by offset."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     album_key = new_album["key"]
 

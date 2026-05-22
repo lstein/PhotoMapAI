@@ -12,13 +12,10 @@ from fixtures import (
 TEST_IMAGE_COUNT = count_test_images()
 
 
-def test_index_update(client, new_album, monkeypatch):
+def test_index_update(client, new_album):
     """Test the creation of an index for the given album."""
     from photomap.backend.embeddings import Embeddings
 
-    monkeypatch.setattr(
-        Embeddings, "minimum_image_size", 10 * 1024
-    )  # Set minimum image size to 10K for testing
     # Start async index update
     response = client.post("/update_index_async", json={"album_key": new_album["key"]})
     assert response.status_code == 202
@@ -56,14 +53,8 @@ def test_index_update(client, new_album, monkeypatch):
     assert metadata["last_modified"] is not None
 
 
-def test_index_exists(client, new_album, monkeypatch):
+def test_index_exists(client, new_album):
     """Test the index_exists endpoint."""
-
-    from photomap.backend.embeddings import Embeddings
-
-    monkeypatch.setattr(
-        Embeddings, "minimum_image_size", 10 * 1024
-    )  # Set minimum image size to 10K for testing
 
     response = client.get(f"/index_exists/{new_album['key']}")
     assert response.status_code == 200
@@ -93,16 +84,10 @@ def test_index_exists(client, new_album, monkeypatch):
     assert response.json().get("exists", False) is False
 
 
-def test_image_search(client, new_album, monkeypatch):
+def test_image_search(client, new_album):
     """Test the search functionality."""
-    from photomap.backend.embeddings import Embeddings
-
     TEST_IMAGE_FILE = "./tests/backend/test_images/flower1.jpeg"
     TEST_TEXT_FILE = "./tests/backend/test_images/building1.jpeg"
-
-    monkeypatch.setattr(
-        Embeddings, "minimum_image_size", 10 * 1024
-    )  # Set minimum image size to 10K for testing
 
     # Create the index first
     response = client.post("/update_index_async", json={"album_key": new_album["key"]})
@@ -141,16 +126,10 @@ def test_image_search(client, new_album, monkeypatch):
     ), "Image search returned unexpected image"
 
 
-def test_text_search(client, new_album, monkeypatch):
+def test_text_search(client, new_album):
     """Test the search functionality."""
-    from photomap.backend.embeddings import Embeddings
-
     TEST_POS_FILE = "./tests/test_images/flower1.jpeg"
     TEST_NEG_FILE = "./tests/test_images/building1.jpeg"
-
-    monkeypatch.setattr(
-        Embeddings, "minimum_image_size", 10 * 1024
-    )  # Set minimum image size to 10K for testing
 
     # Create the index first
     response = client.post("/update_index_async", json={"album_key": new_album["key"]})
@@ -188,15 +167,11 @@ def test_text_search(client, new_album, monkeypatch):
     ), "Text search returned unexpected image"
 
 
-def test_image_indices_lookup(client, new_album, monkeypatch):
+def test_image_indices_lookup(client, new_album):
     """The batch /image_indices endpoint resolves album basenames to their
     indices and returns null for filenames not present in the album. Powers
     the metadata drawer's reference-image-thumbnail enhancement.
     """
-    from photomap.backend.embeddings import Embeddings
-
-    monkeypatch.setattr(Embeddings, "minimum_image_size", 10 * 1024)
-
     response = client.post("/update_index_async", json={"album_key": new_album["key"]})
     assert response.status_code == 202
     try:
@@ -216,12 +191,8 @@ def test_image_indices_lookup(client, new_album, monkeypatch):
     assert indices["another-missing.jpg"] is None
 
 
-def test_image_indices_empty_request(client, new_album, monkeypatch):
+def test_image_indices_empty_request(client, new_album):
     """An empty filenames list returns an empty mapping (not an error)."""
-    from photomap.backend.embeddings import Embeddings
-
-    monkeypatch.setattr(Embeddings, "minimum_image_size", 10 * 1024)
-
     response = client.post("/update_index_async", json={"album_key": new_album["key"]})
     assert response.status_code == 202
     try:

@@ -14,7 +14,7 @@ from fixtures import build_index
 
 @pytest.fixture
 def indexed_album(client, new_album, monkeypatch):
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
     return new_album
 
 
