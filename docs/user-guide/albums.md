@@ -41,6 +41,31 @@ When the indexing process is done, you will find the generated indexes stored in
 
 When you add or remove image files from an album's image directory, you will need to reindex the album. Navigate to the album in the Album Manager list and press the blue <span class="blue-button-text">Update Index</span> button. The update operation will only reindex the files that have been added or removed and will be much faster than the first comprehensive indexing operation.
 
+### Skipping Small Images
+
+During the traversal phase, PhotoMapAI inspects each candidate image and skips any whose width *or* height is below a minimum pixel threshold. The default is **256 pixels** in either dimension. This filter is meant to exclude thumbnails, favicons, contact-sheet previews, and other tiny images that don't carry enough visual content for semantic search to work well on them. A summary of how many images were skipped on the last scan is written to the server log.
+
+The threshold is configured per-album as the `min_image_dimension` field in `config.yaml`. To change it, locate your `config.yaml` (see [Configuration](configuration.md) for the path on your platform) and edit the entry for the album you want to adjust:
+
+```yaml
+albums:
+  my_album:
+    name: My Photos
+    image_paths:
+      - /path/to/photos
+    index: /path/to/photos/photomap_index/embeddings.npz
+    min_image_dimension: 256   # default; raise to be stricter, lower to be more permissive
+```
+
+Some practical values:
+
+- `256` (default) — good for general photo libraries; skips thumbnails but keeps most legitimate photos.
+- `128` — keeps smaller web images, screenshots, and downscaled phone shots.
+- `512` or higher — useful if your library mixes generated thumbnails with full-resolution originals and you only want the originals indexed.
+- `1` — disables the filter entirely; every supported image file is indexed regardless of size.
+
+After saving `config.yaml`, press <span class="blue-button-text">Update Index</span> for the album. The new threshold applies both ways: previously-skipped images that now pass the new threshold will be added to the index, and previously-indexed images that no longer pass will be removed.
+
 ## Editing an Album
 
 To make changes to an album's definition, including changing its display name, description, paths, or encoder, click the orange <span class="orange-button-text">Edit</span> button next to the album's entry in the Album Manager dialogue. Note that you cannot change the album key once the Album is initialized. Changing the encoder will trigger an automatic from-scratch rebuild on the next **Update Index** — see [Encoders](encoders.md) for the implications.
