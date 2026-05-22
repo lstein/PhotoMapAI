@@ -23,6 +23,12 @@ class IndexStatus(Enum):
     ERROR = "error"
 
 
+class IndexingCancelled(Exception):
+    """Raised by ``_process_images_batch`` when a cancel was requested via
+    :meth:`ProgressTracker.request_cancel`. The async indexing wrappers
+    catch it and finish cleanly instead of writing a partial index."""
+
+
 @dataclass
 class ProgressInfo:
     album_key: str
@@ -64,6 +70,12 @@ class ProgressTracker:
 
     def __init__(self):
         self._progress: dict[str, ProgressInfo] = {}
+        # Album keys with an outstanding cancellation request. The indexing
+        # loop polls this each batch via ``is_cancel_requested`` and raises
+        # ``IndexingCancelled`` so the work stops before the next forward
+        # pass, instead of running to completion only to have the status
+        # flipped to ERROR after.
+        self._cancel_requested: set[str] = set()
         self._lock = threading.Lock()
 
     def start_operation(self, album_key: str, total_images: int, operation_type: str):
@@ -77,6 +89,9 @@ class ProgressTracker:
                 total_images=total_images,
                 start_time=time.time(),
             )
+            # A new run clears any stale cancel flag from a previous job
+            # that finished or errored before the user pressed cancel.
+            self._cancel_requested.discard(album_key)
 
     def update_total_images(self, album_key: str, total_images: int):
         """Update the total number of images for an operation."""
@@ -116,6 +131,23 @@ class ProgressTracker:
         """Remove progress tracking for an album."""
         with self._lock:
             self._progress.pop(album_key, None)
+            self._cancel_requested.discard(album_key)
+
+    def request_cancel(self, album_key: str) -> None:
+        """Signal the indexing loop to stop on its next batch boundary.
+
+        The actual cancellation is cooperative — see ``IndexingCancelled``.
+        Set even if no operation is currently running (e.g. cancel hits just
+        as indexing finishes); ``start_operation`` clears the flag the next
+        time the album is indexed.
+        """
+        with self._lock:
+            self._cancel_requested.add(album_key)
+
+    def is_cancel_requested(self, album_key: str) -> bool:
+        """Return True if a cancel was requested for ``album_key``."""
+        with self._lock:
+            return album_key in self._cancel_requested
 
     def is_running(self, album_key: str) -> bool:
         """Check if an operation is currently running for an album."""
