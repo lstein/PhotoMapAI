@@ -12,7 +12,7 @@ from fixtures import build_index
 def test_curate_sync_endpoint(client, new_album, monkeypatch):
     """Test the synchronous curation endpoint."""
     # Build the index first
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     # Test FPS method
     response = client.post(
@@ -53,7 +53,7 @@ def test_curate_sync_endpoint(client, new_album, monkeypatch):
 
 def test_curate_sync_with_exclusions(client, new_album, monkeypatch):
     """Test curation with excluded indices."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     # First, run curation to get some indices
     response = client.post(
@@ -91,7 +91,7 @@ def test_curate_sync_with_exclusions(client, new_album, monkeypatch):
 
 def test_curate_sync_validation(client, new_album, monkeypatch):
     """Test validation of curation parameters."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     # Test negative target_count
     response = client.post(
@@ -150,7 +150,7 @@ def test_curate_sync_validation(client, new_album, monkeypatch):
 
 def test_curate_async_endpoint(client, new_album, monkeypatch):
     """Test the async curation endpoint with progress polling."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     # Start async curation
     response = client.post(
@@ -204,7 +204,7 @@ def test_curate_async_endpoint(client, new_album, monkeypatch):
 
 def test_curate_async_validation(client, new_album, monkeypatch):
     """Test validation of async curation parameters."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     # Test negative target_count
     response = client.post(
@@ -223,7 +223,7 @@ def test_curate_async_validation(client, new_album, monkeypatch):
 
 def test_curate_async_iterations_capped(client, new_album, monkeypatch):
     """Test that iterations are capped at the maximum."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     # Request more than max iterations (30)
     response = client.post(
@@ -250,7 +250,7 @@ def test_progress_nonexistent_job(client):
 
 def test_export_endpoint(client, new_album, monkeypatch, tmp_path):
     """Test the export endpoint."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     # First get some files from curation
     response = client.post(
@@ -337,7 +337,7 @@ def test_export_nonexistent_files(client, new_album, tmp_path):
 
 def test_curate_multiple_iterations(client, new_album, monkeypatch):
     """Test curation with multiple iterations for consensus."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     response = client.post(
         "/api/curation/curate_sync",
@@ -369,7 +369,7 @@ def test_curate_multiple_iterations(client, new_album, monkeypatch):
 
 def test_curate_analysis_results_format(client, new_album, monkeypatch):
     """Test that analysis results have the correct format."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     response = client.post(
         "/api/curation/curate_sync",

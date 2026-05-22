@@ -290,3 +290,66 @@ def test_per_album_search_settings_round_trip(client, tmp_path):
 
     client.delete("/delete_album/siglip_defaults")
     client.delete("/delete_album/clip_defaults")
+
+
+def test_min_image_dimension_round_trips(client, tmp_path):
+    """The Edit Album dialogue's "Exclude thumbnails..." input must round-trip
+    through add_album → /available_albums → /update_album, and an album with
+    no ``min_image_dimension`` set should expose the 256 default. Backs the
+    Album Manager UI wiring for the per-album dimension gate.
+    """
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+
+    # Add with no min_image_dimension — backend should default to 256.
+    response = client.post(
+        "/add_album/",
+        json={
+            "key": "dim_default",
+            "name": "Default dim",
+            "image_paths": [str(img_dir)],
+            "index": str(tmp_path / "d.npz"),
+            "umap_eps": 0.1,
+            "encoder_spec": "openai-clip:ViT-B/32",
+        },
+    )
+    assert response.status_code == 201
+
+    listing = {a["key"]: a for a in client.get("/available_albums/").json()}
+    assert listing["dim_default"]["min_image_dimension"] == 256
+
+    # Update with an explicit value — must persist on the next listing.
+    response = client.post(
+        "/update_album/",
+        json={
+            "key": "dim_default",
+            "name": "Default dim",
+            "image_paths": [str(img_dir)],
+            "index": str(tmp_path / "d.npz"),
+            "encoder_spec": "openai-clip:ViT-B/32",
+            "min_image_dimension": 512,
+        },
+    )
+    assert response.status_code == 200
+
+    listing = {a["key"]: a for a in client.get("/available_albums/").json()}
+    assert listing["dim_default"]["min_image_dimension"] == 512
+
+    # Pydantic ``ge=1`` guard: zero and negatives are rejected at the API.
+    response = client.post(
+        "/update_album/",
+        json={
+            "key": "dim_default",
+            "name": "Default dim",
+            "image_paths": [str(img_dir)],
+            "index": str(tmp_path / "d.npz"),
+            "encoder_spec": "openai-clip:ViT-B/32",
+            "min_image_dimension": 0,
+        },
+    )
+    assert response.status_code == 500
+    # Previous valid value must remain — failed update must not corrupt state.
+    listing = {a["key"]: a for a in client.get("/available_albums/").json()}
+    assert listing["dim_default"]["min_image_dimension"] == 512
+
+    client.delete("/delete_album/dim_default")

@@ -55,7 +55,10 @@
   display: none;
   margin-bottom: 2em;
   padding: 1em;
-  background: #333;
+  /* Match the brighter background used by .album-card.editing so the
+     Add-Album section visually stands out from the surrounding non-editing
+     album cards (which sit at #333). */
+  background: #505050;
   border-radius: 8px;
 }
 
@@ -110,6 +113,13 @@
 
 .form-group textarea {
   resize: vertical;
+}
+
+/* Pixel-dimension input only needs room for four digits and the spinner
+   controls — overrides the full-width default applied to every input
+   inside ``.form-group``. */
+.form-group input.edit-album-min-image-dimension {
+  width: 6em;
 }
 
 .form-hint {

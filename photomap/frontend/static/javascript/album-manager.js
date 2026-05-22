@@ -914,6 +914,13 @@ export class AlbumManager {
     // Initialize the dynamic path fields for THIS specific card
     this.initializePathFields(album.image_paths || [], cardElement);
 
+    // Minimum-pixel-dimension gate. Fall back to 256 if the album predates
+    // the field — matches the backend default (Album.min_image_dimension).
+    const minDimInput = editForm.querySelector(".edit-album-min-image-dimension");
+    if (minDimInput) {
+      minDimInput.value = album.min_image_dimension ?? 256;
+    }
+
     // Initialize the encoder dropdown for THIS specific card
     populateEncoderSelect(editForm.querySelector(".edit-album-encoder"), album.encoder_spec);
 
@@ -975,6 +982,14 @@ export class AlbumManager {
     // Always set index path based on first path
     const indexPath = updatedPaths.length > 0 ? `${updatedPaths[0]}/photomap_index/embeddings.npz` : "";
 
+    // Parse the dimension input. Invalid / non-positive values fall back to
+    // the saved value, then to the backend default (256). The backend's
+    // Pydantic validator enforces ge=1, so we shield it from junk here too.
+    const minDimRaw = editForm.querySelector(".edit-album-min-image-dimension")?.value;
+    const minDimParsed = Number.parseInt(minDimRaw, 10);
+    const minDim =
+      Number.isFinite(minDimParsed) && minDimParsed >= 1 ? minDimParsed : (album.min_image_dimension ?? 256);
+
     const updatedAlbum = {
       key: album.key,
       name: editForm.querySelector(".edit-album-name").value,
@@ -982,6 +997,7 @@ export class AlbumManager {
       image_paths: updatedPaths,
       index: indexPath,
       encoder_spec: editForm.querySelector(".edit-album-encoder")?.value || album.encoder_spec || DEFAULT_ENCODER_SPEC,
+      min_image_dimension: minDim,
     };
 
     // Compare old and new paths (order and content)

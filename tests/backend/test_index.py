@@ -18,7 +18,7 @@ def test_index_creation(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
 ):
     """Test the ability to create indexes."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
     # Check that the index exists
     response = client.get(f"/index_exists/{new_album['key']}")
     assert response.status_code == 200
@@ -41,7 +41,7 @@ def test_delete_image(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
 ):
     """Test the ability to delete an image."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     album_key = new_album["key"]
 
@@ -113,7 +113,7 @@ def test_move_images(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     """Test the ability to move images to a different directory."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     album_key = new_album["key"]
 
@@ -158,7 +158,7 @@ def test_move_images_to_same_folder(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
 ):
     """Test moving images to the same folder they're already in."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     album_key = new_album["key"]
 
@@ -182,7 +182,7 @@ def test_move_images_nonexistent_directory(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
 ):
     """Test moving images to a non-existent directory."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     album_key = new_album["key"]
 
@@ -199,7 +199,7 @@ def test_move_images_file_exists(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     """Test moving images when a file with the same name exists in target."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     album_key = new_album["key"]
 
@@ -229,7 +229,7 @@ def test_copy_images(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     """Test the ability to copy images to a different directory."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     album_key = new_album["key"]
 
@@ -278,7 +278,7 @@ def test_copy_images_file_exists(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     """Test copying images when file already exists in target directory."""
-    build_index(client, new_album, monkeypatch)
+    build_index(client, new_album)
 
     album_key = new_album["key"]
 
@@ -433,3 +433,39 @@ def test_parallel_workers_preserve_order(
         serial.modification_times, parallel.modification_times
     )
     assert serial.bad_files == parallel.bad_files == []
+
+
+def test_min_image_dimension_filters_small_images(tmp_path):
+    """Files whose pixel dimensions are below ``min_image_dimension`` must
+    be silently dropped during the directory scan; larger files are kept.
+    Mirrors the original bug where a hard-coded 100KB byte-size filter was
+    silently dropping ~25% of a real user's photo library.
+    """
+    from PIL import Image
+
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+    # 100x100 — below the default 256 threshold; should be skipped.
+    Image.new("RGB", (100, 100), color="red").save(img_dir / "tiny.jpg")
+    # 200x300 — height passes 256 but width does not; should be skipped.
+    Image.new("RGB", (200, 300), color="blue").save(img_dir / "narrow.jpg")
+    # 300x300 — both dimensions pass; should be kept.
+    Image.new("RGB", (300, 300), color="green").save(img_dir / "ok.jpg")
+    # 256x256 — exactly on the boundary; >= passes; should be kept.
+    Image.new("RGB", (256, 256), color="yellow").save(img_dir / "exact.jpg")
+    # Non-image extension, should never get to the dimension check.
+    (img_dir / "notes.txt").write_text("not an image")
+
+    emb = Embeddings(embeddings_path=tmp_path / "ignored.npz")
+    files = emb.get_image_files_from_directory(img_dir)
+    names = sorted(Path(p).name for p in files)
+    assert names == ["exact.jpg", "ok.jpg"], (
+        f"only 256+ images should be indexed, got {names}"
+    )
+
+    # Lowering the threshold makes the smaller ones eligible too.
+    emb_low = Embeddings(
+        embeddings_path=tmp_path / "ignored.npz", min_image_dimension=100
+    )
+    names_low = sorted(Path(p).name for p in emb_low.get_image_files_from_directory(img_dir))
+    assert names_low == ["exact.jpg", "narrow.jpg", "ok.jpg", "tiny.jpg"]
