@@ -413,6 +413,87 @@ class TestInvokeMetadataViewV5Canvas:
 
 
 # ---------------------------------------------------------------------------
+# GenerationMetadata5 — unknown-field warning
+# ---------------------------------------------------------------------------
+
+
+class TestV5UnknownFieldWarning:
+    """``extra="allow"`` keeps parsing forward-compatible, but the
+    ``_warn_unknown_fields`` model_validator surfaces drift so it doesn't
+    go un-noticed. Each new field name is logged once per process; repeats
+    are silent."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_warned(self):
+        # ``_warned_extra_fields`` is module-level; clear it around each test
+        # so order doesn't influence what counts as "first-time-seen".
+        from photomap.backend.metadata_modules.invoke import invoke5metadata
+
+        invoke5metadata._warned_extra_fields.clear()
+        yield
+        invoke5metadata._warned_extra_fields.clear()
+
+    def _v5_with(self, **extra) -> dict:
+        return {
+            "metadata_version": 5,
+            "app_version": "5.6.0",
+            "model": {"name": "test"},
+            "positive_prompt": "p",
+            "seed": 1,
+            **extra,
+        }
+
+    def test_logs_unknown_field_on_first_encounter(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            GenerationMetadataAdapter().parse(
+                self._v5_with(brand_new_field=42, another_one="x")
+            )
+        # Both unknown fields appear in a single warning, comma-separated and sorted.
+        record = next(r for r in caplog.records if r.levelno == logging.WARNING)
+        assert "another_one" in record.getMessage()
+        assert "brand_new_field" in record.getMessage()
+
+    def test_does_not_warn_for_known_fields(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            GenerationMetadataAdapter().parse(self._v5_with())
+        # No warnings — every field we set is in the schema.
+        assert not any(r.levelno == logging.WARNING for r in caplog.records)
+
+    def test_repeats_are_silent(self, caplog):
+        import logging
+
+        adapter = GenerationMetadataAdapter()
+        with caplog.at_level(logging.WARNING):
+            adapter.parse(self._v5_with(brand_new_field=42))
+            # Drop the first-encounter warning so the second parse can be
+            # asserted silent on its own.
+            caplog.clear()
+            adapter.parse(self._v5_with(brand_new_field=42))
+        assert not any(r.levelno == logging.WARNING for r in caplog.records)
+
+    def test_new_field_after_seen_one_does_warn(self, caplog):
+        import logging
+
+        adapter = GenerationMetadataAdapter()
+        with caplog.at_level(logging.WARNING):
+            adapter.parse(self._v5_with(first_field=1))
+            caplog.clear()
+            adapter.parse(self._v5_with(first_field=1, second_field=2))
+        # Only ``second_field`` is mentioned in the second warning;
+        # ``first_field`` was already in ``_warned_extra_fields`` from the
+        # call above.
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        msg = warnings[0].getMessage()
+        assert "second_field" in msg
+        assert "first_field" not in msg
+
+
+# ---------------------------------------------------------------------------
 # format_invoke_metadata — end-to-end HTML rendering
 # ---------------------------------------------------------------------------
 
