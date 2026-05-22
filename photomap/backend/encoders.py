@@ -17,6 +17,7 @@ import math
 import threading
 import time
 from abc import ABC, abstractmethod
+from typing import ClassVar
 
 import numpy as np
 import torch
@@ -78,6 +79,20 @@ class ImageTextEncoder(ABC):
     embedding_dim: int
     device: str
 
+    # Subclasses override to list the attributes that hold model weights and
+    # companion artifacts (preprocessors, tokenizers, processors). The shared
+    # ``close()`` walks this tuple, ``delattr``-ing each one present, and then
+    # drops the CUDA cache so freed memory is actually reclaimed. Listing the
+    # attributes here keeps the three concrete encoders' teardown logic
+    # consistent — previously one used ``del`` and the others ``delattr``,
+    # and adding a new artifact meant remembering to free it in close().
+    _releasable_attrs: ClassVar[tuple[str, ...]] = ()
+
+    @staticmethod
+    def _resolve_device(device: str | None) -> str:
+        """Pick a torch device string, defaulting to CUDA when available."""
+        return device or ("cuda" if torch.cuda.is_available() else "cpu")
+
     @abstractmethod
     def encode_images(self, images: list[Image.Image]) -> np.ndarray:
         """Encode a batch of PIL images. Returns ``(N, D)`` float32 L2-normalized array."""
@@ -96,11 +111,17 @@ class ImageTextEncoder(ABC):
         """
         return cosines
 
-    def close(self) -> None:  # noqa: B027
+    def close(self) -> None:
         """Release model weights and free GPU memory.
 
-        Default no-op so subclasses without weights to free aren't forced to override.
+        Drops each attribute listed in ``_releasable_attrs`` and then frees
+        CUDA cache. Subclasses normally don't need to override — declare the
+        attribute names instead.
         """
+        for attr in self._releasable_attrs:
+            if hasattr(self, attr):
+                delattr(self, attr)
+        _free_cuda(self.device)
 
     # --- Offload / reload --------------------------------------------------
     # Encoders cached for repeated search use can sit idle for a long time
@@ -175,6 +196,8 @@ class ImageTextEncoder(ABC):
 class OpenAIClipEncoder(ImageTextEncoder):
     """Original OpenAI CLIP via the ``clip`` package — preserves legacy behavior."""
 
+    _releasable_attrs = ("_model", "_preprocess")
+
     def __init__(
         self,
         variant: str = "ViT-B/32",
@@ -189,7 +212,7 @@ class OpenAIClipEncoder(ImageTextEncoder):
             ) from e
 
         self._clip = clip
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = self._resolve_device(device)
         self._model, self._preprocess = clip.load(
             variant, device=self.device, download_root=download_root
         )
@@ -215,16 +238,10 @@ class OpenAIClipEncoder(ImageTextEncoder):
             feats = self._model.encode_text(tokens)
             return _normalize(feats)
 
-    def close(self) -> None:
-        if hasattr(self, "_model"):
-            del self._model
-        if hasattr(self, "_preprocess"):
-            del self._preprocess
-        _free_cuda(self.device)
-
-
 class OpenClipEncoder(ImageTextEncoder):
     """OpenCLIP — same architecture as CLIP, better-trained weights (DFN, MetaCLIP, LAION)."""
+
+    _releasable_attrs = ("_model", "_preprocess", "_tokenizer")
 
     def __init__(
         self,
@@ -240,7 +257,7 @@ class OpenClipEncoder(ImageTextEncoder):
                 "open-clip backend requires the `open_clip_torch` package."
             ) from e
 
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = self._resolve_device(device)
         self._model, _, self._preprocess = open_clip.create_model_and_transforms(
             model_name, pretrained=pretrained, device=self.device, cache_dir=cache_dir
         )
@@ -267,15 +284,10 @@ class OpenClipEncoder(ImageTextEncoder):
             feats = self._model.encode_text(tokens)
             return _normalize(feats)
 
-    def close(self) -> None:
-        for attr in ("_model", "_preprocess", "_tokenizer"):
-            if hasattr(self, attr):
-                delattr(self, attr)
-        _free_cuda(self.device)
-
-
 class SiglipEncoder(ImageTextEncoder):
     """SigLIP / SigLIP 2 via Transformers — sigmoid loss, calibrated similarity."""
+
+    _releasable_attrs = ("_model", "_processor")
 
     def __init__(
         self,
@@ -289,7 +301,7 @@ class SiglipEncoder(ImageTextEncoder):
                 "siglip backend requires the `transformers` package."
             ) from e
 
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = self._resolve_device(device)
         self._model = AutoModel.from_pretrained(hf_id).to(self.device).eval()
         self._processor = AutoProcessor.from_pretrained(hf_id)
         self.model_id = f"siglip:{hf_id}"
@@ -373,13 +385,6 @@ class SiglipEncoder(ImageTextEncoder):
             1.0 / (1.0 + np.exp(-logits)),
             np.exp(logits) / (1.0 + np.exp(logits)),
         )
-
-    def close(self) -> None:
-        for attr in ("_model", "_processor"):
-            if hasattr(self, attr):
-                delattr(self, attr)
-        _free_cuda(self.device)
-
 
 def _unwrap_pooled(feats: object) -> torch.Tensor:
     """Extract a pooled-feature tensor from an HF model's output.

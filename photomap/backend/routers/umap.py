@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from sklearn.cluster import DBSCAN
 
 from ..config import get_config_manager
-from .album import get_embeddings_for_album
+from .album import AlbumDep, EmbeddingsDep
 
 umap_router = APIRouter()
 config_manager = get_config_manager()
@@ -15,6 +15,8 @@ config_manager = get_config_manager()
 @umap_router.get("/umap_data/{album_key}", tags=["UMAP"])
 async def get_umap_data(
     album_key: str,
+    album_config: AlbumDep,
+    embeddings: EmbeddingsDep,
     cluster_eps: float = 0.07,
     cluster_min_samples: int = 10,
 ) -> JSONResponse:
@@ -29,9 +31,6 @@ async def get_umap_data(
     Returns:
         JSONResponse containing a list of points with x, y, index, and cluster ID.
     """
-    # Instantiate your Embeddings object (adjust path as needed)
-    embeddings = get_embeddings_for_album(album_key)
-    album_config = config_manager.get_album(album_key)
     cluster_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
 
     # Load cached UMAP embeddings (will compute/cache if missing)

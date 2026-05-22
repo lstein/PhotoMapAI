@@ -3,11 +3,11 @@ import os
 import platform
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .index import check_album_lock
+from .album import require_no_lock
 
 logger = logging.getLogger(__name__)
 filetree_router = APIRouter()
@@ -72,11 +72,11 @@ def is_path_safe(path_str: str) -> bool:
             return False
 
 
-@filetree_router.get("/filetree/directories", tags=["FileTree"])
+@filetree_router.get(
+    "/filetree/directories", tags=["FileTree"], dependencies=[Depends(require_no_lock)]
+)
 async def get_directories(path: str = "", show_hidden: bool = False):
     """Get directories in the specified path"""
-    check_album_lock()  # May raise a 403 exception
-
     # --- Path parsing and validation ---
     try:
         # Handle Windows drives
@@ -162,10 +162,11 @@ async def get_directories(path: str = "", show_hidden: bool = False):
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
-@filetree_router.get("/filetree/home", tags=["FileTree"])
+@filetree_router.get(
+    "/filetree/home", tags=["FileTree"], dependencies=[Depends(require_no_lock)]
+)
 async def get_home_directory():
     """Get the user's home directory path"""
-    check_album_lock()  # May raise a 403 exception
     try:
         home_path = str(Path.home().resolve())
         return JSONResponse(content={"homePath": home_path})
@@ -179,10 +180,13 @@ class CreateDirectoryRequest(BaseModel):
     directory_name: str
 
 
-@filetree_router.post("/filetree/create_directory", tags=["FileTree"])
+@filetree_router.post(
+    "/filetree/create_directory",
+    tags=["FileTree"],
+    dependencies=[Depends(require_no_lock)],
+)
 async def create_directory(req: CreateDirectoryRequest):
     """Create a new directory in the specified parent path"""
-    check_album_lock()  # May raise a 403 exception
 
     try:
         parent_path = Path(req.parent_path)
