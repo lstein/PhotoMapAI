@@ -112,11 +112,10 @@
 }
 
 .umap-thumbnail-tags {
-  font-size: 1.05em;
-  font-weight: bold;
+  font-size: 0.8em;
   width: 100%;
   text-align: center;
-  padding: 4px 8px 6px 8px;
+  padding: 2px 8px 4px 8px;
 }
 
 .umap-thumbnail-tags .tag-value:first-of-type {
