@@ -2,7 +2,6 @@ import logging
 import os
 import random
 import shutil
-import threading
 import uuid
 from collections import Counter
 from collections.abc import Callable
@@ -15,16 +14,19 @@ from pydantic import BaseModel
 from ..config import get_config_manager
 from ..embeddings import _open_npz_file, get_fps_indices_global, get_kmeans_indices_global
 from ..progress import IndexStatus, progress_tracker
+from ..util import BoundedLRU
 from .album import validate_album_exists, validate_image_access
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Store results for completed curation jobs. The background task writes here
-# from a worker thread while request handlers read in the event-loop thread,
-# so guard accesses with a lock to keep the dict from being mutated mid-read.
-_curation_results: dict[str, Any] = {}
-_curation_results_lock = threading.Lock()
+# Completed curation-job results. Bounded so a long-running server doesn't
+# accumulate one entry per job_id forever — 64 is well above any realistic
+# in-flight + recently-viewed working set (FPS / K-means takes seconds; the
+# frontend polls each job_id once or twice). Older entries fall off via LRU
+# when the cap is exceeded; the frontend already handles "job not found" as
+# the no-result path.
+_curation_results: BoundedLRU[str, dict[str, Any]] = BoundedLRU(maxsize=64)
 
 class CurationRequest(BaseModel):
     """
@@ -155,8 +157,7 @@ def _run_curation_task(job_id: str, request: CurationRequest):
             progress_tracker.set_error(job_id, str(exc))
             return
 
-        with _curation_results_lock:
-            _curation_results[job_id] = result
+        _curation_results.put(job_id, result)
 
         progress_tracker.complete_operation(job_id, "Curation completed")
         logger.info(f"Curation Job {job_id}: Completed successfully")
@@ -164,11 +165,7 @@ def _run_curation_task(job_id: str, request: CurationRequest):
     except Exception as e:
         logger.error(f"Curation Job {job_id}: Error - {str(e)}")
         progress_tracker.set_error(job_id, str(e))
-        with _curation_results_lock:
-            _curation_results[job_id] = {
-                "status": "error",
-                "error": str(e)
-            }
+        _curation_results.put(job_id, {"status": "error", "error": str(e)})
 
 @router.post("/curate")
 async def run_curation(request: CurationRequest, background_tasks: BackgroundTasks):
@@ -206,8 +203,7 @@ async def get_curation_progress(job_id: str):
 
     if progress is None:
         # Check if we have a completed result
-        with _curation_results_lock:
-            cached = _curation_results.get(job_id)
+        cached = _curation_results.get(job_id)
         if cached is not None:
             return {
                 "status": "completed",
@@ -223,8 +219,7 @@ async def get_curation_progress(job_id: str):
 
     if progress.status == IndexStatus.COMPLETED:
         # Return result if available
-        with _curation_results_lock:
-            result = _curation_results.get(job_id, {})
+        result = _curation_results.get(job_id, {})
         return {
             "status": "completed",
             "result": result

@@ -183,8 +183,11 @@ def test_compute_image_label_caches_within_process(synthetic_album, monkeypatch)
 
 
 def test_compute_image_label_cache_evicts_past_max(synthetic_album, monkeypatch):
-    monkeypatch.setattr(cluster_labels, "_IMAGE_LABEL_CACHE_MAX", 3)
-    cluster_labels._IMAGE_LABEL_CACHE.clear()
+    # Replace the module-level cache with a small one for this test so the
+    # eviction policy is observable in a few iterations.
+    from photomap.backend.util import BoundedLRU
+
+    monkeypatch.setattr(cluster_labels, "_IMAGE_LABEL_CACHE", BoundedLRU(maxsize=3))
 
     for i in range(5):
         cluster_labels.compute_image_label(synthetic_album, i)
