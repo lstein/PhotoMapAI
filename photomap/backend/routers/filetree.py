@@ -93,7 +93,13 @@ async def get_directories(path: str = "", show_hidden: bool = False):
             else:
                 dir_path = Path(path)
         else:
-            assert ROOT_DIR is not None
+            # On non-Windows ROOT_DIR is set via the module-level fallback
+            # (``os.environ.get("PHOTOMAP_ALBUM_ROOT", "/")``), so it's
+            # guaranteed truthy here. Make that contract explicit so a
+            # future env-handling change can't silently slip through under
+            # ``python -O`` where ``assert`` is stripped.
+            if not ROOT_DIR:
+                raise RuntimeError("PHOTOMAP_ALBUM_ROOT must be set on this platform")
             if not path:
                 dir_path = Path(ROOT_DIR)
             else:

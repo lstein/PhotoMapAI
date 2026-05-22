@@ -413,6 +413,143 @@ class TestInvokeMetadataViewV5Canvas:
 
 
 # ---------------------------------------------------------------------------
+# GenerationMetadata5 — unknown-field warning
+# ---------------------------------------------------------------------------
+
+
+class TestV5UnknownFieldWarning:
+    """``extra="allow"`` keeps parsing forward-compatible, but the
+    ``_warn_unknown_fields`` model_validator surfaces drift so it doesn't
+    go un-noticed. Each new field name is logged once per process; repeats
+    are silent."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_warned(self):
+        # ``_warned_extra_fields`` is module-level; clear it around each test
+        # so order doesn't influence what counts as "first-time-seen".
+        from photomap.backend.metadata_modules.invoke import invoke5metadata
+
+        invoke5metadata._warned_extra_fields.clear()
+        yield
+        invoke5metadata._warned_extra_fields.clear()
+
+    def _v5_with(self, **extra) -> dict:
+        return {
+            "metadata_version": 5,
+            "app_version": "5.6.0",
+            "model": {"name": "test"},
+            "positive_prompt": "p",
+            "seed": 1,
+            **extra,
+        }
+
+    def test_logs_unknown_field_on_first_encounter(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            GenerationMetadataAdapter().parse(
+                self._v5_with(brand_new_field=42, another_one="x")
+            )
+        # Both unknown fields appear in a single warning, comma-separated and sorted.
+        record = next(r for r in caplog.records if r.levelno == logging.WARNING)
+        assert "another_one" in record.getMessage()
+        assert "brand_new_field" in record.getMessage()
+
+    def test_does_not_warn_for_known_fields(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            GenerationMetadataAdapter().parse(self._v5_with())
+        # No warnings — every field we set is in the schema.
+        assert not any(r.levelno == logging.WARNING for r in caplog.records)
+
+    def test_repeats_are_silent(self, caplog):
+        import logging
+
+        adapter = GenerationMetadataAdapter()
+        with caplog.at_level(logging.WARNING):
+            adapter.parse(self._v5_with(brand_new_field=42))
+            # Drop the first-encounter warning so the second parse can be
+            # asserted silent on its own.
+            caplog.clear()
+            adapter.parse(self._v5_with(brand_new_field=42))
+        assert not any(r.levelno == logging.WARNING for r in caplog.records)
+
+    def test_new_field_after_seen_one_does_warn(self, caplog):
+        import logging
+
+        adapter = GenerationMetadataAdapter()
+        with caplog.at_level(logging.WARNING):
+            adapter.parse(self._v5_with(first_field=1))
+            caplog.clear()
+            adapter.parse(self._v5_with(first_field=1, second_field=2))
+        # Only ``second_field`` is mentioned in the second warning;
+        # ``first_field`` was already in ``_warned_extra_fields`` from the
+        # call above.
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        msg = warnings[0].getMessage()
+        assert "second_field" in msg
+        assert "first_field" not in msg
+
+# ---------------------------------------------------------------------------
+# GenerationMetadataAdapter._infer_metadata_version — discriminator heuristics
+# ---------------------------------------------------------------------------
+
+
+class TestDiscriminatorHeuristics:
+    """Pre-discriminator payloads (no ``metadata_version`` key) get their
+    schema version inferred. ``app_version`` is the authoritative signal
+    when present; structural fingerprints are the fallback.
+
+    Tests call the heuristic directly via ``_infer_metadata_version`` so
+    they don't have to construct payloads complete enough to satisfy each
+    full schema — the point here is the version *picked*, not the parse.
+    """
+
+    def _infer(self, payload: dict) -> int:
+        return GenerationMetadataAdapter._infer_metadata_version(payload)
+
+    def test_app_version_beats_canvas_v2_marker(self):
+        # A v3 image that happens to carry a ``canvas_v2_metadata`` key
+        # must still infer v3 — ``app_version`` is more authoritative than
+        # any individual field's presence. Previously this was forced to v5.
+        assert self._infer({"app_version": "3.4.0", "canvas_v2_metadata": {}}) == 3
+
+    def test_v_prefixed_v3_app_version(self):
+        # InvokeAI has shipped both bare and ``v``-prefixed version strings;
+        # accept ``v3.x.y`` the same way the older v2 branch already accepted
+        # ``v2.x.y``.
+        assert self._infer({"app_version": "v3.4.0"}) == 3
+
+    def test_v3_with_string_model_falls_back_to_v2(self):
+        # Some v3-era payloads stored ``model`` as a string; v3's schema
+        # requires the richer Model object so the heuristic classifies them
+        # as v2 (which accepts a string ``model``).
+        assert self._infer({"app_version": "3.4.0", "model": "sd-1.5"}) == 2
+
+    def test_no_app_version_canvas_marker_picks_v5(self):
+        # Structural fallback: ``canvas_v2_metadata`` without ``app_version``
+        # still implies v5.
+        assert self._infer({"canvas_v2_metadata": {}}) == 5
+
+    def test_no_app_version_model_weights_picks_v2(self):
+        # Structural fallback for legacy v2 payloads (no ``app_version`` and
+        # no ``canvas_v2_metadata``, but ``model_weights`` is set).
+        assert self._infer({"model_weights": "x"}) == 2
+
+    def test_no_signals_defaults_to_v3(self):
+        # The most-common pre-stamped payload shape — assume v3 when nothing
+        # else gives us a hint.
+        assert self._infer({"positive_prompt": "p", "seed": 1}) == 3
+
+    def test_future_app_version_picks_v5(self):
+        # Any ``app_version`` we don't explicitly recognise (4.x, 5.x, 6.x)
+        # routes to v5 since that's the active schema.
+        assert self._infer({"app_version": "6.0.0"}) == 5
+
+
+# ---------------------------------------------------------------------------
 # format_invoke_metadata — end-to-end HTML rendering
 # ---------------------------------------------------------------------------
 
@@ -973,8 +1110,11 @@ class TestFormatInvokeRecallButtons:
         disk is fine even if its metadata makes no sense).
         """
         # ``metadata_version: 99`` is not a known discriminator, so parsing
-        # raises ValidationError and we fall into the "unknown format" branch.
-        # The nested dict also keeps us out of the "flat-scalars" fast path.
+        # raises ValidationError. The fallback used to render an opaque
+        # "Unknown invoke metadata format" placeholder; it now extracts
+        # whichever top-level scalar fields are present and renders them
+        # via ``_scalar_table`` so the user still sees the seed / model /
+        # prompt etc. they care about.
         metadata = {
             "metadata_version": 99,
             "app_version": "9.9.9",
@@ -983,10 +1123,32 @@ class TestFormatInvokeRecallButtons:
         html = format_invoke_metadata(
             _slide(), metadata, show_recall_buttons=True
         ).description
-        assert "Unknown invoke metadata format" in html
+        # Scalar fields surface in the fallback table; the nested ``model``
+        # dict is filtered out as a non-scalar.
+        assert "9.9.9" in html
+        assert "99" in html
+        assert "<table class='invoke-metadata'>" in html
+        # Recall button still appended — file on disk is fine even when the
+        # metadata is unparseable.
         assert 'data-recall-mode="use_ref"' in html
         assert 'data-recall-mode="recall"' not in html
         assert 'data-recall-mode="remix"' not in html
+
+    def test_unparseable_with_no_scalars_falls_back_to_placeholder(self):
+        """If the unparseable payload has *no* scalar top-level fields, the
+        placeholder remains the only sensible output. (No ``metadata_version``
+        here — that would itself be a scalar and trip the scalar-table
+        branch above.)"""
+        metadata = {
+            "model": {"wat": "nope"},
+            "nested_only": {"a": 1},
+        }
+        html = format_invoke_metadata(
+            _slide(), metadata, show_recall_buttons=True
+        ).description
+        assert "Unknown invoke metadata format" in html
+        # Use-as-ref button still appended.
+        assert 'data-recall-mode="use_ref"' in html
 
     def test_use_ref_button_html_renders_single_button(self):
         html = use_ref_button_html()

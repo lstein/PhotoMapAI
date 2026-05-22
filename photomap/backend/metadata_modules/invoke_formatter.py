@@ -159,10 +159,25 @@ def format_invoke_metadata(
     try:
         parsed = GenerationMetadataAdapter().parse(metadata)
     except ValidationError as exc:
+        # Unknown / future ``metadata_version``, or a payload whose shape no
+        # version's schema matches. Rather than render an opaque "Unknown
+        # invoke metadata format" placeholder, surface whichever top-level
+        # scalar fields are present so the user still sees the seed / model
+        # / prompt etc. they care about.
         logger.warning("Failed to parse invoke metadata: %s", exc)
-        slide_data.description = "<i>Unknown invoke metadata format.</i>" + (
-            use_ref_button_html() if show_recall_buttons else ""
-        )
+        scalars = {
+            key: value
+            for key, value in metadata.items()
+            if isinstance(value, str | int | float | bool | type(None))
+        }
+        if scalars:
+            slide_data.description = _scalar_table(scalars) + (
+                use_ref_button_html() if show_recall_buttons else ""
+            )
+        else:
+            slide_data.description = "<i>Unknown invoke metadata format.</i>" + (
+                use_ref_button_html() if show_recall_buttons else ""
+            )
         return slide_data
 
     view = InvokeMetadataView(parsed)

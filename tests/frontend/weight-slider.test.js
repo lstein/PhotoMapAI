@@ -227,13 +227,14 @@ describe("weight-slider.js", () => {
         width: 100,
       }));
 
-      // Start drag
+      // Start drag — listeners are now attached on document (and only while
+      // dragging) instead of perma-bound to window.
       const mousedownEvent = new MouseEvent("mousedown", { clientX: 50 });
       bar.dispatchEvent(mousedownEvent);
 
       // End drag
       const mouseupEvent = new MouseEvent("mouseup");
-      window.dispatchEvent(mouseupEvent);
+      document.dispatchEvent(mouseupEvent);
 
       expect(slider.isDragging).toBe(false);
     });
@@ -256,7 +257,7 @@ describe("weight-slider.js", () => {
 
       // Move mouse
       const mousemoveEvent = new MouseEvent("mousemove", { clientX: 70 });
-      window.dispatchEvent(mousemoveEvent);
+      document.dispatchEvent(mousemoveEvent);
 
       expect(slider.value).toBe(0.7);
       expect(onChangeMock).toHaveBeenCalledWith(0.7);
@@ -270,9 +271,12 @@ describe("weight-slider.js", () => {
         width: 100,
       }));
 
-      // Move mouse without starting drag
+      // Move mouse without starting drag — the new code attaches the
+      // mousemove listener only on mousedown, so this dispatch is a no-op
+      // (preserves the test's intent that ``value`` stays at its initial
+      // setting).
       const mousemoveEvent = new MouseEvent("mousemove", { clientX: 70 });
-      window.dispatchEvent(mousemoveEvent);
+      document.dispatchEvent(mousemoveEvent);
 
       expect(slider.value).toBe(0.5);
       expect(onChangeMock).not.toHaveBeenCalled();

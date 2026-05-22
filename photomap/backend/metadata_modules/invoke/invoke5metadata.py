@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
@@ -14,6 +15,19 @@ from photomap.backend.metadata_modules.invoke.common_metadata_elements import (
     fixup_step_percentages,
     tag_reference_images,
 )
+
+logger = logging.getLogger(__name__)
+
+# Field names already reported by ``GenerationMetadata5._warn_unknown_fields``
+# in this process. InvokeAI's v5 schema is actively extended between
+# releases — that's why the model carries ``extra="allow"`` (see
+# ``ConfigDict`` below) rather than ``"forbid"``: silently dropping a new
+# upstream field is preferable to refusing to parse the image. The trade-off
+# is reduced visibility into schema drift, which this set + the
+# ``model_validator`` hook below address: each new unknown field is logged
+# once per process so an operator notices "huh, InvokeAI added X — should I
+# capture it?" without log spam on every parsed image.
+_warned_extra_fields: set[str] = set()
 
 
 class ControlLayer(BaseModel):
@@ -240,6 +254,30 @@ class GenerationMetadata5(BaseModel):
             data["control_layers"] = {"version": 1, "layers": layers}
             del data["controlnets"]
         return data
+
+    @model_validator(mode="after")
+    def _warn_unknown_fields(self) -> "GenerationMetadata5":
+        """Log v5 fields that weren't declared on this schema.
+
+        ``extra="allow"`` keeps parsing forward-compatible across InvokeAI
+        releases that add new metadata fields, but otherwise leaves us
+        blind to schema drift. This hook surfaces each unknown field name
+        once per process so the next person updating the schema notices
+        what's slipping through. Subsequent images carrying the same
+        field are silent — the goal is "did anything new show up?", not
+        per-image instrumentation.
+        """
+        extra = self.__pydantic_extra__ or {}
+        new_fields = set(extra.keys()) - _warned_extra_fields
+        if new_fields:
+            _warned_extra_fields.update(new_fields)
+            logger.warning(
+                "InvokeAI v5 metadata contains field(s) not declared in "
+                "GenerationMetadata5: %s. Parsing succeeded via extra='allow'; "
+                "add to the schema if useful in the drawer or recall payload.",
+                ", ".join(sorted(new_fields)),
+            )
+        return self
 
     @model_serializer(mode="wrap")
     def serialize_model(self, serializer, info):

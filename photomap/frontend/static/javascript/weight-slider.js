@@ -46,25 +46,57 @@ export class WeightSlider {
       this.setValueFromEvent(e);
     });
 
-    // Drag to set value
-    this.bar.addEventListener("mousedown", (e) => {
-      this.isDragging = true;
-      this.setValueFromEvent(e);
-      document.body.style.userSelect = "none";
-    });
+    // Drag to set value. Document-level move/up listeners are added on the
+    // mousedown (or touchstart) that begins a drag and removed on release,
+    // instead of being installed perma-listening at render time — multiple
+    // slider instances used to leak one mousemove + one mouseup listener
+    // each onto window, and the slider was unusable on touch devices.
+    this.bar.addEventListener("mousedown", (e) => this._beginDrag(e, false));
+    this.bar.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length !== 1) {
+          return;
+        }
+        this._beginDrag(e.touches[0], true);
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+  }
 
-    window.addEventListener("mousemove", (e) => {
-      if (this.isDragging) {
-        this.setValueFromEvent(e);
-      }
-    });
+  _beginDrag(event, isTouch) {
+    this.isDragging = true;
+    this.setValueFromEvent(event);
+    document.body.style.userSelect = "none";
 
-    window.addEventListener("mouseup", () => {
-      if (this.isDragging) {
-        this.isDragging = false;
-        document.body.style.userSelect = "";
+    const onMove = (e) => {
+      if (!this.isDragging) {
+        return;
       }
-    });
+      const point = isTouch && e.touches ? e.touches[0] : e;
+      this.setValueFromEvent(point);
+      if (isTouch) {
+        e.preventDefault();
+      }
+    };
+
+    const onEnd = () => {
+      this.isDragging = false;
+      document.body.style.userSelect = "";
+      document.removeEventListener(isTouch ? "touchmove" : "mousemove", onMove);
+      document.removeEventListener(isTouch ? "touchend" : "mouseup", onEnd);
+      document.removeEventListener("touchcancel", onEnd);
+    };
+
+    if (isTouch) {
+      document.addEventListener("touchmove", onMove, { passive: false });
+      document.addEventListener("touchend", onEnd);
+      document.addEventListener("touchcancel", onEnd);
+    } else {
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onEnd);
+    }
   }
 
   setValueFromEvent(e) {
