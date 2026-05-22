@@ -2,7 +2,7 @@
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-manager.js";
 import { backStack } from "./back-stack.js";
-import { CLUSTER_PALETTE, getClusterLabelInfo, setClusterLabels } from "./cluster-utils.js";
+import { CLUSTER_PALETTE, getClusterLabelInfo, getImageLabelInfo, setClusterLabels } from "./cluster-utils.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
@@ -920,15 +920,18 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
   clusterDiv.style.textShadow = textShadow;
   umapThumbnailDiv.appendChild(clusterDiv);
 
-  // Tags row, only when the labels endpoint has populated this cluster.
-  // Inline rather than title= since the popup disappears on mouse move.
-  if (labelInfo) {
-    const tags = [labelInfo.label, ...(labelInfo.alternates || [])].slice(0, 3);
+  // Tags rows, only when the labels endpoint has populated them. Inline rather
+  // than title= since the popup disappears on mouse move. The image-tags row is
+  // fetched async and appended once it resolves (see below).
+  const appendTagsRow = (prefix, tags) => {
+    if (!umapThumbnailDiv) {
+      return;
+    }
     const tagsDiv = document.createElement("div");
     tagsDiv.className = "umap-thumbnail-tags";
     tagsDiv.style.color = textIsDark;
     tagsDiv.style.textShadow = textShadow;
-    tagsDiv.appendChild(document.createTextNode("Tags for this cluster: "));
+    tagsDiv.appendChild(document.createTextNode(prefix));
     tags.forEach((tag, idx) => {
       if (idx > 0) {
         tagsDiv.appendChild(document.createTextNode(", "));
@@ -939,18 +942,18 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
       tagsDiv.appendChild(span);
     });
     umapThumbnailDiv.appendChild(tagsDiv);
+  };
+
+  if (labelInfo) {
+    appendTagsRow("Cluster tags: ", [labelInfo.label, ...(labelInfo.alternates || [])].slice(0, 3));
   }
 
   document.body.appendChild(umapThumbnailDiv);
 
-  // Position the window near the mouse pointer, but not off-screen
+  // Position the window near the mouse pointer, but not off-screen. Factored
+  // out so we can recompute after the async image-tags row is appended.
   const pad = 12;
-  let left = x + pad;
-  let top = y + pad;
-
-  // Wait for the image to load before showing the div
-  img.onload = () => {
-    // Make sure the thumbnail div is still present in the DOM
+  const repositionThumbnail = () => {
     if (!umapThumbnailDiv || !document.body.contains(umapThumbnailDiv)) {
       return;
     }
@@ -959,8 +962,10 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
       rect = umapThumbnailDiv.getBoundingClientRect();
     } catch (e) {
       console.warn("Error getting thumbnail div dimensions:", e);
-      return; // Exit if we can't get dimensions
+      return;
     }
+    let left = x + pad;
+    let top = y + pad;
     if (left + rect.width > window.innerWidth - 10) {
       left = x - rect.width - pad;
     }
@@ -969,6 +974,15 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
     }
     umapThumbnailDiv.style.left = `${Math.max(0, left)}px`;
     umapThumbnailDiv.style.top = `${Math.max(0, top)}px`;
+  };
+
+  // Wait for the image to load before showing the div
+  img.onload = () => {
+    // Make sure the thumbnail div is still present in the DOM
+    if (!umapThumbnailDiv || !document.body.contains(umapThumbnailDiv)) {
+      return;
+    }
+    repositionThumbnail();
     umapThumbnailDiv.style.visibility = "visible"; // <-- Show after loaded
   };
 
@@ -980,6 +994,20 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
     umapThumbnailDiv.style.visibility = "visible";
     img.alt = "Thumbnail not available";
   };
+
+  // Per-image tags: fetched async (network round-trip on first hit; cached
+  // thereafter). When the user moves off before it resolves, removeUmapThumbnail
+  // has already nulled/replaced umapThumbnailDiv — the identity check drops the
+  // stale append. When the autotagging setting is off, getImageLabelInfo
+  // returns null and we skip the row entirely.
+  const myDiv = umapThumbnailDiv;
+  getImageLabelInfo(state.album, index).then((info) => {
+    if (!info || myDiv !== umapThumbnailDiv || !document.body.contains(myDiv)) {
+      return;
+    }
+    appendTagsRow("Image tags: ", [info.label, ...(info.alternates || [])].slice(0, 3));
+    repositionThumbnail();
+  });
 }
 
 function removeUmapThumbnail() {
