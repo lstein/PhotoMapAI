@@ -8,9 +8,36 @@ Handles extraction of metadata from various image sources including:
 """
 
 import json
+import logging
 from typing import Any
 
 from PIL import ExifTags, Image
+
+logger = logging.getLogger(__name__)
+
+
+def _normalize_text_chunk(value: Any) -> str:
+    """Coerce a PIL ``img.info[...]`` value to a JSON-parseable string.
+
+    Pillow returns different shapes for the three PNG text-chunk types:
+
+    * ``tEXt`` — ``str``
+    * ``zTXt`` — ``str`` (decompressed) in recent Pillow, ``bytes`` historically
+    * ``iTXt`` — a ``(text, lang, translated_keyword)`` tuple in some versions,
+      ``str`` in others
+
+    Without normalization, an ``iTXt`` chunk hands ``json.loads`` a tuple
+    (TypeError on the next line) and a ``zTXt`` bytes payload works but
+    masks the underlying type drift. Funnel everything through this helper
+    so the JSON parse sees a clean ``str``.
+    """
+    if isinstance(value, tuple):
+        # iTXt: the actual text is the first element; subsequent entries
+        # are lang and translated_keyword which we don't need.
+        value = value[0] if value else ""
+    if isinstance(value, bytes | bytearray):
+        value = bytes(value).decode("utf-8", errors="replace")
+    return str(value)
 
 
 class MetadataExtractor:
@@ -27,11 +54,15 @@ class MetadataExtractor:
         Returns:
             dict: Extracted metadata or empty dict if none found
         """
+
+        def _json_from_chunk(key: str):
+            return lambda img: json.loads(_normalize_text_chunk(img.info[key]))
+
         # Define metadata extraction strategies in order of preference
         metadata_extractors = [
-            ("invokeai_metadata", lambda img: json.loads(img.info["invokeai_metadata"])),
-            ("Sd-metadata", lambda img: json.loads(img.info["Sd-metadata"])),
-            ("sd-metadata", lambda img: json.loads(img.info["sd-metadata"])),
+            ("invokeai_metadata", _json_from_chunk("invokeai_metadata")),
+            ("Sd-metadata", _json_from_chunk("Sd-metadata")),
+            ("sd-metadata", _json_from_chunk("sd-metadata")),
             ("exif", ExifExtractor.extract_exif_metadata),
         ]
 
@@ -39,8 +70,8 @@ class MetadataExtractor:
             if key in pil_image.info:
                 try:
                     return extractor(pil_image)
-                except (json.JSONDecodeError, Exception) as e:
-                    print(f"Warning: Failed to parse {key} metadata: {e}")
+                except Exception as e:
+                    logger.warning("Failed to parse %s metadata: %s", key, e)
                     continue
 
         return {}  # No metadata available
@@ -92,7 +123,7 @@ class ExifExtractor:
             except (KeyError, OSError, AttributeError):
                 continue
             except Exception as e:
-                print(f"Warning: Unexpected error reading IFD {ifd_id.name}: {e}")
+                logger.warning("Unexpected error reading IFD %s: %s", ifd_id.name, e)
                 continue
 
         return exif_dict
@@ -137,7 +168,7 @@ class GPSExtractor:
             return filtered_gps
 
         except Exception as e:
-            print(f"Warning: Failed to extract GPS data: {e}")
+            logger.warning("Failed to extract GPS data: %s", e)
             return {}
 
     @staticmethod
@@ -166,5 +197,5 @@ class GPSExtractor:
             return decimal
 
         except Exception as e:
-            print(f"Warning: Failed to convert GPS coordinate {coord_tuple}: {e}")
+            logger.warning("Failed to convert GPS coordinate %r: %s", coord_tuple, e)
             return None
