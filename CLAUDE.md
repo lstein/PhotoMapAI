@@ -36,13 +36,24 @@ make docs                    # mkdocs serve on :8000
 # Creating a branch for features/bugfixes
 # Always use worktrees unless explicitly asked not to
 git worktree add -b lstein/{fix,feature,chore}/<branch-name> ../photomap-worktrees/lstein-{fix,feature,chore}-<branch-name>
-cd ../photomap_worktrees/lstein-{fix,feature,chore}-<branch-name>
-python3 -mvenv .venv --prompt 'photomap-<branch-name>'
-source .venv/bin/activate
-pip install -e .[development,testing]
+cd ../photomap_worktrees/<branch-name>
 ```
 
 Ruff is configured for line-length 120, target py310, rules E/W/F/I/UP/B (see pyproject.toml). Jest runs in jsdom with experimental ESM (the project is `"type": "module"`).
+
+## Creating a feature branch (mandatory unless asked otherwise)
+
+1. Name the branch lstein/{fix,feature,chore,etc}/<what-the-branch-does>
+2. Create a worktree for this branch in ../photomap_worktrees/what-the-branch-does
+
+## Worktree setup (mandatory)
+
+1. chdir to the branch worktree
+1. Install a virtual environment under .venv
+2. Activate the virtual environment
+3. Install photomap using `pip install -e .[development,testing]`
+4. After these steps complete alert the author that the worktree is properly initialized.
+
 
 ## Architecture
 
