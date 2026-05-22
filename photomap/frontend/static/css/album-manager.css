@@ -115,6 +115,13 @@
   resize: vertical;
 }
 
+/* Pixel-dimension input only needs room for four digits and the spinner
+   controls — overrides the full-width default applied to every input
+   inside ``.form-group``. */
+.form-group input.edit-album-min-image-dimension {
+  width: 6em;
+}
+
 .form-hint {
   display: block;
   margin-top: 0.4em;
