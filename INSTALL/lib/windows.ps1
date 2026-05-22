@@ -77,7 +77,7 @@ $version = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_
 if (-not $version) {
     Install-Python "Could not determine Python version."
 }
-if ([version]$version -lt [version]"3.10" -or [version]$version -ge [version]"3.14") {
+if ([version]$version -lt [version]"3.10" -or [version]$version -ge [version]"3.15") {
     Install-Python "An incompatible Python version is installed."
 }
 
