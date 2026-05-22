@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from ..config import get_config_manager
 from ..embeddings import Embeddings, peek_encoder_spec
-from ..progress import progress_tracker
+from ..progress import IndexingCancelled, progress_tracker
 from .album import (
     AlbumDep,
     EmbeddingsDep,
@@ -196,7 +196,14 @@ async def get_index_progress(
 
 @index_router.delete("/cancel_index/{album_key}", tags=["Index"])
 async def cancel_index_operation(album_key: str, album_config: AlbumDep) -> dict:
-    """Cancel an ongoing index operation."""
+    """Cancel an ongoing index operation.
+
+    Sets the cooperative-cancel flag in ``progress_tracker``; the indexing
+    loop polls it between batches via the per-image progress callback and
+    raises :class:`IndexingCancelled`, which the background task catches
+    cleanly. The status text is flipped here too so the frontend's poll
+    sees the cancel immediately, even before the next batch boundary.
+    """
     del album_config  # See get_index_progress above.
     try:
         if not progress_tracker.is_running(album_key):
@@ -204,7 +211,8 @@ async def cancel_index_operation(album_key: str, album_config: AlbumDep) -> dict
                 status_code=404, detail=f"No active operation for album '{album_key}'"
             )
 
-        progress_tracker.set_error(album_key, "Operation cancelled by user")
+        progress_tracker.request_cancel(album_key)
+        progress_tracker.set_error(album_key, "Indexing cancelled by user")
 
         return {
             "success": True,
@@ -510,6 +518,12 @@ async def _update_index_background_async(album_key: str, album_config):
 
         logger.info(f"Index update completed for album '{album_key}'")
 
+    except IndexingCancelled as e:
+        # User-requested cancellation isn't a failure — the inner layers
+        # already called ``set_error`` with the friendly message; log at
+        # info level so the background task summary doesn't look like a
+        # crash.
+        logger.info(f"Index update cancelled for album '{album_key}': {e}")
     except Exception as e:
         logger.error(f"Background index update failed for album '{album_key}': {e}")
         progress_tracker.set_error(album_key, str(e))

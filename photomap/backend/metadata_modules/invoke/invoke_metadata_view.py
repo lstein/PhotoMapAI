@@ -134,7 +134,13 @@ def _control_adapter_to_tuple(ca: ControlAdapter) -> ControlLayerTuple:
 
 def _v5_control_layer_to_tuple(layer: V5ControlLayer) -> ControlLayerTuple:
     ca = layer.control_adapter
-    assert ca is not None  # caller filters this
+    if ca is None:
+        # Belt-and-braces guard — ``_V5Strategy.control_layers`` already
+        # filters layers whose ``control_adapter`` is None before calling
+        # in, so reaching this branch means the contract was broken
+        # upstream. Raise instead of asserting so the check survives
+        # ``python -O``.
+        raise ValueError("V5 control layer has no control_adapter")
     return ControlLayerTuple(
         model_name=ca.model.name if ca.model else "",
         image_name=_image_name(ca.image),

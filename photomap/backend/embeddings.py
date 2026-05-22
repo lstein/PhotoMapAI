@@ -43,7 +43,7 @@ from .encoders import (
 from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
-from .progress import progress_tracker
+from .progress import IndexingCancelled, progress_tracker
 from .util import atomic_savez
 
 logger = logging.getLogger(__name__)
@@ -272,8 +272,13 @@ def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
             else (int(embeddings.shape[1]) if embeddings.ndim == 2 and embeddings.size else 512)
         )
 
-    # Pre-compute sorted order
-    sorted_indices = np.argsort(modification_times)
+    # Pre-compute sorted order. ``np.lexsort`` is stable and uses ``filenames``
+    # as a deterministic tiebreaker when modtimes collide (common: EXIF dates
+    # are 1-second resolution, so bursts and batch copies tie). Plain
+    # ``argsort`` defaults to quicksort, which is unstable — same data sorted
+    # twice could yield different orders, silently invalidating any global
+    # index a caller (bookmarks, back-stack, deletion) has held onto.
+    sorted_indices = np.lexsort((filenames, modification_times))
     sorted_filenames = filenames[sorted_indices]
     filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
 
@@ -736,9 +741,19 @@ class Embeddings(BaseModel):
 
         Serialized by :data:`_indexing_semaphore` so two concurrent album
         indexes don't both hold an encoder in VRAM at the same time.
+
+        The progress callback also enforces cooperative cancellation: when
+        ``progress_tracker.is_cancel_requested(album_key)`` becomes True the
+        callback raises :class:`IndexingCancelled`, which the
+        ``_process_images_batch`` worker propagates back out so the rest of
+        the dataset isn't encoded and no partial index is written. The
+        per-image callback boundary is fine-grained enough to keep
+        cancel-to-stop latency well below a second on a typical GPU.
         """
 
         def progress_cb(i: int, total: int, message: str) -> None:
+            if progress_tracker.is_cancel_requested(album_key):
+                raise IndexingCancelled("Indexing cancelled by user")
             progress_tracker.update_progress(album_key, i, message)
 
         async with _get_indexing_semaphore():
@@ -1043,9 +1058,11 @@ class Embeddings(BaseModel):
         num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Update existing embeddings with new images."""
-        assert (
-            self.embeddings_path.exists()
-        ), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
+        if not self.embeddings_path.exists():
+            raise FileNotFoundError(
+                f"Embeddings file {self.embeddings_path} does not exist. "
+                "Please create an index first."
+            )
 
         try:
             existing = self._load_existing_index_arrays()
@@ -1119,9 +1136,11 @@ class Embeddings(BaseModel):
         num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Asynchronously update existing embeddings with new images."""
-        assert (
-            self.embeddings_path.exists()
-        ), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
+        if not self.embeddings_path.exists():
+            raise FileNotFoundError(
+                f"Embeddings file {self.embeddings_path} does not exist. "
+                "Please create an index first."
+            )
 
         try:
             existing = self._load_existing_index_arrays()
@@ -1438,9 +1457,11 @@ class Embeddings(BaseModel):
         # Normalize embeddings. ``_l2_normalize`` carries an epsilon guard so
         # an all-zero row can't produce NaN here.
         norm_embeddings = _l2_normalize(embeddings, axis=-1)
-        assert isinstance(
-            norm_embeddings, np.ndarray
-        ), "Normalization failed, expected np.ndarray"
+        if not isinstance(norm_embeddings, np.ndarray):
+            raise TypeError(
+                f"_l2_normalize returned {type(norm_embeddings).__name__}, "
+                "expected np.ndarray"
+            )
 
         # Use NearestNeighbors with cosine metric
         nn = NearestNeighbors(metric="cosine", algorithm="brute")
@@ -1512,8 +1533,10 @@ class Embeddings(BaseModel):
                 embeddings = data["embeddings"].copy()
                 modtimes = data["modification_times"].copy()
                 metadata = data["metadata"].copy()
-                # Reconstruct sorting locally to find correct index
-                sorted_indices = np.argsort(modtimes)
+                # Reconstruct sorting locally to find correct index. Must match
+                # the (modtime, filename) lexsort used in ``_open_npz_file`` or
+                # we'd find the wrong file to delete.
+                sorted_indices = np.lexsort((filenames, modtimes))
                 sorted_filenames = filenames[sorted_indices]
 
             current_filename = sorted_filenames[index]
@@ -1567,7 +1590,9 @@ class Embeddings(BaseModel):
                 embeddings = data["embeddings"].copy()
                 modtimes = data["modification_times"].copy()
                 metadata = data["metadata"].copy()
-                sorted_indices = np.argsort(modtimes)
+                # Match the (modtime, filename) lexsort used elsewhere — see
+                # ``_open_npz_file`` for the rationale.
+                sorted_indices = np.lexsort((filenames, modtimes))
                 sorted_filenames = filenames[sorted_indices]
 
             current_filename = sorted_filenames[index]

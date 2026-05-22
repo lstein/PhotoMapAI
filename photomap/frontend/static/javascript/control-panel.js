@@ -164,6 +164,21 @@ async function handleSuccessfulDelete(globalIndex, searchIndex) {
   const metadata = await getIndexMetadata(state.album);
   slideState.totalAlbumImages = metadata?.filename_count || 0;
 
+  // Tell the rest of the app (bookmarks, back-stack, grid view) which index
+  // the backend just renumbered out from under them. The multi-delete path in
+  // bookmarks.js fires the same event with multiple indices, so listeners
+  // only need to handle one shape.
+  window.dispatchEvent(
+    new CustomEvent("albumChanged", {
+      detail: {
+        album: state.album,
+        totalImages: slideState.totalAlbumImages,
+        changeType: "deletion",
+        deletedIndices: [globalIndex],
+      },
+    })
+  );
+
   // Drop the deleted entry from search results and decrement subsequent global indices.
   // Stay on the same search position so the next result fills the slot; clamp at the end.
   if (slideState.isSearchMode && slideState.searchResults?.length > 0) {
