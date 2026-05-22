@@ -272,8 +272,13 @@ def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
             else (int(embeddings.shape[1]) if embeddings.ndim == 2 and embeddings.size else 512)
         )
 
-    # Pre-compute sorted order
-    sorted_indices = np.argsort(modification_times)
+    # Pre-compute sorted order. ``np.lexsort`` is stable and uses ``filenames``
+    # as a deterministic tiebreaker when modtimes collide (common: EXIF dates
+    # are 1-second resolution, so bursts and batch copies tie). Plain
+    # ``argsort`` defaults to quicksort, which is unstable — same data sorted
+    # twice could yield different orders, silently invalidating any global
+    # index a caller (bookmarks, back-stack, deletion) has held onto.
+    sorted_indices = np.lexsort((filenames, modification_times))
     sorted_filenames = filenames[sorted_indices]
     filename_map = {fname: idx for idx, fname in enumerate(sorted_filenames)}
 
@@ -1493,8 +1498,10 @@ class Embeddings(BaseModel):
                 embeddings = data["embeddings"].copy()
                 modtimes = data["modification_times"].copy()
                 metadata = data["metadata"].copy()
-                # Reconstruct sorting locally to find correct index
-                sorted_indices = np.argsort(modtimes)
+                # Reconstruct sorting locally to find correct index. Must match
+                # the (modtime, filename) lexsort used in ``_open_npz_file`` or
+                # we'd find the wrong file to delete.
+                sorted_indices = np.lexsort((filenames, modtimes))
                 sorted_filenames = filenames[sorted_indices]
 
             current_filename = sorted_filenames[index]
@@ -1548,7 +1555,9 @@ class Embeddings(BaseModel):
                 embeddings = data["embeddings"].copy()
                 modtimes = data["modification_times"].copy()
                 metadata = data["metadata"].copy()
-                sorted_indices = np.argsort(modtimes)
+                # Match the (modtime, filename) lexsort used elsewhere — see
+                # ``_open_npz_file`` for the rationale.
+                sorted_indices = np.lexsort((filenames, modtimes))
                 sorted_filenames = filenames[sorted_indices]
 
             current_filename = sorted_filenames[index]
