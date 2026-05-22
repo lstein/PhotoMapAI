@@ -6,6 +6,7 @@ and serving images and thumbnails.
 """
 
 import base64
+import hashlib
 import json
 import re
 import zipfile
@@ -218,16 +219,21 @@ async def serve_thumbnail(
     thumb_dir.mkdir(exist_ok=True)
 
     relative_path = config_manager.get_relative_path(str(image_path), album_key)
-    assert relative_path is not None, "Relative path should not be None"
-    safe_rel_path = relative_path.replace("/", "_").replace("\\", "_")
-    thumb_path = thumb_dir / f"{Path(safe_rel_path).stem}_{size}.png"
+    if relative_path is None:
+        # ``get_relative_path`` returns ``None`` only when the image falls
+        # outside every configured ``image_paths`` entry — i.e. an album
+        # mis-configuration, not a user-supplied bad input.
+        raise HTTPException(status_code=500, detail="Image path is not inside the album")
 
-    # If color is specified, add it to the thumbnail filename to cache separately
-    if color:
-        color_hex = color.replace("#", "")
-        thumb_path = (
-            thumb_dir / f"{Path(safe_rel_path).stem}_{size}_{color_hex}_r{radius}.png"
-        )
+    # Hash the full relative_path (including extension) so structurally
+    # different paths can't collapse to the same cache filename. The prior
+    # implementation ran ``.replace("/", "_")`` + ``Path(...).stem``, which
+    # collided ``/a/b.jpg`` with ``/a_b.jpg`` (same mangled name) and
+    # ``a.png`` with ``a.jpg`` (same stem) — both observable cache-poisoning
+    # bugs. blake2b-128 makes collisions effectively impossible.
+    rel_hash = hashlib.blake2b(relative_path.encode("utf-8"), digest_size=16).hexdigest()
+    suffix = f"_{size}.png" if not color else f"_{size}_{color.lstrip('#')}_r{radius}.png"
+    thumb_path = thumb_dir / f"{rel_hash}{suffix}"
 
     # Generate thumbnail if not cached or outdated
     if (

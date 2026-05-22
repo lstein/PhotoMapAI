@@ -43,7 +43,7 @@ from .encoders import (
 from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
-from .progress import progress_tracker
+from .progress import IndexingCancelled, progress_tracker
 from .util import atomic_savez
 
 logger = logging.getLogger(__name__)
@@ -701,9 +701,19 @@ class Embeddings(BaseModel):
 
         Serialized by :data:`_indexing_semaphore` so two concurrent album
         indexes don't both hold an encoder in VRAM at the same time.
+
+        The progress callback also enforces cooperative cancellation: when
+        ``progress_tracker.is_cancel_requested(album_key)`` becomes True the
+        callback raises :class:`IndexingCancelled`, which the
+        ``_process_images_batch`` worker propagates back out so the rest of
+        the dataset isn't encoded and no partial index is written. The
+        per-image callback boundary is fine-grained enough to keep
+        cancel-to-stop latency well below a second on a typical GPU.
         """
 
         def progress_cb(i: int, total: int, message: str) -> None:
+            if progress_tracker.is_cancel_requested(album_key):
+                raise IndexingCancelled("Indexing cancelled by user")
             progress_tracker.update_progress(album_key, i, message)
 
         async with _get_indexing_semaphore():
@@ -1008,9 +1018,11 @@ class Embeddings(BaseModel):
         num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Update existing embeddings with new images."""
-        assert (
-            self.embeddings_path.exists()
-        ), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
+        if not self.embeddings_path.exists():
+            raise FileNotFoundError(
+                f"Embeddings file {self.embeddings_path} does not exist. "
+                "Please create an index first."
+            )
 
         try:
             existing = self._load_existing_index_arrays()
@@ -1084,9 +1096,11 @@ class Embeddings(BaseModel):
         num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult | None:
         """Asynchronously update existing embeddings with new images."""
-        assert (
-            self.embeddings_path.exists()
-        ), f"Embeddings file {self.embeddings_path} does not exist. Please create an index first."
+        if not self.embeddings_path.exists():
+            raise FileNotFoundError(
+                f"Embeddings file {self.embeddings_path} does not exist. "
+                "Please create an index first."
+            )
 
         try:
             existing = self._load_existing_index_arrays()
@@ -1403,9 +1417,11 @@ class Embeddings(BaseModel):
         # Normalize embeddings. ``_l2_normalize`` carries an epsilon guard so
         # an all-zero row can't produce NaN here.
         norm_embeddings = _l2_normalize(embeddings, axis=-1)
-        assert isinstance(
-            norm_embeddings, np.ndarray
-        ), "Normalization failed, expected np.ndarray"
+        if not isinstance(norm_embeddings, np.ndarray):
+            raise TypeError(
+                f"_l2_normalize returned {type(norm_embeddings).__name__}, "
+                "expected np.ndarray"
+            )
 
         # Use NearestNeighbors with cosine metric
         nn = NearestNeighbors(metric="cosine", algorithm="brute")
