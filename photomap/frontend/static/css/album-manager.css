@@ -55,7 +55,10 @@
   display: none;
   margin-bottom: 2em;
   padding: 1em;
-  background: #333;
+  /* Match the brighter background used by .album-card.editing so the
+     Add-Album section visually stands out from the surrounding non-editing
+     album cards (which sit at #333). */
+  background: #505050;
   border-radius: 8px;
 }
 

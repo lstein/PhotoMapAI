@@ -553,6 +553,7 @@ def create_album(
     min_search_score: float | None = None,
     max_search_results: int | None = None,
     use_query_optimization: bool | None = None,
+    min_image_dimension: int | None = None,
 ) -> Album:
     """Create a new Album instance with validation.
 
@@ -577,6 +578,8 @@ def create_album(
         fields["max_search_results"] = max_search_results
     if use_query_optimization is not None:
         fields["use_query_optimization"] = use_query_optimization
+    if min_image_dimension is not None:
+        fields["min_image_dimension"] = min_image_dimension
     return Album(**fields)
 
 

@@ -191,6 +191,7 @@ async def get_available_albums() -> list[dict[str, Any]]:
                 "min_search_score": album.min_search_score,
                 "max_search_results": album.max_search_results,
                 "use_query_optimization": album.use_query_optimization,
+                "min_image_dimension": album.min_image_dimension,
             }
             for key, album in albums.items()
             if locked_albums is None or key in locked_albums
@@ -249,6 +250,7 @@ async def update_album(album_data: dict) -> JSONResponse:
             min_search_score=album_data.get("min_search_score"),
             max_search_results=album_data.get("max_search_results"),
             use_query_optimization=album_data.get("use_query_optimization"),
+            min_image_dimension=album_data.get("min_image_dimension"),
         )
 
         logger.info(f"Updating album: {album.key} with index {album.index}")
