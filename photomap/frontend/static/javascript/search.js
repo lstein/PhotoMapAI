@@ -1,7 +1,7 @@
 // search.js
 // This file contains functions to interact with the backend API to search and retrieve images.
 import { state } from "./state.js";
-import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
+import { fetchJson, hideSpinner, showSpinner, showToast } from "./utils.js";
 
 // Tracks the AbortController of the in-flight search request so a newer
 // query can cancel an older one. Without this, a slower response wins and
@@ -104,7 +104,14 @@ export async function searchTextAndImage({
       // Superseded by a newer search — fall through silently.
       return [];
     }
+    // Surface the server's error to the user instead of silently returning
+    // zero results — a GPU OOM or any other backend failure used to look
+    // identical to "no matching images". The toast lifts the failure into
+    // the UI; the empty array preserves the existing return contract so
+    // callers don't need to handle exceptions.
     console.error("search_with_text_and_image request failed:", err);
+    const detail = err?.body?.detail ?? err?.message ?? "Search failed.";
+    showToast(`Search failed: ${detail}`, { level: "error", duration: 8000 });
     return [];
   } finally {
     if (_activeSearchController === controller) {

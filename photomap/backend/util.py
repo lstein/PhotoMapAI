@@ -15,6 +15,24 @@ K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")
 
 
+def is_cuda_oom(err: BaseException) -> bool:
+    """True if ``err`` is a CUDA out-of-memory error from torch.
+
+    Tolerates older torch versions where the exception class differs by also
+    sniffing the message of any ``RuntimeError``. Imported lazily so this
+    module doesn't pull torch in when used from CLI tools or tests with a
+    fake encoder that never touch CUDA.
+    """
+    try:
+        import torch
+    except ImportError:
+        return False
+    oom_cls = getattr(torch, "OutOfMemoryError", None)
+    if oom_cls is not None and isinstance(err, oom_cls):
+        return True
+    return isinstance(err, RuntimeError) and "out of memory" in str(err).lower()
+
+
 class BoundedLRU(Generic[K, V]):
     """Thread-safe LRU cache capped at ``maxsize`` entries.
 

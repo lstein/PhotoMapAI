@@ -26,7 +26,7 @@ from platformdirs import user_cache_dir, user_config_dir
 from sklearn.cluster import DBSCAN
 
 from .encoders import get_cached_encoder
-from .util import BoundedLRU
+from .util import BoundedLRU, is_cuda_oom
 
 if TYPE_CHECKING:
     from .embeddings import Embeddings
@@ -135,23 +135,6 @@ def vocab_cache_path(encoder_spec: str) -> Path:
     return base / f"{_sanitize_spec(encoder_spec)}.npz"
 
 
-def _is_cuda_oom(err: Exception) -> bool:
-    """True if `err` is a CUDA out-of-memory error from torch.
-
-    Tolerates older torch versions where the exception class differs by checking
-    the message as a fallback. Imported lazily so this module doesn't pull torch
-    in when used from tests with a fake encoder.
-    """
-    try:
-        import torch
-    except ImportError:
-        return False
-    oom_cls = getattr(torch, "OutOfMemoryError", None)
-    if oom_cls is not None and isinstance(err, oom_cls):
-        return True
-    return isinstance(err, RuntimeError) and "out of memory" in str(err).lower()
-
-
 def _try_cuda_empty_cache() -> None:
     """Defragment torch's CUDA allocator if torch+CUDA are available, else no-op."""
     try:
@@ -188,7 +171,7 @@ def _encode_phrases_ensembled(encoder, phrases: list[str]) -> np.ndarray:
             # encode_text returns (len(expanded), D), already L2-normalized per row.
             feats = encoder.encode_text(expanded)
         except Exception as err:
-            if not _is_cuda_oom(err) or current_batch <= 1:
+            if not is_cuda_oom(err) or current_batch <= 1:
                 raise
             new_batch = max(1, current_batch // 2)
             logger.warning(
