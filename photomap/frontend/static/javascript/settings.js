@@ -37,6 +37,7 @@ export function cacheElements() {
     invokeaiStatusHint: document.getElementById("invokeaiStatusHint"),
     showControlPanelTextCheckbox: document.getElementById("showControlPanelTextCheckbox"),
     confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
+    moveToTrashCheckbox: document.getElementById("moveToTrashCheckbox"),
     wrapNavigationCheckbox: document.getElementById("wrapNavigationCheckbox"),
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
     gridThumbSizeFactorReset: document.getElementById("gridThumbSizeFactorReset"),
@@ -187,6 +188,10 @@ async function populateModalFields() {
     elements.confirmDeleteCheckbox.checked = !state.suppressDeleteConfirm;
   }
 
+  if (elements.moveToTrashCheckbox) {
+    elements.moveToTrashCheckbox.checked = !!state.moveToTrash;
+  }
+
   if (elements.wrapNavigationCheckbox) {
     elements.wrapNavigationCheckbox.checked = !!state.wrapNavigation;
   }
@@ -273,6 +278,16 @@ function setupConfirmDeleteControl() {
   }
   elements.confirmDeleteCheckbox.addEventListener("change", function () {
     state.suppressDeleteConfirm = !this.checked;
+    saveSettingsToLocalStorage();
+  });
+}
+
+function setupMoveToTrashControl() {
+  if (!elements.moveToTrashCheckbox) {
+    return;
+  }
+  elements.moveToTrashCheckbox.addEventListener("change", function () {
+    state.moveToTrash = this.checked;
     saveSettingsToLocalStorage();
   });
 }
@@ -662,6 +677,7 @@ async function initializeSettings() {
   setupLocationIQApiKeyControl();
   setupInvokeAISettingsControls();
   setupConfirmDeleteControl();
+  setupMoveToTrashControl();
   setupWrapNavigationControl();
   setupGridThumbSizeFactorControl();
   setupResetDefaultsControls();

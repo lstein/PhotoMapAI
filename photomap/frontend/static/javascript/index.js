@@ -24,11 +24,12 @@ export async function removeIndex(albumKey) {
   }
 }
 
-export async function deleteImage(albumKey, index) {
+export async function deleteImage(albumKey, index, moveToTrash = true) {
   try {
-    return await fetchJson(`delete_image/${encodeURIComponent(albumKey)}/${encodeURIComponent(index)}`, {
-      method: "DELETE",
-    });
+    return await fetchJson(
+      `delete_image/${encodeURIComponent(albumKey)}/${encodeURIComponent(index)}?move_to_trash=${moveToTrash}`,
+      { method: "DELETE" },
+    );
   } catch (e) {
     console.warn("Failed to delete image.");
     throw e;
