@@ -15,7 +15,16 @@ export async function fetchImageByIndex(index) {
     return null;
   } // No album set, cannot fetch image
 
-  const spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
+  // Deferred-show pattern: only flash the spinner when the request is
+  // visibly slow (>500 ms). Track whether the timer actually fired so the
+  // matching hide only runs in that case — the ref-counted spinner clamps
+  // unbalanced hides at zero, but keeping show/hide pairs balanced is the
+  // safer contract.
+  let spinnerShown = false;
+  const spinnerTimeout = setTimeout(() => {
+    showSpinner();
+    spinnerShown = true;
+  }, 500);
 
   try {
     const url = `retrieve_image/${encodeURIComponent(state.album)}/${encodeURIComponent(index)}`;
@@ -25,7 +34,9 @@ export async function fetchImageByIndex(index) {
     throw e;
   } finally {
     clearTimeout(spinnerTimeout);
-    hideSpinner();
+    if (spinnerShown) {
+      hideSpinner();
+    }
   }
 }
 

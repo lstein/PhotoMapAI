@@ -1,12 +1,65 @@
 // utils.js
 // This file contains utility functions for the application, such as showing and hiding a spinner.
 
-// ShowSpinner and hideSpinner functions
-export function showSpinner() {
-  document.getElementById("spinner").style.display = "block";
+// ---------------------------------------------------------------------------
+// Spinner ref-counting
+// ---------------------------------------------------------------------------
+//
+// The page has one ``#spinner`` element shared by every async operation that
+// wants to indicate "something is loading". The naive ``display = "block"``
+// / ``display = "none"`` pair was racy whenever two operations overlapped:
+//
+//   1. Op A calls showSpinner() → spinner visible
+//   2. Op B calls showSpinner() → spinner visible (no-op)
+//   3. Op A completes → hideSpinner() hides the spinner even though Op B
+//      is still in flight, so the user sees no loading indicator for a
+//      request that hasn't finished.
+//
+// Ref-counting fixes this. Each ``showSpinner`` increments an internal
+// counter; each ``hideSpinner`` decrements it. The DOM only flips to
+// ``display: none`` when the counter drops to zero — i.e. *every* caller
+// that asked for the spinner has reported it done.
+//
+// ``hideSpinner`` clamps the counter at zero. An unmatched hide call
+// (one without a prior show) is therefore a silent no-op rather than a
+// state-corrupting decrement. That preserves the safety of legacy call
+// sites that happen to call hideSpinner in error paths even when the
+// preceding show didn't fire (e.g. cancelled deferred shows).
+
+let _spinnerCount = 0;
+
+function _spinnerEl() {
+  return document.getElementById("spinner");
 }
+
+export function showSpinner() {
+  _spinnerCount += 1;
+  const el = _spinnerEl();
+  if (el) {
+    el.style.display = "block";
+  }
+}
+
 export function hideSpinner() {
-  document.getElementById("spinner").style.display = "none";
+  if (_spinnerCount === 0) {
+    // Surplus hide — keep the DOM hidden (which it already is) and
+    // don't dip the counter below zero, which would desync subsequent
+    // matched show/hide pairs.
+    return;
+  }
+  _spinnerCount -= 1;
+  if (_spinnerCount === 0) {
+    const el = _spinnerEl();
+    if (el) {
+      el.style.display = "none";
+    }
+  }
+}
+
+// Exported for tests only — not part of the production API. Lets the
+// spinner suite reset between cases without reaching into a private symbol.
+export function _resetSpinnerForTests() {
+  _spinnerCount = 0;
 }
 
 // ---------------------------------------------------------------------------
