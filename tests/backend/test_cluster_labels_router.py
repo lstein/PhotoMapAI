@@ -38,8 +38,10 @@ def test_endpoint_returns_labels_dict(client, new_album, monkeypatch):
         "alternates": ["wedding", "kitchen"],
         "score": 0.27,
     }
-    # Defaults match the umap router so cluster IDs align
-    assert captured_call["eps"] == 0.07
+    # Default eps now comes from the album's persisted ``umap_eps`` (the
+    # test fixture sets 0.1). Both ``/cluster_labels`` and ``/umap_data``
+    # resolve eps the same way, so cluster IDs align across endpoints.
+    assert captured_call["eps"] == 0.1
     assert captured_call["ms"] == 10
     assert captured_call["top_k"] == 3
     assert captured_call["album_index"].endswith("embeddings.npz")

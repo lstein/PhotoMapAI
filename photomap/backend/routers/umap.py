@@ -17,7 +17,7 @@ async def get_umap_data(
     album_key: str,
     album_config: AlbumDep,
     embeddings: EmbeddingsDep,
-    cluster_eps: float = 0.07,
+    cluster_eps: float | None = None,
     cluster_min_samples: int = 10,
 ) -> JSONResponse:
     """
@@ -25,12 +25,21 @@ async def get_umap_data(
 
     Args:
         album_key: The key of the album to retrieve data for.
-        cluster_eps: Epsilon parameter for DBSCAN clustering.
+        cluster_eps: Epsilon parameter for DBSCAN clustering. Omit (or send
+            ``None``) to use the album's persisted ``umap_eps`` from YAML.
         cluster_min_samples: Min samples parameter for DBSCAN clustering.
 
     Returns:
         JSONResponse containing a list of points with x, y, index, and cluster ID.
     """
+    # When the caller doesn't override eps, fall back to the album's
+    # persisted ``umap_eps``. This used to be dead code: the parameter
+    # defaulted to ``0.07``, so ``cluster_eps is not None`` was always
+    # true and ``album_config.umap_eps`` was silently ignored. The
+    # corresponding parameter on ``/cluster_labels`` is kept in lockstep
+    # so the two endpoints resolve identical eps values for the same
+    # request — otherwise the cluster IDs they return would disagree
+    # and the hover-label feature would break.
     cluster_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
 
     # Load cached UMAP embeddings (will compute/cache if missing)
