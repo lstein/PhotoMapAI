@@ -261,13 +261,20 @@ def _format_field_value(field_name: str, value) -> str:
 
 
 def _get_static_map_url(latitude, longitude, api_key, width=200, height=150, zoom=8):
+    # Coords are rounded to the same precision as the reverse-geocode cache
+    # key so adjacent photos at the same place produce a byte-identical URL.
+    # That lets the browser's HTTP cache hit instead of refetching a visually
+    # identical tile, which also eliminates the brief blink as the drawer
+    # re-renders between slides.
+    lat = round(latitude, _LOCATIONIQ_COORD_DECIMALS)
+    lon = round(longitude, _LOCATIONIQ_COORD_DECIMALS)
     return (
         f"https://maps.locationiq.com/v3/staticmap"
         f"?key={api_key}"
-        f"&center={latitude},{longitude}"
+        f"&center={lat},{lon}"
         f"&zoom={zoom}"
         f"&size={width}x{height}"
-        f"&markers=icon:small-red-cutout|{latitude},{longitude}"
+        f"&markers=icon:small-red-cutout|{lat},{lon}"
     )
 
 

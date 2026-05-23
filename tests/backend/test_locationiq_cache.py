@@ -199,3 +199,33 @@ class TestCoordinateRounding:
         a = exif_formatter._locationiq_cache_key(1.23455, 2.34565, "k")
         b = exif_formatter._locationiq_cache_key(1.23455, 2.34565, "k")
         assert a == b
+
+
+# ---------------------------------------------------------------------------
+# Static-map URL coordinate rounding — must match the geocode-cache rounding
+# so the browser's HTTP cache hits for nearby photos and the drawer doesn't
+# blink as it re-renders a visually identical tile.
+# ---------------------------------------------------------------------------
+
+
+class TestStaticMapUrlRounding:
+    def test_nearby_coords_produce_identical_url(self):
+        # Both pairs round to (48.8566, 2.3522) at 4 decimals, so the
+        # generated URLs must be byte-identical.
+        a = exif_formatter._get_static_map_url(48.85664, 2.35224, "k")
+        b = exif_formatter._get_static_map_url(48.85661, 2.35221, "k")
+        assert a == b
+
+    def test_url_uses_rounded_coords(self):
+        url = exif_formatter._get_static_map_url(48.856612, 2.352234, "k")
+        # Rounded value present, raw precision absent.
+        assert "center=48.8566,2.3522" in url
+        assert "48.856612" not in url
+        assert "2.352234" not in url
+        # Marker pin also uses the rounded coords.
+        assert "|48.8566,2.3522" in url
+
+    def test_distant_coords_produce_different_urls(self):
+        a = exif_formatter._get_static_map_url(48.8566, 2.3522, "k")
+        b = exif_formatter._get_static_map_url(35.6762, 139.6503, "k")
+        assert a != b
