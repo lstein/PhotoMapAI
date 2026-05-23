@@ -6,6 +6,8 @@ Returns an HTML representation of the EXIF data.
 """
 
 import html
+import threading
+from collections import OrderedDict
 from logging import getLogger
 
 import requests
@@ -13,6 +15,70 @@ import requests
 from .slide_summary import SlideSummary
 
 logger = getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Reverse-geocode cache for LocationIQ
+# ---------------------------------------------------------------------------
+#
+# ``format_exif_metadata`` runs on every image render — typically dozens of
+# times per second while the user scrolls through a folder. Each call here
+# previously fired a network round-trip to LocationIQ, blocking the
+# rendering thread for up to ~500 ms on success and the full 5-second
+# request timeout on transient failures. Adjacent photos at the same place
+# issued duplicate requests because nothing remembered the prior answer.
+#
+# The cache funnels lookups through ``get_locationiq_place_name`` and is
+# keyed by ``(rounded_lat, rounded_lon, api_key)``:
+#
+#   * **Coordinate rounding**: four decimal places is roughly ~11 m of
+#     precision — finer than any neighborhood / city / display_name string
+#     LocationIQ returns at the zoom levels we use. A folder of photos taken
+#     at one place therefore resolves to a single lookup.
+#
+#   * **API key in the key tuple**: changing the key through the settings
+#     UI is self-invalidating. Old entries become unreachable and evict
+#     naturally from the LRU.
+#
+#   * **LRU eviction at 4096 entries**: keeps memory bounded on long-running
+#     servers — well above the unique-place count even for a heavily
+#     travelled photo library.
+#
+# Successes *and* failures are cached. Caching failures avoids hammering
+# the API when an entire folder is rendered with a bad key (401) or while
+# rate-limited (429). Operators who fix the key go through
+# ``set_locationiq_api_key`` (which already calls ``reload_config``) and
+# the new key tuple naturally bypasses the stale entries.
+
+_LOCATIONIQ_COORD_DECIMALS = 4
+_LOCATIONIQ_CACHE_MAX = 4096
+_locationiq_cache: OrderedDict[tuple, tuple] = OrderedDict()
+_locationiq_cache_lock = threading.Lock()
+
+
+def _locationiq_cache_key(lat: float, lon: float, api_key: str) -> tuple:
+    """Build the cache key — rounded coords plus the API-key string."""
+    return (
+        round(lat, _LOCATIONIQ_COORD_DECIMALS),
+        round(lon, _LOCATIONIQ_COORD_DECIMALS),
+        api_key,
+    )
+
+
+def _locationiq_cache_get(key: tuple) -> tuple | None:
+    with _locationiq_cache_lock:
+        val = _locationiq_cache.get(key)
+        if val is not None:
+            _locationiq_cache.move_to_end(key)
+        return val
+
+
+def _locationiq_cache_put(key: tuple, value: tuple) -> None:
+    with _locationiq_cache_lock:
+        _locationiq_cache[key] = value
+        _locationiq_cache.move_to_end(key)
+        while len(_locationiq_cache) > _LOCATIONIQ_CACHE_MAX:
+            _locationiq_cache.popitem(last=False)
 
 
 def _esc(value: object) -> str:
@@ -206,12 +272,33 @@ def _get_static_map_url(latitude, longitude, api_key, width=200, height=150, zoo
 
 
 def get_locationiq_place_name(latitude, longitude, api_key):
-    """Get place name from LocationIQ API.
+    """Reverse-geocode a coordinate to a place name via LocationIQ.
+
+    Cached at ~11 m resolution (four decimal places of latitude /
+    longitude), keyed by the supplied API key. Adjacent photos taken at
+    the same place therefore share a single network round-trip; changing
+    the API key bypasses old entries automatically.
 
     Returns:
-        str: Place name if successful
-        None: If API key is invalid or request fails
+        tuple[str | None, str]: ``(place_name, status_message)``.
+        ``place_name`` is ``None`` on every non-200 response or transport
+        failure; ``status_message`` is ``"ok"`` on success and a short
+        diagnostic string otherwise.
     """
+    key = _locationiq_cache_key(latitude, longitude, api_key)
+    cached = _locationiq_cache_get(key)
+    if cached is not None:
+        return cached
+
+    result = _fetch_locationiq_place_name(latitude, longitude, api_key)
+    _locationiq_cache_put(key, result)
+    return result
+
+
+def _fetch_locationiq_place_name(latitude, longitude, api_key):
+    """Issue the actual reverse-geocode request. Used by
+    :func:`get_locationiq_place_name`; not intended to be called directly
+    by anything else — bypasses the LRU cache."""
     url = "https://us1.locationiq.com/v1/reverse"
     params = {"key": api_key, "lat": latitude, "lon": longitude, "format": "json"}
     headers = {"User-Agent": "ClipSlide/1.0 (Image Slideshow Application)"}
