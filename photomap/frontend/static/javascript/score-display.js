@@ -214,14 +214,6 @@ export class ScoreDisplay {
       }
     }, 300);
   }
-
-  update(score) {
-    if (this.isVisible && score !== undefined && score !== null) {
-      const text = `score=${score.toFixed(4)}`;
-      this.lastDisplayedText = text;
-      this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
-    }
-  }
 }
 
 // Create global instance
