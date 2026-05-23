@@ -67,6 +67,39 @@ class TestExifMetadata:
         assert 'data-recall-mode="remix"' not in result.description
 
 
+class TestExifFieldRendering:
+    """Verify individual EXIF fields render with expected labels and formatting."""
+
+    def test_datetime_original_rendered_with_date_taken_label(self, clear_invokeai_config):
+        metadata = {"DateTimeOriginal": "2021:08:28 13:40:19"}
+        result = format_metadata(_filepath(), metadata, 0, 1)
+        assert "Date Taken" in result.description
+        assert "2021:08:28 13:40:19" in result.description
+
+    def test_orientation_rendered_as_human_readable(self, clear_invokeai_config):
+        result = format_metadata(_filepath(), {"Orientation": 1}, 0, 1)
+        assert "Orientation" in result.description
+        assert "Normal" in result.description
+
+        result = format_metadata(_filepath(), {"Orientation": 6}, 0, 1)
+        assert "Rotated 90° CW" in result.description
+
+    def test_exif_image_dimensions_rendered_with_pixel_suffix(self, clear_invokeai_config):
+        metadata = {"ExifImageWidth": 2048, "ExifImageHeight": 1536}
+        result = format_metadata(_filepath(), metadata, 0, 1)
+        assert "2048 pixels" in result.description
+        assert "1536 pixels" in result.description
+
+    def test_image_and_exif_image_dimensions_dedupe(self, clear_invokeai_config):
+        # When both ImageWidth and ExifImageWidth are present, only one
+        # "Width" row should render (ImageWidth wins because it comes first).
+        metadata = {"ImageWidth": 4000, "ExifImageWidth": 2048}
+        result = format_metadata(_filepath(), metadata, 0, 1)
+        assert result.description.count("<th>Width</th>") == 1
+        assert "4000 pixels" in result.description
+        assert "2048 pixels" not in result.description
+
+
 class TestInvokeMetadata:
     INVOKE = {
         "metadata_version": 3,
