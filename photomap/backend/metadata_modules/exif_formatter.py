@@ -171,6 +171,7 @@ def format_exif_metadata(
 
     # Prioritize important fields
     priority_fields = {
+        "DateTimeOriginal": "Date Taken",
         "DateTime": "Date/Time",
         "Make": "Camera Make",
         "Model": "Camera Model",
@@ -181,8 +182,11 @@ def format_exif_metadata(
         "FocalLength": "Focal Length",
         "Flash": "Flash",
         "WhiteBalance": "White Balance",
+        "Orientation": "Orientation",
         "ImageWidth": "Width",
+        "ExifImageWidth": "Width",
         "ImageLength": "Height",
+        "ExifImageHeight": "Height",
         "GPSLatitudeDecimal": "GPS Latitude",
         "GPSLongitudeDecimal": "GPS Longitude",
         "GPSAltitude": "GPS Altitude",
@@ -191,11 +195,14 @@ def format_exif_metadata(
 
     # Add priority fields first. display_name comes from the hardcoded
     # priority_fields dict above, so it's already trusted; value comes from
-    # the image's EXIF and must be escaped.
+    # the image's EXIF and must be escaped. Skip duplicate labels so that
+    # e.g. ImageWidth and ExifImageWidth don't both render a "Width" row.
+    seen_labels: set[str] = set()
     for field, display_name in priority_fields.items():
-        if field in metadata:
+        if field in metadata and display_name not in seen_labels:
             value = _format_field_value(field, metadata[field])
             html_doc += f"<tr><th>{display_name}</th><td>{_esc(value)}</td></tr>"
+            seen_labels.add(display_name)
 
     html_doc += "</table></div></div>"  # Close right column and flex container
 
@@ -250,7 +257,20 @@ def _format_field_value(field_name: str, value) -> str:
         wb_modes = {0: "Auto", 1: "Manual"}
         return wb_modes.get(value, f"Mode {value}")
 
-    elif field_name in ["ImageWidth", "ImageLength"]:
+    elif field_name == "Orientation":
+        orientations = {
+            1: "Normal",
+            2: "Mirrored horizontally",
+            3: "Rotated 180°",
+            4: "Mirrored vertically",
+            5: "Mirrored horizontally, rotated 270° CW",
+            6: "Rotated 90° CW",
+            7: "Mirrored horizontally, rotated 90° CW",
+            8: "Rotated 270° CW",
+        }
+        return orientations.get(value, f"Orientation {value}")
+
+    elif field_name in ["ImageWidth", "ImageLength", "ExifImageWidth", "ExifImageHeight"]:
         return f"{value} pixels"
 
     # Default formatting for other fields
