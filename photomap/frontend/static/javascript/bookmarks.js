@@ -575,7 +575,7 @@ class BookmarkManager {
         try {
           await fetchJson(
             `delete_image/${encodeURIComponent(state.album)}/${globalIndex}?move_to_trash=${state.moveToTrash}`,
-            { method: "DELETE" },
+            { method: "DELETE" }
           );
         } catch {
           console.warn(`Failed to delete image at index ${globalIndex}`);

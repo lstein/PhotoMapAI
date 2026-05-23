@@ -28,7 +28,7 @@ export async function deleteImage(albumKey, index, moveToTrash = true) {
   try {
     return await fetchJson(
       `delete_image/${encodeURIComponent(albumKey)}/${encodeURIComponent(index)}?move_to_trash=${moveToTrash}`,
-      { method: "DELETE" },
+      { method: "DELETE" }
     );
   } catch (e) {
     console.warn("Failed to delete image.");
