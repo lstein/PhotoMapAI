@@ -15,7 +15,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from ..cluster_labels import compute_image_label, get_or_build_cluster_labels
-from .album import EmbeddingsDep
+from .album import AlbumDep, EmbeddingsDep
 
 cluster_labels_router = APIRouter()
 
@@ -23,8 +23,9 @@ cluster_labels_router = APIRouter()
 @cluster_labels_router.get("/cluster_labels/{album_key}", tags=["UMAP"])
 async def get_cluster_labels(
     album_key: str,
+    album_config: AlbumDep,
     embeddings: EmbeddingsDep,
-    cluster_eps: float = 0.07,
+    cluster_eps: float | None = None,
     cluster_min_samples: int = 10,
     top_k: int = 3,
 ) -> JSONResponse:
@@ -32,8 +33,10 @@ async def get_cluster_labels(
 
     Args:
         album_key: Album to label.
-        cluster_eps: DBSCAN epsilon. Must match the value passed to
-            `/umap_data` for cluster IDs to align.
+        cluster_eps: DBSCAN epsilon. Omit (or send ``None``) to use the
+            album's persisted ``umap_eps`` — the same resolution
+            ``/umap_data`` uses, so cluster IDs align between the two
+            endpoints.
         cluster_min_samples: DBSCAN min_samples. Same constraint.
         top_k: How many candidate phrases to return per cluster
             (the top one is shown, the rest are alternates).
@@ -42,6 +45,11 @@ async def get_cluster_labels(
         `{"labels": {"<cluster_id>": {"label": str, "alternates": [str, ...],
         "score": float}, ...}}`. Cluster `-1` (DBSCAN noise) is omitted.
     """
+    # Mirror ``routers/umap.py``'s eps fallback so ``/cluster_labels`` and
+    # ``/umap_data`` resolve to the same value for the same request.
+    # If they disagree, the cluster IDs returned by the two endpoints
+    # diverge and the hover-label feature breaks.
+    cluster_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
     labels = await asyncio.to_thread(
         get_or_build_cluster_labels,
         embeddings,
