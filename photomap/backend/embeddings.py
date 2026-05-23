@@ -781,6 +781,29 @@ class Embeddings(BaseModel):
         # Clear cache after saving
         _open_npz_file.cache_clear()
 
+    @staticmethod
+    def _path_compare_key(p: Path) -> str:
+        """Canonical key for the new-vs-missing diff in
+        :meth:`_get_new_and_missing_images`.
+
+        Returns the casefolded posix-form of the path. Casefolding is what
+        lets the diff stay correct on **case-insensitive filesystems**
+        (Windows NTFS by default, macOS HFS+ and case-insensitive APFS):
+        when an image is stored in the cache as ``Photo.JPG`` and later
+        scanned from disk as ``photo.jpg``, plain Path equality treats
+        them as different entries — both as new (re-encoded) and as
+        missing (orphaned in the cache).
+
+        Trade-off on case-sensitive Linux: two files in the same
+        directory whose names differ only in case (``IMG.jpg`` and
+        ``img.jpg``) collapse to a single index entry. That collision is
+        rare and harmless — the same image will simply be indexed once
+        instead of twice — and is far less destructive than the silent
+        double-encoding the previous Path-equality diff produced on the
+        majority of user platforms.
+        """
+        return p.as_posix().casefold()
+
     def _get_new_and_missing_images(
         self,
         image_paths_or_dir: list[Path] | Path,
@@ -788,15 +811,25 @@ class Embeddings(BaseModel):
         progress_callback: Callable | None = None,
     ) -> tuple[set[Path], set[Path]]:
         """Determine which images are new and which are missing."""
-        image_path_set = set(
-            self.get_image_files(
-                image_paths_or_dir, progress_callback=progress_callback
-            )
+        live_paths = self.get_image_files(
+            image_paths_or_dir, progress_callback=progress_callback
         )
-        existing_filenames_set = set(Path(p) for p in existing_filenames)
+        # Build map from casefolded posix key to the *original-case* Path.
+        # The casefolded keys drive the set diff; the original Paths flow
+        # back out so downstream filesystem operations see what the disk
+        # actually holds.
+        live_by_key: dict[str, Path] = {
+            self._path_compare_key(p): p for p in live_paths
+        }
+        existing_by_key: dict[str, Path] = {
+            self._path_compare_key(Path(p)): Path(p) for p in existing_filenames
+        }
 
-        new_image_paths = image_path_set - existing_filenames_set
-        missing_image_paths = existing_filenames_set - image_path_set
+        new_keys = set(live_by_key) - set(existing_by_key)
+        missing_keys = set(existing_by_key) - set(live_by_key)
+
+        new_image_paths = {live_by_key[k] for k in new_keys}
+        missing_image_paths = {existing_by_key[k] for k in missing_keys}
 
         return new_image_paths, missing_image_paths
 
@@ -1342,6 +1375,25 @@ class Embeddings(BaseModel):
         if use_query_optimization is not None and hasattr(encoder, "use_ensembling"):
             encoder.use_ensembling = use_query_optimization
 
+        # Pre-declare every GPU tensor and downstream numpy buffer the finally
+        # block needs to release. The previous ``del locals()[name]`` loop was
+        # a no-op — locals() returns a dict copy in functions, so the actual
+        # local bindings (and the VRAM they pinned) lived on until the frame
+        # itself was destroyed. Binding here lets the finally use plain ``del``
+        # to drop the references *before* ``_cleanup_cuda_memory`` runs
+        # ``torch.cuda.empty_cache()``, so the allocator can actually reclaim
+        # the freed memory instead of leaving it pinned.
+        image_embedding = None
+        pos_emb = None
+        neg_emb = None
+        embeddings_tensor = None
+        norm_embeddings = None
+        cos_img = None
+        cos_pos = None
+        cos_neg = None
+        positive_score_sum = None
+        similarities = None
+
         try:
             self._check_cache_compatibility(data, encoder)
 
@@ -1356,9 +1408,6 @@ class Embeddings(BaseModel):
                 return [], []
 
             # Encode only the inputs that will actually contribute.
-            image_embedding = None
-            pos_emb = None
-            neg_emb = None
             if image_weight > 0.0:
                 pil_image = ImageOps.exif_transpose(query_image_data).convert("RGB")
                 image_embedding = torch.from_numpy(
@@ -1426,22 +1475,15 @@ class Embeddings(BaseModel):
 
             return result_indices, result_similarities
         finally:
-            # Drop any local tensors so VRAM doesn't accumulate across queries.
-            # The encoder itself is cached and intentionally NOT closed here.
-            for name in (
-                "image_embedding",
-                "pos_emb",
-                "neg_emb",
-                "embeddings_tensor",
-                "norm_embeddings",
-                "cos_img",
-                "cos_pos",
-                "cos_neg",
-                "positive_score_sum",
-                "similarities",
-            ):
-                if name in locals():
-                    del locals()[name]
+            # Drop any local tensors / arrays so VRAM doesn't accumulate
+            # across queries. All ten names are unconditionally bound above
+            # (initially to None), so plain ``del`` is safe — no NameError
+            # paths to guard against. The encoder itself is cached and
+            # intentionally NOT closed here.
+            del image_embedding, pos_emb, neg_emb
+            del embeddings_tensor, norm_embeddings
+            del cos_img, cos_pos, cos_neg
+            del positive_score_sum, similarities
             self._cleanup_cuda_memory(device)
 
     def find_duplicate_clusters(self, similarity_threshold=0.995):
