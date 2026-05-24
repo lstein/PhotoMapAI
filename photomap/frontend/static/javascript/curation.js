@@ -1,10 +1,18 @@
 import { backStack } from "./back-stack.js";
 import { bookmarkManager } from "./bookmarks.js";
+import { toggleGridSwiperView } from "./events.js";
 import { createSimpleDirectoryPicker } from "./filetree.js";
 import { updateSearchCheckmarks } from "./search-ui.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
-import { highlightCurationSelection, setCurationMode, setUmapClickCallback, updateCurrentImageMarker } from "./umap.js";
+import {
+  highlightCurationSelection,
+  setCurationMode,
+  setUmapClickCallback,
+  setUmapMediumSize,
+  toggleUmapWindow,
+  updateCurrentImageMarker,
+} from "./umap.js";
 import { fetchJson, hideSpinner, makeDraggable, showSpinner } from "./utils.js";
 
 let currentSelectionIndices = new Set();
@@ -496,6 +504,12 @@ function setupEventListeners() {
 
             // Show clear search button for curation results
             updateSearchCheckmarks("curation");
+
+            // The unselected images are dimmed by ``applyGridHighlights`` — that
+            // dim only reads well in grid mode, so jump into grid view, scroll
+            // the first selected image into position, and surface the UMAP at
+            // its medium size so the user can see the spatial selection too.
+            await applyPostSelectionLayout(data.selected_indices);
           } else if (progressData.status === "error") {
             clearInterval(pollInterval);
             throw new Error(progressData.error || "Curation failed");
@@ -716,6 +730,29 @@ function applyGridHighlights() {
       img.classList.add("curation-dimmed-img");
     }
   });
+}
+
+async function applyPostSelectionLayout(selectedIndices) {
+  const firstSelected = selectedIndices.find((idx) => !excludedIndices.has(idx));
+  if (firstSelected === undefined) {
+    return;
+  }
+
+  // Update slide state before swapping views so the grid loads the batch
+  // containing the first selection on its initial reset instead of doing a
+  // second round-trip after navigating.
+  if (!state.gridViewActive) {
+    slideState.setCurrentIndex(firstSelected, false);
+    await toggleGridSwiperView(true);
+  } else {
+    slideState.navigateToIndex(firstSelected, false);
+  }
+
+  const umapWindow = document.getElementById("umapFloatingWindow");
+  if (!umapWindow || umapWindow.style.display !== "block") {
+    await toggleUmapWindow(true);
+  }
+  setUmapMediumSize();
 }
 
 function setStatus(msg, type) {
