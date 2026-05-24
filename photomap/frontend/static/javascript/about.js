@@ -1,7 +1,12 @@
-class AboutManager {
+export const VERSION_CACHE_KEY = "photomap.versionCheck";
+export const VERSION_DISMISSED_KEY = "photomap.versionCheck.dismissed";
+export const VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+export class AboutManager {
   constructor() {
     this.modal = document.getElementById("aboutModal");
     this.closeBtn = document.getElementById("closeAboutBtn");
+    this.aboutBtn = document.getElementById("aboutBtn");
     this.updateContainer = null;
     this.init();
   }
@@ -16,23 +21,129 @@ class AboutManager {
       }
     });
 
-    // Check for updates when modal is shown
-    this.checkForUpdates();
+    // Apply badge from cache immediately, then refresh in background
+    // only when the cache is stale or absent.
+    this.applyBadgeFromCache();
+    this.refreshVersionCheckIfStale();
   }
 
   showModal() {
     this.modal.style.display = "flex";
-    this.checkForUpdates(); // Check again when opening
+    this.dismissBadge();
+    this.checkForUpdates(); // Refresh in-modal notification content
   }
 
   hideModal() {
     this.modal.style.display = "none";
   }
 
+  readVersionCache() {
+    try {
+      const raw = localStorage.getItem(VERSION_CACHE_KEY);
+      if (!raw) {
+        return null;
+      }
+      const data = JSON.parse(raw);
+      if (!data || typeof data.checkedAt !== "number") {
+        return null;
+      }
+      if (Date.now() - data.checkedAt > VERSION_CACHE_TTL_MS) {
+        return null;
+      }
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  writeVersionCache(data) {
+    try {
+      localStorage.setItem(VERSION_CACHE_KEY, JSON.stringify({ ...data, checkedAt: Date.now() }));
+    } catch {
+      // localStorage may be unavailable; ignore.
+    }
+  }
+
+  readDismissedVersion() {
+    try {
+      return localStorage.getItem(VERSION_DISMISSED_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  writeDismissedVersion(version) {
+    try {
+      if (version) {
+        localStorage.setItem(VERSION_DISMISSED_KEY, version);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  setBadge(show) {
+    if (!this.aboutBtn) {
+      return;
+    }
+    this.aboutBtn.classList.toggle("has-update", !!show);
+  }
+
+  applyBadgeFromCache() {
+    const cached = this.readVersionCache();
+    if (cached && cached.updateAvailable) {
+      const dismissed = this.readDismissedVersion();
+      this.setBadge(cached.latestVersion !== dismissed);
+    } else {
+      this.setBadge(false);
+    }
+  }
+
+  dismissBadge() {
+    const cached = this.readVersionCache();
+    if (cached && cached.updateAvailable && cached.latestVersion) {
+      this.writeDismissedVersion(cached.latestVersion);
+    }
+    this.setBadge(false);
+  }
+
+  async refreshVersionCheckIfStale() {
+    // Skip the network call when the cache is still fresh.
+    if (this.readVersionCache()) {
+      return;
+    }
+    try {
+      const response = await fetch("version/check");
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      if (data.error) {
+        return;
+      }
+      this.writeVersionCache({
+        updateAvailable: !!data.update_available,
+        latestVersion: data.latest_version,
+        currentVersion: data.current_version,
+      });
+      this.applyBadgeFromCache();
+    } catch {
+      // Network failure — keep whatever badge state we already have.
+    }
+  }
+
   async checkForUpdates() {
     try {
       const response = await fetch("version/check");
       const data = await response.json();
+
+      if (!data.error) {
+        this.writeVersionCache({
+          updateAvailable: !!data.update_available,
+          latestVersion: data.latest_version,
+          currentVersion: data.current_version,
+        });
+      }
 
       if (data.update_available) {
         this.showUpdateNotification(data.latest_version);
