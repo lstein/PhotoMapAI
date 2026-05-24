@@ -1186,7 +1186,7 @@ export class AlbumManager {
             },
           })
         );
-      }, AlbumManager.AUTO_INDEX_DELAY);
+      }, AlbumManager.AUTO_INDEXING_DELAY);
     }
 
     // Remove from autoIndexingAlbums set so future errors can trigger again

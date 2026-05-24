@@ -362,6 +362,86 @@ def test_build_caches_and_reuses(tiny_vocab, isolated_cache, fake_encoder):
     assert encoder.encode_calls == 1  # unchanged — cache hit
 
 
+def test_concurrent_builds_are_serialized(tiny_vocab, isolated_cache, monkeypatch):
+    """Concurrent first-time callers must not redundantly re-encode the vocab.
+
+    Simulates the production race: /cluster_labels and /image_label both
+    dispatch through asyncio.to_thread, so a cold cache plus a few near-
+    simultaneous requests would otherwise trigger N parallel encoder builds.
+    The first thread blocks inside encode_text until the other threads have
+    arrived at the lock; then the gate is released and we assert that exactly
+    one build ran.
+    """
+    import threading
+
+    spec = "fake:concurrent"
+    entered = threading.Event()
+    release = threading.Event()
+    call_count = 0
+    call_lock = threading.Lock()
+
+    class GatedEncoder:
+        embedding_dim = 16
+
+        def encode_text(self, texts):
+            nonlocal call_count
+            with call_lock:
+                call_count += 1
+                first = call_count == 1
+            if first:
+                entered.set()
+                # Block until the test signals release, giving the other
+                # threads time to pile up on the build lock.
+                assert release.wait(timeout=5.0), "release event never fired"
+            rows = []
+            for t in texts:
+                rng = np.random.default_rng(abs(hash(t)) % (2**32))
+                v = rng.standard_normal(self.embedding_dim).astype(np.float32)
+                v /= np.linalg.norm(v)
+                rows.append(v)
+            return np.stack(rows)
+
+    encoder = GatedEncoder()
+    monkeypatch.setattr(
+        cluster_labels, "get_cached_encoder", lambda spec, *, cache_dir=None, device=None: encoder
+    )
+    # Ensure no stale lock from a previous test run.
+    monkeypatch.setattr(cluster_labels, "_VOCAB_BUILD_LOCKS", {})
+
+    results: list[tuple[list[str], np.ndarray]] = []
+    errors: list[BaseException] = []
+
+    def worker():
+        try:
+            results.append(cluster_labels.get_or_build_vocab_embeddings(spec))
+        except BaseException as err:
+            errors.append(err)
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+
+    assert entered.wait(timeout=5.0), "first thread never reached encode_text"
+    # Give the other threads a moment to block on the build lock. There's no
+    # public hook to observe that, so we sleep briefly; the assertion below
+    # (call_count == 1) catches the race regardless of timing.
+    import time
+    time.sleep(0.1)
+    release.set()
+    for t in threads:
+        t.join(timeout=5.0)
+        assert not t.is_alive(), "worker thread hung"
+
+    assert not errors, f"worker raised: {errors!r}"
+    assert call_count == 1, f"encoder was called {call_count} times; guard failed"
+    assert len(results) == len(threads)
+    # All callers see the same phrases and identical embeddings.
+    phrases0, emb0 = results[0]
+    for phrases, emb in results[1:]:
+        assert phrases == phrases0
+        np.testing.assert_array_equal(emb, emb0)
+
+
 def test_cache_invalidates_on_vocab_edit(tiny_vocab, isolated_cache, fake_encoder):
     spec = "fake:test-encoder"
     cluster_labels.get_or_build_vocab_embeddings(spec)

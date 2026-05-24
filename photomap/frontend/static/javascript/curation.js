@@ -369,6 +369,21 @@ function setupEventListeners() {
       progressFill.style.width = "0%";
     }
 
+    // setInterval doesn't await its async callback, so once polling sees
+    // "completed" and calls clearInterval, any tick already in-flight will
+    // still finish and re-enter this branch. Each entry would call
+    // hideSpinner, double-decrementing the ref-count and stealing a ref
+    // belonging to a concurrent operation. spinnerHidden gates the show /
+    // hide pair to exactly one each per click.
+    let spinnerHidden = false;
+    const hideSpinnerOnce = () => {
+      if (spinnerHidden) {
+        return;
+      }
+      spinnerHidden = true;
+      hideSpinner();
+    };
+
     try {
       showSpinner();
 
@@ -477,7 +492,7 @@ function setupEventListeners() {
               msg += ` (${excludedIndices.size} excluded)`;
             }
             setStatus(msg, "success");
-            hideSpinner();
+            hideSpinnerOnce();
 
             // Show clear search button for curation results
             updateSearchCheckmarks("curation");
@@ -489,7 +504,7 @@ function setupEventListeners() {
           clearInterval(pollInterval);
           console.error("Polling error:", pollError);
           setStatus("Error: " + pollError.message, "error");
-          hideSpinner();
+          hideSpinnerOnce();
           if (progressBar) {
             progressBar.style.display = "none";
           }
@@ -498,7 +513,7 @@ function setupEventListeners() {
     } catch (e) {
       console.error(e);
       setStatus("Error: " + e.message, "error");
-      hideSpinner();
+      hideSpinnerOnce();
 
       // Hide progress bar on error
       const progressBar = document.getElementById("curationProgressBar");
