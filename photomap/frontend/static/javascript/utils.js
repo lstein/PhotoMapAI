@@ -62,6 +62,97 @@ export function _resetSpinnerForTests() {
   _spinnerCount = 0;
 }
 
+// ---------------------------------------------------------------------------
+// Toast notifications
+// ---------------------------------------------------------------------------
+//
+// Generalized transient-message UI for use anywhere in the app. Multiple
+// toasts stack in a top-right container that's created lazily on first call
+// (so no template change is needed and tests that import utils.js stay
+// hermetic — nothing happens until something is actually shown).
+//
+// Styling lives in ``static/css/toasts.css`` as classes ``.app-toast`` and
+// ``.app-toast--info`` / ``.app-toast--warning`` / ``.app-toast--error``.
+// Keeping the styles external lets the rest of the app theme them without
+// touching this module.
+
+const TOAST_CONTAINER_ID = "appToastContainer";
+
+function _getOrCreateToastContainer() {
+  let container = document.getElementById(TOAST_CONTAINER_ID);
+  if (!container) {
+    container = document.createElement("div");
+    container.id = TOAST_CONTAINER_ID;
+    container.className = "app-toast-container";
+    document.body.appendChild(container);
+  }
+  return container;
+}
+
+/**
+ * Show a transient toast notification in the top-right corner.
+ *
+ * Multiple toasts stack vertically. Each one fades out and removes itself
+ * after ``duration`` ms (default 5000). Pass ``duration: 0`` for a sticky
+ * toast that only goes away on click or via the returned ``dismiss``
+ * function.
+ *
+ * @param {string} message - Text to display. Plain text; HTML is escaped
+ *   by being assigned through ``textContent``.
+ * @param {object} [options]
+ * @param {"info"|"warning"|"error"} [options.level="info"] - Visual style.
+ * @param {number} [options.duration=5000] - Auto-dismiss after ms.
+ *   ``0`` disables auto-dismiss.
+ * @param {boolean} [options.dismissible=true] - Show a close button and
+ *   make the toast clickable to dismiss.
+ * @returns {{ element: HTMLDivElement, dismiss: () => void }} - The toast
+ *   DOM node and a function to remove it programmatically.
+ */
+export function showToast(message, options = {}) {
+  const { level = "info", duration = 5000, dismissible = true } = options;
+
+  const container = _getOrCreateToastContainer();
+
+  const toast = document.createElement("div");
+  toast.className = `app-toast app-toast--${level}`;
+  toast.setAttribute("role", level === "error" ? "alert" : "status");
+  toast.setAttribute("aria-live", level === "error" ? "assertive" : "polite");
+
+  const text = document.createElement("span");
+  text.className = "app-toast__message";
+  text.textContent = message;
+  toast.appendChild(text);
+
+  let dismissTimer = null;
+  const dismiss = () => {
+    if (dismissTimer !== null) {
+      clearTimeout(dismissTimer);
+      dismissTimer = null;
+    }
+    toast.classList.add("app-toast--leaving");
+    // Match the CSS transition so the slide-out animation completes.
+    setTimeout(() => toast.remove(), 200);
+  };
+
+  if (dismissible) {
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "app-toast__close";
+    closeBtn.setAttribute("aria-label", "Dismiss notification");
+    closeBtn.textContent = "✕";
+    closeBtn.addEventListener("click", dismiss);
+    toast.appendChild(closeBtn);
+  }
+
+  container.appendChild(toast);
+
+  if (duration > 0) {
+    dismissTimer = setTimeout(dismiss, duration);
+  }
+
+  return { element: toast, dismiss };
+}
+
 /**
  * Error thrown by ``fetchJson`` when the server returns a non-2xx status.
  * Carries ``status`` and ``url`` so call sites can branch on specific codes

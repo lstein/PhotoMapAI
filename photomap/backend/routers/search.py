@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from ..config import get_config_manager
 from ..embeddings import SUPPORTED_EXTENSIONS
 from ..metadata_modules import SlideSummary
+from ..util import is_cuda_oom
 from .album import (
     AlbumDep,
     EmbeddingsDep,
@@ -104,17 +105,41 @@ async def search_with_text_and_image(
         logger.info(
             f"Search request: {req.min_search_score=}, {req.max_search_results=}"
         )
-        results, scores = embeddings.search_images_by_text_and_image(
-            query_image_data=query_image_data,
-            positive_query=req.positive_query,
-            negative_query=req.negative_query,
-            image_weight=req.image_weight,
-            positive_weight=req.positive_weight,
-            negative_weight=req.negative_weight,
-            minimum_score=req.min_search_score,
-            top_k=req.max_search_results,
-            use_query_optimization=req.use_query_optimization,
-        )
+        try:
+            results, scores = embeddings.search_images_by_text_and_image(
+                query_image_data=query_image_data,
+                positive_query=req.positive_query,
+                negative_query=req.negative_query,
+                image_weight=req.image_weight,
+                positive_weight=req.positive_weight,
+                negative_weight=req.negative_weight,
+                minimum_score=req.min_search_score,
+                top_k=req.max_search_results,
+                use_query_optimization=req.use_query_optimization,
+            )
+        except HTTPException:
+            # Pass-through (e.g. AlbumDep / EmbeddingsDep already raised
+            # a useful HTTPException; don't bury it under a generic one).
+            raise
+        except Exception as e:
+            # Surface the failure so the frontend can show a toast instead
+            # of silently rendering "no results". CUDA OOM gets its own
+            # message because the user can act on it (close other GPU
+            # workloads, restart the server, or fall back to CPU); other
+            # exceptions surface their class name + message for diagnosis.
+            logger.exception(f"Search failed for album {album_key}")
+            if is_cuda_oom(e):
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "GPU is out of memory. Close other GPU workloads "
+                        "or restart the server to free VRAM."
+                    ),
+                ) from e
+            raise HTTPException(
+                status_code=500,
+                detail=f"{type(e).__name__}: {e}",
+            ) from e
         return create_search_results(results, scores, album_key)
     finally:
         if temp_path and temp_path.exists():
