@@ -501,3 +501,64 @@ def test_search_combines_modalities_in_score_space(tmp_path, monkeypatch):
     assert by_name["img.jpg"] == pytest.approx(0.0, abs=1e-6)
 
     encoders_module.clear_encoder_cache()
+
+
+# ---------------------------------------------------------------------------
+# Error handling — surface failures instead of silently returning zero rows
+# ---------------------------------------------------------------------------
+#
+# Before this work, an exception from ``search_images_by_text_and_image``
+# propagated as a generic 500 with the body ``{"detail": "Internal Server
+# Error"}``. The frontend's catch logged it and returned ``[]``, which
+# looked identical to "no matching images" from the user's POV. The router
+# now catches the underlying exception, logs it, and converts it into a
+# structured HTTPException so the frontend can surface a useful toast.
+
+
+def test_search_cuda_oom_returns_503(client, new_album, monkeypatch):
+    """A CUDA out-of-memory error should produce 503 with a clear hint."""
+    from photomap.backend.embeddings import Embeddings
+
+    def boom(self, *args, **kwargs):
+        raise RuntimeError(
+            "CUDA out of memory. Tried to allocate 2.00 GiB ..."
+        )
+
+    monkeypatch.setattr(
+        Embeddings, "search_images_by_text_and_image", boom
+    )
+
+    response = client.post(
+        f"/search_with_text_and_image/{quote(new_album['key'])}",
+        json={"positive_query": "anything"},
+    )
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    # Message must give the user something actionable.
+    assert "GPU is out of memory" in detail
+
+
+def test_search_generic_failure_returns_500_with_class_name(
+    client, new_album, monkeypatch
+):
+    """Non-OOM failures should still surface a useful message instead of
+    being collapsed into the framework's generic ``Internal Server Error``."""
+    from photomap.backend.embeddings import Embeddings
+
+    def boom(self, *args, **kwargs):
+        raise ValueError("query weights must sum to a positive number")
+
+    monkeypatch.setattr(
+        Embeddings, "search_images_by_text_and_image", boom
+    )
+
+    response = client.post(
+        f"/search_with_text_and_image/{quote(new_album['key'])}",
+        json={"positive_query": "anything"},
+    )
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    # Both the exception class and message reach the client so the user
+    # (or a developer reading the toast) can diagnose.
+    assert "ValueError" in detail
+    assert "query weights" in detail

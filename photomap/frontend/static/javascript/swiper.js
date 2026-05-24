@@ -8,6 +8,7 @@ import { slideState } from "./slide-state.js";
 import { slideShowRunning, updateSlideshowButtonIcon } from "./slideshow.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
+import { showToast } from "./utils.js";
 
 export const initializeSingleSwiper = async () => {
   const swiperManager = new SwiperManager();
@@ -463,8 +464,19 @@ class SwiperManager {
         this.swiper.appendSlide(slide);
       }
     } catch (error) {
+      // Surface the failure via the toast UI instead of a blocking
+      // ``alert()``. Common trigger: backend went away mid-session, so
+      // every slide-fetch fails until the server comes back; modal
+      // dialogs make that scenario unusable. The catch around the
+      // upstream search request shows its own toast, so during a search
+      // the user may see two stacked toasts — one for the search call,
+      // one for the slide retrieval — but neither blocks the UI.
       console.error("Failed to add new slide:", error);
-      alert(`Failed to add new slide: ${error.message}`);
+      const detail = error?.body?.detail ?? error?.message ?? "Unknown error";
+      showToast(`Failed to load image: ${detail}`, {
+        level: "error",
+        duration: 8000,
+      });
       return;
     }
   }
