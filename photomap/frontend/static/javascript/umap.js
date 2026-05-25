@@ -1694,13 +1694,14 @@ addButtonHandlers("umapResizeBig", () => {
   isFullscreen = false;
   updateExitFullscreenCheckboxState();
 });
-addButtonHandlers("umapResizeMedium", () => {
+export function setUmapMediumSize() {
   setUmapWindowSize("medium");
   lastUnshadedSize = "medium";
   saveCurrentPosition();
   isFullscreen = false;
   updateExitFullscreenCheckboxState();
-});
+}
+addButtonHandlers("umapResizeMedium", setUmapMediumSize);
 addButtonHandlers("umapResizeSmall", () => {
   setUmapWindowSize("small");
   lastUnshadedSize = "small";
