@@ -263,5 +263,14 @@
     </div>
     {% endif %}
 
+    <!-- Reset-all-preferences button: clears this device's saved UI prefs
+         on the server (DELETE /preferences/), wipes the localStorage paint
+         cache, and reloads. Album definitions and bookmarks are preserved. -->
+    <div class="reset-all-section">
+      <button id="resetAllPreferencesBtn" class="reset-defaults-link" type="button">
+        Reset to Defaults
+      </button>
+    </div>
+
   </div>
 </div>

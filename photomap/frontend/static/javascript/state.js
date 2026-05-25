@@ -3,6 +3,12 @@
 import { albumManager } from "./album-manager.js";
 import { setAutotaggingEnabledInLabels } from "./cluster-utils.js";
 import { getIndexMetadata } from "./index.js";
+import {
+  fetchPreferences,
+  flushPendingPatches,
+  loadServerTimestamp,
+  queuePreferencePatch,
+} from "./preferences-client.js";
 import { fetchJson } from "./utils.js";
 
 // TO DO - CONVERT THIS INTO A CLASS
@@ -53,8 +59,16 @@ export const state = {
 // (the dropdown must be validated against the current album list) and its
 // setter does much more than store-and-dispatch (loads per-album search
 // settings, fetches index metadata, fires `albumChanged`). It stays as the
-// hand-written `setAlbum` below, and its localStorage round trip is handled
-// inline in `restoreFromLocalStorage` / `saveSettingsToLocalStorage`.
+// hand-written `setAlbum` below, and its persistence round trip is handled
+// inline in `restoreFromLocalStorage` / `saveSettings`.
+//
+// Persistence is hybrid: localStorage acts as a synchronous paint cache so
+// the first frame after page load uses the last-known values without
+// awaiting the network. The server (per-device, keyed by an HttpOnly cookie)
+// is the source of truth; `reconcileWithServer` runs asynchronously after
+// boot and either pulls newer server state down or pushes locally-newer
+// values up. The setters fire-and-forget via `queuePreferencePatch`, which
+// debounces and merges concurrent updates into one PATCH.
 //
 // `minSearchScore` / `maxSearchResults` / `useQueryOptimization` are also
 // excluded — they live on the album config (not localStorage) and have
@@ -149,6 +163,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   initializeFromServer();
   window.stateIsReady = true; // Flag for modules that may need to know if state is ready
   window.dispatchEvent(new Event("stateReady"));
+  // Reconcile with the server in the background. We don't block stateReady
+  // on this — the LS paint-cache values are good enough to start the app,
+  // and pulling fresh server values can happen as the user interacts.
+  reconcileWithServer().catch((err) => console.warn("Server preferences reconciliation failed:", err));
+});
+
+// Flush any queued PATCH on page hide / unload so a quick "change a setting
+// then close the tab" sequence doesn't lose the change. ``visibilitychange``
+// is what iOS Safari actually fires reliably; ``beforeunload`` covers
+// desktop closes. The flush is fire-and-forget — browsers don't guarantee
+// async work completes during unload, but on mobile backgrounding the
+// debounce window is short enough that the in-flight request usually wins.
+window.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    flushPendingPatches();
+  }
+});
+window.addEventListener("beforeunload", () => {
+  flushPendingPatches();
 });
 
 // Initialize the state from the initial URL.
@@ -170,7 +203,14 @@ export function initializeFromServer() {
   }
 }
 
-// Restore state from local storage
+// Restore state from local storage (the synchronous paint cache).
+//
+// The server is the durable source of truth — `reconcileWithServer` runs
+// after this and may overwrite some of these values — but localStorage is
+// what we read on every boot so the first frame doesn't flicker waiting
+// for the network. On iOS where LS can be evicted, this restore is a
+// no-op and the app boots from in-memory defaults until reconciliation
+// pulls the server copy down.
 export async function restoreFromLocalStorage() {
   // Generic specs: parse-or-default, then run any onSet side-effects so the
   // app boots in a consistent state.
@@ -200,10 +240,124 @@ export async function restoreFromLocalStorage() {
   state.album = validAlbum || albumList[0].key;
 }
 
-// Save state to local storage. Any localStorage exception (private mode,
-// quota exceeded) is logged but doesn't break the calling setter — the
-// in-memory state stays correct and the next session just loses persistence.
-export function saveSettingsToLocalStorage() {
+// Build the partial payload the server expects from the current state.
+// Used both by reconciliation (to compare against server values) and by
+// saveSettings (to ship a single PATCH per debounce window).
+function _stateToPrefsPayload() {
+  const payload = {};
+  for (const spec of PERSISTED_SETTINGS) {
+    payload[spec.key] = state[spec.key];
+  }
+  if (state.album !== null && state.album !== undefined) {
+    payload.album = state.album;
+  }
+  return payload;
+}
+
+// Pull the server's view of preferences and reconcile with what we just
+// loaded from localStorage. Three cases:
+//
+//   1. Server has a newer record than our cached server timestamp — server
+//      values win; overwrite state + LS and re-run onSet side-effects.
+//   2. We have local values that differ from the server (migration from a
+//      pre-server-prefs build, or offline edits since the last successful
+//      PATCH) — push them up.
+//   3. We're in sync — record the server timestamp and exit.
+//
+// If the GET fails (server down, network error, etc.), we keep using the
+// LS-cached values. The next setter call will trigger a PATCH and naturally
+// re-establish the relationship once the server is reachable.
+async function reconcileWithServer() {
+  const serverPrefs = await fetchPreferences();
+  if (serverPrefs === null) {
+    return; // Network/server failure — keep LS values, no further action.
+  }
+
+  const localServerTs = loadServerTimestamp();
+  const serverTs = typeof serverPrefs.updatedAt === "number" ? serverPrefs.updatedAt : 0;
+
+  if (serverTs > 0 && serverTs > localServerTs) {
+    // Case 1: server is authoritative.
+    _applyServerPrefs(serverPrefs);
+    return;
+  }
+
+  // Case 2 / 3: figure out whether to push anything up. Build the payload
+  // from current state and diff against the server. Any field that differs
+  // is queued for PATCH; if nothing differs we just record the server
+  // timestamp so future boots short-circuit cleanly.
+  const local = _stateToPrefsPayload();
+  const partial = {};
+  for (const key of Object.keys(local)) {
+    if (!_valuesEqual(local[key], serverPrefs[key])) {
+      partial[key] = local[key];
+    }
+  }
+  if (Object.keys(partial).length > 0) {
+    queuePreferencePatch(partial);
+  } else {
+    // Already in sync — record the timestamp so subsequent boots don't
+    // re-PATCH on every page load.
+    try {
+      localStorage.setItem("_prefServerUpdatedAt", String(serverTs));
+    } catch {
+      // Non-fatal — same behavior as any other LS write failure.
+    }
+  }
+}
+
+// Apply a server-authoritative preferences record to state + LS, running
+// onSet side-effects so the UI (e.g. cluster-label visibility) reflects
+// the new values.
+function _applyServerPrefs(prefs) {
+  for (const spec of PERSISTED_SETTINGS) {
+    if (prefs[spec.key] === undefined || prefs[spec.key] === null) {
+      continue;
+    }
+    const coerced = _coerce(prefs[spec.key], spec.type);
+    if ((spec.type === "int" || spec.type === "float") && !Number.isFinite(coerced)) {
+      continue;
+    }
+    state[spec.key] = coerced;
+    if (spec.onSet) {
+      spec.onSet(coerced);
+    }
+  }
+  // Album: trust the server only if it points at an album we know about.
+  // Avoids landing on a dropdown value the local config doesn't have (the
+  // album lock list, for instance, may exclude what the server has saved).
+  if (typeof prefs.album === "string" && prefs.album !== state.album) {
+    const known = (state.availableAlbums || []).some((a) => a.key === prefs.album);
+    if (known) {
+      // Don't call setAlbum here — we're inside the boot path and don't
+      // want to fire albumChanged for a value the rest of the app may
+      // already have wired up. The straight assignment + LS write is
+      // enough; the next setAlbum call from user action will re-sync.
+      state.album = prefs.album;
+    }
+  }
+  _writeAllToLocalStorage();
+  try {
+    localStorage.setItem("_prefServerUpdatedAt", String(prefs.updatedAt || 0));
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new CustomEvent("preferencesReconciled", { detail: prefs }));
+}
+
+function _valuesEqual(a, b) {
+  // null/undefined treated as equivalent so a server null doesn't force
+  // an unnecessary PATCH when the client has no value either.
+  if (a === undefined || a === null) {
+    return b === undefined || b === null;
+  }
+  return a === b;
+}
+
+// Write the full PERSISTED_SETTINGS set (plus album) to LS in one pass.
+// Used by both `saveSettings` and `_applyServerPrefs`. Failure is logged
+// once; subsequent calls retry.
+function _writeAllToLocalStorage() {
   try {
     for (const spec of PERSISTED_SETTINGS) {
       localStorage.setItem(spec.key, _serialize(state[spec.key], spec.type));
@@ -213,6 +367,33 @@ export function saveSettingsToLocalStorage() {
     }
   } catch (err) {
     console.warn("Failed to persist settings to localStorage:", err);
+  }
+}
+
+// Persist the current state to both localStorage (immediate, synchronous)
+// and the server (debounced PATCH via the preferences client). Either
+// layer can fail without breaking the other — LS exceptions are caught in
+// `_writeAllToLocalStorage`, server errors are logged inside the client.
+export function saveSettingsToLocalStorage() {
+  _writeAllToLocalStorage();
+  queuePreferencePatch(_stateToPrefsPayload());
+}
+
+// Drop every localStorage key this module owns. Called by the "Reset to
+// Defaults" flow after a successful DELETE /preferences/ so the next page
+// load doesn't read the old paint cache back into state and PATCH it up
+// to the freshly-minted device. Bookmarks, the version-dismissed cache,
+// the curation export path, and accordion open/closed state are owned by
+// other modules and are intentionally left in place.
+export function clearPersistedSettingsCache() {
+  try {
+    for (const spec of PERSISTED_SETTINGS) {
+      localStorage.removeItem(spec.key);
+    }
+    localStorage.removeItem("album");
+    localStorage.removeItem("_prefServerUpdatedAt");
+  } catch (err) {
+    console.warn("Failed to clear persisted-settings cache:", err);
   }
 }
 
