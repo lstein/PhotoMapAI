@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from send2trash import send2trash
 
 from ..config import get_config_manager
 from ..embeddings import Embeddings, peek_encoder_spec
@@ -269,6 +270,7 @@ async def delete_image(
     index: int,
     album_config: AlbumDep,
     embeddings: EmbeddingsDep,
+    move_to_trash: bool = True,
 ) -> JSONResponse:
     """Delete an image file."""
     try:
@@ -280,9 +282,11 @@ async def delete_image(
         if not image_path.exists() or not image_path.is_file():
             raise HTTPException(status_code=404, detail="File not found")
 
-        print(f"Deleting image: {image_path}")
-        # Delete the file
-        image_path.unlink()
+        print(f"{'Trashing' if move_to_trash else 'Deleting'} image: {image_path}")
+        if move_to_trash:
+            send2trash(str(image_path))
+        else:
+            image_path.unlink()
 
         # Remove from embeddings
         embeddings.remove_image_from_embeddings(index)

@@ -120,6 +120,13 @@
           <label for="confirmDeleteCheckbox">Confirm before deleting images:</label>
           <input type="checkbox" id="confirmDeleteCheckbox" />
         </div>
+        <div class="setting-row">
+          <label>When deleting:</label>
+          <div id="deleteMethodRadioGroup">
+            <label><input type="radio" id="deleteMethodTrash" name="deleteMethod" value="trash" /> Move to Trash/Recycle</label>
+            <label><input type="radio" id="deleteMethodImmediate" name="deleteMethod" value="immediate" /> Just Delete</label>
+          </div>
+        </div>
         {% endif %}
       </div>
     </div>
