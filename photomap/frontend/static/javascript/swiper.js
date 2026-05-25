@@ -84,11 +84,6 @@ class SwiperManager {
         disableOnInteraction: true,
         enabled: false,
       },
-      pagination: {
-        el: ".swiper-pagination",
-        clickable: true,
-        dynamicBullets: true,
-      },
       loop: false,
       touchEventsTarget: "container",
       allowTouchMove: true,

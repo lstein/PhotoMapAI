@@ -6,7 +6,7 @@
 import { backStack } from "./back-stack.js";
 import { state } from "./state.js";
 
-const FLYOUT_LIMIT = 10;
+const FLYOUT_LIMIT = 12;
 const DISABLED_CLASS = "back-nav-disabled";
 const FLYOUT_ID = "backNavFlyout";
 
