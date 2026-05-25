@@ -93,17 +93,70 @@ describe("back-button.js", () => {
       expect(document.getElementById("backNavFlyout")).toBeNull();
     });
 
-    it("opens a flyout with up to 10 recent thumbnails on right-click", () => {
-      for (let i = 0; i < 12; i++) {
+    it("opens a flyout with up to 12 recent thumbnails on right-click", () => {
+      for (let i = 0; i < 14; i++) {
         emitSlideChanged(i);
       }
       openFlyout(document.getElementById("backNavBtn"));
       const flyout = document.getElementById("backNavFlyout");
       expect(flyout).not.toBeNull();
       const thumbs = flyout.querySelectorAll("img.back-nav-thumb");
-      expect(thumbs.length).toBe(10);
-      // Newest first: the entry just below the current one (globalIndex 10).
-      expect(thumbs[0].src).toContain("/test-album/10?");
+      expect(thumbs.length).toBe(12);
+      // Oldest of the 12 (globalIndex 1) pinned to bottom-right;
+      // newest (globalIndex 12) lands top-left.
+      expect(thumbs[0].src).toContain("/test-album/1?");
+      expect(thumbs[0].style.gridColumn).toBe("4");
+      expect(thumbs[0].style.gridRow).toBe("3");
+      expect(thumbs[11].src).toContain("/test-album/12?");
+      expect(thumbs[11].style.gridColumn).toBe("1");
+      expect(thumbs[11].style.gridRow).toBe("1");
+    });
+
+    it("anchors a partial fill to the bottom-right corner with oldest in the corner", () => {
+      // 3 previous positions — should occupy the rightmost column, bottom-up,
+      // with the oldest pinned to the bottom-right.
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      emitSlideChanged(2);
+      emitSlideChanged(3);
+      openFlyout(document.getElementById("backNavBtn"));
+      const thumbs = document.querySelectorAll("#backNavFlyout img.back-nav-thumb");
+      expect(thumbs.length).toBe(3);
+      // Oldest (globalIndex 0) at bottom-right; newest of the three (globalIndex 2)
+      // sits at the top of the same column.
+      expect(thumbs[0].src).toContain("/test-album/0?");
+      expect(thumbs[0].style.gridColumn).toBe("4");
+      expect(thumbs[0].style.gridRow).toBe("3");
+      expect(thumbs[2].src).toContain("/test-album/2?");
+      expect(thumbs[2].style.gridColumn).toBe("4");
+      expect(thumbs[2].style.gridRow).toBe("1");
+    });
+
+    it("refreshes thumbnails live when the back stack changes while open", () => {
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      emitSlideChanged(2);
+      openFlyout(document.getElementById("backNavBtn"));
+      let thumbs = document.querySelectorAll("#backNavFlyout img.back-nav-thumb");
+      expect(thumbs.length).toBe(2);
+      // Oldest (globalIndex 0) anchors the bottom-right corner.
+      expect(thumbs[0].src).toContain("/test-album/0?");
+      expect(thumbs[0].style.gridColumn).toBe("4");
+      expect(thumbs[0].style.gridRow).toBe("3");
+
+      // Simulate keyboard / scrollwheel navigation while the flyout stays open.
+      emitSlideChanged(3);
+
+      thumbs = document.querySelectorAll("#backNavFlyout img.back-nav-thumb");
+      expect(thumbs.length).toBe(3);
+      // Oldest still anchored to the bottom-right; newest now at the top of
+      // the column.
+      expect(thumbs[0].src).toContain("/test-album/0?");
+      expect(thumbs[0].style.gridColumn).toBe("4");
+      expect(thumbs[0].style.gridRow).toBe("3");
+      expect(thumbs[2].src).toContain("/test-album/2?");
+      expect(thumbs[2].style.gridColumn).toBe("4");
+      expect(thumbs[2].style.gridRow).toBe("1");
     });
 
     it("clicking a thumbnail truncates the stack to that entry and navigates", () => {

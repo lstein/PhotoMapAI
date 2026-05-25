@@ -68,10 +68,15 @@
   padding: 8px;
   border-radius: 6px;
   z-index: 10000;
-  display: flex;
-  flex-wrap: wrap;
+  /* Fixed 4×3 grid sized to the FLYOUT_LIMIT of 12. back-button.js places
+     each thumb with explicit grid-column / grid-row so the oldest sits at the
+     bottom-right corner, newer entries fill upward then leftward, and partial
+     fills leave empty cells at the top-left — mirroring the grid view's
+     column-major ordering. */
+  display: grid;
+  grid-template-columns: repeat(4, 72px);
+  grid-template-rows: repeat(3, 72px);
   gap: 6px;
-  max-width: 360px;
 }
 
 #backNavFlyout .back-nav-thumb {
