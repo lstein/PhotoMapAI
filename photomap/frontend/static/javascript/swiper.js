@@ -556,46 +556,59 @@ class SwiperManager {
 
     const slideShowRunning = this.swiper.autoplay?.running;
     this.pauseSlideshow();
-    this.swiper.removeAllSlides();
 
-    const { globalIndex, searchIndex } = slideState.getCurrentSlide();
+    // Suppress the swiper.slideChange handler for the duration of the
+    // rebuild. The first appendSlide after removeAllSlides moves activeIndex
+    // onto the just-added prev slide, which fires slideChange; without
+    // suppression, the handler writes that prev slide's globalIndex back
+    // into slideState, and the resolveOffset(+1) call below then resolves
+    // to the *original* current globalIndex — duplicating it as the "next"
+    // slide. (seekToSlideIndex's rebuild path is suppressed the same way.)
+    this.isInternalSlideChange = true;
+    try {
+      this.swiper.removeAllSlides();
 
-    const swiperContainer = document.getElementById("singleSwiper");
-    if (swiperContainer) {
-      swiperContainer.style.visibility = "hidden";
+      const { globalIndex, searchIndex } = slideState.getCurrentSlide();
+
+      const swiperContainer = document.getElementById("singleSwiper");
+      if (swiperContainer) {
+        swiperContainer.style.visibility = "hidden";
+      }
+
+      // Add previous slide if available
+      const { globalIndex: prevGlobal, searchIndex: prevSearch } = slideState.resolveOffset(-1);
+      if (prevGlobal !== null) {
+        await this.addSlideByIndex(prevGlobal, prevSearch, false, random_nextslide);
+      }
+
+      // Add current slide
+      await this.addSlideByIndex(globalIndex, searchIndex);
+
+      // Add next slide if available
+      const { globalIndex: nextGlobal, searchIndex: nextSearch } = slideState.resolveOffset(1);
+      if (nextGlobal !== null) {
+        await this.addSlideByIndex(nextGlobal, nextSearch, false, random_nextslide);
+      }
+
+      // Navigate to the current slide
+      const slideIndex = prevGlobal !== null ? 1 : 0;
+      this.swiper.slideTo(slideIndex, 0);
+
+      await new Promise(requestAnimationFrame);
+      if (swiperContainer) {
+        swiperContainer.style.visibility = "";
+      }
+
+      updateMetadataOverlay(this.currentSlide());
+      if (slideShowRunning) {
+        this.resumeSlideshow();
+      }
+
+      setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
+      window.dispatchEvent(new CustomEvent("slidesReset"));
+    } finally {
+      this.isInternalSlideChange = false;
     }
-
-    // Add previous slide if available
-    const { globalIndex: prevGlobal, searchIndex: prevSearch } = slideState.resolveOffset(-1);
-    if (prevGlobal !== null) {
-      await this.addSlideByIndex(prevGlobal, prevSearch, false, random_nextslide);
-    }
-
-    // Add current slide
-    await this.addSlideByIndex(globalIndex, searchIndex);
-
-    // Add next slide if available
-    const { globalIndex: nextGlobal, searchIndex: nextSearch } = slideState.resolveOffset(1);
-    if (nextGlobal !== null) {
-      await this.addSlideByIndex(nextGlobal, nextSearch, false, random_nextslide);
-    }
-
-    // Navigate to the current slide
-    const slideIndex = prevGlobal !== null ? 1 : 0;
-    this.swiper.slideTo(slideIndex, 0);
-
-    await new Promise(requestAnimationFrame);
-    if (swiperContainer) {
-      swiperContainer.style.visibility = "";
-    }
-
-    updateMetadataOverlay(this.currentSlide());
-    if (slideShowRunning) {
-      this.resumeSlideshow();
-    }
-
-    setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
-    window.dispatchEvent(new CustomEvent("slidesReset"));
   }
 
   enforceHighWaterMark(backward = false) {
