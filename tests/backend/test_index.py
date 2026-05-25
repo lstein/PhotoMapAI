@@ -61,8 +61,13 @@ def test_delete_image(
     print("\n=== ABOUT TO DELETE ===")
     print(f"Cache info: {_open_npz_file.cache_info()}")
 
-    # Delete the image
-    response = client.delete(f"/delete_image/{album_key}/0")
+    # Delete the image. We force ``move_to_trash=False`` so the test exercises
+    # the unlink code path deterministically — the send2trash path depends on
+    # a writable freedesktop trash dir on the temp file's mount, which isn't
+    # guaranteed in CI or on dev machines where /tmp shares the root mount.
+    response = client.delete(
+        f"/delete_image/{album_key}/0", params={"move_to_trash": False}
+    )
     assert response.status_code == 200
     assert response.json().get("success") is True
 
