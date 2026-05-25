@@ -45,6 +45,14 @@ export const state = {
   umapControlsVisible: true, // Whether the UMAP controls panel is visible
   showMetadataFields: true, // Whether the metadata-drawer fields table is shown
   autotaggingEnabled: false, // Whether to build the vocab index and show cluster/image labels
+  // Dataset Curator panel state. The curator panel reads these on open and
+  // writes them through the standard PERSISTED_SETTINGS setters on every
+  // input change, so the next visit reopens the panel with the same values.
+  curationTargetCount: 80, // [10, 1000]
+  curationIterations: 20, // [1, 30]
+  curationMethod: "fps", // "fps" (Diversity) or "kmeans" (Blocks)
+  curationExcludeThreshold: 90, // [1, 100] — the % match threshold for "Exclude Matches"
+  curationExportPath: "", // last-used export folder
 };
 
 // ---------------------------------------------------------------------------
@@ -118,6 +126,12 @@ const PERSISTED_SETTINGS = [
     default: false,
     onSet: (value) => setAutotaggingEnabledInLabels(value),
   },
+  // Dataset Curator
+  { key: "curationTargetCount", type: "int", default: 80 },
+  { key: "curationIterations", type: "int", default: 20 },
+  { key: "curationMethod", type: "string", default: "fps" },
+  { key: "curationExcludeThreshold", type: "int", default: 90 },
+  { key: "curationExportPath", type: "string", default: "" },
 ];
 
 function _parseStored(raw, type) {
@@ -437,6 +451,11 @@ export const setUmapClickSelectsCluster = _setters.umapClickSelectsCluster;
 export const setUmapControlsVisible = _setters.umapControlsVisible;
 export const setShowMetadataFields = _setters.showMetadataFields;
 export const setAutotaggingEnabled = _setters.autotaggingEnabled;
+export const setCurationTargetCount = _setters.curationTargetCount;
+export const setCurationIterations = _setters.curationIterations;
+export const setCurationMethod = _setters.curationMethod;
+export const setCurationExcludeThreshold = _setters.curationExcludeThreshold;
+export const setCurationExportPath = _setters.curationExportPath;
 
 export async function setAlbum(newAlbumKey, force = false) {
   if (force || state.album !== newAlbumKey) {
