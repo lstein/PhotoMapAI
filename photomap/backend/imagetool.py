@@ -5,6 +5,8 @@ import os
 import sys
 from pathlib import Path
 
+from PIL import Image
+
 from .embeddings import Embeddings
 
 
@@ -105,8 +107,15 @@ def do_search():
     args = parser.parse_args()
     embeddings = Embeddings(embeddings_path=args.embeddings)
 
-    results, scores = embeddings.search_images_by_text_and_image(query_image_path=args.search,
-                                                                 top_k=args.top_k)
+    # ``search_images_by_text_and_image`` takes a *PIL Image*, not a path —
+    # the prior ``query_image_path=`` kwarg name didn't exist on the
+    # function and raised TypeError on every invocation. Open + decode here
+    # so the CLI matches the function's actual signature.
+    with Image.open(args.search) as query_image:
+        results, scores = embeddings.search_images_by_text_and_image(
+            query_image_data=query_image,
+            top_k=args.top_k,
+        )
     print("Top similar images:")
     for filename, score in zip(results, scores, strict=False):
         print(f"{filename}: {score:.4f}")

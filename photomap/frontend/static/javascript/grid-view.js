@@ -94,7 +94,13 @@ class GridViewManager {
 
   initializeGridSwiper() {
     this.gridInitialized = false;
-    showSpinner();
+    // No showSpinner() here — the spinner is owned by ``resetAllSlides``
+    // (called by ``resetOrInitialize`` immediately after init). The
+    // previous orphan show had no matching hide, which was harmless under
+    // the old non-ref-counted spinner (subsequent ``hideSpinner`` calls
+    // would still flip ``display: none``) but would permanently pin the
+    // counter at ≥ 1 under the ref-counted API in utils.js, leaving the
+    // spinner stuck visible.
     this.removeAllEventListeners();
 
     if (this.swiper) {

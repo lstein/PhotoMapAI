@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import importlib.resources
 import logging
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,7 +27,7 @@ from platformdirs import user_cache_dir, user_config_dir
 from sklearn.cluster import DBSCAN
 
 from .encoders import get_cached_encoder
-from .util import BoundedLRU
+from .util import BoundedLRU, is_cuda_oom
 
 if TYPE_CHECKING:
     from .embeddings import Embeddings
@@ -64,6 +65,25 @@ USER_VOCAB_FILENAME = "cluster_vocab_extra.txt"
 # because PyTorch's allocator fragments between forward passes. We also retry
 # with a halved batch in `_encode_phrases_ensembled` if an OOM slips through.
 VOCAB_BATCH_PHRASES = 32
+
+
+# Single-flight guard for vocab cache builds. Both /cluster_labels and
+# /image_label dispatch through `asyncio.to_thread`, so concurrent FastAPI
+# requests run `get_or_build_vocab_embeddings` in independent worker threads.
+# On a cold cache, every caller would otherwise re-load the encoder and
+# re-encode the full vocabulary before the first writer's atomic rename
+# lands. Per-encoder locks let unrelated specs build in parallel.
+_VOCAB_BUILD_LOCKS_MUTEX = threading.Lock()
+_VOCAB_BUILD_LOCKS: dict[str, threading.Lock] = {}
+
+
+def _vocab_build_lock(encoder_spec: str) -> threading.Lock:
+    with _VOCAB_BUILD_LOCKS_MUTEX:
+        lock = _VOCAB_BUILD_LOCKS.get(encoder_spec)
+        if lock is None:
+            lock = threading.Lock()
+            _VOCAB_BUILD_LOCKS[encoder_spec] = lock
+        return lock
 
 
 def vocab_file_path() -> Path:
@@ -135,23 +155,6 @@ def vocab_cache_path(encoder_spec: str) -> Path:
     return base / f"{_sanitize_spec(encoder_spec)}.npz"
 
 
-def _is_cuda_oom(err: Exception) -> bool:
-    """True if `err` is a CUDA out-of-memory error from torch.
-
-    Tolerates older torch versions where the exception class differs by checking
-    the message as a fallback. Imported lazily so this module doesn't pull torch
-    in when used from tests with a fake encoder.
-    """
-    try:
-        import torch
-    except ImportError:
-        return False
-    oom_cls = getattr(torch, "OutOfMemoryError", None)
-    if oom_cls is not None and isinstance(err, oom_cls):
-        return True
-    return isinstance(err, RuntimeError) and "out of memory" in str(err).lower()
-
-
 def _try_cuda_empty_cache() -> None:
     """Defragment torch's CUDA allocator if torch+CUDA are available, else no-op."""
     try:
@@ -188,7 +191,7 @@ def _encode_phrases_ensembled(encoder, phrases: list[str]) -> np.ndarray:
             # encode_text returns (len(expanded), D), already L2-normalized per row.
             feats = encoder.encode_text(expanded)
         except Exception as err:
-            if not _is_cuda_oom(err) or current_batch <= 1:
+            if not is_cuda_oom(err) or current_batch <= 1:
                 raise
             new_batch = max(1, current_batch // 2)
             logger.warning(
@@ -315,27 +318,37 @@ def get_or_build_vocab_embeddings(
     if cached is not None:
         return cached
 
-    logger.info("Building vocab embeddings cache at %s", cache_path)
-    phrases = load_vocab_phrases(vocab_path)
-    encoder = get_cached_encoder(encoder_spec, cache_dir=cache_dir)
-    embeddings = _encode_phrases_ensembled(encoder, phrases)
+    # Serialize concurrent builds for the same encoder. Re-check inside the
+    # lock so the second waiter picks up the first builder's atomic rename
+    # instead of redundantly re-encoding the full vocabulary.
+    with _vocab_build_lock(encoder_spec):
+        cached = _read_cached_vocab(cache_path, vocab_path, encoder_spec)
+        if cached is not None:
+            return cached
 
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = cache_path.with_name(cache_path.name + ".tmp")
-    # Open via file handle so numpy doesn't second-guess the suffix.
-    with tmp_path.open("wb") as fh:
-        np.savez(
-            fh,
-            encoder_spec=np.array(encoder_spec),
-            n_templates=np.array(len(PROMPT_TEMPLATES)),
-            phrases=np.array(phrases),
-            embeddings=embeddings,
+        logger.info("Building vocab embeddings cache at %s", cache_path)
+        phrases = load_vocab_phrases(vocab_path)
+        encoder = get_cached_encoder(encoder_spec, cache_dir=cache_dir)
+        embeddings = _encode_phrases_ensembled(encoder, phrases)
+
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = cache_path.with_name(cache_path.name + ".tmp")
+        # Open via file handle so numpy doesn't second-guess the suffix.
+        with tmp_path.open("wb") as fh:
+            np.savez(
+                fh,
+                encoder_spec=np.array(encoder_spec),
+                n_templates=np.array(len(PROMPT_TEMPLATES)),
+                phrases=np.array(phrases),
+                embeddings=embeddings,
+            )
+        tmp_path.replace(cache_path)
+        logger.info(
+            "Vocab embeddings cached: %d phrases, dim=%d",
+            len(phrases),
+            embeddings.shape[1] if len(phrases) else 0,
         )
-    tmp_path.replace(cache_path)
-    logger.info(
-        "Vocab embeddings cached: %d phrases, dim=%d", len(phrases), embeddings.shape[1] if len(phrases) else 0
-    )
-    return phrases, embeddings
+        return phrases, embeddings
 
 
 # ---------------------------------------------------------------------------

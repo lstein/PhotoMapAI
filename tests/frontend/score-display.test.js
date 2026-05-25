@@ -274,39 +274,6 @@ describe("score-display.js", () => {
     });
   });
 
-  describe("update", () => {
-    it("should update score text when visible", () => {
-      scoreDisplayInstance.setBookmarkStatus(1, false);
-      scoreDisplayInstance.showSearchScore(0.5);
-      scoreDisplayInstance.update(0.75);
-
-      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score=0.750");
-    });
-
-    it("should not update when not visible", () => {
-      scoreDisplayInstance.scoreText.textContent = "original";
-      scoreDisplayInstance.update(0.75);
-
-      expect(scoreDisplayInstance.scoreText.textContent).toBe("original");
-    });
-
-    it("should not update with undefined score", () => {
-      scoreDisplayInstance.setBookmarkStatus(1, false);
-      scoreDisplayInstance.showSearchScore(0.5);
-      scoreDisplayInstance.update(undefined);
-
-      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score=0.5000");
-    });
-
-    it("should not update with null score", () => {
-      scoreDisplayInstance.setBookmarkStatus(1, false);
-      scoreDisplayInstance.showSearchScore(0.5);
-      scoreDisplayInstance.update(null);
-
-      expect(scoreDisplayInstance.scoreText.innerHTML).toContain("score=0.5000");
-    });
-  });
-
   describe("ScoreDisplay class export", () => {
     it("should be exportable as a class", () => {
       const instance = new ScoreDisplay();

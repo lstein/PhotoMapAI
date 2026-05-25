@@ -3,6 +3,7 @@ import { jest, describe, it, expect, beforeEach, afterEach } from "@jest/globals
 import {
   showSpinner,
   hideSpinner,
+  _resetSpinnerForTests,
   joinPath,
   isColorLight,
   debounce,
@@ -14,21 +15,60 @@ describe("utils.js", () => {
   beforeEach(() => {
     // Reset DOM before each test
     document.body.innerHTML = "";
+    // Reset spinner ref-count so tests don't leak state into each other.
+    _resetSpinnerForTests();
   });
 
-  describe("showSpinner", () => {
-    it("should set spinner display to block", () => {
-      document.body.innerHTML = '<div id="spinner" style="display:none"></div>';
+  describe("showSpinner / hideSpinner (ref-counted)", () => {
+    function setupSpinner(initialDisplay = "none") {
+      document.body.innerHTML = `<div id="spinner" style="display:${initialDisplay}"></div>`;
+      return document.getElementById("spinner");
+    }
+
+    it("should set spinner display to block when called once", () => {
+      const el = setupSpinner();
       showSpinner();
-      expect(document.getElementById("spinner").style.display).toBe("block");
+      expect(el.style.display).toBe("block");
     });
-  });
 
-  describe("hideSpinner", () => {
-    it("should set spinner display to none", () => {
-      document.body.innerHTML = '<div id="spinner" style="display:block"></div>';
+    it("should hide the spinner when show/hide are paired", () => {
+      const el = setupSpinner();
+      showSpinner();
       hideSpinner();
-      expect(document.getElementById("spinner").style.display).toBe("none");
+      expect(el.style.display).toBe("none");
+    });
+
+    it("should stay visible while any caller still holds a ref", () => {
+      // Two overlapping operations: A starts, B starts, A finishes —
+      // the spinner must stay visible because B is still in flight.
+      // This is the race the ref-counting was added to fix.
+      const el = setupSpinner();
+      showSpinner(); // A
+      showSpinner(); // B
+      hideSpinner(); // A done; B still running
+      expect(el.style.display).toBe("block");
+      hideSpinner(); // B done
+      expect(el.style.display).toBe("none");
+    });
+
+    it("should ignore surplus hideSpinner calls (clamped at zero)", () => {
+      // The deferred-show pattern in search.js can race ahead of its
+      // matching hide; the clamp absorbs the extra hide rather than
+      // dipping the counter negative.
+      const el = setupSpinner();
+      hideSpinner(); // unmatched — no-op
+      expect(el.style.display).toBe("none");
+      showSpinner();
+      expect(el.style.display).toBe("block");
+      hideSpinner();
+      expect(el.style.display).toBe("none");
+    });
+
+    it("should not crash when the #spinner element is missing", () => {
+      // The element is only rendered in main.html. Tests / partial pages
+      // shouldn't blow up just because they imported utils.
+      expect(() => showSpinner()).not.toThrow();
+      expect(() => hideSpinner()).not.toThrow();
     });
   });
 

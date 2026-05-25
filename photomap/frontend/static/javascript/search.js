@@ -1,7 +1,7 @@
 // search.js
 // This file contains functions to interact with the backend API to search and retrieve images.
 import { state } from "./state.js";
-import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
+import { fetchJson, hideSpinner, showSpinner, showToast } from "./utils.js";
 
 // Tracks the AbortController of the in-flight search request so a newer
 // query can cancel an older one. Without this, a slower response wins and
@@ -15,7 +15,16 @@ export async function fetchImageByIndex(index) {
     return null;
   } // No album set, cannot fetch image
 
-  const spinnerTimeout = setTimeout(() => showSpinner(), 500); // Show spinner after 0.5s
+  // Deferred-show pattern: only flash the spinner when the request is
+  // visibly slow (>500 ms). Track whether the timer actually fired so the
+  // matching hide only runs in that case — the ref-counted spinner clamps
+  // unbalanced hides at zero, but keeping show/hide pairs balanced is the
+  // safer contract.
+  let spinnerShown = false;
+  const spinnerTimeout = setTimeout(() => {
+    showSpinner();
+    spinnerShown = true;
+  }, 500);
 
   try {
     const url = `retrieve_image/${encodeURIComponent(state.album)}/${encodeURIComponent(index)}`;
@@ -25,7 +34,9 @@ export async function fetchImageByIndex(index) {
     throw e;
   } finally {
     clearTimeout(spinnerTimeout);
-    hideSpinner();
+    if (spinnerShown) {
+      hideSpinner();
+    }
   }
 }
 
@@ -104,7 +115,14 @@ export async function searchTextAndImage({
       // Superseded by a newer search — fall through silently.
       return [];
     }
+    // Surface the server's error to the user instead of silently returning
+    // zero results — a GPU OOM or any other backend failure used to look
+    // identical to "no matching images". The toast lifts the failure into
+    // the UI; the empty array preserves the existing return contract so
+    // callers don't need to handle exceptions.
     console.error("search_with_text_and_image request failed:", err);
+    const detail = err?.body?.detail ?? err?.message ?? "Search failed.";
+    showToast(`Search failed: ${detail}`, { level: "error", duration: 8000 });
     return [];
   } finally {
     if (_activeSearchController === controller) {
