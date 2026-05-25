@@ -121,8 +121,11 @@
           <input type="checkbox" id="confirmDeleteCheckbox" />
         </div>
         <div class="setting-row">
-          <label for="moveToTrashCheckbox">Move deleted image files into Trash/Recycle Bin:</label>
-          <input type="checkbox" id="moveToTrashCheckbox" />
+          <label>Delete images by:</label>
+          <div id="deleteMethodRadioGroup">
+            <label><input type="radio" id="deleteMethodTrash" name="deleteMethod" value="trash" /> Move to Trash/Recycle</label>
+            <label><input type="radio" id="deleteMethodImmediate" name="deleteMethod" value="immediate" /> Immediately Delete</label>
+          </div>
         </div>
         {% endif %}
       </div>
