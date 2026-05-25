@@ -107,7 +107,7 @@ async function handleDeleteCurrentFile() {
 
   try {
     showSpinner();
-    await deleteImage(state.album, globalIndex);
+    await deleteImage(state.album, globalIndex, state.moveToTrash);
     await handleSuccessfulDelete(globalIndex, searchIndex);
     hideSpinner();
   } catch (error) {

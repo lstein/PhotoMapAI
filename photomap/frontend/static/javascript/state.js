@@ -18,6 +18,7 @@ export const state = {
   availableAlbums: [], // List of available albums
   dataChanged: true, // Flag to indicate if umap data has changed (TO DO - REVISIT THIS)
   suppressDeleteConfirm: false, // Flag to suppress delete confirmation dialogs
+  moveToTrash: true, // Move deleted images to Trash/Recycle Bin instead of permanently deleting
   wrapNavigation: false, // Whether scrolling past first/last image wraps to the other end
   gridThumbSizeFactor: 1.0, // Scaling factor for grid thumbnails
   swiper: null, // backwards compatibility hack; contains the single_swiper.swiper instance
@@ -88,6 +89,7 @@ const PERSISTED_SETTINGS = [
   },
   { key: "gridViewActive", type: "bool", default: false },
   { key: "suppressDeleteConfirm", type: "bool", default: false },
+  { key: "moveToTrash", type: "bool", default: true },
   { key: "wrapNavigation", type: "bool", default: false },
   { key: "gridThumbSizeFactor", type: "float", default: 1.0 },
   { key: "umapShowLandmarks", type: "bool", default: true },

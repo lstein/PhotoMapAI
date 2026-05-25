@@ -37,6 +37,8 @@ export function cacheElements() {
     invokeaiStatusHint: document.getElementById("invokeaiStatusHint"),
     showControlPanelTextCheckbox: document.getElementById("showControlPanelTextCheckbox"),
     confirmDeleteCheckbox: document.getElementById("confirmDeleteCheckbox"),
+    deleteMethodTrash: document.getElementById("deleteMethodTrash"),
+    deleteMethodImmediate: document.getElementById("deleteMethodImmediate"),
     wrapNavigationCheckbox: document.getElementById("wrapNavigationCheckbox"),
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
     gridThumbSizeFactorReset: document.getElementById("gridThumbSizeFactorReset"),
@@ -187,6 +189,11 @@ async function populateModalFields() {
     elements.confirmDeleteCheckbox.checked = !state.suppressDeleteConfirm;
   }
 
+  if (elements.deleteMethodTrash) {
+    elements.deleteMethodTrash.checked = !!state.moveToTrash;
+    elements.deleteMethodImmediate.checked = !state.moveToTrash;
+  }
+
   if (elements.wrapNavigationCheckbox) {
     elements.wrapNavigationCheckbox.checked = !!state.wrapNavigation;
   }
@@ -274,6 +281,20 @@ function setupConfirmDeleteControl() {
   elements.confirmDeleteCheckbox.addEventListener("change", function () {
     state.suppressDeleteConfirm = !this.checked;
     saveSettingsToLocalStorage();
+  });
+}
+
+function setupMoveToTrashControl() {
+  if (!elements.deleteMethodTrash) {
+    return;
+  }
+  document.querySelectorAll('input[name="deleteMethod"]').forEach((radio) => {
+    radio.addEventListener("change", function () {
+      if (this.checked) {
+        state.moveToTrash = this.value === "trash";
+        saveSettingsToLocalStorage();
+      }
+    });
   });
 }
 
@@ -662,6 +683,7 @@ async function initializeSettings() {
   setupLocationIQApiKeyControl();
   setupInvokeAISettingsControls();
   setupConfirmDeleteControl();
+  setupMoveToTrashControl();
   setupWrapNavigationControl();
   setupGridThumbSizeFactorControl();
   setupResetDefaultsControls();

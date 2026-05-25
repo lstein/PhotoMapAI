@@ -51,6 +51,7 @@ dependencies = [
     "uvicorn",
     "psutil",  # Add this for process management
     "packaging",  # Add this for version checking
+    "send2trash",
 ]
 
 [project.urls]

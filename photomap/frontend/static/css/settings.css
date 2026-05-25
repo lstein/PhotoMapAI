@@ -103,6 +103,25 @@
   margin: 0;
 }
 
+#deleteMethodRadioGroup {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: center;
+}
+
+#deleteMethodRadioGroup label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+#deleteMethodRadioGroup input[type="radio"] {
+  margin: 0;
+}
+
 .setting-row {
   display: flex;
   align-items: flex-start;
