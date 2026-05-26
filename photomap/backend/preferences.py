@@ -66,6 +66,15 @@ class UserPreferences(_CamelModel):
     show_metadata_fields: bool = True
     autotagging_enabled: bool = False
 
+    # Dataset Curator panel. Ranges mirror the HTML input min/max attrs in
+    # templates/modules/curation.html — the frontend clamps too, but server
+    # validation defends against a stale tab posting an out-of-range value
+    # after a future HTML change tightens the bounds.
+    curation_target_count: int = Field(default=80, ge=10, le=1000)
+    curation_iterations: int = Field(default=20, ge=1, le=30)
+    curation_method: Literal["fps", "kmeans"] = "fps"
+    curation_exclude_threshold: int = Field(default=90, ge=1, le=100)
+
     # Stragglers currently in localStorage
     album: str | None = None
     curation_export_path: str | None = None

@@ -45,6 +45,12 @@ def test_get_without_cookie_mints_one_and_returns_defaults(client: TestClient):
     assert body["autotaggingEnabled"] is False
     assert body["updatedAt"] == 0.0
     assert body["album"] is None
+    # Curator defaults mirror the HTML input values in curation.html.
+    assert body["curationTargetCount"] == 80
+    assert body["curationIterations"] == 20
+    assert body["curationMethod"] == "fps"
+    assert body["curationExcludeThreshold"] == 90
+    assert body["curationExportPath"] is None
 
 
 def test_patch_then_get_returns_merged(client: TestClient):
@@ -100,6 +106,48 @@ def test_patch_invalid_value_returns_422(client: TestClient):
     # Literal field
     response = client.patch("/preferences/", json={"mode": "shuffle"})
     assert response.status_code == 422
+
+
+def test_curation_fields_round_trip(client: TestClient):
+    """All five Dataset Curator fields persist and come back unchanged."""
+    client.get("/preferences/")
+    response = client.patch(
+        "/preferences/",
+        json={
+            "curationTargetCount": 250,
+            "curationIterations": 15,
+            "curationMethod": "kmeans",
+            "curationExcludeThreshold": 75,
+            "curationExportPath": "/tmp/curated",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["curationTargetCount"] == 250
+    assert body["curationIterations"] == 15
+    assert body["curationMethod"] == "kmeans"
+    assert body["curationExcludeThreshold"] == 75
+    assert body["curationExportPath"] == "/tmp/curated"
+
+    fetched = client.get("/preferences/").json()
+    assert fetched["curationTargetCount"] == 250
+    assert fetched["curationMethod"] == "kmeans"
+    assert fetched["curationExportPath"] == "/tmp/curated"
+
+
+def test_curation_invalid_values_return_422(client: TestClient):
+    client.get("/preferences/")
+    # target count must be 10..1000
+    assert client.patch("/preferences/", json={"curationTargetCount": 5}).status_code == 422
+    assert client.patch("/preferences/", json={"curationTargetCount": 2000}).status_code == 422
+    # iterations must be 1..30
+    assert client.patch("/preferences/", json={"curationIterations": 0}).status_code == 422
+    assert client.patch("/preferences/", json={"curationIterations": 50}).status_code == 422
+    # threshold must be 1..100
+    assert client.patch("/preferences/", json={"curationExcludeThreshold": 0}).status_code == 422
+    assert client.patch("/preferences/", json={"curationExcludeThreshold": 200}).status_code == 422
+    # method is a Literal
+    assert client.patch("/preferences/", json={"curationMethod": "magic"}).status_code == 422
 
 
 def test_two_clients_are_isolated():
