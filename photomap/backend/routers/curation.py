@@ -277,6 +277,12 @@ async def export_dataset(request: ExportRequest):
     if not request.output_folder:
         raise HTTPException(status_code=400, detail="Output folder required")
 
+    # Reject null bytes up-front: POSIX resolve() rejects them via the
+    # underlying stat call, but Windows accepts them silently — without this
+    # the bad path would survive resolve() and trip a different error later.
+    if "\x00" in request.output_folder:
+        raise HTTPException(status_code=400, detail="Invalid output folder")
+
     try:
         requested_dir = Path(request.output_folder).expanduser()
         # Resolve the requested directory to an absolute path
