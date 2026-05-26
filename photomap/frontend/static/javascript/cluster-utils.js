@@ -109,8 +109,7 @@ export function clearImageLabelCache() {
 // shorten it without depending on real timers.
 
 const DEFAULT_SLOW_VOCAB_DELAY_MS = 3000;
-const SLOW_VOCAB_MESSAGE =
-  "Preparing autotagging vocabulary — this is usually a one-time operation.";
+const SLOW_VOCAB_MESSAGE = "Preparing autotagging vocabulary — this is usually a one-time operation.";
 
 let slowVocabDelayMs = DEFAULT_SLOW_VOCAB_DELAY_MS;
 let slowVocabInFlight = 0;
