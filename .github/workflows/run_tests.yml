@@ -34,3 +34,17 @@ jobs:
         run: |
           pytest tests -m "not slow"
 
+  tests_complete:
+    name: tests_complete
+    runs-on: ubuntu-latest
+    needs: run_tests
+    if: always()
+    steps:
+      - name: Verify matrix result
+        run: |
+          if [ "${{ needs.run_tests.result }}" != "success" ]; then
+            echo "run_tests matrix concluded with: ${{ needs.run_tests.result }}"
+            exit 1
+          fi
+          echo "All run_tests matrix legs succeeded."
+
