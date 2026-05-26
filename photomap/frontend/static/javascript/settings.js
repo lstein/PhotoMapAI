@@ -278,7 +278,6 @@ function setupAlbumSelector() {
     const newAlbum = this.value;
     if (newAlbum !== state.album) {
       switchAlbum(newAlbum);
-      closeSettingsModal();
     }
   });
 }
