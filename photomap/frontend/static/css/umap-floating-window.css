@@ -61,6 +61,40 @@
   font-size: 1em;
 }
 
+#semanticMapAlbumSelect {
+  cursor: pointer;
+  background: transparent;
+  color: #fff;
+  font-weight: bold;
+  font-size: 1em;
+  font-family: inherit;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 22px 2px 6px;
+  margin: 0;
+  max-width: 60%;
+  text-overflow: ellipsis;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><polygon points='0,0 10,0 5,6' fill='%23ffffff'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+
+#semanticMapAlbumSelect:hover,
+#semanticMapAlbumSelect:focus {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  outline: none;
+}
+
+#semanticMapAlbumSelect option {
+  background: #1e1e28;
+  color: #fff;
+  font-weight: normal;
+}
+
 /* ===== UMAP THUMBNAIL STYLES ===== */
 .umap-thumbnail {
   position: fixed;
