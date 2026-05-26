@@ -27,6 +27,7 @@ from photomap.backend.routers.curation import router as curation_router
 from photomap.backend.routers.filetree import filetree_router
 from photomap.backend.routers.index import index_router
 from photomap.backend.routers.invoke import invoke_router
+from photomap.backend.routers.preferences import preferences_router
 from photomap.backend.routers.search import search_router
 from photomap.backend.routers.umap import umap_router
 from photomap.backend.routers.upgrade import upgrade_router
@@ -65,6 +66,7 @@ for router in [
     filetree_router,
     upgrade_router,
     invoke_router,
+    preferences_router,
 ]:
     app.include_router(router)
 
