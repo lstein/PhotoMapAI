@@ -2,12 +2,16 @@
  * @jest-environment jsdom
  */
 
+import { jest, beforeEach } from "@jest/globals";
+
 import {
   CLUSTER_PALETTE,
   UNCLUSTERED_COLOR,
   getClusterColorFromPoints,
   getClusterSize,
   getClusterInfoForImage,
+  trackVocabBuildRequest,
+  _setSlowVocabDelayMsForTests,
 } from "../../photomap/frontend/static/javascript/cluster-utils.js";
 
 describe("cluster-utils.js", () => {
@@ -137,6 +141,76 @@ describe("cluster-utils.js", () => {
       expect(info).toHaveProperty("cluster");
       expect(info).toHaveProperty("color");
       expect(info).toHaveProperty("size");
+    });
+  });
+
+  describe("trackVocabBuildRequest", () => {
+    beforeEach(() => {
+      document.body.innerHTML = "";
+      jest.useFakeTimers();
+      _setSlowVocabDelayMsForTests(50);
+    });
+
+    it("does not show a toast when the request settles before the delay", async () => {
+      const p = trackVocabBuildRequest(Promise.resolve("ok"));
+      await p;
+      jest.advanceTimersByTime(200);
+      expect(document.querySelector(".app-toast")).toBeNull();
+    });
+
+    it("shows a sticky toast once the delay elapses with a request still in flight", () => {
+      let resolveFn;
+      trackVocabBuildRequest(new Promise((r) => (resolveFn = r)));
+      expect(document.querySelector(".app-toast")).toBeNull();
+      jest.advanceTimersByTime(50);
+      const toast = document.querySelector(".app-toast");
+      expect(toast).not.toBeNull();
+      expect(toast.textContent).toContain("autotagging vocabulary");
+      // Sticky: duration:0 means the auto-dismiss timer never fires.
+      jest.advanceTimersByTime(60_000);
+      expect(document.querySelectorAll(".app-toast")).toHaveLength(1);
+      resolveFn();
+    });
+
+    it("dismisses the toast when the last in-flight request settles", async () => {
+      let resolveFn;
+      const p = trackVocabBuildRequest(new Promise((r) => (resolveFn = r)));
+      jest.advanceTimersByTime(50);
+      expect(document.querySelectorAll(".app-toast")).toHaveLength(1);
+      resolveFn();
+      await p;
+      // Fade-out animation completes after 200ms.
+      jest.advanceTimersByTime(200);
+      expect(document.querySelectorAll(".app-toast")).toHaveLength(0);
+    });
+
+    it("keeps the toast up while any tracked request is still pending", async () => {
+      let resolveA;
+      let resolveB;
+      const a = trackVocabBuildRequest(new Promise((r) => (resolveA = r)));
+      const b = trackVocabBuildRequest(new Promise((r) => (resolveB = r)));
+      jest.advanceTimersByTime(50);
+      expect(document.querySelectorAll(".app-toast")).toHaveLength(1);
+      resolveA();
+      await a;
+      jest.advanceTimersByTime(200);
+      // B is still in flight — toast should still be visible.
+      expect(document.querySelectorAll(".app-toast")).toHaveLength(1);
+      resolveB();
+      await b;
+      jest.advanceTimersByTime(200);
+      expect(document.querySelectorAll(".app-toast")).toHaveLength(0);
+    });
+
+    it("dismisses the toast when a tracked request rejects", async () => {
+      let rejectFn;
+      const p = trackVocabBuildRequest(new Promise((_, r) => (rejectFn = r))).catch(() => null);
+      jest.advanceTimersByTime(50);
+      expect(document.querySelectorAll(".app-toast")).toHaveLength(1);
+      rejectFn(new Error("boom"));
+      await p;
+      jest.advanceTimersByTime(200);
+      expect(document.querySelectorAll(".app-toast")).toHaveLength(0);
     });
   });
 });
