@@ -273,3 +273,36 @@
   display: block;
 }
 
+/* Reset-to-defaults link sits below all accordions, visually separated
+   from the API Integration block above. Rendered as a bold red text link
+   rather than a filled button — the action is destructive but rare, and a
+   heavy red button reads as a primary call-to-action. */
+.reset-all-section {
+  display: flex;
+  justify-content: center;
+  margin-top: 1em;
+  padding-top: 0.8em;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.reset-defaults-link {
+  background: none;
+  border: none;
+  padding: 0.2em 0.4em;
+  color: #ef5350;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.reset-defaults-link:hover {
+  color: #ff7961;
+}
+
+.reset-defaults-link:focus-visible {
+  outline: 2px solid #ef5350;
+  outline-offset: 2px;
+}
+
