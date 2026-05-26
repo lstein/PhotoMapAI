@@ -2,7 +2,13 @@
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-manager.js";
 import { backStack } from "./back-stack.js";
-import { CLUSTER_PALETTE, getClusterLabelInfo, getImageLabelInfo, setClusterLabels } from "./cluster-utils.js";
+import {
+  CLUSTER_PALETTE,
+  getClusterLabelInfo,
+  getImageLabelInfo,
+  setClusterLabels,
+  trackVocabBuildRequest,
+} from "./cluster-utils.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
@@ -140,11 +146,15 @@ export async function fetchUmapData() {
     // the server side so the umap_data response isn't blocked.
     // When autotagging is disabled in settings, skip the labels fetch entirely
     // so the server-side vocab embedding index is never built.
+    // trackVocabBuildRequest surfaces a sticky toast if the build keeps us
+    // waiting more than a few seconds, so the UI doesn't look frozen.
     const labelsPromise = state.autotaggingEnabled
-      ? fetch(`cluster_labels/${album}?cluster_eps=${eps}`).catch((err) => {
-          console.warn("Cluster labels fetch failed:", err);
-          return null;
-        })
+      ? trackVocabBuildRequest(
+          fetch(`cluster_labels/${album}?cluster_eps=${eps}`).catch((err) => {
+            console.warn("Cluster labels fetch failed:", err);
+            return null;
+          })
+        )
       : Promise.resolve(null);
     const [response, labelsResponse] = await Promise.all([
       fetch(`umap_data/${album}?cluster_eps=${eps}`),

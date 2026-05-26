@@ -18,6 +18,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/index.js", (
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", () => ({
   showSpinner: jest.fn(),
   hideSpinner: jest.fn(),
+  showToast: jest.fn(() => ({ element: null, dismiss: jest.fn() })),
   async fetchJson(url, options = {}) {
     const { json, headers, ...rest } = options;
     const init = { ...rest };
