@@ -2,9 +2,16 @@
 // This file handles the UMAP visualization and interaction logic.
 import { albumManager } from "./album-manager.js";
 import { backStack } from "./back-stack.js";
-import { CLUSTER_PALETTE, getClusterLabelInfo, getImageLabelInfo, setClusterLabels } from "./cluster-utils.js";
+import {
+  CLUSTER_PALETTE,
+  getClusterLabelInfo,
+  getImageLabelInfo,
+  setClusterLabels,
+  trackVocabBuildRequest,
+} from "./cluster-utils.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
+import { switchAlbum } from "./settings.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import {
   setUmapClickSelectsCluster,
@@ -107,20 +114,6 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
   }, 1000);
 };
 
-// --- Caching Current Album ---
-let cachedAlbum = null;
-let cachedAlbumName = null;
-
-async function getCachedAlbum() {
-  const currentAlbumName = state.album;
-  if (cachedAlbum && cachedAlbumName === currentAlbumName) {
-    return cachedAlbum;
-  }
-  cachedAlbum = await albumManager.getCurrentAlbum();
-  cachedAlbumName = currentAlbumName;
-  return cachedAlbum;
-}
-
 // --- Main UMAP Data Fetch and Plot ---
 export async function fetchUmapData() {
   if (mapExists && !state.dataChanged) {
@@ -140,11 +133,15 @@ export async function fetchUmapData() {
     // the server side so the umap_data response isn't blocked.
     // When autotagging is disabled in settings, skip the labels fetch entirely
     // so the server-side vocab embedding index is never built.
+    // trackVocabBuildRequest surfaces a sticky toast if the build keeps us
+    // waiting more than a few seconds, so the UI doesn't look frozen.
     const labelsPromise = state.autotaggingEnabled
-      ? fetch(`cluster_labels/${album}?cluster_eps=${eps}`).catch((err) => {
-          console.warn("Cluster labels fetch failed:", err);
-          return null;
-        })
+      ? trackVocabBuildRequest(
+          fetch(`cluster_labels/${album}?cluster_eps=${eps}`).catch((err) => {
+            console.warn("Cluster labels fetch failed:", err);
+            return null;
+          })
+        )
       : Promise.resolve(null);
     const [response, labelsResponse] = await Promise.all([
       fetch(`umap_data/${album}?cluster_eps=${eps}`),
@@ -863,7 +860,7 @@ async function initializeUmapWindow() {
   }
   state.dataChanged = true;
   lastUnshadedSize = "medium"; // Reset to medium on album change
-  setSemanticMapTitle();
+  populateSemanticMapAlbumSelect();
   fetchUmapData();
   toggleFullscreen(true); // Force fullscreen on album change
 }
@@ -1821,19 +1818,56 @@ window.addEventListener("slideshowStartRequested", () => {
   toggleUmapWindow(false);
 });
 
-// Helper to set the semantic map window title to the album display name
-function setSemanticMapTitle() {
-  const titleSpan = document.getElementById("semanticMapTitle");
-  if (!titleSpan) {
+// Populate the album dropdown in the semantic-map titlebar and select the
+// current album. The change listener is attached once in
+// setupSemanticMapAlbumSelect(); this only refreshes the options.
+async function populateSemanticMapAlbumSelect() {
+  const select = document.getElementById("semanticMapAlbumSelect");
+  if (!select) {
     return;
   }
-  getCachedAlbum().then((album) => {
-    if (album && album.name) {
-      titleSpan.textContent = album.name;
-    } else if (state.album) {
-      titleSpan.textContent = state.album;
-    } else {
-      titleSpan.textContent = "Semantic Map";
+  let albums;
+  try {
+    albums = await albumManager.fetchAvailableAlbums();
+  } catch (err) {
+    console.error("Failed to load albums for semantic map dropdown:", err);
+    return;
+  }
+  select.innerHTML = "";
+  if (!albums || albums.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Semantic Map";
+    option.disabled = true;
+    option.selected = true;
+    select.appendChild(option);
+    return;
+  }
+  for (const album of albums) {
+    const option = document.createElement("option");
+    option.value = album.key;
+    option.textContent = album.name;
+    select.appendChild(option);
+  }
+  if (state.album) {
+    select.value = state.album;
+  }
+}
+
+function setupSemanticMapAlbumSelect() {
+  const select = document.getElementById("semanticMapAlbumSelect");
+  if (!select || select.dataset.listenerAttached === "true") {
+    return;
+  }
+  select.dataset.listenerAttached = "true";
+  // Block titlebar drag/double-click from hijacking native dropdown behavior.
+  ["mousedown", "touchstart", "click", "dblclick"].forEach((evt) => {
+    select.addEventListener(evt, (e) => e.stopPropagation());
+  });
+  select.addEventListener("change", () => {
+    const newAlbum = select.value;
+    if (newAlbum && newAlbum !== state.album) {
+      switchAlbum(newAlbum);
     }
   });
 }
@@ -1844,7 +1878,11 @@ export function isUmapFullscreen() {
 }
 
 // Set initial title on DOMContentLoaded
-document.addEventListener("DOMContentLoaded", initializeUmapWindow);
+document.addEventListener("DOMContentLoaded", () => {
+  setupSemanticMapAlbumSelect();
+  populateSemanticMapAlbumSelect();
+  initializeUmapWindow();
+});
 window.addEventListener("albumChanged", initializeUmapWindow);
 
 // ========================================================

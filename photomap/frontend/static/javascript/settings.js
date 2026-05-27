@@ -1,8 +1,16 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { albumManager } from "./album-manager.js";
+import { cancelPendingPatches } from "./preferences-client.js";
 import { exitSearchMode } from "./search-ui.js";
-import { saveSettingsToLocalStorage, setAlbum, setAutotaggingEnabled, setWrapNavigation, state } from "./state.js";
+import {
+  clearPersistedSettingsCache,
+  saveSettingsToLocalStorage,
+  setAlbum,
+  setAutotaggingEnabled,
+  setWrapNavigation,
+  state,
+} from "./state.js";
 import { clearImageLabelCache, setClusterLabels } from "./cluster-utils.js";
 import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
@@ -43,6 +51,7 @@ export function cacheElements() {
     gridThumbSizeFactor: document.getElementById("gridThumbSizeFactor"),
     gridThumbSizeFactorReset: document.getElementById("gridThumbSizeFactorReset"),
     autotaggingEnabledCheckbox: document.getElementById("autotaggingEnabledCheckbox"),
+    resetAllPreferencesBtn: document.getElementById("resetAllPreferencesBtn"),
   };
 }
 
@@ -269,7 +278,6 @@ function setupAlbumSelector() {
     const newAlbum = this.value;
     if (newAlbum !== state.album) {
       switchAlbum(newAlbum);
-      closeSettingsModal();
     }
   });
 }
@@ -644,6 +652,45 @@ function setupResetDefaultsControls() {
   }
 }
 
+// "Reset to Defaults" button at the bottom of the modal. Confirms, then
+// DELETE /preferences/ (which also clears the device cookie server-side),
+// wipes the localStorage paint cache for owned keys, and reloads. The
+// reload re-mints a fresh device cookie and the new device starts at
+// model defaults.
+function setupResetAllPreferencesButton() {
+  if (!elements.resetAllPreferencesBtn) {
+    return;
+  }
+  elements.resetAllPreferencesBtn.addEventListener("click", async () => {
+    const ok = window.confirm(
+      "Reset all PhotoMap preferences on this device to defaults? " + "Albums and bookmarks are not affected."
+    );
+    if (!ok) {
+      return;
+    }
+    // Drop anything queued — we don't want a stale debounce firing a
+    // PATCH against the freshly minted device after the DELETE.
+    cancelPendingPatches();
+    try {
+      const response = await fetch("preferences/", {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!response.ok) {
+        console.warn("Reset preferences failed:", response.status);
+        window.alert("Failed to reset preferences. Please try again.");
+        return;
+      }
+    } catch (err) {
+      console.warn("Reset preferences failed:", err);
+      window.alert("Failed to reset preferences. Please try again.");
+      return;
+    }
+    clearPersistedSettingsCache();
+    window.location.reload();
+  });
+}
+
 // Accordion section toggle
 function setupAccordions() {
   document.querySelectorAll(".settings-accordion .accordion-header").forEach((header) => {
@@ -687,6 +734,7 @@ async function initializeSettings() {
   setupWrapNavigationControl();
   setupGridThumbSizeFactorControl();
   setupResetDefaultsControls();
+  setupResetAllPreferencesButton();
   setupAutotaggingControl();
 }
 

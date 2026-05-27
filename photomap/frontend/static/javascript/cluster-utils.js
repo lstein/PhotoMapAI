@@ -6,7 +6,7 @@
 // autotagging-enabled flag is pushed in from state.js via
 // setAutotaggingEnabledInLabels() rather than read from state directly.
 
-import { fetchJson } from "./utils.js";
+import { fetchJson, showToast } from "./utils.js";
 
 // Feature flag: when false, the cluster vocabulary label is shown ONLY in the
 // UMAP hover popup (the original opt-in surface). When true, the label is also
@@ -64,23 +64,25 @@ export function getImageLabelInfo(album, index) {
   if (imageLabelInFlight.has(key)) {
     return imageLabelInFlight.get(key);
   }
-  const promise = (async () => {
-    try {
-      const body = await fetchJson(`image_label/${encodeURIComponent(album)}/${index}`).catch(() => null);
-      const value = body && body.label ? body : null;
-      imageLabelCache.set(key, value);
-      while (imageLabelCache.size > IMAGE_LABEL_CACHE_MAX) {
-        const firstKey = imageLabelCache.keys().next().value;
-        imageLabelCache.delete(firstKey);
+  const promise = trackVocabBuildRequest(
+    (async () => {
+      try {
+        const body = await fetchJson(`image_label/${encodeURIComponent(album)}/${index}`).catch(() => null);
+        const value = body && body.label ? body : null;
+        imageLabelCache.set(key, value);
+        while (imageLabelCache.size > IMAGE_LABEL_CACHE_MAX) {
+          const firstKey = imageLabelCache.keys().next().value;
+          imageLabelCache.delete(firstKey);
+        }
+        return value;
+      } catch (err) {
+        console.warn("image_label fetch failed:", err);
+        return null;
+      } finally {
+        imageLabelInFlight.delete(key);
       }
-      return value;
-    } catch (err) {
-      console.warn("image_label fetch failed:", err);
-      return null;
-    } finally {
-      imageLabelInFlight.delete(key);
-    }
-  })();
+    })()
+  );
   imageLabelInFlight.set(key, promise);
   return promise;
 }
@@ -88,6 +90,78 @@ export function getImageLabelInfo(album, index) {
 export function clearImageLabelCache() {
   imageLabelCache.clear();
   imageLabelInFlight.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Slow-vocab-build toast
+// ---------------------------------------------------------------------------
+//
+// `/cluster_labels` and `/image_label` both trigger the server-side vocab
+// embedding build the first time they're hit after startup or after the
+// album's encoder changes. The build encodes a few thousand phrases through
+// CLIP/SigLIP and can take 20-30s on CPU. Without feedback the UI just looks
+// frozen. We track in-flight vocab-triggering requests with a counter and
+// show a single sticky toast if any of them is still pending after a short
+// grace period; the toast is dismissed as soon as the count returns to zero.
+//
+// Threshold is generous (3s) so a warm-cache call (sub-second) never flashes
+// a toast. Exposed via `_setSlowVocabDelayMsForTests` so the Jest test can
+// shorten it without depending on real timers.
+
+const DEFAULT_SLOW_VOCAB_DELAY_MS = 3000;
+const SLOW_VOCAB_MESSAGE = "Preparing autotagging vocabulary — this is usually a one-time operation.";
+
+let slowVocabDelayMs = DEFAULT_SLOW_VOCAB_DELAY_MS;
+let slowVocabInFlight = 0;
+let slowVocabTimer = null;
+let slowVocabToast = null;
+
+export function _setSlowVocabDelayMsForTests(ms) {
+  slowVocabDelayMs = ms;
+}
+
+function _maybeShowSlowVocabToast() {
+  if (slowVocabToast || slowVocabTimer) {
+    return;
+  }
+  slowVocabTimer = setTimeout(() => {
+    slowVocabTimer = null;
+    if (slowVocabInFlight > 0 && !slowVocabToast) {
+      slowVocabToast = showToast(SLOW_VOCAB_MESSAGE, { level: "info", duration: 0 });
+    }
+  }, slowVocabDelayMs);
+}
+
+function _maybeDismissSlowVocabToast() {
+  if (slowVocabInFlight > 0) {
+    return;
+  }
+  if (slowVocabTimer) {
+    clearTimeout(slowVocabTimer);
+    slowVocabTimer = null;
+  }
+  if (slowVocabToast) {
+    slowVocabToast.dismiss();
+    slowVocabToast = null;
+  }
+}
+
+/**
+ * Wrap a vocab-triggering fetch so a sticky toast appears if the request
+ * takes longer than the slow-vocab threshold. The toast is shared across all
+ * concurrently tracked requests and dismissed once the last one settles.
+ * Returns the same promise (resolved value and rejection propagate
+ * unchanged).
+ */
+export function trackVocabBuildRequest(promise) {
+  slowVocabInFlight += 1;
+  _maybeShowSlowVocabToast();
+  const settle = () => {
+    slowVocabInFlight = Math.max(0, slowVocabInFlight - 1);
+    _maybeDismissSlowVocabToast();
+  };
+  promise.then(settle, settle);
+  return promise;
 }
 
 // Standard cluster color palette used across the application

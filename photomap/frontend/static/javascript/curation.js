@@ -4,7 +4,14 @@ import { toggleGridSwiperView } from "./events.js";
 import { createSimpleDirectoryPicker } from "./filetree.js";
 import { updateSearchCheckmarks } from "./search-ui.js";
 import { slideState } from "./slide-state.js";
-import { state } from "./state.js";
+import {
+  setCurationExcludeThreshold,
+  setCurationExportPath,
+  setCurationIterations,
+  setCurationMethod,
+  setCurationTargetCount,
+  state,
+} from "./state.js";
 import {
   highlightCurationSelection,
   setCurationMode,
@@ -205,17 +212,35 @@ function setupEventListeners() {
     return;
   }
 
-  // Load saved export path from localStorage
-  const savedPath = localStorage.getItem("curationExportPath");
-  if (savedPath) {
-    exportPathInput.value = savedPath;
+  const thresholdInput = document.getElementById("lockThresholdInput");
+  const methodFps = document.getElementById("methodFps");
+  const methodKmeans = document.getElementById("methodKmeans");
+
+  // Restore every curator field from the persisted state so reopening
+  // the panel (or revisiting the app on another day) shows the same
+  // values the user left. State has already been populated from
+  // localStorage and reconciled with the server by state.js before this
+  // function runs.
+  number.value = state.curationTargetCount;
+  slider.value = state.curationTargetCount;
+  iterationsInput.value = state.curationIterations;
+  if (state.curationMethod === "kmeans") {
+    methodKmeans.checked = true;
+  } else {
+    methodFps.checked = true;
+  }
+  if (thresholdInput) {
+    thresholdInput.value = state.curationExcludeThreshold;
+  }
+  if (state.curationExportPath) {
+    exportPathInput.value = state.curationExportPath;
     validateExportPath();
   }
 
   // Monitor export path changes
   exportPathInput.oninput = () => {
     const path = exportPathInput.value.trim();
-    localStorage.setItem("curationExportPath", path);
+    setCurationExportPath(path);
     validateExportPath();
   };
 
@@ -229,7 +254,7 @@ function setupEventListeners() {
       createSimpleDirectoryPicker(
         (selectedPath) => {
           exportPathInput.value = selectedPath;
-          localStorage.setItem("curationExportPath", selectedPath);
+          setCurationExportPath(selectedPath);
           validateExportPath();
         },
         currentPath,
@@ -256,11 +281,49 @@ function setupEventListeners() {
     };
   }
 
-  slider.oninput = () => (number.value = slider.value);
-  number.oninput = () => (slider.value = number.value);
+  // Slider <-> number input are bidirectionally synced; both also persist
+  // the change so the value survives a panel close + reopen (and the
+  // server PATCH lets it survive a localStorage eviction on iOS).
+  slider.oninput = () => {
+    number.value = slider.value;
+    const clamped = Math.max(10, Math.min(1000, parseInt(slider.value, 10) || 80));
+    setCurationTargetCount(clamped);
+  };
+  number.oninput = () => {
+    slider.value = number.value;
+    const clamped = Math.max(10, Math.min(1000, parseInt(number.value, 10) || 80));
+    setCurationTargetCount(clamped);
+  };
+  iterationsInput.oninput = () => {
+    // HTML caps at 30 already (and the run-button handler also re-clamps);
+    // mirror the same clamp here so the persisted value can't drift past
+    // what the model accepts (server validates ge=1, le=30).
+    const clamped = Math.max(1, Math.min(30, parseInt(iterationsInput.value, 10) || 20));
+    setCurationIterations(clamped);
+  };
+  if (thresholdInput) {
+    thresholdInput.oninput = () => {
+      const clamped = Math.max(1, Math.min(100, parseInt(thresholdInput.value, 10) || 90));
+      setCurationExcludeThreshold(clamped);
+    };
+  }
+  // Method radios. The change event fires for the radio that becomes
+  // selected; persist the selected value as a string.
+  if (methodFps) {
+    methodFps.onchange = () => {
+      if (methodFps.checked) {
+        setCurationMethod("fps");
+      }
+    };
+  }
+  if (methodKmeans) {
+    methodKmeans.onchange = () => {
+      if (methodKmeans.checked) {
+        setCurationMethod("kmeans");
+      }
+    };
+  }
   closeBtn.onclick = window.toggleCurationPanel;
-
-  // Radio buttons don't need click handlers - they work automatically
 
   clearBtn.onclick = () => {
     clearSelectionData();

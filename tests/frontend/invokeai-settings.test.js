@@ -14,7 +14,11 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/album-manage
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/search-ui.js", () => ({
   exitSearchMode: jest.fn(),
 }));
+jest.unstable_mockModule("../../photomap/frontend/static/javascript/preferences-client.js", () => ({
+  cancelPendingPatches: jest.fn(),
+}));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
+  clearPersistedSettingsCache: jest.fn(),
   saveSettingsToLocalStorage: jest.fn(),
   setAlbum: jest.fn(),
   setAutotaggingEnabled: jest.fn(),
