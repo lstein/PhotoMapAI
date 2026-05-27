@@ -30,25 +30,56 @@ For more information on adding and modifying albums see [Albums](albums.md).
 
 ## The Semantic Map
 
-When you open an album for the first time, it will show the [Semantic Map](semantic-map.md) view, a scatterplot of all the photos in your album, clustered and colored by similarity.
+When you open an album for the first time, it will show the [Semantic
+Map](semantic-map.md) view, a scatterplot of all the photos in your
+album, clustered and colored by similarity.
 
+<img src="../../img/photomap_semantic_map_1.png" width="480"
+alt="Semantic Map" class="img-hover-zoom">
 
+The initial view shows the entire collection, with a yellow target
+(far left side of the screenshot) marking the current photo on
+display. Use the mouse and scrollwheel to zoom in and out of the map
+and pan around. If you zoom in enough, you will see individual dots
+for each photo. The largest clusters are labeled with landmark images
+shown in the screenshot above as map markers pointing to major
+clusters. Hover the mouse over areas of interest to see larger
+thumbnail previews of the corresponding images. You can control
+whether landmarks and/or hover thumbnails are displayed by selecting
+those options in the checkboxes at the bottom of the screen.
 
-<img src="../../img/photomap_semantic_map_1.png" width="480" alt="Semantic Map" class="img-hover-zoom">
+Click on the album title ("Open Images Demo" in the screenshot) to
+switch from one album to another.
 
-The initial view shows the entire collection, with a yellow target (far left side of the screenshot) marking the current photo on display. Use the mouse and scrollwheel to zoom in and out of the map and pan around. If you zoom in enough, you will see individual dots for each photo. The largest clusters are labeled with landmark images shown in the screenshot above as map markers pointing to major clusters. Hover the mouse over areas of interest to see larger thumbnail previews of the corresponding images. You can control whether landmarks and/or hover thumbnails are displayed by selecting those options in the checkboxes at the bottom of the screen. 
+Click on a dot to load that photo into the [album browsing
+display](#the-album-browsing-display). This will also highlight the
+cluster that you clicked in and load the contents of the cluster into
+the search results. You can then use the navigation buttons or the
+[grid view](#viewing-a-thumbnail-grid) to scroll through the images in
+the selected cluster.
 
-Click on a dot to load that photo into the [album browsing display](#the-album-browsing-display). This will also highlight the cluster that you clicked in and load the contents of the cluster into the search results. You can then use the navigation buttons or the [grid view](#viewing-a-thumbnail-grid) to scroll through the images in the selected cluster.
+If you don't see anything, or if the colors are very faint, this means
+that there were insufficient images in the album to cluster well. You
+can fix this by increasing the cluster strength. Go to the *Cluster
+Strength* field and increase its value until you are satisfied with
+the cluster number and size.
 
-If you don't see anything, or if the colors are very faint, this means that there were insufficient images in the album to cluster well. You can fix this by increasing the cluster strength. Go to the *Cluster Strength* field and increase its value until you are satisfied with the cluster number and size.
-
-If you hover over the top of the map, additional navigation controls appear for zooming in and out, panning, resetting to the default scale, and downloading the map as a PNG image.
+If you hover over the top of the map, additional navigation controls
+appear for zooming in and out, panning, resetting to the default
+scale, and downloading the map as a PNG image.
 
 <img src="../../img/photomap_semantic_map_2.png" width="480" alt="Semantic Map Nav Controls" class="img-hover-zoom">
 
-You can control the size and position of the semantic map. You can have it appear in fullscreen mode that covers the full size image display beneath it, or you can set it to be a semi-transparent window that floats on top of the full size image. See [Semantic Map](./semantic-map.md) for more details.
+You can control the size and position of the semantic map. You can
+have it appear in fullscreen mode that covers the full size image
+display beneath it, or you can set it to be a semi-transparent window
+that floats on top of the full size image. See [Semantic
+Map](./semantic-map.md) for more details.
 
-You can completely close the semantic map at any time by clicking its close box or the *Target* (⊙) icon at the bottom of the screen (see the screenshot below). To reopen the map, click the *Target* icon again.
+You can completely close the semantic map at any time by clicking its
+close box or the *Target* (⊙) icon at the bottom of the screen (see
+the screenshot below). To reopen the map, click the *Target* icon
+again.
 
 <div class="photomap-overlay-container">
   <img src="../../img/photomap_basic_usage_3_base.png" style="width: 320px" class="photomap-base" alt="Base image">
@@ -60,27 +91,36 @@ You can completely close the semantic map at any time by clicking its close box 
 
 If you click on an image in the semantic map, or just close the window, you will see the album browsing display shown below. Hover over the screenshot to see the key to the various buttons and controls for album browsing:
 
-<div class="photomap-overlay-container">
-  <img src="../../img/photomap_basic_usage_1_base.png" width="480" class="photomap-base" alt="Base image">
-  <img src="../../img/photomap_basic_usage_1_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
-</div>
+<img src="../../img/photomap_basic_usage_1.png" width="480" class="photomap-base" alt="Base image">
 
 Going from left to right:
 
+- The *Previous image* and *Next image* buttons advance the images in the album or current search.
 - The *About* button shows the current version of the software and links to its  home page.
-_ The *Previous slide* and *Next slide* buttons advance the images in the album or current search.
 - The *Gear* button opens up a dialogue that lets you adjust the behavior and appearance of PhotoMapAI.
 - The *Trash* icon permanently deletes the current photo from the album and removes the disk file (after confirmation).
 - The *Fullscreen* button puts PhotoMapAI into fullscreen mode and hides most of the control elements.
 - The *Grid* icon toggles between showing one image at a time to showing a screen of thumbnails.
-- The *Play/Pause* button starts and stops a slideshow in which the photos autoadvance after a user-adjustable interval.
+- The *Back* icon keeps track of your navigation and searches and lets you page back in the history. Right-clicking or long-pressing this button brings up clickable thumbnails of the most recent 12 images.
+- The *Play/Pause Slideshow* button starts and stops a slideshow in which the photos autoadvance after a user-adjustable interval. Right or long-click the icon to choose between linear and shuffle modes.
+- The *Star* icon displays the bookmarks menu, allowing you to display only favorited (starred) images, download starred images, or delete them. It also lets you enter [curator mode](curator-mode.md) for selecting diverse images for model training.
 - The *Target* icon opens and closes the [semantic map](semantic-map.md).
 - The *Bookmark* icon opens a menu for managing [bookmarked images](bookmarks.md), including options to show, download, or delete bookmarked photos.
-- The *Landscape* icon initiates a search for images similar to the one currently displayed.
+- Clicking on the *Landscape* icon initiates a search for images similar to the one currently displayed.
 - The *Magnifier* button opens up a search dialogue that lets you search by image similarity and/or a text description of image content.
 - The "Clear search* button clears any search that is currently active and returns to album browsing mode.
 
-Finally, the yellow tab with the black arrow on the left margin of the window opens a drawer that displays the image's EXIF date, including the date the photo was taken, GPS information (if available), and camera information. Once you open the drawer up, you can drag it around by clicking on any of its edges. Click the black arrow again to return it to its home location and close it.
+Finally, the yellow tab with the black arrow on the left margin of the
+window opens the "metadata drawer", where you can see the image's EXIF
+date, including the date the photo was taken, GPS information (if
+available), and camera information. If the image was generated by the
+[InvokeAI Image Generation](https://invoke.ai) package, then the
+generation parameters are displayed, along with controls that enable
+you to reload the image into InvokeAI and remix it.
+
+Once you open the drawer up, you can drag it around by clicking on its
+title bars. Click the black arrow again to return it to its home
+location and close it.
 
 ### Jumping Forward and Back
 
@@ -114,15 +154,64 @@ The slideshow mode can also be set in the settings dialogue.
 
 The Gear icon opens the settings dialogue, which allows you to adjust the appearance and behavior of PhotoMapAI:
 
-<img src="../../img/photomap_settings.png" width="480" alt="PhotoMapAI Settings Dialogue" class="img-hover-zoom">
+<img src="../../img/photomap_settings_1.png" width="480" alt="PhotoMapAI Settings Dialogue (Top)" class="img-hover-zoom">
 
-- **Image Change Interval** -- When the slideshow is running, this controls how long each image will be displayed, in seconds.
-- **Image Browse Order** -- When the slideshow is running, or when you are browsing the album without an active search, this controls the order in which photos are displayed. "Random" will present the images in shuffled order, while "Chronological" will show them in order from oldest to newest.
-- **Grid thumbnail size factor** -- This allows you to change the size of the image thumbnails by scaling them from a maximum of 2.0 (double default size) to a minimum of 0.5 (half default size). Be aware that the grid takes longer to load with small thumbnails.
-- **Minimum search score** -- When performing a text or image search, this is the minimum allowable value of the match score (range 0.0-1.0). Text search matches are usually in the range of 0.2 to 0.3. Setting the value higher than 0.3 makes the search very strict. Lower than 0.2 will allow for weak matches. The default is 0.2.
-- **Maximum # of search results** -- When performing a text or image search, this controls the maximum number of matches to return. The default is 100.
-- **Show Button Labels** -- Disabling this checkbox allows you to turn off the labels on the row of clickable icons at the bottom of the screen for a more minimalist experience.
-- **Confirm before deleting images** -- Disabling this checkbox stops the Trash Can icon from asking for confirmation before permanently deleting the current image from disk.
-- **LocationIQ Map API Key** -- This optional API key lets PhotoMapAI display thumbnail maps and named locations for photos that contain GPS geolocation information. If you wish to enable this feature, get a key for free from [LocationIQ](http://locationiq.com/) and paste it into the field. If not present, PhotoMapAI will display the longitude and latitude of the photo, but not the map or place name.
+It has several collapsible sections:
+
+### Top portion
+
 - **Album** -- This pulldown menu lists all the albums you have configured and allows you to switch among them. Note that when you switch albums, the settings dialogue will close immediately and the window will display the first photo from the selected albums.
 - **Manage Albums** -- This green button will open the [Album Manager](albums.md), where you can create, edit and delete albums.
+
+### Slideshow Settings
+
+- **Image Change Interval** -- When the slideshow is running, this controls how long each image will be displayed, in seconds.
+- **Image Slideshow Mode** -- When the slideshow is running, or when you are browsing the album without an active search, this controls the order in which photos are displayed. "Random" will present the images in shuffled order, while "Sequential" will show them in sequential order. When viewing the whole album, images are ordered from oldest to newest. After performing a search, images will be ordered from best match to worst. When viewing a cluster, the images closest to where you clicked on the cluster are displayed first.
+- **Wrap Around During Navigation** -- If selected, the last image in the album will wrap around to the first image when you advance beyond it. Similarly for the first image in the album if you navigate to the pevious image. If not selected, you cannot advance beyond the last image, or go backwards from the first.
+
+### Appearance
+
+- **Grid thumbnail size factor** -- This allows you to change the size of the image thumbnails by scaling them from a maximum of 2.0 (double default size) to a minimum of 0.5 (half default size). Be aware that the grid takes longer to load with small thumbnails.
+- **Show Button Labels** -- Disabling this checkbox allows you to turn off the labels on the row of clickable icons at the bottom of the screen for a more minimalist experience.
+- **Confirm before deleting images** -- Disabling this checkbox stops the Trash Can icon from asking for confirmation before permanently deleting the current image from disk.
+- **When deleting** -- Choose whether deleted images are moved to the Trash/Recycle bin  or deleted immediately.
+
+
+### Autotagging
+
+This portion of the Settings window has a single checkbox for
+activating **Autotagging** a feature that tags individual images and
+whole clusters with descriptive labels. See [Autotagging](autotagging.md) for details.
+
+<img src="../../img/photomap_settings_2.png" width="480" alt="PhotoMapAI Settings Dialogue (Bottom)" class="img-hover-zoom">
+
+### API Integration
+
+These settings enable optional integration with third party services.
+
+- **LocationIQ Map API Key** -- This optional API key lets PhotoMapAI
+  display thumbnail maps and named locations for photos that contain
+  GPS geolocation information. If you wish to enable this feature, get
+  a key for free from [LocationIQ](http://locationiq.com/) and paste
+  it into the field. If not present, PhotoMapAI will display the
+  longitude and latitude of the photo, but not the map or place name.
+  
+- **InvokeAI Backend URL** -- If you use the
+  [InvokeAI](https://invoke.ai) locally-hosted AI image generation
+  software, you can use PhotoMapAI to view your InvokeAI library, and
+  send previously-generated images back to the software to remix or
+  use as reference images. To active this support, paste the URL of
+  the running InvokeAI backend into this field. You'll find more
+  information in [InvokeAI Integration](invokeai-integration.md).
+  
+- **InvokeAI Username, InvokeAI Password** -- If a valid InvokeAI
+  URL is present, these fields will appear. If you are running
+  InvokeAI in password-protected "multiuser mode," these fields
+  provide the InvokeAI username and password to log into.
+  
+- **Upload to Image Board** -- If a valid InvokeAI URL is present,
+  this pulldown menu allows you to select which InvokeAI gallery to
+  upload reference images into.
+  
+- **Reset to Defaults** -- This clears out settings, returning them to
+  their default state. It will not delete albums or images.
