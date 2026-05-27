@@ -26,8 +26,8 @@ import { debounce, getPercentile, isColorLight, makeDraggable } from "./utils.js
 
 const UMAP_SIZES = {
   big: { width: 800, height: 590 },
-  medium: { width: 440, height: 310 },
-  small: { width: 360, height: 210 },
+  medium: { width: 520, height: 310 },
+  small: { width: 440, height: 210 },
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
