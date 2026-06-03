@@ -1,3 +1,5 @@
+**Languages:** English | [繁體中文](README.zh-TW.md)
+
 # PhotoMapAI
 
 Rediscover your photo collection!
@@ -134,7 +136,7 @@ python3 -m pip install --upgrade pip
 pip install photomapai
 start_photomap
 
-Then open your web browser and point it to [http://127.0.0.1:8050](http://128.0.0.1:8050). Follow the prompts to create your first album.
+Then open your web browser and point it to [http://127.0.0.1:8050](http://127.0.0.1:8050). Follow the prompts to create your first album.
 
 #### Windows
 
@@ -146,7 +148,7 @@ python3 -m pip install --upgrade pip
 pip install photomapai
 start_photomap
 
-Then open your web browser and point it to [http://127.0.0.1:8050](http://128.0.0.1:8050). Follow the prompts to create your first album.
+Then open your web browser and point it to [http://127.0.0.1:8050](http://127.0.0.1:8050). Follow the prompts to create your first album.
 
 ## Other Installation Methods
 
