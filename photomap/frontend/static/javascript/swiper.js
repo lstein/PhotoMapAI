@@ -29,6 +29,15 @@ class SwiperManager {
     this.isAppending = false;
     this.isInternalSlideChange = false;
 
+    // Shuffle-mode "bag": every image is dealt once per cycle in random order,
+    // then the bag is refilled and reshuffled for a fresh order. This is what
+    // lets shuffle run indefinitely even on tiny albums — avoiding
+    // already-loaded slides would otherwise leave nothing to pick once all
+    // images are in the buffer, stalling the slideshow on the last slide.
+    this.shuffleBag = []; // iteration indices not yet dealt this cycle
+    this.shuffleBagPool = 0; // pool size the current bag was built for
+    this.lastShuffleIterIndex = null; // last index dealt, to avoid an immediate repeat across cycles
+
     // Single-flight gate for resetAllSlides. albumChanged, searchResultsChanged,
     // and swiperModeChanged can all fire in quick succession (e.g. switching
     // album while a search is in flight). Without coordination, two concurrent
@@ -83,6 +92,15 @@ class SwiperManager {
         delay: state.currentDelay * 1000,
         disableOnInteraction: true,
         enabled: false,
+        // Backstop for the "start the slideshow while already parked on the
+        // last slide" case, where no slideNextTransitionStart fires for us to
+        // intercept. Swiper's autoplay otherwise defaults this to false and, on
+        // reaching the end with loop off, calls slideTo(0) — jumping to the
+        // first slide of the in-memory buffer (a windowed subset, not the
+        // album's first image). The primary end-of-list handling lives in the
+        // slideNextTransitionStart handler below, which stops autoplay the
+        // instant resolveOffset(+1) reports there is no next slide.
+        stopOnLastSlide: true,
       },
       loop: false,
       touchEventsTarget: "container",
@@ -180,21 +198,45 @@ class SwiperManager {
         this.isAppending = true;
         this.swiper.allowSlideNext = false;
 
+        const finishAppend = () => {
+          this.isAppending = false;
+          this.swiper.allowSlideNext = true;
+        };
+
+        // Shuffle mode has no "end of list": the next slide is a random pick,
+        // not the one after the current index. addSlideByIndex(null, null)
+        // selects a random slide internally when the slideshow is running in
+        // random mode. We must NOT consult resolveOffset here — it reports null
+        // whenever the current random slide happens to be the last album index,
+        // which would otherwise stop the shuffle slideshow prematurely.
+        const isRandom = state.mode === "random" && slideShowRunning();
+        if (isRandom) {
+          const finishRandomAppend = () => {
+            finishAppend();
+            // Re-dealing images across shuffle cycles would grow the DOM without
+            // bound, so drop the oldest slides once we exceed the high-water
+            // mark. Deferred so it runs after the in-progress transition settles.
+            setTimeout(() => this.trimShuffleBacklog(), 500);
+          };
+          this.addSlideByIndex(null, null).then(finishRandomAppend).catch(finishRandomAppend);
+          return;
+        }
+
         const { globalIndex: nextGlobal, searchIndex: nextSearch } = slideState.resolveOffset(+1);
 
         if (nextGlobal !== null) {
-          this.addSlideByIndex(nextGlobal, nextSearch)
-            .then(() => {
-              this.isAppending = false;
-              this.swiper.allowSlideNext = true;
-            })
-            .catch(() => {
-              this.isAppending = false;
-              this.swiper.allowSlideNext = true;
-            });
+          this.addSlideByIndex(nextGlobal, nextSearch).then(finishAppend).catch(finishAppend);
         } else {
-          this.isAppending = false;
-          this.swiper.allowSlideNext = true;
+          finishAppend();
+          // resolveOffset(+1) returned null: in linear mode we have just landed
+          // on the genuine last item with wrap navigation off (it only returns
+          // null at the end of the list — wrap mode always resolves to a real
+          // index). Nothing gets appended, so the active slide is now the last
+          // loaded one and Swiper considers itself at the end. Stop autoplay
+          // here so the slideshow rests on this final slide. If we left autoplay
+          // running, its next tick would see isEnd and call slideTo(0), snapping
+          // back to the first slide still held in the windowed buffer (~10 back).
+          this.pauseSlideshow();
         }
       }
     });
@@ -349,38 +391,55 @@ class SwiperManager {
   }
 
   /**
-   * Select a random slide index that doesn't already exist in the swiper.
-   * Tries multiple random selections to avoid duplicates.
+   * Deal the next slide for shuffle mode from a reshuffling "bag".
+   *
+   * Each image is dealt exactly once per cycle in a random order; when the bag
+   * empties it is refilled and reshuffled, so every pass through the album uses
+   * a fresh order and the slideshow never runs out of slides to show. The
+   * index is an "iteration index": a search-results index in search mode, or a
+   * global album index otherwise — matching slideState.getCurrentIndex().
+   *
    * @returns {{globalIndex: number|null, searchIndex: number|null}} The selected indices
    */
   selectRandomSlideIndex() {
-    const totalPool = slideState.isSearchMode ? slideState.searchResults.length : slideState.totalAlbumImages;
+    const pool = slideState.isSearchMode ? slideState.searchResults.length : slideState.totalAlbumImages;
+    if (!pool || pool <= 0) {
+      return { globalIndex: null, searchIndex: null };
+    }
 
-    const existingIndices = new Set(Array.from(this.swiper.slides).map((el) => parseInt(el.dataset.globalIndex, 10)));
-
-    // Try to find a random slide that doesn't already exist in the swiper
-    // Limit attempts to avoid infinite loop when all slides are already loaded
-    const MAX_RANDOM_ATTEMPTS = 50;
-    const maxAttempts = Math.min(totalPool, MAX_RANDOM_ATTEMPTS);
-
-    let globalIndex = null;
-    let searchIndex = null;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      if (slideState.isSearchMode) {
-        searchIndex = Math.floor(Math.random() * totalPool);
-        globalIndex = slideState.searchToGlobal(searchIndex);
-      } else {
-        globalIndex = Math.floor(Math.random() * totalPool);
-        searchIndex = null;
+    // Refill + reshuffle when the bag empties (new cycle) or the album/search
+    // pool changes underneath us (album switch, search results changed).
+    const poolChanged = this.shuffleBagPool !== pool;
+    if (this.shuffleBag.length === 0 || poolChanged) {
+      if (poolChanged) {
+        this.lastShuffleIterIndex = null;
       }
-      // Check for valid globalIndex and that it doesn't already exist
-      if (globalIndex !== null && !existingIndices.has(globalIndex)) {
-        break;
+      this.shuffleBag = Array.from({ length: pool }, (_, i) => i);
+      this.shuffleBagPool = pool;
+
+      // Fisher-Yates shuffle.
+      for (let i = this.shuffleBag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [this.shuffleBag[i], this.shuffleBag[j]] = [this.shuffleBag[j], this.shuffleBag[i]];
+      }
+
+      // Avoid showing the same image twice in a row across a cycle boundary. The
+      // bag is dealt from the end (pop), so if the last entry repeats the image
+      // currently on screen, swap it to the front of the bag (dealt last).
+      const avoidIter = this.lastShuffleIterIndex !== null ? this.lastShuffleIterIndex : slideState.getCurrentIndex();
+      const lastPos = this.shuffleBag.length - 1;
+      if (pool > 1 && this.shuffleBag[lastPos] === avoidIter) {
+        [this.shuffleBag[0], this.shuffleBag[lastPos]] = [this.shuffleBag[lastPos], this.shuffleBag[0]];
       }
     }
 
-    return { globalIndex, searchIndex };
+    const iterIndex = this.shuffleBag.pop();
+    this.lastShuffleIterIndex = iterIndex;
+
+    if (slideState.isSearchMode) {
+      return { globalIndex: slideState.searchToGlobal(iterIndex), searchIndex: iterIndex };
+    }
+    return { globalIndex: iterIndex, searchIndex: null };
   }
 
   async addSlideByIndex(globalIndex, searchIndex = null, prepend = false, random = null) {
@@ -395,14 +454,13 @@ class SwiperManager {
       const selected = this.selectRandomSlideIndex();
       globalIndex = selected.globalIndex;
       searchIndex = selected.searchIndex;
-      // Shuffle mode must not show duplicates: if selectRandomSlideIndex
-      // exhausted its attempts in a small pool, the index might already be loaded.
-      // Linear navigation deliberately allows duplicates so wrap-around can
-      // re-append a globalIndex that appeared earlier in the swiper.
-      const exists = Array.from(this.swiper.slides).some((el) => parseInt(el.dataset.globalIndex, 10) === globalIndex);
-      if (exists) {
+      if (globalIndex === null) {
         return;
       }
+      // No buffer-duplicate guard here: the shuffle bag already guarantees each
+      // image is dealt once per cycle, and re-dealing an image on a later cycle
+      // (so it can be shown again) is the whole point. An image already in the
+      // windowed buffer from an earlier cycle is therefore an intentional repeat.
     }
 
     let currentScore, currentCluster, currentColor;
@@ -608,6 +666,23 @@ class SwiperManager {
       window.dispatchEvent(new CustomEvent("slidesReset"));
     } finally {
       this.isInternalSlideChange = false;
+    }
+  }
+
+  /**
+   * Keep the shuffle buffer bounded. The active slide and its single look-ahead
+   * live at the tail, so dropping the oldest (front) slides never disturbs what
+   * is on screen or about to be shown. Unlike enforceHighWaterMark this does not
+   * stop/start autoplay, so it won't flicker the play/pause icon on every
+   * advance — important because shuffle trims on (nearly) every slide.
+   */
+  trimShuffleBacklog() {
+    if (!this.swiper) {
+      return;
+    }
+    const maxSlides = state.highWaterMark || 50;
+    while (this.swiper.slides.length > maxSlides) {
+      this.swiper.removeSlide(0);
     }
   }
 
