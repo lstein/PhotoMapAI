@@ -205,7 +205,9 @@ export function showHidePanelText(hide) {
 
 // Listen for slide changes to update UI
 window.addEventListener("slideChanged", () => {
-  // nothing to do here yet, but could be used to update UI elements
+  // Refresh the play/pause button so it grays out when we land on the last
+  // slide in sequential mode (and re-activates when we navigate away).
+  updateSlideshowButtonIcon();
 });
 
 // Toggle grid/swiper views

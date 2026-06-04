@@ -1,4 +1,5 @@
 import { saveSettingsToLocalStorage, state } from "./state.js";
+import { slideState } from "./slide-state.js";
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 
 // SVG icons used for the button/menu
@@ -13,6 +14,14 @@ const SHUFFLE_SVG = `<svg id="shuffleIcon" width="32" height="32" viewBox="0 0 2
 
 export function slideShowRunning() {
   return !!state.single_swiper?.swiper?.autoplay?.running;
+}
+
+// In sequential mode there is a genuine end of the list, so a stopped slideshow
+// resting on the final slide has nowhere to advance to. resolveOffset(+1)
+// reports null only at that end (wrap mode always resolves to a real index, and
+// random mode has no end), so it cleanly captures the "last slide" case.
+function atSequentialEnd() {
+  return state.mode !== "random" && slideState.resolveOffset(+1).globalIndex === null;
 }
 
 // public: update the icon displayed on the start/stop button according to state
@@ -41,6 +50,13 @@ export function updateSlideshowButtonIcon() {
     if (btn) {
       btn.title = `Start Slideshow (${modeLabel})`;
     }
+  }
+
+  // Gray out and disable Play when stopped on the final slide in sequential
+  // mode — there is nothing left to play. Never disable the Pause button.
+  if (btn) {
+    const disabled = !isRunning && atSequentialEnd();
+    btn.classList.toggle("slideshow-disabled", disabled);
   }
 }
 
@@ -90,6 +106,12 @@ export async function toggleSlideshowWithIndicator(e) {
   if (e && e.preventDefault) {
     e.preventDefault();
     e.stopPropagation();
+  }
+
+  // Ignore clicks while parked on the last sequential slide (button is grayed
+  // out): there is nothing to start.
+  if (!slideShowRunning() && atSequentialEnd()) {
+    return;
   }
 
   if (slideShowRunning()) {
