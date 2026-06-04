@@ -56,7 +56,9 @@
 }
 
 #controlPanel button.back-nav-disabled,
-#controlPanel button.back-nav-disabled:hover {
+#controlPanel button.back-nav-disabled:hover,
+#controlPanel button.slideshow-disabled,
+#controlPanel button.slideshow-disabled:hover {
   opacity: 0.25;
   cursor: default;
 }
