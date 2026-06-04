@@ -229,7 +229,9 @@ class SeekSlider {
     this.resetFadeOutTimer();
 
     let panelText = "";
-    if (state.searchResults?.length > 0 && state.searchResults[0].score !== undefined) {
+    if (state.searchType === "bookmarks") {
+      panelText = `Favorite: ${value}`;
+    } else if (state.searchResults?.length > 0 && state.searchResults[0].score !== undefined) {
       const result = state.searchResults[value - 1];
       panelText = result ? `Score: ${result.score.toFixed(4)}` : "";
     } else if (!state.searchResults || state.searchResults.length === 0) {
@@ -471,6 +473,9 @@ class SeekSlider {
           }
         })
       );
+    } else if (state.searchType === "bookmarks") {
+      contextText = "Favorite";
+      ticks = positions.map((idx) => `${idx}`);
     } else if (state.searchResults.length > 0 && state.searchResults[0].score !== undefined) {
       contextText = "Score";
       ticks = positions.map((idx) => {
