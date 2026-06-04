@@ -38,8 +38,13 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/umap.js", ()
 }));
 
 // Now import the module we want to test
-const { slideShowRunning, updateSlideshowButtonIcon, showPlayPauseIndicator, removeExistingIndicator } =
-  await import("../../photomap/frontend/static/javascript/slideshow.js");
+const {
+  slideShowRunning,
+  updateSlideshowButtonIcon,
+  showPlayPauseIndicator,
+  removeExistingIndicator,
+  toggleSlideshowWithIndicator,
+} = await import("../../photomap/frontend/static/javascript/slideshow.js");
 
 const { state } = await import("../../photomap/frontend/static/javascript/state.js");
 
@@ -162,6 +167,43 @@ describe("slideshow.js", () => {
 
       const container = document.getElementById("slideshowIcon");
       expect(container.innerHTML).toContain("playIcon");
+    });
+  });
+
+  describe("toggleSlideshowWithIndicator (pause path)", () => {
+    beforeEach(() => {
+      document.body.innerHTML = `
+        <div id="slideshowIcon"></div>
+        <button id="startStopSlideshowBtn" title=""></button>
+      `;
+    });
+
+    it("rebuilds the buffer sequentially when pausing a shuffle run", async () => {
+      // Regression: after stopping a shuffle slideshow, the swiper buffer is
+      // still in random order, so forward/back navigation would walk the
+      // leftover shuffle instead of the current image's sequential neighbors.
+      const resetAllSlides = jest.fn(() => Promise.resolve());
+      const pauseSlideshow = jest.fn();
+      state.single_swiper = { swiper: { autoplay: { running: true } }, pauseSlideshow, resetAllSlides };
+      state.mode = "random";
+
+      await toggleSlideshowWithIndicator();
+
+      expect(pauseSlideshow).toHaveBeenCalled();
+      expect(resetAllSlides).toHaveBeenCalled();
+    });
+
+    it("does not rebuild the buffer when pausing a sequential run", async () => {
+      // Sequential runs already leave an in-order buffer, so no rebuild needed.
+      const resetAllSlides = jest.fn(() => Promise.resolve());
+      const pauseSlideshow = jest.fn();
+      state.single_swiper = { swiper: { autoplay: { running: true } }, pauseSlideshow, resetAllSlides };
+      state.mode = "chronological";
+
+      await toggleSlideshowWithIndicator();
+
+      expect(pauseSlideshow).toHaveBeenCalled();
+      expect(resetAllSlides).not.toHaveBeenCalled();
     });
   });
 
