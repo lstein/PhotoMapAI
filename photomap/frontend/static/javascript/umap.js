@@ -1210,12 +1210,19 @@ function updateLandmarkTrace() {
     const y = clustersInView.map((c) => c.center.y + verticalOffset);
     const markerColors = clustersInView.map((c) => c.color);
 
-    // Triangle-down markers at bottom of thumbnails
+    // Triangle-down markers at bottom of thumbnails.
+    // Rendered with scattergl (WebGL) to match the main point traces. The main
+    // points use scattergl, so an SVG `scatter` trace here was the only visible
+    // element on the SVG layer. During a touch pan, Plotly translates the SVG
+    // layer immediately but only repaints the WebGL scene once the gesture
+    // settles, so on tablets a touch-and-immediately-drag made the triangles
+    // slide alone while the dots stayed frozen. Keeping the triangles in the
+    // same WebGL pipeline makes them freeze-and-snap together with the points.
     const landmarkTrace = {
       x,
       y,
       mode: "markers",
-      type: "scatter",
+      type: "scattergl",
       marker: {
         size: triangleSize,
         color: markerColors,
