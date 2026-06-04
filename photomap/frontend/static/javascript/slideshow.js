@@ -94,8 +94,19 @@ export async function toggleSlideshowWithIndicator(e) {
 
   if (slideShowRunning()) {
     // pause
+    const wasShuffling = state.mode === "random";
     try {
       state.single_swiper.pauseSlideshow();
+      // A shuffle run fills the swiper buffer with slides in random order. Once
+      // stopped, the forward/back buttons just walk that buffer, so the user
+      // would see the shuffled neighborhood instead of the current image's real
+      // sequential neighbors. Rebuild the buffer in album order around the
+      // current slide so manual navigation behaves sequentially again.
+      // (Sequential runs already leave an in-order buffer, so only shuffle needs
+      // this.)
+      if (wasShuffling) {
+        await state.single_swiper.resetAllSlides();
+      }
     } catch (err) {
       console.warn("pauseSlideshow failed:", err);
     }
