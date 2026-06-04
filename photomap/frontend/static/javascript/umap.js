@@ -31,7 +31,7 @@ const UMAP_SIZES = {
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
-const randomWalkMaxSize = 2000; // Max cluster size to use random walk ordering
+const randomWalkMaxSize = 5000; // Max cluster size to use random walk ordering
 const MARKER_UPDATE_IGNORE_WINDOW_MS = 1000; // Time window to ignore marker updates after manual navigation
 
 let externalClickCallback = null;
