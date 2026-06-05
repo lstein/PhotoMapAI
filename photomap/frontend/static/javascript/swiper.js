@@ -743,26 +743,40 @@ class SwiperManager {
     try {
       this.swiper.removeAllSlides();
 
-      let origin = -2;
-      const slides_to_add = 5;
-      if (globalIndex + origin < 0) {
-        origin = 0;
-      }
-
       const swiperContainer = document.getElementById("singleSwiper");
       swiperContainer.style.visibility = "hidden";
 
-      for (let i = origin; i < slides_to_add; i++) {
-        if (searchIndex + i >= totalCount) {
-          break;
+      // Load a small window of slides centred on the target so the user can
+      // immediately swipe a couple of slides in either direction. In
+      // search/cluster mode the neighbours are the adjacent *search results*,
+      // which are NOT contiguous in global-album index, so each neighbour's
+      // global index must be resolved through searchToGlobal. Stepping
+      // globalIndex and searchIndex together (the old behaviour) loaded
+      // album-adjacent images and tagged the prepended slides with bogus
+      // search indices (including negatives), which corrupted the position
+      // badge — seeking back to cluster image #1 could show "3", and swiping
+      // left showed "0" then "-1".
+      const SLIDES_BEFORE = 2;
+      const SLIDES_AFTER = 2;
+
+      for (let i = -SLIDES_BEFORE; i <= SLIDES_AFTER; i++) {
+        if (isSearchMode) {
+          const neighborSearch = searchIndex + i;
+          if (neighborSearch < 0 || neighborSearch >= totalCount) {
+            continue;
+          }
+          const neighborGlobal = slideState.searchToGlobal(neighborSearch);
+          if (neighborGlobal === null) {
+            continue;
+          }
+          await this.addSlideByIndex(neighborGlobal, neighborSearch, false, false);
+        } else {
+          const neighborGlobal = globalIndex + i;
+          if (neighborGlobal < 0 || neighborGlobal >= slideState.totalAlbumImages) {
+            continue;
+          }
+          await this.addSlideByIndex(neighborGlobal, null, false, false);
         }
-        if (globalIndex + i < 0) {
-          continue;
-        }
-        if (globalIndex + i >= slideState.totalAlbumImages) {
-          break;
-        }
-        await this.addSlideByIndex(globalIndex + i, searchIndex + i, false, false);
       }
 
       slideEls = this.swiper.slides;
