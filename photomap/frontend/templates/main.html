@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <link rel="icon" type="image/x-icon" href="static/icons/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="{{ static_url('icons/favicon.ico') }}" />
 
     <!-- Detect legacy EdgeHTML (Edge ≤18 / Edge 44) before loading any ES2020 scripts.
          window.StyleMedia is unique to EdgeHTML and absent from Chromium-based Edge.
@@ -27,25 +27,25 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
-    <link rel="stylesheet" type="text/css" href="static/css/base.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/animations.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/modal-base.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/spinners.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/toasts.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/swiper.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/grid-view.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/control-and-search-panels.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/seek-slider.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/metadata-drawer.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/search.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/settings.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/album-manager.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/filetree.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/delete-modal.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/about.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/bookmarks.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/umap-floating-window.css" />
-    <link rel="stylesheet" type="text/css" href="static/css/curation.css" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/base.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/animations.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/modal-base.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/spinners.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/toasts.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/swiper.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/grid-view.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/control-and-search-panels.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/seek-slider.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/metadata-drawer.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/search.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/settings.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/album-manager.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/filetree.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/delete-modal.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/about.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/bookmarks.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/umap-floating-window.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/curation.css') }}" />
 
     <script>
         window.slideshowConfig = {
@@ -56,7 +56,7 @@
         albumLocked: {% if album_locked %}true{% else %}false{% endif %}
       };
     </script>
-    <script type="module" src="static/main.js"></script>
+    <script type="module" src="{{ static_url('main.js') }}"></script>
 </head>
 
 <body>

@@ -13,7 +13,6 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -31,6 +30,7 @@ from photomap.backend.routers.preferences import preferences_router
 from photomap.backend.routers.search import search_router
 from photomap.backend.routers.umap import umap_router
 from photomap.backend.routers.upgrade import upgrade_router
+from photomap.backend.static_assets import VersionedStaticFiles, compute_asset_version
 from photomap.backend.util import get_app_url
 
 # Initialize logging
@@ -89,12 +89,26 @@ class IECompatibilityMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(IECompatibilityMiddleware)
 
-# Mount static files and templates
+# Mount static files and templates.
+#
+# Assets are served under a version-stamped path (static/<asset_version>/...) so
+# browsers — iOS Safari in particular — can't serve a stale module or stylesheet
+# after an upgrade. The version is a content hash, so the URL only changes when
+# the assets do. See photomap.backend.static_assets for the full rationale.
 static_path = get_package_resource_path("static")
-app.mount("/static", StaticFiles(directory=static_path), name="static")
+asset_version = compute_asset_version(static_path, get_version())
+app.mount(
+    "/static",
+    VersionedStaticFiles(directory=static_path, version=asset_version),
+    name="static",
+)
 
 templates_path = get_package_resource_path("templates")
 templates = Jinja2Templates(directory=templates_path)
+
+# Expose a `static_url('css/base.css')` helper to every template so asset
+# references pick up the cache-busting version segment automatically.
+templates.env.globals["static_url"] = lambda path: f"static/{asset_version}/{path}"
 
 
 # Main Routes
