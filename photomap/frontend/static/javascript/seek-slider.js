@@ -283,14 +283,18 @@ class SeekSlider {
       const isBookmarked = globalIndex !== undefined ? bookmarkManager.isBookmarked(globalIndex) : false;
       this.scoreDisplayObj.setBookmarkStatus(globalIndex, isBookmarked);
 
+      // showCluster/showSearchScore display index+1, so pass the 0-based
+      // targetIndex (matching metadata-drawer's release-time path). Passing
+      // targetIndex+1 here double-incremented the badge during the drag, so the
+      // live position read one too high until the thumb was released.
       if (state.searchResults[targetIndex]?.cluster !== undefined) {
         const cluster = state.searchResults[targetIndex]?.cluster;
         const color = state.searchResults[targetIndex]?.color;
-        this.scoreDisplayObj.showCluster(cluster, color, targetIndex + 1, state.searchResults.length);
+        this.scoreDisplayObj.showCluster(cluster, color, targetIndex, state.searchResults.length);
       } else {
         this.scoreDisplayObj.showSearchScore(
           state.searchResults[targetIndex]?.score,
-          targetIndex + 1,
+          targetIndex,
           state.searchResults.length
         );
       }
