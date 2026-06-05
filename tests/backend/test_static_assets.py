@@ -1,7 +1,9 @@
 """Tests for cache-busting of the no-build frontend assets."""
+import asyncio
 import re
 
-from photomap.backend.static_assets import compute_asset_version
+from photomap.backend.constants import get_package_resource_path
+from photomap.backend.static_assets import VersionedStaticFiles, compute_asset_version
 
 
 def test_compute_asset_version_is_stable_for_unchanged_content(tmp_path):
@@ -64,7 +66,9 @@ def test_versioned_asset_is_served_and_marked_immutable(client):
 
     resp = client.get(f"/static/{version}/main.js")
     assert resp.status_code == 200
-    assert "javascript" in resp.headers["content-type"]
+    # Confirm the real module was served. The content-type for .js varies by OS
+    # / registry (notably on Windows), so assert on the body, not the MIME type.
+    assert "import" in resp.text
     assert "immutable" in resp.headers.get("cache-control", "")
 
     # A nested module import resolves under the same version segment.
@@ -84,3 +88,20 @@ def test_wrong_version_segment_is_not_served(client):
     # A stale/foreign version segment must not resolve to a real file.
     resp = client.get("/static/vDOESNOTMATCH.0000000000/main.js")
     assert resp.status_code == 404
+
+
+def test_os_specific_separator_in_path_is_handled(client):
+    """StaticFiles.get_path hands get_response an OS-specific path: backslashes
+    on Windows. The version prefix must still be recognised, or every versioned
+    asset 404s on Windows. Reproduce that path shape directly so the regression
+    is caught on any platform."""
+    version = _asset_version_from_home(client)
+    static_dir = get_package_resource_path("static")
+    handler = VersionedStaticFiles(directory=static_dir, version=version)
+    scope = {"type": "http", "method": "GET", "headers": []}
+
+    # Backslash separator, as os.path.normpath would produce on Windows.
+    response = asyncio.run(handler.get_response(f"{version}\\main.js", scope))
+
+    assert response.status_code == 200
+    assert "immutable" in response.headers.get("cache-control", "")

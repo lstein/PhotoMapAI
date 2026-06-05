@@ -72,9 +72,15 @@ class VersionedStaticFiles(StaticFiles):
         self._version_prefix = f"{version}/"
 
     async def get_response(self, path: str, scope: Scope) -> Response:
-        versioned = path.startswith(self._version_prefix)
+        # StaticFiles.get_path normalises to OS-specific separators, so on
+        # Windows ``path`` arrives with backslashes (e.g. ``v1.2.3\\main.js``).
+        # Compare on forward slashes so the version segment is recognised on
+        # every platform; the forward-slash remainder we hand back to
+        # ``super().get_response`` resolves correctly on Windows too.
+        normalized = path.replace("\\", "/")
+        versioned = normalized.startswith(self._version_prefix)
         if versioned:
-            path = path[len(self._version_prefix) :]
+            path = normalized[len(self._version_prefix) :]
         response = await super().get_response(path, scope)
         if versioned and response.status_code == 200:
             # The version segment uniquely identifies this content, so it can be
