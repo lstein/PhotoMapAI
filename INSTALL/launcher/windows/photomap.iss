@@ -36,8 +36,8 @@ OutputBaseFilename=PhotoMapAI-{#AppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-SetupIconFile=..\..\..\photomap\frontend\static\icons\favicon.ico
-UninstallDisplayIcon={app}\{#AppExe}
+SetupIconFile=..\icons\photomap.ico
+UninstallDisplayIcon={app}\photomap.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -47,13 +47,16 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "{#AppExe}"; Flags: ignoreversion
+; Launcher icon used by the Start Menu / desktop shortcuts (the Go exe has no
+; embedded icon, so shortcuts reference this file).
+Source: "..\icons\photomap.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; Bundled VC++ runtime installer; only extracted when the runtime is missing.
 Source: "{#VCRedist}"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: VCRedistNeeded
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\photomap.ico"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\photomap.ico"; Tasks: desktopicon
 
 [Run]
 ; PyTorch needs the Microsoft Visual C++ runtime (vcruntime140.dll, etc.).

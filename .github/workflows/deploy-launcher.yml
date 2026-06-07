@@ -90,7 +90,7 @@ jobs:
           INSTALL/launcher/linux/build_appimage.sh \
             dist/photomap "${VERSION}" \
             "dist/PhotoMapAI-${VERSION}-x86_64.AppImage" \
-            photomap/frontend/static/icons/favicon-32x32.png
+            INSTALL/launcher/icons/photomap.png
 
       - uses: actions/upload-artifact@v5
         with:
@@ -138,7 +138,7 @@ jobs:
           chmod +x INSTALL/launcher/macos/build_app.sh
           INSTALL/launcher/macos/build_app.sh \
             dist/photomap "${VERSION}" "dist/PhotoMapAI.app" \
-            photomap/frontend/static/icons/icon.icns
+            INSTALL/launcher/icons/photomap.icns
 
       - name: Import signing certificate
         if: env.SIGNING_ENABLED == 'true'
