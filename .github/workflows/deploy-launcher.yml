@@ -1,0 +1,267 @@
+name: Deploy Launcher
+
+# Builds the small native launcher for each OS, signs/notarizes it, packages it
+# (.dmg / setup.exe / .AppImage), and uploads the result as a build artifact.
+# Replaces deploy-pyinstaller.yml: the launcher does NOT bundle torch, so there
+# is no cpu/cu129 matrix and no disk-space juggling — builds are small and fast.
+#
+# Required repository secrets (signing is skipped gracefully if absent, so
+# workflow_dispatch still produces unsigned artifacts for testing):
+#   macOS    MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD, MACOS_KEYCHAIN_PASSWORD,
+#            APPLE_API_KEY_P8_BASE64, APPLE_API_KEY_ID, APPLE_API_ISSUER_ID
+#   Windows  AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+#
+# Required repository variables (non-secret Azure Trusted Signing config):
+#   AZURE_CODESIGN_ENDPOINT  e.g. https://eus.codesigning.azure.net
+#   AZURE_CODESIGN_ACCOUNT   the Trusted Signing account name
+#   AZURE_CODESIGN_PROFILE   the certificate profile name
+
+on:
+  workflow_call:
+    secrets:
+      MACOS_CERT_P12_BASE64: { required: false }
+      MACOS_CERT_PASSWORD: { required: false }
+      MACOS_KEYCHAIN_PASSWORD: { required: false }
+      APPLE_API_KEY_P8_BASE64: { required: false }
+      APPLE_API_KEY_ID: { required: false }
+      APPLE_API_ISSUER_ID: { required: false }
+      AZURE_TENANT_ID: { required: false }
+      AZURE_CLIENT_ID: { required: false }
+      AZURE_CLIENT_SECRET: { required: false }
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Pin the uv we have tested the launcher against (must support
+  # `--torch-backend` on `uv tool install`).
+  UV_VERSION: "0.11.19"
+  GO_VERSION: "1.22"
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Extract version from pyproject.toml
+        id: get_version
+        run: |
+          VERSION=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  # --------------------------------------------------------------------------
+  linux:
+    needs: version
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Fetch uv ${{ env.UV_VERSION }}
+        run: |
+          mkdir -p launcher/assets
+          curl -fsSL -o /tmp/uv.tar.gz \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
+          tar -xzf /tmp/uv.tar.gz --strip-components=1 -C launcher/assets uv-x86_64-unknown-linux-gnu/uv
+          mv launcher/assets/uv launcher/assets/uv-bin
+
+      - name: Build launcher
+        run: |
+          mkdir -p dist
+          cd launcher
+          go build -tags embed_uv -ldflags "-X main.version=${VERSION}" -o ../dist/photomap .
+
+      - name: Build AppImage
+        run: |
+          curl -fsSL -o /tmp/appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x /tmp/appimagetool
+          export PATH="/tmp:$PATH"
+          export APPIMAGE_EXTRACT_AND_RUN=1   # CI has no FUSE
+          chmod +x INSTALL/launcher/linux/build_appimage.sh
+          INSTALL/launcher/linux/build_appimage.sh \
+            dist/photomap "${VERSION}" \
+            "dist/PhotoMapAI-${VERSION}-x86_64.AppImage" \
+            photomap/frontend/static/icons/favicon-32x32.png
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: photomap-launcher-linux-x64-v${{ env.VERSION }}
+          path: dist/PhotoMapAI-${{ env.VERSION }}-x86_64.AppImage
+          retention-days: 30
+
+  # --------------------------------------------------------------------------
+  macos:
+    needs: version
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      # 'true' when the signing/notarization secrets are configured.
+      SIGNING_ENABLED: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.APPLE_API_KEY_P8_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Fetch uv ${{ env.UV_VERSION }}
+        run: |
+          mkdir -p launcher/assets
+          # macos-latest runners are Apple Silicon (arm64). Intel Macs are not
+          # covered by this build; add an x86_64 leg / universal2 if needed.
+          curl -fsSL -o /tmp/uv.tar.gz \
+            "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-aarch64-apple-darwin.tar.gz"
+          tar -xzf /tmp/uv.tar.gz --strip-components=1 -C launcher/assets uv-aarch64-apple-darwin/uv
+          mv launcher/assets/uv launcher/assets/uv-bin
+
+      - name: Build launcher
+        run: |
+          mkdir -p dist
+          cd launcher
+          go build -tags embed_uv -ldflags "-X main.version=${VERSION}" -o ../dist/photomap .
+
+      - name: Assemble .app
+        run: |
+          chmod +x INSTALL/launcher/macos/build_app.sh
+          INSTALL/launcher/macos/build_app.sh \
+            dist/photomap "${VERSION}" "dist/PhotoMapAI.app" \
+            photomap/frontend/static/icons/icon.icns
+
+      - name: Import signing certificate
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)".*/\1/')
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Sign .app (hardened runtime)
+        if: env.SIGNING_ENABLED == 'true'
+        run: |
+          # Sign the nested Mach-O first, then the bundle.
+          codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
+            "dist/PhotoMapAI.app/Contents/Resources/photomap"
+          codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
+            "dist/PhotoMapAI.app"
+          codesign --verify --deep --strict --verbose=2 "dist/PhotoMapAI.app"
+
+      - name: Build DMG
+        run: |
+          DMG="dist/PhotoMapAI-${VERSION}.dmg"
+          ROOT="$RUNNER_TEMP/dmg-root"
+          mkdir -p "$ROOT"
+          cp -R "dist/PhotoMapAI.app" "$ROOT/"
+          ln -s /Applications "$ROOT/Applications"
+          hdiutil create -volname "PhotoMapAI" -srcfolder "$ROOT" -ov -format UDZO "$DMG"
+          echo "DMG=$DMG" >> "$GITHUB_ENV"
+
+      - name: Sign + notarize + staple DMG
+        if: env.SIGNING_ENABLED == 'true'
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG"
+          echo "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/api_key.p8"
+          xcrun notarytool submit "$DMG" \
+            --key "$RUNNER_TEMP/api_key.p8" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "$DMG"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: photomap-launcher-macos-arm64-v${{ env.VERSION }}
+          path: dist/PhotoMapAI-${{ env.VERSION }}.dmg
+          retention-days: 30
+
+  # --------------------------------------------------------------------------
+  windows:
+    needs: version
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      SIGNING_ENABLED: ${{ secrets.AZURE_CLIENT_ID != '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Fetch uv ${{ env.UV_VERSION }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path launcher/assets | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/astral-sh/uv/releases/download/$env:UV_VERSION/uv-x86_64-pc-windows-msvc.zip" -OutFile "$env:TEMP/uv.zip"
+          Expand-Archive -Path "$env:TEMP/uv.zip" -DestinationPath "$env:TEMP/uv" -Force
+          # Embed file name is extension-less on every OS; the bytes are the exe.
+          Copy-Item "$env:TEMP/uv/uv.exe" "launcher/assets/uv-bin"
+
+      - name: Build launcher
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Set-Location launcher
+          go build -tags embed_uv -ldflags "-X main.version=$env:VERSION" -o ../dist/photomap.exe .
+
+      - name: Sign launcher exe (Azure Trusted Signing)
+        if: env.SIGNING_ENABLED == 'true'
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ vars.AZURE_CODESIGN_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.AZURE_CODESIGN_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CODESIGN_PROFILE }}
+          files-folder: dist
+          files-folder-filter: exe
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=$env:VERSION" `
+            "/DSourceExe=dist\photomap.exe" `
+            INSTALL\launcher\windows\photomap.iss
+
+      - name: Sign installer (Azure Trusted Signing)
+        if: env.SIGNING_ENABLED == 'true'
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ vars.AZURE_CODESIGN_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.AZURE_CODESIGN_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CODESIGN_PROFILE }}
+          files-folder: dist
+          files-folder-filter: exe
+          files-folder-recurse: false
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: photomap-launcher-windows-x64-v${{ env.VERSION }}
+          path: dist/PhotoMapAI-${{ env.VERSION }}-setup.exe
+          retention-days: 30

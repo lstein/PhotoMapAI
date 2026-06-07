@@ -1,5 +1,10 @@
 name: Deploy PyInstaller Executables
 
+# DEPRECATED: superseded by deploy-launcher.yml (the small signed uv-bootstrap
+# launcher). No longer wired into deploy.yml; kept one release cycle as a
+# fallback and for manual dispatch. Remove this workflow, photomap.spec, and
+# INSTALL/pyinstaller/ once the signed launcher has shipped on all platforms.
+
 on:
   workflow_call:
   workflow_dispatch:

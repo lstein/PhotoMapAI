@@ -17,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from photomap.backend.args import get_args, get_version
+from photomap.backend.browser import open_browser_when_ready, should_open_browser
 from photomap.backend.config import get_config_manager
 from photomap.backend.constants import get_package_resource_path
 from photomap.backend.encoders import start_idle_watcher, stop_idle_watcher
@@ -163,14 +164,32 @@ async def get_root(
 
 
 def start_photomap_loop():
-    """Start the PhotoMapAI server loop."""
+    """Supervise the server, respawning the worker if it crashes.
+
+    The browser is opened here (once), not in the respawned worker: the worker is
+    re-launched on every crash, so opening it there would reopen a tab on each
+    restart. Workers are therefore always spawned with ``--no-browser``.
+    """
+    args = get_args()
+    host = args.host or os.environ.get("PHOTOMAP_HOST", "127.0.0.1")
+    port = args.port or int(os.environ.get("PHOTOMAP_PORT", "8050"))
+    if should_open_browser(host, no_browser=args.no_browser, reload=args.reload):
+        open_browser_when_ready(host, port)
+
     running = True
-    args = [sys.executable] + ["-m", "photomap.backend.photomap_server"] + sys.argv[1:] + ["--once"]
+    child_argv = [
+        sys.executable,
+        "-m",
+        "photomap.backend.photomap_server",
+        *sys.argv[1:],
+        "--once",
+        "--no-browser",
+    ]
 
     while running:
         try:
             logger.info("Loading...")
-            subprocess.run(args, check=True)
+            subprocess.run(child_argv, check=True)
         except KeyboardInterrupt:
             logger.warning("Shutting down server...")
             running = False
@@ -266,6 +285,9 @@ def main():
     logger.info(
         f"Please open your browser to \033[1m{app_url}\033[0m to access the PhotoMapAI application"
     )
+
+    if should_open_browser(host, no_browser=args.no_browser, reload=args.reload):
+        open_browser_when_ready(host, port)
 
     uvicorn.run(
         "photomap.backend.photomap_server:app",

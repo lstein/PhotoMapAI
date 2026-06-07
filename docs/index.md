@@ -73,115 +73,28 @@ PhotoMapAI supports most of the other features you would expect, including suppo
 
 ## Quick Start
 
-Here are instructions for installation on [Windows](#windows), [Linux/Mac](#linux-mac), [From the Python repo](#python-repository), and [Docker](#docker-install)
+The easiest way to install PhotoMapAI is the native installer for your platform. **You don't need Python, CUDA, or anything else first** — the installer sets everything up on first launch. Download the file for your system from the latest [Releases page](https://github.com/lstein/PhotoMapAI/releases) (under **Assets**), where `X.X.X` is the current version:
 
-### Windows
+| Platform | Download | Install |
+|----------|----------|---------|
+| **macOS** | `PhotoMapAI-X.X.X.dmg` | Open the `.dmg`, drag **PhotoMapAI** to **Applications** |
+| **Windows** | `PhotoMapAI-X.X.X-setup.exe` | Run the installer (no admin rights needed) |
+| **Linux** | `PhotoMapAI-X.X.X-x86_64.AppImage` | `chmod +x` it and double-click, or run from a terminal |
 
-#### 1. Download and unpack the source code
+The **first** launch downloads a private copy of Python and the AI libraries (a multi-gigabyte, one-time download that takes a few minutes; a console window shows progress). When it finishes, the server starts and your browser opens automatically to create your first album. Later launches start in seconds. An NVIDIA GPU is detected and used automatically, as is Apple Silicon acceleration.
 
-Download the PhotoMapAI source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMapAI home page.
+See the [Installation guide](installation.md) for PyPI, Docker, source, GPU overrides, and uninstall details.
 
-Choose a convenient location in your home folder and unzip the file to create a new folder named `PhotoMapAI`.
+### Install from the command line
 
-#### 2. Run the installer script
-
-Navigate to the unpacked `PhotoMapAI` folder, find the `INSTALL` folder, and double-click the `install_windows` script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named `start_photomap`.
-
-#### 3. Start the server
-
-Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server.
-
-#### 4. **Open your browser:**
-
-Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
-
----
-
-### Linux & Mac
-
-#### 1. Download and unpack the source code
-
-Download the PhotoMapAI source code as a .zip file from the latest stable Releases page. For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMapAI home page.
-
-Choose a convenient location in your home directory and unzip the file to create a new folder named `PhotoMapAI`.
-
-#### 2. Run the installer script
-
-Navigate to the `PhotoMapAI` folder and launch the `install_linux_mac` shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named `start_photomap` on your desktop.
-
-#### 3. Start the server
-
-Double click `start_photomap` to launch the server. You will see a few startup messages followed by the URL for the running server.
-
-#### 4. **Open your browser:**
-
-Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
-
----
-
-
-### Python Repository
-
-If you are familiar with installing Python packages from the PyPi repo, here is a quick four line recipe:
+If you already have Python 3.10–3.14:
 
 ```bash
-pip -mvenv photomap --prompt photomap
-source photomap/bin/activate
-pip install photomapai
+uv tool install photomapai --torch-backend auto   # or: pip install photomapai
 start_photomap
 ```
 
-After the startup messages, point your browser to http://localhost:8050 and follow the prompts.
-
----
-
-### Docker Install
-
-If you have Docker installed on your system, here is a one-liner to get PhotoMapAI up and running:
-
-```bash
-docker -p 8050:8050 -v /path/to/a/picture_folder:/Pictures lstein/photomapai:latest
-```
-Change `/path/to/a/picture_folder` to a path on your desktop that contains the images/photos you wish to add to an album. After the startup messages, point your browser to http://localhost:8050 and follow the prompts. Your images will be found in the container directory `/Pictures`.
-
----
-
-### Executable Install
-
-As of version 0.9.4, there is also an option to install a prebuilt executable package. This package does not require you to install Python, CUDA, or any other PhotoMapAI dependencies. However, the executable is not yet code-signed, meaning that Windows and Mac users will have to bypass code safety checks.
-
-Go to the latest [release page](https://github.com/lstein/PhotoMapAI/releases) and look under **assets**. There you will find the following files, where X.X.X is replaced by the current released version number:
-
-| Name                              | Platform            | GPU Acceleration |
-|-----------------------------------|---------------------|--------------|
-| photomap-linux-x64-cpu-vX.X.X.zip | Linux | none |
-| photomap-linux-x64-cu129-vX.X.X.zip | Linux | CUDA 12.9 |
-| photomap-macos-x64-cpu-vX.X.X.zip | Macintosh | built-in acceleration|
-| photomap-windows-x64-cpu-vX.X.X.zip | Windows | none|
-| photomap-windows-x64-cu129-vX.X.X.zip | Windows | CUDA 12.9|
-
-If you have an Nvidia card and any of the CUDA 12.X libraries installed, you can take advantage of accelerated image indexing by choosing one of the `cu129` packages. Download the zip file for your platform and unpack it. Then follow these instructions to bypass the operating system's code-checking:
-
-#### Mac
-
-Using the command-line terminal, navigate to the unpacked folder `photomap-macos-x64-cpu-vX.X.X` and run this command:
-
-```bash
-xattr -d com.apple.quarantine ./photomap-macos-x64-cpu-vX.X.X`
-```
-(Use the actual version number, not X.X.X). This step only has to be done once.
-
-Now you can double-click on the package and the PhotoMapAI server will launch in a terminal window after a brief delay.
-
-#### Windows
-
-After unpacking, navigate into the folder and double-click on `photomap.exe`. You will be warned that you are trying to run untrusted code. Click on the `More info` link, and choose `Run anyway`. After a short delay, a new terminal window will open up with the output from the PhotoMapAI server.
-
-You'll need to override the untrusted code check each time you launch PhotoMapAI. 
-
-#### Linux
-
-Using the terminal/command-line shell, navigate to the unpacked folder and run `./photomap`. No trusted code workarounds are needed. If you prefer to double-click an icon, there is a `run_photomap.sh` script in the folder that will launch a terminal for you and run PhotoMapAI inside it.
+After the startup messages your browser opens to http://localhost:8050 automatically.
 
 ---
 

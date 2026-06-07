@@ -14,10 +14,10 @@ jobs:
   upload-release: 
     runs-on: ubuntu-latest
     steps:
-      - name: Download CPU installer package artifacts
+      - name: Download launcher artifacts
         uses: actions/download-artifact@v5
-        with: 
-          pattern: "*-cpu-*"
+        with:
+          pattern: "photomap-launcher-*"
           path: artifacts
 
       - name: List downloaded artifacts
@@ -27,6 +27,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.tag_name }}
-          files: artifacts/*-cpu-*/*
+          files: artifacts/photomap-launcher-*/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
