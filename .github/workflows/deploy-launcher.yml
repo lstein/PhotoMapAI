@@ -102,6 +102,11 @@ jobs:
   macos:
     needs: version
     runs-on: macos-latest
+    # Apple notarization (`notarytool --wait`) is the long pole and can sit in
+    # Apple's queue for ~45+ min with no incident; cap the job well above that so
+    # a genuinely stuck submission fails at 2h instead of GitHub's 6h default,
+    # without false-failing a slow-but-valid notarization.
+    timeout-minutes: 120
     env:
       VERSION: ${{ needs.version.outputs.version }}
       # 'true' when the signing/notarization secrets are configured.
