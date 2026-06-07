@@ -15,6 +15,7 @@ help:
 	@echo "docker-demo      Build the Docker demo site image."
 	@echo "docs             Serve the mkdocs site with live reload."
 	@echo "deploy-docs      Deploy the mkdocs site to GitHub pages."
+	@echo "launcher         Build the launcher binary (fast, no embedded uv) into dist/."
 	@echo "appimage         Build the Linux launcher AppImage into dist/."
 	@echo "backend-lint     Run Python backend linting with Ruff."
 	@echo "frontend-lint    Run JavaScript frontend linting with ESLint and Prettier."
@@ -56,6 +57,18 @@ docs:
 
 deploy-docs:
 	mkdocs gh-deploy
+
+# Build just the launcher binary for fast dev iteration (~1s). No embedded uv,
+# so the binary downloads uv on first run; no packaging. Output: dist/photomap.
+# Run it with `./dist/photomap`. Use `make appimage` for the distributable.
+.PHONY: launcher
+launcher:
+	@command -v go >/dev/null || { echo "Go is required: https://go.dev/dl/"; exit 1; }
+	version=$$(grep '^version\s*=' pyproject.toml | sed -E 's/.*=\s*"([^"]+)".*/\1/') \
+	&& mkdir -p dist \
+	&& echo "Building launcher v$$version (no embedded uv)..." \
+	&& ( cd launcher && go build -ldflags "-X main.version=$$version" -o ../dist/photomap . ) \
+	&& echo "Built dist/photomap"
 
 # Build the Linux launcher AppImage on demand (the same steps CI runs):
 #   1. fetch the pinned uv binary into launcher/assets/uv-bin (cached after first run)
