@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 class IndexStatus(Enum):
     IDLE = "idle"
     SCANNING = "scanning"
+    DOWNLOADING = "downloading"
     INDEXING = "indexing"
     UMAPPING = "mapping"
     CURATING = "curating"
@@ -114,6 +115,51 @@ class ProgressTracker:
                 ):
                     progress.status = IndexStatus.COMPLETED
 
+    def report_download(
+        self,
+        album_key: str,
+        downloaded: int,
+        total: int | None,
+        message: str = "Downloading encoder model…",
+    ) -> None:
+        """Surface encoder-weight download progress as a DOWNLOADING phase.
+
+        ``downloaded``/``total`` are *byte* counts (``total`` may be ``None`` when
+        the server omits ``Content-Length``); they reuse the
+        ``images_processed``/``total_images`` fields so the existing percentage
+        and ETA machinery drives the UI bar without special-casing. On the first
+        transition into DOWNLOADING the start time is reset so the byte-rate ETA
+        reflects the download rather than the preceding scan. The cancel flag is
+        deliberately left untouched.
+        """
+        with self._lock:
+            progress = self._progress.get(album_key)
+            if progress is None:
+                return
+            if progress.status != IndexStatus.DOWNLOADING:
+                progress.start_time = time.time()
+            progress.status = IndexStatus.DOWNLOADING
+            progress.images_processed = max(downloaded, 0)
+            progress.total_images = total if total and total > 0 else 0
+            progress.current_step = message
+
+    def begin_indexing(self, album_key: str, total_images: int) -> None:
+        """Transition an album into the INDEXING phase.
+
+        Used to flip back from DOWNLOADING once the encoder is ready and image
+        encoding starts. Resets the processed count and start time (so the ETA
+        excludes any preceding download) but leaves the cancel flag intact.
+        """
+        with self._lock:
+            progress = self._progress.get(album_key)
+            if progress is None:
+                return
+            progress.status = IndexStatus.INDEXING
+            progress.images_processed = 0
+            progress.total_images = total_images
+            progress.current_step = "Starting indexing"
+            progress.start_time = time.time()
+
     def set_error(self, album_key: str, error_message: str):
         """Set error status for an album."""
         with self._lock:
@@ -155,6 +201,7 @@ class ProgressTracker:
             progress = self._progress.get(album_key)
             return progress is not None and progress.status in [
                 IndexStatus.SCANNING,
+                IndexStatus.DOWNLOADING,
                 IndexStatus.INDEXING,
                 IndexStatus.UMAPPING,
                 IndexStatus.CURATING,

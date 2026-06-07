@@ -232,6 +232,9 @@
 .index-status.scanning {
   color: #636ceb;
 }
+.index-status.downloading {
+  color: #9c27b0 !important;
+}
 .index-status.indexing {
   color: #ff9800 !important;
 }

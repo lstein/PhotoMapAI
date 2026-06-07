@@ -12,12 +12,15 @@ weights, so behavior is unchanged unless an album opts in to a different spec.
 
 from __future__ import annotations
 
+import contextlib
+import importlib
 import logging
 import math
 import sys
 import threading
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterator
 from typing import ClassVar
 
 import numpy as np
@@ -434,6 +437,104 @@ def _normalize(feats: torch.Tensor) -> np.ndarray:
 def _free_cuda(device: str) -> None:
     if device.startswith("cuda"):
         torch.cuda.empty_cache()
+
+
+# --- Model download progress capture --------------------------------------
+# The first time an encoder is built on a fresh install, its weights (hundreds
+# of MB) are fetched from the network, which can take minutes with no UI
+# feedback. Each backend renders that fetch through a ``tqdm`` byte-bar, but via
+# a *different* module-level ``tqdm`` reference:
+#
+#   - ``clip.clip.tqdm``                    -- openai-clip URL download
+#   - ``open_clip.pretrained.tqdm``         -- open-clip URL download (non-HF tags)
+#   - ``huggingface_hub.utils.tqdm.tqdm``   -- HF Hub fetches (open-clip HF + siglip)
+#
+# ``capture_download_progress`` temporarily swaps those references for a
+# subclass that forwards byte progress to a caller-supplied callback, so the
+# indexing UI can show a real download bar. The originals are restored on exit,
+# and the swap only happens when a callback is provided — so the CLI/console
+# path keeps its normal tqdm output.
+
+# (module, attribute) pairs to patch. Resolved lazily inside the context manager
+# so a backend that isn't installed is simply skipped.
+_DOWNLOAD_TQDM_TARGETS: tuple[tuple[str, str], ...] = (
+    ("clip.clip", "tqdm"),
+    ("open_clip.pretrained", "tqdm"),
+    ("huggingface_hub.utils.tqdm", "tqdm"),
+)
+
+# tqdm reports download bars in these units; anything else (e.g. a plain
+# iteration counter) is ignored so we only ever surface real byte progress.
+_BYTE_UNITS = frozenset({"B", "iB", "bytes"})
+
+
+def _make_reporting_tqdm(base_cls: type, callback: Callable[[int, int | None, str], None]) -> type:
+    """Build a ``tqdm`` subclass that forwards byte progress to ``callback``.
+
+    Subclassing the real ``tqdm`` keeps all of its behavior intact (including
+    console rendering); we only add a side-channel report on each update/close.
+    Reports are best-effort: any exception raised by ``callback`` is swallowed
+    so a UI hiccup can never interrupt or fail a model download.
+    """
+
+    class _ReportingTqdm(base_cls):  # type: ignore[valid-type, misc]
+        def update(self, n: float = 1):  # noqa: ANN001 - mirror tqdm signature
+            ret = super().update(n)
+            self._photomap_report()
+            return ret
+
+        def close(self):
+            self._photomap_report()
+            return super().close()
+
+        def _photomap_report(self) -> None:
+            try:
+                if getattr(self, "unit", "") not in _BYTE_UNITS:
+                    return
+                total = getattr(self, "total", None)
+                callback(
+                    int(getattr(self, "n", 0) or 0),
+                    int(total) if total else None,
+                    str(getattr(self, "desc", "") or ""),
+                )
+            except Exception:
+                # Never let progress reporting break a download.
+                pass
+
+    return _ReportingTqdm
+
+
+@contextlib.contextmanager
+def capture_download_progress(
+    callback: Callable[[int, int | None, str], None] | None,
+) -> Iterator[None]:
+    """Route encoder-weight download progress to ``callback`` within the block.
+
+    ``callback(downloaded, total, desc)`` is invoked with cumulative bytes for
+    the *currently active* download bar (``total`` is ``None`` when the server
+    omits ``Content-Length``). When ``callback`` is ``None`` this is a no-op, so
+    callers that don't want UI reporting (the CLI/sync path) get unchanged
+    behavior.
+    """
+    if callback is None:
+        yield
+        return
+
+    patched: list[tuple[object, str, object]] = []
+    for module_name, attr in _DOWNLOAD_TQDM_TARGETS:
+        try:
+            module = importlib.import_module(module_name)
+            original = getattr(module, attr)
+        except (ImportError, AttributeError):
+            continue
+        patched.append((module, attr, original))
+        setattr(module, attr, _make_reporting_tqdm(original, callback))
+
+    try:
+        yield
+    finally:
+        for module, attr, original in patched:
+            setattr(module, attr, original)
 
 
 def build_encoder(

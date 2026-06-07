@@ -37,6 +37,7 @@ from .encoders import (
     EmbeddingCacheMismatch,
     ImageTextEncoder,
     build_encoder,
+    capture_download_progress,
     get_cached_encoder,
 )
 from .metadata_extraction import MetadataExtractor
@@ -605,6 +606,7 @@ class Embeddings(BaseModel):
         progress_callback: Callable | None = None,
         batch_size: int = 1,
         num_workers: int = 1,
+        download_callback: Callable | None = None,
     ) -> IndexResult:
         """
         Process a batch of images and return IndexResult.
@@ -619,13 +621,17 @@ class Embeddings(BaseModel):
                 parallel. Default 1 keeps the legacy serial path. >1 enables a
                 bounded producer/consumer pipeline so the GPU stays fed while images
                 decode concurrently.
+            download_callback: Optional callback(downloaded, total, desc) invoked with
+                byte progress while the encoder weights are downloaded on first use.
+                ``None`` (the CLI/sync path) leaves tqdm's console output untouched.
         """
         if batch_size < 1:
             raise ValueError(f"batch_size must be >= 1 (got {batch_size})")
         if num_workers < 1:
             raise ValueError(f"num_workers must be >= 1 (got {num_workers})")
 
-        encoder = self._build_encoder()
+        with capture_download_progress(download_callback):
+            encoder = self._build_encoder()
         embedding_dim = encoder.embedding_dim
 
         embeddings: list[np.ndarray] = []
@@ -752,7 +758,14 @@ class Embeddings(BaseModel):
         def progress_cb(i: int, total: int, message: str) -> None:
             if progress_tracker.is_cancel_requested(album_key):
                 raise IndexingCancelled("Indexing cancelled by user")
+            # The first encode marks the end of any model-download phase; flip
+            # the status back to INDEXING (a no-op when nothing was downloaded).
+            if i == 0:
+                progress_tracker.begin_indexing(album_key, total)
             progress_tracker.update_progress(album_key, i, message)
+
+        def download_cb(downloaded: int, total: int | None, desc: str) -> None:
+            progress_tracker.report_download(album_key, downloaded, total)
 
         async with _get_indexing_semaphore():
             return await asyncio.to_thread(
@@ -761,6 +774,7 @@ class Embeddings(BaseModel):
                 progress_cb,
                 batch_size,
                 num_workers,
+                download_cb,
             )
 
     def _save_embeddings(self, index_result: IndexResult) -> None:
