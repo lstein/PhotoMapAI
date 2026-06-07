@@ -14,6 +14,7 @@ import pytest
 
 from photomap.backend import encoders as encoders_module
 from photomap.backend.encoders import (
+    CPU_FALLBACK_ENCODER_SPEC,
     DEFAULT_ENCODER_SPEC,
     LEGACY_ENCODER_SPEC,
     EmbeddingCacheMismatch,
@@ -23,6 +24,7 @@ from photomap.backend.encoders import (
     SiglipEncoder,
     build_encoder,
     clear_encoder_cache,
+    default_encoder_spec,
     get_cached_encoder,
 )
 
@@ -30,6 +32,33 @@ from photomap.backend.encoders import (
 def test_default_spec_for_new_albums():
     """New albums default to OpenCLIP-DFN ViT-L-14 (best general-purpose pick)."""
     assert DEFAULT_ENCODER_SPEC == "open-clip:ViT-L-14/dfn2b_s39b"
+
+
+def test_cpu_fallback_spec_is_light_clip():
+    """CPU-only Linux/Windows hosts default new albums to the light CLIP."""
+    assert CPU_FALLBACK_ENCODER_SPEC == "openai-clip:ViT-B/32"
+
+
+def test_default_encoder_spec_cuda_uses_high_quality(monkeypatch):
+    """Any host with CUDA gets the high-quality default regardless of OS."""
+    monkeypatch.setattr(encoders_module.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(encoders_module.sys, "platform", "win32")
+    assert default_encoder_spec() == DEFAULT_ENCODER_SPEC
+
+
+def test_default_encoder_spec_macos_uses_high_quality(monkeypatch):
+    """macOS stays on the high-quality default even without CUDA (untested path)."""
+    monkeypatch.setattr(encoders_module.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(encoders_module.sys, "platform", "darwin")
+    assert default_encoder_spec() == DEFAULT_ENCODER_SPEC
+
+
+@pytest.mark.parametrize("platform", ["linux", "win32"])
+def test_default_encoder_spec_cpu_linux_windows_falls_back(monkeypatch, platform):
+    """CPU-only Linux/Windows hosts fall back to the lighter encoder."""
+    monkeypatch.setattr(encoders_module.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(encoders_module.sys, "platform", platform)
+    assert default_encoder_spec() == CPU_FALLBACK_ENCODER_SPEC
 
 
 def test_legacy_spec_unchanged():

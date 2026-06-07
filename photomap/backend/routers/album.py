@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from ..config import Album, create_album, get_config_manager
 from ..embeddings import Embeddings
+from ..encoders import default_encoder_spec
 
 
 class UmapEpsSetRequest(BaseModel):
@@ -199,6 +200,17 @@ async def get_available_albums() -> list[dict[str, Any]]:
     except Exception as e:
         logger.error(f"Failed to get albums: {e}")
         return []
+
+
+@album_router.get("/default_encoder/", tags=["Albums"])
+async def get_default_encoder() -> dict[str, str]:
+    """Return the encoder spec new albums should default to on this host.
+
+    The default is platform-aware — CPU-only Linux/Windows hosts get a lighter
+    encoder than CUDA/macOS hosts — so the frontend asks the server for it
+    rather than hardcoding a single default in the dropdown.
+    """
+    return {"encoder_spec": default_encoder_spec()}
 
 
 @album_router.get("/album/{album_key}/", tags=["Albums"])

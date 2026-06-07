@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import math
+import sys
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -38,6 +39,29 @@ DEFAULT_ENCODER_SPEC = "open-clip:ViT-L-14/dfn2b_s39b"
 # the field was unambiguously built with this spec. Don't change this — it's
 # a compatibility marker, not a tunable.
 LEGACY_ENCODER_SPEC = "openai-clip:ViT-B/32"
+
+# Default encoder for *new* albums on Linux/Windows hosts without CUDA. The
+# OpenCLIP ViT-L-14 DEFAULT_ENCODER_SPEC is impractically slow to index/search
+# on CPU there, so new albums fall back to the much lighter OpenAI CLIP
+# ViT-B/32 (weaker recall, far faster). This happens to be the same spec string
+# as LEGACY_ENCODER_SPEC, but it's a distinct constant on purpose: this one is
+# a tunable CPU default, not the frozen legacy-cache compatibility marker.
+CPU_FALLBACK_ENCODER_SPEC = "openai-clip:ViT-B/32"
+
+
+def default_encoder_spec() -> str:
+    """Resolve the default encoder spec for *new* albums based on the host.
+
+    Hosts with CUDA, and macOS (left on the high-quality default since the
+    lighter CPU path is untested there), get ``DEFAULT_ENCODER_SPEC``. Linux and
+    Windows hosts without CUDA fall back to ``CPU_FALLBACK_ENCODER_SPEC`` because
+    OpenCLIP ViT-L-14 is far too slow to run on CPU on those platforms.
+    """
+    if torch.cuda.is_available():
+        return DEFAULT_ENCODER_SPEC
+    if sys.platform == "darwin":
+        return DEFAULT_ENCODER_SPEC
+    return CPU_FALLBACK_ENCODER_SPEC
 
 # When True, SigLIP's encode_text wraps each query in every entry of
 # SIGLIP_PROMPT_TEMPLATES, encodes them all, L2-normalizes each per-template

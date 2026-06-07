@@ -15,7 +15,7 @@ import yaml
 from platformdirs import user_config_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .encoders import DEFAULT_ENCODER_SPEC, LEGACY_ENCODER_SPEC
+from .encoders import LEGACY_ENCODER_SPEC, default_encoder_spec
 from .util import atomic_write_text
 
 logger = logging.getLogger(__name__)
@@ -33,10 +33,12 @@ class Album(BaseModel):
     umap_eps: float = Field(default=0.2, description="UMAP epsilon parameter")
     description: str = Field(default="", description="Album description")
     encoder_spec: str = Field(
-        default=DEFAULT_ENCODER_SPEC,
+        # Resolved per-host: OpenCLIP ViT-L-14 on CUDA/macOS, lighter OpenAI CLIP
+        # ViT-B/32 on CPU-only Linux/Windows. See encoders.default_encoder_spec.
+        default_factory=default_encoder_spec,
         description=(
             "Image/text encoder spec. Format: '<backend>:<model>'. "
-            "Examples: 'openai-clip:ViT-B/32' (default, legacy), "
+            "Examples: 'openai-clip:ViT-B/32' (legacy, CPU default), "
             "'open-clip:ViT-L-14/dfn2b', 'siglip:google/siglip2-large-patch16-256'. "
             "Changing this requires re-indexing the album."
         ),
@@ -124,8 +126,9 @@ class Album(BaseModel):
             description=data.get("description", ""),
             # Legacy YAML albums predate the encoder_spec field; their indexes
             # were built with the original CLIP, so fall back to that to stay
-            # cache-compatible. New albums get DEFAULT_ENCODER_SPEC via the
-            # Album field default when the frontend creates them.
+            # cache-compatible. New albums get the host-resolved default
+            # (encoders.default_encoder_spec) via the Album field default when
+            # the frontend creates them.
             encoder_spec=data.get("encoder_spec", LEGACY_ENCODER_SPEC),
             min_search_score=data.get("min_search_score"),
             max_search_results=data.get("max_search_results", 100),
