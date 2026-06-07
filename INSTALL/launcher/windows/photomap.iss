@@ -12,6 +12,9 @@
 #ifndef SourceExe
   #define SourceExe "dist\photomap.exe"
 #endif
+#ifndef VCRedist
+  #define VCRedist "dist\vc_redist.x64.exe"
+#endif
 
 #define AppName "PhotoMapAI"
 #define AppExe "photomap.exe"
@@ -44,6 +47,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "{#AppExe}"; Flags: ignoreversion
+; Bundled VC++ runtime installer; only extracted when the runtime is missing.
+Source: "{#VCRedist}"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: VCRedistNeeded
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
@@ -51,4 +56,18 @@ Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]
+; PyTorch needs the Microsoft Visual C++ runtime (vcruntime140.dll, etc.).
+; Install it silently only when absent (one UAC prompt; skipped otherwise).
+Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Microsoft Visual C++ Runtime..."; Check: VCRedistNeeded; Flags: waituntilterminated
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function VCRedistNeeded(): Boolean;
+var
+  Installed: Cardinal;
+begin
+  // Read the native 64-bit view for the VC++ 2015-2022 x64 runtime key.
+  Result := True;
+  if RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64', 'Installed', Installed) then
+    Result := (Installed <> 1);
+end;
