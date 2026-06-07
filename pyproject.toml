@@ -71,7 +71,6 @@ development = [
     "mkdocs-material",
     "pymdown-extensions",
     "twine",
-    "pyinstaller",
     "ruff",
 ]
 [tool.setuptools.packages.find]

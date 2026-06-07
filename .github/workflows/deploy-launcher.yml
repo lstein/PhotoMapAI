@@ -2,8 +2,8 @@ name: Deploy Launcher
 
 # Builds the small native launcher for each OS, signs/notarizes it, packages it
 # (.dmg / setup.exe / .AppImage), and uploads the result as a build artifact.
-# Replaces deploy-pyinstaller.yml: the launcher does NOT bundle torch, so there
-# is no cpu/cu129 matrix and no disk-space juggling — builds are small and fast.
+# The launcher does NOT bundle torch (uv fetches it on first run), so builds are
+# small and fast — no cpu/cu129 matrix and no disk-space juggling.
 #
 # Required repository secrets (signing is skipped gracefully if absent, so
 # workflow_dispatch still produces unsigned artifacts for testing):
