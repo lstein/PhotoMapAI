@@ -8,8 +8,9 @@ import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 // Encoder backends offered in the album manager dropdown. Values must match
 // the spec format consumed by photomap.backend.encoders.build_encoder.
-// The first entry is the default selection for new albums and must stay in
-// sync with backend ``DEFAULT_ENCODER_SPEC`` (encoders.py).
+// The pre-selected default for new albums is fetched from the server
+// (getServerDefaultEncoderSpec) since it's platform-aware; ENCODER_OPTIONS[0]
+// is only the client-side fallback when that request fails.
 export const ENCODER_OPTIONS = [
   {
     value: "open-clip:ViT-L-14/dfn2b_s39b",
@@ -25,6 +26,21 @@ export const ENCODER_OPTIONS = [
   },
 ];
 const DEFAULT_ENCODER_SPEC = ENCODER_OPTIONS[0].value;
+
+// The default encoder for *new* albums is resolved by the server: it's
+// platform-aware (CPU-only Linux/Windows hosts get a lighter encoder than
+// CUDA/macOS hosts), so we can't hardcode ENCODER_OPTIONS[0] here. Fetch it
+// once, cache the promise, and fall back to the recommended option if the
+// request fails.
+let serverDefaultEncoderPromise = null;
+function getServerDefaultEncoderSpec() {
+  if (!serverDefaultEncoderPromise) {
+    serverDefaultEncoderPromise = fetchJson("default_encoder/")
+      .then((data) => data?.encoder_spec || DEFAULT_ENCODER_SPEC)
+      .catch(() => DEFAULT_ENCODER_SPEC);
+  }
+  return serverDefaultEncoderPromise;
+}
 
 function populateEncoderSelect(selectEl, currentValue) {
   if (!selectEl) {
@@ -273,8 +289,8 @@ export class AlbumManager {
       this.elements.newAlbumPathsContainer.innerHTML = "";
     }
 
-    // Reset encoder dropdown to the default
-    populateEncoderSelect(this.elements.newAlbumEncoder, DEFAULT_ENCODER_SPEC);
+    // Reset encoder dropdown to the host-resolved default
+    getServerDefaultEncoderSpec().then((spec) => populateEncoderSelect(this.elements.newAlbumEncoder, spec));
   }
 
   // Form management
@@ -286,8 +302,8 @@ export class AlbumManager {
     // Initialize path fields for the add album form
     this.initializeNewAlbumPathFields();
 
-    // Initialize encoder dropdown
-    populateEncoderSelect(this.elements.newAlbumEncoder, DEFAULT_ENCODER_SPEC);
+    // Initialize encoder dropdown to the host-resolved default
+    getServerDefaultEncoderSpec().then((spec) => populateEncoderSelect(this.elements.newAlbumEncoder, spec));
 
     // Focus on the first input field
     this.elements.newAlbumKey.focus();

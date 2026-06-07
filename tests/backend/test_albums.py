@@ -169,6 +169,31 @@ def test_album_routes(client):
     assert len(albums) == 0
 
 
+def test_default_encoder_endpoint(client, monkeypatch):
+    """/default_encoder/ reports the host-resolved default the frontend
+    pre-selects in the new-album dropdown."""
+    from photomap.backend.encoders import (
+        CPU_FALLBACK_ENCODER_SPEC,
+        DEFAULT_ENCODER_SPEC,
+    )
+
+    monkeypatch.setattr(
+        "photomap.backend.routers.album.default_encoder_spec",
+        lambda: CPU_FALLBACK_ENCODER_SPEC,
+    )
+    assert client.get("/default_encoder/").json() == {
+        "encoder_spec": CPU_FALLBACK_ENCODER_SPEC
+    }
+
+    monkeypatch.setattr(
+        "photomap.backend.routers.album.default_encoder_spec",
+        lambda: DEFAULT_ENCODER_SPEC,
+    )
+    assert client.get("/default_encoder/").json() == {
+        "encoder_spec": DEFAULT_ENCODER_SPEC
+    }
+
+
 def test_encoder_spec_round_trips_through_available_albums(client, tmp_path):
     """Regression: /available_albums/ used to strip encoder_spec, which
     caused the album-manager edit form to always show the default encoder
