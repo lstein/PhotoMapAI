@@ -12,7 +12,6 @@ import functools
 import gc
 import logging
 import os
-import sys
 import warnings
 from collections import deque
 from collections.abc import Callable, Generator
@@ -576,17 +575,8 @@ class Embeddings(BaseModel):
             return None, None, None
 
     def _clip_root(self) -> str | None:
-        """
-        Determine the root directory for CLIP model caching.
-        This is important for PyInstaller compatibility.
-        """
-        if getattr(sys, "frozen", False):
-            # If running in a PyInstaller bundle, use the bundled cache directory
-            bundle_dir = sys._MEIPASS
-            return os.path.join(bundle_dir, "clip_models")
-        else:
-            # Otherwise, use the default cache directory
-            return None
+        """Root directory for CLIP model caching (None = use the default cache)."""
+        return None
 
     def _load_image(
         self, image_path: Path
