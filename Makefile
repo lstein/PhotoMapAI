@@ -96,7 +96,7 @@ appimage:
 	&& PATH="/tmp:$$PATH" APPIMAGE_EXTRACT_AND_RUN=1 \
 		INSTALL/launcher/linux/build_appimage.sh \
 		dist/photomap "$$version" "dist/PhotoMapAI-$$version-x86_64.AppImage" \
-		photomap/frontend/static/icons/favicon-32x32.png \
+		INSTALL/launcher/icons/photomap.png \
 	&& echo "" \
 	&& echo "Built dist/PhotoMapAI-$$version-x86_64.AppImage"
 
