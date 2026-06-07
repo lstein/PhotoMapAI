@@ -151,7 +151,10 @@ func launchServer(l layout, noBrowser bool, serverArgs []string) error {
 	if host == "0.0.0.0" || host == "::" {
 		host = "127.0.0.1"
 	}
-	go openWhenReady(host, port, noBrowser)
+	// Open the browser once the server is reachable; closed when it exits so the
+	// poller stops immediately if the server crashes instead of waiting it out.
+	serverExited := make(chan struct{})
+	go openWhenReady(host, port, noBrowser, serverExited)
 
 	// Forward interrupts to the server so Ctrl+C shuts it down cleanly. A shutdown
 	// we initiated is not an error, so we don't want to show the error/pause path.
@@ -165,6 +168,7 @@ func launchServer(l layout, noBrowser bool, serverArgs []string) error {
 	}()
 
 	err := cmd.Wait()
+	close(serverExited)
 	if shuttingDown.Load() {
 		return nil
 	}
