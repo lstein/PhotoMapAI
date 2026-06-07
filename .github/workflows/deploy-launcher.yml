@@ -246,13 +246,19 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y
+          # Bundle the VC++ runtime installer so torch's c10.dll has its deps on
+          # clean machines; the installer only runs it when the runtime is absent.
+          Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vc_redist.x64.exe `
+            -OutFile dist\vc_redist.x64.exe -MaximumRetryCount 5 -RetryIntervalSec 5
           # Inno resolves relative paths against the .iss file's folder, so pass
           # absolute paths for the source exe and the output dir (repo-root dist).
           $exe = (Resolve-Path dist\photomap.exe).Path
+          $vc  = (Resolve-Path dist\vc_redist.x64.exe).Path
           $out = (Resolve-Path dist).Path
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
             "/DAppVersion=$env:VERSION" `
             "/DSourceExe=$exe" `
+            "/DVCRedist=$vc" `
             "/O$out" `
             INSTALL\launcher\windows\photomap.iss
 
