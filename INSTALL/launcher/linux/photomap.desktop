@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PhotoMapAI
+Comment=AI-powered local photo browser and semantic map
+Exec=photomap
+Icon=photomap
+Categories=Graphics;Photography;Viewer;
+Terminal=true

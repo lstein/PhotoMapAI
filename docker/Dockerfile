@@ -14,6 +14,10 @@ RUN python -c "import clip; clip.load('ViT-B/32')"
 RUN pip cache purge
 RUN rm -rf ./photomap ./build ./dist ./demo_images/photomap_index/
 
+# Never try to open a browser from inside the container (also implied by the
+# 0.0.0.0 bind, but set explicitly so it can't regress).
+ENV PHOTOMAP_NO_BROWSER=1
+
 # Expose the port your app runs on
 EXPOSE 8050
 

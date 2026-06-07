@@ -67,92 +67,34 @@ PhotoMap supports most of the other features you would expect, including support
 
 ## Quick Start
 
-Here are quick start instructions for Windows, Mac and Linux users using the automated installer scripts that are provided with this package. For instructions on manual installation, see [Installation](https://lstein.github.io/PhotoMapAI/installation/).
+The easiest way to install PhotoMapAI is the native installer for your platform. **You don't need Python, CUDA, or anything else first** — the installer sets everything up on first launch.
 
-### Windows
+Download the file for your system from the latest [Releases page](https://github.com/lstein/PhotoMapAI/releases) (under **Assets**), where `X.X.X` is the current version:
 
-#### 1. Download and unpack the source code
+| Platform | Download | Install |
+|----------|----------|---------|
+| **macOS** | `PhotoMapAI-X.X.X.dmg` | Open the `.dmg`, drag **PhotoMapAI** to **Applications** |
+| **Windows** | `PhotoMapAI-X.X.X-setup.exe` | Run the installer (no admin rights needed) |
+| **Linux** | `PhotoMapAI-X.X.X-x86_64.AppImage` | `chmod +x` it and double-click, or run from a terminal |
 
-Download the PhotoMap source code as a .zip file from the latest stable [Releases page](https://github.com/lstein/PhotoMapAI/releases). For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
+The **first** launch downloads a private copy of Python and the AI libraries (a multi-gigabyte, one-time download that takes a few minutes; a console window shows progress). When it finishes the server starts and your browser opens automatically. Later launches start in seconds. An NVIDIA GPU is detected and used automatically; Apple Silicon acceleration is automatic too.
 
-Choose a convenient location in your home folder and unzip the file to create a new folder named `PhotoMap`.
+For PyPI, Docker, and manual install instructions, see the [Installation guide](https://lstein.github.io/PhotoMapAI/installation/).
 
-#### 2. Run the installer script
+### Install from PyPI (command line)
 
-Navigate to the unpacked `PhotoMap` folder, find the `INSTALL` folder, and double-click the `install_windows` script file. The system will check that Python and other requirements are installed, download the necessary library files, and create a .bat script named `start_photomap`.
+If you already have Python 3.10–3.14 and prefer the command line:
 
-#### 3. [Optional] Install Microsoft C++ Runtime DLLs
-
-Several of PhotoMapAI's dependencies require Microsoft
-C++ Runtime DLLs. If these are not present, the installer will
-attempt to download and install them on your behalf. You will need to relaunch the install script after this is done.
-
-#### 4. Start the server
-
-Double-click `start_photomap.bat` to launch the server. You should see a few startup messages, followed by the URL for the running server.
-
-#### 5. **Open your browser:**
-
-Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
-
----
-
-### Linux & Mac
-
-#### 1. Download and unpack the source code
-
-Download the PhotoMap source code as a .zip file from the latest stable [Releases page](https://github.com/lstein/PhotoMapAI/releases). For development versions, use the "Download ZIP" link in the green "Code" button near the top of the GitHub PhotoMap home page.
-
-Choose a convenient location in your home or downloads directory and unzip the file to create a new folder named `PhotoMap-X.X.X` (where X.X.X is the current release).
-
-#### 2. Run the installer script
-
-Launch a command line shell ("Terminal" on the Mac) and navigate to the `PhotoMap-X.X.X` folder. Launch the `INSTALL/install_linux_mac.sh` shell script file. The script will check that Python and other requirements are installed, download the necessary library files, and create a launcher script named `start_photomap` on your desktop. If you are uncomfortable with the command line, here are the commands you need:
-
-```
-cd ~/Downloads/PhotoMap-X.X.X/INSTALL
-/bin/sh install_linux_mac.sh
+```bash
+uv tool install photomapai --torch-backend auto   # or: pip install photomapai
+start_photomap
 ```
 
-#### 3. Start the server
-
-Double click `start_photomap` to launch the server. You will see a few startup messages followed by the URL for the running server.
-
-#### 4. **Open your browser:**
-
-Navigate to `http://localhost:8050` and follow the prompts to create and populate your first album.
-
-### Manual Install
-
-Follow these instructions if you are comfortable with installing Python packages on the command line.
-
-#### Mac/Linux
-
-Make sure that your version of Python is between 3.10 and 3.13. Other versions are not guaranteed to work.
-
-python3 -m venv ~/photomap --prompt photomap
-source ~/photomap/bin/activate
-python3 -m pip install --upgrade pip
-pip install photomapai
-start_photomap
-
-Then open your web browser and point it to [http://127.0.0.1:8050](http://127.0.0.1:8050). Follow the prompts to create your first album.
-
-#### Windows
-
-Make sure that your version of Python is between 3.10 and 3.13. Other versions are not guaranteed to work. Also make sure that Python is on your PATH.
-
-python3 -m venv C:\Users\<your name>\Documents\photomap --prompt photomap
-C:\Users\<your name>\Documents\photomap\Scripts\activate
-python3 -m pip install --upgrade pip
-pip install photomapai
-start_photomap
-
-Then open your web browser and point it to [http://127.0.0.1:8050](http://127.0.0.1:8050). Follow the prompts to create your first album.
+Then open your browser to [http://127.0.0.1:8050](http://127.0.0.1:8050) (it opens automatically) and follow the prompts to create your first album.
 
 ## Other Installation Methods
 
-In addition to the above, PhotoMapAI can be installed via [Docker](https://lstein.github.io/PhotoMapAI/installation/#docker-install), [PyPi](https://lstein.github.io/PhotoMapAI/installation/#pypi-installation), or a [double-click desktop executable](https://lstein.github.io/PhotoMapAI/installation/#executable-install).
+In addition to the above, PhotoMapAI can be installed via [Docker](https://lstein.github.io/PhotoMapAI/installation/#alternative-docker), [PyPI](https://lstein.github.io/PhotoMapAI/installation/#alternative-install-from-pypi), or [from source](https://lstein.github.io/PhotoMapAI/installation/#manual-installation-from-source).
 
 ## Detailed Guides
 

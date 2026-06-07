@@ -69,6 +69,12 @@ def get_args() -> argparse.Namespace:
         "--once", action="store_true", help="Run server once; do not respawn"
     )
     parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not automatically open a web browser on startup (default: open). "
+        "Also controlled by the PHOTOMAP_NO_BROWSER environment variable.",
+    )
+    parser.add_argument(
         "--inline-upgrade",
         action=argparse.BooleanOptionalAction,
         default=True,

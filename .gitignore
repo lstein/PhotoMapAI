@@ -115,3 +115,9 @@ demo_images/photomap_index
 
 # Node.js
 node_modules/
+
+# Go launcher: build output and the uv binary CI fetches/embeds at build time
+/launcher/launcher
+/launcher/photomap
+/launcher/photomap.exe
+/launcher/assets/uv-bin

@@ -74,12 +74,22 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  deploy-pyinstaller:
+  deploy-launcher:
     needs: deploy-dockerhub
-    uses: ./.github/workflows/deploy-pyinstaller.yml
+    uses: ./.github/workflows/deploy-launcher.yml
+    secrets:
+      MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+      APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
 
   upload-release:
-    needs: [tag-release, deploy-pypi, deploy-dockerhub, deploy-pyinstaller]
+    needs: [tag-release, deploy-pypi, deploy-dockerhub, deploy-launcher]
     uses: ./.github/workflows/upload-artifacts.yml
     with:
       tag_name: ${{ needs.tag-release.outputs.tag }}

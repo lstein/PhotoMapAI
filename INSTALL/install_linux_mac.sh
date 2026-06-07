@@ -103,6 +103,12 @@ create_mac_launcher() {
     local repo_root=.
     local icon_path="$repo_root/photomap/frontend/static/icons/favicon-32x32.icns"
 
+    # Read the installed package version rather than hardcoding it, so the bundle
+    # version never drifts from what's actually installed.
+    local app_version
+    app_version="$("$install_path/bin/python" -c "from importlib.metadata import version; print(version('photomapai'))" 2>/dev/null)"
+    app_version="${app_version:-0.0.0}"
+
     # Create app bundle structure
     mkdir -p "$app_dir/Contents/MacOS"
     mkdir -p "$app_dir/Contents/Resources"
@@ -124,9 +130,9 @@ create_mac_launcher() {
     <key>CFBundleIconFile</key>
     <string>photomap.icns</string>
     <key>CFBundleVersion</key>
-    <string>0.3.0</string>
+    <string>$app_version</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.0</string>
+    <string>$app_version</string>
     <key>LSUIElement</key>
     <false/>
 </dict>
@@ -194,8 +200,10 @@ main() {
     pip install --upgrade pip
     
     # Step 5: Install PhotoMap
+    # Non-editable install: an editable (-e) install hard-links the venv to this
+    # unpacked source directory, so moving or deleting it later breaks the launcher.
     print_info "Installing PhotoMap..."
-    pip install -e .
+    pip install .
 
     # Step 6: Install the CLIP model
     print_info "Downloading CLIP model..."
