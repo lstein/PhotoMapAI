@@ -241,9 +241,14 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y
+          # Inno resolves relative paths against the .iss file's folder, so pass
+          # absolute paths for the source exe and the output dir (repo-root dist).
+          $exe = (Resolve-Path dist\photomap.exe).Path
+          $out = (Resolve-Path dist).Path
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
             "/DAppVersion=$env:VERSION" `
-            "/DSourceExe=dist\photomap.exe" `
+            "/DSourceExe=$exe" `
+            "/O$out" `
             INSTALL\launcher\windows\photomap.iss
 
       - name: Sign installer (Azure Trusted Signing)
