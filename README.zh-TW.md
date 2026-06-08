@@ -82,96 +82,34 @@ PhotoMapAI 也支援多相簿管理、依時間瀏覽照片、簡潔的全螢幕
 
 ## 快速開始
 
-以下是 Windows、Mac 與 Linux 的快速安裝方式。這些方式使用專案提供的自動安裝腳本。若你想手動安裝，請參考官方文件中的 [Installation](https://lstein.github.io/PhotoMapAI/installation/)。
+安裝 PhotoMapAI 最簡單的方式，是使用對應你作業系統的原生安裝程式。**你不需要先安裝 Python、CUDA 或其他任何東西** — 安裝程式會在第一次啟動時自動完成所有設定。
 
-### Windows
+請到最新的 [Releases page](https://github.com/lstein/PhotoMapAI/releases)（在 **Assets** 區塊）下載對應你系統的檔案，其中 `X.X.X` 是目前版本：
 
-#### 1. 下載並解壓縮原始碼
+| 平台 | 下載檔案 | 安裝方式 |
+|------|----------|----------|
+| **macOS** | `PhotoMapAI-X.X.X.dmg` | 開啟 `.dmg`，將 **PhotoMapAI** 拖曳到 **Applications** |
+| **Windows** | `PhotoMapAI-X.X.X-setup.exe` | 執行安裝程式（不需系統管理員權限） |
+| **Linux** | `PhotoMapAI-X.X.X-x86_64.AppImage` | 執行 `chmod +x` 後雙擊，或從終端機執行 |
 
-從 [Releases page](https://github.com/lstein/PhotoMapAI/releases) 下載最新穩定版 PhotoMapAI 原始碼 zip 檔。若要使用開發版本，可以在 GitHub repo 頁面的綠色 Code 按鈕中選擇 Download ZIP。
+**第一次**啟動時會下載一份專屬的 Python 與 AI library（數 GB 的一次性下載，需要幾分鐘；主控台視窗會顯示進度）。完成後 server 會啟動，並自動開啟你的瀏覽器。之後的啟動只需幾秒鐘。系統會自動偵測並使用 NVIDIA GPU，Apple Silicon 加速也會自動啟用。
 
-選擇家目錄中的適合位置，解壓縮後建立 `PhotoMap` 資料夾。
+關於 PyPI、Docker 與手動安裝的說明，請參考 [Installation guide](https://lstein.github.io/PhotoMapAI/installation/)。
 
-#### 2. 執行安裝腳本
+### 從 PyPI 安裝（命令列）
 
-進入解壓縮後的 `PhotoMap` 資料夾，找到 `INSTALL` 資料夾，雙擊 `install_windows` 腳本。系統會檢查 Python 與其他需求是否已安裝，下載必要的 library files，並建立 `start_photomap.bat` 啟動腳本。
-
-#### 3. 選擇性：安裝 Microsoft C++ Runtime DLLs
-
-PhotoMapAI 的部分依賴套件需要 Microsoft C++ Runtime DLLs。若系統沒有這些 DLLs，安裝腳本會嘗試協助下載與安裝。完成後需要重新啟動安裝腳本。
-
-#### 4. 啟動 server
-
-雙擊 `start_photomap.bat` 啟動 server。你會看到啟動訊息，以及目前 server 的 URL。
-
-#### 5. 開啟瀏覽器
-
-前往 `http://localhost:8050`，並依照畫面提示建立與匯入你的第一個相簿。
-
----
-
-### Linux 與 Mac
-
-#### 1. 下載並解壓縮原始碼
-
-從 [Releases page](https://github.com/lstein/PhotoMapAI/releases) 下載最新穩定版 PhotoMapAI 原始碼 zip 檔。若要使用開發版本，可以在 GitHub repo 頁面的綠色 Code 按鈕中選擇 Download ZIP。
-
-選擇家目錄或 Downloads 目錄中的適合位置，解壓縮後建立 `PhotoMap-X.X.X` 資料夾，其中 `X.X.X` 是目前版本。
-
-#### 2. 執行安裝腳本
-
-打開命令列 shell，Mac 使用 Terminal，並進入 `PhotoMap-X.X.X` 資料夾。接著執行 `INSTALL/install_linux_mac.sh`。腳本會檢查 Python 與其他需求是否已安裝，下載必要的 library files，並在桌面建立 `start_photomap` 啟動腳本。
-
-若你熟悉命令列，可以使用：
+如果你已經安裝 Python 3.10–3.14，並偏好使用命令列：
 
 ```bash
-cd ~/Downloads/PhotoMap-X.X.X/INSTALL
-/bin/sh install_linux_mac.sh
-```
-
-#### 3. 啟動 server
-
-雙擊 `start_photomap` 啟動 server。你會看到啟動訊息，以及目前 server 的 URL。
-
-#### 4. 開啟瀏覽器
-
-前往 `http://localhost:8050`，並依照畫面提示建立與匯入你的第一個相簿。
-
-## 手動安裝
-
-如果你熟悉 Python 套件安裝，可以使用手動安裝方式。
-
-### Mac / Linux
-
-請確認 Python 版本介於 3.10 到 3.13。其他版本不保證能正常運作。
-
-```bash
-python3 -m venv ~/photomap --prompt photomap
-source ~/photomap/bin/activate
-python3 -m pip install --upgrade pip
-pip install photomapai
+uv tool install photomapai --torch-backend auto   # 或：pip install photomapai
 start_photomap
 ```
 
-接著開啟瀏覽器，前往 `http://127.0.0.1:8050`，並依照畫面提示建立你的第一個相簿。
-
-### Windows
-
-請確認 Python 版本介於 3.10 到 3.13。其他版本不保證能正常運作。也請確認 Python 已加入 PATH。
-
-```powershell
-python3 -m venv C:\Users\<your name>\Documents\photomap --prompt photomap
-C:\Users\<your name>\Documents\photomap\Scripts\activate
-python3 -m pip install --upgrade pip
-pip install photomapai
-start_photomap
-```
-
-接著開啟瀏覽器，前往 `http://127.0.0.1:8050`，並依照畫面提示建立你的第一個相簿。
+接著開啟瀏覽器，前往 [http://127.0.0.1:8050](http://127.0.0.1:8050)（會自動開啟），並依照畫面提示建立你的第一個相簿。
 
 ## 其他安裝方式
 
-除了上述方式，PhotoMapAI 也可以透過 [Docker](https://lstein.github.io/PhotoMapAI/installation/#docker-install)、[PyPI](https://lstein.github.io/PhotoMapAI/installation/#pypi-installation)，或 [double-click desktop executable](https://lstein.github.io/PhotoMapAI/installation/#executable-install) 安裝。
+除了上述方式，PhotoMapAI 也可以透過 [Docker](https://lstein.github.io/PhotoMapAI/installation/#alternative-docker)、[PyPI](https://lstein.github.io/PhotoMapAI/installation/#alternative-install-from-pypi)，或[從原始碼安裝](https://lstein.github.io/PhotoMapAI/installation/#manual-installation-from-source)。
 
 ## 詳細文件
 
