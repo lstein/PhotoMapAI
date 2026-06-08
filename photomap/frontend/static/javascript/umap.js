@@ -34,6 +34,50 @@ const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show
 const randomWalkMaxSize = 5000; // Max cluster size to use random walk ordering
 const MARKER_UPDATE_IGNORE_WINDOW_MS = 1000; // Time window to ignore marker updates after manual navigation
 
+// We drive UMAP scroll- and pinch-to-zoom ourselves instead of via Plotly's
+// built-in `scrollZoom` (disabled in the plot config below). Two reasons:
+//   1. Plotly's wheel zoom silently fails in Safari for cartesian plots (it
+//      delivers `wheel` events in a form Plotly's handler doesn't act on).
+//   2. Plotly doesn't treat a trackpad pinch as a plot zoom. A pinch is delivered
+//      as a `wheel` event with `ctrlKey` set; without our own handler the browser
+//      grabs it for page zoom, so pinch-to-zoom never reached the plot.
+// One non-passive handler gives consistent scroll- and pinch-to-zoom across
+// Chrome / Firefox / Safari, zooming around the cursor via Plotly.relayout.
+function enableWheelZoom(gd) {
+  if (gd._wheelZoomAttached) {
+    return;
+  }
+  gd._wheelZoomAttached = true;
+  gd.addEventListener(
+    "wheel",
+    (ev) => {
+      const fl = gd._fullLayout;
+      if (!fl || !fl.xaxis || !fl.yaxis) {
+        return;
+      }
+      ev.preventDefault(); // also stops the browser page-zooming on ctrl+wheel (pinch)
+      const xa = fl.xaxis;
+      const ya = fl.yaxis;
+      const bb = gd.getBoundingClientRect();
+      // Cursor position in data coordinates, so the point under the pointer stays put.
+      const xData = xa.p2d(ev.clientX - bb.left - xa._offset);
+      const yData = ya.p2d(ev.clientY - bb.top - ya._offset);
+      // Zoom out (deltaY > 0) grows the ranges, zoom in shrinks them. A trackpad
+      // pinch (ctrlKey) sends small deltas, so give it a larger per-delta gain than
+      // a mouse wheel for a responsive feel. Tune the gains here if needed.
+      const gain = ev.ctrlKey ? 0.01 : 0.001;
+      const factor = Math.exp(ev.deltaY * gain);
+      const [x0, x1] = xa.range;
+      const [y0, y1] = ya.range;
+      Plotly.relayout(gd, {
+        "xaxis.range": [xData + (x0 - xData) * factor, xData + (x1 - xData) * factor],
+        "yaxis.range": [yData + (y0 - yData) * factor, yData + (y1 - yData) * factor],
+      });
+    },
+    { passive: false }
+  );
+}
+
 let externalClickCallback = null;
 let updateMarkerTimer = null;
 let ignoreUpdatesUntil = 0;
@@ -263,7 +307,9 @@ export async function fetchUmapData() {
 
     const config = {
       modeBarButtons: [["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "toImage"]],
-      scrollZoom: true,
+      // Wheel/pinch zoom is handled by enableWheelZoom() for consistent cross-browser
+      // behavior (Plotly's built-in scrollZoom fails in Safari and ignores pinch).
+      scrollZoom: false,
     };
 
     const isFirstRender = !mapExists;
@@ -274,6 +320,7 @@ export async function fetchUmapData() {
     Plotly.newPlot("umapPlot", [allPointsTrace, currentImageTrace], layout, config).then(async (gd) => {
       document.getElementById("umapContent").style.display = "block";
       applyUmapControlsVisibility();
+      enableWheelZoom(gd);
       if (isFirstRender) {
         setUmapWindowSize("fullscreen");
       } else if (isShaded) {
