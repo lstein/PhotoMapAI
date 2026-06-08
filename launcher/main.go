@@ -12,6 +12,7 @@
 //	--reinstall   force a clean reinstall, then run
 //	--uninstall   remove the photomapai install and all runtime files, then exit
 //	--no-browser  start the server but don't open a browser
+//	--pkg-version install a specific photomapai version/spec, e.g. 1.0.6rc1 (implies reinstall)
 //	--version     print the launcher version and exit
 //
 // Anything after a "--" separator is passed straight through to start_photomap,
@@ -54,6 +55,7 @@ func main() {
 		reinstall    = flag.Bool("reinstall", false, "force a clean reinstall before running")
 		doUninst     = flag.Bool("uninstall", false, "remove PhotoMapAI and all runtime files")
 		noBrowser    = flag.Bool("no-browser", false, "do not open a web browser on startup")
+		pkgVersion   = flag.String("pkg-version", "", "advanced: install a specific photomapai version/spec, e.g. 1.0.6rc1 (implies --reinstall)")
 		showVer      = flag.Bool("version", false, "print the launcher version and exit")
 	)
 	flag.Parse()
@@ -66,14 +68,14 @@ func main() {
 	// Anything after "--" is forwarded verbatim to start_photomap.
 	serverArgs := flag.Args()
 
-	if err := run(*gpu, *cpu, *torchBackend, *reinstall, *doUninst, *noBrowser, serverArgs); err != nil {
+	if err := run(*gpu, *cpu, *torchBackend, *reinstall, *doUninst, *noBrowser, *pkgVersion, serverArgs); err != nil {
 		fmt.Fprintf(os.Stderr, "\nError: %v\n", err)
 		pause()
 		os.Exit(1)
 	}
 }
 
-func run(gpu, cpu bool, torchBackend string, reinstall, doUninst, noBrowser bool, serverArgs []string) error {
+func run(gpu, cpu bool, torchBackend string, reinstall, doUninst, noBrowser bool, pkgVersion string, serverArgs []string) error {
 	l, err := newLayout()
 	if err != nil {
 		return err
@@ -88,6 +90,15 @@ func run(gpu, cpu bool, torchBackend string, reinstall, doUninst, noBrowser bool
 
 	if err := ensureUV(l); err != nil {
 		return fmt.Errorf("setting up uv: %w", err)
+	}
+
+	// A version override always forces a reinstall: the marker tracks only the
+	// torch backend, not the installed version, so on a machine that already has
+	// photomapai the request would otherwise be silently ignored.
+	pkgSpec := pkgName
+	if pkgVersion != "" {
+		pkgSpec = pkgName + "==" + pkgVersion
+		reinstall = true
 	}
 
 	// Decide the torch backend and whether (re)install is needed.
@@ -107,7 +118,7 @@ func run(gpu, cpu bool, torchBackend string, reinstall, doUninst, noBrowser bool
 	needInstall := reinstall || current == "" || target != current
 	if needInstall {
 		force := reinstall || (current != "" && target != current)
-		if err := install(l, target, force); err != nil {
+		if err := install(l, pkgSpec, target, force); err != nil {
 			return err
 		}
 		fmt.Println("\nSetup complete.")
