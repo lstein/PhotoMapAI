@@ -106,7 +106,16 @@ Change `/path/to/a/picture_folder` to a folder of images you want to browse, the
 
 ## Manual installation from source
 
-Download and unpack the source from the [release page](https://github.com/lstein/PhotoMapAI/releases), then:
+Download and unpack the source from the [release page](https://github.com/lstein/PhotoMapAI/releases), then install with `uv` (faster, recommended if you have it):
+
+```bash
+cd PhotoMapAI
+uv venv                               # creates ./.venv
+uv pip install .
+uv run start_photomap                 # or: source .venv/bin/activate && start_photomap
+```
+
+Or with stock Python and `pip` (no extra tools required):
 
 ```bash
 cd PhotoMapAI
@@ -117,4 +126,6 @@ pip install .
 start_photomap
 ```
 
-If you have an NVidia card on Windows and want GPU acceleration, install a CUDA build of PyTorch first (see [CUDA](installation/cuda.md)); on Linux and macOS this is handled automatically. To start the server again later, re-run `start_photomap` from the activated environment.
+Both create an isolated virtual environment in `./.venv`; the difference is only which tool builds it. If you intend to *modify* the source, add `-e` to do an editable install (`uv pip install -e .` or `pip install -e .`) — but then the environment is tied to this folder's location, so don't move or rename it afterwards.
+
+GPU acceleration needs only a recent **NVIDIA driver** — *not* the CUDA Toolkit (see [NVIDIA GPU Acceleration](installation/cuda.md)). On Linux and macOS the default `pip install .` already pulls a GPU-capable build of PyTorch, so there's nothing extra to do. On Windows the default PyTorch from PyPI is CPU-only; to enable the GPU, install the CUDA build of PyTorch from PyTorch's [official index](https://pytorch.org/get-started/locally/), or use the `uv tool install photomapai --torch-backend auto` recipe above, which selects the right build automatically. To start the server again later, re-run `start_photomap` from the activated environment.
