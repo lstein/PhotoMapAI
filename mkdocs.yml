@@ -25,6 +25,7 @@ nav:
       - Architecture: developer/architecture.md
       - API: developer/api.md
       - Frontend: developer/frontend.md
+  - Release Notes: release-notes.md
   - Troubleshooting: troubleshooting.md
 
 theme:
