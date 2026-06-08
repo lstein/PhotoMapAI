@@ -23,6 +23,7 @@ from photomap.backend.encoders import (
     OpenClipEncoder,
     SiglipEncoder,
     build_encoder,
+    capture_download_progress,
     clear_encoder_cache,
     default_encoder_spec,
     get_cached_encoder,
@@ -570,3 +571,98 @@ def test_get_cached_encoder_reuses_instance(monkeypatch):
     assert d is not a
     assert call_count["n"] == 3
     clear_encoder_cache()
+
+
+# --- Model download progress capture --------------------------------------
+
+
+def _hf_tqdm_module():
+    """Return the huggingface_hub submodule whose ``tqdm`` we patch, or None."""
+    import importlib
+
+    try:
+        return importlib.import_module("huggingface_hub.utils.tqdm")
+    except ImportError:  # pragma: no cover - hf_hub is a hard dep in practice
+        return None
+
+
+def test_capture_download_progress_noop_when_callback_none():
+    module = _hf_tqdm_module()
+    if module is None:
+        pytest.skip("huggingface_hub not installed")
+    original = module.tqdm
+    with capture_download_progress(None):
+        # No callback -> tqdm references must be left exactly as-is so the
+        # console download bars behave normally on the CLI path.
+        assert module.tqdm is original
+    assert module.tqdm is original
+
+
+def test_capture_download_progress_patches_and_restores():
+    module = _hf_tqdm_module()
+    if module is None:
+        pytest.skip("huggingface_hub not installed")
+    original = module.tqdm
+
+    def cb(downloaded, total, desc):
+        pass
+
+    with capture_download_progress(cb):
+        assert module.tqdm is not original
+        assert issubclass(module.tqdm, original)
+    # Originals restored on exit, even though the block did real work.
+    assert module.tqdm is original
+
+
+def test_capture_forwards_byte_progress():
+    module = _hf_tqdm_module()
+    if module is None:
+        pytest.skip("huggingface_hub not installed")
+    import io
+
+    reports: list[tuple[int, int | None, str]] = []
+
+    with capture_download_progress(lambda d, t, desc: reports.append((d, t, desc))):
+        bar = module.tqdm(total=100, unit="B", desc="model.safetensors", file=io.StringIO())
+        bar.update(40)
+        bar.update(60)
+        bar.close()
+
+    assert reports, "expected byte progress to be reported"
+    # Cumulative byte counts and total flow straight through to the callback.
+    assert (40, 100, "model.safetensors") in reports
+    assert reports[-1] == (100, 100, "model.safetensors")
+
+
+def test_capture_ignores_non_byte_bars():
+    module = _hf_tqdm_module()
+    if module is None:
+        pytest.skip("huggingface_hub not installed")
+    import io
+
+    reports: list[tuple[int, int | None, str]] = []
+
+    with capture_download_progress(lambda d, t, desc: reports.append((d, t, desc))):
+        # A plain iteration counter (default unit "it") is not a download and
+        # must not be surfaced as model-download progress.
+        bar = module.tqdm(total=100, unit="it", file=io.StringIO())
+        bar.update(10)
+        bar.close()
+
+    assert reports == []
+
+
+def test_capture_swallows_callback_errors():
+    module = _hf_tqdm_module()
+    if module is None:
+        pytest.skip("huggingface_hub not installed")
+    import io
+
+    def boom(downloaded, total, desc):
+        raise RuntimeError("UI exploded")
+
+    # A misbehaving callback must never break the underlying download.
+    with capture_download_progress(boom):
+        bar = module.tqdm(total=100, unit="B", file=io.StringIO())
+        bar.update(50)  # must not raise
+        bar.close()

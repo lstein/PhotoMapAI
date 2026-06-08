@@ -79,6 +79,7 @@ export class AlbumManager {
 
   static STATUS_CLASSES = {
     SCANNING: "index-status scanning",
+    DOWNLOADING: "index-status downloading",
     INDEXING: "index-status indexing",
     UMAPPING: "index-status mapping",
     COMPLETED: "index-status completed",
@@ -1292,6 +1293,13 @@ export class AlbumManager {
       status.textContent = progress.current_step || "Scanning for images...";
       status.style.color = "#ff9800"; // Orange for scanning
       estimatedTime.textContent = "";
+    } else if (progress.status === "downloading") {
+      // First-use model download. The bar width/percent and ETA are already set
+      // from progress_percentage/estimated_time_remaining in updateProgress();
+      // here we just label the phase and leave the ETA line in place.
+      status.className = AlbumManager.STATUS_CLASSES.DOWNLOADING;
+      status.textContent = progress.current_step || "Downloading encoder model…";
+      status.style.color = "#9c27b0"; // Purple for downloading
     } else if (progress.status === "mapping") {
       status.className = AlbumManager.STATUS_CLASSES.UMAPPING;
       status.textContent = progress.current_step || "Generating image map...";
