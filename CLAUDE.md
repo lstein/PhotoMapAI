@@ -33,26 +33,42 @@ npm run format:check         # CI check
 # Docs
 make docs                    # mkdocs serve on :8000
 
-# Creating a branch for features/bugfixes
-# Always use worktrees unless explicitly asked not to
-git worktree add -b lstein/{fix,feature,chore}/<branch-name> ../photomap-worktrees/lstein-{fix,feature,chore}-<branch-name>
-cd ../photomap_worktrees/<branch-name>
+# Branch + worktree for ANY fix/feature/chore (see "Worktrees are mandatory" below)
+git worktree add -b lstein/fix/<what-it-does> ../photomap-worktrees/lstein-fix-<what-it-does>
+cd ../photomap-worktrees/lstein-fix-<what-it-does>
 ```
 
 Ruff is configured for line-length 120, target py310, rules E/W/F/I/UP/B (see pyproject.toml). Jest runs in jsdom with experimental ESM (the project is `"type": "module"`).
 
-## Creating a feature branch (mandatory unless asked otherwise)
+## Worktrees are mandatory for ANY code change — read before editing
 
-1. Name the branch lstein/{fix,feature,chore,etc}/<what-the-branch-does>
-2. Create a worktree for this branch in ../photomap_worktrees/what-the-branch-does
+Reading/investigating in the main checkout (`/home/lstein/Projects/PhotoMap`,
+branch `master`) is fine. But **the first time you are about to create, edit, or
+delete a file** for a fix/feature/chore, STOP: you must be inside a dedicated
+worktree on a branch first. Never edit on `master` in the main checkout — not for
+a "quick" one-line change, and not while "still investigating" a bug.
 
-## Worktree setup (mandatory)
+Self-check before your first edit:
 
-1. chdir to the branch worktree
-1. Install a virtual environment under .venv
-2. Activate the virtual environment
-3. Install photomap using `pip install -e .[development,testing]`
-4. After these steps complete alert the author that the worktree is properly initialized.
+```bash
+git rev-parse --abbrev-ref HEAD   # prints "master" => create the worktree first
+```
+
+Create AND fully initialize the worktree before editing (branch name:
+`lstein/{fix,feature,chore}/<what-it-does>`):
+
+```bash
+git worktree add -b lstein/fix/<what-it-does> ../photomap-worktrees/lstein-fix-<what-it-does>
+cd ../photomap-worktrees/lstein-fix-<what-it-does>
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[development,testing]"
+npm install        # only if you'll run frontend tests/lint
+```
+
+Then alert the author that the worktree is initialized and tell them which
+directory to run the server from. The worktree's `.venv` is an editable install
+pointing at the worktree, so `start_photomap` launched from there serves *that*
+worktree's code — skip this and the author ends up testing the wrong files.
 
 
 ## Architecture
