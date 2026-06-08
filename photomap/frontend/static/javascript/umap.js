@@ -34,6 +34,128 @@ const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show
 const randomWalkMaxSize = 5000; // Max cluster size to use random walk ordering
 const MARKER_UPDATE_IGNORE_WINDOW_MS = 1000; // Time window to ignore marker updates after manual navigation
 
+// We drive UMAP zoom ourselves instead of via Plotly's built-in interactions,
+// because Plotly's handling is inconsistent across the inputs we care about:
+//   - Mouse wheel: Plotly's `scrollZoom` (disabled below) silently fails in Safari
+//     for cartesian plots (it delivers `wheel` events in a form Plotly ignores).
+//   - Trackpad pinch: arrives as a `wheel` event with `ctrlKey` set; Plotly doesn't
+//     treat it as a plot zoom, so the browser grabs it for page zoom instead.
+//   - Touchscreen pinch (iPad/iOS, Android): arrives as two-finger touch events.
+//     Plotly's pan treats the two touches as independent drags, so the plot jumps
+//     around instead of zooming. (Safari and Chrome on iOS are both WebKit, so they
+//     misbehave identically.)
+// enableWheelZoom + enableTouchZoom give consistent scroll- and pinch-to-zoom on
+// every browser/device, always zooming around the gesture's focal point.
+
+// zoomAround scales both axis ranges by `factor` about the screen point
+// (clientX, clientY), keeping whatever is under that point fixed.
+function zoomAround(gd, clientX, clientY, factor) {
+  const fl = gd._fullLayout;
+  if (!fl || !fl.xaxis || !fl.yaxis) {
+    return;
+  }
+  const xa = fl.xaxis;
+  const ya = fl.yaxis;
+  const bb = gd.getBoundingClientRect();
+  const xData = xa.p2d(clientX - bb.left - xa._offset);
+  const yData = ya.p2d(clientY - bb.top - ya._offset);
+  const [x0, x1] = xa.range;
+  const [y0, y1] = ya.range;
+  Plotly.relayout(gd, {
+    "xaxis.range": [xData + (x0 - xData) * factor, xData + (x1 - xData) * factor],
+    "yaxis.range": [yData + (y0 - yData) * factor, yData + (y1 - yData) * factor],
+  });
+}
+
+function enableWheelZoom(gd) {
+  if (gd._wheelZoomAttached) {
+    return;
+  }
+  gd._wheelZoomAttached = true;
+  gd.addEventListener(
+    "wheel",
+    (ev) => {
+      ev.preventDefault(); // also stops the browser page-zooming on ctrl+wheel (pinch)
+      // Zoom out (deltaY > 0) grows the ranges, zoom in shrinks them. A trackpad
+      // pinch (ctrlKey) sends small deltas, so give it a larger per-delta gain than
+      // a mouse wheel for a responsive feel. Tune the gains here if needed.
+      const gain = ev.ctrlKey ? 0.01 : 0.001;
+      zoomAround(gd, ev.clientX, ev.clientY, Math.exp(ev.deltaY * gain));
+    },
+    { passive: false }
+  );
+}
+
+const touchDistance = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+function enableTouchZoom(gd) {
+  if (gd._touchZoomAttached) {
+    return;
+  }
+  gd._touchZoomAttached = true;
+
+  // Tell the browser we handle touch gestures on the plot ourselves, so it won't
+  // intercept the pinch for its own page zoom and reliably delivers touchmove.
+  gd.style.touchAction = "none";
+
+  let lastDist = 0;
+
+  // Two-finger pinch is handled here. We listen on `document` in the capture phase
+  // (the earliest point in the event flow, before any Plotly listener regardless of
+  // where it attached) and stopImmediatePropagation, so Plotly never sees the
+  // gesture and can't pan-jump from it. gd-level capture wasn't early enough on iOS
+  // Chrome (a WKWebView), where Plotly still received the touches. Single-finger
+  // touches fall through to Plotly (pan, tap-to-select) since we only act on two.
+  const inPlot = (ev) => gd.contains(ev.target);
+
+  document.addEventListener(
+    "touchstart",
+    (ev) => {
+      if (ev.touches.length === 2 && inPlot(ev)) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        lastDist = touchDistance(ev.touches[0], ev.touches[1]);
+        gd._lastPinchAt = Date.now();
+      }
+    },
+    { passive: false, capture: true }
+  );
+
+  document.addEventListener(
+    "touchmove",
+    (ev) => {
+      if (ev.touches.length !== 2 || !inPlot(ev)) {
+        return;
+      }
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      gd._lastPinchAt = Date.now();
+      const newDist = touchDistance(ev.touches[0], ev.touches[1]);
+      if (!lastDist || !newDist) {
+        lastDist = newDist;
+        return;
+      }
+      const midX = (ev.touches[0].clientX + ev.touches[1].clientX) / 2;
+      const midY = (ev.touches[0].clientY + ev.touches[1].clientY) / 2;
+      // Fingers apart (newDist > lastDist) zooms in -> ranges shrink (factor < 1).
+      zoomAround(gd, midX, midY, lastDist / newDist);
+      lastDist = newDist;
+    },
+    { passive: false, capture: true }
+  );
+
+  const onEnd = (ev) => {
+    if (ev.touches.length < 2 && lastDist) {
+      // A pinch just ended; stamp the time so the plotly_click handler can ignore the
+      // stray tap that lifting the fingers would otherwise fire as a point selection.
+      gd._lastPinchAt = Date.now();
+      lastDist = 0;
+    }
+  };
+  document.addEventListener("touchend", onEnd, { capture: true });
+  document.addEventListener("touchcancel", onEnd, { capture: true });
+}
+
 let externalClickCallback = null;
 let updateMarkerTimer = null;
 let ignoreUpdatesUntil = 0;
@@ -263,7 +385,9 @@ export async function fetchUmapData() {
 
     const config = {
       modeBarButtons: [["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "toImage"]],
-      scrollZoom: true,
+      // Wheel/pinch zoom is handled by enableWheelZoom() for consistent cross-browser
+      // behavior (Plotly's built-in scrollZoom fails in Safari and ignores pinch).
+      scrollZoom: false,
     };
 
     const isFirstRender = !mapExists;
@@ -274,6 +398,8 @@ export async function fetchUmapData() {
     Plotly.newPlot("umapPlot", [allPointsTrace, currentImageTrace], layout, config).then(async (gd) => {
       document.getElementById("umapContent").style.display = "block";
       applyUmapControlsVisibility();
+      enableWheelZoom(gd);
+      enableTouchZoom(gd);
       if (isFirstRender) {
         setUmapWindowSize("fullscreen");
       } else if (isShaded) {
@@ -402,7 +528,14 @@ export async function fetchUmapData() {
     setTimeout(() => updateCurrentImageMarker(), 0);
 
     // Cluster click: highlight cluster as search
-    document.getElementById("umapPlot").on("plotly_click", async (data) => {
+    const clickPlotEl = document.getElementById("umapPlot");
+    clickPlotEl.on("plotly_click", async (data) => {
+      // Ignore the stray click Plotly synthesizes when a two-finger pinch ends (the
+      // fingers lifting register as a tap). enableTouchZoom stamps _lastPinchAt on
+      // this same element (the graph div passed to it).
+      if (clickPlotEl._lastPinchAt && Date.now() - clickPlotEl._lastPinchAt < 500) {
+        return;
+      }
       // --- MODIFIED: Intercept click for Curation Lock Mode ---
       if (externalClickCallback) {
         const pt = data.points[0];
