@@ -121,7 +121,7 @@ func run(gpu, cpu bool, torchBackend string, reinstall, doUninst, noBrowser bool
 		if err := install(l, pkgSpec, target, force); err != nil {
 			return err
 		}
-		fmt.Println("\nSetup complete.")
+		fmt.Println("\nSetup complete. Please wait while the PhotoMapAI server launches...")
 	}
 
 	return launchServer(l, noBrowser, serverArgs)
