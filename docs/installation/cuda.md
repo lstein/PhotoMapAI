@@ -1,37 +1,96 @@
-# Installing CUDA
+# NVIDIA GPU Acceleration
 
-CUDA library versions 12.6 through 12.9 are required to take advantage of GPU acceleration on NVidia graphics cards. Acceleration will dramatically speed up indexing of your photo collection by about 10X. After the index is built, GPU acceleration offers only a modest increase in performance when searching image content by text or image similarity. Note that CUDA is **not** available (or required) for MacOS systems.
+If your computer has an NVIDIA graphics card, PhotoMapAI can use it to speed up
+the initial indexing of your photo collection by roughly **10x**. (After the
+index is built, the GPU offers only a modest speedup for text- and
+image-similarity searches.)
 
-CUDA version 13 is not currently supported by the AI libraries underlying PhotoMapAI.
+## You do **not** need to install CUDA
 
-## Steps to Install CUDA
+This is the part that surprises most people: **you do not need to download or
+install the CUDA Toolkit from NVIDIA.** PhotoMapAI installs its own copy of
+PyTorch, and the GPU build of PyTorch already bundles every CUDA runtime library
+it needs (the CUDA runtime, cuDNN, cuBLAS, and so on). This is true on **both
+Windows and Linux** — there is no difference between the two platforms here.
 
-### 1. First test whether CUDA is already installed:
+The one thing PhotoMapAI cannot bundle is the **NVIDIA graphics driver**, because
+that talks directly to your hardware. So the *only* GPU prerequisite is a
+reasonably recent NVIDIA driver. If you can play modern games or already use your
+card for anything graphics-intensive, you almost certainly have it.
 
-Open a command window and type the command `nvidia-smi`:
+> **macOS:** CUDA is neither available nor required. PhotoMapAI automatically uses
+> the built-in GPU acceleration on Apple M-series chips. You can ignore this page.
+
+## Check whether your system is ready
+
+Open a command window — PowerShell or Command Prompt on Windows, Terminal on
+Linux — and run:
 
 ```bash
-PS C:\Users\username> nvidia-smi
-Mon Aug 11 21:33:57 2025       
+nvidia-smi
+```
+
+If it prints a table like this, **you're ready** — there is nothing else to install:
+
+```text
 +---------------------------------------------------------------------------------------+
-| NVIDIA-SMI 535.230.02             Driver Version: 535.230.02   CUDA Version: 12.9     |
+| NVIDIA-SMI 535.230.02             Driver Version: 535.230.02   CUDA Version: 13.0     |
 |-----------------------------------------+----------------------+----------------------+
 (more information follows)
 ```
-If this runs and prints out CUDA Version 12.6-12.9 or higher, then you're all done and can skip the rest of this section.
 
-### 2. Install CUDA from NVIDIA.
+Two things to notice:
 
-Go to the [CUDA 12.9 Download Page](https://developer.nvidia.com/cuda-12-9-0-download-archive) and choose your operating system, architecture, and OS version. Select either the "local" or "network" installer. Download the installer, run it, and follow the on-screen prompts.
+- `nvidia-smi` ships **with the driver**, not with the CUDA Toolkit. The fact that
+  it runs at all means the driver is installed and working — which is exactly (and
+  only) what PhotoMapAI needs.
+- The **"CUDA Version"** in the top-right is the highest CUDA version your
+  *driver* can support — **not** a toolkit you have to install. Make sure it reads
+  **12.x or newer** (current PyTorch builds target CUDA 12 and 13). Anything in
+  that range works.
 
-### 3. Confirm that CUDA is installed.
+If `nvidia-smi` runs and shows your card, skip the rest of this page.
 
-In a command shell, run the `nvidia-smi` command as in (1) and confirm that the expected version is installed.
+## If `nvidia-smi` is not found
 
-### 4. Re-run the PhotoMapAI installer (Windows only).
+That means the NVIDIA **driver** isn't installed (you still do not need the CUDA
+Toolkit). Install just the driver:
 
-If you are on a Windows platform, please follow the [PhotoMapAI Installation](../installation.md) instructions to update the Torch machine learning library for CUDA support. The easiest path is to run the [installer script](../installation.md#2-run-the-installer-script) again, and provide it with the same installation path you chose for the original install. Alternatively, you may [manually install](../installation.md#manual-installation) the CUDA version of Torch.
+### Windows
 
-To confirm that CUDA support is enabled, look for a console message about GPU acceleration when PhotoMapAI first launches.
+Most Windows machines with an NVIDIA card already have the driver via Windows
+Update or GeForce Experience. If not, download the latest **Game Ready** or
+**Studio** driver from
+[nvidia.com/drivers](https://www.nvidia.com/download/index.aspx), install it, and
+run `nvidia-smi` again.
 
+### Linux (Ubuntu / Mint and similar)
 
+A fresh Linux install boots with the open-source `nouveau` driver, so `nvidia-smi`
+won't exist until you install NVIDIA's proprietary driver. On Ubuntu/Mint, use any
+one of:
+
+```bash
+# easiest: let the distro pick the right driver
+sudo ubuntu-drivers autoinstall
+
+# or install a specific version
+sudo apt install nvidia-driver-550        # use the version offered by your distro
+```
+
+Mint and Ubuntu also expose this through the **"Additional Drivers"** /
+**"Driver Manager"** GUI. Reboot, then run `nvidia-smi` to confirm. Again — this
+installs the *driver*, not the CUDA Toolkit.
+
+## Telling PhotoMapAI to use the GPU
+
+- **Desktop installer:** nothing to do. On first launch PhotoMapAI auto-detects
+  the GPU and installs the GPU build of PyTorch for you. If you add a card later
+  (or want to force a re-detect), launch with the `--gpu` flag — see
+  [GPU acceleration](../installation.md#gpu-acceleration) in the main installation
+  guide.
+- **PyPI / `uv`:** `uv tool install photomapai --torch-backend auto` picks the GPU
+  or CPU build of PyTorch automatically based on what `nvidia-smi` reports.
+
+To confirm GPU support is active, watch for a console message about GPU
+acceleration when PhotoMapAI starts up.
