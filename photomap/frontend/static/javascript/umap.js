@@ -94,31 +94,42 @@ function enableTouchZoom(gd) {
   }
   gd._touchZoomAttached = true;
 
+  // Tell the browser we handle touch gestures on the plot ourselves, so it won't
+  // intercept the pinch for its own page zoom and reliably delivers touchmove.
+  gd.style.touchAction = "none";
+
   let lastDist = 0;
 
-  // Capture phase + stopPropagation so Plotly never sees the two-finger gesture and
-  // can't start a pan from it. Single-finger touches fall through to Plotly (pan,
-  // tap-to-select) untouched, since we only act when exactly two fingers are down.
-  gd.addEventListener(
+  // Two-finger pinch is handled here. We listen on `document` in the capture phase
+  // (the earliest point in the event flow, before any Plotly listener regardless of
+  // where it attached) and stopImmediatePropagation, so Plotly never sees the
+  // gesture and can't pan-jump from it. gd-level capture wasn't early enough on iOS
+  // Chrome (a WKWebView), where Plotly still received the touches. Single-finger
+  // touches fall through to Plotly (pan, tap-to-select) since we only act on two.
+  const inPlot = (ev) => gd.contains(ev.target);
+
+  document.addEventListener(
     "touchstart",
     (ev) => {
-      if (ev.touches.length === 2) {
+      if (ev.touches.length === 2 && inPlot(ev)) {
         ev.preventDefault();
-        ev.stopPropagation();
+        ev.stopImmediatePropagation();
         lastDist = touchDistance(ev.touches[0], ev.touches[1]);
+        gd._lastPinchAt = Date.now();
       }
     },
     { passive: false, capture: true }
   );
 
-  gd.addEventListener(
+  document.addEventListener(
     "touchmove",
     (ev) => {
-      if (ev.touches.length !== 2) {
+      if (ev.touches.length !== 2 || !inPlot(ev)) {
         return;
       }
       ev.preventDefault();
-      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      gd._lastPinchAt = Date.now();
       const newDist = touchDistance(ev.touches[0], ev.touches[1]);
       if (!lastDist || !newDist) {
         lastDist = newDist;
@@ -134,12 +145,15 @@ function enableTouchZoom(gd) {
   );
 
   const onEnd = (ev) => {
-    if (ev.touches.length < 2) {
+    if (ev.touches.length < 2 && lastDist) {
+      // A pinch just ended; stamp the time so the plotly_click handler can ignore the
+      // stray tap that lifting the fingers would otherwise fire as a point selection.
+      gd._lastPinchAt = Date.now();
       lastDist = 0;
     }
   };
-  gd.addEventListener("touchend", onEnd, { capture: true });
-  gd.addEventListener("touchcancel", onEnd, { capture: true });
+  document.addEventListener("touchend", onEnd, { capture: true });
+  document.addEventListener("touchcancel", onEnd, { capture: true });
 }
 
 let externalClickCallback = null;
@@ -514,7 +528,14 @@ export async function fetchUmapData() {
     setTimeout(() => updateCurrentImageMarker(), 0);
 
     // Cluster click: highlight cluster as search
-    document.getElementById("umapPlot").on("plotly_click", async (data) => {
+    const clickPlotEl = document.getElementById("umapPlot");
+    clickPlotEl.on("plotly_click", async (data) => {
+      // Ignore the stray click Plotly synthesizes when a two-finger pinch ends (the
+      // fingers lifting register as a tap). enableTouchZoom stamps _lastPinchAt on
+      // this same element (the graph div passed to it).
+      if (clickPlotEl._lastPinchAt && Date.now() - clickPlotEl._lastPinchAt < 500) {
+        return;
+      }
       // --- MODIFIED: Intercept click for Curation Lock Mode ---
       if (externalClickCallback) {
         const pt = data.points[0];
