@@ -100,6 +100,7 @@ def _recall_buttons_html() -> str:
     """Render the recall / remix / use-ref button group shown at the bottom of the drawer."""
     return (
         '<div class="invoke-recall-controls" data-invoke-recall="1">'
+        f"{_USE_REF_BUTTON_HTML}"
         '<button type="button" class="invoke-recall-btn" data-recall-mode="remix" '
         'title="Remix (recall parameters without the seed) to InvokeAI">'
         f'{_REMIX_SVG}<span class="invoke-recall-label">Remix</span>'
@@ -110,7 +111,6 @@ def _recall_buttons_html() -> str:
         f'{_RECALL_SVG}<span class="invoke-recall-label">Recall</span>'
         '<span class="invoke-recall-status" aria-live="polite"></span>'
         "</button>"
-        f"{_USE_REF_BUTTON_HTML}"
         "</div>"
     )
 
