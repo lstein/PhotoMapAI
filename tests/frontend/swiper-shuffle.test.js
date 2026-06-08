@@ -128,11 +128,27 @@ describe("swiper.js shuffle mode", () => {
     mockSwiper = {
       slides: [],
       activeIndex: 0,
-      autoplay: { running: true, stop: jest.fn(), start: jest.fn() },
+      params: { autoplay: { stopOnLastSlide: true } },
+      autoplay: {
+        running: true,
+        stop: jest.fn(() => {
+          mockSwiper.autoplay.running = false;
+        }),
+        start: jest.fn(() => {
+          mockSwiper.autoplay.running = true;
+        }),
+      },
       allowSlideNext: true,
       allowSlidePrev: true,
       appendSlide: jest.fn((slide) => mockSwiper.slides.push(slide)),
       prependSlide: jest.fn((slide) => mockSwiper.slides.unshift(slide)),
+      // Mirror Swiper: removeSlide() calls slideTo(), whose beforeTransitionStart
+      // (with disableOnInteraction) stops autoplay. The mock reproduces that side
+      // effect so the trim-restart logic is actually exercised.
+      removeSlide: jest.fn(() => {
+        mockSwiper.slides.shift();
+        mockSwiper.autoplay.running = false;
+      }),
       removeAllSlides: jest.fn(() => {
         mockSwiper.slides = [];
       }),
@@ -261,6 +277,72 @@ describe("swiper.js shuffle mode", () => {
       const swiperConfig = global.Swiper.mock.calls[0][1];
       expect(swiperConfig.loop).toBe(false);
       expect(swiperConfig.autoplay.stopOnLastSlide).toBe(true);
+    });
+
+    // Regression: shuffle mode froze after ~highWaterMark slides because the
+    // linear-mode stopOnLastSlide backstop is a global autoplay option and so
+    // also fired in shuffle, where there is no end of list. resumeSlideshow
+    // must flip it off for random mode and back on for sequential mode.
+    it("disables stopOnLastSlide when resuming in shuffle mode", async () => {
+      const { initializeSingleSwiper } = await import("../../photomap/frontend/static/javascript/swiper.js");
+      const manager = await initializeSingleSwiper();
+
+      mockState.mode = "random";
+      mockSwiper.params.autoplay.stopOnLastSlide = true;
+
+      manager.resumeSlideshow();
+
+      expect(mockSwiper.params.autoplay.stopOnLastSlide).toBe(false);
+    });
+
+    it("enables stopOnLastSlide when resuming in sequential mode", async () => {
+      const { initializeSingleSwiper } = await import("../../photomap/frontend/static/javascript/swiper.js");
+      const manager = await initializeSingleSwiper();
+
+      mockState.mode = "chronological";
+      mockSwiper.params.autoplay.stopOnLastSlide = false;
+
+      manager.resumeSlideshow();
+
+      expect(mockSwiper.params.autoplay.stopOnLastSlide).toBe(true);
+    });
+
+    // Regression (the real cause of the "freezes after ~18 shuffled slides"
+    // report): swiper.removeSlide() stops autoplay as a side effect (its internal
+    // slideTo fires beforeTransitionStart, which with disableOnInteraction halts
+    // autoplay). trimShuffleBacklog must restart autoplay or the slideshow dies
+    // the first time the buffer is trimmed past the high-water mark.
+    it("restarts autoplay after trimming the shuffle backlog", async () => {
+      const { initializeSingleSwiper } = await import("../../photomap/frontend/static/javascript/swiper.js");
+      const manager = await initializeSingleSwiper();
+
+      // Buffer well over the high-water mark, autoplay running.
+      const over = mockState.highWaterMark + 3;
+      mockSwiper.slides = Array.from({ length: over }, (_, i) => createMockSlide(i));
+      mockSwiper.autoplay.running = true;
+
+      manager.trimShuffleBacklog();
+
+      // Buffer trimmed down to the cap and autoplay left running.
+      expect(mockSwiper.slides.length).toBe(mockState.highWaterMark);
+      expect(mockSwiper.removeSlide).toHaveBeenCalled();
+      expect(mockSwiper.autoplay.start).toHaveBeenCalled();
+      expect(mockSwiper.autoplay.running).toBe(true);
+    });
+
+    it("does not restart autoplay when trimming while the slideshow is paused", async () => {
+      const { initializeSingleSwiper } = await import("../../photomap/frontend/static/javascript/swiper.js");
+      const manager = await initializeSingleSwiper();
+
+      const over = mockState.highWaterMark + 3;
+      mockSwiper.slides = Array.from({ length: over }, (_, i) => createMockSlide(i));
+      mockSwiper.autoplay.running = false; // paused before the trim
+
+      manager.trimShuffleBacklog();
+
+      expect(mockSwiper.slides.length).toBe(mockState.highWaterMark);
+      expect(mockSwiper.autoplay.start).not.toHaveBeenCalled();
+      expect(mockSwiper.autoplay.running).toBe(false);
     });
 
     it("stops autoplay and appends nothing at the genuine last image (wrap off)", async () => {
