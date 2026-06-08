@@ -73,6 +73,12 @@ development = [
     "twine",
     "ruff",
 ]
+# Real-browser end-to-end tests. Heavy (pulls Playwright + a browser), kept out
+# of the default `testing` extra. After install, run `playwright install
+# chromium` once, then `RUN_E2E=1 pytest tests/e2e`. See tests/e2e/README.md.
+e2e = [
+    "playwright",
+]
 [tool.setuptools.packages.find]
 where = ["."]  # Look in the current directory (repo root)
 include = ["photomap*"]  # Include photomap package and subpackages
