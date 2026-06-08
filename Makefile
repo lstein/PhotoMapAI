@@ -20,6 +20,7 @@ help:
 	@echo "backend-lint     Run Python backend linting with Ruff."
 	@echo "frontend-lint    Run JavaScript frontend linting with ESLint and Prettier."
 	@echo "lint             Run both backend and frontend linting."
+	@echo "e2e-test         Run end-to-end Playwright tests (requires: pip install -e .[e2e] && playwright install chromium)."
 
 # Run the unit tests
 test:
@@ -122,3 +123,9 @@ frontend-lint:
 # Run both backend and frontend linting
 .PHONY: lint
 lint: backend-lint frontend-lint
+
+# Run end-to-end Playwright tests
+# Requires: pip install -e .[e2e] && playwright install chromium
+.PHONY: e2e-test
+e2e-test:
+	RUN_E2E=1 pytest tests/e2e -v
