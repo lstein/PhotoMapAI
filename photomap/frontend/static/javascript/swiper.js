@@ -49,6 +49,10 @@ class SwiperManager {
     this._resetInFlight = null;
     this._resetPending = false;
 
+    // Set while trimShuffleBacklog is restarting autoplay after a trim, so the
+    // autoplay event handlers don't flicker the play/pause icon (see below).
+    this._suppressAutoplayIcon = false;
+
     // Store event listeners for cleanup
     this.eventListeners = [];
 
@@ -100,6 +104,11 @@ class SwiperManager {
         // album's first image). The primary end-of-list handling lives in the
         // slideNextTransitionStart handler below, which stops autoplay the
         // instant resolveOffset(+1) reports there is no next slide.
+        //
+        // This applies to *linear* mode only. resumeSlideshow() flips it off
+        // for shuffle mode, which has no end of list and must never auto-stop
+        // at a buffer boundary. We default it on here so a linear slideshow
+        // started before resumeSlideshow ever runs still has the backstop.
         stopOnLastSlide: true,
       },
       loop: false,
@@ -144,29 +153,23 @@ class SwiperManager {
       return;
     }
 
-    this.swiper.on("autoplayStart", () => {
+    // trimShuffleBacklog stops+restarts autoplay internally (see its comment);
+    // that churn would otherwise flip the play/pause icon on nearly every shuffle
+    // advance, so it sets _suppressAutoplayIcon to mute these handlers while it
+    // works. The slideshow's true running state is unchanged across a trim.
+    const refreshSlideshowIcon = () => {
+      if (this._suppressAutoplayIcon) {
+        return;
+      }
       if (!state.gridViewActive) {
         updateSlideshowButtonIcon();
       }
-    });
+    };
 
-    this.swiper.on("autoplayResume", () => {
-      if (!state.gridViewActive) {
-        updateSlideshowButtonIcon();
-      }
-    });
-
-    this.swiper.on("autoplayStop", () => {
-      if (!state.gridViewActive) {
-        updateSlideshowButtonIcon();
-      }
-    });
-
-    this.swiper.on("autoplayPause", () => {
-      if (!state.gridViewActive) {
-        updateSlideshowButtonIcon();
-      }
-    });
+    this.swiper.on("autoplayStart", refreshSlideshowIcon);
+    this.swiper.on("autoplayResume", refreshSlideshowIcon);
+    this.swiper.on("autoplayStop", refreshSlideshowIcon);
+    this.swiper.on("autoplayPause", refreshSlideshowIcon);
 
     this.swiper.on("scrollbarDragStart", () => {
       if (!state.gridViewActive) {
@@ -383,6 +386,14 @@ class SwiperManager {
 
   resumeSlideshow() {
     if (this.swiper) {
+      // stopOnLastSlide is a *linear-mode* backstop only (see the autoplay
+      // config comment). Shuffle has no end of list: its look-ahead append
+      // keeps a slide past the active one, but once trimShuffleBacklog starts
+      // dropping front slides at the high-water mark the index churn can briefly
+      // expose Swiper's isEnd, and a global stopOnLastSlide would then freeze
+      // autoplay (the "pauses after the 18th shuffled image" regression). Keep
+      // it off whenever we're starting in random mode.
+      this.swiper.params.autoplay.stopOnLastSlide = state.mode !== "random";
       this.swiper.autoplay.stop();
       setTimeout(() => {
         this.swiper.autoplay.start();
@@ -672,17 +683,36 @@ class SwiperManager {
   /**
    * Keep the shuffle buffer bounded. The active slide and its single look-ahead
    * live at the tail, so dropping the oldest (front) slides never disturbs what
-   * is on screen or about to be shown. Unlike enforceHighWaterMark this does not
-   * stop/start autoplay, so it won't flicker the play/pause icon on every
-   * advance — important because shuffle trims on (nearly) every slide.
+   * is on screen or about to be shown.
+   *
+   * swiper.removeSlide() internally calls slideTo(), which emits
+   * beforeTransitionStart; Swiper's autoplay treats that programmatic move like
+   * a user interaction and (with disableOnInteraction) *stops* autoplay. So the
+   * very first trim — when the buffer first exceeds the high-water mark, ~18
+   * slides into a shuffle run — would silently kill the slideshow. We therefore
+   * restart autoplay after trimming, mirroring enforceHighWaterMark. The
+   * stop+restart is muted via _suppressAutoplayIcon so it doesn't flicker the
+   * play/pause icon on every advance (shuffle trims on nearly every slide).
    */
   trimShuffleBacklog() {
     if (!this.swiper) {
       return;
     }
     const maxSlides = state.highWaterMark || 50;
-    while (this.swiper.slides.length > maxSlides) {
-      this.swiper.removeSlide(0);
+    if (this.swiper.slides.length <= maxSlides) {
+      return;
+    }
+    const wasRunning = this.swiper.autoplay?.running;
+    this._suppressAutoplayIcon = true;
+    try {
+      while (this.swiper.slides.length > maxSlides) {
+        this.swiper.removeSlide(0);
+      }
+      if (wasRunning && this.swiper.autoplay && !this.swiper.autoplay.running) {
+        this.swiper.autoplay.start();
+      }
+    } finally {
+      this._suppressAutoplayIcon = false;
     }
   }
 
