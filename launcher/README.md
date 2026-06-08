@@ -31,6 +31,7 @@ untouched, so albums carry over for existing users.
 --reinstall        force a clean reinstall, then run
 --uninstall        remove the install and all runtime files, then exit
 --no-browser       start the server but don't open a browser
+--pkg-version X    advanced: install a specific photomapai version/spec (implies --reinstall)
 --version          print the launcher version and exit
 ```
 
@@ -39,6 +40,13 @@ an NVIDIA GPU and installs the matching CUDA wheels, falling back to CPU when
 there's no GPU — so the common case needs no choice and there's no CUDA index
 version to maintain. `--cpu` forces CPU (e.g. to avoid a flaky driver); `--gpu`
 re-detects after adding a GPU; `--torch-backend` pins a specific backend.
+
+`--pkg-version` is a maintainer/testing aid: by default the launcher installs the
+latest stable photomapai from PyPI (uv skips pre-releases for the bare package
+name). To test a pre-release or pin an exact version, pass e.g.
+`--pkg-version 1.0.6rc1` — it installs `photomapai==<spec>` (the explicit `==`
+lets uv resolve a pre-release) and forces a reinstall so it takes effect even
+when a version is already installed.
 
 ### Passing options to the server
 

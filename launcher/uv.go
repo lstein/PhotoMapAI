@@ -233,9 +233,12 @@ func writeMarker(l layout, torchBackend string) error {
 }
 
 // install runs the uv steps to put photomapai on disk with the requested torch
-// backend. reinstall forces uv to replace an existing install (used when
-// switching backend or recovering a broken install).
-func install(l layout, torchBackend string, reinstall bool) error {
+// backend. pkgSpec is the argument passed to `uv tool install` — usually the bare
+// pkgName, or pkgName=="<version>" when --pkg-version pins a release (an explicit
+// "==" lets uv resolve a pre-release the bare name would otherwise skip).
+// reinstall forces uv to replace an existing install (used when switching backend,
+// pinning a version, or recovering a broken install).
+func install(l layout, pkgSpec, torchBackend string, reinstall bool) error {
 	fmt.Printf("\nFirst-time setup: downloading Python and the PhotoMapAI libraries.\n")
 	fmt.Printf("This is a multi-GB download and runs once; it can take several minutes.\n\n")
 
@@ -244,7 +247,7 @@ func install(l layout, torchBackend string, reinstall bool) error {
 	}
 
 	args := []string{
-		"tool", "install", pkgName,
+		"tool", "install", pkgSpec,
 		"--python", pythonVersion,
 		"--torch-backend", torchBackend,
 	}
@@ -252,7 +255,7 @@ func install(l layout, torchBackend string, reinstall bool) error {
 		args = append(args, "--reinstall")
 	}
 	if err := l.runUV(args...); err != nil {
-		return fmt.Errorf("installing %s: %w", pkgName, err)
+		return fmt.Errorf("installing %s: %w", pkgSpec, err)
 	}
 	return writeMarker(l, torchBackend)
 }
