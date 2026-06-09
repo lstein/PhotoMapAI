@@ -89,8 +89,8 @@ installs the *driver*, not the CUDA Toolkit.
   (or want to force a re-detect), launch with the `--gpu` flag — see
   [GPU acceleration](../installation.md#gpu-acceleration) in the main installation
   guide.
-- **PyPI / `uv`:** `uv tool install photomapai --torch-backend auto` picks the GPU
-  or CPU build of PyTorch automatically based on what `nvidia-smi` reports.
+- **PyPI / `uv`:** `uv tool install photomapai --python 3.12 --python-preference only-managed --torch-backend auto`
+  picks the GPU or CPU build of PyTorch automatically based on what `nvidia-smi` reports.
 
 To confirm GPU support is active, watch for a console message about GPU
 acceleration when PhotoMapAI starts up.

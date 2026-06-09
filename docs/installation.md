@@ -74,11 +74,14 @@ To also remove the downloaded Python/libraries, run `photomap --uninstall` (path
 If you are comfortable with the command line and already have Python 3.10–3.14, you can install the package directly. We recommend [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv tool install photomapai --torch-backend auto
+uv tool install photomapai --python 3.12 --python-preference only-managed --torch-backend auto
 start_photomap
 ```
 
-`--torch-backend auto` picks GPU or CPU PyTorch automatically. Or with plain `pip` in a virtual environment:
+`--torch-backend auto` picks GPU or CPU PyTorch automatically. `--python 3.12
+--python-preference only-managed` tells `uv` to use its own managed Python build
+rather than a system one; on macOS this avoids a pop-up that asks to install the
+Xcode command-line tools. Or with plain `pip` in a virtual environment:
 
 ```bash
 python -m venv photomap --prompt photomap
@@ -128,4 +131,4 @@ start_photomap
 
 Both create an isolated virtual environment in `./.venv`; the difference is only which tool builds it. If you intend to *modify* the source, add `-e` to do an editable install (`uv pip install -e .` or `pip install -e .`) — but then the environment is tied to this folder's location, so don't move or rename it afterwards.
 
-GPU acceleration needs only a recent **NVIDIA driver** — *not* the CUDA Toolkit (see [NVIDIA GPU Acceleration](installation/cuda.md)). On Linux and macOS the default `pip install .` already pulls a GPU-capable build of PyTorch, so there's nothing extra to do. On Windows the default PyTorch from PyPI is CPU-only; to enable the GPU, install the CUDA build of PyTorch from PyTorch's [official index](https://pytorch.org/get-started/locally/), or use the `uv tool install photomapai --torch-backend auto` recipe above, which selects the right build automatically. To start the server again later, re-run `start_photomap` from the activated environment.
+GPU acceleration needs only a recent **NVIDIA driver** — *not* the CUDA Toolkit (see [NVIDIA GPU Acceleration](installation/cuda.md)). On Linux and macOS the default `pip install .` already pulls a GPU-capable build of PyTorch, so there's nothing extra to do. On Windows the default PyTorch from PyPI is CPU-only; to enable the GPU, install the CUDA build of PyTorch from PyTorch's [official index](https://pytorch.org/get-started/locally/), or use the `uv tool install` recipe above, which selects the right build automatically. To start the server again later, re-run `start_photomap` from the activated environment.

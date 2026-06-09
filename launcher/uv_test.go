@@ -51,6 +51,35 @@ func TestMarkerRoundTrip(t *testing.T) {
 	}
 }
 
+func TestUVEnvForcesManagedPython(t *testing.T) {
+	l := layout{
+		pythonDir: "/tmp/pm/python",
+		toolDir:   "/tmp/pm/tools",
+		toolBin:   "/tmp/pm/bin",
+		cacheDir:  "/tmp/pm/cache",
+	}
+	want := map[string]string{
+		"UV_PYTHON_INSTALL_DIR": l.pythonDir,
+		"UV_TOOL_DIR":           l.toolDir,
+		"UV_TOOL_BIN_DIR":       l.toolBin,
+		"UV_CACHE_DIR":          l.cacheDir,
+		// only-managed keeps uv off the non-relocatable macOS framework Python,
+		// which would otherwise trigger the Xcode install_name_tool prompt.
+		"UV_PYTHON_PREFERENCE": "only-managed",
+	}
+	got := map[string]string{}
+	for _, kv := range l.uvEnv() {
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			got[k] = v
+		}
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("uvEnv()[%q] = %q, want %q", k, got[k], v)
+		}
+	}
+}
+
 // TestDownloadUVIntegration exercises the download + archive-extraction + exec
 // path against the real uv release (~30 MB, no torch). Skipped with -short.
 func TestDownloadUVIntegration(t *testing.T) {

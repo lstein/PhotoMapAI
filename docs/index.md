@@ -90,8 +90,9 @@ See the [Installation guide](installation.md) for PyPI, Docker, source, GPU over
 If you already have Python 3.10–3.14:
 
 ```bash
-uv tool install photomapai --torch-backend auto   # or: pip install photomapai
+uv tool install photomapai --python 3.12 --python-preference only-managed --torch-backend auto
 start_photomap
+# (or simply: pip install photomapai && start_photomap)
 ```
 
 After the startup messages your browser opens to http://localhost:8050 automatically.
