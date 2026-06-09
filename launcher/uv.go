@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const (
@@ -45,15 +46,6 @@ func (l layout) uvEnv() []string {
 		"UV_CACHE_DIR="+l.cacheDir,
 		// Don't let a managed-Python download be disabled by inherited config.
 		"UV_PYTHON_DOWNLOADS=automatic",
-		// Only ever use uv's managed (python-build-standalone) interpreters,
-		// never a system/framework CPython. uv's default preference ("managed")
-		// will still fall back to a system interpreter if it finds a matching
-		// version — on macOS that's the non-relocatable python.org framework
-		// build at /Library/Frameworks/Python.framework. Building a venv from it
-		// makes uv rewrite Mach-O load paths with `install_name_tool`, which
-		// triggers the Xcode Command Line Tools install prompt. Managed builds
-		// are relocatable, so forcing only-managed avoids that prompt entirely.
-		"UV_PYTHON_PREFERENCE=only-managed",
 	)
 	return env
 }
@@ -241,6 +233,26 @@ func writeMarker(l layout, torchBackend string) error {
 	return os.WriteFile(l.marker, []byte(torchBackend+"\n"), 0o644)
 }
 
+// warnIfXcodeToolsMissing gives macOS users a heads-up before uv runs for the
+// first time. When uv builds the tool's virtualenv it has macOS rewrite the
+// Python executable's library paths with `install_name_tool`; if the Xcode
+// Command Line Tools aren't installed, macOS pops a dialog offering to install
+// them. The tools are NOT actually needed — PhotoMapAI installs fine whether the
+// user accepts or cancels — and there's no clean way to suppress the dialog, so
+// we just warn, pause long enough to read it, and continue. No-op off macOS, or
+// when the Command Line Tools are already present (then no dialog appears).
+func warnIfXcodeToolsMissing() {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	// `xcode-select -p` exits non-zero when the Command Line Tools are absent.
+	if err := exec.Command("xcode-select", "-p").Run(); err == nil {
+		return
+	}
+	fmt.Println("\nMacOS will ask you to install the XCode Command Line Tools. Either cancel or accept this request -- it makes no difference.")
+	time.Sleep(5 * time.Second)
+}
+
 // install runs the uv steps to put photomapai on disk with the requested torch
 // backend. pkgSpec is the argument passed to `uv tool install` — usually the bare
 // pkgName, or pkgName=="<version>" when --pkg-version pins a release (an explicit
@@ -250,6 +262,8 @@ func writeMarker(l layout, torchBackend string) error {
 func install(l layout, pkgSpec, torchBackend string, reinstall bool) error {
 	fmt.Printf("\nFirst-time setup: downloading Python and the PhotoMapAI libraries.\n")
 	fmt.Printf("This is a multi-GB download and runs once; it can take several minutes.\n\n")
+
+	warnIfXcodeToolsMissing()
 
 	if err := l.runUV("python", "install", pythonVersion); err != nil {
 		return fmt.Errorf("installing Python: %w", err)
