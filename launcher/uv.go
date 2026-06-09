@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"archive/zip"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -35,12 +36,19 @@ const (
 	uvLatestBase = "https://github.com/astral-sh/uv/releases/latest/download/"
 )
 
-// uvEnv returns the process environment with all uv state redirected under the
-// runtime root, so nothing leaks into the user's global uv cache/tools.
+// uvEnv returns the process environment with uv's tool and cache state redirected
+// under the runtime root, so nothing leaks into the user's global uv dirs.
+//
+// It deliberately does NOT set UV_PYTHON_INSTALL_DIR. The managed-Python download
+// is run by ensurePython, which sets that variable itself; the `uv tool install`
+// step must run *without* it so that the explicit interpreter we pass via
+// --python is treated as an external interpreter. If UV_PYTHON_INSTALL_DIR were
+// set there, uv would treat that interpreter as managed and try to (re)create its
+// minor-version directory junction — the exact step that fails with os error 448
+// on Windows under OneDrive Files-On-Demand.
 func (l layout) uvEnv() []string {
 	env := os.Environ()
 	env = append(env,
-		"UV_PYTHON_INSTALL_DIR="+l.pythonDir,
 		"UV_TOOL_DIR="+l.toolDir,
 		"UV_TOOL_BIN_DIR="+l.toolBin,
 		"UV_CACHE_DIR="+l.cacheDir,
@@ -48,45 +56,6 @@ func (l layout) uvEnv() []string {
 		"UV_PYTHON_DOWNLOADS=automatic",
 	)
 	return env
-}
-
-// installStepAttempts is how many times each uv install command is tried before
-// giving up. On Windows with OneDrive Files-On-Demand, the cloud-filter driver
-// (cldflt) can transiently fail uv's creation of the managed-Python
-// minor-version junction with "untrusted mount point" (os error 448) while it
-// engages a freshly created folder tree on the very first run. The failure
-// clears itself once the filter settles, so a short retry turns what was a hard
-// first-run abort into a brief pause. Retrying is cheap: uv caches its
-// downloads, so a second attempt reuses the already-fetched Python/wheels.
-const installStepAttempts = 3
-
-// withRetry calls fn up to attempts times, returning nil on the first success
-// and the last error once attempts are exhausted. Between failed tries it calls
-// backoff(attempt) (1-based) so callers control the delay (and tests can make it
-// a no-op). Pulled out as a free function so the retry logic is unit-testable
-// without spawning a real uv.
-func withRetry(attempts int, backoff func(attempt int), fn func() error) error {
-	var err error
-	for attempt := 1; ; attempt++ {
-		if err = fn(); err == nil || attempt >= attempts {
-			return err
-		}
-		backoff(attempt)
-	}
-}
-
-// runUVRetry runs uv like runUV but retries a few times with a short, growing
-// backoff so a transient first-run filesystem error (see installStepAttempts)
-// self-heals instead of aborting setup.
-func (l layout) runUVRetry(args ...string) error {
-	return withRetry(installStepAttempts, func(attempt int) {
-		delay := time.Duration(attempt*3) * time.Second
-		fmt.Printf("\nThat step didn't complete (attempt %d of %d). Retrying in %s...\n",
-			attempt, installStepAttempts, delay)
-		time.Sleep(delay)
-	}, func() error {
-		return l.runUV(args...)
-	})
 }
 
 // runUV runs uv with the given arguments, streaming its output to our console.
@@ -97,6 +66,57 @@ func (l layout) runUV(args ...string) error {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
+}
+
+// ensurePython makes a managed CPython available on disk and returns the path to
+// its interpreter executable.
+//
+// It runs uv's managed-Python install (download + extract into l.pythonDir) but
+// treats a nonzero exit as success *as long as a usable interpreter landed on
+// disk*. The reason: on Windows with OneDrive Files-On-Demand, the final step
+// where uv creates a "minor version" directory junction fails with os error 448
+// ("untrusted mount point") even though the interpreter itself is fully extracted
+// and runnable. We don't need that junction — install() points uv at the
+// interpreter directly via --python — so a junction failure is harmless here. uv
+// output is captured and only surfaced if we end up with no usable interpreter,
+// to avoid alarming the user with a 448 we deliberately ignore.
+func (l layout) ensurePython() (string, error) {
+	var out bytes.Buffer
+	cmd := exec.Command(l.uvBin, "python", "install", pythonVersion, "--no-bin")
+	// Set UV_PYTHON_INSTALL_DIR only for this step (see uvEnv). --no-bin keeps uv
+	// from dropping a python shim into the user's ~/.local/bin.
+	cmd.Env = append(l.uvEnv(), "UV_PYTHON_INSTALL_DIR="+l.pythonDir)
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	runErr := cmd.Run()
+
+	if pyExe, ok := findExtractedPython(l); ok {
+		return pyExe, nil
+	}
+	if runErr != nil {
+		return "", fmt.Errorf("%w\n%s", runErr, strings.TrimSpace(out.String()))
+	}
+	return "", fmt.Errorf("Python %s was not found under %s after install", pythonVersion, l.pythonDir)
+}
+
+// findExtractedPython locates the interpreter inside an extracted managed-CPython
+// directory under l.pythonDir (e.g. cpython-3.12.13-windows-x86_64-none),
+// returning the path and whether one was found. The glob requires a patch
+// component (`3.12.`), so it matches the real install directory and not uv's
+// `cpython-3.12-…` minor-version junction.
+func findExtractedPython(l layout) (string, bool) {
+	dirs, _ := filepath.Glob(filepath.Join(l.pythonDir, "cpython-"+pythonVersion+".*"))
+	for _, dir := range dirs {
+		for _, exe := range []string{
+			filepath.Join(dir, "python.exe"),     // Windows
+			filepath.Join(dir, "bin", "python3"), // macOS / Linux
+		} {
+			if fileExists(exe) {
+				return exe, true
+			}
+		}
+	}
+	return "", false
 }
 
 // ensureUV makes sure a usable uv binary exists at l.uvBin. It prefers an
@@ -304,23 +324,25 @@ func install(l layout, pkgSpec, torchBackend string, reinstall bool) error {
 
 	warnIfXcodeToolsMissing()
 
-	// --no-bin: the launcher runs start_photomap from the tool venv directly, so
-	// we don't need uv to drop a python3.12 shim into the user's ~/.local/bin
-	// (which it can't manage on reinstall, and which is one more cross-folder
-	// write outside our runtime root).
-	if err := l.runUVRetry("python", "install", pythonVersion, "--no-bin"); err != nil {
+	// Get a managed interpreter on disk. We pass its explicit path to
+	// `uv tool install` below rather than `--python 3.12`, so uv never runs its
+	// managed-install machinery for the tool venv — and therefore never tries to
+	// create the minor-version junction that fails with os error 448 on Windows
+	// under OneDrive Files-On-Demand. See ensurePython / uvEnv for the details.
+	pyExe, err := l.ensurePython()
+	if err != nil {
 		return fmt.Errorf("installing Python: %w", err)
 	}
 
 	args := []string{
 		"tool", "install", pkgSpec,
-		"--python", pythonVersion,
+		"--python", pyExe,
 		"--torch-backend", torchBackend,
 	}
 	if reinstall {
 		args = append(args, "--reinstall")
 	}
-	if err := l.runUVRetry(args...); err != nil {
+	if err := l.runUV(args...); err != nil {
 		return fmt.Errorf("installing %s: %w", pkgSpec, err)
 	}
 	return writeMarker(l, torchBackend)

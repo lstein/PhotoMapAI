@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,52 +8,40 @@ import (
 	"testing"
 )
 
-func TestWithRetrySucceedsAfterTransientFailures(t *testing.T) {
-	calls, backoffs := 0, 0
-	err := withRetry(3, func(int) { backoffs++ }, func() error {
-		calls++
-		if calls < 3 {
-			return errors.New("transient 448")
+func TestFindExtractedPython(t *testing.T) {
+	dir := t.TempDir()
+	l := layout{pythonDir: dir}
+
+	if _, ok := findExtractedPython(l); ok {
+		t.Fatal("findExtractedPython found an interpreter in an empty dir")
+	}
+
+	// A bare minor-version junction name (no patch) must NOT match — only the
+	// real, patch-versioned install directory should.
+	if err := os.MkdirAll(filepath.Join(dir, "cpython-3.12-windows-x86_64-none"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := findExtractedPython(l); ok {
+		t.Fatal("findExtractedPython matched the patch-less junction directory")
+	}
+
+	// Simulate an extracted interpreter. Create both candidate layouts (Windows
+	// python.exe at the root, Unix bin/python3) so the test is host-OS-agnostic.
+	pdir := filepath.Join(dir, "cpython-3.12.13-windows-x86_64-none")
+	if err := os.MkdirAll(filepath.Join(pdir, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, exe := range []string{filepath.Join(pdir, "python.exe"), filepath.Join(pdir, "bin", "python3")} {
+		if err := os.WriteFile(exe, []byte("stub"), 0o755); err != nil {
+			t.Fatal(err)
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("withRetry = %v, want nil after recovering", err)
 	}
-	if calls != 3 {
-		t.Errorf("fn called %d times, want 3", calls)
+	got, ok := findExtractedPython(l)
+	if !ok {
+		t.Fatal("findExtractedPython did not find the extracted interpreter")
 	}
-	if backoffs != 2 {
-		t.Errorf("backoff called %d times, want 2 (between the 3 tries)", backoffs)
-	}
-}
-
-func TestWithRetryReturnsLastErrorWhenExhausted(t *testing.T) {
-	calls := 0
-	want := errors.New("persistent failure")
-	err := withRetry(3, func(int) {}, func() error {
-		calls++
-		return want
-	})
-	if !errors.Is(err, want) {
-		t.Fatalf("withRetry = %v, want %v", err, want)
-	}
-	if calls != 3 {
-		t.Errorf("fn called %d times, want 3", calls)
-	}
-}
-
-func TestWithRetryStopsOnFirstSuccess(t *testing.T) {
-	calls := 0
-	err := withRetry(3, func(int) { t.Error("backoff should not be called on immediate success") }, func() error {
-		calls++
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("withRetry = %v, want nil", err)
-	}
-	if calls != 1 {
-		t.Errorf("fn called %d times, want 1", calls)
+	if !strings.HasPrefix(got, pdir) {
+		t.Errorf("findExtractedPython = %q, want a path under %q", got, pdir)
 	}
 }
 
@@ -108,24 +95,29 @@ func TestUVEnvRedirectsState(t *testing.T) {
 		toolBin:   "/tmp/pm/bin",
 		cacheDir:  "/tmp/pm/cache",
 	}
-	// All uv state must be redirected under the runtime root so nothing leaks
-	// into the user's global uv cache/tools.
-	want := map[string]string{
-		"UV_PYTHON_INSTALL_DIR": l.pythonDir,
-		"UV_TOOL_DIR":           l.toolDir,
-		"UV_TOOL_BIN_DIR":       l.toolBin,
-		"UV_CACHE_DIR":          l.cacheDir,
-	}
 	got := map[string]string{}
 	for _, kv := range l.uvEnv() {
 		if k, v, ok := strings.Cut(kv, "="); ok {
 			got[k] = v
 		}
 	}
+	// Tool + cache state must be redirected under the runtime root so nothing
+	// leaks into the user's global uv dirs.
+	want := map[string]string{
+		"UV_TOOL_DIR":     l.toolDir,
+		"UV_TOOL_BIN_DIR": l.toolBin,
+		"UV_CACHE_DIR":    l.cacheDir,
+	}
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("uvEnv()[%q] = %q, want %q", k, got[k], v)
 		}
+	}
+	// uvEnv must NOT set UV_PYTHON_INSTALL_DIR: only ensurePython sets it, and the
+	// `uv tool install` step must run without it so the explicit --python
+	// interpreter is treated as external (no minor-version junction → no os 448).
+	if v, set := got["UV_PYTHON_INSTALL_DIR"]; set {
+		t.Errorf("uvEnv() set UV_PYTHON_INSTALL_DIR=%q, want it unset", v)
 	}
 }
 
