@@ -1,12 +1,62 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestWithRetrySucceedsAfterTransientFailures(t *testing.T) {
+	calls, backoffs := 0, 0
+	err := withRetry(3, func(int) { backoffs++ }, func() error {
+		calls++
+		if calls < 3 {
+			return errors.New("transient 448")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("withRetry = %v, want nil after recovering", err)
+	}
+	if calls != 3 {
+		t.Errorf("fn called %d times, want 3", calls)
+	}
+	if backoffs != 2 {
+		t.Errorf("backoff called %d times, want 2 (between the 3 tries)", backoffs)
+	}
+}
+
+func TestWithRetryReturnsLastErrorWhenExhausted(t *testing.T) {
+	calls := 0
+	want := errors.New("persistent failure")
+	err := withRetry(3, func(int) {}, func() error {
+		calls++
+		return want
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("withRetry = %v, want %v", err, want)
+	}
+	if calls != 3 {
+		t.Errorf("fn called %d times, want 3", calls)
+	}
+}
+
+func TestWithRetryStopsOnFirstSuccess(t *testing.T) {
+	calls := 0
+	err := withRetry(3, func(int) { t.Error("backoff should not be called on immediate success") }, func() error {
+		calls++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("withRetry = %v, want nil", err)
+	}
+	if calls != 1 {
+		t.Errorf("fn called %d times, want 1", calls)
+	}
+}
 
 func TestEnvOr(t *testing.T) {
 	const key = "PHOTOMAP_TEST_ENVOR"

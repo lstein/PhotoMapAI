@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const (
@@ -56,6 +57,45 @@ func (l layout) uvEnv() []string {
 		"UV_PYTHON_PREFERENCE=only-managed",
 	)
 	return env
+}
+
+// installStepAttempts is how many times each uv install command is tried before
+// giving up. On Windows with OneDrive Files-On-Demand, the cloud-filter driver
+// (cldflt) can transiently fail uv's creation of the managed-Python
+// minor-version junction with "untrusted mount point" (os error 448) while it
+// engages a freshly created folder tree on the very first run. The failure
+// clears itself once the filter settles, so a short retry turns what was a hard
+// first-run abort into a brief pause. Retrying is cheap: uv caches its
+// downloads, so a second attempt reuses the already-fetched Python/wheels.
+const installStepAttempts = 3
+
+// withRetry calls fn up to attempts times, returning nil on the first success
+// and the last error once attempts are exhausted. Between failed tries it calls
+// backoff(attempt) (1-based) so callers control the delay (and tests can make it
+// a no-op). Pulled out as a free function so the retry logic is unit-testable
+// without spawning a real uv.
+func withRetry(attempts int, backoff func(attempt int), fn func() error) error {
+	var err error
+	for attempt := 1; ; attempt++ {
+		if err = fn(); err == nil || attempt >= attempts {
+			return err
+		}
+		backoff(attempt)
+	}
+}
+
+// runUVRetry runs uv like runUV but retries a few times with a short, growing
+// backoff so a transient first-run filesystem error (see installStepAttempts)
+// self-heals instead of aborting setup.
+func (l layout) runUVRetry(args ...string) error {
+	return withRetry(installStepAttempts, func(attempt int) {
+		delay := time.Duration(attempt*3) * time.Second
+		fmt.Printf("\nThat step didn't complete (attempt %d of %d). Retrying in %s...\n",
+			attempt, installStepAttempts, delay)
+		time.Sleep(delay)
+	}, func() error {
+		return l.runUV(args...)
+	})
 }
 
 // runUV runs uv with the given arguments, streaming its output to our console.
@@ -251,7 +291,11 @@ func install(l layout, pkgSpec, torchBackend string, reinstall bool) error {
 	fmt.Printf("\nFirst-time setup: downloading Python and the PhotoMapAI libraries.\n")
 	fmt.Printf("This is a multi-GB download and runs once; it can take several minutes.\n\n")
 
-	if err := l.runUV("python", "install", pythonVersion); err != nil {
+	// --no-bin: the launcher runs start_photomap from the tool venv directly, so
+	// we don't need uv to drop a python3.12 shim into the user's ~/.local/bin
+	// (which it can't manage on reinstall, and which is one more cross-folder
+	// write outside our runtime root).
+	if err := l.runUVRetry("python", "install", pythonVersion, "--no-bin"); err != nil {
 		return fmt.Errorf("installing Python: %w", err)
 	}
 
@@ -263,7 +307,7 @@ func install(l layout, pkgSpec, torchBackend string, reinstall bool) error {
 	if reinstall {
 		args = append(args, "--reinstall")
 	}
-	if err := l.runUV(args...); err != nil {
+	if err := l.runUVRetry(args...); err != nil {
 		return fmt.Errorf("installing %s: %w", pkgSpec, err)
 	}
 	return writeMarker(l, torchBackend)
