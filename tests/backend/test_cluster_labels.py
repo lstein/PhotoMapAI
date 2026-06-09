@@ -246,10 +246,7 @@ def test_encode_propagates_non_oom_errors(tiny_vocab, monkeypatch):
 def test_vocab_cache_invalidates_on_user_file_edit(
     tiny_vocab, isolated_cache, fake_encoder, monkeypatch, tmp_path
 ):
-    """Touching the user extras file should rebuild the vocab embeddings."""
-    import os
-    import time
-
+    """Editing the user extras file (changing its phrases) should rebuild."""
     user = tmp_path / "extras.txt"
     user.write_text("stadium\n", encoding="utf-8")
     monkeypatch.setattr(cluster_labels, "user_vocab_file_path", lambda: user)
@@ -259,12 +256,43 @@ def test_vocab_cache_invalidates_on_user_file_edit(
     encoder = fake_encoder[spec]
     calls_before = encoder.encode_calls
 
-    # Bump user file mtime forward
+    # Change the content — the phrase set actually differs now.
+    user.write_text("stadium\nlibrary\n", encoding="utf-8")
+
+    phrases, _ = cluster_labels.get_or_build_vocab_embeddings(spec)
+    assert "library" in phrases
+    assert encoder.encode_calls == calls_before + 1
+
+
+def test_vocab_cache_survives_mtime_bump_without_content_change(
+    tiny_vocab, isolated_cache, fake_encoder, monkeypatch, tmp_path
+):
+    """A pure `touch` (newer mtime, identical content) must NOT rebuild.
+
+    This is the reinstall case: `pip install` rewrites the bundled
+    ``cluster_vocab.txt`` with a fresh mtime even when its contents are
+    unchanged. Invalidation is content-based, so the cached embeddings — and
+    the multi-second CLIP encode that produced them — are reused.
+    """
+    import os
+    import time
+
+    user = tmp_path / "extras.txt"
+    user.write_text("stadium\n", encoding="utf-8")
+    monkeypatch.setattr(cluster_labels, "user_vocab_file_path", lambda: user)
+
+    spec = "fake:user-vocab-touch"
+    cluster_labels.get_or_build_vocab_embeddings(spec)
+    encoder = fake_encoder[spec]
+    calls_before = encoder.encode_calls
+
+    # Bump both source files' mtimes forward without changing their contents.
     future = time.time() + 5
     os.utime(user, (future, future))
+    os.utime(cluster_labels.vocab_file_path(), (future, future))
 
     cluster_labels.get_or_build_vocab_embeddings(spec)
-    assert encoder.encode_calls == calls_before + 1
+    assert encoder.encode_calls == calls_before  # cache reused, no rebuild
 
 
 def test_vocab_cache_invalidates_when_user_file_removed(
@@ -448,12 +476,8 @@ def test_cache_invalidates_on_vocab_edit(tiny_vocab, isolated_cache, fake_encode
     encoder = fake_encoder[spec]
     assert encoder.encode_calls == 1
 
-    # Edit the vocab — bump the mtime forward
-    import os
-    import time
+    # Edit the vocab content — the phrase set changes, so the cache rebuilds.
     tiny_vocab.write_text(tiny_vocab.read_text() + "\nstadium\n", encoding="utf-8")
-    future = time.time() + 5
-    os.utime(tiny_vocab, (future, future))
 
     phrases, emb = cluster_labels.get_or_build_vocab_embeddings(spec)
     assert "stadium" in phrases
@@ -716,12 +740,43 @@ def test_get_or_build_invalidates_on_embeddings_touch(synthetic_album, monkeypat
     assert call_count["n"] == 2
 
 
-def test_get_or_build_invalidates_on_vocab_touch(synthetic_album, monkeypatch, tmp_path):
+def test_get_or_build_invalidates_on_vocab_edit(synthetic_album, monkeypatch, tmp_path):
     """Editing cluster_vocab.txt must invalidate every per-album labels cache."""
+    # Synthetic vocab file so we can edit it in isolation.
+    vocab = tmp_path / "vocab.txt"
+    vocab.write_text("abbey\nwedding\nmountain\nkitchen\ncar\n", encoding="utf-8")
+    monkeypatch.setattr(cluster_labels, "vocab_file_path", lambda: vocab)
+
+    call_count = {"n": 0}
+    real_compute = cluster_labels.compute_cluster_labels
+
+    def counting_compute(*args, **kwargs):
+        call_count["n"] += 1
+        return real_compute(*args, **kwargs)
+
+    monkeypatch.setattr(cluster_labels, "compute_cluster_labels", counting_compute)
+
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    # Change the vocabulary content — the fingerprint changes, so the labels
+    # cache must rebuild.
+    vocab.write_text("abbey\nwedding\nmountain\nkitchen\ncar\nbridge\n", encoding="utf-8")
+    cluster_labels.get_or_build_cluster_labels(
+        synthetic_album, cluster_eps=1.0, cluster_min_samples=3
+    )
+    assert call_count["n"] == 2
+
+
+def test_get_or_build_labels_survives_vocab_mtime_bump(synthetic_album, monkeypatch, tmp_path):
+    """A pure `touch` of the vocab file (same content) must NOT rebuild labels.
+
+    The reinstall case for the per-album labels cache: identical vocabulary,
+    fresher mtime. Content fingerprinting keeps the cache valid.
+    """
     import os
     import time
 
-    # Synthetic vocab file so we can bump its mtime in isolation.
     vocab = tmp_path / "vocab.txt"
     vocab.write_text("abbey\nwedding\nmountain\nkitchen\ncar\n", encoding="utf-8")
     monkeypatch.setattr(cluster_labels, "vocab_file_path", lambda: vocab)
@@ -743,7 +798,7 @@ def test_get_or_build_invalidates_on_vocab_touch(synthetic_album, monkeypatch, t
     cluster_labels.get_or_build_cluster_labels(
         synthetic_album, cluster_eps=1.0, cluster_min_samples=3
     )
-    assert call_count["n"] == 2
+    assert call_count["n"] == 1  # cache reused, no rebuild
 
 
 def test_get_or_build_invalidates_when_user_vocab_removed(
