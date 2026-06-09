@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"archive/zip"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const (
@@ -34,12 +36,19 @@ const (
 	uvLatestBase = "https://github.com/astral-sh/uv/releases/latest/download/"
 )
 
-// uvEnv returns the process environment with all uv state redirected under the
-// runtime root, so nothing leaks into the user's global uv cache/tools.
+// uvEnv returns the process environment with uv's tool and cache state redirected
+// under the runtime root, so nothing leaks into the user's global uv dirs.
+//
+// It deliberately does NOT set UV_PYTHON_INSTALL_DIR. The managed-Python download
+// is run by ensurePython, which sets that variable itself; the `uv tool install`
+// step must run *without* it so that the explicit interpreter we pass via
+// --python is treated as an external interpreter. If UV_PYTHON_INSTALL_DIR were
+// set there, uv would treat that interpreter as managed and try to (re)create its
+// minor-version directory junction — the exact step that fails with os error 448
+// on Windows under OneDrive Files-On-Demand.
 func (l layout) uvEnv() []string {
 	env := os.Environ()
 	env = append(env,
-		"UV_PYTHON_INSTALL_DIR="+l.pythonDir,
 		"UV_TOOL_DIR="+l.toolDir,
 		"UV_TOOL_BIN_DIR="+l.toolBin,
 		"UV_CACHE_DIR="+l.cacheDir,
@@ -57,6 +66,57 @@ func (l layout) runUV(args ...string) error {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
+}
+
+// ensurePython makes a managed CPython available on disk and returns the path to
+// its interpreter executable.
+//
+// It runs uv's managed-Python install (download + extract into l.pythonDir) but
+// treats a nonzero exit as success *as long as a usable interpreter landed on
+// disk*. The reason: on Windows with OneDrive Files-On-Demand, the final step
+// where uv creates a "minor version" directory junction fails with os error 448
+// ("untrusted mount point") even though the interpreter itself is fully extracted
+// and runnable. We don't need that junction — install() points uv at the
+// interpreter directly via --python — so a junction failure is harmless here. uv
+// output is captured and only surfaced if we end up with no usable interpreter,
+// to avoid alarming the user with a 448 we deliberately ignore.
+func (l layout) ensurePython() (string, error) {
+	var out bytes.Buffer
+	cmd := exec.Command(l.uvBin, "python", "install", pythonVersion, "--no-bin")
+	// Set UV_PYTHON_INSTALL_DIR only for this step (see uvEnv). --no-bin keeps uv
+	// from dropping a python shim into the user's ~/.local/bin.
+	cmd.Env = append(l.uvEnv(), "UV_PYTHON_INSTALL_DIR="+l.pythonDir)
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	runErr := cmd.Run()
+
+	if pyExe, ok := findExtractedPython(l); ok {
+		return pyExe, nil
+	}
+	if runErr != nil {
+		return "", fmt.Errorf("%w\n%s", runErr, strings.TrimSpace(out.String()))
+	}
+	return "", fmt.Errorf("Python %s was not found under %s after install", pythonVersion, l.pythonDir)
+}
+
+// findExtractedPython locates the interpreter inside an extracted managed-CPython
+// directory under l.pythonDir (e.g. cpython-3.12.13-windows-x86_64-none),
+// returning the path and whether one was found. The glob requires a patch
+// component (`3.12.`), so it matches the real install directory and not uv's
+// `cpython-3.12-…` minor-version junction.
+func findExtractedPython(l layout) (string, bool) {
+	dirs, _ := filepath.Glob(filepath.Join(l.pythonDir, "cpython-"+pythonVersion+".*"))
+	for _, dir := range dirs {
+		for _, exe := range []string{
+			filepath.Join(dir, "python.exe"),     // Windows
+			filepath.Join(dir, "bin", "python3"), // macOS / Linux
+		} {
+			if fileExists(exe) {
+				return exe, true
+			}
+		}
+	}
+	return "", false
 }
 
 // ensureUV makes sure a usable uv binary exists at l.uvBin. It prefers an
@@ -232,6 +292,26 @@ func writeMarker(l layout, torchBackend string) error {
 	return os.WriteFile(l.marker, []byte(torchBackend+"\n"), 0o644)
 }
 
+// warnIfXcodeToolsMissing gives macOS users a heads-up before uv runs for the
+// first time. When uv builds the tool's virtualenv it has macOS rewrite the
+// Python executable's library paths with `install_name_tool`; if the Xcode
+// Command Line Tools aren't installed, macOS pops a dialog offering to install
+// them. The tools are NOT actually needed — PhotoMapAI installs fine whether the
+// user accepts or cancels — and there's no clean way to suppress the dialog, so
+// we just warn, pause long enough to read it, and continue. No-op off macOS, or
+// when the Command Line Tools are already present (then no dialog appears).
+func warnIfXcodeToolsMissing() {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	// `xcode-select -p` exits non-zero when the Command Line Tools are absent.
+	if err := exec.Command("xcode-select", "-p").Run(); err == nil {
+		return
+	}
+	fmt.Println("\nMacOS will ask you to install the XCode Command Line Tools. Either cancel or accept this request -- it makes no difference.")
+	time.Sleep(5 * time.Second)
+}
+
 // install runs the uv steps to put photomapai on disk with the requested torch
 // backend. pkgSpec is the argument passed to `uv tool install` — usually the bare
 // pkgName, or pkgName=="<version>" when --pkg-version pins a release (an explicit
@@ -242,13 +322,21 @@ func install(l layout, pkgSpec, torchBackend string, reinstall bool) error {
 	fmt.Printf("\nFirst-time setup: downloading Python and the PhotoMapAI libraries.\n")
 	fmt.Printf("This is a multi-GB download and runs once; it can take several minutes.\n\n")
 
-	if err := l.runUV("python", "install", pythonVersion); err != nil {
+	warnIfXcodeToolsMissing()
+
+	// Get a managed interpreter on disk. We pass its explicit path to
+	// `uv tool install` below rather than `--python 3.12`, so uv never runs its
+	// managed-install machinery for the tool venv — and therefore never tries to
+	// create the minor-version junction that fails with os error 448 on Windows
+	// under OneDrive Files-On-Demand. See ensurePython / uvEnv for the details.
+	pyExe, err := l.ensurePython()
+	if err != nil {
 		return fmt.Errorf("installing Python: %w", err)
 	}
 
 	args := []string{
 		"tool", "install", pkgSpec,
-		"--python", pythonVersion,
+		"--python", pyExe,
 		"--torch-backend", torchBackend,
 	}
 	if reinstall {

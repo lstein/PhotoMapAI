@@ -67,7 +67,22 @@ function Install-VisualCPlusPlus {
     exit 0
 }
 
-# 1. Check Python version 
+# DEPRECATED: superseded by the PhotoMapAI desktop installer (see header banner below).
+Write-Host "============================================================" -ForegroundColor Yellow
+Write-Host " This installer is DEPRECATED and will be removed in a future" -ForegroundColor Yellow
+Write-Host " release. The recommended way to install PhotoMapAI is now the" -ForegroundColor Yellow
+Write-Host " desktop installer:" -ForegroundColor Yellow
+Write-Host "   https://github.com/lstein/PhotoMapAI/releases" -ForegroundColor Yellow
+Write-Host " Or from PyPI:  uv tool install photomapai --torch-backend auto" -ForegroundColor Yellow
+Write-Host " Docs: https://lstein.github.io/PhotoMapAI/installation/" -ForegroundColor Yellow
+Write-Host "============================================================" -ForegroundColor Yellow
+$depConfirm = Read-Host "Continue with this deprecated installer anyway? (y/N)"
+if ($depConfirm -notin @('Y', 'y')) {
+    Write-Host "Installation cancelled." -ForegroundColor Red
+    exit 0
+}
+
+# 1. Check Python version
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
     Install-Python "Python is not installed."
