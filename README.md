@@ -86,9 +86,8 @@ For PyPI, Docker, and manual install instructions, see the [Installation guide](
 If you already have Python 3.10–3.14 and prefer the command line:
 
 ```bash
-uv tool install photomapai --python 3.12 --python-preference only-managed --torch-backend auto
+uv tool install photomapai --torch-backend auto   # or: pip install photomapai
 start_photomap
-# (or simply: pip install photomapai && start_photomap)
 ```
 
 Then open your browser to [http://127.0.0.1:8050](http://127.0.0.1:8050) (it opens automatically) and follow the prompts to create your first album.

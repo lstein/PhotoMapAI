@@ -51,21 +51,20 @@ func TestMarkerRoundTrip(t *testing.T) {
 	}
 }
 
-func TestUVEnvForcesManagedPython(t *testing.T) {
+func TestUVEnvRedirectsState(t *testing.T) {
 	l := layout{
 		pythonDir: "/tmp/pm/python",
 		toolDir:   "/tmp/pm/tools",
 		toolBin:   "/tmp/pm/bin",
 		cacheDir:  "/tmp/pm/cache",
 	}
+	// All uv state must be redirected under the runtime root so nothing leaks
+	// into the user's global uv cache/tools.
 	want := map[string]string{
 		"UV_PYTHON_INSTALL_DIR": l.pythonDir,
 		"UV_TOOL_DIR":           l.toolDir,
 		"UV_TOOL_BIN_DIR":       l.toolBin,
 		"UV_CACHE_DIR":          l.cacheDir,
-		// only-managed keeps uv off the non-relocatable macOS framework Python,
-		// which would otherwise trigger the Xcode install_name_tool prompt.
-		"UV_PYTHON_PREFERENCE": "only-managed",
 	}
 	got := map[string]string{}
 	for _, kv := range l.uvEnv() {

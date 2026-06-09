@@ -101,9 +101,8 @@ PhotoMapAI 也支援多相簿管理、依時間瀏覽照片、簡潔的全螢幕
 如果你已經安裝 Python 3.10–3.14，並偏好使用命令列：
 
 ```bash
-uv tool install photomapai --python 3.12 --python-preference only-managed --torch-backend auto
+uv tool install photomapai --torch-backend auto   # 或：pip install photomapai
 start_photomap
-# （或改用 pip：pip install photomapai && start_photomap）
 ```
 
 接著開啟瀏覽器，前往 [http://127.0.0.1:8050](http://127.0.0.1:8050)（會自動開啟），並依照畫面提示建立你的第一個相簿。
