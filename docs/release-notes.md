@@ -1,13 +1,18 @@
 # Release Notes
 
-Notable changes to PhotoMapAI, newest first. For the full commit-level history,
-see the [GitHub releases page](https://github.com/lstein/PhotoMapAI/releases).
+Welcome to PhotoMapAI, an AI-based image manager. See
+[Features](https://lstein.github.io/PhotoMapAI/) for a quick
+introduction,
+[Installation](https://lstein.github.io/PhotoMapAI/installation) to
+get PhotoMapAI installed on your home computer, and [User
+Guide](https://lstein.github.io/PhotoMapAI/user-guide/basic-usage/)
+for usage and configuration.
 
-## 1.1.0
+## PhotoMapAI Version 1.1.0
 
-This is a big feature release — the highlight is a **brand-new, signed desktop
-installer** that removes the old "install Python and CUDA first" friction. Since
-1.0.5 there are 22 new features and dozens of fixes, with no breaking changes.
+This is a big feature release — the highlight is a **much smoother install experience**
+on Macintoshes, Windows machines and Linux boxes. In addition, since the previous
+1.0.5 release there are 22 new features and dozens of fixes large and small.
 
 ### ⭐ New install experience
 
@@ -15,16 +20,9 @@ installer** that removes the old "install Python and CUDA first" friction. Since
   (#300). No need to install Python, CUDA, or anything else first — on first
   launch it downloads a private Python plus the AI libraries, starts the server,
   and opens your browser automatically. Later launches start in seconds.
-    - Code-signed on macOS and Windows, so no more Gatekeeper/quarantine dances.
-    - Custom app icons across all three platforms (#304).
-    - Advanced `--pkg-version` flag to install a specific release (#310).
-- **Reliable first-run setup, everywhere.** The launcher installs its private
-  Python by handing `uv` the downloaded interpreter directly, so first-run setup
-  completes cleanly even on Windows machines running OneDrive "Files On-Demand" —
-  which previously could block installation with an "untrusted mount point"
-  error (#326). On macOS, the launcher now explains up front that the one-time
-  Xcode Command Line Tools prompt is harmless and can be accepted *or* cancelled
-  (#324).
+- **Reliable first-run setup, everywhere.** The launcher installs its
+  private Python and required libraries, avoiding interfering with
+  other software installed on the machine.
 - **GPU "just works":** an NVIDIA GPU is detected and used automatically. You no
   longer need to install the CUDA Toolkit — only a recent NVIDIA driver. Apple
   Silicon acceleration is automatic too.
@@ -89,5 +87,6 @@ installer** that removes the old "install Python and CUDA first" friction. Since
 
 Plus internal refactors, CI repairs, and frontend cleanups under the hood.
 
-!!! note "Upgrading from the `1.0.6rc1` prerelease"
-    The `1.0.6rc1` prerelease line is superseded — please move to `1.1.0`.
+For the full commit-level history, see the [GitHub releases
+page](https://github.com/lstein/PhotoMapAI/releases).
+
