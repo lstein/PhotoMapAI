@@ -18,6 +18,13 @@ installer** that removes the old "install Python and CUDA first" friction. Since
     - Code-signed on macOS and Windows, so no more Gatekeeper/quarantine dances.
     - Custom app icons across all three platforms (#304).
     - Advanced `--pkg-version` flag to install a specific release (#310).
+- **Reliable first-run setup, everywhere.** The launcher installs its private
+  Python by handing `uv` the downloaded interpreter directly, so first-run setup
+  completes cleanly even on Windows machines running OneDrive "Files On-Demand" —
+  which previously could block installation with an "untrusted mount point"
+  error (#326). On macOS, the launcher now explains up front that the one-time
+  Xcode Command Line Tools prompt is harmless and can be accepted *or* cancelled
+  (#324).
 - **GPU "just works":** an NVIDIA GPU is detected and used automatically. You no
   longer need to install the CUDA Toolkit — only a recent NVIDIA driver. Apple
   Silicon acceleration is automatic too.
