@@ -1,5 +1,11 @@
 #!/bin/bash
 # filepath: /home/lstein/Projects/PhotoMap/INSTALL/install_linux_mac.sh
+#
+# DEPRECATED: This script is superseded by the PhotoMapAI desktop installer and
+# will be removed in a future release. Prefer the signed installer (.dmg /
+# .AppImage) from https://github.com/lstein/PhotoMapAI/releases, or install from
+# PyPI with `uv tool install photomapai --torch-backend auto`.
+# See https://lstein.github.io/PhotoMapAI/installation/ for details.
 
 set -e  # Exit on any error
 
@@ -149,8 +155,30 @@ EOF
     print_info "macOS app bundle created at: $app_dir"
 }
 
+# Deprecation banner shown before the installer runs
+print_deprecation() {
+    echo
+    print_warn "============================================================"
+    print_warn " This script is DEPRECATED and will be removed in a future"
+    print_warn " release. The recommended way to install PhotoMapAI is now"
+    print_warn " the desktop installer:"
+    print_warn "   https://github.com/lstein/PhotoMapAI/releases"
+    print_warn " Or from PyPI:"
+    print_warn "   uv tool install photomapai --torch-backend auto"
+    print_warn " Docs: https://lstein.github.io/PhotoMapAI/installation/"
+    print_warn "============================================================"
+    echo
+    read -p "Continue with this deprecated installer anyway? (y/N): " dep_confirm
+    if [[ ! "$dep_confirm" =~ ^[Yy]$ ]]; then
+        print_info "Installation cancelled."
+        exit 0
+    fi
+}
+
 # Main installation function
 main() {
+    print_deprecation
+
     print_info "PhotoMap Installation Script"
     print_info "============================="
     

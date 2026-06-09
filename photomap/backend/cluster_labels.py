@@ -247,10 +247,18 @@ def _read_cached_vocab(
     vocab_path: Path,
     encoder_spec: str,
 ) -> tuple[list[str], np.ndarray] | None:
-    """Return cached (phrases, embeddings) if valid, else None to signal rebuild."""
+    """Return cached (phrases, embeddings) if valid, else None to signal rebuild.
+
+    Invalidation is purely content-based: the encoder spec, template count, and
+    the exact phrase set are all stamped in the cache and compared here. We
+    deliberately do NOT compare file mtimes — a reinstall (or any `touch`)
+    rewrites the bundled `cluster_vocab.txt` with a newer mtime even when its
+    contents are byte-for-byte identical, and an mtime gate would then discard a
+    perfectly valid cache and force a multi-second CLIP re-encode on first
+    startup. Content comparison reuses the cache across reinstalls and only
+    rebuilds when the vocabulary actually changed.
+    """
     if not cache_path.exists():
-        return None
-    if cache_path.stat().st_mtime < _vocab_sources_max_mtime(vocab_path):
         return None
     try:
         data = np.load(cache_path, allow_pickle=False)
@@ -274,11 +282,10 @@ def _read_cached_vocab(
         )
         return None
     phrases = [str(p) for p in data["phrases"]]
-    # Mtime check above can miss two cases:
-    #   - User extras file deleted/renamed: bundled mtime stays the same, but
-    #     the phrase set just shrank.
-    #   - User extras file added back with an mtime older than the cache.
-    # Compare actual phrase sets to catch both.
+    # The stamped phrase set is the sole content signal. Comparing actual sets
+    # (rather than mtimes) catches every real change regardless of mtime
+    # direction: a user extras file deleted/renamed (phrase set shrinks while
+    # the bundled mtime is unchanged), or added back with a back-dated mtime.
     current_phrases = load_vocab_phrases(vocab_path)
     if set(phrases) != set(current_phrases):
         logger.info(
@@ -299,12 +306,13 @@ def get_or_build_vocab_embeddings(
     """Load or build the vocab embeddings cache for `encoder_spec`.
 
     Returns `(phrases, embeddings)` where `embeddings` is `(N, D)` float32 and
-    L2-normalized after template-ensemble mean-pooling. The cache rebuilds when:
+    L2-normalized after template-ensemble mean-pooling. Invalidation is
+    content-based (never mtime-based, so the cache survives reinstalls that
+    rewrite the bundled vocab file without changing it). The cache rebuilds when:
 
     - the file is missing,
-    - either vocab source file has been edited since the cache was written,
-    - the stored phrase set differs from what's on disk now (catches user
-      extras file deletion/rename, which mtime alone misses),
+    - the stored phrase set differs from what's on disk now (catches edits,
+      additions, and user extras file deletion/rename),
     - the stamped encoder spec doesn't match (defensive against filename collisions),
     - `len(PROMPT_TEMPLATES)` has changed since the cache was written.
 
@@ -473,12 +481,10 @@ def _read_cached_labels(
     if cache_mtime < embeddings_path.stat().st_mtime:
         return None
     # Vocab edits change the candidate label strings (and, indirectly, the chosen
-    # top-1 once vocab embeddings rebuild). Without this check, a vocab refresh
-    # would silently leave every album's labels stale until the album reindexes.
-    # Both the bundled vocab and the user extras file count as sources.
-    vocab_path = vocab_file_path()
-    if vocab_path.exists() and cache_mtime < _vocab_sources_max_mtime(vocab_path):
-        return None
+    # top-1 once vocab embeddings rebuild). That signal is the stored
+    # ``vocab_fingerprint`` checked below — a content hash, not an mtime, so a
+    # reinstall that rewrites the bundled vocab without changing it doesn't
+    # needlessly invalidate every album's labels cache.
     try:
         data = np.load(cache_path, allow_pickle=False)
         cluster_ids = [int(c) for c in data["cluster_ids"]]

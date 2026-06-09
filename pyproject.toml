@@ -89,7 +89,7 @@ search_images = "photomap.backend.imagetool:main"
 search_text = "photomap.backend.imagetool:main"
 find_duplicate_images = "photomap.backend.imagetool:main"
 rebuild_cluster_labels = "photomap.backend.imagetool:main"
-start_photomap = "photomap.backend.photomap_server:main"
+start_photomap = "photomap.backend.launch:main"
 
 [tool.ruff]
 # Set line length to match the project's style
