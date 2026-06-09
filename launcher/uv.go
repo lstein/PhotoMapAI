@@ -45,6 +45,15 @@ func (l layout) uvEnv() []string {
 		"UV_CACHE_DIR="+l.cacheDir,
 		// Don't let a managed-Python download be disabled by inherited config.
 		"UV_PYTHON_DOWNLOADS=automatic",
+		// Only ever use uv's managed (python-build-standalone) interpreters,
+		// never a system/framework CPython. uv's default preference ("managed")
+		// will still fall back to a system interpreter if it finds a matching
+		// version — on macOS that's the non-relocatable python.org framework
+		// build at /Library/Frameworks/Python.framework. Building a venv from it
+		// makes uv rewrite Mach-O load paths with `install_name_tool`, which
+		// triggers the Xcode Command Line Tools install prompt. Managed builds
+		// are relocatable, so forcing only-managed avoids that prompt entirely.
+		"UV_PYTHON_PREFERENCE=only-managed",
 	)
 	return env
 }
