@@ -5,7 +5,7 @@
   z-index: 100;
 }
 .img-hover-zoom:hover {
-  transform: scale(1.75);
+  transform: scale(1.33);
   z-index: 999;
 }
 
