@@ -302,60 +302,12 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Photo Metadata Display">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#invokeai-metadata-support" class="md-nav__link">
-    <span class="md-ellipsis">
-      InvokeAI Metadata Support
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
-  <a href="#other-features" class="md-nav__link">
+  <a href="#invokeai-image-generation-support" class="md-nav__link">
     <span class="md-ellipsis">
-      Other Features
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      Quick Start
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Quick Start">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#install-from-the-command-line" class="md-nav__link">
-    <span class="md-ellipsis">
-      Install from the command line
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#detailed-guides" class="md-nav__link">
-    <span class="md-ellipsis">
-      Detailed Guides
+      InvokeAI Image Generation Support
     </span>
   </a>
   
@@ -457,7 +409,7 @@
         
   
   <span class="md-ellipsis">
-    CUDA Setup
+    GPU Acceleration
   </span>
   
 
@@ -900,6 +852,26 @@
   
   
     <li class="md-nav__item">
+      <a href="release-notes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Release Notes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="troubleshooting/" class="md-nav__link">
         
   
@@ -973,60 +945,12 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Photo Metadata Display">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#invokeai-metadata-support" class="md-nav__link">
-    <span class="md-ellipsis">
-      InvokeAI Metadata Support
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
-  <a href="#other-features" class="md-nav__link">
+  <a href="#invokeai-image-generation-support" class="md-nav__link">
     <span class="md-ellipsis">
-      Other Features
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      Quick Start
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Quick Start">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#install-from-the-command-line" class="md-nav__link">
-    <span class="md-ellipsis">
-      Install from the command line
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#detailed-guides" class="md-nav__link">
-    <span class="md-ellipsis">
-      Detailed Guides
+      InvokeAI Image Generation Support
     </span>
   </a>
   
@@ -1072,15 +996,25 @@ themes.</p>
 <hr />
 <h2 id="features">Features</h2>
 <ul>
-<li>Fast browsing of large image collections</li>
-<li>All images are local to your computer; nothing goes out to the internet</li>
-<li>AI-based text and image similarity search</li>
-<li>Thematic image clustering and visualization</li>
-<li>Flexible album management</li>
+<li>Fast browsing of large image collections and image metadata</li>
+<li>AI-based text and image <a href="#text-and-image-similarity-search">similarity search</a></li>
+<li>Thematic image <a href="#the-semantic-map">clustering and visualization</a></li>
+<li>Flexible <a href="user-guide/albums">album management</a></li>
+<li><a href="#invokeai-image-generation-support">Integration</a> with the InvokeAI image generation app.</li>
+<li>A <a href="user-guide/curator-mode">curator mode</a> for creating training sets for LoRA models.</li>
+<li>Extensible <a href="developer/architecture">backend</a> (FastAPI)</li>
 <li>Responsive UI for desktop and mobile</li>
 <li>Support for wide range of image formats, including Apple's HEIC</li>
-<li>Integration with the InvokeAI image generation app.</li>
-<li>Extensible backend (FastAPI)</li>
+<li>All images are local to your computer; nothing goes out to the internet</li>
+</ul>
+<p>Quick Links:</p>
+<ul>
+<li><a href="#quick-start">Getting Started</a></li>
+<li><a href="installation/">Installation</a></li>
+<li><a href="user-guide/basic-usage/">User Guide</a></li>
+<li><a href="user-guide/configuration/">Configuration</a></li>
+<li><a href="developer/architecture/">Developer Guide</a></li>
+<li><a href="troubleshooting/">Troubleshooting</a></li>
 </ul>
 <h2 id="the-semantic-map">The Semantic Map</h2>
 <p>PhotoMapAI's unique feature is its ability to identify thematically similar images and automatically cluster them, creating a "semantic map":</p>
@@ -1094,11 +1028,34 @@ themes.</p>
 <h2 id="photo-metadata-display">Photo Metadata Display</h2>
 <p>When viewing a photo in full-screen mode, you can pop out a little drawer to show its metadata, including the GPS location (if available), and the camera/phone settings:</p>
 <p><img src="img/photomap_metadata.png" alt="Image Metadata" class="img-hover-zoom"></p>
-<h3 id="invokeai-metadata-support">InvokeAI Metadata Support</h3>
-<p>If you are a user of the <a href="https://github.com/invoke-ai/InvokeAI">InvokeAI</a> text-to-image generation tool, you can get quick access to the key settings used to generate the image, including the prompts, model and LoRAs in use, and the input images used for IPAdapters, ControlNets and the img2img raster layer. You can also display the full generation metadata in native JSON format and copy it to the clipboard.</p>
+<h2 id="invokeai-image-generation-support">InvokeAI Image Generation Support</h2>
+<p>If you are a user of the
+<a href="https://github.com/invoke-ai/InvokeAI">InvokeAI</a> text-to-image
+generation tool, you can get quick access to the key settings used to
+generate the image, including the prompts, model and LoRAs in use, and
+the input images used for IPAdapters, ControlNets and the img2img
+raster layer. You can view the full metadata in its native JSON
+format, and copy and paste it.</p>
 <p><img src="img/photomap_invokeai.png" alt="InvokeAI Metadata" class="img-hover-zoom"></p>
+<p>Any image can be sent to a running InvokeAI instance to use as a
+reference image for image-to-image and style transfer. If the image
+was originally generated with InvokeAI, you can remix it (same
+parameters, different starting seed) or recall it (regenerate the
+exact image). Instructions for configuring the PhotoMapAI to InvokeAI link can be found <a href="user-guide/invokeai-integration">here</a>.</p>
+<hr />
+<h1 id="autotagging">Autotagging</h1>
+<p>You can optionally activate <a href="user-guide/autotagging">autotagging</a>, which will use a vision model
+to assign tags to individual images as well as to each cluster in the
+semantic map. You can easily add your own tags to customize the
+labels.</p>
+<p><img src="img/photomap-autotagging.png" alt="Autotagging Example" class="img-hover-zoom"></p>
+<hr />
 <h2 id="other-features">Other Features</h2>
-<p>PhotoMapAI supports most of the other features you would expect, including support for multiple separate photo albums, the ability to browse photos chronologically, an uncluttered fullscreen mode, and of course a configurable slideshow mode that can show images sequentially or shuffled.</p>
+<p>PhotoMapAI supports most of the other features you would expect,
+including support for multiple separate photo albums, the ability to
+browse photos chronologically, an uncluttered fullscreen mode, and of
+course a configurable slideshow mode that can show images sequentially
+or shuffled.</p>
 <hr />
 <h2 id="quick-start">Quick Start</h2>
 <p>The easiest way to install PhotoMapAI is the native installer for your platform. <strong>You don't need Python, CUDA, or anything else first</strong> — the installer sets everything up on first launch. Download the file for your system from the latest <a href="https://github.com/lstein/PhotoMapAI/releases">Releases page</a> (under <strong>Assets</strong>), where <code>X.X.X</code> is the current version:</p>
@@ -1136,15 +1093,6 @@ themes.</p>
 start_photomap
 </code></pre></div>
 <p>After the startup messages your browser opens to http://localhost:8050 automatically.</p>
-<hr />
-<h2 id="detailed-guides">Detailed Guides</h2>
-<ul>
-<li><a href="installation/">Installation</a></li>
-<li><a href="user-guide/basic-usage/">User Guide</a></li>
-<li><a href="user-guide/configuration/">Configuration</a></li>
-<li><a href="developer/architecture/">Developer Guide</a></li>
-<li><a href="troubleshooting/">Troubleshooting</a></li>
-</ul>
 
 
 

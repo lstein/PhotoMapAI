@@ -455,7 +455,7 @@
         
   
   <span class="md-ellipsis">
-    CUDA Setup
+    GPU Acceleration
   </span>
   
 
@@ -898,6 +898,26 @@
   
   
     <li class="md-nav__item">
+      <a href="../release-notes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Release Notes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../troubleshooting/" class="md-nav__link">
         
   
@@ -1150,7 +1170,13 @@ start_photomap
 <p>Change <code>/path/to/a/picture_folder</code> to a folder of images you want to browse, then point your browser to <code>http://localhost:8050</code>. Your images appear in the container directory <code>/Pictures</code>.</p>
 <hr />
 <h2 id="manual-installation-from-source">Manual installation from source</h2>
-<p>Download and unpack the source from the <a href="https://github.com/lstein/PhotoMapAI/releases">release page</a>, then:</p>
+<p>Download and unpack the source from the <a href="https://github.com/lstein/PhotoMapAI/releases">release page</a>, then install with <code>uv</code> (faster, recommended if you have it):</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>PhotoMapAI
+uv<span class="w"> </span>venv<span class="w">                               </span><span class="c1"># creates ./.venv</span>
+uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>.
+uv<span class="w"> </span>run<span class="w"> </span>start_photomap<span class="w">                 </span><span class="c1"># or: source .venv/bin/activate &amp;&amp; start_photomap</span>
+</code></pre></div>
+<p>Or with stock Python and <code>pip</code> (no extra tools required):</p>
 <div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>PhotoMapAI
 python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv<span class="w"> </span>--prompt<span class="w"> </span>photomap
 <span class="nb">source</span><span class="w"> </span>.venv/bin/activate<span class="w">             </span><span class="c1"># Windows: .venv\Scripts\activate</span>
@@ -1158,7 +1184,8 @@ pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="
 pip<span class="w"> </span>install<span class="w"> </span>.
 start_photomap
 </code></pre></div>
-<p>If you have an NVidia card on Windows and want GPU acceleration, install a CUDA build of PyTorch first (see <a href="cuda/">CUDA</a>); on Linux and macOS this is handled automatically. To start the server again later, re-run <code>start_photomap</code> from the activated environment.</p>
+<p>Both create an isolated virtual environment in <code>./.venv</code>; the difference is only which tool builds it. If you intend to <em>modify</em> the source, add <code>-e</code> to do an editable install (<code>uv pip install -e .</code> or <code>pip install -e .</code>) — but then the environment is tied to this folder's location, so don't move or rename it afterwards.</p>
+<p>GPU acceleration needs only a recent <strong>NVIDIA driver</strong> — <em>not</em> the CUDA Toolkit (see <a href="cuda/">NVIDIA GPU Acceleration</a>). On Linux and macOS the default <code>pip install .</code> already pulls a GPU-capable build of PyTorch, so there's nothing extra to do. On Windows the default PyTorch from PyPI is CPU-only; to enable the GPU, install the CUDA build of PyTorch from PyTorch's <a href="https://pytorch.org/get-started/locally/">official index</a>, or use the <code>uv tool install photomapai --torch-backend auto</code> recipe above, which selects the right build automatically. To start the server again later, re-run <code>start_photomap</code> from the activated environment.</p>
 
 
 
