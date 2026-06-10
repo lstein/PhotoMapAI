@@ -25,15 +25,25 @@ themes.
 
 ## Features
 
-- Fast browsing of large image collections
-- All images are local to your computer; nothing goes out to the internet
-- AI-based text and image similarity search
-- Thematic image clustering and visualization
-- Flexible album management
+- Fast browsing of large image collections and image metadata
+- AI-based text and image [similarity search](#text-and-image-similarity-search)
+- Thematic image [clustering and visualization](#the-semantic-map)
+- Flexible [album management](user-guide/albums)
+- [Integration](#invokeai-image-generation-support) with the InvokeAI image generation app.
+- A [curator mode](user-guide/curator-mode) for creating training sets for LoRA models.
+- Extensible [backend](developer/architecture) (FastAPI)
 - Responsive UI for desktop and mobile
 - Support for wide range of image formats, including Apple's HEIC
-- Integration with the InvokeAI image generation app.
-- Extensible backend (FastAPI)
+- All images are local to your computer; nothing goes out to the internet
+
+Quick Links:
+
+- [Getting Started](#quick-start)
+- [Installation](installation.md)
+- [User Guide](user-guide/basic-usage.md)
+- [Configuration](user-guide/configuration.md)
+- [Developer Guide](developer/architecture.md)
+- [Troubleshooting](troubleshooting.md)
 
 ## The Semantic Map
 
@@ -59,15 +69,44 @@ When viewing a photo in full-screen mode, you can pop out a little drawer to sho
 
 <img src="img/photomap_metadata.png" alt="Image Metadata" class="img-hover-zoom">
 
-### InvokeAI Metadata Support
+## InvokeAI Image Generation Support
 
-If you are a user of the [InvokeAI](https://github.com/invoke-ai/InvokeAI) text-to-image generation tool, you can get quick access to the key settings used to generate the image, including the prompts, model and LoRAs in use, and the input images used for IPAdapters, ControlNets and the img2img raster layer. You can also display the full generation metadata in native JSON format and copy it to the clipboard.
+If you are a user of the
+[InvokeAI](https://github.com/invoke-ai/InvokeAI) text-to-image
+generation tool, you can get quick access to the key settings used to
+generate the image, including the prompts, model and LoRAs in use, and
+the input images used for IPAdapters, ControlNets and the img2img
+raster layer. You can view the full metadata in its native JSON
+format, and copy and paste it.
 
 <img src="img/photomap_invokeai.png" alt="InvokeAI Metadata" class="img-hover-zoom">
 
+Any image can be sent to a running InvokeAI instance to use as a
+reference image for image-to-image and style transfer. If the image
+was originally generated with InvokeAI, you can remix it (same
+parameters, different starting seed) or recall it (regenerate the
+exact image). Instructions for configuring the PhotoMapAI to InvokeAI link can be found [here](user-guide/invokeai-integration).
+
+---
+
+# Autotagging
+
+You can optionally activate [autotagging](user-guide/autotagging), which will use a vision model
+to assign tags to individual images as well as to each cluster in the
+semantic map. You can easily add your own tags to customize the
+labels.
+
+<img src="img/photomap-autotagging.png" alt="Autotagging Example" class="img-hover-zoom">
+
+---
+
 ## Other Features
 
-PhotoMapAI supports most of the other features you would expect, including support for multiple separate photo albums, the ability to browse photos chronologically, an uncluttered fullscreen mode, and of course a configurable slideshow mode that can show images sequentially or shuffled.
+PhotoMapAI supports most of the other features you would expect,
+including support for multiple separate photo albums, the ability to
+browse photos chronologically, an uncluttered fullscreen mode, and of
+course a configurable slideshow mode that can show images sequentially
+or shuffled.
 
 ---
 
@@ -96,12 +135,3 @@ start_photomap
 
 After the startup messages your browser opens to http://localhost:8050 automatically.
 
----
-
-## Detailed Guides
-
-- [Installation](installation.md)
-- [User Guide](user-guide/basic-usage.md)
-- [Configuration](user-guide/configuration.md)
-- [Developer Guide](developer/architecture.md)
-- [Troubleshooting](troubleshooting.md)
