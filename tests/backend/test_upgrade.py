@@ -66,12 +66,8 @@ def test_build_command_raises_when_no_pip_and_no_uv(monkeypatch):
 
 
 # --- endpoint plumbing -----------------------------------------------------
-
-
-def test_update_rejects_without_header(client):
-    response = client.post("/version/update")
-    assert response.status_code == 403
-    assert "X-Requested-With" in response.json()["detail"]
+# (The X-Requested-With / inline-disabled gating is covered by
+# test_upgrade_router.py; these focus on which upgrade command runs.)
 
 
 def test_update_runs_pip_for_pip_install(client, monkeypatch):

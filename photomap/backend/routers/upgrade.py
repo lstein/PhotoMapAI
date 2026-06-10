@@ -1,4 +1,6 @@
+import importlib.util
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -6,6 +8,7 @@ import threading
 import time
 from importlib.metadata import version
 from logging import getLogger
+from pathlib import Path
 
 import requests
 from fastapi import APIRouter, HTTPException, Request
@@ -14,6 +17,58 @@ from packaging import version as pversion
 
 upgrade_router = APIRouter()
 logger = getLogger(__name__)
+
+# The package name to upgrade on PyPI / via the chosen package manager.
+_PACKAGE = "photomapai"
+
+
+class UpgradeUnavailableError(RuntimeError):
+    """No usable self-upgrade mechanism for the current install."""
+
+
+def _pip_available() -> bool:
+    """True when ``pip`` can be run as ``python -m pip`` in this interpreter."""
+    return importlib.util.find_spec("pip") is not None
+
+
+def _find_uv() -> str | None:
+    """Locate the ``uv`` executable for a uv-managed (pip-less) install.
+
+    The server process runs under uv's tool environment, which is *not* on the
+    same ``PATH`` we can rely on, so ``shutil.which`` may miss it. Fall back to
+    the location uv self-installs to (``~/.local/bin`` on every platform).
+    """
+    found = shutil.which("uv")
+    if found:
+        return found
+    for name in ("uv", "uv.exe"):
+        candidate = Path.home() / ".local" / "bin" / name
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def _build_upgrade_command() -> list[str]:
+    """Return the argv that upgrades PhotoMapAI for the current install method.
+
+    Pip-based installs (e.g. the dev editable venv, or the legacy installer
+    scripts) keep using ``python -m pip``. Installs created by the desktop
+    launcher use ``uv tool install``, which produces a deliberately pip-less
+    environment — there ``python -m pip`` fails with "No module named pip", so
+    we drive ``uv tool upgrade`` instead. We branch on whether ``pip`` is
+    actually importable rather than sniffing install paths, since that is the
+    exact condition that makes the pip command fail.
+    """
+    if _pip_available():
+        return [sys.executable, "-m", "pip", "install", "--upgrade", _PACKAGE]
+    uv = _find_uv()
+    if uv is None:
+        raise UpgradeUnavailableError(
+            "This installation has no pip and the 'uv' command could not be found, "
+            "so it cannot upgrade itself in place. Please re-run the PhotoMapAI "
+            "launcher (with --reinstall) to update to the latest version."
+        )
+    return [uv, "tool", "upgrade", _PACKAGE]
 
 
 def _require_inline_upgrades_enabled() -> None:
@@ -88,13 +143,21 @@ async def check_version():
 
 @upgrade_router.post("/version/update", tags=["Upgrade"])
 async def update_version(request: Request):
-    """Update PhotoMapAI to the latest version using pip"""
+    """Update PhotoMapAI to the latest version via pip or uv (per install type)."""
     _require_inline_upgrades_enabled()
     _require_same_origin_header(request)
     try:
-        # Run pip install --upgrade photomapai
+        command = _build_upgrade_command()
+    except UpgradeUnavailableError as e:
+        return JSONResponse(
+            content={"success": False, "message": str(e)},
+            status_code=500,
+        )
+    try:
+        # Upgrade via pip or `uv tool upgrade`, depending on how this install
+        # was created (see _build_upgrade_command).
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "photomapai"],
+            command,
             capture_output=True,
             text=True,
             timeout=300,
