@@ -9,12 +9,14 @@ PhotoMapAI is a local-first image browser for large photo collections. It uses C
 ## Common Commands
 
 ```bash
-# Install for development (Python 3.10–3.13)
-pip install -e .[testing,development]
+# Install for development (Python 3.10–3.13) — uv is preferred (see below)
+uv sync --extra testing --extra development   # creates .venv + editable install + locked deps
 npm install
+# (legacy equivalent: pip install -e .[testing,development])
 
 # Run the server (entry point defined in pyproject.toml)
-start_photomap               # http://localhost:8050
+uv run start_photomap        # http://localhost:8050 — runs THIS worktree's .venv, no activation
+# (or `start_photomap` directly if the .venv is activated)
 
 # Tests
 make test                    # runs npm test + pytest
@@ -36,6 +38,10 @@ make docs                    # mkdocs serve on :8000
 # Branch + worktree for ANY fix/feature/chore (see "Worktrees are mandatory" below)
 git worktree add -b lstein/fix/<what-it-does> ../photomap-worktrees/lstein-fix-<what-it-does>
 cd ../photomap-worktrees/lstein-fix-<what-it-does>
+uv sync --extra testing --extra development
+
+# Keep a branch current with master — rebase, don't merge (see "Keeping branches current")
+git fetch origin && git rebase origin/master && git push --force-with-lease
 ```
 
 Ruff is configured for line-length 120, target py310, rules E/W/F/I/UP/B (see pyproject.toml). Jest runs in jsdom with experimental ESM (the project is `"type": "module"`).
@@ -60,15 +66,40 @@ Create AND fully initialize the worktree before editing (branch name:
 ```bash
 git worktree add -b lstein/fix/<what-it-does> ../photomap-worktrees/lstein-fix-<what-it-does>
 cd ../photomap-worktrees/lstein-fix-<what-it-does>
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[development,testing]"
+uv sync --extra testing --extra development   # creates .venv + editable install + locked deps
 npm install        # only if you'll run frontend tests/lint
 ```
 
+`uv sync` replaces the old `python3 -m venv .venv && source .venv/bin/activate &&
+pip install -e ".[development,testing]"` dance: it creates the worktree's `.venv`,
+installs PhotoMap editable, and installs the locked deps from `uv.lock` in one step.
+You do **not** need to activate it — `uv run <cmd>` (e.g. `uv run start_photomap`,
+`uv run pytest tests`) always uses the nearest `.venv` and auto-syncs first, so it
+serves *this* worktree's code. (Activating with `source .venv/bin/activate` still
+works if you want a bare `python`/REPL.)
+
 Then alert the author that the worktree is initialized and tell them which
 directory to run the server from. The worktree's `.venv` is an editable install
-pointing at the worktree, so `start_photomap` launched from there serves *that*
-worktree's code — skip this and the author ends up testing the wrong files.
+pointing at the worktree, so `uv run start_photomap` launched from there serves
+*that* worktree's code — skip this and the author ends up testing the wrong files.
+
+## Keeping branches current — rebase, don't merge
+
+PRs are squash-merged, so `master` stays linear. Keep feature branches current by
+**rebasing onto master**, never by merging master into them (merge commits inside a
+branch are discarded at squash time and just complicate conflict resolution):
+
+```bash
+git fetch origin
+git rebase origin/master        # from inside the worktree, on your branch
+git push --force-with-lease     # only if the branch was already pushed; never plain --force
+```
+
+Global git is configured with `pull.rebase=true` and `rebase.autoStash=true`, so a
+stray `git pull` rebases (rather than making a merge commit) and rebases don't need a
+clean tree. After a rebase that pulls in dependency changes, just `uv run …` — it
+auto-syncs the worktree's `.venv`. Only rebase branches you own (all `lstein/*` are
+solo); never rebase a branch someone else is building on.
 
 
 ## Architecture
