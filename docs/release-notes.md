@@ -84,8 +84,18 @@ on Macintoshes, Windows machines and Linux boxes. In addition, since the previou
   #271).
 - Numerous UI leak and stability fixes across the slideshow, curation, and grid
   views.
+- **In-app "Update" now works for launcher installs** (#327). Installs created by
+  the desktop launcher run in a pip-less environment, so the About → Update
+  button previously failed; it now upgrades via `uv` instead.
 
 Plus internal refactors, CI repairs, and frontend cleanups under the hood.
+
+> **Upgrading from the 1.0.6rc1 pre-release?** If you installed an `rc` build with
+> the desktop launcher, the in-app **Update** button may fail with
+> `No module named pip` (that older build predates the fix in #327). To get onto
+> 1.1.0, just re-run the PhotoMapAI launcher with `--reinstall` — it reinstalls
+> the latest release cleanly. After that, the in-app Update button works normally.
+> Stable installs (1.0.5 and earlier) are unaffected and can update in place.
 
 For the full commit-level history, see the [GitHub releases
 page](https://github.com/lstein/PhotoMapAI/releases).
