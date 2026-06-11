@@ -140,10 +140,17 @@ class RecallRequest(BaseModel):
 
 
 class UseRefImageRequest(BaseModel):
-    """Payload posted by the drawer's "Use Ref Image" button."""
+    """Payload posted by the drawer's "Send to InvokeAI" / "Append to InvokeAI" buttons."""
 
     album_key: str = Field(..., description="Album containing the image")
     index: int = Field(..., ge=0, description="Image index within the album")
+    append: bool = Field(
+        False,
+        description=(
+            "If True, ask InvokeAI to append the image to its existing "
+            "reference-image list instead of replacing it"
+        ),
+    )
     queue_id: str = Field(
         "default",
         description="InvokeAI queue id to target",
@@ -498,6 +505,10 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
     InvokeAI knows the file, then ``POST /api/v1/recall/{queue_id}`` with the
     returned ``image_name`` in ``reference_images`` so the next generation
     picks it up as visual guidance.
+
+    With ``append=True`` the recall is sent with ``?append=true``, which asks
+    InvokeAI to add the image to its existing reference-image list instead of
+    replacing it (the drawer's "Append to InvokeAI" button).
     """
     settings = config_manager.get_invokeai_settings()
     base_url = settings["url"]
@@ -556,9 +567,12 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
             # set up in InvokeAI rather than resetting every other
             # parameter back to defaults.
             payload = {"reference_images": [{"image_name": image_name}]}
+            recall_params = {"append": "true"} if request.append else None
 
             async def _do_recall(headers: dict[str, str]) -> httpx.Response:
-                return await client.post(recall_url, json=payload, headers=headers)
+                return await client.post(
+                    recall_url, json=payload, params=recall_params, headers=headers
+                )
 
             response = await _request_with_auth_fallback(
                 base_url, username, password, _do_recall

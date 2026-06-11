@@ -313,6 +313,80 @@ def test_use_ref_image_uploads_then_calls_recall_without_strict(
     }
 
 
+def test_use_ref_image_append_passes_append_param(
+    client, clear_invokeai_config, monkeypatch, tmp_path
+):
+    """``append: true`` must reach the recall call as ``?append=true`` so
+    InvokeAI adds to its reference-image list instead of replacing it."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    image_file = tmp_path / "pic.png"
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: image_file
+    )
+    monkeypatch.setattr(
+        invoke_module, "_load_raw_metadata", lambda album_key, index: {}
+    )
+
+    calls: list[dict] = []
+
+    class _UploadResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"image_name": "uploaded-abc.png"}
+
+    class _RecallResponse:
+        status_code = 200
+        text = "{}"
+
+        def json(self):
+            return {"status": "success"}
+
+    class _StubClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, **kwargs):
+            call = {"url": url, "params": kwargs.get("params")}
+            if "files" in kwargs:
+                call["kind"] = "upload"
+                kwargs["files"]["file"][1].read()
+                calls.append(call)
+                return _UploadResponse()
+            call["kind"] = "recall"
+            call["json"] = kwargs.get("json")
+            calls.append(call)
+            return _RecallResponse()
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0, "append": True},
+    )
+    assert response.status_code == 200, response.text
+
+    assert len(calls) == 2
+    # The upload is unaffected by append mode.
+    assert calls[0]["kind"] == "upload"
+    assert "append" not in (calls[0]["params"] or {})
+    # The recall carries append=true and still no strict.
+    assert calls[1]["kind"] == "recall"
+    assert calls[1]["params"] == {"append": "true"}
+
+
 def test_use_ref_image_upload_failure_returns_502(
     client, clear_invokeai_config, monkeypatch, tmp_path
 ):

@@ -101,10 +101,10 @@ export async function sendRecall({ albumKey, index, includeSeed }) {
   }
 }
 
-export async function sendUseRefImage({ albumKey, index }) {
+export async function sendUseRefImage({ albumKey, index, append = false }) {
   try {
     return await fetchJson("invokeai/use_ref_image", {
-      json: { album_key: albumKey, index },
+      json: { album_key: albumKey, index, append },
     });
   } catch (err) {
     throw _withDetailMessage(err);
@@ -138,8 +138,10 @@ async function handleRecallClick(button) {
 
   button.disabled = true;
   try {
-    if (mode === "use_ref") {
-      await sendUseRefImage({ albumKey, index: parsed.index });
+    if (mode === "use_ref" || mode === "append_ref") {
+      // append_ref adds the image to InvokeAI's existing reference-image
+      // list; use_ref replaces it.
+      await sendUseRefImage({ albumKey, index: parsed.index, append: mode === "append_ref" });
     } else {
       await sendRecall({
         albumKey,
@@ -151,7 +153,12 @@ async function handleRecallClick(button) {
   } catch (err) {
     console.error("InvokeAI recall failed:", err);
     showStatus(button, "error");
-    const fallback = mode === "use_ref" ? "Use as Ref Image failed" : "Recall failed";
+    let fallback = "Recall failed";
+    if (mode === "use_ref") {
+      fallback = "Send to InvokeAI failed";
+    } else if (mode === "append_ref") {
+      fallback = "Append to InvokeAI failed";
+    }
     showErrorMessage(button, err && err.message ? err.message : fallback);
   } finally {
     button.disabled = false;

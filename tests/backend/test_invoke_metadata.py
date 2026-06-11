@@ -1082,8 +1082,10 @@ class TestFormatInvokeRecallButtons:
         assert 'data-recall-mode="recall"' in html
         assert 'data-recall-mode="remix"' in html
         assert 'data-recall-mode="use_ref"' in html
+        assert 'data-recall-mode="append_ref"' in html
         assert "Send to InvokeAI" in html
-        assert html.count('class="invoke-recall-btn"') == 3
+        assert "Append to InvokeAI" in html
+        assert html.count('class="invoke-recall-btn"') == 4
 
     def test_scalar_only_metadata_appends_use_ref_button_when_enabled(self):
         """A flat-scalars custom-workflow image carries no recallable
@@ -1094,10 +1096,11 @@ class TestFormatInvokeRecallButtons:
             _slide(), metadata, show_recall_buttons=True
         ).description
         assert 'data-recall-mode="use_ref"' in html
+        assert 'data-recall-mode="append_ref"' in html
         # Recall and Remix make no sense without parsed parameters.
         assert 'data-recall-mode="recall"' not in html
         assert 'data-recall-mode="remix"' not in html
-        assert html.count('class="invoke-recall-btn"') == 1
+        assert html.count('class="invoke-recall-btn"') == 2
 
     def test_scalar_only_metadata_no_buttons_when_disabled(self):
         metadata = {"Custom Field": "value"}
@@ -1150,9 +1153,11 @@ class TestFormatInvokeRecallButtons:
         # Use-as-ref button still appended.
         assert 'data-recall-mode="use_ref"' in html
 
-    def test_use_ref_button_html_renders_single_button(self):
+    def test_use_ref_button_html_renders_send_and_append_buttons(self):
         html = use_ref_button_html()
         assert 'class="invoke-recall-controls"' in html
         assert 'data-recall-mode="use_ref"' in html
+        assert 'data-recall-mode="append_ref"' in html
         assert "Send to InvokeAI" in html
-        assert html.count('class="invoke-recall-btn"') == 1
+        assert "Append to InvokeAI" in html
+        assert html.count('class="invoke-recall-btn"') == 2

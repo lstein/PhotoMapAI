@@ -146,8 +146,24 @@ describe("invoke-recall.js", () => {
       expect(JSON.parse(opts.body)).toEqual({
         album_key: "vacation",
         index: 3,
+        append: false,
       });
       expect(result.uploaded_image_name).toBe("abc.png");
+    });
+
+    it("passes append: true through to the backend", async () => {
+      const fetchMock = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        })
+      );
+      global.fetch = fetchMock;
+
+      await sendUseRefImage({ albumKey: "vacation", index: 3, append: true });
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.append).toBe(true);
     });
   });
 
@@ -164,6 +180,9 @@ describe("invoke-recall.js", () => {
             <span class="invoke-recall-status"></span>
           </button>
           <button type="button" class="invoke-recall-btn" data-recall-mode="use_ref">
+            <span class="invoke-recall-status"></span>
+          </button>
+          <button type="button" class="invoke-recall-btn" data-recall-mode="append_ref">
             <span class="invoke-recall-status"></span>
           </button>
         </div>
@@ -238,6 +257,28 @@ describe("invoke-recall.js", () => {
       const body = JSON.parse(opts.body);
       expect(body.album_key).toBe("my-album");
       expect(body.index).toBe(5);
+      expect(body.append).toBe(false);
+      expect(body.include_seed).toBeUndefined();
+    });
+
+    it("posts append: true when the append_ref button is clicked", async () => {
+      const fetchMock = jest.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        })
+      );
+      global.fetch = fetchMock;
+
+      document.querySelector('[data-recall-mode="append_ref"]').click();
+      await flushPromises();
+
+      const [url, opts] = fetchMock.mock.calls[0];
+      expect(url).toBe("invokeai/use_ref_image");
+      const body = JSON.parse(opts.body);
+      expect(body.album_key).toBe("my-album");
+      expect(body.index).toBe(5);
+      expect(body.append).toBe(true);
       expect(body.include_seed).toBeUndefined();
     });
 
