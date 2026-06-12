@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from send2trash import send2trash
 
+from .. import invokeai_client
 from ..config import get_config_manager
 from ..embeddings import Embeddings, peek_encoder_spec
 from ..progress import IndexingCancelled, progress_tracker
@@ -279,6 +280,26 @@ async def delete_image(
         if not validate_image_access(album_config, image_path):
             raise HTTPException(status_code=403, detail="Access denied")
 
+        if album_config.source_type == "invokeai_board":
+            # Board images belong to InvokeAI: deleting the file directly
+            # would leave a dangling row in InvokeAI's database, so route
+            # the deletion through its API (which also removes the file).
+            # ``move_to_trash`` has no meaning here and is ignored.
+            await invokeai_client.delete_image(
+                album_config.invokeai_url,
+                image_path.name,
+                album_config.invokeai_username,
+                album_config.invokeai_password,
+            )
+            embeddings.remove_image_from_embeddings(index)
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": f"Deleted {image_path.name} via InvokeAI",
+                },
+                status_code=200,
+            )
+
         if not image_path.exists() or not image_path.is_file():
             raise HTTPException(status_code=404, detail="File not found")
 
@@ -315,6 +336,14 @@ async def move_images(
 ) -> JSONResponse:
     """Move multiple images to a different directory."""
     try:
+        if album_config.source_type == "invokeai_board":
+            # Moving files out of InvokeAI's outputs/images would leave its
+            # database pointing at missing files.
+            raise HTTPException(
+                status_code=400,
+                detail="Moving images is not supported for InvokeAI board albums",
+            )
+
         target_dir = Path(req.target_directory)
 
         # Validate target directory exists and is writable
@@ -471,11 +500,61 @@ async def copy_images(
         raise HTTPException(status_code=500, detail=f"Failed to copy images: {str(e)}") from e
 
 
+async def _resolve_board_album_files(album_config) -> list[Path]:
+    """Resolve an InvokeAI-board album's images to local file paths.
+
+    Fetches the selected boards' image names from the InvokeAI API and maps
+    them to ``<invokeai_root>/outputs/images/<name>``. Names the API lists
+    but that don't exist locally are skipped with a warning; if *none* of
+    them exist the InvokeAI root is almost certainly wrong, which deserves
+    a pointed error instead of a generic "no images found".
+    """
+    names = await invokeai_client.fetch_board_image_names(
+        album_config.invokeai_url,
+        album_config.invokeai_board_ids,
+        album_config.invokeai_username,
+        album_config.invokeai_password,
+    )
+    images_dir = Path(album_config.invokeai_root).expanduser() / "outputs" / "images"
+    paths = [images_dir / name for name in names]
+    existing = [p for p in paths if p.is_file()]
+    missing = len(paths) - len(existing)
+    if missing and not existing:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"None of the {len(paths)} board images were found under "
+                f"{images_dir} — check the InvokeAI root directory."
+            ),
+        )
+    if missing:
+        logger.warning(
+            f"{missing} of {len(paths)} board images not found under {images_dir}; skipping them."
+        )
+    return existing
+
+
 # Background Tasks
 async def _update_index_background_async(album_key: str, album_config):
     """Background task for updating index with async support."""
     try:
-        image_paths = [Path(path) for path in album_config.image_paths]
+        if getattr(album_config, "source_type", "directory") == "invokeai_board":
+            try:
+                image_paths = await _resolve_board_album_files(album_config)
+            except HTTPException as e:
+                progress_tracker.set_error(
+                    album_key,
+                    f"Could not fetch board contents from InvokeAI at "
+                    f"{album_config.invokeai_url}: {e.detail}",
+                )
+                return
+            if not image_paths:
+                progress_tracker.set_error(
+                    album_key, "Selected InvokeAI board(s) contain no images"
+                )
+                return
+        else:
+            image_paths = [Path(path) for path in album_config.image_paths]
         index_path = Path(album_config.index)
 
         embeddings = Embeddings(

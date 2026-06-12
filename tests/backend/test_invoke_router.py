@@ -548,12 +548,13 @@ def test_recall_sends_cached_token_on_subsequent_requests(
     # Pre-seed the token cache as though a previous login had succeeded.
     import time as _time
 
+    from photomap.backend import invokeai_client
     from photomap.backend.routers import invoke as invoke_module
 
-    invoke_module._cached_token = "cached-token"
-    invoke_module._token_expires_at = _time.monotonic() + 3600
-    invoke_module._token_base_url = "http://localhost:9090"
-    invoke_module._token_username = "alice"
+    invokeai_client._cached_token = "cached-token"
+    invokeai_client._token_expires_at = _time.monotonic() + 3600
+    invokeai_client._token_base_url = "http://localhost:9090"
+    invokeai_client._token_username = "alice"
 
     _install_recall_stub(monkeypatch)
 
@@ -590,13 +591,14 @@ def test_recall_403_with_cached_token_retries_anonymously_and_forgets_token(
 
     import time as _time
 
+    from photomap.backend import invokeai_client
     from photomap.backend.routers import invoke as invoke_module
 
     # Pre-seed a cached token.
-    invoke_module._cached_token = "stale-token"
-    invoke_module._token_expires_at = _time.monotonic() + 3600
-    invoke_module._token_base_url = "http://localhost:9090"
-    invoke_module._token_username = "alice"
+    invokeai_client._cached_token = "stale-token"
+    invokeai_client._token_expires_at = _time.monotonic() + 3600
+    invokeai_client._token_base_url = "http://localhost:9090"
+    invokeai_client._token_username = "alice"
 
     _install_recall_stub(monkeypatch)
 
@@ -630,7 +632,7 @@ def test_recall_403_with_cached_token_retries_anonymously_and_forgets_token(
     assert "Authorization" not in stub.calls[1]["headers"]
 
     # Cache must have been cleared.
-    assert invoke_module._cached_token is None
+    assert invokeai_client._cached_token is None
 
 
 def test_recall_anonymous_403_is_not_retried(
@@ -674,12 +676,13 @@ def test_use_ref_image_403_with_token_retries_anonymously(
 
     import time as _time
 
+    from photomap.backend import invokeai_client
     from photomap.backend.routers import invoke as invoke_module
 
-    invoke_module._cached_token = "stale-token"
-    invoke_module._token_expires_at = _time.monotonic() + 3600
-    invoke_module._token_base_url = "http://localhost:9090"
-    invoke_module._token_username = "alice"
+    invokeai_client._cached_token = "stale-token"
+    invokeai_client._token_expires_at = _time.monotonic() + 3600
+    invokeai_client._token_base_url = "http://localhost:9090"
+    invokeai_client._token_username = "alice"
 
     image_file = tmp_path / "pic.png"
     image_file.write_bytes(b"\x89PNG\r\n\x1a\nfake")
@@ -756,7 +759,7 @@ def test_use_ref_image_403_with_token_retries_anonymously(
     assert "Authorization" not in recall_calls[-1]["headers"]
 
     # Cache cleared.
-    assert invoke_module._cached_token is None
+    assert invokeai_client._cached_token is None
 
 
 # ── board_id round-trip + /invokeai/status + /invokeai/boards ──────────
@@ -1462,3 +1465,215 @@ def test_use_ref_image_rejects_unsafe_queue_id(
         json={"album_key": "any", "index": 0, "queue_id": bad_queue},
     )
     assert response.status_code == 422, response.text
+
+
+# ── /invokeai/probe_status and /invokeai/probe_boards ─────────────────────
+
+
+def test_probe_status_reachable(client, monkeypatch):
+    from photomap.backend.routers import invoke as invoke_module
+
+    stub = _ScriptedClient([_Resp(200, {"version": "5.1.0"})])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/probe_status", json={"url": "http://elsewhere:9090"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reachable"] is True
+    assert body["version"] == "5.1.0"
+    # The probe hit the explicit URL, not whatever is stored in settings.
+    assert stub.calls[0]["url"] == "http://elsewhere:9090/api/v1/app/version"
+
+
+def test_probe_status_unreachable(client, monkeypatch):
+    from photomap.backend.routers import invoke as invoke_module
+
+    def _raise(url, kwargs):
+        raise httpx.ConnectError("refused")
+
+    stub = _ScriptedClient([_raise])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/probe_status", json={"url": "http://down:9090"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reachable"] is False
+    assert "Could not reach" in body["detail"]
+
+
+def test_probe_status_rejects_bad_scheme(client):
+    response = client.post(
+        "/invokeai/probe_status", json={"url": "file:///etc/passwd"}
+    )
+    assert response.status_code == 400
+
+
+def test_probe_boards_returns_board_list(client, clear_invokeai_config, monkeypatch):
+    from photomap.backend.routers import invoke as invoke_module
+
+    boards = [
+        {"board_id": "b1", "board_name": "Portraits"},
+        {"board_id": "b2", "board_name": "Landscapes"},
+    ]
+    stub = _ScriptedClient([_Resp(200, boards)])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/probe_boards", json={"url": "http://elsewhere:9090"}
+    )
+    assert response.status_code == 200
+    assert response.json() == [
+        {"board_id": "b1", "board_name": "Portraits"},
+        {"board_id": "b2", "board_name": "Landscapes"},
+    ]
+    assert stub.calls[0]["url"] == "http://elsewhere:9090/api/v1/boards/"
+
+
+def test_probe_boards_logs_in_on_401(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    """Explicit credentials drive the standard 401 → login → retry dance."""
+    from photomap.backend.routers import invoke as invoke_module
+
+    def _route(url, kwargs):
+        if url.endswith("/api/v1/auth/login"):
+            return _Resp(200, {"token": "tok-123", "expires_in": 3600})
+        headers = kwargs.get("headers") or {}
+        if headers.get("Authorization") == "Bearer tok-123":
+            return _Resp(200, [{"board_id": "b1", "board_name": "Mine"}])
+        return _Resp(401, {"detail": "auth required"})
+
+    stub = _ScriptedClient([_route, _route, _route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/probe_boards",
+        json={"url": "http://multi:9090", "username": "alice", "password": "pw"},
+    )
+    assert response.status_code == 200
+    assert response.json() == [{"board_id": "b1", "board_name": "Mine"}]
+
+
+def test_probe_boards_falls_back_to_album_password(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    """With album_key and no explicit password, the stored album credentials
+    are used for the login retry."""
+    from photomap.backend.config import Album
+
+    manager = get_config_manager()
+    album = Album(
+        key="probe_board_album",
+        name="Probe Board Album",
+        source_type="invokeai_board",
+        invokeai_url="http://multi:9090",
+        invokeai_username="bob",
+        invokeai_password="album-secret",
+        invokeai_root="/tmp/invokeai",
+        invokeai_board_ids=["b1"],
+    )
+    assert manager.add_album(album)
+
+    try:
+        from photomap.backend.routers import invoke as invoke_module
+
+        captured_login = {}
+
+        def _route(url, kwargs):
+            if url.endswith("/api/v1/auth/login"):
+                captured_login.update(kwargs.get("json") or {})
+                return _Resp(200, {"token": "tok-xyz", "expires_in": 3600})
+            headers = kwargs.get("headers") or {}
+            if headers.get("Authorization") == "Bearer tok-xyz":
+                return _Resp(200, [{"board_id": "b1", "board_name": "Mine"}])
+            return _Resp(401, {"detail": "auth required"})
+
+        stub = _ScriptedClient([_route, _route, _route])
+        monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+        response = client.post(
+            "/invokeai/probe_boards",
+            json={"url": "http://multi:9090", "album_key": "probe_board_album"},
+        )
+        assert response.status_code == 200
+        assert captured_login == {"email": "bob", "password": "album-secret"}
+    finally:
+        manager.delete_album("probe_board_album")
+
+
+def test_probe_boards_upstream_error_returns_502(
+    client, clear_invokeai_config, monkeypatch
+):
+    from photomap.backend.routers import invoke as invoke_module
+
+    stub = _ScriptedClient([_Resp(500, text="boom")])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/probe_boards", json={"url": "http://elsewhere:9090"}
+    )
+    assert response.status_code == 502
+
+
+def test_probe_boards_uses_settings_password_for_matching_username(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    """When the probed URL matches the settings backend and the username is
+    the stored one (or omitted), the stored password drives the login."""
+    client.post(
+        "/invokeai/config",
+        json={"url": "http://localhost:9090", "username": "alice", "password": "pw"},
+    )
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    captured_login = {}
+
+    def _route(url, kwargs):
+        if url.endswith("/api/v1/auth/login"):
+            captured_login.update(kwargs.get("json") or {})
+            return _Resp(200, {"token": "tok-1", "expires_in": 3600})
+        headers = kwargs.get("headers") or {}
+        if headers.get("Authorization") == "Bearer tok-1":
+            return _Resp(200, [{"board_id": "b1", "board_name": "Mine"}])
+        return _Resp(401, {"detail": "auth required"})
+
+    stub = _ScriptedClient([_route, _route, _route])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/probe_boards",
+        json={"url": "http://localhost:9090", "username": "alice"},
+    )
+    assert response.status_code == 200
+    assert captured_login == {"email": "alice", "password": "pw"}
+
+
+def test_probe_boards_never_pairs_settings_password_with_other_username(
+    client, clear_invokeai_config, clear_token_cache, monkeypatch
+):
+    """A different typed username must NOT borrow the stored password — the
+    request goes out unauthenticated and the upstream 401 surfaces as 502
+    with no login attempt."""
+    client.post(
+        "/invokeai/config",
+        json={"url": "http://localhost:9090", "username": "alice", "password": "pw"},
+    )
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    stub = _ScriptedClient([_Resp(401, {"detail": "auth required"})])
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", stub)
+
+    response = client.post(
+        "/invokeai/probe_boards",
+        json={"url": "http://localhost:9090", "username": "mallory"},
+    )
+    assert response.status_code == 502
+    # Exactly one upstream call: the boards GET. No login was attempted.
+    assert len(stub.calls) == 1
+    assert stub.calls[0]["url"].endswith("/api/v1/boards/")
