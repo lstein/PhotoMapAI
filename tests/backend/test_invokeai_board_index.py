@@ -216,18 +216,21 @@ def test_move_images_rejected_for_board_albums(client, board_album, tmp_path):
 
 def test_describe_image_source_keeps_logs_compact():
     """Board albums feed thousands of explicit file paths into indexing;
-    log lines must summarize them, not dump the whole list."""
+    log lines must summarize them, not dump the whole list.
+
+    Expectations are built from Path/str round-trips rather than literals so
+    the test holds on Windows, where str(Path(...)) uses backslashes.
+    """
     from photomap.backend.embeddings import describe_image_source
 
-    # Single directory and short lists print verbatim.
-    assert describe_image_source(Path("/photos/vacation")) == "/photos/vacation"
-    assert (
-        describe_image_source([Path("/photos/a"), Path("/photos/b")])
-        == "/photos/a, /photos/b"
-    )
+    # Single directory and short lists print verbatim (native separators).
+    vacation = Path("/photos/vacation")
+    assert describe_image_source(vacation) == str(vacation)
+    short = [Path("/photos/a"), Path("/photos/b")]
+    assert describe_image_source(short) == f"{short[0]}, {short[1]}"
 
     # Long explicit lists collapse to a count + common parent.
     many = [Path(f"/root/outputs/images/{i:04d}.png") for i in range(3666)]
     description = describe_image_source(many)
-    assert description == "3666 explicit paths under /root/outputs/images"
+    assert description == f"3666 explicit paths under {Path('/root/outputs/images')}"
     assert len(description) < 120
