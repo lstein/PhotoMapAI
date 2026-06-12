@@ -218,6 +218,18 @@
   align-items: center;
 }
 
+/* Capability gating (see invoke-capabilities.js): every recall button stays
+   hidden until the backend confirms the configured InvokeAI instance
+   supports the recall API; the Append button additionally requires the
+   append option, which older backends would silently treat as replace. */
+body:not(.invoke-recall-supported) .invoke-recall-controls {
+  display: none;
+}
+
+body:not(.invoke-append-supported) .invoke-recall-btn[data-recall-mode="append_ref"] {
+  display: none;
+}
+
 .invoke-recall-btn {
   display: inline-flex;
   align-items: center;

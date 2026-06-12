@@ -8,6 +8,7 @@ import { backStack } from "./back-stack.js";
 import { toggleCurrentBookmark } from "./bookmarks.js";
 import { initializeControlPanel, toggleFullscreen } from "./control-panel.js";
 import { initializeGridSwiper } from "./grid-view.js";
+import { refreshInvokeCapabilities } from "./invoke-capabilities.js";
 import {
   hideMetadataOverlay,
   initializeMetadataDrawer,
@@ -40,6 +41,10 @@ async function initializeEvents() {
   setupAccessibility();
   checkAlbumIndex(); // Check if the album index exists before proceeding
   positionMetadataDrawer();
+  // Fire-and-forget: reveals the InvokeAI recall buttons the backend
+  // supports. Nothing downstream depends on the answer, so don't block
+  // initialization on a (possibly slow) network probe.
+  refreshInvokeCapabilities();
 
   await initializeSwipers();
   await toggleGridSwiperView(state.gridViewActive);
