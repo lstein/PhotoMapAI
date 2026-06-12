@@ -3,15 +3,11 @@
   <div class="modal-content album-management-modal" id="albumManagementContent">
     <!-- Header with Add Album Button (fixed) -->
     <div class="album-header">
-      <button id="backToSettingsBtn" class="back-button" title="Back to Settings">
-        ← Settings
-      </button>
+      <button id="backToSettingsBtn" class="back-button" title="Back to Settings">← Settings</button>
       <h2>Album Management</h2>
       <div class="header-buttons">
         <button id="showAddAlbumBtn" class="btn-primary">+ Add Album</button>
-        <button id="closeAlbumManagementBtn" class="modal-close" title="Close">
-          ✖
-        </button>
+        <button id="closeAlbumManagementBtn" class="modal-close" title="Close">✖</button>
       </div>
     </div>
 
@@ -19,50 +15,87 @@
     <div id="addAlbumSection" class="add-album-section">
       <div class="section-header">
         <h3>Add New Album</h3>
-        <button id="cancelAddAlbumBtn" class="cancel-btn" title="Cancel">
-          ✖
-        </button>
+        <button id="cancelAddAlbumBtn" class="cancel-btn" title="Cancel">✖</button>
       </div>
 
       <div class="form-grid">
         <div class="form-group">
           <label>Album Key</label>
-          <input
-            id="newAlbumKey"
-            type="text"
-            placeholder="e.g., vacation_2024"
-          />
+          <input id="newAlbumKey" type="text" placeholder="e.g., vacation_2024" />
         </div>
         <div class="form-group">
           <label>Display Name</label>
-          <input
-            id="newAlbumName"
-            type="text"
-            placeholder="e.g., Vacation 2024"
-          />
+          <input id="newAlbumName" type="text" placeholder="e.g., Vacation 2024" />
         </div>
       </div>
 
       <div class="form-group">
         <label>Description</label>
-        <input
-          id="newAlbumDescription"
-          type="text"
-          placeholder="Optional description"
-        />
+        <input id="newAlbumDescription" type="text" placeholder="Optional description" />
       </div>
 
       <div class="form-group">
+        <label>Album Source</label>
+        <div class="album-source-radios">
+          <label class="radio-label">
+            <input type="radio" name="newAlbumSourceType" value="directory" checked />
+            Directory of Image Files
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="newAlbumSourceType" value="invokeai_board" />
+            An InvokeAI Image Gallery Board
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" id="newAlbumDirectorySection">
         <label>Image Folder(s)</label>
         <div id="newAlbumPathsContainer" class="edit-album-paths-container"></div>
+      </div>
+
+      <div id="newAlbumInvokeAISection" hidden>
+        <div class="form-group">
+          <label>InvokeAI Backend URL</label>
+          <input id="newAlbumInvokeUrl" type="url" placeholder="e.g. http://localhost:9090" />
+        </div>
+        <div class="form-group">
+          <label>InvokeAI Root Directory</label>
+          <div id="newAlbumInvokeRootRow" class="invoke-root-row"></div>
+          <small class="form-hint">
+            Local directory containing InvokeAI's outputs/images folder. It must be accessible from the machine running
+            PhotoMapAI.
+          </small>
+        </div>
+        <div id="newAlbumInvokeAuth" hidden>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Username</label>
+              <input id="newAlbumInvokeUsername" type="text" placeholder="(optional, multi-user mode)" />
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input id="newAlbumInvokePassword" type="password" placeholder="(optional, multi-user mode)" />
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <button id="newAlbumInvokeConnectBtn" type="button" class="btn-secondary">
+            Check Connection &amp; Load Boards
+          </button>
+          <small id="newAlbumInvokeStatusHint" class="form-hint"></small>
+        </div>
+        <div class="form-group">
+          <label>Boards</label>
+          <div id="newAlbumInvokeBoards" class="invoke-board-checklist" hidden></div>
+        </div>
       </div>
 
       <div class="form-group">
         <label>Encoder</label>
         <select id="newAlbumEncoder" class="encoder-select"></select>
         <small class="form-hint">
-          Picks the embedding model used for search. Changing it later will
-          rebuild the index from scratch on the next index update.
+          Picks the embedding model used for search. Changing it later will rebuild the index from scratch on the next
+          index update.
         </small>
       </div>
 
@@ -134,25 +167,62 @@
         </div>
       </div>
       <div class="form-group">
+        <label>Album Source</label>
+        <div class="album-source-radios">
+          <label class="radio-label">
+            <input type="radio" class="edit-album-source-radio" value="directory" disabled />
+            Directory of Image Files
+          </label>
+          <label class="radio-label">
+            <input type="radio" class="edit-album-source-radio" value="invokeai_board" disabled />
+            An InvokeAI Image Gallery Board
+          </label>
+        </div>
+        <small class="form-hint"> An album's source type cannot be changed after creation. </small>
+      </div>
+      <div class="form-group edit-album-directory-section">
         <label>Image Folder(s)</label>
         <div class="edit-album-paths-container"></div>
       </div>
+      <div class="edit-album-invokeai-section" hidden>
+        <div class="form-group">
+          <label>InvokeAI Backend URL</label>
+          <input class="edit-album-invoke-url" type="url" />
+        </div>
+        <div class="form-group">
+          <label>InvokeAI Root Directory</label>
+          <div class="edit-album-invoke-root-row invoke-root-row"></div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Username</label>
+            <input class="edit-album-invoke-username" type="text" placeholder="(optional, multi-user mode)" />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input class="edit-album-invoke-password" type="password" />
+          </div>
+        </div>
+        <div class="form-group">
+          <button type="button" class="edit-album-invoke-connect-btn btn-secondary">
+            Check Connection &amp; Load Boards
+          </button>
+          <small class="edit-album-invoke-status-hint form-hint"></small>
+        </div>
+        <div class="form-group">
+          <label>Boards</label>
+          <div class="edit-album-invoke-boards invoke-board-checklist"></div>
+        </div>
+      </div>
       <div class="form-group">
         <label>Exclude thumbnails and other images below this size (px)</label>
-        <input
-          class="edit-album-min-image-dimension"
-          type="number"
-          min="1"
-          step="1"
-          value="256"
-        />
+        <input class="edit-album-min-image-dimension" type="number" min="1" step="1" value="256" />
       </div>
       <div class="form-group">
         <label>Encoder</label>
         <select class="edit-album-encoder encoder-select"></select>
         <small class="form-hint">
-          Changing the encoder rebuilds the index from scratch on the next
-          index update.
+          Changing the encoder rebuilds the index from scratch on the next index update.
         </small>
       </div>
       <div class="form-buttons">

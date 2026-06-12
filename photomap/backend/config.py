@@ -9,10 +9,10 @@ import os
 import threading
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
-from platformdirs import user_config_dir
+from platformdirs import user_config_dir, user_data_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .encoders import LEGACY_ENCODER_SPEC, default_encoder_spec
@@ -21,15 +21,70 @@ from .util import atomic_write_text
 logger = logging.getLogger(__name__)
 
 
+def default_board_index_path(album_key: str) -> Path:
+    """Index location for albums that have no image directory of their own.
+
+    InvokeAI-board albums can't store ``photomap_index`` next to their
+    images (the images belong to InvokeAI), so their .npz lives in the
+    per-user data directory instead, keyed by album.
+    """
+    # The key lands in a filesystem path, and keys are user input — refuse
+    # anything that could escape the indexes directory.
+    if (
+        not album_key
+        or "/" in album_key
+        or "\\" in album_key
+        or "\x00" in album_key
+        or ".." in album_key
+    ):
+        raise ValueError(f"Album key not usable as a directory name: {album_key!r}")
+    data_dir = Path(user_data_dir("photomap", "photomap"))
+    return data_dir / "indexes" / album_key / "embeddings.npz"
+
+
 class Album(BaseModel):
     """Represents a photo album configuration."""
 
     key: str = Field(..., description="Unique album identifier")
     name: str = Field(..., description="Display name for the album")
+    source_type: Literal["directory", "invokeai_board"] = Field(
+        default="directory",
+        description=(
+            "Where the album's images come from: a local directory tree "
+            "('directory', the default) or one or more InvokeAI gallery "
+            "boards ('invokeai_board')."
+        ),
+    )
     image_paths: list[str] = Field(
         ..., min_length=1, description="List of paths containing images"
     )
     index: str = Field(..., description="Path to the embeddings index file")
+    invokeai_url: str | None = Field(
+        default=None,
+        description="Base URL of the InvokeAI backend serving this album's boards",
+    )
+    invokeai_username: str | None = Field(
+        default=None,
+        description="Username for the InvokeAI backend (multi-user mode only)",
+    )
+    invokeai_password: str | None = Field(
+        default=None,
+        description="Password for the InvokeAI backend (multi-user mode only)",
+    )
+    invokeai_root: str | None = Field(
+        default=None,
+        description=(
+            "Locally-accessible InvokeAI root directory; images resolve to "
+            "<root>/outputs/images/<image_name>"
+        ),
+    )
+    invokeai_board_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "InvokeAI board ids whose images make up this album. The special "
+            "id 'none' is InvokeAI's Uncategorized bucket."
+        ),
+    )
     umap_eps: float = Field(default=0.2, description="UMAP epsilon parameter")
     description: str = Field(default="", description="Album description")
     encoder_spec: str = Field(
@@ -72,12 +127,47 @@ class Album(BaseModel):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_board_album_fields(cls, data: Any) -> Any:
+        """Fill in `image_paths` and `index` for InvokeAI-board albums.
+
+        Board albums have no user-chosen image directory: their images live
+        under `<invokeai_root>/outputs/images` and their index in the user
+        data directory. Both must be derived *before* field validation
+        because `image_paths` has `min_length=1` and `index` is required.
+        """
+        if not isinstance(data, dict) or data.get("source_type") != "invokeai_board":
+            return data
+        root = data.get("invokeai_root")
+        if root and not data.get("image_paths"):
+            data["image_paths"] = [
+                str(Path(root).expanduser() / "outputs" / "images")
+            ]
+        if not data.get("index") and data.get("key"):
+            data["index"] = default_board_index_path(str(data["key"])).as_posix()
+        return data
+
     @model_validator(mode="after")
     def _resolve_min_search_score(self) -> "Album":
         if self.min_search_score is None:
             self.min_search_score = (
                 0.005 if self.encoder_spec.startswith("siglip:") else 0.2
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_board_fields(self) -> "Album":
+        if self.source_type != "invokeai_board":
+            return self
+        if not self.invokeai_url:
+            raise ValueError("InvokeAI-board albums require invokeai_url")
+        if not self.invokeai_url.startswith(("http://", "https://")):
+            raise ValueError("invokeai_url must use http:// or https://")
+        if not self.invokeai_root:
+            raise ValueError("InvokeAI-board albums require invokeai_root")
+        if not self.invokeai_board_ids:
+            raise ValueError("InvokeAI-board albums require at least one board id")
         return self
 
     @field_validator("image_paths")
@@ -101,8 +191,9 @@ class Album(BaseModel):
 
     def to_dict(self) -> dict[str, Any]:
         """Convert album to dictionary format for YAML."""
-        return {
+        data = {
             "name": self.name,
+            "source_type": self.source_type,
             "image_paths": self.image_paths,
             "index": self.index,
             "umap_eps": self.umap_eps,
@@ -113,6 +204,14 @@ class Album(BaseModel):
             "use_query_optimization": self.use_query_optimization,
             "min_image_dimension": self.min_image_dimension,
         }
+        # Keep directory-album YAML free of irrelevant InvokeAI keys.
+        if self.source_type == "invokeai_board":
+            data["invokeai_url"] = self.invokeai_url
+            data["invokeai_username"] = self.invokeai_username
+            data["invokeai_password"] = self.invokeai_password
+            data["invokeai_root"] = self.invokeai_root
+            data["invokeai_board_ids"] = self.invokeai_board_ids
+        return data
 
     @classmethod
     def from_dict(cls, key: str, data: dict[str, Any]) -> "Album":
@@ -120,6 +219,8 @@ class Album(BaseModel):
         return cls(
             key=key,
             name=data.get("name", key.capitalize()),
+            # Albums written before this field existed are directory albums.
+            source_type=data.get("source_type", "directory"),
             image_paths=data.get("image_paths", []),
             index=data["index"],
             umap_eps=data.get("umap_eps", 0.07),
@@ -134,6 +235,11 @@ class Album(BaseModel):
             max_search_results=data.get("max_search_results", 100),
             use_query_optimization=data.get("use_query_optimization", True),
             min_image_dimension=data.get("min_image_dimension", 256),
+            invokeai_url=data.get("invokeai_url"),
+            invokeai_username=data.get("invokeai_username"),
+            invokeai_password=data.get("invokeai_password"),
+            invokeai_root=data.get("invokeai_root"),
+            invokeai_board_ids=data.get("invokeai_board_ids", []),
         )
 
 
@@ -548,8 +654,8 @@ class ConfigManager:
 def create_album(
     key: str,
     name: str,
-    image_paths: list[str],
-    index: str,
+    image_paths: list[str] | None,
+    index: str | None,
     umap_eps: float,
     description: str = "",
     encoder_spec: str | None = None,
@@ -557,22 +663,36 @@ def create_album(
     max_search_results: int | None = None,
     use_query_optimization: bool | None = None,
     min_image_dimension: int | None = None,
+    source_type: str = "directory",
+    invokeai_url: str | None = None,
+    invokeai_username: str | None = None,
+    invokeai_password: str | None = None,
+    invokeai_root: str | None = None,
+    invokeai_board_ids: list[str] | None = None,
 ) -> Album:
     """Create a new Album instance with validation.
 
     Each optional parameter falls through to the Album default when omitted,
-    so existing callers don't have to thread every field.
+    so existing callers don't have to thread every field. ``image_paths``
+    and ``index`` may be None for InvokeAI-board albums — the Album model
+    derives them from ``invokeai_root`` and the album key.
     """
-    image_paths = [str(Path(x).expanduser().resolve()) for x in image_paths]
-    index = str(Path(index).expanduser().resolve())
+    image_paths = [str(Path(x).expanduser().resolve()) for x in image_paths or []]
     fields: dict[str, object] = {
         "key": key,
         "name": name,
+        "source_type": source_type,
         "image_paths": image_paths,
-        "index": index,
         "umap_eps": umap_eps,
         "description": description,
+        "invokeai_url": invokeai_url,
+        "invokeai_username": invokeai_username,
+        "invokeai_password": invokeai_password,
+        "invokeai_root": invokeai_root,
+        "invokeai_board_ids": invokeai_board_ids or [],
     }
+    if index is not None:
+        fields["index"] = str(Path(index).expanduser().resolve())
     if encoder_spec is not None:
         fields["encoder_spec"] = encoder_spec
     if min_search_score is not None:

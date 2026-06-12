@@ -378,3 +378,158 @@ def test_min_image_dimension_round_trips(client, tmp_path):
     assert listing["dim_default"]["min_image_dimension"] == 512
 
     client.delete("/delete_album/dim_default")
+
+
+# ── InvokeAI board-backed albums ──────────────────────────────────────────
+
+
+def _board_album_payload(key="board_album", **overrides):
+    payload = {
+        "key": key,
+        "name": "Board Album",
+        "description": "Backed by InvokeAI boards",
+        "source_type": "invokeai_board",
+        "invokeai_url": "http://localhost:9090",
+        "invokeai_username": "alice",
+        "invokeai_password": "secret",
+        "invokeai_root": "/srv/invokeai",
+        "invokeai_board_ids": ["b1", "none"],
+        "encoder_spec": "openai-clip:ViT-B/32",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_add_board_album_derives_paths_and_index(client):
+    """POSTing a board album without index/image_paths derives both."""
+    from photomap.backend.config import default_board_index_path
+
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+
+    try:
+        manager = get_config_manager()
+        manager.reload_config()
+        album = manager.get_album("board_album")
+        assert album is not None
+        assert album.source_type == "invokeai_board"
+        assert album.image_paths == [
+            str(Path("/srv/invokeai") / "outputs" / "images")
+        ]
+        assert album.index == default_board_index_path("board_album").as_posix()
+        assert album.invokeai_board_ids == ["b1", "none"]
+        assert album.invokeai_password == "secret"
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_board_album_yaml_round_trip(client):
+    """All board fields survive a save/reload cycle of the YAML config."""
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        manager = get_config_manager()
+        before = manager.get_album("board_album")
+        manager.reload_config()
+        after = manager.get_album("board_album")
+        assert after == before
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_album_endpoints_never_leak_password(client):
+    """Neither /album/{key}/ nor /available_albums/ may expose the stored
+    per-album InvokeAI password."""
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        single = client.get("/album/board_album/").json()
+        assert "invokeai_password" not in single
+        assert single["has_invokeai_password"] is True
+        assert single["source_type"] == "invokeai_board"
+        assert single["invokeai_board_ids"] == ["b1", "none"]
+
+        listing = client.get("/available_albums/").json()
+        entry = next(a for a in listing if a["key"] == "board_album")
+        assert "invokeai_password" not in entry
+        assert entry["has_invokeai_password"] is True
+        assert entry["invokeai_url"] == "http://localhost:9090"
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_update_board_album_keeps_password_and_index_when_omitted(client):
+    """The edit form omits the password (never echoed) and the index — both
+    must survive an update untouched."""
+    from photomap.backend.config import default_board_index_path
+
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        update = {
+            "key": "board_album",
+            "name": "Renamed Board Album",
+            "source_type": "invokeai_board",
+            "invokeai_url": "http://localhost:9090",
+            "invokeai_username": "alice",
+            "invokeai_root": "/srv/invokeai",
+            "invokeai_board_ids": ["b2"],
+        }
+        response = client.post("/update_album/", json=update)
+        assert response.status_code == 200, response.text
+
+        manager = get_config_manager()
+        manager.reload_config()
+        album = manager.get_album("board_album")
+        assert album.name == "Renamed Board Album"
+        assert album.invokeai_board_ids == ["b2"]
+        assert album.invokeai_password == "secret"  # kept
+        assert album.index == default_board_index_path("board_album").as_posix()
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_board_album_requires_connection_fields(client):
+    """Board albums without url/root/board ids are rejected."""
+    for missing in ("invokeai_url", "invokeai_root", "invokeai_board_ids"):
+        payload = _board_album_payload(**{missing: None})
+        response = client.post("/add_album/", json=payload)
+        assert response.status_code >= 400, (
+            f"album missing {missing} was accepted: {response.text}"
+        )
+
+
+def test_board_album_key_cannot_traverse_paths():
+    """Album keys land in a filesystem path — traversal must be rejected."""
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    from photomap.backend.config import Album, default_board_index_path
+
+    for bad_key in ("../evil", "a/b", "a\\b"):
+        with _pytest.raises(ValueError):
+            default_board_index_path(bad_key)
+        with _pytest.raises(ValidationError):
+            Album(
+                key=bad_key,
+                name="Bad",
+                source_type="invokeai_board",
+                invokeai_url="http://localhost:9090",
+                invokeai_root="/srv/invokeai",
+                invokeai_board_ids=["b1"],
+            )
+
+
+def test_legacy_album_dict_loads_as_directory_album():
+    """YAML written before source_type existed must load unchanged."""
+    legacy = {
+        "name": "Old Album",
+        "image_paths": ["/tmp/somewhere"],
+        "index": "/tmp/somewhere/embeddings.npz",
+    }
+    album = Album.from_dict("old_album", legacy)
+    assert album.source_type == "directory"
+    assert album.invokeai_url is None
+    assert album.invokeai_board_ids == []
+    # And directory albums keep their YAML free of InvokeAI keys.
+    assert not any(k.startswith("invokeai") for k in album.to_dict())

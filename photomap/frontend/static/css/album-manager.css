@@ -140,7 +140,9 @@
   border-radius: 8px;
   margin-bottom: 1em;
   padding: 1em;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .album-card:hover {
@@ -325,12 +327,7 @@
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
   animation: shimmer 2s infinite;
 }
 
@@ -450,4 +447,57 @@
   border: 2px solid #b00020;
   border-radius: 4px;
   padding: 4px;
+}
+
+/* ── InvokeAI board-album source controls ────────────────────────────── */
+
+.album-source-radios {
+  display: flex;
+  gap: 1.5em;
+  flex-wrap: wrap;
+}
+
+.album-source-radios .radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-bottom: 0;
+  font-weight: normal;
+  color: #fff;
+}
+
+/* Radios/checkboxes must not inherit the 100%-width applied to every
+   input inside .form-group. */
+.album-source-radios input[type="radio"],
+.invoke-board-checklist input[type="checkbox"] {
+  width: auto;
+}
+
+.invoke-root-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.invoke-board-checklist {
+  max-height: 10em;
+  overflow-y: auto;
+  border: 1px solid #888;
+  border-radius: 4px;
+  background: #444;
+  padding: 0.5em;
+}
+
+.invoke-board-checklist .board-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-bottom: 0.25em;
+  font-weight: normal;
+  color: #fff;
+}
+
+.invoke-board-checklist .board-checklist-empty {
+  color: #bbb;
+  font-style: italic;
 }

@@ -121,6 +121,26 @@ SUPPORTED_EXTENSIONS = {
 }
 
 
+def describe_image_source(image_paths_or_dir: list[Path] | Path, limit: int = 3) -> str:
+    """Compact, log-safe description of an indexing source.
+
+    Directory albums pass one or a few directories, which are worth printing
+    verbatim. InvokeAI-board albums pass thousands of explicit file paths —
+    summarize those as a count plus their common parent instead of flooding
+    the log.
+    """
+    if isinstance(image_paths_or_dir, Path):
+        return str(image_paths_or_dir)
+    paths = list(image_paths_or_dir)
+    if len(paths) <= limit:
+        return ", ".join(str(p) for p in paths)
+    try:
+        parent = os.path.commonpath([str(p) for p in paths])
+    except ValueError:  # mixed drives / empty — no common anchor
+        parent = "multiple locations"
+    return f"{len(paths)} explicit paths under {parent}"
+
+
 # =========================================================================
 # FPS with Exclusion Support
 # =========================================================================
@@ -978,7 +998,9 @@ class Embeddings(BaseModel):
             progress_callback=traversal_callback,
         )
         total_images = len(image_paths)
-        logger.info(f"Found {total_images} image files in {image_paths_or_dir}")
+        logger.info(
+            f"Found {total_images} image files in {describe_image_source(image_paths_or_dir)}"
+        )
         if total_images == 0:
             progress_tracker.set_error(
                 album_key, "No image files found in album directory(ies)"
@@ -1112,7 +1134,9 @@ class Embeddings(BaseModel):
         try:
             existing = self._load_existing_index_arrays()
 
-            logger.info(f"Scanning for new images in {image_paths_or_dir}...")
+            logger.info(
+                f"Scanning for new images in {describe_image_source(image_paths_or_dir)}..."
+            )
             new_image_paths, missing_image_paths = self._get_new_and_missing_images(
                 image_paths_or_dir,
                 existing.filenames,

@@ -27,134 +27,29 @@ from __future__ import annotations
 import logging
 import mimetypes
 import re
-import time
-from collections.abc import Awaitable, Callable
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
+from .. import invokeai_client
 from ..config import get_config_manager
+from ..invokeai_client import (  # noqa: F401  (re-exported for tests/backward compat)
+    _HTTP_TIMEOUT,
+    _invalidate_token_cache,
+    _request_with_auth_fallback,
+    _validate_invokeai_url,
+)
 from ..metadata_modules.invoke.invoke_metadata_view import InvokeMetadataView
 from ..metadata_modules.invokemetadata import GenerationMetadataAdapter
-from .album import get_embeddings_for_album
+from .album import get_embeddings_for_album, require_no_lock
 
 logger = logging.getLogger(__name__)
 
 invoke_router = APIRouter(prefix="/invokeai", tags=["InvokeAI"])
 
-# 5 seconds is plenty for a local loopback call; anything slower almost
-# certainly means the backend is unreachable rather than genuinely busy.
-_HTTP_TIMEOUT = 5.0
-
 config_manager = get_config_manager()
-
-# ── InvokeAI JWT token cache ──────────────────────────────────────────
-_cached_token: str | None = None
-_token_expires_at: float = 0.0
-_token_base_url: str | None = None
-_token_username: str | None = None
-
-
-def _cached_auth_headers(base_url: str, username: str | None) -> dict[str, str]:
-    """Return ``{"Authorization": "Bearer ..."}`` if we still hold a valid
-    cached token for this ``(base_url, username)`` pair, else ``{}``.
-
-    This never talks to the network.  Deliberate: the first attempt at any
-    request always uses whatever auth we already have (or none), so that a
-    backend that has since been reconfigured into single-user mode is given
-    a chance to accept the call anonymously.
-    """
-    if (
-        _cached_token
-        and time.monotonic() < _token_expires_at
-        and _token_base_url == base_url
-        and _token_username == username
-    ):
-        return {"Authorization": f"Bearer {_cached_token}"}
-    return {}
-
-
-async def _login(base_url: str, username: str, password: str) -> dict[str, str]:
-    """Exchange ``username``/``password`` for a JWT via the InvokeAI auth
-    endpoint, cache the token, and return the ``Authorization`` header.
-    """
-    global _cached_token, _token_expires_at, _token_base_url, _token_username  # noqa: PLW0603
-
-    login_url = f"{base_url.rstrip('/')}/api/v1/auth/login"
-    try:
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            resp = await client.post(login_url, json={"email": username, "password": password})
-    except httpx.RequestError as exc:
-        logger.warning("InvokeAI auth request failed: %s", exc)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not reach InvokeAI backend for authentication: {exc}",
-        ) from exc
-
-    if resp.status_code != 200:
-        detail = resp.json().get("detail", resp.text[:200]) if resp.headers.get("content-type", "").startswith("application/json") else resp.text[:200]
-        raise HTTPException(
-            status_code=502,
-            detail=f"InvokeAI authentication failed ({resp.status_code}): {detail}",
-        )
-
-    data = resp.json()
-    _cached_token = data["token"]
-    _token_expires_at = time.monotonic() + data.get("expires_in", 86400) - 60  # refresh 60s early
-    _token_base_url = base_url
-    _token_username = username
-    return {"Authorization": f"Bearer {_cached_token}"}
-
-
-def _invalidate_token_cache() -> None:
-    """Clear the cached token so the next request re-authenticates."""
-    global _cached_token, _token_expires_at, _token_base_url, _token_username  # noqa: PLW0603
-    _cached_token = None
-    _token_expires_at = 0.0
-    _token_base_url = None
-    _token_username = None
-
-
-async def _request_with_auth_fallback(
-    base_url: str,
-    username: str | None,
-    password: str | None,
-    request_fn: Callable[[dict[str, str]], Awaitable[httpx.Response]],
-) -> httpx.Response:
-    """Perform an InvokeAI request with graceful handling of auth transitions.
-
-    ``request_fn`` is an async callable that takes a headers dict and
-    performs the HTTP call — using a factory lets the caller re-open file
-    streams (needed for multipart uploads) on a retry.
-
-    Three-step flow:
-
-    1. First attempt uses whatever token we have cached (or no auth at all).
-       A freshly-restarted single-user backend then accepts the call even
-       if credentials are stored in PhotoMap.
-    2. If the first attempt returns **401**, the backend demands
-       authentication: if credentials are configured we log in, cache a
-       fresh token, and retry.
-    3. If the first attempt was made *with* a token and returns **403**
-       (most commonly "Multiuser mode is disabled. Authentication is not
-       required…"), the backend was reconfigured to single-user mode — we
-       invalidate the cached token and retry anonymously.
-    """
-    auth_headers = _cached_auth_headers(base_url, username)
-    response = await request_fn(auth_headers)
-
-    if response.status_code == 401 and username and password:
-        _invalidate_token_cache()
-        auth_headers = await _login(base_url, username, password)
-        response = await request_fn(auth_headers)
-    elif response.status_code == 403 and auth_headers:
-        _invalidate_token_cache()
-        response = await request_fn({})
-
-    return response
 
 
 # InvokeAI stores images on disk as ``{uuid}.{ext}``; a filename matching this
@@ -211,38 +106,6 @@ async def _invokeai_image_exists(
         logger.debug("InvokeAI existence check for %s failed: %s", image_name, exc)
         return False
     return resp.status_code == 200
-
-
-def _validate_invokeai_url(url: str | None) -> str | None:
-    """Reject non-http(s) schemes so configured URLs cannot be used for SSRF.
-
-    The configured URL is later concatenated into outbound requests for
-    ``/status``, ``/boards``, ``/recall`` and ``/use_ref_image``; ``httpx``
-    already refuses non-http(s) schemes, but validating up front returns
-    a clean 400 to the settings panel rather than a 502 at call time, and
-    blocks obviously-wrong values like ``file://`` or ``javascript:`` from
-    ever reaching the config file.
-
-    Empty / None is allowed — that's "not configured yet".
-    """
-    if not url:
-        return url
-    try:
-        parts = urlsplit(url)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid InvokeAI URL: {exc}"
-        ) from exc
-    if parts.scheme not in {"http", "https"}:
-        raise HTTPException(
-            status_code=400,
-            detail="InvokeAI URL must use http:// or https://",
-        )
-    if not parts.netloc:
-        raise HTTPException(
-            status_code=400, detail="InvokeAI URL must include a host"
-        )
-    return url
 
 
 # InvokeAI queue ids are short opaque tokens (e.g. ``default``); restrict
@@ -344,33 +207,7 @@ async def invokeai_status() -> dict:
     an error banner while the user is still typing.
     """
     settings = config_manager.get_invokeai_settings()
-    base_url = settings["url"]
-    if not base_url:
-        return {"reachable": False, "detail": "No InvokeAI URL configured"}
-
-    version_url = f"{base_url.rstrip('/')}/api/v1/app/version"
-    try:
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
-            resp = await client.get(version_url)
-    except httpx.RequestError as exc:
-        return {"reachable": False, "detail": f"Could not reach backend: {exc}"}
-
-    if resp.status_code != 200:
-        return {
-            "reachable": False,
-            "detail": f"Backend returned HTTP {resp.status_code}",
-        }
-    not_invokeai = "Server is reachable but doesn't appear to be an InvokeAI backend"
-    try:
-        payload = resp.json()
-    except ValueError:
-        return {"reachable": False, "detail": not_invokeai}
-    version = payload.get("version")
-    if not version:
-        # A non-InvokeAI server happening to have /api/v1/app/version would
-        # almost certainly not return a version field.
-        return {"reachable": False, "detail": not_invokeai}
-    return {"reachable": True, "version": version}
+    return await invokeai_client.check_status(settings["url"])
 
 
 @invoke_router.get("/boards")
@@ -389,57 +226,79 @@ async def invokeai_boards() -> list[dict]:
         raise HTTPException(
             status_code=400, detail="InvokeAI backend URL is not configured."
         )
+    return await invokeai_client.list_boards(
+        base_url, settings["username"], settings["password"]
+    )
 
-    boards_url = f"{base_url.rstrip('/')}/api/v1/boards/"
-    username = settings["username"]
-    password = settings["password"]
 
-    try:
-        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+class ProbeStatusRequest(BaseModel):
+    """Connection probe for a URL that may not be saved in settings yet."""
 
-            async def _do(headers: dict[str, str]) -> httpx.Response:
-                return await client.get(
-                    boards_url, params={"all": "true"}, headers=headers
-                )
+    url: str
 
-            response = await _request_with_auth_fallback(
-                base_url, username, password, _do
-            )
-    except httpx.RequestError as exc:
-        logger.warning("InvokeAI boards request failed: %s", exc)
+
+class ProbeBoardsRequest(BaseModel):
+    """Board listing for per-album connection values from the album form."""
+
+    url: str
+    username: str | None = None
+    password: str | None = None
+    # Edit flow: the form never receives the stored album password, so it
+    # sends the album key instead and we look the password up server-side.
+    album_key: str | None = None
+
+
+@invoke_router.post("/probe_status", dependencies=[Depends(require_no_lock)])
+async def probe_invokeai_status(request: ProbeStatusRequest) -> dict:
+    """Like ``GET /invokeai/status`` but for an explicit, possibly-unsaved URL.
+
+    Used by the album form to validate a per-album InvokeAI URL before the
+    album exists.
+    """
+    _validate_invokeai_url(request.url)
+    return await invokeai_client.check_status(request.url)
+
+
+@invoke_router.post("/probe_boards", dependencies=[Depends(require_no_lock)])
+async def probe_invokeai_boards(request: ProbeBoardsRequest) -> list[dict]:
+    """Like ``GET /invokeai/boards`` but for explicit connection values.
+
+    Password resolution: an explicit password wins; otherwise fall back to
+    the named album's stored password, then to the global settings password
+    when the URL matches the globally-configured backend.
+    """
+    _validate_invokeai_url(request.url)
+    if not request.url:
         raise HTTPException(
-            status_code=502,
-            detail=f"Could not reach InvokeAI backend at {base_url}: {exc}",
-        ) from exc
-
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                f"InvokeAI backend returned {response.status_code}: "
-                f"{response.text[:200]}"
-            ),
+            status_code=400, detail="InvokeAI backend URL is required."
         )
 
-    try:
-        raw = response.json()
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=502, detail="Boards endpoint did not return JSON"
-        ) from exc
+    username = request.username
+    password = request.password
+    # A stored password is only ever paired with its own username: if the
+    # caller typed a *different* username, the fallbacks don't apply and
+    # the request proceeds without a password (failing cleanly upstream)
+    # rather than submitting someone else's credentials.
+    if not password and request.album_key:
+        album = config_manager.get_albums().get(request.album_key)
+        if (
+            album is not None
+            and album.invokeai_password
+            and (not username or username == album.invokeai_username)
+        ):
+            password = album.invokeai_password
+            username = album.invokeai_username
+    if not password:
+        settings = config_manager.get_invokeai_settings()
+        if (
+            settings["url"]
+            and settings["url"].rstrip("/") == request.url.rstrip("/")
+            and (not username or username == settings["username"])
+        ):
+            password = settings["password"]
+            username = settings["username"]
 
-    # ``?all=true`` returns a flat list; without it InvokeAI returns
-    # ``{"items": [...], "offset": ..., "total": ...}``.  Handle both shapes
-    # so an accidentally-paginated response doesn't blank out the dropdown.
-    items = raw if isinstance(raw, list) else raw.get("items", [])
-    return [
-        {
-            "board_id": item.get("board_id"),
-            "board_name": item.get("board_name") or "(unnamed board)",
-        }
-        for item in items
-        if isinstance(item, dict) and item.get("board_id")
-    ]
+    return await invokeai_client.list_boards(request.url, username, password)
 
 
 def _load_raw_metadata(album_key: str, index: int) -> dict:

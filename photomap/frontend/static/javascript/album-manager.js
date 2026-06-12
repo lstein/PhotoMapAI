@@ -1,6 +1,12 @@
 // album-management.js
 import { createSimpleDirectoryPicker } from "./filetree.js"; // Add this import
 import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
+import {
+  collectSelectedBoardIds,
+  fetchInvokeAIBoards,
+  probeInvokeAI,
+  renderBoardChecklist,
+} from "./invokeai-album-source.js";
 import { exitSearchMode } from "./search-ui.js";
 import { closeSettingsModal, loadAvailableAlbums, openSettingsModal } from "./settings.js";
 import { setAlbum, state } from "./state.js";
@@ -103,6 +109,17 @@ export class AlbumManager {
       albumSelect: document.getElementById("albumSelect"),
       slideshowTitle: document.getElementById("slideshow_title"),
       albumManagementContent: document.querySelector("#albumManagementContent"),
+      // InvokeAI board-album source controls (add form)
+      newAlbumDirectorySection: document.getElementById("newAlbumDirectorySection"),
+      newAlbumInvokeAISection: document.getElementById("newAlbumInvokeAISection"),
+      newAlbumInvokeUrl: document.getElementById("newAlbumInvokeUrl"),
+      newAlbumInvokeRootRow: document.getElementById("newAlbumInvokeRootRow"),
+      newAlbumInvokeAuth: document.getElementById("newAlbumInvokeAuth"),
+      newAlbumInvokeUsername: document.getElementById("newAlbumInvokeUsername"),
+      newAlbumInvokePassword: document.getElementById("newAlbumInvokePassword"),
+      newAlbumInvokeConnectBtn: document.getElementById("newAlbumInvokeConnectBtn"),
+      newAlbumInvokeStatusHint: document.getElementById("newAlbumInvokeStatusHint"),
+      newAlbumInvokeBoards: document.getElementById("newAlbumInvokeBoards"),
     };
 
     this.progressPollers = new Map();
@@ -155,6 +172,20 @@ export class AlbumManager {
     document.getElementById("addAlbumBtn").addEventListener("click", () => {
       this.addAlbum();
     });
+
+    // The slide-down entrance animation fills forwards with a 600px
+    // max-height clamp sized for the directory form. The InvokeAI board
+    // form is taller, so drop the class once the animation finishes to
+    // return the section to its natural height.
+    if (this.addAlbumSection) {
+      this.addAlbumSection.addEventListener("animationend", (event) => {
+        if (event.animationName === "slideDown") {
+          this.addAlbumSection.classList.remove("slide-down");
+        }
+      });
+    }
+
+    this.setupNewAlbumSourceControls();
 
     // Click outside to close
     this.overlay.addEventListener("click", (e) => {
@@ -277,7 +308,249 @@ export class AlbumManager {
       description: this.elements.newAlbumDescription.value.trim(),
       paths: this.collectNewAlbumPathFields(), // Changed this line
       encoder_spec: this.elements.newAlbumEncoder?.value || DEFAULT_ENCODER_SPEC,
+      source_type: this.getNewAlbumSourceType(),
+      invokeai_url: this.elements.newAlbumInvokeUrl?.value.trim() || "",
+      invokeai_root: this.elements.newAlbumInvokeRootRow?.querySelector(".invoke-root-input")?.value.trim() || "",
+      invokeai_username: this.elements.newAlbumInvokeUsername?.value.trim() || "",
+      invokeai_password: this.elements.newAlbumInvokePassword?.value || "",
+      invokeai_board_ids: collectSelectedBoardIds(this.elements.newAlbumInvokeBoards),
     };
+  }
+
+  // InvokeAI board-album source controls
+  getNewAlbumSourceType() {
+    const checked = document.querySelector('input[name="newAlbumSourceType"]:checked');
+    return checked ? checked.value : "directory";
+  }
+
+  setupNewAlbumSourceControls() {
+    document.querySelectorAll('input[name="newAlbumSourceType"]').forEach((radio) => {
+      radio.addEventListener("change", () => this.toggleNewAlbumSourceSections());
+    });
+
+    // Keep the surfaced settings credentials in sync as the URL changes:
+    // matching the settings backend shows them, leaving it clears them.
+    if (this.elements.newAlbumInvokeUrl) {
+      this.elements.newAlbumInvokeUrl.addEventListener("input", () => this._applySettingsCredentialDefaults());
+    }
+    // A username the user edits by hand is theirs — stop treating it as
+    // auto-filled so URL changes no longer overwrite or clear it.
+    if (this.elements.newAlbumInvokeUsername) {
+      this.elements.newAlbumInvokeUsername.addEventListener("input", () => {
+        delete this.elements.newAlbumInvokeUsername.dataset.autofilled;
+      });
+    }
+
+    if (this.elements.newAlbumInvokeConnectBtn) {
+      this.elements.newAlbumInvokeConnectBtn.addEventListener("click", () => {
+        this.connectAndLoadBoards({
+          urlInput: this.elements.newAlbumInvokeUrl,
+          usernameInput: this.elements.newAlbumInvokeUsername,
+          passwordInput: this.elements.newAlbumInvokePassword,
+          authSection: this.elements.newAlbumInvokeAuth,
+          hintElement: this.elements.newAlbumInvokeStatusHint,
+          boardsContainer: this.elements.newAlbumInvokeBoards,
+          selectedIds: collectSelectedBoardIds(this.elements.newAlbumInvokeBoards),
+        });
+      });
+    }
+  }
+
+  toggleNewAlbumSourceSections() {
+    const isBoard = this.getNewAlbumSourceType() === "invokeai_board";
+    if (this.elements.newAlbumDirectorySection) {
+      this.elements.newAlbumDirectorySection.hidden = isBoard;
+    }
+    if (this.elements.newAlbumInvokeAISection) {
+      this.elements.newAlbumInvokeAISection.hidden = !isBoard;
+    }
+  }
+
+  // Build the InvokeAI-root input row: a text input plus the same 📁
+  // filetree-picker button used by the image-path rows.
+  _createInvokeRootRow(container, initialValue = "") {
+    if (!container) {
+      return;
+    }
+    container.innerHTML = "";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "invoke-root-input";
+    input.value = initialValue;
+    input.placeholder = "Path to the InvokeAI root directory";
+
+    const folderBtn = document.createElement("button");
+    folderBtn.type = "button";
+    folderBtn.className = "open-folder-btn";
+    folderBtn.title = "Select folder";
+    folderBtn.innerHTML = "📁";
+    folderBtn.style.cssText = "background: none; border: none; font-size: 1.2em; cursor: pointer; padding: 4px;";
+    folderBtn.onclick = () => {
+      createSimpleDirectoryPicker(
+        (selectedPath) => {
+          input.value = selectedPath;
+        },
+        input.value.trim(),
+        { showCreateFolder: false }
+      );
+    };
+
+    container.appendChild(input);
+    container.appendChild(folderBtn);
+  }
+
+  _setInvokeHint(hintElement, message, isError = false) {
+    if (!hintElement) {
+      return;
+    }
+    hintElement.textContent = message || "";
+    hintElement.style.color = isError ? "#c0392b" : "#7bd47b";
+  }
+
+  // Shared probe-then-load-boards flow for the add and edit forms. On
+  // success the auth section is revealed (mirrors the settings panel: the
+  // username/password rows only matter once the backend answers) and the
+  // board checklist is rendered.
+  async connectAndLoadBoards({
+    urlInput,
+    usernameInput,
+    passwordInput,
+    authSection,
+    hintElement,
+    boardsContainer,
+    selectedIds = [],
+    albumKey = null,
+  }) {
+    const url = urlInput?.value.trim();
+    if (!url) {
+      this._setInvokeHint(hintElement, "Enter the InvokeAI backend URL first.", true);
+      return false;
+    }
+
+    this._setInvokeHint(hintElement, "Checking connection…");
+    let status;
+    try {
+      status = await probeInvokeAI(url);
+    } catch (error) {
+      this._setInvokeHint(hintElement, error.body?.detail || "Could not contact the PhotoMap backend.", true);
+      return false;
+    }
+    if (!status.reachable) {
+      this._setInvokeHint(hintElement, status.detail || "InvokeAI backend is not reachable.", true);
+      if (authSection) {
+        authSection.hidden = true;
+      }
+      return false;
+    }
+
+    if (authSection) {
+      authSection.hidden = false;
+    }
+
+    let boards;
+    try {
+      boards = await fetchInvokeAIBoards({
+        url,
+        username: usernameInput?.value.trim() || "",
+        password: passwordInput?.value || "",
+        albumKey,
+      });
+    } catch (error) {
+      this._setInvokeHint(
+        hintElement,
+        error.body?.detail || "Connected, but the board list could not be fetched. Check the credentials.",
+        true
+      );
+      return false;
+    }
+
+    renderBoardChecklist(boardsContainer, boards, selectedIds);
+    if (boardsContainer) {
+      boardsContainer.hidden = false;
+      // Marks the checklist as authoritative: until a fetch succeeds, the
+      // edit-save path keeps the album's stored board selection instead of
+      // trusting a placeholder render.
+      boardsContainer.dataset.loaded = "true";
+      boardsContainer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    this._setInvokeHint(hintElement, `Connected to InvokeAI ${status.version || ""} — select one or more boards.`);
+    return true;
+  }
+
+  async initializeNewAlbumInvokeSection() {
+    this._setInvokeHint(this.elements.newAlbumInvokeStatusHint, "");
+    if (this.elements.newAlbumInvokeAuth) {
+      this.elements.newAlbumInvokeAuth.hidden = true;
+    }
+    if (this.elements.newAlbumInvokeBoards) {
+      this.elements.newAlbumInvokeBoards.innerHTML = "";
+      this.elements.newAlbumInvokeBoards.hidden = true;
+    }
+    if (this.elements.newAlbumInvokeUsername) {
+      this.elements.newAlbumInvokeUsername.value = "";
+      delete this.elements.newAlbumInvokeUsername.dataset.autofilled;
+    }
+    if (this.elements.newAlbumInvokePassword) {
+      this.elements.newAlbumInvokePassword.value = "";
+    }
+    this._createInvokeRootRow(this.elements.newAlbumInvokeRootRow);
+
+    // Prefill the URL — and surface the credential fallback — from the
+    // global InvokeAI settings when available.
+    this._settingsInvokeDefaults = null;
+    if (this.elements.newAlbumInvokeUrl) {
+      this.elements.newAlbumInvokeUrl.value = "";
+      try {
+        const config = await fetchJson("invokeai/config");
+        if (config.url) {
+          this.elements.newAlbumInvokeUrl.value = config.url;
+        }
+        this._settingsInvokeDefaults = {
+          url: config.url || "",
+          username: config.username || "",
+          hasPassword: !!config.has_password,
+        };
+      } catch {
+        // No prefill — the field stays empty.
+      }
+      this._applySettingsCredentialDefaults();
+    }
+  }
+
+  // The backend reuses the settings-panel credentials when the album form
+  // targets the same URL as the settings panel (and only then). Surface
+  // that: show the stored username and say the saved password will be
+  // used. When the user points the form at a different backend — where
+  // stored credentials are never sent — the auto-filled username is
+  // cleared again. A username the user typed themselves is left alone.
+  _applySettingsCredentialDefaults() {
+    const defaults = this._settingsInvokeDefaults;
+    const urlInput = this.elements.newAlbumInvokeUrl;
+    const usernameInput = this.elements.newAlbumInvokeUsername;
+    const passwordInput = this.elements.newAlbumInvokePassword;
+    if (!urlInput || !usernameInput || !passwordInput) {
+      return;
+    }
+
+    const normalize = (url) => (url || "").trim().replace(/\/+$/, "");
+    const matchesSettings = !!defaults && !!defaults.url && normalize(urlInput.value) === normalize(defaults.url);
+
+    if (matchesSettings) {
+      if (defaults.username && (!usernameInput.value || usernameInput.dataset.autofilled === "true")) {
+        usernameInput.value = defaults.username;
+        usernameInput.dataset.autofilled = "true";
+      }
+      passwordInput.placeholder = defaults.hasPassword
+        ? "(password saved in Settings — leave blank to use it)"
+        : "(optional, multi-user mode)";
+    } else {
+      if (usernameInput.dataset.autofilled === "true") {
+        usernameInput.value = "";
+        delete usernameInput.dataset.autofilled;
+      }
+      passwordInput.placeholder = "(optional, multi-user mode)";
+    }
   }
 
   clearAddAlbumForm() {
@@ -289,6 +562,13 @@ export class AlbumManager {
     if (this.elements.newAlbumPathsContainer) {
       this.elements.newAlbumPathsContainer.innerHTML = "";
     }
+
+    // Reset the source selector to the directory default
+    const directoryRadio = document.querySelector('input[name="newAlbumSourceType"][value="directory"]');
+    if (directoryRadio) {
+      directoryRadio.checked = true;
+    }
+    this.toggleNewAlbumSourceSections();
 
     // Reset encoder dropdown to the host-resolved default
     getServerDefaultEncoderSpec().then((spec) => populateEncoderSelect(this.elements.newAlbumEncoder, spec));
@@ -302,6 +582,10 @@ export class AlbumManager {
 
     // Initialize path fields for the add album form
     this.initializeNewAlbumPathFields();
+
+    // Reset the InvokeAI source section (prefills the URL from settings)
+    this.toggleNewAlbumSourceSections();
+    this.initializeNewAlbumInvokeSection();
 
     // Initialize encoder dropdown to the host-resolved default
     getServerDefaultEncoderSpec().then((spec) => populateEncoderSelect(this.elements.newAlbumEncoder, spec));
@@ -672,8 +956,14 @@ export class AlbumManager {
     card.querySelector(".album-key").textContent = `Key: ${album.key || "Unknown"}`;
     card.querySelector(".album-description").textContent = album.description || "No description";
 
-    const imagePaths = album.image_paths || [];
-    card.querySelector(".album-paths").textContent = `Paths: ${imagePaths.join(", ") || "No paths configured"}`;
+    if (album.source_type === "invokeai_board") {
+      const boardCount = (album.invokeai_board_ids || []).length;
+      card.querySelector(".album-paths").textContent =
+        `Source: ${boardCount} InvokeAI board${boardCount === 1 ? "" : "s"} @ ${album.invokeai_url || "?"}`;
+    } else {
+      const imagePaths = album.image_paths || [];
+      card.querySelector(".album-paths").textContent = `Paths: ${imagePaths.join(", ") || "No paths configured"}`;
+    }
 
     // Set up event listeners
     const cardElement = card.querySelector(".album-card");
@@ -742,16 +1032,28 @@ export class AlbumManager {
 
   async addAlbum() {
     const formData = this.getNewAlbumFormData();
+    const isBoardAlbum = formData.source_type === "invokeai_board";
 
     // Map field names to their corresponding elements
     const requiredFields = [
       { value: formData.key, element: this.elements.newAlbumKey },
       { value: formData.name, element: this.elements.newAlbumName },
-      {
+    ];
+    if (isBoardAlbum) {
+      requiredFields.push(
+        { value: formData.invokeai_url, element: this.elements.newAlbumInvokeUrl },
+        { value: formData.invokeai_root, element: this.elements.newAlbumInvokeRootRow },
+        {
+          value: formData.invokeai_board_ids.length > 0 ? "has boards" : "",
+          element: this.elements.newAlbumInvokeBoards,
+        }
+      );
+    } else {
+      requiredFields.push({
         value: formData.paths.length > 0 ? "has paths" : "",
         element: this.elements.newAlbumPathsContainer,
-      },
-    ];
+      });
+    }
 
     let hasError = false;
 
@@ -765,7 +1067,11 @@ export class AlbumManager {
     });
 
     if (hasError) {
-      alert("Please fill in all required fields");
+      alert(
+        isBoardAlbum
+          ? "Please fill in all required fields and select at least one board"
+          : "Please fill in all required fields"
+      );
       return;
     }
 
@@ -778,21 +1084,40 @@ export class AlbumManager {
       return;
     }
 
-    // Use the collected paths directly
-    const paths = formData.paths;
+    let newAlbum;
+    if (isBoardAlbum) {
+      // image_paths and index are deliberately omitted: the backend derives
+      // them from the InvokeAI root and the album key.
+      newAlbum = {
+        key: formData.key,
+        name: formData.name,
+        umap_eps: 0.1,
+        description: formData.description,
+        encoder_spec: formData.encoder_spec,
+        source_type: "invokeai_board",
+        invokeai_url: formData.invokeai_url,
+        invokeai_root: formData.invokeai_root,
+        invokeai_username: formData.invokeai_username || null,
+        invokeai_password: formData.invokeai_password || null,
+        invokeai_board_ids: formData.invokeai_board_ids,
+      };
+    } else {
+      // Use the collected paths directly
+      const paths = formData.paths;
 
-    // Always set index path based on first path
-    const indexPath = paths.length > 0 ? `${paths[0]}/photomap_index/embeddings.npz` : "";
+      // Always set index path based on first path
+      const indexPath = paths.length > 0 ? `${paths[0]}/photomap_index/embeddings.npz` : "";
 
-    const newAlbum = {
-      key: formData.key,
-      name: formData.name,
-      image_paths: paths,
-      index: indexPath,
-      umap_eps: 0.1,
-      description: formData.description,
-      encoder_spec: formData.encoder_spec,
-    };
+      newAlbum = {
+        key: formData.key,
+        name: formData.name,
+        image_paths: paths,
+        index: indexPath,
+        umap_eps: 0.1,
+        description: formData.description,
+        encoder_spec: formData.encoder_spec,
+      };
+    }
 
     try {
       await fetchJson("add_album/", { json: newAlbum });
@@ -805,6 +1130,12 @@ export class AlbumManager {
 
   async handleSuccessfulAlbumAdd(albumKey) {
     this.hideAddAlbumForm();
+    // Mark the album as auto-indexing BEFORE rebuilding the cards: the
+    // rebuild's index-metadata probe 404s for the brand-new album and
+    // fires albumIndexError, whose handler would otherwise start a
+    // second, racing kickoff (a duplicate POST that 409s, and a progress
+    // poller bound to a card the rebuild has already detached).
+    this.autoIndexingAlbums.add(albumKey);
     await this.loadAlbums();
 
     // Set state.album directly to avoid triggering slideshow before indexing
@@ -928,8 +1259,26 @@ export class AlbumManager {
     editForm.querySelector(".edit-album-name").value = album.name;
     editForm.querySelector(".edit-album-description").value = album.description || "";
 
-    // Initialize the dynamic path fields for THIS specific card
-    this.initializePathFields(album.image_paths || [], cardElement);
+    // Reflect the (immutable) source type and show the matching section
+    const isBoardAlbum = album.source_type === "invokeai_board";
+    editForm.querySelectorAll(".edit-album-source-radio").forEach((radio) => {
+      radio.checked = radio.value === (album.source_type || "directory");
+    });
+    const directorySection = editForm.querySelector(".edit-album-directory-section");
+    const invokeSection = editForm.querySelector(".edit-album-invokeai-section");
+    if (directorySection) {
+      directorySection.hidden = isBoardAlbum;
+    }
+    if (invokeSection) {
+      invokeSection.hidden = !isBoardAlbum;
+    }
+
+    if (isBoardAlbum) {
+      this.populateBoardAlbumEditForm(editForm, album);
+    } else {
+      // Initialize the dynamic path fields for THIS specific card
+      this.initializePathFields(album.image_paths || [], cardElement);
+    }
 
     // Minimum-pixel-dimension gate. Fall back to 256 if the album predates
     // the field — matches the backend default (Album.min_image_dimension).
@@ -959,6 +1308,58 @@ export class AlbumManager {
 
     // --- Scroll the card so its bottom is visible ---
     cardElement.scrollIntoView({ behavior: "smooth", block: "end" });
+  }
+
+  // Populate the InvokeAI fields of the edit form and auto-load the board
+  // checklist with the album's saved selection.
+  populateBoardAlbumEditForm(editForm, album) {
+    const urlInput = editForm.querySelector(".edit-album-invoke-url");
+    const usernameInput = editForm.querySelector(".edit-album-invoke-username");
+    const passwordInput = editForm.querySelector(".edit-album-invoke-password");
+    const hintElement = editForm.querySelector(".edit-album-invoke-status-hint");
+    const boardsContainer = editForm.querySelector(".edit-album-invoke-boards");
+
+    if (urlInput) {
+      urlInput.value = album.invokeai_url || "";
+    }
+    if (usernameInput) {
+      usernameInput.value = album.invokeai_username || "";
+    }
+    if (passwordInput) {
+      // Never echo passwords; indicate if one is stored.
+      passwordInput.value = "";
+      passwordInput.placeholder = album.has_invokeai_password
+        ? "(password saved — leave blank to keep)"
+        : "(optional, multi-user mode)";
+    }
+    this._createInvokeRootRow(editForm.querySelector(".edit-album-invoke-root-row"), album.invokeai_root || "");
+
+    const loadBoards = () =>
+      this.connectAndLoadBoards({
+        urlInput,
+        usernameInput,
+        passwordInput,
+        authSection: null,
+        hintElement,
+        boardsContainer,
+        selectedIds: collectSelectedBoardIds(boardsContainer).length
+          ? collectSelectedBoardIds(boardsContainer)
+          : album.invokeai_board_ids || [],
+        albumKey: album.key,
+      });
+
+    const connectBtn = editForm.querySelector(".edit-album-invoke-connect-btn");
+    if (connectBtn) {
+      connectBtn.onclick = loadBoards;
+    }
+
+    // Show the saved selection immediately (board names unresolved until
+    // the fetch returns), then refresh from the backend.
+    if (boardsContainer) {
+      delete boardsContainer.dataset.loaded;
+    }
+    renderBoardChecklist(boardsContainer, [], album.invokeai_board_ids || []);
+    loadBoards();
   }
 
   // Path field methods
@@ -992,12 +1393,7 @@ export class AlbumManager {
 
   async saveAlbumChanges(cardElement, album) {
     const editForm = cardElement.querySelector(".edit-form");
-
-    // Collect paths from dynamic fields for THIS specific card
-    const updatedPaths = this.collectPathFields(cardElement);
-
-    // Always set index path based on first path
-    const indexPath = updatedPaths.length > 0 ? `${updatedPaths[0]}/photomap_index/embeddings.npz` : "";
+    const isBoardAlbum = album.source_type === "invokeai_board";
 
     // Parse the dimension input. Invalid / non-positive values fall back to
     // the saved value, then to the backend default (256). The backend's
@@ -1011,20 +1407,69 @@ export class AlbumManager {
       key: album.key,
       name: editForm.querySelector(".edit-album-name").value,
       description: editForm.querySelector(".edit-album-description").value,
-      image_paths: updatedPaths,
-      index: indexPath,
       encoder_spec: editForm.querySelector(".edit-album-encoder")?.value || album.encoder_spec || DEFAULT_ENCODER_SPEC,
       min_image_dimension: minDim,
     };
 
-    // Compare old and new paths (order and content)
-    const oldPaths = Array.isArray(album.image_paths) ? album.image_paths : [];
-    const pathsChanged = oldPaths.length !== updatedPaths.length || oldPaths.some((p, i) => p !== updatedPaths[i]);
+    let sourceChanged = false;
+    if (isBoardAlbum) {
+      const boardsContainer = editForm.querySelector(".edit-album-invoke-boards");
+      // Only trust the checklist once a board fetch has succeeded —
+      // otherwise (e.g. InvokeAI unreachable during this edit) keep the
+      // album's saved selection.
+      const boardIds =
+        boardsContainer?.dataset.loaded === "true"
+          ? collectSelectedBoardIds(boardsContainer)
+          : album.invokeai_board_ids || [];
+      if (boardsContainer?.dataset.loaded === "true" && boardIds.length === 0) {
+        alert("Please select at least one board");
+        return;
+      }
+      const url = editForm.querySelector(".edit-album-invoke-url")?.value.trim() || "";
+      const root = editForm.querySelector(".edit-album-invoke-root-row .invoke-root-input")?.value.trim() || "";
+      if (!url || !root) {
+        alert("The InvokeAI backend URL and root directory are required");
+        return;
+      }
+
+      updatedAlbum.source_type = "invokeai_board";
+      updatedAlbum.invokeai_url = url;
+      updatedAlbum.invokeai_root = root;
+      updatedAlbum.invokeai_username = editForm.querySelector(".edit-album-invoke-username")?.value.trim() || null;
+      // Blank password means "keep the stored one" — omit it entirely.
+      const password = editForm.querySelector(".edit-album-invoke-password")?.value;
+      if (password) {
+        updatedAlbum.invokeai_password = password;
+      }
+      updatedAlbum.invokeai_board_ids = boardIds;
+      // index and image_paths are omitted: the backend keeps the stored
+      // index and re-derives image_paths from the InvokeAI root.
+
+      const oldBoardIds = album.invokeai_board_ids || [];
+      sourceChanged =
+        url !== (album.invokeai_url || "") ||
+        root !== (album.invokeai_root || "") ||
+        oldBoardIds.length !== boardIds.length ||
+        oldBoardIds.some((id) => !boardIds.includes(id));
+    } else {
+      // Collect paths from dynamic fields for THIS specific card
+      const updatedPaths = this.collectPathFields(cardElement);
+
+      // Always set index path based on first path
+      const indexPath = updatedPaths.length > 0 ? `${updatedPaths[0]}/photomap_index/embeddings.npz` : "";
+
+      updatedAlbum.image_paths = updatedPaths;
+      updatedAlbum.index = indexPath;
+
+      // Compare old and new paths (order and content)
+      const oldPaths = Array.isArray(album.image_paths) ? album.image_paths : [];
+      sourceChanged = oldPaths.length !== updatedPaths.length || oldPaths.some((p, i) => p !== updatedPaths[i]);
+    }
 
     try {
       await fetchJson("update_album/", { json: updatedAlbum });
       await this.refreshAlbumsAndDropdown();
-      if (pathsChanged) {
+      if (sourceChanged) {
         this.send_update_index_event(updatedAlbum.key);
       }
     } catch (error) {
@@ -1133,6 +1578,16 @@ export class AlbumManager {
     cancelBtn.style.display = "none";
   }
 
+  // loadAlbums() rebuilds the card list wholesale, and several flows do
+  // that while indexing is running (album add, edit save, the auto-index
+  // event handler). A card element captured at kickoff may therefore be
+  // detached by the time a poll tick fires — updating it paints a node
+  // nobody sees while the on-screen card stays frozen. Always resolve the
+  // album's live card by key, falling back to the captured element.
+  _liveCardFor(albumKey, fallback = null) {
+    return document.querySelector(`.album-card[data-album-key="${albumKey}"]`) || fallback;
+  }
+
   startProgressPolling(albumKey, cardElement) {
     if (this.progressPollers.has(albumKey)) {
       console.log(`Already polling progress for album: ${albumKey}`);
@@ -1143,18 +1598,19 @@ export class AlbumManager {
       try {
         const progress = await fetchJson(`index_progress/${albumKey}`);
 
-        this.updateProgress(cardElement, progress);
+        const liveCard = this._liveCardFor(albumKey, cardElement);
+        this.updateProgress(liveCard, progress);
 
         if (progress.status === "completed" || progress.status === "error") {
           clearInterval(interval);
           this.progressPollers.delete(albumKey);
 
           if (progress.status === "completed") {
-            await this.handleIndexingCompletion(albumKey, cardElement);
+            await this.handleIndexingCompletion(albumKey, liveCard);
           }
 
           setTimeout(() => {
-            this.hideProgressUI(cardElement);
+            this.hideProgressUI(this._liveCardFor(albumKey, liveCard));
           }, AlbumManager.PROGRESS_HIDE_DELAY);
         }
       } catch (error) {

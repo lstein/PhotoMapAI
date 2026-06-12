@@ -34,10 +34,17 @@
   }
 }
 
+/* The max-height keyframes clamp the box while it animates; overflow must
+   be hidden or content taller than the clamp paints outside the section
+   mid-animation. album-manager.js removes .slide-down on animationend so
+   the section returns to natural (unclamped) height once open — the
+   InvokeAI board form is taller than the 600px the keyframes assume. */
 .slide-down {
   animation: slideDown 0.3s ease forwards;
+  overflow: hidden;
 }
 
 .slide-up {
   animation: slideUp 0.3s ease forwards;
+  overflow: hidden;
 }
