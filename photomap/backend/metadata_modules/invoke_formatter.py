@@ -87,10 +87,34 @@ _USE_REF_SVG = (
 )
 
 
+# The use-ref photo-frame icon with a plus sign in place of the sun and
+# mountain, signalling "add to the existing reference images".
+_APPEND_REF_SVG = (
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" '
+    'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" '
+    'stroke-linejoin="round" aria-hidden="true">'
+    '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>'
+    '<line x1="12" y1="8" x2="12" y2="16"/>'
+    '<line x1="8" y1="12" x2="16" y2="12"/>'
+    "</svg>"
+)
+
+
 _USE_REF_BUTTON_HTML = (
     '<button type="button" class="invoke-recall-btn" data-recall-mode="use_ref" '
     'title="Upload this image to InvokeAI and use it as a reference image">'
     f'{_USE_REF_SVG}<span class="invoke-recall-label">Send to InvokeAI</span>'
+    '<span class="invoke-recall-status" aria-live="polite"></span>'
+    "</button>"
+)
+
+# "Append" variant: same upload flow, but InvokeAI adds the image to the
+# existing reference-image list instead of replacing it. Requires an
+# InvokeAI backend whose recall endpoint understands ``?append=true``.
+_APPEND_REF_BUTTON_HTML = (
+    '<button type="button" class="invoke-recall-btn" data-recall-mode="append_ref" '
+    'title="Upload this image to InvokeAI and append it to the existing reference images">'
+    f'{_APPEND_REF_SVG}<span class="invoke-recall-label">Append to InvokeAI</span>'
     '<span class="invoke-recall-status" aria-live="polite"></span>'
     "</button>"
 )
@@ -101,6 +125,7 @@ def _recall_buttons_html() -> str:
     return (
         '<div class="invoke-recall-controls" data-invoke-recall="1">'
         f"{_USE_REF_BUTTON_HTML}"
+        f"{_APPEND_REF_BUTTON_HTML}"
         '<button type="button" class="invoke-recall-btn" data-recall-mode="remix" '
         'title="Remix (recall parameters without the seed) to InvokeAI">'
         f'{_REMIX_SVG}<span class="invoke-recall-label">Remix</span>'
@@ -126,6 +151,7 @@ def use_ref_button_html() -> str:
     return (
         '<div class="invoke-recall-controls" data-invoke-recall="1">'
         f"{_USE_REF_BUTTON_HTML}"
+        f"{_APPEND_REF_BUTTON_HTML}"
         "</div>"
     )
 

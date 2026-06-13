@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import mimetypes
 import re
+import time
 from pathlib import Path
 
 import httpx
@@ -50,6 +51,46 @@ logger = logging.getLogger(__name__)
 invoke_router = APIRouter(prefix="/invokeai", tags=["InvokeAI"])
 
 config_manager = get_config_manager()
+
+# ── InvokeAI capability cache ─────────────────────────────────────────
+#
+# Whether the configured backend supports the recall API at all, and the
+# ``append`` reference-image option, is probed from its OpenAPI schema (or,
+# failing that, inferred from its version).  The result gates which recall
+# buttons the frontend reveals.  A successful probe is cached for several
+# minutes; a failed one only briefly, so a backend that comes up (or gets
+# upgraded) is noticed quickly.
+_CAPS_TTL_OK = 300.0
+_CAPS_TTL_ERROR = 30.0
+# Version fallbacks, used only when the OpenAPI schema can't be fetched:
+# the recall router shipped in 6.13.0, the append option in 6.13.5.
+_RECALL_MIN_VERSION = (6, 13, 0)
+_APPEND_MIN_VERSION = (6, 13, 5)
+
+_caps_cache: dict | None = None
+_caps_expires_at: float = 0.0
+_caps_base_url: str | None = None
+
+
+def _invalidate_capabilities_cache() -> None:
+    """Clear the cached capabilities so the next request re-probes."""
+    global _caps_cache, _caps_expires_at, _caps_base_url  # noqa: PLW0603
+    _caps_cache = None
+    _caps_expires_at = 0.0
+    _caps_base_url = None
+
+
+def _parse_version_tuple(version: str) -> tuple[int, ...] | None:
+    """Extract the leading dotted-numeric part of a version string.
+
+    Handles plain releases ("6.13.0"), post/dev suffixes ("6.13.0.post1",
+    "6.14.0.dev5+g1a2b3c") and release candidates ("6.13.5rc1") by simply
+    stopping at the first non-numeric component.
+    """
+    match = re.match(r"(\d+(?:\.\d+)*)", version.strip())
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
 
 
 # InvokeAI stores images on disk as ``{uuid}.{ext}``; a filename matching this
@@ -140,10 +181,17 @@ class RecallRequest(BaseModel):
 
 
 class UseRefImageRequest(BaseModel):
-    """Payload posted by the drawer's "Use Ref Image" button."""
+    """Payload posted by the drawer's "Send to InvokeAI" / "Append to InvokeAI" buttons."""
 
     album_key: str = Field(..., description="Album containing the image")
     index: int = Field(..., ge=0, description="Image index within the album")
+    append: bool = Field(
+        False,
+        description=(
+            "If True, ask InvokeAI to append the image to its existing "
+            "reference-image list instead of replacing it"
+        ),
+    )
     queue_id: str = Field(
         "default",
         description="InvokeAI queue id to target",
@@ -177,6 +225,7 @@ async def set_invokeai_config(settings: InvokeAISettings) -> dict:
     """
     url = _validate_invokeai_url(settings.url)
     _invalidate_token_cache()
+    _invalidate_capabilities_cache()
     existing = config_manager.get_invokeai_settings()
     password = settings.password if settings.password is not None else existing["password"]
     board_id = settings.board_id if settings.board_id is not None else existing["board_id"]
@@ -208,6 +257,130 @@ async def invokeai_status() -> dict:
     """
     settings = config_manager.get_invokeai_settings()
     return await invokeai_client.check_status(settings["url"])
+
+
+async def _probe_capabilities(
+    client: httpx.AsyncClient,
+    base_url: str,
+    username: str | None,
+    password: str | None,
+) -> dict:
+    """Determine which recall features the backend supports.
+
+    Primary signal is the backend's OpenAPI schema: the presence of the
+    ``/api/v1/recall/{queue_id}`` POST operation means the recall router
+    exists, and an ``append`` entry in its query parameters means the
+    append option is understood.  Probing the schema rather than comparing
+    versions keeps development builds working — a backend running from a
+    feature branch advertises the capability the moment the route exists,
+    whatever its version string says.
+
+    If the schema can't be fetched (older deployments may not serve it, or
+    a proxy may block it), fall back to version thresholds via
+    ``/api/v1/app/version``: recall shipped in 6.13.0, append in 6.13.5.
+
+    Returns ``{"reachable": bool, "recall": bool, "append": bool,
+    "source": "openapi" | "version" | "unreachable"}``.
+    """
+    openapi_url = f"{base_url.rstrip('/')}/openapi.json"
+
+    async def _do(headers: dict[str, str]) -> httpx.Response:
+        return await client.get(openapi_url, headers=headers)
+
+    try:
+        resp = await _request_with_auth_fallback(base_url, username, password, _do)
+        if resp.status_code == 200:
+            spec = resp.json()
+            recall_post = (
+                spec.get("paths", {}).get("/api/v1/recall/{queue_id}", {}).get("post")
+            )
+            if recall_post is None:
+                return {
+                    "reachable": True,
+                    "recall": False,
+                    "append": False,
+                    "source": "openapi",
+                }
+            params = {
+                param.get("name") for param in recall_post.get("parameters", [])
+            }
+            return {
+                "reachable": True,
+                "recall": True,
+                "append": "append" in params,
+                "source": "openapi",
+            }
+    except (httpx.RequestError, HTTPException, ValueError) as exc:
+        logger.debug("InvokeAI OpenAPI capability probe failed: %s", exc)
+
+    # Fallback: infer support from the version number.
+    version_url = f"{base_url.rstrip('/')}/api/v1/app/version"
+    version: str | None = None
+    try:
+        resp = await client.get(version_url)
+        if resp.status_code == 200:
+            version = resp.json().get("version")
+    except (httpx.RequestError, ValueError) as exc:
+        logger.debug("InvokeAI version capability probe failed: %s", exc)
+
+    version_tuple = _parse_version_tuple(version) if version else None
+    if version_tuple:
+        return {
+            "reachable": True,
+            "recall": version_tuple >= _RECALL_MIN_VERSION,
+            "append": version_tuple >= _APPEND_MIN_VERSION,
+            "source": "version",
+            "version": version,
+        }
+    return {"reachable": False, "recall": False, "append": False, "source": "unreachable"}
+
+
+@invoke_router.get("/capabilities")
+async def invokeai_capabilities(refresh: bool = False) -> dict:
+    """Report which recall features the configured backend supports.
+
+    The frontend calls this once at startup (and after the InvokeAI settings
+    change) and reveals only the recall buttons the backend can honor:
+
+    * no recall router — no recall buttons at all;
+    * recall without append — Send to InvokeAI / Remix / Recall, but no
+      Append (an old backend would silently treat append as replace);
+    * recall with append — all buttons.
+
+    Results are cached per configured URL; pass ``?refresh=true`` to force a
+    re-probe (used right after the settings are saved).
+    """
+    global _caps_cache, _caps_expires_at, _caps_base_url  # noqa: PLW0603
+
+    settings = config_manager.get_invokeai_settings()
+    base_url = settings["url"]
+    if not base_url:
+        return {
+            "configured": False,
+            "reachable": False,
+            "recall": False,
+            "append": False,
+        }
+
+    now = time.monotonic()
+    if (
+        not refresh
+        and _caps_cache is not None
+        and _caps_base_url == base_url
+        and now < _caps_expires_at
+    ):
+        return _caps_cache
+
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+        probed = await _probe_capabilities(
+            client, base_url, settings["username"], settings["password"]
+        )
+
+    capabilities = {"configured": True, **probed}
+    _caps_cache = capabilities
+    _caps_base_url = base_url
+    _caps_expires_at = now + (_CAPS_TTL_OK if probed["reachable"] else _CAPS_TTL_ERROR)
+    return capabilities
 
 
 @invoke_router.get("/boards")
@@ -498,6 +671,10 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
     InvokeAI knows the file, then ``POST /api/v1/recall/{queue_id}`` with the
     returned ``image_name`` in ``reference_images`` so the next generation
     picks it up as visual guidance.
+
+    With ``append=True`` the recall is sent with ``?append=true``, which asks
+    InvokeAI to add the image to its existing reference-image list instead of
+    replacing it (the drawer's "Append to InvokeAI" button).
     """
     settings = config_manager.get_invokeai_settings()
     base_url = settings["url"]
@@ -556,9 +733,12 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
             # set up in InvokeAI rather than resetting every other
             # parameter back to defaults.
             payload = {"reference_images": [{"image_name": image_name}]}
+            recall_params = {"append": "true"} if request.append else None
 
             async def _do_recall(headers: dict[str, str]) -> httpx.Response:
-                return await client.post(recall_url, json=payload, headers=headers)
+                return await client.post(
+                    recall_url, json=payload, params=recall_params, headers=headers
+                )
 
             response = await _request_with_auth_fallback(
                 base_url, username, password, _do_recall

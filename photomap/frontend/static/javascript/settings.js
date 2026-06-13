@@ -12,6 +12,7 @@ import {
   state,
 } from "./state.js";
 import { clearImageLabelCache, setClusterLabels } from "./cluster-utils.js";
+import { refreshInvokeCapabilities } from "./invoke-capabilities.js";
 import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 // Constants
@@ -573,6 +574,9 @@ function setupInvokeAISettingsControls() {
     setInvokeAIUrlError(error);
     if (!error) {
       await refreshInvokeAIStatus();
+      // The configured backend may have changed — re-probe which recall
+      // buttons it supports (force past the backend's capability cache).
+      await refreshInvokeCapabilities({ refresh: true });
     }
   };
   const debouncedSaveAndRefresh = debounced(saveAndRefresh);

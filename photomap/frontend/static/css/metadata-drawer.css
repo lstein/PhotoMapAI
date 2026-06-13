@@ -67,7 +67,6 @@
   text-align: left;
   cursor: auto;
 }
-}
 
 #filepathText {
   color: #ccc;
@@ -188,7 +187,7 @@
 }
 
 .details-link-cell {
-  text-align: right;
+  text-align: left;
   /* Pin the link to the bottom of the scrollable description area so it
      remains visible even when reference-image thumbnails push the table
      past the 40vh scroll cap. Solid background keeps preceding rows from
@@ -209,7 +208,7 @@
 
 #metadataLinkContainer {
   padding: 0.4em 2em 0.8em;
-  text-align: right;
+  text-align: left;
 }
 
 .invoke-recall-controls {
@@ -217,6 +216,18 @@
   gap: 12px;
   margin: 2px 0 4px 0;
   align-items: center;
+}
+
+/* Capability gating (see invoke-capabilities.js): every recall button stays
+   hidden until the backend confirms the configured InvokeAI instance
+   supports the recall API; the Append button additionally requires the
+   append option, which older backends would silently treat as replace. */
+body:not(.invoke-recall-supported) .invoke-recall-controls {
+  display: none;
+}
+
+body:not(.invoke-append-supported) .invoke-recall-btn[data-recall-mode="append_ref"] {
+  display: none;
 }
 
 .invoke-recall-btn {

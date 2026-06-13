@@ -313,6 +313,80 @@ def test_use_ref_image_uploads_then_calls_recall_without_strict(
     }
 
 
+def test_use_ref_image_append_passes_append_param(
+    client, clear_invokeai_config, monkeypatch, tmp_path
+):
+    """``append: true`` must reach the recall call as ``?append=true`` so
+    InvokeAI adds to its reference-image list instead of replacing it."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+
+    image_file = tmp_path / "pic.png"
+    image_file.write_bytes(b"\x89PNG\r\n\x1a\nfakebytes")
+
+    from photomap.backend.routers import invoke as invoke_module
+
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: image_file
+    )
+    monkeypatch.setattr(
+        invoke_module, "_load_raw_metadata", lambda album_key, index: {}
+    )
+
+    calls: list[dict] = []
+
+    class _UploadResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"image_name": "uploaded-abc.png"}
+
+    class _RecallResponse:
+        status_code = 200
+        text = "{}"
+
+        def json(self):
+            return {"status": "success"}
+
+    class _StubClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, **kwargs):
+            call = {"url": url, "params": kwargs.get("params")}
+            if "files" in kwargs:
+                call["kind"] = "upload"
+                kwargs["files"]["file"][1].read()
+                calls.append(call)
+                return _UploadResponse()
+            call["kind"] = "recall"
+            call["json"] = kwargs.get("json")
+            calls.append(call)
+            return _RecallResponse()
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+
+    response = client.post(
+        "/invokeai/use_ref_image",
+        json={"album_key": "any", "index": 0, "append": True},
+    )
+    assert response.status_code == 200, response.text
+
+    assert len(calls) == 2
+    # The upload is unaffected by append mode.
+    assert calls[0]["kind"] == "upload"
+    assert "append" not in (calls[0]["params"] or {})
+    # The recall carries append=true and still no strict.
+    assert calls[1]["kind"] == "recall"
+    assert calls[1]["params"] == {"append": "true"}
+
+
 def test_use_ref_image_upload_failure_returns_502(
     client, clear_invokeai_config, monkeypatch, tmp_path
 ):
@@ -1677,3 +1751,227 @@ def test_probe_boards_never_pairs_settings_password_with_other_username(
     # Exactly one upstream call: the boards GET. No login was attempted.
     assert len(stub.calls) == 1
     assert stub.calls[0]["url"].endswith("/api/v1/boards/")
+
+
+# ---------------------------------------------------------------------------
+# GET /invokeai/capabilities — feature detection for the recall buttons
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def clear_caps_cache():
+    """Wipe the module-level capabilities cache before and after each test."""
+    from photomap.backend.routers import invoke as invoke_module
+
+    invoke_module._invalidate_capabilities_cache()
+    yield
+    invoke_module._invalidate_capabilities_cache()
+
+
+def _openapi_spec(recall: bool, append: bool) -> dict:
+    """Build a minimal OpenAPI document advertising the recall endpoint."""
+    if not recall:
+        return {"paths": {"/api/v1/images/upload": {"post": {}}}}
+    params = [
+        {"name": "queue_id", "in": "path"},
+        {"name": "strict", "in": "query"},
+    ]
+    if append:
+        params.append({"name": "append", "in": "query"})
+    return {"paths": {"/api/v1/recall/{queue_id}": {"post": {"parameters": params}}}}
+
+
+def _install_caps_stub(
+    monkeypatch,
+    *,
+    openapi: dict | None = None,
+    version: str | None = None,
+    network_error: bool = False,
+) -> list[str]:
+    """Stub httpx.AsyncClient for the capability probe.
+
+    ``openapi=None`` serves a 404 for /openapi.json (forcing the version
+    fallback); ``version=None`` 404s the version endpoint too.  Returns the
+    list of probed URLs so tests can assert caching behaviour.
+    """
+    from photomap.backend.routers import invoke as invoke_module
+
+    calls: list[str] = []
+
+    class _Resp:
+        def __init__(self, status_code: int, payload):
+            self.status_code = status_code
+            self._payload = payload
+            self.text = ""
+
+        def json(self):
+            if self._payload is None:
+                raise ValueError("no JSON body")
+            return self._payload
+
+    class _StubClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, **kwargs):
+            calls.append(url)
+            if network_error:
+                raise httpx.ConnectError("probe refused")
+            if url.endswith("/openapi.json"):
+                if openapi is None:
+                    return _Resp(404, None)
+                return _Resp(200, openapi)
+            if url.endswith("/api/v1/app/version"):
+                if version is None:
+                    return _Resp(404, None)
+                return _Resp(200, {"version": version})
+            return _Resp(404, None)
+
+    monkeypatch.setattr(invoke_module.httpx, "AsyncClient", _StubClient)
+    return calls
+
+
+def test_capabilities_unconfigured(client, clear_invokeai_config, clear_caps_cache):
+    response = client.get("/invokeai/capabilities")
+    assert response.status_code == 200
+    assert response.json() == {
+        "configured": False,
+        "reachable": False,
+        "recall": False,
+        "append": False,
+    }
+
+
+def test_capabilities_openapi_recall_and_append(
+    client, clear_invokeai_config, clear_caps_cache, monkeypatch
+):
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    _install_caps_stub(monkeypatch, openapi=_openapi_spec(recall=True, append=True))
+
+    body = client.get("/invokeai/capabilities").json()
+    assert body["configured"] is True
+    assert body["reachable"] is True
+    assert body["recall"] is True
+    assert body["append"] is True
+    assert body["source"] == "openapi"
+
+
+def test_capabilities_openapi_recall_without_append(
+    client, clear_invokeai_config, clear_caps_cache, monkeypatch
+):
+    """A 6.13.0-era backend: recall route present, no append query param."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    _install_caps_stub(monkeypatch, openapi=_openapi_spec(recall=True, append=False))
+
+    body = client.get("/invokeai/capabilities").json()
+    assert body["recall"] is True
+    assert body["append"] is False
+    assert body["source"] == "openapi"
+
+
+def test_capabilities_openapi_without_recall_route(
+    client, clear_invokeai_config, clear_caps_cache, monkeypatch
+):
+    """A pre-6.13 backend: reachable, but no recall router at all."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    _install_caps_stub(monkeypatch, openapi=_openapi_spec(recall=False, append=False))
+
+    body = client.get("/invokeai/capabilities").json()
+    assert body["reachable"] is True
+    assert body["recall"] is False
+    assert body["append"] is False
+
+
+@pytest.mark.parametrize(
+    ("version", "recall", "append"),
+    [
+        ("6.12.9", False, False),
+        ("6.13.0.post1", True, False),
+        ("6.13.4", True, False),
+        ("6.13.5", True, True),
+        ("6.14.0.dev5+g1a2b3c", True, True),
+    ],
+)
+def test_capabilities_version_fallback(
+    client, clear_invokeai_config, clear_caps_cache, monkeypatch, version, recall, append
+):
+    """When /openapi.json is unavailable, fall back to version thresholds."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    _install_caps_stub(monkeypatch, openapi=None, version=version)
+
+    body = client.get("/invokeai/capabilities").json()
+    assert body["source"] == "version"
+    assert body["recall"] is recall
+    assert body["append"] is append
+
+
+def test_capabilities_unreachable_backend(
+    client, clear_invokeai_config, clear_caps_cache, monkeypatch
+):
+    """A backend that's down yields no capabilities — buttons stay hidden."""
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    _install_caps_stub(monkeypatch, network_error=True)
+
+    body = client.get("/invokeai/capabilities").json()
+    assert body == {
+        "configured": True,
+        "reachable": False,
+        "recall": False,
+        "append": False,
+        "source": "unreachable",
+    }
+
+
+def test_capabilities_cached_until_refresh(
+    client, clear_invokeai_config, clear_caps_cache, monkeypatch
+):
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    calls = _install_caps_stub(monkeypatch, openapi=_openapi_spec(recall=True, append=True))
+
+    client.get("/invokeai/capabilities")
+    probes_after_first = len(calls)
+    client.get("/invokeai/capabilities")
+    assert len(calls) == probes_after_first  # served from cache
+
+    client.get("/invokeai/capabilities?refresh=true")
+    assert len(calls) > probes_after_first  # forced re-probe
+
+
+def test_capabilities_cache_invalidated_by_config_change(
+    client, clear_invokeai_config, clear_caps_cache, monkeypatch
+):
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    calls = _install_caps_stub(monkeypatch, openapi=_openapi_spec(recall=True, append=True))
+
+    client.get("/invokeai/capabilities")
+    probes_after_first = len(calls)
+
+    # Saving settings (even the same URL) must drop the cache: the user may
+    # have just pointed PhotoMap at an upgraded backend.
+    client.post("/invokeai/config", json={"url": "http://localhost:9090"})
+    client.get("/invokeai/capabilities")
+    assert len(calls) > probes_after_first
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("6.13.0", (6, 13, 0)),
+        ("6.13.0.post1", (6, 13, 0)),
+        ("6.14.0.dev5+g1a2b3c", (6, 14, 0)),
+        ("6.13.5rc1", (6, 13, 5)),
+        (" 6.13.5 ", (6, 13, 5)),
+        ("garbage", None),
+        ("", None),
+    ],
+)
+def test_parse_version_tuple(raw, expected):
+    from photomap.backend.routers.invoke import _parse_version_tuple
+
+    assert _parse_version_tuple(raw) == expected
