@@ -1083,8 +1083,9 @@ class TestFormatInvokeRecallButtons:
         assert 'data-recall-mode="remix"' in html
         assert 'data-recall-mode="use_ref"' in html
         assert 'data-recall-mode="append_ref"' in html
-        assert "Send to InvokeAI" in html
-        assert "Append to InvokeAI" in html
+        assert 'class="invoke-recall-heading">InvokeAI</th>' in html
+        assert "Send Image" in html
+        assert "Append Image" in html
         assert html.count('class="invoke-recall-btn"') == 4
 
     def test_scalar_only_metadata_appends_use_ref_button_when_enabled(self):
@@ -1158,6 +1159,7 @@ class TestFormatInvokeRecallButtons:
         assert 'class="invoke-recall-controls"' in html
         assert 'data-recall-mode="use_ref"' in html
         assert 'data-recall-mode="append_ref"' in html
-        assert "Send to InvokeAI" in html
-        assert "Append to InvokeAI" in html
+        assert 'class="invoke-recall-heading">InvokeAI</th>' in html
+        assert "Send Image" in html
+        assert "Append Image" in html
         assert html.count('class="invoke-recall-btn"') == 2

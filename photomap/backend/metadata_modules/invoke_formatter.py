@@ -103,7 +103,7 @@ _APPEND_REF_SVG = (
 _USE_REF_BUTTON_HTML = (
     '<button type="button" class="invoke-recall-btn" data-recall-mode="use_ref" '
     'title="Upload this image to InvokeAI and use it as a reference image">'
-    f'{_USE_REF_SVG}<span class="invoke-recall-label">Send to InvokeAI</span>'
+    f'{_USE_REF_SVG}<span class="invoke-recall-label">Send Image</span>'
     '<span class="invoke-recall-status" aria-live="polite"></span>'
     "</button>"
 )
@@ -114,16 +114,33 @@ _USE_REF_BUTTON_HTML = (
 _APPEND_REF_BUTTON_HTML = (
     '<button type="button" class="invoke-recall-btn" data-recall-mode="append_ref" '
     'title="Upload this image to InvokeAI and append it to the existing reference images">'
-    f'{_APPEND_REF_SVG}<span class="invoke-recall-label">Append to InvokeAI</span>'
+    f'{_APPEND_REF_SVG}<span class="invoke-recall-label">Append Image</span>'
     '<span class="invoke-recall-status" aria-live="polite"></span>'
     "</button>"
 )
 
 
+def _recall_controls_table(buttons_html: str) -> str:
+    """Wrap a set of recall buttons in a two-row table styled like the Image
+    Details table: an "InvokeAI" header row above a row holding the buttons.
+
+    The whole table carries the ``invoke-recall-controls`` class so the
+    capability gating in ``invoke-capabilities.js`` can hide it wholesale when
+    no InvokeAI backend is configured. It deliberately does *not* reuse the
+    ``invoke-metadata`` class (which the drawer's "Path" row injection targets);
+    its styling is mirrored in CSS instead.
+    """
+    return (
+        '<table class="invoke-recall-controls" data-invoke-recall="1">'
+        '<tr><th class="invoke-recall-heading">InvokeAI</th></tr>'
+        f'<tr><td><div class="invoke-recall-buttons">{buttons_html}</div></td></tr>'
+        "</table>"
+    )
+
+
 def _recall_buttons_html() -> str:
     """Render the recall / remix / use-ref button group shown at the bottom of the drawer."""
-    return (
-        '<div class="invoke-recall-controls" data-invoke-recall="1">'
+    return _recall_controls_table(
         f"{_USE_REF_BUTTON_HTML}"
         f"{_APPEND_REF_BUTTON_HTML}"
         '<button type="button" class="invoke-recall-btn" data-recall-mode="remix" '
@@ -136,7 +153,6 @@ def _recall_buttons_html() -> str:
         f'{_RECALL_SVG}<span class="invoke-recall-label">Recall</span>'
         '<span class="invoke-recall-status" aria-live="polite"></span>'
         "</button>"
-        "</div>"
     )
 
 
@@ -148,11 +164,8 @@ def use_ref_button_html() -> str:
     so it is appended to non-Invoke metadata views as well, whenever an
     InvokeAI backend is configured.
     """
-    return (
-        '<div class="invoke-recall-controls" data-invoke-recall="1">'
-        f"{_USE_REF_BUTTON_HTML}"
-        f"{_APPEND_REF_BUTTON_HTML}"
-        "</div>"
+    return _recall_controls_table(
+        f"{_USE_REF_BUTTON_HTML}{_APPEND_REF_BUTTON_HTML}"
     )
 
 
