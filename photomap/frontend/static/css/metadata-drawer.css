@@ -211,11 +211,39 @@
   text-align: left;
 }
 
+/* The recall controls are a two-row table styled to match the Image Details
+   table (.invoke-metadata): an "InvokeAI" header row above a row of buttons.
+   The borders/width/padding are mirrored here rather than via the shared class
+   because the drawer's "Path" row injection targets .invoke-metadata. The
+   table is relocated out of #descriptionText (see metadata-drawer.js), so the
+   foreground color the field headers inherit (#ccc) is set explicitly. */
 .invoke-recall-controls {
+  border-collapse: collapse;
+  border: 1px solid #bbb;
+  width: 100%;
+  margin: 0.5em 0 4px;
+}
+
+.invoke-recall-controls th,
+.invoke-recall-controls td {
+  border: 1px solid #555;
+  padding: 6px 10px;
+}
+
+/* Header cell ("InvokeAI"): bold and left-aligned to match the Image Details
+   field headers (e.g. "Path"). */
+.invoke-recall-heading {
+  color: #ccc;
+  font-weight: bold;
+  text-align: left;
+}
+
+/* The button row itself: lay the buttons out horizontally inside the cell. */
+.invoke-recall-buttons {
   display: flex;
   gap: 12px;
-  margin: 2px 0 4px 0;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 /* Capability gating (see invoke-capabilities.js): every recall button stays
