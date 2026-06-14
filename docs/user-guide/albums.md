@@ -4,7 +4,7 @@ PhotoMapAI allows you to organize your photos and other images into a series of 
 
 ## Adding Albums
 
-Bring up the Album Manager by clicking on the **Settings** gear icon and then the green <span class="green-button-text">Manage Albums</span>> button.
+Bring up the Album Manager by clicking on the **Settings** gear icon and then the blue <span class="blue-button-text">Manage Albums</span> button.
 
 <img src="../../img/photomap_settings.png" width="640">
 
@@ -15,7 +15,9 @@ The Album Management dialogue provides you with controls for creating new albums
   <img src="../../img/photomap_album_overview_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
 </div>
 
-To add an album, press the green <span class="green-button-text">Add Album</span> button. This will add a new section to the dialogue window that prompts you to enter the following fields:
+To add an album, press the green <span class="green-button-text">Add
+Album</span> button. This will add a new section to the dialogue
+window that prompts you to enter the following fields:
 
 - **Album Key** - This is a short mnemonic text that is used to uniquely identify the album. You can add it to PhotoMapAI's URL in order to go directly to the album of your choice, so it is best to avoid spaces and symbols. Once the key is assigned, you can't change it.
 - **Display Name** - This is the name of the album that will be displayed in the settings Album popup menu and the browser tab window title.
@@ -28,6 +30,13 @@ To add an album, press the green <span class="green-button-text">Add Album</span
 At least one image folder needs to be defined. You can type the path in manually, or browse the filesystem for a folder by clicking on the folder icon to the right of the image folder field. Each time you enter a path, a new empty field will appear, allowing you to add additional folders to the album. You can remove a previously-entered folder by clicking a trash icon that appears next to it.
 
 You are free to organize your image files in any way you wish. You can dump them into a single big folder, or organize them into multiple nested subfolders. During indexing, PhotoMapAI will traverse the folder structure and identify all image files of type JPEG, PNG, TIFF, HEIF, and HEIC.
+
+### InvokeAI-Backed Albums
+
+If you have configured PhotoMapAI to communicate with an
+[InvokeAI](https://invoke.ai) backend, then you will see additional
+configuration options that allow you to index images directly from an
+InvokeAI image gallery. See [InvokeAI Integration](../invokeai-integration/) for more information.
 
 ## Indexing Albums
 
