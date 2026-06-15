@@ -34,7 +34,7 @@
         <input id="newAlbumDescription" type="text" placeholder="Optional description" />
       </div>
 
-      <div class="form-group">
+      <div class="form-group" id="newAlbumSourceGroup" hidden>
         <label>Album Source</label>
         <div class="album-source-radios">
           <label class="radio-label">
@@ -166,19 +166,9 @@
           <input class="edit-album-description" type="text" />
         </div>
       </div>
-      <div class="form-group">
-        <label>Album Source</label>
-        <div class="album-source-radios">
-          <label class="radio-label">
-            <input type="radio" class="edit-album-source-radio" value="directory" disabled />
-            Directory of Image Files
-          </label>
-          <label class="radio-label">
-            <input type="radio" class="edit-album-source-radio" value="invokeai_board" disabled />
-            An InvokeAI Image Gallery Board
-          </label>
-        </div>
-        <small class="form-hint"> An album's source type cannot be changed after creation. </small>
+      <div class="form-group edit-album-source-group" hidden>
+        <label>Album Source: <span class="edit-album-source-display"></span></label>
+        <small class="form-hint"> An album's source cannot be changed after creation. </small>
       </div>
       <div class="form-group edit-album-directory-section">
         <label>Image Folder(s)</label>
