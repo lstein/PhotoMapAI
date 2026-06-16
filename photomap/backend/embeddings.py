@@ -534,13 +534,25 @@ class Embeddings(BaseModel):
             )
         elif isinstance(image_paths_or_dir, list):
             images = []
+            skipped_too_small = 0
             for p in image_paths_or_dir:
                 if p.is_dir():
                     images.extend(
                         self.get_image_files_from_directory(p, exts, progress_callback)
                     )
-                elif p.suffix.lower() in exts and self._passes_dimension_gate(p):
-                    images.append(p)
+                elif p.suffix.lower() in exts:
+                    if self._passes_dimension_gate(p):
+                        images.append(p)
+                    else:
+                        skipped_too_small += 1
+            # Mirror the directory-scan path: an explicit file list (e.g. an
+            # InvokeAI board album) silently dropped sub-threshold/unreadable
+            # images, which made indexed-vs-source count mismatches a mystery.
+            if skipped_too_small:
+                logger.info(
+                    f"Skipped {skipped_too_small} image(s) under "
+                    f"{self.min_image_dimension}px in either dimension."
+                )
         else:
             raise ValueError("Input must be a Path object or a list of Paths.")
         return images

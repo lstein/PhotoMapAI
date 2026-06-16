@@ -109,3 +109,56 @@ describe("AlbumManager downloading phase", () => {
     expect(status.textContent).not.toContain("(1024/4096)");
   });
 });
+
+describe("AlbumManager completed status", () => {
+  test("shows a plain success message when there is no warning", () => {
+    const { status, estimatedTime } = makeElements();
+
+    callUpdate(status, { status: "completed" }, estimatedTime);
+
+    expect(status.textContent).toBe("Indexing completed successfully");
+    expect(status.className).toBe(AlbumManager.STATUS_CLASSES.COMPLETED);
+    expect(status.style.color).toBe("green");
+  });
+
+  test("surfaces a non-fatal warning_message alongside completion", () => {
+    const { status, estimatedTime } = makeElements();
+
+    callUpdate(
+      status,
+      {
+        status: "completed",
+        warning_message: "2 of 242 image(s) listed by InvokeAI were not found on disk and were skipped.",
+      },
+      estimatedTime
+    );
+
+    expect(status.textContent).toContain("Indexing completed");
+    expect(status.textContent).toContain("not found on disk");
+    expect(status.className).toBe(AlbumManager.STATUS_CLASSES.COMPLETED);
+    // Completion-with-a-caveat is coloured differently from a clean success.
+    expect(status.style.color).not.toBe("green");
+  });
+});
+
+describe("AlbumManager persistent index warning note", () => {
+  test("appends a note element when a warning is stored for the album", () => {
+    const manager = { indexWarnings: new Map([["alb", "2 images skipped"]]) };
+    const status = document.createElement("span");
+
+    AlbumManager.prototype._appendIndexWarningNote.call(manager, status, "alb");
+
+    const note = status.querySelector(".index-status-warning");
+    expect(note).not.toBeNull();
+    expect(note.textContent).toBe("2 images skipped");
+  });
+
+  test("does nothing when no warning is stored", () => {
+    const manager = { indexWarnings: new Map() };
+    const status = document.createElement("span");
+
+    AlbumManager.prototype._appendIndexWarningNote.call(manager, status, "alb");
+
+    expect(status.querySelector(".index-status-warning")).toBeNull();
+  });
+});

@@ -39,6 +39,10 @@ class ProgressInfo:
     total_images: int
     start_time: float
     error_message: str | None = None
+    # Non-fatal notice shown alongside a COMPLETED status (e.g. "2 images
+    # listed by InvokeAI were not found on disk and were skipped"). Distinct
+    # from ``error_message``, which marks the run as failed.
+    warning_message: str | None = None
 
     @property
     def progress_percentage(self) -> float:
@@ -77,6 +81,12 @@ class ProgressTracker:
         # pass, instead of running to completion only to have the status
         # flipped to ERROR after.
         self._cancel_requested: set[str] = set()
+        # Pending non-fatal notices, set before/while a run is in flight and
+        # folded into the ProgressInfo when the run completes (see
+        # ``complete_operation``). Kept separate from ``_progress`` because the
+        # per-phase ``start_operation`` calls recreate ProgressInfo and would
+        # otherwise wipe a warning recorded earlier in the same run.
+        self._completion_warnings: dict[str, str] = {}
         self._lock = threading.Lock()
 
     def start_operation(self, album_key: str, total_images: int, operation_type: str):
@@ -168,6 +178,21 @@ class ProgressTracker:
                 progress.status = IndexStatus.ERROR
                 progress.error_message = error_message
 
+    def set_completion_warning(self, album_key: str, message: str | None) -> None:
+        """Record (or clear) a non-fatal notice to attach when the run completes.
+
+        Called before indexing starts — e.g. once a board album's missing-on-disk
+        count is known — so it survives the per-phase ``start_operation`` resets
+        and is folded in atomically by ``complete_operation``. A falsy
+        ``message`` clears any pending notice so a clean re-run doesn't inherit
+        a stale one.
+        """
+        with self._lock:
+            if message:
+                self._completion_warnings[album_key] = message
+            else:
+                self._completion_warnings.pop(album_key, None)
+
     def get_progress(self, album_key: str) -> ProgressInfo | None:
         """Get progress info for an album."""
         with self._lock:
@@ -178,6 +203,7 @@ class ProgressTracker:
         with self._lock:
             self._progress.pop(album_key, None)
             self._cancel_requested.discard(album_key)
+            self._completion_warnings.pop(album_key, None)
 
     def request_cancel(self, album_key: str) -> None:
         """Signal the indexing loop to stop on its next batch boundary.
@@ -217,6 +243,11 @@ class ProgressTracker:
                 progress.status = IndexStatus.COMPLETED
                 progress.current_step = message
                 progress.images_processed = progress.total_images
+                # Fold in (and consume) any pending non-fatal notice so it
+                # lands atomically with the COMPLETED status the poller reads.
+                progress.warning_message = self._completion_warnings.pop(
+                    album_key, None
+                )
 
 
 # Global instance

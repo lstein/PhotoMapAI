@@ -356,6 +356,7 @@ describe("AlbumManager indexing-progress robustness", () => {
       const detachedCard = document.createElement("div");
       const manager = {
         progressPollers: new Map(),
+        indexWarnings: new Map(),
         _liveCardFor: AlbumManager.prototype._liveCardFor,
         updateProgress: jest.fn(),
         handleIndexingCompletion: jest.fn(),

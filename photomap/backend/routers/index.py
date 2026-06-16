@@ -42,6 +42,7 @@ class ProgressResponse(BaseModel):
     elapsed_time: float
     estimated_time_remaining: float | None
     error_message: str | None = None
+    warning_message: str | None = None
 
 
 class UpdateIndexRequest(BaseModel):
@@ -188,6 +189,7 @@ async def get_index_progress(
             elapsed_time=progress.elapsed_time,
             estimated_time_remaining=progress.estimated_time_remaining,
             error_message=progress.error_message,
+            warning_message=progress.warning_message,
         )
 
     except HTTPException:
@@ -500,7 +502,7 @@ async def copy_images(
         raise HTTPException(status_code=500, detail=f"Failed to copy images: {str(e)}") from e
 
 
-async def _resolve_board_album_files(album_config) -> list[Path]:
+async def _resolve_board_album_files(album_config) -> tuple[list[Path], int]:
     """Resolve an InvokeAI-board album's images to local file paths.
 
     Fetches the selected boards' image names from the InvokeAI API and maps
@@ -508,6 +510,10 @@ async def _resolve_board_album_files(album_config) -> list[Path]:
     but that don't exist locally are skipped with a warning; if *none* of
     them exist the InvokeAI root is almost certainly wrong, which deserves
     a pointed error instead of a generic "no images found".
+
+    Returns the existing files plus the count of listed-but-missing ones, so
+    the caller can surface that discrepancy to the user (the InvokeAI gallery
+    will show a higher total than the album indexes).
     """
     names = await invokeai_client.fetch_board_image_names(
         album_config.invokeai_url,
@@ -531,7 +537,7 @@ async def _resolve_board_album_files(album_config) -> list[Path]:
         logger.warning(
             f"{missing} of {len(paths)} board images not found under {images_dir}; skipping them."
         )
-    return existing
+    return existing, missing
 
 
 # Background Tasks
@@ -540,7 +546,7 @@ async def _update_index_background_async(album_key: str, album_config):
     try:
         if getattr(album_config, "source_type", "directory") == "invokeai_board":
             try:
-                image_paths = await _resolve_board_album_files(album_config)
+                image_paths, missing = await _resolve_board_album_files(album_config)
             except HTTPException as e:
                 progress_tracker.set_error(
                     album_key,
@@ -553,6 +559,18 @@ async def _update_index_background_async(album_key: str, album_config):
                     album_key, "Selected InvokeAI board(s) contain no images"
                 )
                 return
+            # Surface the gallery-vs-indexed discrepancy (always set so a clean
+            # re-run clears any stale notice). Folded into the COMPLETED status
+            # by progress_tracker.complete_operation.
+            if missing:
+                total = len(image_paths) + missing
+                progress_tracker.set_completion_warning(
+                    album_key,
+                    f"{missing} of {total} image(s) listed by InvokeAI were not "
+                    f"found on disk and were skipped.",
+                )
+            else:
+                progress_tracker.set_completion_warning(album_key, None)
         else:
             image_paths = [Path(path) for path in album_config.image_paths]
         index_path = Path(album_config.index)
