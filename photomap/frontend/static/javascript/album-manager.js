@@ -125,6 +125,10 @@ export class AlbumManager {
     this.progressPollers = new Map();
     this.isSetupMode = false;
     this.autoIndexingAlbums = new Set();
+    // Per-album non-fatal indexing notice (e.g. board images missing on disk),
+    // captured from the completing progress poll so it can persist on the card
+    // status after the transient progress UI is gone.
+    this.indexWarnings = new Map();
 
     this.initializeEventListeners();
   }
@@ -994,6 +998,7 @@ export class AlbumManager {
         status.textContent = `Index updated ${modDate} (${fileCount} images)`;
         status.style.color = "green";
         createBtn.textContent = "Update Index";
+        this._appendIndexWarningNote(status, album.key);
       } else {
         status.className = "index-status";
         status.textContent = "No index present";
@@ -1006,6 +1011,22 @@ export class AlbumManager {
       status.style.color = "red";
       createBtn.textContent = "Create Index";
     }
+  }
+
+  // Append the most recent non-fatal indexing notice (if any) under the card's
+  // index-status line, so a "N images skipped" warning persists after the
+  // transient progress UI is gone.
+  _appendIndexWarningNote(statusElement, albumKey) {
+    const warning = this.indexWarnings.get(albumKey);
+    if (!warning) {
+      return;
+    }
+    const note = document.createElement("div");
+    note.className = "index-status-warning";
+    note.textContent = warning;
+    note.style.color = "#ff9800";
+    note.style.fontSize = "0.9em";
+    statusElement.appendChild(note);
   }
 
   attachCardEventListeners(card, cardElement, album) {
@@ -1593,6 +1614,8 @@ export class AlbumManager {
       console.log(`Already polling progress for album: ${albumKey}`);
       return;
     }
+    // Drop any notice from a previous run before this one can record its own.
+    this.indexWarnings.delete(albumKey);
 
     const interval = setInterval(async () => {
       try {
@@ -1606,6 +1629,7 @@ export class AlbumManager {
           this.progressPollers.delete(albumKey);
 
           if (progress.status === "completed") {
+            this.indexWarnings.set(albumKey, progress.warning_message || null);
             await this.handleIndexingCompletion(albumKey, liveCard);
           }
 
@@ -1728,8 +1752,13 @@ export class AlbumManager {
   updateProgressStatus(status, progress, estimatedTime) {
     if (progress.status === "completed") {
       status.className = AlbumManager.STATUS_CLASSES.COMPLETED;
-      status.textContent = "Indexing completed successfully";
-      status.style.color = "green";
+      if (progress.warning_message) {
+        status.textContent = `Indexing completed — ${progress.warning_message}`;
+        status.style.color = "#ff9800"; // Orange: completed, but with a caveat
+      } else {
+        status.textContent = "Indexing completed successfully";
+        status.style.color = "green";
+      }
       estimatedTime.textContent = "";
     } else if (progress.status === "error") {
       status.className = AlbumManager.STATUS_CLASSES.ERROR;

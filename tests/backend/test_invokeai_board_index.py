@@ -108,6 +108,34 @@ def test_board_album_index_contains_board_images(client, board_album):
     )
 
 
+def test_missing_board_images_surface_completion_warning(client, board_album):
+    """A board name InvokeAI lists but that's absent on disk is skipped, and the
+    discrepancy is surfaced as a non-fatal warning on the completed run (the
+    InvokeAI gallery shows a higher count than the album indexes)."""
+    # 4 real images + 1 ghost that has no file under outputs/images.
+    ghost = f"{uuid.uuid4()}.png"
+    board_album["boards"]["b1"].append(ghost)
+
+    _build_index(client)
+
+    progress = client.get(f"/index_progress/{ALBUM_KEY}").json()
+    assert progress["status"] == "completed"
+    assert progress["warning_message"]
+    assert "1 of 5" in progress["warning_message"]
+    # The real images still index; only the ghost is dropped.
+    metadata = client.get(f"/index_metadata/{ALBUM_KEY}").json()
+    assert metadata["filename_count"] == 4
+
+
+def test_complete_board_index_has_no_warning(client, board_album):
+    """When every listed image exists, the completed run carries no warning."""
+    _build_index(client)
+
+    progress = client.get(f"/index_progress/{ALBUM_KEY}").json()
+    assert progress["status"] == "completed"
+    assert progress["warning_message"] is None
+
+
 def test_board_membership_changes_flow_through_update(client, board_album):
     _build_index(client)
 

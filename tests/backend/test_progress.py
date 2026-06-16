@@ -95,3 +95,44 @@ def test_is_running_includes_downloading():
 
     # A download is an active operation, so a duplicate index must stay blocked.
     assert tracker.is_running("alb") is True
+
+
+def test_completion_warning_folds_into_completed_status():
+    tracker = ProgressTracker()
+    # Recorded before the run starts (as the board resolver does).
+    tracker.set_completion_warning("alb", "2 images skipped")
+    tracker.start_operation("alb", total_images=5, operation_type="indexing")
+
+    tracker.complete_operation("alb", "done")
+
+    progress = tracker.get_progress("alb")
+    assert progress is not None
+    assert progress.status is IndexStatus.COMPLETED
+    assert progress.warning_message == "2 images skipped"
+
+
+def test_completion_warning_survives_phase_restarts_then_clears_on_reuse():
+    tracker = ProgressTracker()
+    tracker.set_completion_warning("alb", "2 images skipped")
+    # The per-phase scanning -> indexing -> mapping restarts must not wipe it.
+    tracker.start_operation("alb", 0, "scanning")
+    tracker.start_operation("alb", 5, "indexing")
+    tracker.start_operation("alb", 5, "mapping")
+    tracker.complete_operation("alb")
+    assert tracker.get_progress("alb").warning_message == "2 images skipped"
+
+    # The notice was consumed at completion, so a clean re-run doesn't inherit it.
+    tracker.start_operation("alb", 5, "indexing")
+    tracker.complete_operation("alb")
+    assert tracker.get_progress("alb").warning_message is None
+
+
+def test_set_completion_warning_none_clears_pending():
+    tracker = ProgressTracker()
+    tracker.set_completion_warning("alb", "stale")
+    tracker.set_completion_warning("alb", None)
+    tracker.start_operation("alb", 5, "indexing")
+
+    tracker.complete_operation("alb")
+
+    assert tracker.get_progress("alb").warning_message is None
