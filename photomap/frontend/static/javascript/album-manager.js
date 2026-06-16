@@ -110,6 +110,7 @@ export class AlbumManager {
       slideshowTitle: document.getElementById("slideshow_title"),
       albumManagementContent: document.querySelector("#albumManagementContent"),
       // InvokeAI board-album source controls (add form)
+      newAlbumSourceGroup: document.getElementById("newAlbumSourceGroup"),
       newAlbumDirectorySection: document.getElementById("newAlbumDirectorySection"),
       newAlbumInvokeAISection: document.getElementById("newAlbumInvokeAISection"),
       newAlbumInvokeUrl: document.getElementById("newAlbumInvokeUrl"),
@@ -327,6 +328,16 @@ export class AlbumManager {
     return checked ? checked.value : "directory";
   }
 
+  // Whether a global InvokeAI backend URL is configured in settings.
+  async _isInvokeAIConfigured() {
+    try {
+      const config = await fetchJson("invokeai/config");
+      return !!(config.url && config.url.trim());
+    } catch {
+      return false;
+    }
+  }
+
   setupNewAlbumSourceControls() {
     document.querySelectorAll('input[name="newAlbumSourceType"]').forEach((radio) => {
       radio.addEventListener("change", () => this.toggleNewAlbumSourceSections());
@@ -367,6 +378,22 @@ export class AlbumManager {
     }
     if (this.elements.newAlbumInvokeAISection) {
       this.elements.newAlbumInvokeAISection.hidden = !isBoard;
+    }
+  }
+
+  // Show or hide the album-source chooser based on whether a global InvokeAI
+  // backend is configured. With no backend the board option is meaningless, so
+  // we hide the radios and force the directory source.
+  _setNewAlbumInvokeAvailable(available) {
+    if (this.elements.newAlbumSourceGroup) {
+      this.elements.newAlbumSourceGroup.hidden = !available;
+    }
+    if (!available) {
+      const directoryRadio = document.querySelector('input[name="newAlbumSourceType"][value="directory"]');
+      if (directoryRadio) {
+        directoryRadio.checked = true;
+      }
+      this.toggleNewAlbumSourceSections();
     }
   }
 
@@ -503,10 +530,12 @@ export class AlbumManager {
     // Prefill the URL — and surface the credential fallback — from the
     // global InvokeAI settings when available.
     this._settingsInvokeDefaults = null;
+    let hasBackend = false;
     if (this.elements.newAlbumInvokeUrl) {
       this.elements.newAlbumInvokeUrl.value = "";
       try {
         const config = await fetchJson("invokeai/config");
+        hasBackend = !!(config.url && config.url.trim());
         if (config.url) {
           this.elements.newAlbumInvokeUrl.value = config.url;
         }
@@ -520,6 +549,8 @@ export class AlbumManager {
       }
       this._applySettingsCredentialDefaults();
     }
+    // The board-album option only makes sense with a configured backend.
+    this._setNewAlbumInvokeAvailable(hasBackend);
   }
 
   // The backend reuses the settings-panel credentials when the album form
@@ -1282,9 +1313,19 @@ export class AlbumManager {
 
     // Reflect the (immutable) source type and show the matching section
     const isBoardAlbum = album.source_type === "invokeai_board";
-    editForm.querySelectorAll(".edit-album-source-radio").forEach((radio) => {
-      radio.checked = radio.value === (album.source_type || "directory");
-    });
+    const sourceDisplay = editForm.querySelector(".edit-album-source-display");
+    if (sourceDisplay) {
+      sourceDisplay.textContent = isBoardAlbum ? "An InvokeAI Image Gallery Board" : "Directory of Image Files";
+    }
+    // Show the (immutable) source line only when an InvokeAI backend is
+    // configured — or when this album is itself a board album, so its type is
+    // never silently hidden.
+    const sourceGroup = editForm.querySelector(".edit-album-source-group");
+    if (sourceGroup) {
+      this._isInvokeAIConfigured().then((available) => {
+        sourceGroup.hidden = !(available || isBoardAlbum);
+      });
+    }
     const directorySection = editForm.querySelector(".edit-album-directory-section");
     const invokeSection = editForm.querySelector(".edit-album-invokeai-section");
     if (directorySection) {
@@ -1355,7 +1396,12 @@ export class AlbumManager {
     }
     this._createInvokeRootRow(editForm.querySelector(".edit-album-invoke-root-row"), album.invokeai_root || "");
 
-    const loadBoards = () =>
+    // preferredIds wins when given; otherwise fall back to the album's saved
+    // selection. The initial auto-load must pass the saved ids explicitly: it
+    // can't read them back from the DOM, because the placeholder render below
+    // only paints "Uncategorized" (board names are still unresolved), so a DOM
+    // scrape would collapse an "all boards" selection down to just ["none"].
+    const loadBoards = (preferredIds) =>
       this.connectAndLoadBoards({
         urlInput,
         usernameInput,
@@ -1363,15 +1409,14 @@ export class AlbumManager {
         authSection: null,
         hintElement,
         boardsContainer,
-        selectedIds: collectSelectedBoardIds(boardsContainer).length
-          ? collectSelectedBoardIds(boardsContainer)
-          : album.invokeai_board_ids || [],
+        selectedIds: preferredIds?.length ? preferredIds : album.invokeai_board_ids || [],
         albumKey: album.key,
       });
 
     const connectBtn = editForm.querySelector(".edit-album-invoke-connect-btn");
     if (connectBtn) {
-      connectBtn.onclick = loadBoards;
+      // Manual reconnect keeps whatever the user currently has checked.
+      connectBtn.onclick = () => loadBoards(collectSelectedBoardIds(boardsContainer));
     }
 
     // Show the saved selection immediately (board names unresolved until
@@ -1380,7 +1425,7 @@ export class AlbumManager {
       delete boardsContainer.dataset.loaded;
     }
     renderBoardChecklist(boardsContainer, [], album.invokeai_board_ids || []);
-    loadBoards();
+    loadBoards(album.invokeai_board_ids || []);
   }
 
   // Path field methods

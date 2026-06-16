@@ -221,6 +221,12 @@ describe("AlbumManager add-album payloads", () => {
 describe("AlbumManager settings-credential surfacing", () => {
   function makeInvokeSectionStub() {
     document.body.innerHTML = `
+      <div id="newAlbumSourceGroup" hidden>
+        <label><input type="radio" name="newAlbumSourceType" value="directory" /></label>
+        <label><input type="radio" name="newAlbumSourceType" value="invokeai_board" checked /></label>
+      </div>
+      <div id="newAlbumDirectorySection"></div>
+      <div id="newAlbumInvokeAISection"></div>
       <input id="newAlbumInvokeUrl" />
       <input id="newAlbumInvokeUsername" />
       <input id="newAlbumInvokePassword" />
@@ -231,6 +237,9 @@ describe("AlbumManager settings-credential surfacing", () => {
     `;
     const elements = {};
     [
+      "newAlbumSourceGroup",
+      "newAlbumDirectorySection",
+      "newAlbumInvokeAISection",
       "newAlbumInvokeUrl",
       "newAlbumInvokeUsername",
       "newAlbumInvokePassword",
@@ -246,6 +255,9 @@ describe("AlbumManager settings-credential surfacing", () => {
       _setInvokeHint: AlbumManager.prototype._setInvokeHint,
       _createInvokeRootRow: AlbumManager.prototype._createInvokeRootRow,
       _applySettingsCredentialDefaults: AlbumManager.prototype._applySettingsCredentialDefaults,
+      _setNewAlbumInvokeAvailable: AlbumManager.prototype._setNewAlbumInvokeAvailable,
+      getNewAlbumSourceType: AlbumManager.prototype.getNewAlbumSourceType,
+      toggleNewAlbumSourceSections: AlbumManager.prototype.toggleNewAlbumSourceSections,
       initializeNewAlbumInvokeSection: AlbumManager.prototype.initializeNewAlbumInvokeSection,
     };
   }
@@ -310,6 +322,25 @@ describe("AlbumManager settings-credential surfacing", () => {
     manager.elements.newAlbumInvokeUrl.value = "http://localhost:9090";
     manager._applySettingsCredentialDefaults();
     expect(manager.elements.newAlbumInvokeUsername.value).toBe("bob");
+  });
+
+  test("reveals the album-source chooser when a backend is configured", async () => {
+    const manager = makeInvokeSectionStub();
+    fetchJson.mockResolvedValue({ url: "http://localhost:9090", username: "", has_password: false, board_id: "" });
+
+    await manager.initializeNewAlbumInvokeSection();
+
+    expect(manager.elements.newAlbumSourceGroup.hidden).toBe(false);
+  });
+
+  test("hides the chooser and forces the directory source with no backend", async () => {
+    const manager = makeInvokeSectionStub();
+    fetchJson.mockResolvedValue({ url: "", username: "", has_password: false, board_id: "" });
+
+    await manager.initializeNewAlbumInvokeSection();
+
+    expect(manager.elements.newAlbumSourceGroup.hidden).toBe(true);
+    expect(document.querySelector('input[name="newAlbumSourceType"][value="directory"]').checked).toBe(true);
   });
 });
 
@@ -480,5 +511,90 @@ describe("AlbumManager edit-save payloads for board albums", () => {
     const payload = fetchJson.mock.calls[0][1].json;
     expect(payload.invokeai_board_ids).toEqual(["b1", "b2"]);
     expect(manager.send_update_index_event).not.toHaveBeenCalled();
+  });
+});
+
+describe("AlbumManager board-album edit form population", () => {
+  function buildBoardEditForm() {
+    document.body.innerHTML = `
+      <div class="edit-form">
+        <input class="edit-album-invoke-url" />
+        <input class="edit-album-invoke-username" />
+        <input class="edit-album-invoke-password" />
+        <small class="edit-album-invoke-status-hint"></small>
+        <div class="edit-album-invoke-root-row"></div>
+        <button class="edit-album-invoke-connect-btn"></button>
+        <div class="edit-album-invoke-boards" hidden></div>
+      </div>
+    `;
+    const form = document.querySelector(".edit-form");
+    // jsdom doesn't implement scrollIntoView, which connectAndLoadBoards calls.
+    form.querySelector(".edit-album-invoke-boards").scrollIntoView = () => {};
+    return form;
+  }
+
+  function makeStub() {
+    return {
+      connectAndLoadBoards: AlbumManager.prototype.connectAndLoadBoards,
+      populateBoardAlbumEditForm: AlbumManager.prototype.populateBoardAlbumEditForm,
+      _createInvokeRootRow: AlbumManager.prototype._createInvokeRootRow,
+      _setInvokeHint: AlbumManager.prototype._setInvokeHint,
+    };
+  }
+
+  const album = {
+    key: "board_album",
+    source_type: "invokeai_board",
+    invokeai_url: "http://localhost:9090",
+    invokeai_root: "/srv/invokeai",
+    // "all boards" selection — including Uncategorized ("none").
+    invokeai_board_ids: ["none", "b1", "b2"],
+    has_invokeai_password: true,
+  };
+
+  // Flush the async connectAndLoadBoards() chain populateBoardAlbumEditForm
+  // kicks off but doesn't await.
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  test("checks every saved board on reopen, even when Uncategorized is among them", async () => {
+    // Regression: the placeholder render only paints the (checked)
+    // Uncategorized box, so the auto-load must use the album's saved ids —
+    // not scrape the DOM, which would collapse the selection to just ["none"].
+    const editForm = buildBoardEditForm();
+    const manager = makeStub();
+    fetchJson.mockResolvedValueOnce({ reachable: true }).mockResolvedValueOnce([
+      { board_id: "b1", board_name: "Board One" },
+      { board_id: "b2", board_name: "Board Two" },
+    ]);
+
+    manager.populateBoardAlbumEditForm(editForm, album);
+    await flush();
+
+    const boardsContainer = editForm.querySelector(".edit-album-invoke-boards");
+    expect(collectSelectedBoardIds(boardsContainer)).toEqual(["none", "b1", "b2"]);
+  });
+
+  test("manual reconnect keeps the user's in-progress selection", async () => {
+    const editForm = buildBoardEditForm();
+    const manager = makeStub();
+    fetchJson.mockResolvedValueOnce({ reachable: true }).mockResolvedValueOnce([
+      { board_id: "b1", board_name: "Board One" },
+      { board_id: "b2", board_name: "Board Two" },
+    ]);
+
+    manager.populateBoardAlbumEditForm(editForm, album);
+    await flush();
+
+    const boardsContainer = editForm.querySelector(".edit-album-invoke-boards");
+    // User unchecks b2, then clicks "Connect & Load Boards" again.
+    boardsContainer.querySelector('.board-checkbox[value="b2"]').checked = false;
+    fetchJson.mockResolvedValueOnce({ reachable: true }).mockResolvedValueOnce([
+      { board_id: "b1", board_name: "Board One" },
+      { board_id: "b2", board_name: "Board Two" },
+    ]);
+    editForm.querySelector(".edit-album-invoke-connect-btn").click();
+    await flush();
+
+    expect(collectSelectedBoardIds(boardsContainer)).toEqual(["none", "b1"]);
   });
 });
