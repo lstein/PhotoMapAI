@@ -1375,7 +1375,12 @@ export class AlbumManager {
     }
     this._createInvokeRootRow(editForm.querySelector(".edit-album-invoke-root-row"), album.invokeai_root || "");
 
-    const loadBoards = () =>
+    // preferredIds wins when given; otherwise fall back to the album's saved
+    // selection. The initial auto-load must pass the saved ids explicitly: it
+    // can't read them back from the DOM, because the placeholder render below
+    // only paints "Uncategorized" (board names are still unresolved), so a DOM
+    // scrape would collapse an "all boards" selection down to just ["none"].
+    const loadBoards = (preferredIds) =>
       this.connectAndLoadBoards({
         urlInput,
         usernameInput,
@@ -1383,15 +1388,14 @@ export class AlbumManager {
         authSection: null,
         hintElement,
         boardsContainer,
-        selectedIds: collectSelectedBoardIds(boardsContainer).length
-          ? collectSelectedBoardIds(boardsContainer)
-          : album.invokeai_board_ids || [],
+        selectedIds: preferredIds?.length ? preferredIds : album.invokeai_board_ids || [],
         albumKey: album.key,
       });
 
     const connectBtn = editForm.querySelector(".edit-album-invoke-connect-btn");
     if (connectBtn) {
-      connectBtn.onclick = loadBoards;
+      // Manual reconnect keeps whatever the user currently has checked.
+      connectBtn.onclick = () => loadBoards(collectSelectedBoardIds(boardsContainer));
     }
 
     // Show the saved selection immediately (board names unresolved until
@@ -1400,7 +1404,7 @@ export class AlbumManager {
       delete boardsContainer.dataset.loaded;
     }
     renderBoardChecklist(boardsContainer, [], album.invokeai_board_ids || []);
-    loadBoards();
+    loadBoards(album.invokeai_board_ids || []);
   }
 
   // Path field methods
