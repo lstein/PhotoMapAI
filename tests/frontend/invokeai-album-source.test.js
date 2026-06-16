@@ -221,6 +221,12 @@ describe("AlbumManager add-album payloads", () => {
 describe("AlbumManager settings-credential surfacing", () => {
   function makeInvokeSectionStub() {
     document.body.innerHTML = `
+      <div id="newAlbumSourceGroup" hidden>
+        <label><input type="radio" name="newAlbumSourceType" value="directory" /></label>
+        <label><input type="radio" name="newAlbumSourceType" value="invokeai_board" checked /></label>
+      </div>
+      <div id="newAlbumDirectorySection"></div>
+      <div id="newAlbumInvokeAISection"></div>
       <input id="newAlbumInvokeUrl" />
       <input id="newAlbumInvokeUsername" />
       <input id="newAlbumInvokePassword" />
@@ -231,6 +237,9 @@ describe("AlbumManager settings-credential surfacing", () => {
     `;
     const elements = {};
     [
+      "newAlbumSourceGroup",
+      "newAlbumDirectorySection",
+      "newAlbumInvokeAISection",
       "newAlbumInvokeUrl",
       "newAlbumInvokeUsername",
       "newAlbumInvokePassword",
@@ -246,6 +255,9 @@ describe("AlbumManager settings-credential surfacing", () => {
       _setInvokeHint: AlbumManager.prototype._setInvokeHint,
       _createInvokeRootRow: AlbumManager.prototype._createInvokeRootRow,
       _applySettingsCredentialDefaults: AlbumManager.prototype._applySettingsCredentialDefaults,
+      _setNewAlbumInvokeAvailable: AlbumManager.prototype._setNewAlbumInvokeAvailable,
+      getNewAlbumSourceType: AlbumManager.prototype.getNewAlbumSourceType,
+      toggleNewAlbumSourceSections: AlbumManager.prototype.toggleNewAlbumSourceSections,
       initializeNewAlbumInvokeSection: AlbumManager.prototype.initializeNewAlbumInvokeSection,
     };
   }
@@ -310,6 +322,25 @@ describe("AlbumManager settings-credential surfacing", () => {
     manager.elements.newAlbumInvokeUrl.value = "http://localhost:9090";
     manager._applySettingsCredentialDefaults();
     expect(manager.elements.newAlbumInvokeUsername.value).toBe("bob");
+  });
+
+  test("reveals the album-source chooser when a backend is configured", async () => {
+    const manager = makeInvokeSectionStub();
+    fetchJson.mockResolvedValue({ url: "http://localhost:9090", username: "", has_password: false, board_id: "" });
+
+    await manager.initializeNewAlbumInvokeSection();
+
+    expect(manager.elements.newAlbumSourceGroup.hidden).toBe(false);
+  });
+
+  test("hides the chooser and forces the directory source with no backend", async () => {
+    const manager = makeInvokeSectionStub();
+    fetchJson.mockResolvedValue({ url: "", username: "", has_password: false, board_id: "" });
+
+    await manager.initializeNewAlbumInvokeSection();
+
+    expect(manager.elements.newAlbumSourceGroup.hidden).toBe(true);
+    expect(document.querySelector('input[name="newAlbumSourceType"][value="directory"]').checked).toBe(true);
   });
 });
 
