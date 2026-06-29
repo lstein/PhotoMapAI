@@ -100,6 +100,7 @@ test_scripts/test_pick_from_image.py
 icloudpd
 scripts/*
 !scripts/build_vocab.py
+!scripts/download-vendor.py
 
 # Cache directories for mkdocs etc
 site

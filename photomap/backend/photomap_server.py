@@ -111,6 +111,20 @@ templates = Jinja2Templates(directory=templates_path)
 # references pick up the cache-busting version segment automatically.
 templates.env.globals["static_url"] = lambda path: f"static/{asset_version}/{path}"
 
+_REQUIRED_VENDOR_FILES = [
+    "vendor/swiper-bundle.min.js",
+    "vendor/swiper-bundle.min.css",
+    "vendor/plotly.min.js",
+]
+_missing_vendor = [f for f in _REQUIRED_VENDOR_FILES if not (Path(static_path) / f).exists()]
+if _missing_vendor:
+    logger.error(
+        "Missing vendor files in static/vendor/: %s. "
+        "Run `python scripts/download-vendor.py` (or `make vendor`) from the repo root "
+        "to download them, then restart the server.",
+        ", ".join(_missing_vendor),
+    )
+
 
 # Main Routes
 @app.get("/", response_class=HTMLResponse, tags=["Main"])
