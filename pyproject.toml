@@ -47,6 +47,7 @@ dependencies = [
     "torch",
     "tqdm",
     "transformers",  # SigLIP encoder backend
+    "numba>=0.57",  # 0.57+ supports Python 3.12+; without this, resolver can pick numba 0.53.1 which only supports <3.10
     "umap-learn",
     "uvicorn",
     "psutil",  # Add this for process management
