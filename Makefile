@@ -20,6 +20,7 @@ help:
 	@echo "backend-lint     Run Python backend linting with Ruff."
 	@echo "frontend-lint    Run JavaScript frontend linting with ESLint and Prettier."
 	@echo "lint             Run both backend and frontend linting."
+	@echo "vendor           Download/copy vendor JS/CSS assets for offline use."
 
 # Run the unit tests
 test:
@@ -122,3 +123,10 @@ frontend-lint:
 # Run both backend and frontend linting
 .PHONY: lint
 lint: backend-lint frontend-lint
+
+# Download vendor JS/CSS assets into static/vendor/ for offline use.
+# Commit the generated files so they are bundled with the pip package.
+.PHONY: vendor
+vendor:
+	python scripts/download-vendor.py
+	@echo "Vendor assets ready in photomap/frontend/static/vendor/"
