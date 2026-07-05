@@ -221,6 +221,31 @@ class BackStack {
       this._notifyChanged();
       return;
     }
+    if (detail && detail.changeType === "refresh") {
+      // Same album re-indexed in place. Index updates append, so existing
+      // entries stay valid unless images were removed — drop only the ones
+      // that now point past the end rather than wiping the whole stack.
+      const total = typeof detail.totalImages === "number" ? detail.totalImages : Infinity;
+      let newCursor = this._cursor;
+      const kept = [];
+      for (let i = 0; i < this._entries.length; i++) {
+        if (this._entries[i].globalIndex >= total) {
+          if (i <= this._cursor) {
+            newCursor--;
+          }
+          continue;
+        }
+        kept.push(this._entries[i]);
+      }
+      if (kept.length !== this._entries.length) {
+        this._entries = kept;
+        this._cursor = kept.length === 0 ? -1 : Math.max(0, Math.min(newCursor, kept.length - 1));
+        this._historyStates = [this._historyStates[0]];
+        this._currentHistoryIdx = 0;
+        this._notifyChanged();
+      }
+      return;
+    }
     // Album switch / move / index change: cross-album back doesn't make sense.
     // The next slideChanged is recorded as a plain step (NOT a jump), so the
     // album load itself doesn't create a browser-history entry. If we did

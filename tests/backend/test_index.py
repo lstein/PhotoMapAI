@@ -741,3 +741,35 @@ def test_index_metadata_reflects_last_update_operation(client, new_album):
 
     assert meta2["filename_count"] == meta1["filename_count"]
     assert meta2["last_modified"] > meta1["last_modified"]
+
+
+def test_update_endpoint_registers_progress_before_task_runs(
+    client, new_album, monkeypatch
+):
+    """The update endpoint must create the progress entry itself: the first
+    poll otherwise races the background task (board resolution and loading a
+    big existing .npz happen before the task's own start_operation) and
+    paints "No operation in progress" — and if the task dies inside that
+    window, the run looks idle forever."""
+    from photomap.backend.progress import progress_tracker
+    from photomap.backend.routers import index as index_router
+
+    key = new_album["key"]
+    progress_tracker.remove_progress(key)
+
+    async def frozen_task(album_key, album_config):
+        return None  # never reaches its own start_operation
+
+    monkeypatch.setattr(index_router, "_update_index_background_async", frozen_task)
+
+    try:
+        response = client.post("/update_index_async", json={"album_key": key})
+        assert response.status_code == 202
+
+        progress = client.get(f"/index_progress/{key}").json()
+        assert progress["status"] == "scanning"
+        assert progress["current_step"] == "Preparing index update..."
+    finally:
+        # The frozen task never completes; drop the entry so the shared
+        # tracker can't 409 later tests that reuse this album key.
+        progress_tracker.remove_progress(key)

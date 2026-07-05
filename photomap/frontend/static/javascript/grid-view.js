@@ -201,8 +201,9 @@ class GridViewManager {
     });
 
     this.addEventListener(window, "albumChanged", async (e) => {
-      // Update cache breaker to force thumbnail reload, especially for deletions
-      if (e.detail?.changeType === "deletion") {
+      // Update cache breaker to force thumbnail reload whenever the image
+      // set changed underneath existing indices (deletion, in-place reindex)
+      if (e.detail?.changeType === "deletion" || e.detail?.changeType === "refresh") {
         this.cacheBreaker = Date.now();
       }
       await this.resetAllSlides();

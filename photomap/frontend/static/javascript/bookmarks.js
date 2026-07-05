@@ -97,6 +97,13 @@ class BookmarkManager {
         this.updateAllBookmarkIcons();
         return;
       }
+      if (detail.changeType === "refresh") {
+        // Same album re-indexed in place: the bookmark set is unchanged, and
+        // resetting isShowingBookmarks/previousSearchResults would drop the
+        // user's bookmark-browsing context mid-session.
+        this.updateAllBookmarkIcons();
+        return;
+      }
       this.loadBookmarks();
       this.isShowingBookmarks = false;
       this.previousSearchResults = null;

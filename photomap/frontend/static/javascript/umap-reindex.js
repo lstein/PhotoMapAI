@@ -6,9 +6,10 @@
 // Album Manager's status colours), and whose hover title carries the live
 // status text. Clicking the ring does nothing — cancellation stays in the
 // Album Manager. On completion an "albumIndexUpdated" event is dispatched
-// so the map can reload itself.
+// so the map can reload itself, and an albumChanged/"refresh" event so the
+// slideshow picks up the new image set without losing its place.
 
-import { updateIndex } from "./index.js";
+import { getIndexMetadata, updateIndex } from "./index.js";
 import { state } from "./state.js";
 import { fetchJson } from "./utils.js";
 
@@ -118,6 +119,7 @@ function beginProgress(albumKey, initialProgress = null) {
       stopPolling();
       if (progress.status === "completed") {
         window.dispatchEvent(new CustomEvent("albumIndexUpdated", { detail: { albumKey } }));
+        await refreshAlbumImageData(albumKey);
       } else if (progress.status === "error") {
         const { btn } = elements();
         if (btn) {
@@ -132,6 +134,32 @@ function beginProgress(albumKey, initialProgress = null) {
       }
     }
   }, reindexConfig.pollInterval);
+}
+
+// The index the swiper and grid are browsing changed underneath them:
+// fetch the fresh image count and fire an albumChanged with
+// changeType "refresh", which rebuilds the slides while slideState keeps
+// the current position and any active search results.
+async function refreshAlbumImageData(albumKey) {
+  if (albumKey !== state.album) {
+    return;
+  }
+  let metadata = null;
+  try {
+    metadata = await getIndexMetadata(albumKey);
+  } catch (error) {
+    console.error(`Failed to refresh index metadata for album ${albumKey}:`, error);
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent("albumChanged", {
+      detail: {
+        album: albumKey,
+        totalImages: metadata?.filename_count || 0,
+        changeType: "refresh",
+      },
+    })
+  );
 }
 
 export async function startUmapReindex() {
@@ -204,7 +232,11 @@ export function initUmapReindexButton() {
     startUmapReindex();
   });
 
-  window.addEventListener("albumChanged", () => {
-    checkUmapReindexOngoing();
+  window.addEventListener("albumChanged", (e) => {
+    // "refresh" is dispatched by this module when a run completes — the
+    // ring is already down and the album hasn't changed, so nothing to do.
+    if (e.detail?.changeType !== "refresh") {
+      checkUmapReindexOngoing();
+    }
   });
 }

@@ -1,13 +1,14 @@
 /**
  * Tests for AlbumManager.updateProgressStatus, focused on the model-download
- * phase added so first-install encoder downloads are surfaced on the album card.
+ * phase added so first-install encoder downloads are surfaced on the album card,
+ * and for handleIndexingCompletion's in-place refresh events.
  *
  * album-manager.js pulls in a large sibling graph (index.js -> umap.js, etc.)
  * whose modules touch the DOM at import time, so we mock the direct imports and
  * dynamically load the module under test — the same pattern used by
  * seek-search-rebuild.test.js.
  */
-import { beforeAll, describe, expect, jest, test } from "@jest/globals";
+import { afterEach, beforeAll, beforeEach, describe, expect, jest, test } from "@jest/globals";
 
 const M = "../../photomap/frontend/static/javascript";
 
@@ -36,6 +37,9 @@ jest.unstable_mockModule(`${M}/utils.js`, () => ({
   hideSpinner: jest.fn(),
   showSpinner: jest.fn(),
 }));
+
+const { getIndexMetadata } = await import(`${M}/index.js`);
+const { state } = await import(`${M}/state.js`);
 
 let AlbumManager;
 
@@ -160,5 +164,53 @@ describe("AlbumManager persistent index warning note", () => {
     AlbumManager.prototype._appendIndexWarningNote.call(manager, status, "alb");
 
     expect(status.querySelector(".index-status-warning")).toBeNull();
+  });
+});
+
+describe("AlbumManager handleIndexingCompletion refresh events", () => {
+  // Minimal instance: no card element, not in setup mode.
+  function makeManager() {
+    return {
+      showIndexingCompletedUI: jest.fn(),
+      isSetupMode: false,
+      autoIndexingAlbums: new Set(["alb"]),
+    };
+  }
+
+  let albumChangedEvents;
+  let indexUpdatedEvents;
+  const onAlbumChanged = (e) => albumChangedEvents.push(e.detail);
+  const onIndexUpdated = (e) => indexUpdatedEvents.push(e.detail);
+
+  beforeEach(() => {
+    albumChangedEvents = [];
+    indexUpdatedEvents = [];
+    getIndexMetadata.mockReset();
+    getIndexMetadata.mockResolvedValue({ filename_count: 7 });
+    window.addEventListener("albumChanged", onAlbumChanged);
+    window.addEventListener("albumIndexUpdated", onIndexUpdated);
+  });
+
+  afterEach(() => {
+    window.removeEventListener("albumChanged", onAlbumChanged);
+    window.removeEventListener("albumIndexUpdated", onIndexUpdated);
+  });
+
+  test("current album: fires albumIndexUpdated plus an in-place albumChanged refresh", async () => {
+    state.album = "alb";
+
+    await AlbumManager.prototype.handleIndexingCompletion.call(makeManager(), "alb", null);
+
+    expect(indexUpdatedEvents).toEqual([{ albumKey: "alb" }]);
+    expect(albumChangedEvents).toEqual([{ album: "alb", totalImages: 7, changeType: "refresh" }]);
+  });
+
+  test("other album: no refresh events for the one being browsed", async () => {
+    state.album = "alb";
+
+    await AlbumManager.prototype.handleIndexingCompletion.call(makeManager(), "other", null);
+
+    expect(indexUpdatedEvents).toEqual([]);
+    expect(albumChangedEvents).toEqual([]);
   });
 });

@@ -136,3 +136,18 @@ def test_set_completion_warning_none_clears_pending():
     tracker.complete_operation("alb")
 
     assert tracker.get_progress("alb").warning_message is None
+
+
+def test_set_error_creates_entry_when_none_exists():
+    """Failures before a run's first start_operation (e.g. the InvokeAI board
+    fetch) must surface as a visible ERROR entry, not vanish — a dropped
+    error leaves the frontend polling "No operation in progress" forever."""
+    tracker = ProgressTracker()
+
+    tracker.set_error("alb", "boom")
+
+    progress = tracker.get_progress("alb")
+    assert progress is not None
+    assert progress.status is IndexStatus.ERROR
+    assert progress.error_message == "boom"
+    assert tracker.is_running("alb") is False

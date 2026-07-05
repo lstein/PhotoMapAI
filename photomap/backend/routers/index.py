@@ -94,6 +94,15 @@ async def update_index_async(
             )
 
         album_config = validate_album_exists(album_key)
+        # Register the run before the background task is even scheduled, so
+        # the very first progress poll sees a live operation instead of
+        # "idle": board resolution and loading a large existing index both
+        # happen before the first in-task start_operation, and a poller that
+        # reads "idle" during that window paints "No operation in progress".
+        # It also guarantees set_error() has an entry to land on if the task
+        # dies before scanning starts (e.g. InvokeAI unreachable).
+        progress_tracker.start_operation(album_key, 0, "scanning")
+        progress_tracker.update_progress(album_key, 0, "Preparing index update...")
         background_tasks.add_task(
             _update_index_background_async, album_key, album_config
         )
@@ -551,6 +560,9 @@ async def _update_index_background_async(album_key: str, album_config):
     """Background task for updating index with async support."""
     try:
         if getattr(album_config, "source_type", "directory") == "invokeai_board":
+            progress_tracker.update_progress(
+                album_key, 0, "Fetching board contents from InvokeAI..."
+            )
             try:
                 image_paths, missing = await _resolve_board_album_files(album_config)
             except HTTPException as e:
