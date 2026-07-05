@@ -262,3 +262,27 @@ def test_describe_image_source_keeps_logs_compact():
     description = describe_image_source(many)
     assert description == f"3666 explicit paths under {Path('/root/outputs/images')}"
     assert len(description) < 120
+
+
+def test_first_update_failure_surfaces_error_without_prior_run(
+    client, board_album, monkeypatch
+):
+    """A failure before scanning starts (InvokeAI unreachable) must produce a
+    visible ERROR even when the tracker has no entry from an earlier run —
+    e.g. the first update after a server restart. set_error used to drop the
+    message then, leaving the UI stuck on "No operation in progress"."""
+    from photomap.backend.progress import progress_tracker
+
+    _build_index(client)
+    progress_tracker.remove_progress(ALBUM_KEY)  # simulate a fresh server
+
+    async def broken_fetch(base_url, board_ids, username, password):
+        raise HTTPException(status_code=502, detail="connection refused")
+
+    monkeypatch.setattr(invokeai_client, "fetch_board_image_names", broken_fetch)
+
+    response = client.post("/update_index_async", json={"album_key": ALBUM_KEY})
+    assert response.status_code == 202
+    progress = _poll_until(client, ALBUM_KEY, {"completed", "error"}, timeout=10)
+    assert progress["status"] == "error"
+    assert "InvokeAI" in progress["error_message"]

@@ -173,10 +173,23 @@ class ProgressTracker:
     def set_error(self, album_key: str, error_message: str):
         """Set error status for an album."""
         with self._lock:
-            if album_key in self._progress:
-                progress = self._progress[album_key]
-                progress.status = IndexStatus.ERROR
-                progress.error_message = error_message
+            progress = self._progress.get(album_key)
+            if progress is None:
+                # A failure can hit before the run's first start_operation
+                # (e.g. the InvokeAI board fetch). Create the entry rather
+                # than dropping the error, or the frontend polls "idle"
+                # forever and the failure is invisible outside the log.
+                progress = ProgressInfo(
+                    album_key=album_key,
+                    status=IndexStatus.ERROR,
+                    current_step="",
+                    images_processed=0,
+                    total_images=0,
+                    start_time=time.time(),
+                )
+                self._progress[album_key] = progress
+            progress.status = IndexStatus.ERROR
+            progress.error_message = error_message
 
     def set_completion_warning(self, album_key: str, message: str | None) -> None:
         """Record (or clear) a non-fatal notice to attach when the run completes.

@@ -247,6 +247,26 @@ class SlideStateManager {
   }
 
   handleAlbumChanged(detail) {
+    // A "refresh" is the same album whose index was rebuilt in place (e.g.
+    // the semantic map's reindex button): keep the current position and any
+    // active search instead of jumping back to the first slide. Index
+    // updates append new images, so existing global indices only shift when
+    // images were removed — clamp against the new total for that case.
+    if (detail.changeType === "refresh") {
+      this.totalAlbumImages = detail.totalImages;
+      if (this.isSearchMode) {
+        this.searchResults = this.searchResults.filter((r) => r.index < detail.totalImages);
+        if (this.searchResults.length > 0) {
+          this.currentSearchIndex = Math.min(this.currentSearchIndex, this.searchResults.length - 1);
+          this.currentGlobalIndex = this.searchResults[this.currentSearchIndex].index;
+          return;
+        }
+        this.exitSearchMode();
+      }
+      this.currentGlobalIndex = detail.totalImages > 0 ? Math.min(this.currentGlobalIndex, detail.totalImages - 1) : 0;
+      return;
+    }
+
     // For deletions, try to preserve position by calculating how many images before current were deleted
     if (detail.changeType === "deletion" && detail.deletedIndices && !this.isSearchMode) {
       const deletedIndices = detail.deletedIndices;

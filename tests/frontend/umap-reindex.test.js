@@ -10,6 +10,7 @@ const M = "../../photomap/frontend/static/javascript";
 
 jest.unstable_mockModule(`${M}/index.js`, () => ({
   updateIndex: jest.fn(),
+  getIndexMetadata: jest.fn(),
 }));
 jest.unstable_mockModule(`${M}/state.js`, () => ({
   state: { album: "alb" },
@@ -18,7 +19,7 @@ jest.unstable_mockModule(`${M}/utils.js`, () => ({
   fetchJson: jest.fn(),
 }));
 
-const { updateIndex } = await import(`${M}/index.js`);
+const { updateIndex, getIndexMetadata } = await import(`${M}/index.js`);
 const { state } = await import(`${M}/state.js`);
 const { fetchJson } = await import(`${M}/utils.js`);
 const { reindexConfig, startUmapReindex, checkUmapReindexOngoing } = await import(`${M}/umap-reindex.js`);
@@ -49,6 +50,8 @@ beforeEach(async () => {
   buildDom();
   updateIndex.mockReset();
   fetchJson.mockReset();
+  getIndexMetadata.mockReset();
+  getIndexMetadata.mockResolvedValue({ filename_count: 100 });
   state.album = "alb";
   // Drain any poller left over from a previous test.
   fetchJson.mockResolvedValue({ status: "completed" });
@@ -64,9 +67,13 @@ describe("startUmapReindex", () => {
     ];
     fetchJson.mockImplementation(() => Promise.resolve(statuses.shift() ?? { status: "completed" }));
     updateIndex.mockResolvedValue({ success: true });
+    getIndexMetadata.mockResolvedValue({ filename_count: 42 });
     const events = [];
+    const albumChangedEvents = [];
     const onUpdated = (e) => events.push(e.detail.albumKey);
+    const onAlbumChanged = (e) => albumChangedEvents.push(e.detail);
     window.addEventListener("albumIndexUpdated", onUpdated);
+    window.addEventListener("albumChanged", onAlbumChanged);
     try {
       await startUmapReindex();
       expect(updateIndex).toHaveBeenCalledWith("alb");
@@ -76,8 +83,14 @@ describe("startUmapReindex", () => {
       await waitForButtonRestore();
       expect(events).toEqual(["alb"]);
       expect(document.getElementById("umapReindexProgress").style.display).toBe("none");
+
+      // The slideshow/grid refresh: an in-place albumChanged carrying the
+      // fresh image count, so slides rebuild without losing position.
+      await flush();
+      expect(albumChangedEvents).toEqual([{ album: "alb", totalImages: 42, changeType: "refresh" }]);
     } finally {
       window.removeEventListener("albumIndexUpdated", onUpdated);
+      window.removeEventListener("albumChanged", onAlbumChanged);
     }
   });
 

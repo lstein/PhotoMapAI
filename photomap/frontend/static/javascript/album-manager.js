@@ -1823,11 +1823,6 @@ export class AlbumManager {
     await loadAvailableAlbums();
     this.showIndexingCompletedUI(cardElement);
 
-    if (albumKey === state.album) {
-      console.log(`Refreshing slideshow for completed indexing of current album: ${albumKey}`);
-      this.single_swiper.resetAllSlides();
-    }
-
     // After a delay set the status
     if (cardElement) {
       setTimeout(async () => {
@@ -1877,11 +1872,18 @@ export class AlbumManager {
       }
     }
     if (albumKey === state.album) {
+      // Reload the semantic map (or mark it stale if it's hidden).
+      window.dispatchEvent(new CustomEvent("albumIndexUpdated", { detail: { albumKey } }));
+      // Rebuild the slideshow/grid against the new image count; the
+      // "refresh" type keeps the current position and any active search
+      // instead of resetting to the first slide (see slide-state.js).
       const album = await getIndexMetadata(albumKey);
       window.dispatchEvent(
         new CustomEvent("albumChanged", {
           detail: {
+            album: albumKey,
             totalImages: album ? album.filename_count : 0,
+            changeType: "refresh",
           },
         })
       );

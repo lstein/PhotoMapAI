@@ -2030,15 +2030,27 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeUmapWindow();
 });
 
-// The titlebar reindex button finished an update of the current album: the
-// map on screen is stale, so reload it.
+// An index update of the current album finished (titlebar reindex button or
+// Album Management): the map data is stale. Reload right away if the window
+// is showing; otherwise the dataChanged flag makes toggleUmapWindow's show
+// path refetch, without rendering Plotly into a hidden container here.
 window.addEventListener("albumIndexUpdated", (e) => {
   if (e.detail?.albumKey === state.album) {
     state.dataChanged = true;
-    fetchUmapData();
+    const umapWindow = document.getElementById("umapFloatingWindow");
+    if (umapWindow?.style.display === "block") {
+      fetchUmapData();
+    }
   }
 });
-window.addEventListener("albumChanged", initializeUmapWindow);
+window.addEventListener("albumChanged", (e) => {
+  // A "refresh" is the same album re-indexed in place: the map reload is
+  // handled by the albumIndexUpdated listener above, and re-initializing
+  // here would refetch a second time and force the window fullscreen.
+  if (e.detail?.changeType !== "refresh") {
+    initializeUmapWindow();
+  }
+});
 
 // ========================================================
 // Toggle Curation Mode (Grey out all points)

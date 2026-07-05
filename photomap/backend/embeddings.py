@@ -1497,9 +1497,12 @@ class Embeddings(BaseModel):
             )
 
         try:
-            existing = self._load_existing_index_arrays()
-
+            # Register before loading: reading a large existing .npz can take
+            # seconds, and progress polls during it must not report "idle".
             progress_tracker.start_operation(album_key, 0, "scanning")
+            progress_tracker.update_progress(album_key, 0, "Loading existing index...")
+
+            existing = self._load_existing_index_arrays()
 
             def traversal_callback(count, message):
                 # Update the total as we discover more files.
