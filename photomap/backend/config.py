@@ -126,6 +126,17 @@ class Album(BaseModel):
             "little to semantic search."
         ),
     )
+    min_image_bytes: int = Field(
+        default=8192,
+        ge=0,
+        description=(
+            "Minimum file size (in bytes) for an image to be indexed; "
+            "smaller files are rejected without being opened, which keeps "
+            "scans fast on thumbnail-heavy or network-mounted libraries. "
+            "0 disables the check. The 8192 default suits the default 256px "
+            "min_image_dimension; lower both together."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -203,6 +214,7 @@ class Album(BaseModel):
             "max_search_results": self.max_search_results,
             "use_query_optimization": self.use_query_optimization,
             "min_image_dimension": self.min_image_dimension,
+            "min_image_bytes": self.min_image_bytes,
         }
         # Keep directory-album YAML free of irrelevant InvokeAI keys.
         if self.source_type == "invokeai_board":
@@ -235,6 +247,7 @@ class Album(BaseModel):
             max_search_results=data.get("max_search_results", 100),
             use_query_optimization=data.get("use_query_optimization", True),
             min_image_dimension=data.get("min_image_dimension", 256),
+            min_image_bytes=data.get("min_image_bytes", 8192),
             invokeai_url=data.get("invokeai_url"),
             invokeai_username=data.get("invokeai_username"),
             invokeai_password=data.get("invokeai_password"),
@@ -663,6 +676,7 @@ def create_album(
     max_search_results: int | None = None,
     use_query_optimization: bool | None = None,
     min_image_dimension: int | None = None,
+    min_image_bytes: int | None = None,
     source_type: str = "directory",
     invokeai_url: str | None = None,
     invokeai_username: str | None = None,
@@ -703,6 +717,8 @@ def create_album(
         fields["use_query_optimization"] = use_query_optimization
     if min_image_dimension is not None:
         fields["min_image_dimension"] = min_image_dimension
+    if min_image_bytes is not None:
+        fields["min_image_bytes"] = min_image_bytes
     return Album(**fields)
 
 

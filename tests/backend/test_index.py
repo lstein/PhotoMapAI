@@ -14,6 +14,18 @@ from photomap.backend.embeddings import Embeddings, _open_npz_file
 TEST_IMAGE_COUNT = count_test_images()
 
 
+def _save_noise_jpeg(path, width, height, seed=0):
+    """Random-noise JPEG: compresses poorly, so even smallish dimensions stay
+    above the gate's byte-size reject floor. Solid-color images do NOT — a
+    300x300 single-color JPEG is ~3 KB and gets floor-rejected regardless of
+    its pixel dimensions, which is exactly what the floor is for."""
+    from PIL import Image
+
+    rng = np.random.default_rng(seed)
+    arr = rng.integers(0, 256, (height, width, 3), dtype=np.uint8)
+    Image.fromarray(arr).save(path)
+
+
 def test_index_creation(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
 ):
@@ -446,18 +458,17 @@ def test_min_image_dimension_filters_small_images(tmp_path):
     Mirrors the original bug where a hard-coded 100KB byte-size filter was
     silently dropping ~25% of a real user's photo library.
     """
-    from PIL import Image
 
     img_dir = tmp_path / "imgs"
     img_dir.mkdir()
     # 100x100 — below the default 256 threshold; should be skipped.
-    Image.new("RGB", (100, 100), color="red").save(img_dir / "tiny.jpg")
+    _save_noise_jpeg(img_dir / "tiny.jpg", 100, 100)
     # 200x300 — height passes 256 but width does not; should be skipped.
-    Image.new("RGB", (200, 300), color="blue").save(img_dir / "narrow.jpg")
+    _save_noise_jpeg(img_dir / "narrow.jpg", 200, 300)
     # 300x300 — both dimensions pass; should be kept.
-    Image.new("RGB", (300, 300), color="green").save(img_dir / "ok.jpg")
+    _save_noise_jpeg(img_dir / "ok.jpg", 300, 300)
     # 256x256 — exactly on the boundary; >= passes; should be kept.
-    Image.new("RGB", (256, 256), color="yellow").save(img_dir / "exact.jpg")
+    _save_noise_jpeg(img_dir / "exact.jpg", 256, 256)
     # Non-image extension, should never get to the dimension check.
     (img_dir / "notes.txt").write_text("not an image")
 
@@ -468,9 +479,265 @@ def test_min_image_dimension_filters_small_images(tmp_path):
         f"only 256+ images should be indexed, got {names}"
     )
 
-    # Lowering the threshold makes the smaller ones eligible too.
+    # Lowering the threshold makes the smaller ones eligible too. The byte
+    # floor is disabled here to exercise the pixel gate in isolation — the
+    # small noise JPEGs sit below the default 8 KB floor.
     emb_low = Embeddings(
-        embeddings_path=tmp_path / "ignored.npz", min_image_dimension=100
+        embeddings_path=tmp_path / "ignored.npz",
+        min_image_dimension=100,
+        min_image_bytes=0,
     )
     names_low = sorted(Path(p).name for p in emb_low.get_image_files_from_directory(img_dir))
     assert names_low == ["exact.jpg", "narrow.jpg", "ok.jpg", "tiny.jpg"]
+
+
+def test_dimension_gate_size_shortcircuit(tmp_path):
+    """Files over DIMENSION_PROBE_MAX_BYTES pass the gate on byte size alone,
+    without the per-file header open. Proven with junk bytes PIL can't parse:
+    the big file passes (never opened), the small one is probed and dropped.
+    """
+    from photomap.backend.embeddings import DIMENSION_PROBE_MAX_BYTES
+
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+    (img_dir / "big_junk.jpg").write_bytes(b"x" * (DIMENSION_PROBE_MAX_BYTES + 1))
+    (img_dir / "small_junk.jpg").write_bytes(b"x" * 1024)
+
+    emb = Embeddings(embeddings_path=tmp_path / "ignored.npz")
+    names = [Path(p).name for p in emb.get_image_files_from_directory(img_dir)]
+    assert names == ["big_junk.jpg"]
+
+
+def test_update_scan_probes_only_new_files(tmp_path, monkeypatch):
+    """The update-path diff must dimension-probe only files that are not
+    already in the index — re-probing the whole library on every update was
+    the dominant scan cost.
+    """
+
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+    for name in ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]:
+        _save_noise_jpeg(img_dir / name, 300, 300)
+    # A new file that must be probed and rejected as too small.
+    _save_noise_jpeg(img_dir / "new_tiny.jpg", 100, 100)
+
+    # a-c are already indexed (stored as resolved posix strings, matching
+    # what _process_images_batch writes); d and new_tiny are new.
+    existing = np.array(
+        [(img_dir / n).resolve().as_posix() for n in ["a.jpg", "b.jpg", "c.jpg"]]
+    )
+
+    probed: list[str] = []
+    original_gate = Embeddings._passes_dimension_gate
+
+    def spy(self, path, st=None):
+        probed.append(path.name)
+        return original_gate(self, path, st)
+
+    monkeypatch.setattr(Embeddings, "_passes_dimension_gate", spy)
+
+    emb = Embeddings(embeddings_path=tmp_path / "ignored.npz")
+    new_paths, missing_paths = emb._get_new_and_missing_images(img_dir, existing)
+
+    assert sorted(probed) == ["d.jpg", "new_tiny.jpg"]
+    assert {p.name for p in new_paths} == {"d.jpg"}
+    assert missing_paths == set()
+
+
+def _make_probe_spy(monkeypatch):
+    """Monkeypatch _passes_dimension_gate to record which files get probed."""
+    probed: list[str] = []
+    original_gate = Embeddings._passes_dimension_gate
+
+    def spy(self, path, st=None):
+        probed.append(path.name)
+        return original_gate(self, path, st)
+
+    monkeypatch.setattr(Embeddings, "_passes_dimension_gate", spy)
+    return probed
+
+
+def test_scan_reject_cache_skips_reprobing(tmp_path, monkeypatch):
+    """A file the gate rejected is remembered (with size/mtime) in the
+    scan-reject cache; the next update dismisses it on the stat alone
+    instead of re-opening it.
+    """
+
+    from photomap.backend.embeddings import SCAN_REJECTS_FILENAME
+
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+    _save_noise_jpeg(img_dir / "ok.jpg", 300, 300)
+    _save_noise_jpeg(img_dir / "tiny.jpg", 100, 100)
+    existing = np.array([(img_dir / "ok.jpg").resolve().as_posix()])
+
+    emb = Embeddings(embeddings_path=tmp_path / "idx" / "embeddings.npz")
+
+    # First update: tiny.jpg is new, gets probed, is rejected and cached.
+    new1, _ = emb._get_new_and_missing_images(img_dir, existing)
+    assert new1 == set()
+    assert (tmp_path / "idx" / SCAN_REJECTS_FILENAME).exists()
+
+    # Second update: nothing gets probed at all.
+    probed = _make_probe_spy(monkeypatch)
+    new2, _ = emb._get_new_and_missing_images(img_dir, existing)
+    assert new2 == set()
+    assert probed == []
+
+
+def test_scan_reject_cache_revalidates_changed_files(tmp_path, monkeypatch):
+    """A cached rejection is keyed to size/mtime: replacing the file with a
+    large-enough image must be noticed and the file indexed."""
+
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+    _save_noise_jpeg(img_dir / "photo.jpg", 100, 100)
+    existing = np.array([])
+
+    emb = Embeddings(embeddings_path=tmp_path / "idx" / "embeddings.npz")
+    new1, _ = emb._get_new_and_missing_images(img_dir, existing)
+    assert new1 == set()
+
+    # Same name, new content (different size and mtime), now big enough.
+    _save_noise_jpeg(img_dir / "photo.jpg", 400, 400)
+
+    probed = _make_probe_spy(monkeypatch)
+    new2, _ = emb._get_new_and_missing_images(img_dir, existing)
+    assert probed == ["photo.jpg"]
+    assert {p.name for p in new2} == {"photo.jpg"}
+
+
+def test_scan_reject_cache_invalidated_by_min_dim_change(tmp_path):
+    """The cache memoizes verdicts for one min_image_dimension; changing the
+    threshold must discard it rather than keep stale rejections."""
+
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+    _save_noise_jpeg(img_dir / "small.jpg", 100, 100)
+    existing = np.array([])
+    index_path = tmp_path / "idx" / "embeddings.npz"
+
+    # Byte floor off in both instances so the pixel-gate change is the only
+    # variable this test exercises.
+    emb = Embeddings(embeddings_path=index_path, min_image_bytes=0)  # 256px gate
+    new1, _ = emb._get_new_and_missing_images(img_dir, existing)
+    assert new1 == set()
+
+    emb_low = Embeddings(
+        embeddings_path=index_path, min_image_dimension=50, min_image_bytes=0
+    )
+    new2, _ = emb_low._get_new_and_missing_images(img_dir, existing)
+    assert {p.name for p in new2} == {"small.jpg"}
+
+
+def test_thumbnail_dirs_pruned_from_traversal(tmp_path):
+    """Hidden directories and thumbnail-cache directories (and
+    photomap_index) are pruned from the walk entirely — their contents are
+    never candidates, gated or not."""
+
+    img_dir = tmp_path / "imgs"
+    for sub in ["@eaDir", ".thumbnails", ".@__thumb", "__MACOSX", "photomap_index", "vacation"]:
+        (img_dir / sub).mkdir(parents=True)
+        _save_noise_jpeg(img_dir / sub / "pic.jpg", 300, 300)
+    # Nested hidden caches (the Shotwell case): a 360px thumb passes both
+    # gates, so only the hidden-dir pruning keeps it out of the index.
+    shotwell = img_dir / ".shotwell" / "thumbs" / "thumbs360"
+    shotwell.mkdir(parents=True)
+    _save_noise_jpeg(shotwell / "thumb0000000000004edd.jpg", 360, 360)
+    _save_noise_jpeg(img_dir / "top.jpg", 300, 300)
+
+    emb = Embeddings(embeddings_path=tmp_path / "ignored.npz")
+    # Gated and ungated traversals must prune identically.
+    for gate in (True, False):
+        found = {
+            p.relative_to(img_dir.resolve()).as_posix()
+            for p in emb.get_image_files_from_directory(img_dir, apply_dimension_gate=gate)
+        }
+        assert found == {"top.jpg", "vacation/pic.jpg"}
+
+
+def test_check_progress_callback_reports_gate_progress(tmp_path):
+    """The gate pass drives a (checked, total) progress callback, ending on
+    (total, total) so the UI bar completes."""
+
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+    for i in range(5):
+        _save_noise_jpeg(img_dir / f"p{i}.jpg", 300, 300)
+    existing = np.array([])
+
+    calls: list[tuple[int, int]] = []
+    emb = Embeddings(embeddings_path=tmp_path / "idx" / "embeddings.npz")
+    new, _ = emb._get_new_and_missing_images(
+        img_dir, existing, check_progress_callback=lambda checked, total: calls.append((checked, total))
+    )
+
+    assert len(new) == 5
+    assert calls[-1] == (5, 5)
+
+
+def test_dimension_gate_byte_reject_floor(tmp_path, monkeypatch):
+    """Files under the album's min_image_bytes are rejected without a header
+    open; the floor is an independent per-album setting that can be lowered
+    or disabled (0) for libraries with legitimately small photos."""
+    from PIL import Image
+
+    from photomap.backend import embeddings as embeddings_module
+    from photomap.backend.embeddings import DIMENSION_REJECT_MIN_BYTES
+
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+    # A solid-color 300x300 JPEG: passes the pixel gate but compresses far
+    # below the byte floor — the accepted ~0.15% false-negative case.
+    Image.new("RGB", (300, 300), color="red").save(img_dir / "solid.jpg")
+    solid_size = (img_dir / "solid.jpg").stat().st_size
+    assert solid_size < DIMENSION_REJECT_MIN_BYTES, "premise: solid jpg must be sub-floor"
+
+    opens: list[str] = []
+    real_open = embeddings_module.Image.open
+
+    def counting_open(fp, *args, **kwargs):
+        opens.append(str(fp))
+        return real_open(fp, *args, **kwargs)
+
+    monkeypatch.setattr(embeddings_module.Image, "open", counting_open)
+
+    # Default 8 KB floor: rejected on the stat alone — no open.
+    emb = Embeddings(embeddings_path=tmp_path / "ignored.npz")
+    assert emb.get_image_files_from_directory(img_dir) == []
+    assert opens == []
+
+    # Lowered floor (1 kb): the file is probed and kept.
+    emb_low_floor = Embeddings(
+        embeddings_path=tmp_path / "ignored.npz", min_image_bytes=1024
+    )
+    found = emb_low_floor.get_image_files_from_directory(img_dir)
+    assert [Path(f).name for f in found] == ["solid.jpg"]
+    assert len(opens) == 1
+
+    # Floor disabled entirely (0): same outcome via the probe.
+    emb_no_floor = Embeddings(
+        embeddings_path=tmp_path / "ignored.npz", min_image_bytes=0
+    )
+    found = emb_no_floor.get_image_files_from_directory(img_dir)
+    assert [Path(f).name for f in found] == ["solid.jpg"]
+    assert len(opens) == 2
+
+
+def test_index_metadata_reflects_last_update_operation(client, new_album):
+    """The "Index updated <when>" timestamp must advance after every
+    successful update operation, including a no-change one — the .npz is
+    deliberately not rewritten then, so its mtime alone would make a
+    freshly-refreshed album look stale."""
+    import time
+
+    build_index(client, new_album)
+    key = new_album["key"]
+    meta1 = client.get(f"/index_metadata/{key}").json()
+
+    time.sleep(0.05)
+    build_index(client, new_album)  # nothing new — the noop update path
+    meta2 = client.get(f"/index_metadata/{key}").json()
+
+    assert meta2["filename_count"] == meta1["filename_count"]
+    assert meta2["last_modified"] > meta1["last_modified"]

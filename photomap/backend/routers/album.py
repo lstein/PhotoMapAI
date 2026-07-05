@@ -104,6 +104,7 @@ def get_embeddings_for_album(album_key: str) -> Embeddings:
         embeddings_path=Path(album_config.index),
         encoder_spec=album_config.encoder_spec,
         min_image_dimension=album_config.min_image_dimension,
+        min_image_bytes=album_config.min_image_bytes,
     )
 
 
@@ -211,6 +212,7 @@ def _album_public_dict(album: Album) -> dict[str, Any]:
         "max_search_results": album.max_search_results,
         "use_query_optimization": album.use_query_optimization,
         "min_image_dimension": album.min_image_dimension,
+        "min_image_bytes": album.min_image_bytes,
         "invokeai_url": album.invokeai_url,
         "invokeai_username": album.invokeai_username,
         "invokeai_root": album.invokeai_root,
@@ -310,6 +312,7 @@ async def update_album(album_data: dict) -> JSONResponse:
             max_search_results=album_data.get("max_search_results"),
             use_query_optimization=album_data.get("use_query_optimization"),
             min_image_dimension=album_data.get("min_image_dimension"),
+            min_image_bytes=album_data.get("min_image_bytes"),
             source_type=album_data.get("source_type", "directory"),
             invokeai_url=album_data.get("invokeai_url"),
             invokeai_username=album_data.get("invokeai_username"),
