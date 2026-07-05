@@ -61,6 +61,60 @@
   font-size: 1em;
 }
 
+.umap-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  /* Was on the select itself before the reindex button joined it. */
+  max-width: 60%;
+}
+
+#umapReindexBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  margin: 0;
+}
+
+/* Progress ring shown in place of the reindex button while indexing runs.
+   The fill arc is driven from JS via stroke-dashoffset (circumference 2πr,
+   r=8 → 50.27); the -90° rotation starts the arc at 12 o'clock. */
+.umap-reindex-progress {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  cursor: default;
+}
+
+.umap-reindex-progress svg {
+  transform: rotate(-90deg);
+}
+
+.umap-reindex-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 3;
+}
+
+.umap-reindex-ring {
+  fill: none;
+  stroke: #ff9800;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 50.27;
+  stroke-dashoffset: 50.27;
+  transition:
+    stroke-dashoffset 0.3s,
+    stroke 0.3s;
+}
+
+/* Phases without a meaningful percentage (directory traversal) show a
+   spinning quarter arc instead of a fill level. Keyframes: spinners.css. */
+.umap-reindex-progress.indeterminate svg {
+  animation: umap-spin 1.2s linear infinite;
+}
+
 #semanticMapAlbumSelect {
   cursor: pointer;
   background: transparent;
@@ -72,7 +126,8 @@
   border-radius: 4px;
   padding: 2px 22px 2px 6px;
   margin: 0;
-  max-width: 60%;
+  max-width: 100%;
+  min-width: 0;
   text-overflow: ellipsis;
   appearance: none;
   -webkit-appearance: none;

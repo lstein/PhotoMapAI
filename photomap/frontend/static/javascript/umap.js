@@ -22,6 +22,7 @@ import {
   state,
 } from "./state.js";
 import { findLandmarkClusterAt } from "./umap-helpers.js";
+import { checkUmapReindexOngoing, initUmapReindexButton } from "./umap-reindex.js";
 import { debounce, getPercentile, isColorLight, makeDraggable } from "./utils.js";
 
 const UMAP_SIZES = {
@@ -1600,6 +1601,10 @@ export async function toggleUmapWindow(show = null) {
       return;
     }
 
+    // If an index update is already running for this album (e.g. started
+    // from Album Management), show the titlebar progress ring for it.
+    checkUmapReindexOngoing();
+
     // Fetch configured eps value from server
     const result = await fetch("get_umap_eps/", {
       method: "POST",
@@ -2021,7 +2026,17 @@ export function isUmapFullscreen() {
 document.addEventListener("DOMContentLoaded", () => {
   setupSemanticMapAlbumSelect();
   populateSemanticMapAlbumSelect();
+  initUmapReindexButton();
   initializeUmapWindow();
+});
+
+// The titlebar reindex button finished an update of the current album: the
+// map on screen is stale, so reload it.
+window.addEventListener("albumIndexUpdated", (e) => {
+  if (e.detail?.albumKey === state.album) {
+    state.dataChanged = true;
+    fetchUmapData();
+  }
 });
 window.addEventListener("albumChanged", initializeUmapWindow);
 
