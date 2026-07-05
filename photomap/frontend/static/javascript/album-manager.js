@@ -78,6 +78,16 @@ export class AlbumManager {
   // Constants
   static POLL_INTERVAL = 1000;
   static PROGRESS_HIDE_DELAY = 3000;
+  // "Update All" pipeline depth. The backend serializes both the file scan
+  // and the GPU-heavy embedding stage across albums (process-wide semaphores
+  // in embeddings.py), so two in-flight updates let one album scan its files
+  // or build its UMAP while another encodes; more would only queue on those
+  // gates while holding extra embedding arrays in memory.
+  static MAX_CONCURRENT_UPDATES = 2;
+  // Backend statuses that mean an index operation is still in flight.
+  static RUNNING_STATUSES = ["scanning", "downloading", "indexing", "mapping"];
+  // Consecutive index_progress failures before Update All gives up on an album.
+  static MAX_PROGRESS_POLL_FAILURES = 5;
   static AUTO_INDEXING_DELAY = 500;
   static SETUP_EXIT_DELAY = 10000;
   static FORM_ANIMATION_DELAY = 300;
@@ -124,6 +134,10 @@ export class AlbumManager {
     };
 
     this.progressPollers = new Map();
+    // Non-null while "Update All" is working through the albums:
+    // { finished, total }. Instance state (not just button text) so the
+    // button can be repainted after the dialog is closed and reopened.
+    this.updateAllProgress = null;
     this.isSetupMode = false;
     this.autoIndexingAlbums = new Set();
     // Per-album non-fatal indexing notice (e.g. board images missing on disk),
@@ -163,6 +177,14 @@ export class AlbumManager {
     document.getElementById("showAddAlbumBtn").addEventListener("click", () => {
       this.showAddAlbumForm();
     });
+
+    // Update the index of every album
+    const updateAllBtn = document.getElementById("updateAllBtn");
+    if (updateAllBtn) {
+      updateAllBtn.addEventListener("click", () => {
+        this.updateAllAlbums();
+      });
+    }
 
     // Cancel add album buttons (both X and Cancel button)
     document.getElementById("cancelAddAlbumBtn").addEventListener("click", () => {
@@ -805,6 +827,9 @@ export class AlbumManager {
   async show() {
     this.overlay.classList.add("visible");
     hideSpinner();
+    // Repaint the Update All button in case a run is still in flight from
+    // before the dialog was closed.
+    this._refreshUpdateAllButton();
     await this.loadAlbums();
     await this.checkForOngoingIndexing(); // <-- Move this after loadAlbums
 
@@ -978,6 +1003,8 @@ export class AlbumManager {
       albums.forEach((album) => {
         this.createAlbumCard(album);
       });
+      // Card count just changed — show/hide the Update All button to match.
+      this._refreshUpdateAllButton();
     } catch (error) {
       console.error("Failed to load albums:", error);
     }
@@ -1349,6 +1376,13 @@ export class AlbumManager {
       minDimInput.value = album.min_image_dimension ?? 256;
     }
 
+    // Minimum-byte-size gate: stored in bytes, edited in kb. Fall back to
+    // 8192 bytes (Album.min_image_bytes default) for albums predating it.
+    const minBytesInput = editForm.querySelector(".edit-album-min-image-bytes");
+    if (minBytesInput) {
+      minBytesInput.value = Math.round((album.min_image_bytes ?? 8192) / 1024);
+    }
+
     // Initialize the encoder dropdown for THIS specific card
     populateEncoderSelect(editForm.querySelector(".edit-album-encoder"), album.encoder_spec);
 
@@ -1469,12 +1503,19 @@ export class AlbumManager {
     const minDim =
       Number.isFinite(minDimParsed) && minDimParsed >= 1 ? minDimParsed : (album.min_image_dimension ?? 256);
 
+    // Byte-size gate is edited in kb but stored in bytes; 0 disables it.
+    const minBytesRaw = editForm.querySelector(".edit-album-min-image-bytes")?.value;
+    const minBytesParsed = Number.parseInt(minBytesRaw, 10);
+    const minBytes =
+      Number.isFinite(minBytesParsed) && minBytesParsed >= 0 ? minBytesParsed * 1024 : (album.min_image_bytes ?? 8192);
+
     const updatedAlbum = {
       key: album.key,
       name: editForm.querySelector(".edit-album-name").value,
       description: editForm.querySelector(".edit-album-description").value,
       encoder_spec: editForm.querySelector(".edit-album-encoder")?.value || album.encoder_spec || DEFAULT_ENCODER_SPEC,
       min_image_dimension: minDim,
+      min_image_bytes: minBytes,
     };
 
     let sourceChanged = false;
@@ -1561,7 +1602,7 @@ export class AlbumManager {
     // Backend guard: check if indexing is already running
     try {
       const progress = await fetchJson(`index_progress/${albumKey}`);
-      if (progress.status === "indexing" || progress.status === "scanning" || progress.status === "mapping") {
+      if (AlbumManager.RUNNING_STATUSES.includes(progress.status)) {
         console.log(`Backend reports indexing already in progress for album: ${albumKey}`);
         this.showProgressUIWithoutScroll(cardElement, progress);
         this.startProgressPolling(albumKey, cardElement);
@@ -1596,6 +1637,92 @@ export class AlbumManager {
     }
     this.showProgressUIWithoutScroll(cardElement, progress);
     this.startProgressPolling(albumKey, cardElement);
+  }
+
+  // Polls the backend until the album's indexing run leaves a running state.
+  // Deliberately independent of the card progress pollers: hide() tears those
+  // down when the dialog closes, and "Update All" must keep working through
+  // its queue whether or not the dialog is open.
+  async _waitForIndexingToFinish(albumKey) {
+    let consecutiveFailures = 0;
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, AlbumManager.POLL_INTERVAL));
+      try {
+        const progress = await fetchJson(`index_progress/${albumKey}`);
+        consecutiveFailures = 0;
+        if (!AlbumManager.RUNNING_STATUSES.includes(progress.status)) {
+          return;
+        }
+      } catch (error) {
+        // Tolerate transient failures (the server can be busy mid-scan);
+        // give up only after several in a row so the queue can't hang.
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= AlbumManager.MAX_PROGRESS_POLL_FAILURES) {
+          console.error(`Giving up waiting on indexing progress for album ${albumKey}:`, error);
+          return;
+        }
+      }
+    }
+  }
+
+  // Repaint the Update All button from instance state. The button is looked
+  // up fresh and this is also called from show() and loadAlbums(), so the
+  // label survives the dialog being closed and reopened mid-run, and the
+  // button hides entirely when no albums exist (fresh install / setup mode).
+  _refreshUpdateAllButton() {
+    const btn = document.getElementById("updateAllBtn");
+    if (!btn) {
+      return;
+    }
+    const hasAlbums = !!this.albumsList?.querySelector(".album-card");
+    btn.style.display = hasAlbums ? "" : "none";
+    if (this.updateAllProgress) {
+      const { finished, total } = this.updateAllProgress;
+      btn.disabled = true;
+      btn.textContent = `Updating ${finished}/${total}…`;
+    } else {
+      btn.disabled = false;
+      btn.textContent = "Update All";
+    }
+  }
+
+  // Update the index of every album, MAX_CONCURRENT_UPDATES at a time (see
+  // the constant for why the pipeline is kept shallow). Albums already
+  // indexing are awaited rather than restarted; one album failing doesn't
+  // stop the rest.
+  async updateAllAlbums() {
+    if (this.updateAllProgress) {
+      return;
+    }
+    const cards = [...this.albumsList.querySelectorAll(".album-card[data-album-key]")];
+    if (cards.length === 0) {
+      return;
+    }
+
+    this.updateAllProgress = { finished: 0, total: cards.length };
+    this._refreshUpdateAllButton();
+
+    const queue = [...cards];
+    const worker = async () => {
+      let card;
+      while ((card = queue.shift())) {
+        const albumKey = card.dataset.albumKey;
+        try {
+          await this.startIndexing(albumKey, this._liveCardFor(albumKey, card));
+          await this._waitForIndexingToFinish(albumKey);
+        } catch (error) {
+          console.error(`Update All: indexing failed for album ${albumKey}:`, error);
+        }
+        this.updateAllProgress.finished += 1;
+        this._refreshUpdateAllButton();
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(AlbumManager.MAX_CONCURRENT_UPDATES, cards.length) }, () => worker())
+    );
+
+    this.updateAllProgress = null;
+    this._refreshUpdateAllButton();
   }
 
   showProgressUI(cardElement) {
@@ -1876,7 +2003,7 @@ export class AlbumManager {
       try {
         const progress = await fetchJson(`index_progress/${albumKey}`);
 
-        if (progress.status === "indexing" || progress.status === "scanning") {
+        if (AlbumManager.RUNNING_STATUSES.includes(progress.status)) {
           console.log(`Restoring progress UI for ongoing operation: ${albumKey} (${progress.status})`);
 
           this.showProgressUIWithoutScroll(cardElement, progress);

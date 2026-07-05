@@ -6,6 +6,7 @@
       <button id="backToSettingsBtn" class="back-button" title="Back to Settings">← Settings</button>
       <h2>Album Management</h2>
       <div class="header-buttons">
+        <button id="updateAllBtn" class="btn-update-all" title="Update the index of every album">Update All</button>
         <button id="showAddAlbumBtn" class="btn-primary">+ Add Album</button>
         <button id="closeAlbumManagementBtn" class="modal-close" title="Close">✖</button>
       </div>
@@ -205,8 +206,13 @@
         </div>
       </div>
       <div class="form-group">
-        <label>Exclude thumbnails and other images below this size (px)</label>
-        <input class="edit-album-min-image-dimension" type="number" min="1" step="1" value="256" />
+        <label>Exclude thumbnails and other images below this size:</label>
+        <div class="min-image-gates">
+          <input class="edit-album-min-image-bytes" type="number" min="0" step="1" value="8" />
+          <span class="min-image-gate-unit">kb</span>
+          <input class="edit-album-min-image-dimension" type="number" min="1" step="1" value="256" />
+          <span class="min-image-gate-unit">pixels</span>
+        </div>
       </div>
       <div class="form-group">
         <label>Encoder</label>

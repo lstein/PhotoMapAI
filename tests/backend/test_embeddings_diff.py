@@ -56,8 +56,15 @@ class TestPathCompareKey:
 def _embeddings_stub(tmp_path: Path) -> Embeddings:
     """Construct an ``Embeddings`` pointed at a path inside ``tmp_path`` so
     the encoder spec and clip root are valid but no model is ever loaded —
-    we only exercise the pure-Python diff method here."""
-    return Embeddings(embeddings_path=tmp_path / "stub.npz")
+    we only exercise the pure-Python diff method here.
+
+    ``min_image_dimension=0`` and ``min_image_bytes=0`` disable both gate
+    bands: the diff would otherwise stat/probe new files on disk, and these
+    tests use fabricated paths that don't exist (the gate itself is covered
+    in ``test_index.py``)."""
+    return Embeddings(
+        embeddings_path=tmp_path / "stub.npz", min_image_dimension=0, min_image_bytes=0
+    )
 
 
 class TestNewAndMissingDiff:

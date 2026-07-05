@@ -16,7 +16,7 @@ from send2trash import send2trash
 
 from .. import invokeai_client
 from ..config import get_config_manager
-from ..embeddings import Embeddings, peek_encoder_spec
+from ..embeddings import LAST_UPDATED_FILENAME, Embeddings, peek_encoder_spec
 from ..progress import IndexingCancelled, progress_tracker
 from .album import (
     AlbumDep,
@@ -252,8 +252,14 @@ async def index_metadata(album_config: AlbumDep) -> EmbeddingsIndexMetadata:
     if not index_path.exists():
         raise HTTPException(status_code=404, detail="Index file does not exist")
 
-    # Get file metadata
+    # "Last updated" is when an update operation last COMPLETED, not when the
+    # .npz content last changed — a no-change update skips the save, and the
+    # card shouldn't look stale right after a successful refresh. The marker
+    # is absent for indexes predating it; fall back to the .npz mtime.
     last_modified = index_path.stat().st_mtime
+    marker = index_path.parent / LAST_UPDATED_FILENAME
+    if marker.exists():
+        last_modified = max(last_modified, marker.stat().st_mtime)
     filename_count = len(Embeddings.open_cached_embeddings(index_path)["filenames"])
 
     return EmbeddingsIndexMetadata(
@@ -579,6 +585,7 @@ async def _update_index_background_async(album_key: str, album_config):
             embeddings_path=index_path,
             encoder_spec=album_config.encoder_spec,
             min_image_dimension=album_config.min_image_dimension,
+            min_image_bytes=getattr(album_config, "min_image_bytes", 8192),
         )
 
         if index_path.exists():

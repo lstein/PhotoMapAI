@@ -356,6 +356,40 @@
   font-size: 14px;
 }
 
+/* Byte-size + pixel-dimension gates on one line in the album editor. */
+.min-image-gates {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.min-image-gates input {
+  width: 5em;
+}
+
+.min-image-gate-unit {
+  color: #aaa;
+  font-size: 0.9em;
+}
+
+/* Header "Update All" button: shaped like .btn-primary, coloured like the
+   per-album .btn-index buttons it fans out to. */
+.btn-update-all {
+  background: #2196f3;
+  border: none;
+  color: #fff;
+  padding: 0.5em 1em;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.btn-update-all:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .btn-secondary {
   background: #666;
   border: none;
@@ -394,6 +428,7 @@
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.85em;
+  white-space: nowrap;
 }
 
 .btn-cancel {

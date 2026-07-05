@@ -533,3 +533,44 @@ def test_legacy_album_dict_loads_as_directory_album():
     assert album.invokeai_board_ids == []
     # And directory albums keep their YAML free of InvokeAI keys.
     assert not any(k.startswith("invokeai") for k in album.to_dict())
+
+
+def test_min_image_bytes_round_trips(client, tmp_path):
+    """The Edit Album dialogue's byte-size gate must round-trip through
+    add_album → /available_albums → /update_album, defaulting to 8192, and
+    0 (gate disabled) must be accepted."""
+    img_dir = tmp_path / "imgs"
+    img_dir.mkdir()
+
+    response = client.post(
+        "/add_album/",
+        json={
+            "key": "bytes_default",
+            "name": "Default bytes",
+            "image_paths": [str(img_dir)],
+            "index": str(tmp_path / "b.npz"),
+            "umap_eps": 0.1,
+            "encoder_spec": "openai-clip:ViT-B/32",
+        },
+    )
+    assert response.status_code == 201
+
+    listing = {a["key"]: a for a in client.get("/available_albums/").json()}
+    assert listing["bytes_default"]["min_image_bytes"] == 8192
+
+    # Explicit value (16 kb) and the 0 = disabled sentinel must both persist.
+    for value in (16 * 1024, 0):
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": "bytes_default",
+                "name": "Default bytes",
+                "image_paths": [str(img_dir)],
+                "index": str(tmp_path / "b.npz"),
+                "encoder_spec": "openai-clip:ViT-B/32",
+                "min_image_bytes": value,
+            },
+        )
+        assert response.status_code == 200
+        listing = {a["key"]: a for a in client.get("/available_albums/").json()}
+        assert listing["bytes_default"]["min_image_bytes"] == value

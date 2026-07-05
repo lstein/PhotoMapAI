@@ -54,6 +54,55 @@ logger = logging.getLogger(__name__)
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_NUM_WORKERS = 4
 
+# Files larger than this pass the pixel-dimension gate on byte size alone,
+# skipping the per-file header open (see _passes_dimension_gate). Tuned for
+# the default 256px minimum: real photos over 500 KB are essentially never
+# that small in pixels. (Validated by sampling a 122k-file real library,
+# 2026-07-04: 0 of 1,175 sampled files over 500 KB failed the pixel gate.)
+DIMENSION_PROBE_MAX_BYTES = 500 * 1024
+
+# Default for the per-album ``min_image_bytes`` setting: files smaller than
+# this are REJECTED by the gate on byte size alone, again skipping the header
+# open. From the same 2026-07-04 sampling (5,000 files probed): at 8 KB the
+# false-negative rate — real >=256px photos wrongly rejected — measured 0.15%
+# (they exist: old heavily-compressed JPEGs go down to 6.5 KB), while 75% of
+# the sub-256px thumbnail population falls below it. Raising this buys almost
+# nothing and loses photos fast (16 KB -> 3.4% FN, 100 KB -> ~49%, which is
+# the bug PR #269 fixed). The default is calibrated to the default 256px
+# pixel gate; albums with a smaller pixel gate should lower it (both are
+# editable side by side in the album editor).
+DIMENSION_REJECT_MIN_BYTES = 8 * 1024
+
+# Directory names (matched case-insensitively) that hold derived previews,
+# never originals — pruned from the scan alongside our own photomap_index.
+# NAS and desktop indexers can stash as many thumbnails as there are photos,
+# and every one of them would be probed and rejected on each scan otherwise.
+# Hidden (dot-prefixed) directories are pruned wholesale in the walk itself:
+# on a photo library they are app caches (.shotwell/thumbs, .thumbnails,
+# .dtrash, ...), and some hold thumbnails big enough to pass BOTH gates —
+# Shotwell's 360px thumbs would otherwise be indexed as photos.
+EXCLUDED_SCAN_DIRS = {
+    "photomap_index",
+    "@eadir",  # Synology
+    "__macosx",  # AppleDouble cruft from unzipped archives
+}
+
+# Marker file next to embeddings.npz whose mtime records when an index
+# create/update operation last COMPLETED — as opposed to the .npz mtime,
+# which records when the index content last changed. A no-change update
+# deliberately skips rewriting the .npz (and touching the .npz instead would
+# spuriously invalidate the umap.npz staleness check), but the UI's "Index
+# updated <when>" line should still show that the album was just refreshed.
+LAST_UPDATED_FILENAME = "last_updated"
+
+# Sidecar next to embeddings.npz remembering files the dimension gate
+# rejected, keyed the same way as the index diff, with the size/mtime seen
+# at rejection time. Lets update scans skip re-probing (re-opening) files
+# that were already checked and turned away — on a library with a large
+# thumbnail population that is as many header opens as the album has photos,
+# on every single update.
+SCAN_REJECTS_FILENAME = "scan_rejects.npz"
+
 # Process-wide gate around the GPU-using portion of indexing. Two concurrent
 # albums each spinning up a CLIP/SigLIP encoder will OOM a typical 8-12 GiB
 # card; this serializes them so the second album waits its turn. Created
@@ -67,6 +116,21 @@ def _get_indexing_semaphore() -> asyncio.Semaphore:
     if _indexing_semaphore is None:
         _indexing_semaphore = asyncio.Semaphore(1)
     return _indexing_semaphore
+
+
+# Process-wide gate around the file-traversal stage. The scan opens every
+# candidate file's header for the dimension gate, so it is seek-bound (and
+# GIL-bound); two albums scanning at once run far slower than back-to-back.
+# Kept separate from _indexing_semaphore so one album's scan can still
+# overlap another album's GPU encoding — that pairing is the useful pipeline.
+_scan_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_scan_semaphore() -> asyncio.Semaphore:
+    global _scan_semaphore
+    if _scan_semaphore is None:
+        _scan_semaphore = asyncio.Semaphore(1)
+    return _scan_semaphore
 
 
 def _l2_normalize(x: np.ndarray, axis: int = -1, eps: float = 1e-12) -> np.ndarray:
@@ -378,6 +442,7 @@ class Embeddings(BaseModel):
     # smallest patch grid the bundled CLIP/SigLIP variants encode without
     # heavy upscaling. Default mirrors the Album field default in config.py.
     min_image_dimension: int = 256
+    min_image_bytes: int = DIMENSION_REJECT_MIN_BYTES
 
     def __init__(self, **data):
         """Ensure embeddings_path is always resolved to prevent cache key mismatches."""
@@ -428,18 +493,46 @@ class Embeddings(BaseModel):
                 # Log but don't crash if CUDA operations fail
                 logger.warning(f"CUDA cleanup failed: {e}")
 
-    def _passes_dimension_gate(self, path: Path) -> bool:
+    def _passes_dimension_gate(self, path: Path, st: os.stat_result | None = None) -> bool:
         """Return True if ``path``'s pixel dimensions are >= ``min_image_dimension``.
 
-        Reads only the image header via ``Image.open(...).size`` — PIL does
-        not decode pixels until they're accessed, so this is a few-KB read
-        per file. Unreadable / corrupt files return False and are logged at
-        debug level (they'd fail at encoding time anyway and would land in
-        ``bad_files`` there; here we just keep the scan log quiet).
+        The gate has three bands, decided from a stat where possible because
+        a stat is far cheaper than a header open (~200ms per open on a
+        network mount):
+
+        - smaller than the album's ``min_image_bytes`` (0 disables) —
+          reject on byte size alone. At the 8 KB default this measured a
+          ~0.15% false-negative rate against a real library.
+        - larger than :data:`DIMENSION_PROBE_MAX_BYTES` — pass on byte size
+          alone; files that big are effectively never below the (default
+          256px) pixel gate, and a rare false accept just indexes a small
+          image, which is harmless.
+        - in between — read the image header via ``Image.open(...).size``;
+          PIL does not decode pixels until they're accessed, so this is a
+          few-KB read per file. Unreadable / corrupt files return False and
+          are logged at debug level (they'd fail at encoding time anyway and
+          would land in ``bad_files`` there; here we just keep the scan log
+          quiet).
+
+        The byte and pixel thresholds are independent album settings,
+        surfaced side by side in the album editor; either can be disabled.
+        Callers that already stat'ed the file pass the result as ``st``.
         """
         min_dim = self.min_image_dimension
-        if min_dim <= 1:
+        byte_floor = self.min_image_bytes
+        pixel_gate_active = min_dim > 1
+        if not pixel_gate_active and byte_floor <= 0:
             return True
+        try:
+            if st is None:
+                st = path.stat()
+            if byte_floor > 0 and st.st_size < byte_floor:
+                return False
+            if not pixel_gate_active or st.st_size > DIMENSION_PROBE_MAX_BYTES:
+                return True
+        except OSError as e:
+            logger.debug(f"Skipping unstattable image during scan: {path}: {e}")
+            return False
         try:
             with Image.open(path) as im:
                 width, height = im.size
@@ -448,45 +541,134 @@ class Embeddings(BaseModel):
             return False
         return width >= min_dim and height >= min_dim
 
+    def last_updated_path(self) -> Path:
+        return self.embeddings_path.parent / LAST_UPDATED_FILENAME
+
+    def _touch_last_updated(self) -> None:
+        """Record that an index create/update operation completed (see
+        :data:`LAST_UPDATED_FILENAME`). Failures only cost UI accuracy."""
+        try:
+            path = self.last_updated_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        except OSError as e:
+            logger.warning(f"Could not record index update time: {e}")
+
+    def _scan_rejects_path(self) -> Path:
+        return self.embeddings_path.parent / SCAN_REJECTS_FILENAME
+
+    def _load_scan_rejects(self) -> dict[str, tuple[int, float]]:
+        """Load the gate-rejection cache: compare-key -> (size, mtime).
+
+        Returns an empty dict when the sidecar is absent, unreadable, or was
+        written under different gate thresholds (the verdicts it memoizes
+        would no longer hold).
+        """
+        path = self._scan_rejects_path()
+        if not path.exists():
+            return {}
+        try:
+            with np.load(path) as data:
+                if (
+                    int(data["min_dim"]) != self.min_image_dimension
+                    or int(data["min_bytes"]) != self.min_image_bytes
+                ):
+                    return {}
+                return {
+                    str(key): (int(size), float(mtime))
+                    for key, size, mtime in zip(
+                        data["keys"], data["sizes"], data["mtimes"], strict=True
+                    )
+                }
+        except Exception as e:
+            logger.warning(f"Ignoring unreadable scan-reject cache {path}: {e}")
+            return {}
+
+    def _save_scan_rejects(self, rejects: dict[str, tuple[int, float]]) -> None:
+        """Persist the gate-rejection cache; failures only cost speed, not
+        correctness, so they're logged and swallowed."""
+        path = self._scan_rejects_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_savez(
+                path,
+                keys=np.array(list(rejects.keys()), dtype=str),
+                sizes=np.array([v[0] for v in rejects.values()], dtype=np.int64),
+                mtimes=np.array([v[1] for v in rejects.values()], dtype=np.float64),
+                min_dim=np.int64(self.min_image_dimension),
+                min_bytes=np.int64(self.min_image_bytes),
+            )
+        except OSError as e:
+            logger.warning(f"Could not save scan-reject cache {path}: {e}")
+
     def get_image_files_from_directory(
         self,
         directory: Path,
         exts: set[str] = SUPPORTED_EXTENSIONS,
         progress_callback: Callable | None = None,
         update_interval: int = 100,
+        apply_dimension_gate: bool = True,
+        reject_sink: dict[str, tuple[int, float]] | None = None,
     ) -> list[Path]:
         """
         Recursively collect all image files from a directory.
 
-        Each candidate file's header is opened to read pixel dimensions;
-        images with either dimension below ``self.min_image_dimension`` are
-        skipped. The header read is a few KB per file, so a scan of 10k
-        files typically adds 10-30s on SSD — small next to encoding time.
+        Hidden (dot-prefixed) subdirectories and those named in
+        :data:`EXCLUDED_SCAN_DIRS` (thumbnail caches and our own
+        ``photomap_index``) are pruned from the walk entirely. The album
+        root itself is exempt, so an album may point at a hidden directory.
+
+        With ``apply_dimension_gate`` (the default), each candidate file
+        under :data:`DIMENSION_PROBE_MAX_BYTES` has its header opened to
+        read pixel dimensions; images with either dimension below
+        ``self.min_image_dimension`` are skipped. Pass
+        ``apply_dimension_gate=False`` to collect by extension only — the
+        update path does this and probes just the files not already indexed.
 
         Args:
             directory: Directory to scan
             exts: File extensions to include
             progress_callback: Optional callback function(count, message) for progress updates
             update_interval: How often to call progress_callback (every N files found)
+            apply_dimension_gate: Probe pixel dimensions during the walk
+            reject_sink: When given, gate-rejected files are recorded here as
+                compare-key -> (size, mtime) so they can be persisted to the
+                scan-reject cache and skipped on later scans
         """
         logger.info(f"Scanning directory {directory} for image files...")
         image_files = []
         files_checked = 0
         skipped_too_small = 0
+        gate_active = apply_dimension_gate and (self.min_image_dimension > 1 or self.min_image_bytes > 0)
 
         for root, dirs, files in os.walk(directory):
-            # Remove 'photomap_index' from dirs so os.walk skips it and its subdirs
-            dirs[:] = [d for d in dirs if d != "photomap_index"]
+            # Prune hidden dirs (app caches — see EXCLUDED_SCAN_DIRS note),
+            # thumbnail caches, and our own index dir from the walk. The
+            # album root itself is never pruned, only subdirectories.
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d.lower() not in EXCLUDED_SCAN_DIRS]
             for file in [Path(x) for x in files]:
                 files_checked += 1
 
                 if file.suffix.lower() not in exts:
                     continue
                 full = Path(root, file)
-                if self._passes_dimension_gate(full):
+                if not gate_active:
                     image_files.append(full.resolve())
                 else:
-                    skipped_too_small += 1
+                    st = None
+                    try:
+                        st = full.stat()
+                    except OSError as e:
+                        logger.debug(f"Skipping unstattable image during scan: {full}: {e}")
+                    if st is not None and self._passes_dimension_gate(full, st):
+                        image_files.append(full.resolve())
+                    else:
+                        skipped_too_small += 1
+                        if reject_sink is not None and st is not None:
+                            reject_sink[self._path_compare_key(full.resolve())] = (
+                                st.st_size,
+                                st.st_mtime,
+                            )
 
                 # Provide progress updates at regular intervals
                 if progress_callback and files_checked % update_interval == 0:
@@ -515,6 +697,8 @@ class Embeddings(BaseModel):
         image_paths_or_dir: list[Path] | Path,
         exts: set[str] = SUPPORTED_EXTENSIONS,
         progress_callback: Callable | None = None,
+        apply_dimension_gate: bool = True,
+        reject_sink: dict[str, tuple[int, float]] | None = None,
     ) -> list[Path]:
         """
         Get a list of image file paths from a directory or a list of image paths.
@@ -522,6 +706,10 @@ class Embeddings(BaseModel):
         Args:
             image_paths_or_dir (list of str or str): List of image paths or a directory path.
             progress_callback: Optional callback function for progress updates
+            apply_dimension_gate: Probe pixel dimensions during the scan (see
+                ``get_image_files_from_directory``)
+            reject_sink: Collects gate-rejected files (see
+                ``get_image_files_from_directory``)
 
         Returns:
             list of Path: List of image file paths.
@@ -530,7 +718,11 @@ class Embeddings(BaseModel):
         if isinstance(image_paths_or_dir, Path):
             # If it's a single Path object, treat it as a directory
             images = self.get_image_files_from_directory(
-                image_paths_or_dir, exts, progress_callback
+                image_paths_or_dir,
+                exts,
+                progress_callback,
+                apply_dimension_gate=apply_dimension_gate,
+                reject_sink=reject_sink,
             )
         elif isinstance(image_paths_or_dir, list):
             images = []
@@ -538,10 +730,16 @@ class Embeddings(BaseModel):
             for p in image_paths_or_dir:
                 if p.is_dir():
                     images.extend(
-                        self.get_image_files_from_directory(p, exts, progress_callback)
+                        self.get_image_files_from_directory(
+                            p,
+                            exts,
+                            progress_callback,
+                            apply_dimension_gate=apply_dimension_gate,
+                            reject_sink=reject_sink,
+                        )
                     )
                 elif p.suffix.lower() in exts:
-                    if self._passes_dimension_gate(p):
+                    if not apply_dimension_gate or self._passes_dimension_gate(p):
                         images.append(p)
                     else:
                         skipped_too_small += 1
@@ -853,10 +1051,30 @@ class Embeddings(BaseModel):
         image_paths_or_dir: list[Path] | Path,
         existing_filenames: np.ndarray,
         progress_callback: Callable | None = None,
+        check_progress_callback: Callable | None = None,
     ) -> tuple[set[Path], set[Path]]:
-        """Determine which images are new and which are missing."""
+        """Determine which images are new and which are missing.
+
+        The traversal collects candidates by extension only; the pixel
+        dimension gate runs afterwards, and only on files not already in the
+        index. Already-indexed files passed the gate when first indexed, so
+        re-probing all of them on every update paid the scan's dominant cost
+        (a per-file header open) for zero information.
+
+        Files the gate has already rejected are remembered in the scan-reject
+        cache with their size/mtime; while those match, later scans dismiss
+        them on the stat alone. Without this, a rejected file (e.g. a NAS
+        thumbnail) would look "new" — and be re-opened — on every update.
+
+        ``check_progress_callback(checked, total)``, when given, is invoked
+        periodically through the gate pass so callers can drive a real
+        progress bar — ``total`` is known up front here, unlike during the
+        traversal.
+        """
         live_paths = self.get_image_files(
-            image_paths_or_dir, progress_callback=progress_callback
+            image_paths_or_dir,
+            progress_callback=progress_callback,
+            apply_dimension_gate=False,
         )
         # Build map from casefolded posix key to the *original-case* Path.
         # The casefolded keys drive the set diff; the original Paths flow
@@ -872,7 +1090,45 @@ class Embeddings(BaseModel):
         new_keys = set(live_by_key) - set(existing_by_key)
         missing_keys = set(existing_by_key) - set(live_by_key)
 
-        new_image_paths = {live_by_key[k] for k in new_keys}
+        gate_active = self.min_image_dimension > 1 or self.min_image_bytes > 0
+        rejects = self._load_scan_rejects() if gate_active else {}
+        new_rejects: dict[str, tuple[int, float]] = {}
+        new_image_paths: set[Path] = set()
+        skipped_too_small = 0
+        total_new = len(new_keys)
+        for i, key in enumerate(new_keys, start=1):
+            path = live_by_key[key]
+            if not gate_active:
+                new_image_paths.add(path)
+                continue
+            st = None
+            try:
+                st = path.stat()
+            except OSError as e:
+                logger.debug(f"Skipping unstattable image during scan: {path}: {e}")
+            if st is None:
+                skipped_too_small += 1
+            elif rejects.get(key) == (st.st_size, st.st_mtime):
+                # Rejected before and unchanged since — no need to re-probe.
+                new_rejects[key] = rejects[key]
+                skipped_too_small += 1
+            elif self._passes_dimension_gate(path, st):
+                new_image_paths.add(path)
+            else:
+                new_rejects[key] = (st.st_size, st.st_mtime)
+                skipped_too_small += 1
+            if check_progress_callback and (i % 100 == 0 or i == total_new):
+                check_progress_callback(i, total_new)
+        if skipped_too_small:
+            logger.info(
+                f"Skipped {skipped_too_small} new image(s) under "
+                f"{self.min_image_dimension}px in either dimension."
+            )
+        # Rebuilding from this run's rejects self-prunes entries for files
+        # that were deleted or changed; skip the write when nothing moved.
+        if gate_active and new_rejects != rejects:
+            self._save_scan_rejects(new_rejects)
+
         missing_image_paths = {existing_by_key[k] for k in missing_keys}
 
         return new_image_paths, missing_image_paths
@@ -962,7 +1218,9 @@ class Embeddings(BaseModel):
         num_workers: int = DEFAULT_NUM_WORKERS,
     ) -> IndexResult:
         """Index images using CLIP and save their embeddings."""
-        image_paths = self.get_image_files(image_paths_or_dir)
+        reject_sink: dict[str, tuple[int, float]] = {}
+        image_paths = self.get_image_files(image_paths_or_dir, reject_sink=reject_sink)
+        self._save_scan_rejects(reject_sink)
         total_images = len(image_paths)
         progress_callback = tqdm_progress_callback(total_images)
 
@@ -985,6 +1243,7 @@ class Embeddings(BaseModel):
                 f"Created UMAP index with shape: {result.umap_embeddings.shape}"
             )
 
+        self._touch_last_updated()
         return result
 
     async def create_index_async(
@@ -1003,12 +1262,24 @@ class Embeddings(BaseModel):
             progress_tracker.update_total_images(album_key, max(count, 0))
             progress_tracker.update_progress(album_key, count, message)
 
-        # Offload the blocking traversal to a thread
-        image_paths = await asyncio.to_thread(
-            self.get_image_files,
-            image_paths_or_dir,
-            progress_callback=traversal_callback,
-        )
+        # Offload the blocking traversal to a thread, one album at a time
+        # (see _scan_semaphore).
+        scan_semaphore = _get_scan_semaphore()
+        if scan_semaphore.locked():
+            progress_tracker.update_progress(
+                album_key, 0, "Waiting for another album's file scan to finish…"
+            )
+        reject_sink: dict[str, tuple[int, float]] = {}
+        async with scan_semaphore:
+            image_paths = await asyncio.to_thread(
+                self.get_image_files,
+                image_paths_or_dir,
+                progress_callback=traversal_callback,
+                reject_sink=reject_sink,
+            )
+        # Seed the reject cache so the first *update* doesn't have to
+        # re-probe everything the gate just turned away.
+        self._save_scan_rejects(reject_sink)
         total_images = len(image_paths)
         logger.info(
             f"Found {total_images} image files in {describe_image_source(image_paths_or_dir)}"
@@ -1044,6 +1315,7 @@ class Embeddings(BaseModel):
             progress_tracker.complete_operation(
                 album_key, "Indexing completed successfully"
             )
+            self._touch_last_updated()
             return result
         except Exception as e:
             progress_tracker.set_error(album_key, str(e))
@@ -1203,6 +1475,7 @@ class Embeddings(BaseModel):
                     f"UMAP index created with shape: {result.umap_embeddings.shape}"
                 )
 
+            self._touch_last_updated()
             return result
 
         except Exception as e:
@@ -1233,12 +1506,30 @@ class Embeddings(BaseModel):
                 progress_tracker.update_total_images(album_key, max(count, 0))
                 progress_tracker.update_progress(album_key, count, message)
 
-            new_image_paths, missing_image_paths = await asyncio.to_thread(
-                self._get_new_and_missing_images,
-                image_paths_or_dir,
-                existing.filenames,
-                progress_callback=traversal_callback,
-            )
+            def check_progress_callback(checked, total):
+                # Unlike the open-ended traversal, the gate pass knows its
+                # total up front, so it can drive a real percentage.
+                progress_tracker.update_total_images(album_key, total)
+                progress_tracker.update_progress(
+                    album_key,
+                    checked,
+                    f"Checking new image files ({checked:,} of {total:,})...",
+                )
+
+            # One album traverses at a time (see _scan_semaphore).
+            scan_semaphore = _get_scan_semaphore()
+            if scan_semaphore.locked():
+                progress_tracker.update_progress(
+                    album_key, 0, "Waiting for another album's file scan to finish…"
+                )
+            async with scan_semaphore:
+                new_image_paths, missing_image_paths = await asyncio.to_thread(
+                    self._get_new_and_missing_images,
+                    image_paths_or_dir,
+                    existing.filenames,
+                    progress_callback=traversal_callback,
+                    check_progress_callback=check_progress_callback,
+                )
 
             filtered_existing = self._filter_missing_images(
                 missing_image_paths,
@@ -1306,6 +1597,7 @@ class Embeddings(BaseModel):
                     f"Successfully indexed {len(result.embeddings)} new images",
                 )
 
+            self._touch_last_updated()
             return result
 
         except Exception as e:
