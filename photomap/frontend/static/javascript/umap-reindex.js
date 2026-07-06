@@ -7,7 +7,10 @@
 // status text. Clicking the ring does nothing — cancellation stays in the
 // Album Manager. On completion an "albumIndexUpdated" event is dispatched
 // so the map can reload itself, and an albumChanged/"refresh" event so the
-// slideshow picks up the new image set without losing its place.
+// slideshow picks up the new image set without losing its place. The ring
+// also animates for runs started elsewhere: it listens for the
+// "albumIndexStarted" event fired when the Album Manager (Update Index /
+// Update All) kicks off or attaches to an update of the current album.
 
 import { getIndexMetadata, updateIndex } from "./index.js";
 import { state } from "./state.js";
@@ -237,6 +240,17 @@ export function initUmapReindexButton() {
     // ring is already down and the album hasn't changed, so nothing to do.
     if (e.detail?.changeType !== "refresh") {
       checkUmapReindexOngoing();
+    }
+  });
+
+  // An index update was started elsewhere (Album Manager's "Update Index",
+  // "Update All", auto-indexing). If it's for the album being viewed, raise
+  // the ring and track that run; beginProgress is a no-op if the ring is
+  // already polling (e.g. the run was started by this button).
+  window.addEventListener("albumIndexStarted", (e) => {
+    const albumKey = e.detail?.albumKey;
+    if (albumKey && albumKey === state.album) {
+      beginProgress(albumKey);
     }
   });
 }

@@ -5,7 +5,11 @@ import { fetchJson, HttpError } from "./utils.js";
 
 export async function updateIndex(albumKey) {
   try {
-    return await fetchJson("update_index_async/", { json: { album_key: albumKey } });
+    const response = await fetchJson("update_index_async/", { json: { album_key: albumKey } });
+    // Tell interested UI (e.g. the semantic map's titlebar progress ring)
+    // that a run just started, whichever control initiated it.
+    window.dispatchEvent(new CustomEvent("albumIndexStarted", { detail: { albumKey } }));
+    return response;
   } catch (error) {
     console.error("Failed to start indexing:", error);
     alert(`Failed to start indexing: ${error.message}`);
