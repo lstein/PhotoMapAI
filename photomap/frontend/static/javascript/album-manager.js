@@ -1606,6 +1606,10 @@ export class AlbumManager {
         console.log(`Backend reports indexing already in progress for album: ${albumKey}`);
         this.showProgressUIWithoutScroll(cardElement, progress);
         this.startProgressPolling(albumKey, cardElement);
+        // The run predates this click (another tab, Update All, …) so
+        // updateIndex() won't fire albumIndexStarted for it — announce it
+        // here so the semantic map's ring attaches to it as well.
+        window.dispatchEvent(new CustomEvent("albumIndexStarted", { detail: { albumKey } }));
         return;
       }
     } catch {

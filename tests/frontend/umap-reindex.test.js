@@ -22,7 +22,9 @@ jest.unstable_mockModule(`${M}/utils.js`, () => ({
 const { updateIndex, getIndexMetadata } = await import(`${M}/index.js`);
 const { state } = await import(`${M}/state.js`);
 const { fetchJson } = await import(`${M}/utils.js`);
-const { reindexConfig, startUmapReindex, checkUmapReindexOngoing } = await import(`${M}/umap-reindex.js`);
+const { reindexConfig, startUmapReindex, checkUmapReindexOngoing, initUmapReindexButton } = await import(
+  `${M}/umap-reindex.js`
+);
 
 reindexConfig.pollInterval = 5;
 
@@ -182,5 +184,26 @@ describe("checkUmapReindexOngoing", () => {
     fetchJson.mockResolvedValue({ status: "idle" });
     await checkUmapReindexOngoing();
     expect(document.getElementById("umapReindexProgress").style.display).toBe("none");
+  });
+});
+
+// Keep this block last: initUmapReindexButton registers persistent window
+// listeners that would otherwise react to events dispatched by other tests.
+describe("albumIndexStarted from another control (e.g. Album Manager)", () => {
+  test("raises the ring for the current album and tracks the run to completion", async () => {
+    initUmapReindexButton();
+    fetchJson.mockResolvedValue({ status: "indexing", progress_percentage: 30 });
+
+    // A run on some other album must not touch this ring.
+    window.dispatchEvent(new CustomEvent("albumIndexStarted", { detail: { albumKey: "other-album" } }));
+    await flush();
+    expect(document.getElementById("umapReindexProgress").style.display).toBe("none");
+
+    window.dispatchEvent(new CustomEvent("albumIndexStarted", { detail: { albumKey: "alb" } }));
+    expect(document.getElementById("umapReindexProgress").style.display).toBe("inline-flex");
+    expect(document.getElementById("umapReindexBtn").style.display).toBe("none");
+
+    fetchJson.mockResolvedValue({ status: "completed" });
+    await waitForButtonRestore();
   });
 });
