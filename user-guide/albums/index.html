@@ -502,6 +502,21 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Adding Albums">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#invokeai-backed-albums" class="md-nav__link">
+    <span class="md-ellipsis">
+      InvokeAI-Backed Albums
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -937,6 +952,21 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Adding Albums">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#invokeai-backed-albums" class="md-nav__link">
+    <span class="md-ellipsis">
+      InvokeAI-Backed Albums
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1011,7 +1041,7 @@
 <h1 id="managing-albums">Managing Albums</h1>
 <p>PhotoMapAI allows you to organize your photos and other images into a series of albums. Each album draws its images from one or more folders of images, and manages independent search indexes and semantic maps. Albums may also overlap by having some image paths in common -- with some restrictions.</p>
 <h2 id="adding-albums">Adding Albums</h2>
-<p>Bring up the Album Manager by clicking on the <strong>Settings</strong> gear icon and then the green <span class="green-button-text">Manage Albums</span>&gt; button.</p>
+<p>Bring up the Album Manager by clicking on the <strong>Settings</strong> gear icon and then the blue <span class="blue-button-text">Manage Albums</span> button.</p>
 <p><img src="../../img/photomap_settings.png" width="640"></p>
 <p>The Album Management dialogue provides you with controls for creating new albums, editing existing ones, deleting unwanted albums, and bringing an album's contents up to date after you've added or removed image file from its folder paths.</p>
 <div class="photomap-overlay-container">
@@ -1019,7 +1049,9 @@
   <img src="../../img/photomap_album_overview_overlay.png" width="480" class="photomap-overlay" alt="Overlay image">
 </div>
 
-<p>To add an album, press the green <span class="green-button-text">Add Album</span> button. This will add a new section to the dialogue window that prompts you to enter the following fields:</p>
+<p>To add an album, press the green <span class="green-button-text">Add
+Album</span> button. This will add a new section to the dialogue
+window that prompts you to enter the following fields:</p>
 <ul>
 <li><strong>Album Key</strong> - This is a short mnemonic text that is used to uniquely identify the album. You can add it to PhotoMapAI's URL in order to go directly to the album of your choice, so it is best to avoid spaces and symbols. Once the key is assigned, you can't change it.</li>
 <li><strong>Display Name</strong> - This is the name of the album that will be displayed in the settings Album popup menu and the browser tab window title.</li>
@@ -1030,6 +1062,11 @@
 <p><img src="../../img/photomap_album_add.png" width="640" class="img-hover-zoom"></p>
 <p>At least one image folder needs to be defined. You can type the path in manually, or browse the filesystem for a folder by clicking on the folder icon to the right of the image folder field. Each time you enter a path, a new empty field will appear, allowing you to add additional folders to the album. You can remove a previously-entered folder by clicking a trash icon that appears next to it.</p>
 <p>You are free to organize your image files in any way you wish. You can dump them into a single big folder, or organize them into multiple nested subfolders. During indexing, PhotoMapAI will traverse the folder structure and identify all image files of type JPEG, PNG, TIFF, HEIF, and HEIC.</p>
+<h3 id="invokeai-backed-albums">InvokeAI-Backed Albums</h3>
+<p>If you have configured PhotoMapAI to communicate with an
+<a href="https://invoke.ai">InvokeAI</a> backend, then you will see additional
+configuration options that allow you to index images directly from an
+InvokeAI image gallery. See <a href="../invokeai-integration/">InvokeAI Integration</a> for more information.</p>
 <h2 id="indexing-albums">Indexing Albums</h2>
 <p>For fast search and retrieval, PhotoMapAI indexes all the image files it finds and stores them in a compact set of indexes. Indexing begins automatically when you first add an album, and will continue in the background even if you navigate away from the Album Manager, or even close the browser.</p>
 <p>The time it takes to index depends on how many image files you have, their size, the speed of the disk media, and the availability of a GPU. On a typical Windows machine with an NVidia graphics card, it takes ~2 hours to index 80,000 images located on a network mounted disk. Expect the speed to be noticeably faster on a collection of images located on a local solid-state disk, and much slower (about 10X) on a machine that lacks GPU acceleration.</p>
