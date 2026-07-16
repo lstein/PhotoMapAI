@@ -335,6 +335,22 @@ def peek_encoder_spec(embeddings_path: Path) -> str:
     return LEGACY_ENCODER_SPEC
 
 
+# Per-image arrays mutated by the delete/move rewrite paths. Every OTHER key
+# in the .npz (model_id, embedding_dim, and anything added later) must be
+# carried over verbatim when rewriting the file.
+_PER_IMAGE_KEYS = frozenset({"filenames", "embeddings", "modification_times", "metadata"})
+
+
+def _copy_non_per_image_keys(data: Any) -> dict[str, Any]:
+    """Copy the non-per-image keys out of an open .npz for a rewrite.
+
+    Dropping these on a rewrite silently strips the encoder stamp: the next
+    reader falls back to ``LEGACY_ENCODER_SPEC`` and every search fails with
+    :class:`EmbeddingCacheMismatch` until a full re-index.
+    """
+    return {key: data[key].copy() for key in data.files if key not in _PER_IMAGE_KEYS}
+
+
 @functools.lru_cache(maxsize=3)
 def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
     """
@@ -1918,6 +1934,7 @@ class Embeddings(BaseModel):
                 embeddings = data["embeddings"].copy()
                 modtimes = data["modification_times"].copy()
                 metadata = data["metadata"].copy()
+                extras = _copy_non_per_image_keys(data)
                 # Reconstruct sorting locally to find correct index. Must match
                 # the (modtime, filename) lexsort used in ``_open_npz_file`` or
                 # we'd find the wrong file to delete.
@@ -1948,6 +1965,7 @@ class Embeddings(BaseModel):
                 filenames=filenames,
                 modification_times=modtimes,
                 metadata=metadata,
+                **extras,
             )
 
             # 6. Re-prime the cache immediately to verify the write
@@ -1975,6 +1993,7 @@ class Embeddings(BaseModel):
                 embeddings = data["embeddings"].copy()
                 modtimes = data["modification_times"].copy()
                 metadata = data["metadata"].copy()
+                extras = _copy_non_per_image_keys(data)
                 # Match the (modtime, filename) lexsort used elsewhere — see
                 # ``_open_npz_file`` for the rationale.
                 sorted_indices = np.lexsort((filenames, modtimes))
@@ -2014,6 +2033,7 @@ class Embeddings(BaseModel):
                 filenames=filenames,
                 modification_times=modtimes,
                 metadata=metadata,
+                **extras,
             )
 
             logger.info(f"Updated path in embeddings: {current_filename} -> {new_path}")

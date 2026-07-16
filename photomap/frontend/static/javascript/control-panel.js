@@ -92,7 +92,7 @@ function handleCopyText() {
 
 // Delete the current file
 async function handleDeleteCurrentFile() {
-  const [globalIndex, , searchIndex] = getCurrentSlideIndex();
+  const [globalIndex] = getCurrentSlideIndex();
   const currentFilepath = await getCurrentFilepath();
 
   if (globalIndex === -1 || !currentFilepath) {
@@ -108,7 +108,7 @@ async function handleDeleteCurrentFile() {
   try {
     showSpinner();
     await deleteImage(state.album, globalIndex, state.moveToTrash);
-    await handleSuccessfulDelete(globalIndex, searchIndex);
+    await handleSuccessfulDelete(globalIndex);
     hideSpinner();
   } catch (error) {
     hideSpinner();
@@ -160,49 +160,28 @@ async function confirmDelete(filepath, globalIndex) {
   return await showDeleteConfirmModal(filepath, globalIndex);
 }
 
-async function handleSuccessfulDelete(globalIndex, searchIndex) {
+async function handleSuccessfulDelete(globalIndex) {
   const metadata = await getIndexMetadata(state.album);
-  slideState.totalAlbumImages = metadata?.filename_count || 0;
+  const totalImages = metadata?.filename_count || 0;
 
-  // Tell the rest of the app (bookmarks, back-stack, grid view) which index
-  // the backend just renumbered out from under them. The multi-delete path in
-  // bookmarks.js fires the same event with multiple indices, so listeners
-  // only need to handle one shape.
+  // Tell the rest of the app (slide state, bookmarks, back-stack, grid view)
+  // which index the backend just renumbered out from under them. The
+  // multi-delete path in bookmarks.js fires the same event with multiple
+  // indices, so listeners only need to handle one shape. slide-state.js owns
+  // repositioning — including staying inside an active search — so don't
+  // touch slideState's position fields here.
   window.dispatchEvent(
     new CustomEvent("albumChanged", {
       detail: {
         album: state.album,
-        totalImages: slideState.totalAlbumImages,
+        totalImages,
         changeType: "deletion",
         deletedIndices: [globalIndex],
       },
     })
   );
 
-  // Drop the deleted entry from search results and decrement subsequent global indices.
-  // Stay on the same search position so the next result fills the slot; clamp at the end.
-  if (slideState.isSearchMode && slideState.searchResults?.length > 0) {
-    slideState.searchResults.splice(searchIndex, 1);
-    for (const result of slideState.searchResults) {
-      if (result.index > globalIndex) {
-        result.index -= 1;
-      }
-    }
-    if (slideState.searchResults.length === 0) {
-      slideState.exitSearchMode();
-    } else {
-      slideState.currentSearchIndex = Math.min(slideState.currentSearchIndex, slideState.searchResults.length - 1);
-      slideState.currentGlobalIndex = slideState.searchResults[slideState.currentSearchIndex].index;
-    }
-  }
-
-  // Backend re-indexes after deletion: the slide that was at globalIndex+1 is now at globalIndex,
-  // so keeping currentGlobalIndex unchanged naturally advances to the next image. Clamp so that
-  // deleting the last image lands on the new last image.
-  if (slideState.totalAlbumImages > 0) {
-    slideState.currentGlobalIndex = Math.min(slideState.currentGlobalIndex, slideState.totalAlbumImages - 1);
-  } else {
-    slideState.currentGlobalIndex = 0;
+  if (totalImages === 0) {
     state.swiper.removeAllSlides();
     return;
   }

@@ -114,6 +114,11 @@ def test_delete_image(
     with np.load(index_path, allow_pickle=True) as data:
         disk_count = len(data["filenames"])
         print(f"Direct disk read count: {disk_count}")
+        # The rewrite must keep the encoder stamp. Losing it makes readers
+        # fall back to LEGACY_ENCODER_SPEC and every subsequent search fail
+        # with EmbeddingCacheMismatch for albums on a non-legacy encoder.
+        assert "model_id" in data.files, "deletion rewrite dropped model_id"
+        assert str(data["model_id"]) == new_album["encoder_spec"]
 
     assert (
         metadata["filename_count"] == TEST_IMAGE_COUNT - 1
@@ -123,6 +128,44 @@ def test_delete_image(
     assert not Path(
         directory, filename_to_delete
     ).exists(), "Image file should be deleted"
+
+
+def test_npz_rewrites_preserve_non_per_image_keys(tmp_path: Path):
+    """``remove_image_from_embeddings`` and ``update_image_path`` rewrite the
+    whole ``.npz``; they must carry over ``model_id``, ``embedding_dim``, and
+    any key added in the future, not just the four per-image arrays. Dropping
+    ``model_id`` made the next reader fall back to the legacy encoder spec, so
+    every search on a non-legacy album failed with ``EmbeddingCacheMismatch``
+    after a single deletion."""
+    encoder_spec = "open-clip:ViT-L-14/dfn2b_s39b"
+    npz_path = tmp_path / "embeddings.npz"
+    np.savez(
+        npz_path,
+        embeddings=np.eye(3, dtype=np.float32),
+        filenames=np.array([str(tmp_path / f"{name}.jpg") for name in "abc"]),
+        modification_times=np.array([1.0, 2.0, 3.0]),
+        metadata=np.array([{}, {}, {}], dtype=object),
+        model_id=np.array(encoder_spec),
+        embedding_dim=np.array(3),
+        future_key=np.array("still here"),
+    )
+    emb = Embeddings(embeddings_path=npz_path, encoder_spec=encoder_spec)
+
+    emb.remove_image_from_embeddings(0)
+    with np.load(npz_path, allow_pickle=True) as data:
+        assert len(data["filenames"]) == 2
+        assert str(data["model_id"]) == encoder_spec
+        assert int(data["embedding_dim"]) == 3
+        assert str(data["future_key"]) == "still here"
+
+    emb.update_image_path(0, tmp_path / "renamed.jpg")
+    with np.load(npz_path, allow_pickle=True) as data:
+        assert str(tmp_path / "renamed.jpg") in data["filenames"]
+        assert str(data["model_id"]) == encoder_spec
+        assert int(data["embedding_dim"]) == 3
+        assert str(data["future_key"]) == "still here"
+
+    _open_npz_file.cache_clear()
 
 
 # test that we can move images
