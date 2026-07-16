@@ -40,6 +40,20 @@ export async function deleteImage(albumKey, index, moveToTrash = true) {
   }
 }
 
+// Batch delete: one request and a single embeddings rewrite on the server,
+// instead of one full .npz rewrite per image. Returns the server's summary,
+// including ``deleted_indices`` (the subset that actually got removed).
+export async function deleteImages(albumKey, indices, moveToTrash = true) {
+  try {
+    return await fetchJson(`delete_images/${encodeURIComponent(albumKey)}`, {
+      json: { indices, move_to_trash: moveToTrash },
+    });
+  } catch (e) {
+    console.warn("Failed to delete images.");
+    throw e;
+  }
+}
+
 // Given an album key, returns metadata about the index, including number of images.
 // On any failure, dispatches ``albumIndexError`` so the album manager can
 // react (e.g. start auto-indexing on 404). The errorType distinguishes

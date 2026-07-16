@@ -168,6 +168,119 @@ def test_npz_rewrites_preserve_non_per_image_keys(tmp_path: Path):
     _open_npz_file.cache_clear()
 
 
+def test_delete_images_batch(
+    client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """The batch endpoint deletes several images in one request, drops all of
+    their index rows in a single rewrite, and keeps the encoder stamp."""
+    build_index(client, new_album)
+    album_key = new_album["key"]
+
+    # Resolve which files the sorted indices refer to BEFORE deleting.
+    targets = {}
+    for idx in (0, 2, 4):
+        targets[idx] = client.get(f"/retrieve_image/{album_key}/{idx}").json()["filename"]
+    survivor = client.get(f"/retrieve_image/{album_key}/1").json()["filename"]
+
+    # move_to_trash=False for the same determinism reason as test_delete_image.
+    response = client.post(
+        f"/delete_images/{album_key}",
+        json={"indices": [0, 2, 4], "move_to_trash": False},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["success"] is True
+    assert result["deleted_count"] == 3
+    assert sorted(result["deleted_indices"]) == [0, 2, 4]
+    assert "errors" not in result
+
+    metadata = client.get(f"/index_metadata/{album_key}").json()
+    assert metadata["filename_count"] == TEST_IMAGE_COUNT - 3
+
+    directory = Path(new_album["image_paths"][0])
+    for filename in targets.values():
+        assert not (directory / filename).exists(), f"{filename} should be deleted"
+    assert (directory / survivor).exists(), "non-selected image must survive"
+
+    # The single batch rewrite must carry the encoder stamp over, exactly
+    # like the per-image path — losing it breaks every subsequent search.
+    config = get_config_manager().get_album(album_key)
+    with np.load(Path(config.index), allow_pickle=True) as data:
+        assert str(data["model_id"]) == new_album["encoder_spec"]
+        remaining = {Path(str(f)).name for f in data["filenames"]}
+    assert survivor in remaining
+    assert remaining.isdisjoint(targets.values())
+
+
+def test_delete_images_batch_reports_bad_indices(
+    client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """Out-of-range indices are reported per-item; the valid ones still
+    delete and the index shrinks only by the successful count."""
+    build_index(client, new_album)
+    album_key = new_album["key"]
+
+    response = client.post(
+        f"/delete_images/{album_key}",
+        json={"indices": [0, 9999], "move_to_trash": False},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["success"] is True
+    assert result["deleted_count"] == 1
+    assert result["deleted_indices"] == [0]
+    assert result["error_count"] == 1
+    assert "9999" in result["errors"][0]
+
+    metadata = client.get(f"/index_metadata/{album_key}").json()
+    assert metadata["filename_count"] == TEST_IMAGE_COUNT - 1
+
+
+def test_delete_images_batch_rejects_empty_list(
+    client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
+):
+    build_index(client, new_album)
+    response = client.post(
+        f"/delete_images/{new_album['key']}",
+        json={"indices": []},
+    )
+    assert response.status_code == 400
+
+
+def test_remove_images_batch_maps_sorted_indices_and_keeps_extras(tmp_path: Path):
+    """``remove_images_from_embeddings`` receives sorted-order indices (the
+    ones the API exposes) that all refer to the pre-delete ordering. It must
+    map them through the (modtime, filename) lexsort against ONE snapshot —
+    no reverse-order shifting — and its single rewrite must carry over every
+    non-per-image key (model_id and anything added later)."""
+    encoder_spec = "openai-clip:ViT-B/32"
+    npz_path = tmp_path / "embeddings.npz"
+    # Raw storage order deliberately differs from sorted order: lexsorting by
+    # (modtime, filename) yields [c, a, b, d].
+    np.savez(
+        npz_path,
+        embeddings=np.arange(8, dtype=np.float32).reshape(4, 2),
+        filenames=np.array([str(tmp_path / f"{name}.jpg") for name in "abcd"]),
+        modification_times=np.array([2.0, 3.0, 1.0, 4.0]),
+        metadata=np.array([{}, {}, {}, {}], dtype=object),
+        model_id=np.array(encoder_spec),
+        future_key=np.array("still here"),
+    )
+    emb = Embeddings(embeddings_path=npz_path, encoder_spec=encoder_spec)
+
+    # Sorted indices 0 and 2 are c.jpg and b.jpg.
+    emb.remove_images_from_embeddings([0, 2])
+
+    with np.load(npz_path, allow_pickle=True) as data:
+        names = {Path(str(f)).name for f in data["filenames"]}
+        assert names == {"a.jpg", "d.jpg"}
+        assert len(data["embeddings"]) == 2
+        assert str(data["model_id"]) == encoder_spec
+        assert str(data["future_key"]) == "still here"
+
+    _open_npz_file.cache_clear()
+
+
 # test that we can move images
 def test_move_images(
     client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
