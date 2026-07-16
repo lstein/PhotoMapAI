@@ -3,7 +3,7 @@
 import { deleteImage, getIndexMetadata } from "./index.js";
 import { getCurrentFilepath, getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
-import { hideSpinner, showSpinner } from "./utils.js";
+import { errorDetail, hideSpinner, showSpinner } from "./utils.js";
 
 // Cache DOM elements
 let elements = {};
@@ -112,7 +112,7 @@ async function handleDeleteCurrentFile() {
     hideSpinner();
   } catch (error) {
     hideSpinner();
-    alert(`Failed to delete: ${error.message}`);
+    alert(`Failed to delete: ${errorDetail(error)}`);
     console.error("Delete failed:", error);
   }
 }

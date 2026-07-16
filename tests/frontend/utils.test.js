@@ -9,6 +9,8 @@ import {
   debounce,
   getPercentile,
   setCheckmarkOnIcon,
+  errorDetail,
+  HttpError,
 } from "../../photomap/frontend/static/javascript/utils.js";
 
 describe("utils.js", () => {
@@ -293,6 +295,26 @@ describe("utils.js", () => {
 
     it("should handle undefined icon element gracefully", () => {
       expect(() => setCheckmarkOnIcon(undefined, false)).not.toThrow();
+    });
+  });
+
+  describe("errorDetail", () => {
+    it("prefers the server's detail string for an HttpError", () => {
+      const err = new HttpError(403, "Forbidden", "delete_image/family/4425", {
+        detail: "Cannot delete 'img.jpg': permission denied.",
+      });
+      expect(errorDetail(err)).toBe("Cannot delete 'img.jpg': permission denied.");
+    });
+
+    it("falls back to the error message when there is no string detail", () => {
+      // No body at all (e.g. reading the response body failed).
+      expect(errorDetail(new HttpError(500, "Internal Server Error", "u", undefined))).toBe(
+        "HTTP 500 Internal Server Error for u"
+      );
+      // FastAPI validation errors put a list in detail — not showable as-is.
+      expect(errorDetail(new HttpError(422, "", "u", { detail: [{ loc: [] }] }))).toBe("HTTP 422 for u");
+      // Non-HTTP errors pass straight through.
+      expect(errorDetail(new Error("plain failure"))).toBe("plain failure");
     });
   });
 });
