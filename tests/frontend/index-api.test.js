@@ -13,7 +13,7 @@ jest.unstable_mockModule(`${M}/utils.js`, () => ({
 }));
 
 const { fetchJson } = await import(`${M}/utils.js`);
-const { updateIndex } = await import(`${M}/index.js`);
+const { deleteImages, updateIndex } = await import(`${M}/index.js`);
 
 beforeEach(() => {
   fetchJson.mockReset();
@@ -49,5 +49,29 @@ describe("updateIndex", () => {
     } finally {
       window.removeEventListener("albumIndexStarted", onStarted);
     }
+  });
+});
+
+describe("deleteImages", () => {
+  test("posts the whole batch in one request and returns the summary", async () => {
+    const response = { success: true, deleted_count: 3, deleted_indices: [1, 5, 9] };
+    fetchJson.mockResolvedValue(response);
+
+    const result = await deleteImages("my album", [1, 5, 9], false);
+
+    expect(result).toBe(response);
+    expect(fetchJson).toHaveBeenCalledTimes(1);
+    expect(fetchJson).toHaveBeenCalledWith("delete_images/my%20album", {
+      json: { indices: [1, 5, 9], move_to_trash: false },
+    });
+  });
+
+  test("defaults move_to_trash to true and rethrows failures", async () => {
+    fetchJson.mockRejectedValue(new Error("boom"));
+
+    await expect(deleteImages("alb", [0])).rejects.toThrow("boom");
+    expect(fetchJson).toHaveBeenCalledWith("delete_images/alb", {
+      json: { indices: [0], move_to_trash: true },
+    });
   });
 });

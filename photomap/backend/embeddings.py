@@ -1926,6 +1926,22 @@ class Embeddings(BaseModel):
         """
         Remove an image from the embeddings file.
         """
+        self.remove_images_from_embeddings([index])
+
+    def remove_images_from_embeddings(self, indices: list[int]) -> None:
+        """
+        Remove a batch of images from the embeddings file in one rewrite.
+
+        Args:
+            indices: Sorted-order indices (the ones the API exposes) of the
+                images to remove. All indices refer to the sort order BEFORE
+                any removal — callers must not pre-shift them.
+
+        The whole batch costs one .npz load and one atomic rewrite, instead
+        of one full load/rewrite per image as repeated single deletions do.
+        """
+        if not indices:
+            return
         try:
             # 1. Load data explicitly without using the cache wrapper
             # This ensures we get a fresh copy to work on
@@ -1935,22 +1951,24 @@ class Embeddings(BaseModel):
                 modtimes = data["modification_times"].copy()
                 metadata = data["metadata"].copy()
                 extras = _copy_non_per_image_keys(data)
-                # Reconstruct sorting locally to find correct index. Must match
-                # the (modtime, filename) lexsort used in ``_open_npz_file`` or
-                # we'd find the wrong file to delete.
+                # Reconstruct sorting locally to find correct indices. Must
+                # match the (modtime, filename) lexsort used in
+                # ``_open_npz_file`` or we'd find the wrong files to delete.
                 sorted_indices = np.lexsort((filenames, modtimes))
-                sorted_filenames = filenames[sorted_indices]
 
-            current_filename = sorted_filenames[index]
+            # 2. Map sorted-order indices to positions in the raw arrays.
+            # All lookups happen against the same snapshot, so the batch
+            # needs no reverse-order index-shifting dance.
+            for index in indices:
+                if index < 0 or index >= len(sorted_indices):
+                    raise IndexError(f"Index {index} out of bounds for embeddings file.")
+            original_indices = sorted_indices[np.asarray(indices, dtype=np.intp)]
 
-            # 2. Find index in the arrays
-            original_idx = np.where(filenames == current_filename)[0][0]
-
-            # 3. Remove from all arrays
-            filenames = np.delete(filenames, original_idx)
-            embeddings = np.delete(embeddings, original_idx, axis=0)
-            modtimes = np.delete(modtimes, original_idx)
-            metadata = np.delete(metadata, original_idx)
+            # 3. Remove from all arrays in one pass
+            filenames = np.delete(filenames, original_indices)
+            embeddings = np.delete(embeddings, original_indices, axis=0)
+            modtimes = np.delete(modtimes, original_indices)
+            metadata = np.delete(metadata, original_indices)
 
             # 4. Clear Cache immediately (Before touching disk)
             _open_npz_file.cache_clear()
@@ -1972,7 +1990,7 @@ class Embeddings(BaseModel):
             _open_npz_file(self.embeddings_path)
 
         except Exception as e:
-            logger.error(f"Error removing image: {e}")
+            logger.error(f"Error removing images: {e}")
             raise
 
     def update_image_path(self, index: int, new_path: Path) -> None:
