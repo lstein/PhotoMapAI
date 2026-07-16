@@ -4,6 +4,7 @@
 
 import { showDeleteConfirmModal } from "./control-panel.js";
 import { createSimpleDirectoryPicker } from "./filetree.js";
+import { deleteImages } from "./index.js";
 import { showConfirmModal } from "./modal-utils.js";
 import { setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
@@ -575,18 +576,13 @@ class BookmarkManager {
     showSpinner();
 
     try {
-      // Delete images in reverse order to maintain index consistency
-      const sortedIndices = [...indices].sort((a, b) => b - a);
-
-      for (const globalIndex of sortedIndices) {
-        try {
-          await fetchJson(
-            `delete_image/${encodeURIComponent(state.album)}/${globalIndex}?move_to_trash=${state.moveToTrash}`,
-            { method: "DELETE" }
-          );
-        } catch {
-          console.warn(`Failed to delete image at index ${globalIndex}`);
-        }
+      // One request for the whole batch: the server deletes the files and
+      // rewrites the embeddings index once, instead of once per image as
+      // the old per-image loop forced it to.
+      const result = await deleteImages(state.album, indices, state.moveToTrash);
+      const deletedIndices = result.deleted_indices ?? [];
+      if (result.errors?.length) {
+        console.warn("Some images could not be deleted:", result.errors);
       }
 
       // Trigger album refresh BEFORE clearing bookmarks
@@ -596,9 +592,9 @@ class BookmarkManager {
         new CustomEvent("albumChanged", {
           detail: {
             album: state.album,
-            totalImages: slideState.totalAlbumImages - indices.length,
+            totalImages: slideState.totalAlbumImages - deletedIndices.length,
             changeType: "deletion",
-            deletedIndices: indices,
+            deletedIndices,
           },
         })
       );

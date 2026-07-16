@@ -229,6 +229,68 @@ def test_delete_image_failure_leaves_index_intact(client, board_album, monkeypat
     assert metadata["filename_count"] == 4
 
 
+def test_delete_images_batch_routes_through_invokeai(client, board_album, monkeypatch):
+    """The batch endpoint deletes each board image through InvokeAI's API
+    (never touching the files directly) and drops all their index rows in
+    one rewrite."""
+    _build_index(client)
+
+    deleted_names = []
+
+    async def fake_delete(base_url, image_name, username, password):
+        deleted_names.append(image_name)
+
+    monkeypatch.setattr(invokeai_client, "delete_image", fake_delete)
+
+    targets = {
+        idx: Path(client.get(f"/retrieve_image/{ALBUM_KEY}/{idx}").json()["filename"]).name
+        for idx in (0, 1)
+    }
+
+    response = client.post(f"/delete_images/{ALBUM_KEY}", json={"indices": [0, 1]})
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["deleted_count"] == 2
+    assert set(deleted_names) == set(targets.values())
+
+    # The local files are NOT touched directly — InvokeAI owns them.
+    for name in targets.values():
+        assert (board_album["images_dir"] / name).exists()
+    # But the index rows are gone.
+    metadata = client.get(f"/index_metadata/{ALBUM_KEY}").json()
+    assert metadata["filename_count"] == 2
+    assert set(targets.values()).isdisjoint(
+        _index_filenames(board_album["index_path"])
+    )
+
+
+def test_delete_images_batch_invokeai_failure_keeps_failed_row(
+    client, board_album, monkeypatch
+):
+    """A per-image InvokeAI failure is reported as an error and its index row
+    survives; the rest of the batch still deletes."""
+    _build_index(client)
+
+    calls = []
+
+    async def flaky_delete(base_url, image_name, username, password):
+        calls.append(image_name)
+        if len(calls) == 1:
+            raise HTTPException(status_code=502, detail="backend down")
+
+    monkeypatch.setattr(invokeai_client, "delete_image", flaky_delete)
+
+    response = client.post(f"/delete_images/{ALBUM_KEY}", json={"indices": [0, 1]})
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["deleted_count"] == 1
+    assert result["error_count"] == 1
+    assert len(result["deleted_indices"]) == 1
+
+    metadata = client.get(f"/index_metadata/{ALBUM_KEY}").json()
+    assert metadata["filename_count"] == 3
+
+
 def test_move_images_rejected_for_board_albums(client, board_album, tmp_path):
     _build_index(client)
 

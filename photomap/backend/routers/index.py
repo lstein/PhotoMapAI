@@ -50,6 +50,11 @@ class UpdateIndexRequest(BaseModel):
     album_key: str
 
 
+class DeleteImagesRequest(BaseModel):
+    indices: list[int]
+    move_to_trash: bool = True
+
+
 class MoveImagesRequest(BaseModel):
     indices: list[int]
     target_directory: str
@@ -382,6 +387,99 @@ async def delete_image(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}") from e
+
+
+@index_router.post(
+    "/delete_images/{album_key}",
+    tags=["Index"],
+    dependencies=[Depends(require_no_lock)],
+)
+async def delete_images(
+    album_key: str,
+    req: DeleteImagesRequest,
+    album_config: AlbumDep,
+    embeddings: EmbeddingsDep,
+) -> JSONResponse:
+    """Delete a batch of images with a single embeddings-index rewrite.
+
+    Repeated calls to ``delete_image`` rewrite the entire .npz once per
+    image; this endpoint removes the files first and then drops all of
+    their rows in one rewrite, so a multi-select delete costs the same
+    index I/O as a single deletion.
+    """
+    if not req.indices:
+        raise HTTPException(status_code=400, detail="No indices provided")
+
+    try:
+        indices = sorted(set(req.indices))
+
+        # Resolve every index against one snapshot of the sort order before
+        # anything is deleted — the indices all refer to the pre-delete
+        # ordering, so nothing here needs reverse-order shifting.
+        image_paths: dict[int, Path] = {}
+        errors: list[str] = []
+        for index in indices:
+            try:
+                image_paths[index] = embeddings.get_image_path(index)
+            except IndexError:
+                errors.append(f"Index {index}: out of range")
+
+        deleted_indices: list[int] = []
+        deleted_files: list[str] = []
+        for index, image_path in image_paths.items():
+            try:
+                if not validate_image_access(album_config, image_path):
+                    errors.append(f"Index {index}: Access denied")
+                    continue
+
+                if album_config.source_type == "invokeai_board":
+                    # Board images belong to InvokeAI: deleting the file
+                    # directly would leave a dangling row in InvokeAI's
+                    # database, so route each deletion through its API
+                    # (which also removes the file). ``move_to_trash`` has
+                    # no meaning here and is ignored.
+                    await invokeai_client.delete_image(
+                        album_config.invokeai_url,
+                        image_path.name,
+                        album_config.invokeai_username,
+                        album_config.invokeai_password,
+                    )
+                else:
+                    if not image_path.exists() or not image_path.is_file():
+                        errors.append(f"Index {index}: File not found")
+                        continue
+                    if req.move_to_trash:
+                        send2trash(str(image_path))
+                    else:
+                        image_path.unlink()
+
+                deleted_indices.append(index)
+                deleted_files.append(image_path.name)
+            except Exception as e:
+                logger.error(f"Error deleting image at index {index}: {e}")
+                errors.append(f"Index {index}: {str(e)}")
+
+        # One rewrite for the whole batch — this is the entire speedup.
+        if deleted_indices:
+            embeddings.remove_images_from_embeddings(deleted_indices)
+
+        response_data = {
+            "success": len(deleted_indices) > 0 or len(errors) == 0,
+            "deleted_count": len(deleted_indices),
+            "deleted_indices": deleted_indices,
+            "deleted_files": deleted_files,
+        }
+        if errors:
+            response_data["errors"] = errors
+            response_data["error_count"] = len(errors)
+
+        return JSONResponse(content=response_data, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete images: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete images: {str(e)}") from e
 
 
 @index_router.post(
