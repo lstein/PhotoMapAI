@@ -267,27 +267,59 @@ class SlideStateManager {
       return;
     }
 
-    // For deletions, try to preserve position by calculating how many images before current were deleted
-    if (detail.changeType === "deletion" && detail.deletedIndices && !this.isSearchMode) {
+    // For deletions, preserve the current position — and any active search —
+    // instead of jumping back to the first slide of the album.
+    if (detail.changeType === "deletion" && detail.deletedIndices) {
       const deletedIndices = detail.deletedIndices;
-      const currentIndex = this.currentGlobalIndex;
+      this.totalAlbumImages = detail.totalImages;
 
-      // Count how many deleted images were before the current position
-      const deletedBefore = deletedIndices.filter((idx) => idx < currentIndex).length;
+      if (this.isSearchMode && this.searchResults.length > 0) {
+        // Drop the deleted entries from the search results and renumber the
+        // survivors' global indices (the backend renumbers the album after a
+        // deletion). Mutate the array in place: ``state.searchResults``
+        // (search.js) shares this same array object, and dispatching
+        // ``searchResultsChanged`` instead would re-enter search mode back
+        // at position 0.
+        const deletedSet = new Set(deletedIndices);
+        const removedBefore = this.searchResults
+          .slice(0, this.currentSearchIndex)
+          .filter((r) => deletedSet.has(r.index)).length;
+        for (let i = this.searchResults.length - 1; i >= 0; i--) {
+          if (deletedSet.has(this.searchResults[i].index)) {
+            this.searchResults.splice(i, 1);
+          }
+        }
+        for (const result of this.searchResults) {
+          result.index -= deletedIndices.filter((idx) => idx < result.index).length;
+        }
+        if (this.searchResults.length > 0) {
+          // Deleting the current result keeps the same search position so the
+          // next result fills the slot; clamp when the last result was deleted.
+          this.currentSearchIndex = Math.max(
+            0,
+            Math.min(this.currentSearchIndex - removedBefore, this.searchResults.length - 1)
+          );
+          this.currentGlobalIndex = this.searchResults[this.currentSearchIndex].index;
+          this.notifySlideChanged();
+          return;
+        }
+        // Every remaining search result was deleted; fall back to album mode.
+        this.exitSearchMode();
+      }
 
-      // Adjust current position by subtracting deleted images before it
-      const newIndex = Math.max(0, currentIndex - deletedBefore);
-
-      // Clamp to new total, ensuring non-negative
-      // Handle edge case where all images are deleted (totalImages = 0)
-      this.currentGlobalIndex = detail.totalImages > 0 ? Math.max(0, Math.min(newIndex, detail.totalImages - 1)) : 0;
+      // Count how many deleted images were before the current position and
+      // shift back by that many; clamp to the new total (which may be 0).
+      const deletedBefore = deletedIndices.filter((idx) => idx < this.currentGlobalIndex).length;
+      const newIndex = Math.max(0, this.currentGlobalIndex - deletedBefore);
+      this.currentGlobalIndex = detail.totalImages > 0 ? Math.min(newIndex, detail.totalImages - 1) : 0;
       this.currentSearchIndex = 0;
-    } else {
-      // For other changes (album switch, move, etc.), reset to beginning
-      this.currentGlobalIndex = 0;
-      this.currentSearchIndex = 0;
+      this.notifySlideChanged();
+      return;
     }
 
+    // For other changes (album switch, move, etc.), reset to beginning
+    this.currentGlobalIndex = 0;
+    this.currentSearchIndex = 0;
     this.exitSearchMode();
     this.totalAlbumImages = detail.totalImages; // Update from state
   }
