@@ -165,7 +165,7 @@ describe("cluster-utils.js", () => {
       jest.advanceTimersByTime(50);
       const toast = document.querySelector(".app-toast");
       expect(toast).not.toBeNull();
-      expect(toast.textContent).toContain("autotagging vocabulary");
+      expect(toast.textContent).toContain("Computing autotag labels");
       // Sticky: duration:0 means the auto-dismiss timer never fires.
       jest.advanceTimersByTime(60_000);
       expect(document.querySelectorAll(".app-toast")).toHaveLength(1);

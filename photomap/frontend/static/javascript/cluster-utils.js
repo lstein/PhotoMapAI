@@ -96,20 +96,24 @@ export function clearImageLabelCache() {
 // Slow-vocab-build toast
 // ---------------------------------------------------------------------------
 //
-// `/cluster_labels` and `/image_label` both trigger the server-side vocab
-// embedding build the first time they're hit after startup or after the
-// album's encoder changes. The build encodes a few thousand phrases through
-// CLIP/SigLIP and can take 20-30s on CPU. Without feedback the UI just looks
-// frozen. We track in-flight vocab-triggering requests with a counter and
-// show a single sticky toast if any of them is still pending after a short
-// grace period; the toast is dismissed as soon as the count returns to zero.
+// `/cluster_labels` and `/image_label` can both be slow for two different
+// server-side reasons: the vocab embedding build (first hit after startup or
+// after the album's encoder changes — a few thousand phrases through
+// CLIP/SigLIP, 20-30s on CPU) and the label recompute after the index
+// changes (deleting an image invalidates umap.npz and the labels cache, so
+// the next request refits UMAP over the whole album). The toast can't tell
+// which is happening — it fires on any tracked request still pending after
+// the grace period — so the message must stay generic; don't reword it to
+// promise a "one-time" operation. We track in-flight requests with a counter
+// and show a single sticky toast, dismissed as soon as the count returns to
+// zero.
 //
 // Threshold is generous (3s) so a warm-cache call (sub-second) never flashes
 // a toast. Exposed via `_setSlowVocabDelayMsForTests` so the Jest test can
 // shorten it without depending on real timers.
 
 const DEFAULT_SLOW_VOCAB_DELAY_MS = 3000;
-const SLOW_VOCAB_MESSAGE = "Preparing autotagging vocabulary — this is usually a one-time operation.";
+const SLOW_VOCAB_MESSAGE = "Computing autotag labels — this can take a while on large albums.";
 
 let slowVocabDelayMs = DEFAULT_SLOW_VOCAB_DELAY_MS;
 let slowVocabInFlight = 0;
