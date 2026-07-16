@@ -174,6 +174,19 @@ export class HttpError extends Error {
 }
 
 /**
+ * The message to show a user for a failed request: the server's explanation
+ * (FastAPI's ``{"detail": "..."}``) when there is one, else the error's own
+ * message. Alerts that show ``error.message`` directly print the unhelpful
+ * "HTTP 500 Internal Server Error for <url>" and bury the actual reason.
+ */
+export function errorDetail(error) {
+  if (error instanceof HttpError && typeof error.body?.detail === "string") {
+    return error.body.detail;
+  }
+  return error.message;
+}
+
+/**
  * Thin wrapper around ``fetch`` + ``response.json()`` that throws
  * :class:`HttpError` on non-2xx and returns the parsed body on 2xx.
  *

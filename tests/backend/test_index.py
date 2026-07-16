@@ -130,6 +130,92 @@ def test_delete_image(
     ).exists(), "Image file should be deleted"
 
 
+def test_delete_image_permission_error_names_file_and_cause(
+    client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """A file the server can't remove must surface as a 403 whose detail names
+    the file and says it's a permissions problem — not the generic
+    "HTTP 500 Internal Server Error" the alert dialog used to show."""
+    build_index(client, new_album)
+    album_key = new_album["key"]
+    filename = client.get(f"/retrieve_image/{album_key}/0").json()["filename"]
+
+    def deny_unlink(self, missing_ok=False):
+        raise PermissionError(13, "Permission denied", str(self))
+
+    monkeypatch.setattr(Path, "unlink", deny_unlink)
+    response = client.delete(
+        f"/delete_image/{album_key}/0", params={"move_to_trash": False}
+    )
+    monkeypatch.undo()
+
+    assert response.status_code == 403
+    detail = response.json()["detail"]
+    assert filename in detail
+    assert "permission denied" in detail.lower()
+    assert "write permission" in detail
+
+    # The failed delete must leave both the file and its index row in place.
+    assert (Path(new_album["image_paths"][0]) / filename).exists()
+    metadata = client.get(f"/index_metadata/{album_key}").json()
+    assert metadata["filename_count"] == TEST_IMAGE_COUNT
+
+
+def test_delete_image_trash_permission_error_points_at_settings(
+    client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """send2trash's TrashPermissionError means the file itself may be
+    deletable but the trash folder isn't usable — the message must offer the
+    "Just Delete" setting as the way out."""
+    from send2trash.exceptions import TrashPermissionError
+
+    from photomap.backend.routers import index as index_router_module
+
+    build_index(client, new_album)
+    album_key = new_album["key"]
+    filename = client.get(f"/retrieve_image/{album_key}/0").json()["filename"]
+
+    def broken_trash(path):
+        raise TrashPermissionError(path)
+
+    monkeypatch.setattr(index_router_module, "send2trash", broken_trash)
+
+    response = client.delete(f"/delete_image/{album_key}/0")  # move_to_trash default
+    assert response.status_code == 403
+    detail = response.json()["detail"]
+    assert filename in detail
+    assert "trash" in detail.lower()
+    assert "Just Delete" in detail
+    assert (Path(new_album["image_paths"][0]) / filename).exists()
+
+
+def test_delete_image_trash_oserror_surfaces_reason(
+    client: TestClient, new_album: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """Non-permission trash failures (e.g. no trash dir on the file's mount)
+    keep the 500 but the detail must carry the OS reason and the Settings
+    hint instead of a bare 'Failed to delete file'."""
+    import errno
+
+    from photomap.backend.routers import index as index_router_module
+
+    build_index(client, new_album)
+    album_key = new_album["key"]
+    filename = client.get(f"/retrieve_image/{album_key}/0").json()["filename"]
+
+    def broken_trash(path):
+        raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+    monkeypatch.setattr(index_router_module, "send2trash", broken_trash)
+
+    response = client.delete(f"/delete_image/{album_key}/0")
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert filename in detail
+    assert "Invalid cross-device link" in detail
+    assert "Just Delete" in detail
+
+
 def test_npz_rewrites_preserve_non_per_image_keys(tmp_path: Path):
     """``remove_image_from_embeddings`` and ``update_image_path`` rewrite the
     whole ``.npz``; they must carry over ``model_id``, ``embedding_dim``, and

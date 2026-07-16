@@ -13,6 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from send2trash import send2trash
+from send2trash.exceptions import TrashPermissionError
 
 from .. import invokeai_client
 from ..config import get_config_manager
@@ -278,6 +279,52 @@ async def index_metadata(album_config: AlbumDep) -> EmbeddingsIndexMetadata:
     )
 
 
+def _remove_image_file(image_path: Path, move_to_trash: bool) -> None:
+    """Trash or unlink ``image_path``, translating OS failures into HTTP
+    errors whose ``detail`` tells the user what to fix.
+
+    Without this, a read-only folder surfaced as a bare
+    "HTTP 500 Internal Server Error" dialog with no hint that it was a
+    permissions problem.
+    """
+    try:
+        if move_to_trash:
+            send2trash(str(image_path))
+        else:
+            image_path.unlink()
+    except TrashPermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Cannot move '{image_path.name}' to the trash: permission denied "
+                "creating or writing the trash folder. Fix its permissions, or "
+                'switch "When deleting" to "Just Delete" in Settings to delete '
+                "the file permanently."
+            ),
+        ) from e
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Cannot delete '{image_path.name}': permission denied. "
+                "The PhotoMap server needs write permission on the image file "
+                "and its containing folder."
+            ),
+        ) from e
+    except OSError as e:
+        action = "move to the trash" if move_to_trash else "delete"
+        reason = e.strerror or str(e)
+        hint = (
+            ' Switching "When deleting" to "Just Delete" in Settings may help.'
+            if move_to_trash
+            else ""
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not {action} '{image_path.name}': {reason}.{hint}",
+        ) from e
+
+
 @index_router.delete(
     "/delete_image/{album_key}/{index}",
     tags=["Index"],
@@ -321,10 +368,7 @@ async def delete_image(
             raise HTTPException(status_code=404, detail="File not found")
 
         print(f"{'Trashing' if move_to_trash else 'Deleting'} image: {image_path}")
-        if move_to_trash:
-            send2trash(str(image_path))
-        else:
-            image_path.unlink()
+        _remove_image_file(image_path, move_to_trash)
 
         # Remove from embeddings
         embeddings.remove_image_from_embeddings(index)

@@ -8,7 +8,7 @@ import { showConfirmModal } from "./modal-utils.js";
 import { setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
-import { fetchJson, hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
+import { errorDetail, fetchJson, hideSpinner, setCheckmarkOnIcon, showSpinner } from "./utils.js";
 
 // SVG icons for bookmark actions
 const BOOKMARK_SVG = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -607,7 +607,7 @@ class BookmarkManager {
       this.clearBookmarks();
     } catch (error) {
       console.error("Delete failed:", error);
-      alert(`Delete failed: ${error.message}`);
+      alert(`Delete failed: ${errorDetail(error)}`);
     } finally {
       hideSpinner();
     }
