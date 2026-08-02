@@ -285,7 +285,18 @@ async def fetch_board_image_names(
     The special board id ``"none"`` is InvokeAI's Uncategorized bucket.
     Returned names include their file extension (``{uuid}.png`` style).
     Raises 502 on any network error or non-200 response.
+
+    Canvas intermediates (region masks, staging composites) and
+    control/mask-category assets are excluded, matching what InvokeAI's own
+    gallery shows.  Servers that predate these query params ignore them and
+    return the unfiltered list.
     """
+    # httpx repeats list values (categories=general&categories=user), which
+    # is the encoding FastAPI expects for list[ImageCategory].
+    filter_params = {
+        "is_intermediate": "false",
+        "categories": ["general", "user"],
+    }
     all_names: list[str] = []
     try:
         async with httpx.AsyncClient(timeout=_BOARD_FETCH_TIMEOUT) as client:
@@ -297,7 +308,7 @@ async def fetch_board_image_names(
                 async def _do(
                     headers: dict[str, str], url: str = names_url
                 ) -> httpx.Response:
-                    return await client.get(url, headers=headers)
+                    return await client.get(url, params=filter_params, headers=headers)
 
                 response = await _request_with_auth_fallback(
                     base_url, username, password, _do
