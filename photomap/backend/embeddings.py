@@ -41,7 +41,7 @@ from .encoders import (
     capture_download_progress,
     get_cached_encoder,
 )
-from .media_types import IMAGE_EXTENSIONS
+from .media_types import IMAGE_EXTENSIONS, is_video
 from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
@@ -1856,6 +1856,18 @@ class Embeddings(BaseModel):
         data = np.load(self.embeddings_path, allow_pickle=True)
         embeddings = data["embeddings"]
         filenames = data["filenames"]
+
+        # Videos are excluded from duplicate detection. Their embedding
+        # describes one extracted frame, and opening frames are frequently a
+        # black slate or a title card — two unrelated clips would then sit at
+        # ~1.0 cosine and be reported as duplicates, which users act on by
+        # deleting. Their frames can also legitimately duplicate a photo.
+        keep = np.array([not is_video(Path(str(f))) for f in filenames], dtype=bool)
+        if not keep.all():
+            embeddings = embeddings[keep]
+            filenames = filenames[keep]
+        if len(embeddings) == 0:
+            return
 
         # Normalize embeddings. ``_l2_normalize`` carries an epsilon guard so
         # an all-zero row can't produce NaN here.

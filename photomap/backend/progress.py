@@ -199,12 +199,31 @@ class ProgressTracker:
         and is folded in atomically by ``complete_operation``. A falsy
         ``message`` clears any pending notice so a clean re-run doesn't inherit
         a stale one.
+
+        Replaces whatever was pending. Use :meth:`add_completion_warning` to
+        contribute an additional notice without discarding an existing one.
         """
         with self._lock:
             if message:
                 self._completion_warnings[album_key] = message
             else:
                 self._completion_warnings.pop(album_key, None)
+
+    def add_completion_warning(self, album_key: str, message: str | None) -> None:
+        """Append a notice, keeping any already pending for this album.
+
+        A run can now produce more than one: a board album may have images
+        missing on disk *and* videos that could not be decoded. This used to
+        be a single slot, so the second writer silently discarded the first.
+        """
+        if not message:
+            return
+        with self._lock:
+            existing = self._completion_warnings.get(album_key)
+            if existing and message not in existing:
+                self._completion_warnings[album_key] = f"{existing} {message}"
+            elif not existing:
+                self._completion_warnings[album_key] = message
 
     def get_progress(self, album_key: str) -> ProgressInfo | None:
         """Get progress info for an album."""

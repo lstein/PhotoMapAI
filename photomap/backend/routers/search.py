@@ -47,6 +47,10 @@ _COLOR_RE = re.compile(r"\A#?[0-9A-Fa-f]{6}\Z|\A\d{1,3},\d{1,3},\d{1,3}\Z")
 _MAX_THUMB_SIZE = 2048
 _MAX_THUMB_RADIUS = 512
 
+# ``download_images_zip`` builds its archive in memory. Videos make it easy to
+# ask for far more than fits, so cap the total selection size.
+_MAX_ZIP_BYTES = 2_000_000_000
+
 
 # Response Models
 class SearchResult(BaseModel):
@@ -104,8 +108,21 @@ async def search_with_text_and_image(
     try:
         # If image_data is provided, decode and save to temp file
         if req.image_data:
-            image_bytes = base64.b64decode(req.image_data.split(",")[-1])
-            query_image_data = Image.open(BytesIO(image_bytes))
+            # A query blob that isn't a still image — a video file dropped on
+            # the search panel, say — used to surface as an opaque 500 from
+            # deep inside PIL. The encoder only takes stills.
+            try:
+                image_bytes = base64.b64decode(req.image_data.split(",")[-1])
+                query_image_data = Image.open(BytesIO(image_bytes))
+                query_image_data.load()
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.info(f"Rejected an unreadable search query image: {e}")
+                raise HTTPException(
+                    status_code=400,
+                    detail="The query image could not be read. Search by image needs a still image.",
+                ) from e
 
         logger.info(
             f"Search request: {req.min_search_score=}, {req.max_search_results=}"
@@ -531,6 +548,28 @@ async def download_images_zip(
     """
     Download multiple images as a ZIP file.
     """
+    # The archive is assembled entirely in memory, which was fine for photos
+    # but is not for video: twenty bookmarked 200 MB clips would be several
+    # gigabytes resident. Refuse above a ceiling rather than exhausting the
+    # server.
+    total_bytes = 0
+    for index in req.indices:
+        try:
+            candidate = embeddings.get_image_path(index)
+            if candidate.is_file():
+                total_bytes += candidate.stat().st_size
+        except Exception:
+            continue
+    if total_bytes > _MAX_ZIP_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"That selection is {total_bytes / 1_000_000_000:.1f} GB, over the "
+                f"{_MAX_ZIP_BYTES // 1_000_000_000} GB download limit. "
+                "Select fewer files, or copy them to a folder instead."
+            ),
+        )
+
     # Create ZIP file in memory
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -543,8 +582,13 @@ async def download_images_zip(
                 if not image_path.exists() or not image_path.is_file():
                     logger.warning(f"Image not found at index {index}")
                     continue
+                # Video containers hold already-compressed streams, so
+                # deflating them burns CPU for no gain. Store them instead.
+                compression = (
+                    zipfile.ZIP_STORED if is_video(image_path) else zipfile.ZIP_DEFLATED
+                )
                 # Add file to ZIP with just the filename (not full path)
-                zip_file.write(image_path, image_path.name)
+                zip_file.write(image_path, image_path.name, compress_type=compression)
             except Exception as e:
                 logger.warning(f"Error adding image at index {index} to ZIP: {e}")
                 continue
