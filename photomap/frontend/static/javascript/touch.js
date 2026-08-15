@@ -115,7 +115,12 @@ function handleTouchEnd(e) {
     document.msFullscreenElement
   );
 
-  if (isTap && isFullscreen) {
+  // A tap on a control — the play badge, the player's own buttons — is not a
+  // tap on the slide. Without this, tapping the play badge in fullscreen both
+  // opens the player and toggles the slideshow behind it.
+  const tappedAControl = e.target?.closest?.("button, .video-badge, #videoPlayerModal");
+
+  if (isTap && isFullscreen && !tappedAControl) {
     toggleSlideshowWithIndicator();
   } else {
     // Only detect horizontal swipe (left/right) for pausing slideshow

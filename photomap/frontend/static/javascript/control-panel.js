@@ -4,6 +4,7 @@ import { deleteImage, getIndexMetadata } from "./index.js";
 import { getCurrentFilepath, getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import { errorDetail, hideSpinner, showSpinner } from "./utils.js";
+import { isVideoPlayerOpen } from "./video-player.js";
 
 // Cache DOM elements
 let elements = {};
@@ -30,6 +31,15 @@ function toggleFullscreen() {
 }
 
 function handleFullscreenChange() {
+  // A <video controls> element has its own fullscreen button. Using it fires
+  // this handler with the video as the fullscreen element, and *leaving* it
+  // fires again with none — which would read as "the app left fullscreen"
+  // and un-hide every panel behind the still-open modal. While the player
+  // owns the screen, panel visibility is not ours to change.
+  if (isVideoPlayerOpen()) {
+    return;
+  }
+
   const isFullscreen = !!document.fullscreenElement;
 
   // Toggle visibility of UI panels
