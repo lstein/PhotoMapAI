@@ -30,7 +30,14 @@ dependencies = [
     "clip-anytorch",
     "colorama",
     "dash",
-    "fastapi",
+    # Range/206 handling in Starlette's FileResponse is load-bearing for video
+    # seeking; 0.115 is the first FastAPI requiring a Starlette with the
+    # reworked range support.
+    "fastapi>=0.115",
+    # Bundles a static ffmpeg binary used to extract a still frame from videos.
+    # Ships py3-none-<platform> wheels (no ABI tag), so every supported Python
+    # is satisfied identically.
+    "imageio-ffmpeg>=0.5.1",
     "jinja2",
     "networkx",
     "numpy",

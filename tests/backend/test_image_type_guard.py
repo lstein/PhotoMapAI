@@ -75,3 +75,27 @@ def test_image_by_name_rejects_non_image_extension(client, tmp_path):
         assert response.status_code == 403
     finally:
         client.delete("/delete_album/name_album")
+
+
+def test_serve_image_rejects_video_extension(client, tmp_path):
+    """The image routes stay image-only even once videos are indexable.
+
+    Videos are served by a separate route with its own allowlist.  Widening
+    this one instead would have reopened the arbitrary-file-read chain above,
+    so the separation is asserted here rather than left implicit.
+    """
+    media_dir = tmp_path / "mixed"
+    media_dir.mkdir()
+    (media_dir / "clip.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42")
+
+    try:
+        _add_album(client, "video_guard_album", media_dir, tmp_path / "vg.npz")
+
+        response = client.get("/images/video_guard_album/clip.mp4")
+        assert response.status_code == 403, response.text
+        assert "unsupported" in response.json()["detail"].lower()
+
+        response = client.get("/image_by_name/video_guard_album/clip.mp4")
+        assert response.status_code == 403
+    finally:
+        client.delete("/delete_album/video_guard_album")
