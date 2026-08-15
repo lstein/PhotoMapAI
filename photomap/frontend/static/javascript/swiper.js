@@ -9,6 +9,7 @@ import { slideShowRunning, updateSlideshowButtonIcon } from "./slideshow.js";
 import { state } from "./state.js";
 import { updateCurrentImageMarker } from "./umap.js";
 import { showToast } from "./utils.js";
+import { applyVideoOverlay } from "./video-badge.js";
 
 export const initializeSingleSwiper = async () => {
   const swiperManager = new SwiperManager();
@@ -518,6 +519,15 @@ class SwiperManager {
       slide.dataset.searchIndex = searchIndex !== null ? searchIndex : "";
       slide.dataset.metadata_url = metadata_url || "";
       slide.dataset.reference_images = JSON.stringify(data.reference_images || []);
+      slide.dataset.mediaType = data.media_type || "image";
+      slide.dataset.videoUrl = data.video_url || "";
+
+      // Draws the play/duration/fps badge over the still. No-ops for images.
+      // Applied here, at slide construction, rather than in a later sweep:
+      // slides are also created by prependSlide, _doResetAllSlides and
+      // seekToSlideIndex, and a badge added by a separate pass would be
+      // missing on all of those paths.
+      applyVideoOverlay(slide, data);
 
       // Attach double-tap/double-click handler immediately
       this.attachDoubleTapHandler(slide);

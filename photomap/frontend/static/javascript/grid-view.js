@@ -10,6 +10,7 @@ import { fetchImageByIndex } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { hideSpinner, showSpinner } from "./utils.js";
+import { applyVideoOverlay } from "./video-badge.js";
 
 // Create and export singleton instance
 export const initializeGridSwiper = async () => {
@@ -680,6 +681,10 @@ class GridViewManager {
       if (img) {
         img.alt = data.filename || "";
       }
+      // Tiles are painted as placeholders first and upgraded here once the
+      // metadata arrives, so this is the earliest point at which the media
+      // type is known. applyVideoOverlay is idempotent.
+      applyVideoOverlay(slideEl, data);
     }
   }
 

@@ -1,0 +1,94 @@
+/* video-badge.css */
+/* Play button + duration/fps overlay on a video's still frame. */
+
+/* Bottom-left, so it never collides with the bookmark star (top-right,
+   see bookmarks.css) or the score pill. */
+.video-badge {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.85;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
+  z-index: 100;
+  font-size: 0.95rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.video-badge:hover,
+.video-badge:focus-visible {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.video-badge-icon {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+
+/* The disc is outlined, the triangle solid, so the icon reads as a play
+   button against both light and dark frames. */
+.video-badge-icon circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.video-badge-icon path {
+  fill: currentColor;
+}
+
+.video-badge-label:empty {
+  display: none;
+}
+
+/* Containers browsers generally cannot play. Muted rather than hidden: the
+   video is still indexed, searchable and mapped, and clicking still opens the
+   player, which explains the situation and offers a download. */
+.video-badge--unplayable {
+  color: #d6d6d6;
+  background: rgba(60, 60, 60, 0.62);
+}
+
+.video-badge--unplayable .video-badge-icon circle {
+  stroke-dasharray: 3 2;
+}
+
+/* Grid tiles are small; drop to an icon-only badge below ~140px so the label
+   never overruns the tile. */
+#gridViewSwiperWrapper .video-badge {
+  bottom: 6px;
+  left: 6px;
+  gap: 5px;
+  padding: 4px 8px 4px 5px;
+  font-size: 0.78rem;
+}
+
+#gridViewSwiperWrapper .video-badge .video-badge-icon {
+  width: 18px;
+  height: 18px;
+}
+
+#gridViewSwiperWrapper .swiper-slide[style*="width:75px"] .video-badge-label,
+#gridViewSwiperWrapper .swiper-slide[style*="width:100px"] .video-badge-label,
+#gridViewSwiperWrapper .swiper-slide[style*="width:125px"] .video-badge-label {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-badge {
+    transition: none;
+  }
+}

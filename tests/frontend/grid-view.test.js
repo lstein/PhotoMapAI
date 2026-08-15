@@ -367,5 +367,65 @@ describe("grid-view.js", () => {
       const img = slideEl.querySelector("img");
       expect(img.alt).toBe("test-image.jpg");
     });
+
+    it("should badge a video tile once its metadata arrives", async () => {
+      // Tiles paint as placeholders first, so this is the earliest point at
+      // which the media type is known.
+      gridViewManager = await initializeGridSwiper();
+
+      document.querySelector("#gridViewContainer .swiper.grid-mode").innerHTML = `
+        <div class="swiper-slide" data-global-index="7" data-filepath="">
+          <img alt="Loading..." />
+        </div>
+      `;
+
+      const videoData = {
+        filename: "clip.mp4",
+        filepath: "/path/to/clip.mp4",
+        globalIndex: 7,
+        media_type: "video",
+        video_url: "videos/album/clip.mp4",
+        video_info: { duration: 65, fps: 30, playable: true },
+      };
+
+      gridViewManager.updateSlideWithMetadata(7, videoData);
+
+      const slideEl = document.querySelector('[data-global-index="7"]');
+      const badge = slideEl.querySelector(".video-badge");
+      expect(badge).not.toBeNull();
+      expect(badge.querySelector(".video-badge-label").textContent).toBe("1:05 · 30 fps");
+      // The thumbnail <img> must survive — curation.js skips tiles without one.
+      expect(slideEl.querySelector("img")).not.toBeNull();
+    });
+
+    it("should not badge an image tile, and should not double-badge on refresh", async () => {
+      gridViewManager = await initializeGridSwiper();
+
+      document.querySelector("#gridViewContainer .swiper.grid-mode").innerHTML = `
+        <div class="swiper-slide" data-global-index="8" data-filepath="">
+          <img alt="Loading..." />
+        </div>
+      `;
+
+      gridViewManager.updateSlideWithMetadata(8, {
+        filename: "photo.jpg",
+        filepath: "/path/to/photo.jpg",
+        globalIndex: 8,
+        media_type: "image",
+      });
+      const slideEl = document.querySelector('[data-global-index="8"]');
+      expect(slideEl.querySelector(".video-badge")).toBeNull();
+
+      const videoData = {
+        filename: "clip.mp4",
+        filepath: "/path/to/clip.mp4",
+        globalIndex: 8,
+        media_type: "video",
+        video_info: { duration: 5, fps: 25, playable: true },
+      };
+      gridViewManager.updateSlideWithMetadata(8, videoData);
+      gridViewManager.updateSlideWithMetadata(8, videoData);
+      expect(slideEl.querySelectorAll(".video-badge")).toHaveLength(1);
+    });
   });
 });
