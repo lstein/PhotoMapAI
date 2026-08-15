@@ -98,3 +98,24 @@ def count_test_images():
     """Count the number of test images in the fixtures directory."""
     src_images = Path(__file__).parent / "test_images"
     return len([img for img in src_images.iterdir() if img.is_file()])
+
+
+# Video fixtures live in their own directory, deliberately NOT in
+# ``test_images``. ``new_album`` copies every file out of ``test_images``, and
+# a video there would break the exact-count assertions in test_umap /
+# test_invokeai_board_index, fail test_index's "bad_files == []" ordering
+# test, and make every existing index test depend on ffmpeg.
+TEST_MEDIA_DIR = Path(__file__).parent / "test_media"
+
+
+def media_fixture_path(name: str) -> Path:
+    """Absolute path to a committed video fixture.
+
+    Not named ``test_*``: pytest would try to collect it as a test case.
+    """
+    return TEST_MEDIA_DIR / name
+
+
+def count_test_media():
+    """Count the number of test videos in the fixtures directory."""
+    return len([f for f in TEST_MEDIA_DIR.iterdir() if f.is_file()])
