@@ -20,6 +20,7 @@ from ..config import get_config_manager
 from ..embeddings import LAST_UPDATED_FILENAME, Embeddings, peek_encoder_spec
 from ..media_types import is_video
 from ..progress import IndexingCancelled, progress_tracker
+from ..video_cache import VideoFrameCache
 from .album import (
     AlbumDep,
     EmbeddingsDep,
@@ -341,6 +342,16 @@ def _remove_image_file(image_path: Path, move_to_trash: bool) -> None:
         ) from e
 
 
+def _discard_cached_frame(album_key: str, path: Path) -> None:
+    """Remove a deleted video's cached still. Never raises."""
+    if not is_video(path):
+        return
+    try:
+        VideoFrameCache(album_key).discard(path)
+    except Exception as e:
+        logger.debug(f"Could not discard cached frame for {path}: {e}")
+
+
 @index_router.delete(
     "/delete_image/{album_key}/{index}",
     tags=["Index"],
@@ -385,6 +396,11 @@ async def delete_image(
 
         print(f"{'Trashing' if move_to_trash else 'Deleting'} image: {image_path}")
         _remove_image_file(image_path, move_to_trash)
+
+        # Drop the extracted still too. The index-time sweep would collect it
+        # eventually, but not until the next update — and a stale frame for a
+        # deleted file is exactly the kind of thing users notice.
+        _discard_cached_frame(album_key, image_path)
 
         # Remove from embeddings
         embeddings.remove_image_from_embeddings(index)
@@ -464,6 +480,7 @@ async def delete_images(
                     else:
                         image_path.unlink()
 
+                _discard_cached_frame(album_key, image_path)
                 deleted_indices.append(index)
                 deleted_files.append(image_path.name)
             except Exception as e:
@@ -690,7 +707,12 @@ async def _resolve_board_album_files(album_config) -> tuple[list[Path], int]:
         album_config.invokeai_password,
     )
     images_dir = Path(album_config.invokeai_root).expanduser() / "outputs" / "images"
-    paths = [images_dir / name for name in names]
+    # Board albums stay image-only for now. Newer InvokeAI versions can hold
+    # video assets, but deletion for board albums routes through
+    # invokeai_client.delete_image, which has not been verified against them —
+    # indexing a video we could not then delete would be worse than skipping
+    # it. Directory albums are unaffected.
+    paths = [images_dir / name for name in names if not is_video(Path(name))]
     existing = [p for p in paths if p.is_file()]
     missing = len(paths) - len(existing)
     if missing and not existing:
@@ -751,6 +773,7 @@ async def _update_index_background_async(album_key: str, album_config):
             encoder_spec=album_config.encoder_spec,
             min_image_dimension=album_config.min_image_dimension,
             min_image_bytes=getattr(album_config, "min_image_bytes", 8192),
+            album_key=album_key,
         )
 
         if index_path.exists():
@@ -763,6 +786,7 @@ async def _update_index_background_async(album_key: str, album_config):
                 )
                 stored_spec = None
 
+            result = None
             if stored_spec is not None and stored_spec != album_config.encoder_spec:
                 logger.warning(
                     f"Encoder mismatch for album '{album_key}': existing index was built "
@@ -777,16 +801,35 @@ async def _update_index_background_async(album_key: str, album_config):
                 )
                 index_path.unlink()
                 logger.info(f"Creating new index for album '{album_key}'...")
-                await embeddings.create_index_async(
+                result = await embeddings.create_index_async(
                     image_paths, album_key, create_index=True
                 )
             else:
                 logger.info(f"Updating existing index for album '{album_key}'...")
-                await embeddings.update_index_async(image_paths, album_key)
+                result = await embeddings.update_index_async(image_paths, album_key)
         else:
             logger.info(f"Creating new index for album '{album_key}'...")
-            await embeddings.create_index_async(
+            result = await embeddings.create_index_async(
                 image_paths, album_key, create_index=True
+            )
+
+        # Files that couldn't be read at all are collected but were, until
+        # now, reported nowhere — the user just saw a smaller count than
+        # expected. Videos make that much more likely (a truncated download, a
+        # codec ffmpeg can't handle), so surface it. ``add_`` rather than
+        # ``set_`` so this composes with the board album's
+        # "N of M missing on disk" notice instead of discarding it.
+        if result is not None and result.bad_files:
+            count = len(result.bad_files)
+            noun = "file" if count == 1 else "files"
+            progress_tracker.add_completion_warning(
+                album_key,
+                f"{count} {noun} could not be read and were skipped.",
+            )
+            logger.warning(
+                f"Skipped {count} unreadable {noun} in album '{album_key}': "
+                + ", ".join(p.name for p in result.bad_files[:5])
+                + ("…" if count > 5 else "")
             )
 
         logger.info(f"Index update completed for album '{album_key}'")
