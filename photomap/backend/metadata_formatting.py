@@ -9,12 +9,15 @@ import logging
 from pathlib import Path
 
 from .config import get_config_manager
+from .media_types import media_type_for
 from .metadata_modules import (
     SlideSummary,
     format_exif_metadata,
     format_invoke_metadata,
+    format_video_metadata,
     use_ref_button_html,
 )
+from .video import VIDEO_METADATA_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,32 @@ def format_metadata(
 
     config_manager = get_config_manager()
     invokeai_configured = bool(config_manager.get_invokeai_settings().get("url"))
+
+    # Videos branch first and return early. Two reasons this cannot just fall
+    # through to the EXIF path: the video facts live under a reserved key that
+    # would otherwise render as a raw dict row, and the "Use as Ref Image"
+    # button below uploads the file to InvokeAI as a reference image — handing
+    # it an .mkv is a live bug, so videos never get that button.
+    if media_type_for(filepath) == "video":
+        result.media_type = "video"
+        video_info = metadata.get(VIDEO_METADATA_KEY) if metadata else None
+        result.video_info = video_info
+        result = format_video_metadata(result, video_info)
+
+        # Phone videos routinely carry a creation date and GPS, so any
+        # non-video metadata still gets the normal EXIF panel underneath.
+        remaining = {
+            k: v for k, v in (metadata or {}).items() if k != VIDEO_METADATA_KEY
+        }
+        if remaining:
+            api_key = config_manager.get_locationiq_api_key()
+            exif_only = format_exif_metadata(
+                SlideSummary(filename=result.filename, filepath=result.filepath),
+                remaining,
+                api_key,
+            )
+            result.description += exif_only.description
+        return result
 
     # The "Use as Ref Image" button only needs an image to upload — it works
     # for any file regardless of metadata. The full Recall/Remix group, on the

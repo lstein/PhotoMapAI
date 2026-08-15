@@ -21,8 +21,10 @@ from pydantic import BaseModel
 
 from ..config import get_config_manager
 from ..embeddings import SUPPORTED_EXTENSIONS
-from ..metadata_modules import SlideSummary
+from ..media_types import VIDEO_EXTENSIONS, is_video, video_media_type
+from ..metadata_modules import SlideSummary, video_external_link_html
 from ..util import is_cuda_oom
+from ..video_cache import VideoFrameCache
 from .album import (
     AlbumDep,
     EmbeddingsDep,
@@ -239,6 +241,21 @@ async def serve_thumbnail(
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
+    # A video has no pixels of its own to shrink, so the thumbnail is built
+    # from its extracted still instead. Resolving it here rather than in each
+    # caller is what lets the grid, the UMAP hover popup, the landmark
+    # overlay, the back flyout and the reference-thumbnail strip all display
+    # videos with no changes of their own — they are already index-based.
+    source_path = image_path
+    if is_video(image_path):
+        frame_path = VideoFrameCache(album_key).ensure(image_path)
+        if frame_path is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No still frame available for video {image_path.name}",
+            )
+        source_path = frame_path
+
     index_path = Path(album_config.index)
     thumb_dir = index_path.parent / "thumbnails"
     thumb_dir.mkdir(exist_ok=True)
@@ -263,10 +280,10 @@ async def serve_thumbnail(
     # Generate thumbnail if not cached or outdated
     if (
         not thumb_path.exists()
-        or thumb_path.stat().st_mtime < image_path.stat().st_mtime
+        or thumb_path.stat().st_mtime < source_path.stat().st_mtime
     ):
         try:
-            with Image.open(image_path) as im:
+            with Image.open(source_path) as im:
                 im = ImageOps.exif_transpose(im).convert("RGBA")
                 im.thumbnail((size, size))
                 if color:
@@ -301,6 +318,44 @@ async def serve_thumbnail(
     return FileResponse(thumb_path.with_suffix(".png"))
 
 
+@search_router.get("/video_frame/{album_key}/{index}", tags=["Search"])
+async def serve_video_frame(
+    album_key: str,
+    index: int,
+    album_config: AlbumDep,
+    embeddings: EmbeddingsDep,
+) -> FileResponse:
+    """Serve the full-size still extracted from a video, by index.
+
+    The slideshow shows a poster at full viewport size and so wants the whole
+    frame rather than a ``/thumbnails/`` reduction.  Goes through
+    ``VideoFrameCache.ensure`` so a cache that was wiped or pruned regenerates
+    instead of leaving a broken image on screen.
+    """
+    try:
+        video_path = embeddings.get_image_path(index)
+    except Exception as e:
+        raise HTTPException(
+            status_code=404, detail=f"Image not found for index {index}: {e}"
+        ) from e
+
+    if not validate_image_access(album_config, video_path):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not is_video(video_path):
+        raise HTTPException(
+            status_code=404, detail=f"Index {index} is not a video"
+        )
+
+    frame_path = VideoFrameCache(album_key).ensure(video_path)
+    if frame_path is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No still frame available for video {video_path.name}",
+        )
+    return FileResponse(frame_path, media_type="image/jpeg")
+
+
 # File Management Routes
 # Do NOT provide a response_model here, as it may be either an image
 # or a converted stream and FastAPI refuses to work with Union types
@@ -330,6 +385,40 @@ async def serve_image(album_key: str, path: str, album_config: AlbumDep):
         return serve_image_with_conversion(image_path)
     else:
         return FileResponse(image_path)
+
+
+@search_router.get("/videos/{album_key}/{path:path}", tags=["Search"])
+async def serve_video(
+    album_key: str, path: str, album_config: AlbumDep
+) -> FileResponse:
+    """Serve a video file's bytes for playback.
+
+    A separate route rather than a widened ``/images/`` allowlist.
+    ``SUPPORTED_EXTENSIONS`` guards ``serve_image`` against the
+    ``add_album(image_paths=["/etc"])`` -> ``GET /images/<key>/passwd``
+    arbitrary-file-read chain; widening it to admit videos would have loosened
+    that guard as a side effect.  Two routes, two allowlists, neither able to
+    serve the other's file types.
+
+    Returns a ``FileResponse`` specifically: Starlette implements HTTP Range
+    on it, which is what makes the ``<video>`` scrubber able to seek.  A
+    ``StreamingResponse`` (as the HEIC conversion path uses) has no range
+    support and would silently break seeking.
+    """
+    video_path = config_manager.find_image_in_album(album_key, path)
+    if not video_path:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    if not validate_image_access(album_config, video_path):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if video_path.suffix.lower() not in VIDEO_EXTENSIONS:
+        raise HTTPException(status_code=403, detail="Unsupported video type")
+
+    if not video_path.exists() or not video_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(video_path, media_type=video_media_type(video_path))
 
 
 @search_router.post(
@@ -490,7 +579,18 @@ def create_slide_url(slide_metadata: SlideSummary, album_key: str) -> None:
         f"Creating URL for slide: {slide_metadata.filepath} -> {relative_path}"
     )
     slide_metadata.metadata_url = f"get_metadata/{album_key}/{slide_metadata.index}"
-    slide_metadata.image_url = f"images/{album_key}/{relative_path}"
+
+    if slide_metadata.media_type == "video":
+        # ``image_url`` still points at something displayable — the extracted
+        # still — so every consumer that just wants a picture keeps working.
+        # The playable bytes get their own field.
+        slide_metadata.image_url = f"video_frame/{album_key}/{slide_metadata.index}"
+        slide_metadata.video_url = f"videos/{album_key}/{relative_path}"
+        slide_metadata.description += video_external_link_html(
+            slide_metadata.video_url
+        )
+    else:
+        slide_metadata.image_url = f"images/{album_key}/{relative_path}"
 
 
 # This is not currently used. It can be applied to the end of the image serving
