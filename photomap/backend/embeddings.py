@@ -15,6 +15,7 @@ import os
 import warnings
 from collections import deque
 from collections.abc import Callable, Generator
+from collections.abc import Set as AbstractSet
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -40,6 +41,7 @@ from .encoders import (
     capture_download_progress,
     get_cached_encoder,
 )
+from .media_types import IMAGE_EXTENSIONS
 from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
@@ -172,17 +174,12 @@ def _normalized_filtered_embeddings(
 
 
 register_heif_opener()  # Register HEIF opener for PIL
-SUPPORTED_EXTENSIONS = {
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".bmp",
-    ".gif",
-    ".webp",
-    ".tiff",
-    ".heif",
-    ".heic",
-}
+
+# The image-suffix allowlist. Canonically defined in ``media_types`` now that
+# videos are also a media type; re-exported here because this name is what the
+# file-serving guards in routers/search.py import, and what external callers
+# have always used.
+SUPPORTED_EXTENSIONS = IMAGE_EXTENSIONS
 
 
 def describe_image_source(image_paths_or_dir: list[Path] | Path, limit: int = 3) -> str:
@@ -620,7 +617,7 @@ class Embeddings(BaseModel):
     def get_image_files_from_directory(
         self,
         directory: Path,
-        exts: set[str] = SUPPORTED_EXTENSIONS,
+        exts: AbstractSet[str] = SUPPORTED_EXTENSIONS,
         progress_callback: Callable | None = None,
         update_interval: int = 100,
         apply_dimension_gate: bool = True,
@@ -711,7 +708,7 @@ class Embeddings(BaseModel):
     def get_image_files(
         self,
         image_paths_or_dir: list[Path] | Path,
-        exts: set[str] = SUPPORTED_EXTENSIONS,
+        exts: AbstractSet[str] = SUPPORTED_EXTENSIONS,
         progress_callback: Callable | None = None,
         apply_dimension_gate: bool = True,
         reject_sink: dict[str, tuple[int, float]] | None = None,
