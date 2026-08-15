@@ -1,3 +1,4 @@
+from collections import Counter
 from pathlib import Path
 
 from fixtures import build_index, count_test_images, fetch_filename
@@ -22,3 +23,31 @@ def test_umap_construction(client, new_album, monkeypatch):
             in slides
         )
         assert point["cluster"] is not None
+
+
+def test_umap_data_reports_media_type(client, new_media_album, monkeypatch):
+    """The map needs a per-point media type to filter on.
+
+    Derived from the filename suffix rather than stored per-image, so no npz
+    change and no migration.
+    """
+    build_index(client, new_media_album)
+
+    response = client.get(f"umap_data/{new_media_album['key']}")
+    assert response.status_code == 200
+    points = response.json()
+
+    assert all("media" in point for point in points)
+    media_counts = Counter(point["media"] for point in points)
+    assert media_counts["video"] > 0, "the mixed album should contain videos"
+    assert media_counts["image"] == TEST_IMAGE_COUNT
+
+
+def test_umap_data_reports_image_only_albums_as_all_images(client, new_album, monkeypatch):
+    """An index predating video support must report "image" throughout."""
+    build_index(client, new_album)
+
+    points = client.get(f"umap_data/{new_album['key']}").json()
+
+    assert points
+    assert all(point["media"] == "image" for point in points)

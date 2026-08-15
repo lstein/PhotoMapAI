@@ -1,11 +1,14 @@
 # UMAP Routes
 
+from pathlib import Path
+
 import numpy as np
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sklearn.cluster import DBSCAN
 
 from ..config import get_config_manager
+from ..media_types import media_type_for
 from .album import AlbumDep, EmbeddingsDep
 
 umap_router = APIRouter()
@@ -66,6 +69,11 @@ async def get_umap_data(
                 filename_map[filenames[idx]]
             ),  # map from unsorted to sorted indices
             "cluster": int(cluster),
+            # Lets the map filter images/videos without a round-trip per
+            # point. Derived from the suffix, which is already in hand here,
+            # so indexes predating video support report "image" throughout
+            # with no migration.
+            "media": media_type_for(Path(str(filenames[idx]))),
         }
         for idx, (x, y, cluster) in enumerate(
             zip(umap_embeddings[:, 0], umap_embeddings[:, 1], labels, strict=False)
