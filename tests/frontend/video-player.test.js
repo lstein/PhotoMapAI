@@ -90,6 +90,56 @@ describe("opening", () => {
     expect(mockKeyboardDisable).toHaveBeenCalled();
   });
 
+  it("starts playing immediately", () => {
+    // The modal is opened from a click on the play badge, so this call still
+    // carries that gesture's user activation and may play with sound.
+    openVideoPlayer(MP4);
+    expect(video().play).toHaveBeenCalled();
+  });
+
+  it("does not try to play when there is nothing to play", () => {
+    openVideoPlayer({ url: "", filename: "clip.mp4", playable: true });
+    expect(video().play).not.toHaveBeenCalled();
+  });
+
+  it("does not try to play a container it has already declared unplayable", () => {
+    openVideoPlayer({ url: "videos/a/clip.avi", filename: "clip.avi", playable: false });
+    expect(video().play).not.toHaveBeenCalled();
+  });
+
+  it("survives the browser refusing to autoplay", async () => {
+    // A refusal is a policy decision, not a playback failure: the native
+    // controls are right there, so it must not raise the error fallback.
+    const refusal = Object.assign(new Error("blocked"), { name: "NotAllowedError" });
+    window.HTMLMediaElement.prototype.play = jest.fn(() => Promise.reject(refusal));
+
+    openVideoPlayer(MP4);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(isVideoPlayerOpen()).toBe(true);
+    expect(fallback().hidden).toBe(true);
+  });
+
+  it("survives a play() aborted by closing the modal straight away", async () => {
+    const abort = Object.assign(new Error("aborted"), { name: "AbortError" });
+    window.HTMLMediaElement.prototype.play = jest.fn(() => Promise.reject(abort));
+
+    openVideoPlayer(MP4);
+    closeVideoPlayer();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(isVideoPlayerOpen()).toBe(false);
+    expect(fallback().hidden).toBe(true);
+  });
+
+  it("tolerates a browser with no play() at all", () => {
+    delete window.HTMLMediaElement.prototype.play;
+    expect(() => openVideoPlayer(MP4)).not.toThrow();
+    expect(isVideoPlayerOpen()).toBe(true);
+  });
+
   it("opens from a videoPlayRequested event", () => {
     // The seam between the badge (PR 4) and the player.
     window.dispatchEvent(new CustomEvent("videoPlayRequested", { detail: MP4 }));

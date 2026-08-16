@@ -53,6 +53,27 @@ function hideFallback() {
   }
 }
 
+/**
+ * Start playing as soon as the player opens.
+ *
+ * This runs inside the click on the play badge — window events dispatch
+ * synchronously, so the gesture's transient user activation is still live —
+ * which is what lets playback start *with sound* instead of being refused by
+ * the browser's autoplay policy.
+ *
+ * A rejection here is not a playback failure and must not raise the error
+ * fallback. It means either the browser declined anyway (NotAllowedError, on
+ * a stricter policy or a synthetic open) or the load was torn down while
+ * still pending (AbortError, from closing the modal quickly). In both cases
+ * the native controls are right there for the user.
+ */
+function startPlayback() {
+  const started = videoEl?.play?.();
+  started?.catch?.((err) => {
+    console.debug("Video autoplay declined:", err?.name || err);
+  });
+}
+
 /** Stop playback and release the stream. */
 function teardownVideo() {
   if (!videoEl) {
@@ -85,6 +106,7 @@ export function openVideoPlayer({ url, filename, playable = true } = {}) {
     showFallback(`${filename || "This video"} is in a format your browser probably cannot play.`, url);
   } else {
     videoEl.src = url;
+    startPlayback();
   }
 
   // Snapshot before pausing, and restore rather than force-start on close.

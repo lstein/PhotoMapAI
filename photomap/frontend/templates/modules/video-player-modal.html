@@ -7,8 +7,12 @@
     <!-- The <video> lives here permanently rather than being created per
          open, so its listeners are wired once. Its src is set on open and
          cleared on close — leaving a src behind keeps the browser streaming
-         and, worse, keeps the audio playing. -->
-    <video id="videoPlayerElement" class="video-player-element" controls preload="metadata"></video>
+         and, worse, keeps the audio playing.
+
+         playsinline: without it iOS Safari hijacks playback into its own
+         fullscreen view the moment the video starts, which would drop the
+         user out of the modal entirely. -->
+    <video id="videoPlayerElement" class="video-player-element" controls playsinline preload="metadata"></video>
 
     <!-- Shown instead of the player when the container is one browsers
          cannot play, or when the <video> reports an error. -->
