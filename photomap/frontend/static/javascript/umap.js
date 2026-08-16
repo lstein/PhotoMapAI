@@ -1375,6 +1375,27 @@ let isRenderingLandmarks = false;
 let lastImagesJSON = null;
 let suppressRelayoutEvent = false; // Add this flag
 
+/**
+ * Remove any landmark thumbnails currently on the plot.
+ *
+ * Landmarks are two things: triangle marker traces, and thumbnails in
+ * ``layout.images``. Deleting the traces does not touch the images, so every
+ * path that bails out of drawing landmarks has to come through here or it
+ * leaves the thumbnails behind.
+ *
+ * ``lastImagesJSON`` is reset so the next draw is not mistaken for a no-op.
+ */
+function clearLandmarkImages(plotDiv) {
+  if (lastImagesJSON === null) {
+    return;
+  }
+  suppressRelayoutEvent = true;
+  Plotly.relayout(plotDiv, { images: [] }).then(() => {
+    suppressRelayoutEvent = false;
+    lastImagesJSON = null;
+  });
+}
+
 function updateLandmarkTrace() {
   if (isRenderingLandmarks) {
     return;
@@ -1413,19 +1434,19 @@ function updateLandmarkTrace() {
     }
 
     if (!landmarksVisible) {
-      if (lastImagesJSON !== null) {
-        suppressRelayoutEvent = true;
-        Plotly.relayout(plotDiv, { images: [] }).then(() => {
-          suppressRelayoutEvent = false;
-          lastImagesJSON = null;
-        });
-      }
+      clearLandmarkImages(plotDiv);
       return;
     }
 
     // Get clusters in view
     const clusters = getLargestClustersInView(100);
     if (!clusters.length) {
+      // The triangle traces were deleted above, but the thumbnails live in
+      // layout.images and need clearing separately — otherwise they hang over
+      // a region that no longer has any points under it. Reachable whenever
+      // the last cluster in view stops being drawn: most easily by switching
+      // the media filter to one that hides every member of it.
+      clearLandmarkImages(plotDiv);
       return;
     }
 
