@@ -1,53 +1,92 @@
 /* video-badge.css */
 /* Play button + duration/fps overlay on a video's still frame. */
 
-/* Bottom-left, so it never collides with the bookmark star (top-right,
-   see bookmarks.css) or the score pill. */
+/* Centred on the slide.
+ *
+ * Not in a corner: the fixed UI chrome owns all four of them — the score
+ * display is top-left, the bookmark star top-right, and #controlPanel /
+ * #searchPanel sit along the bottom at z-index 4000. A bottom-left badge was
+ * unreachable in the swiper, where the slide fills the viewport and its
+ * bottom-left corner IS the screen's. (It worked in the grid only because a
+ * tile is small and rarely sits in that corner.)
+ *
+ * The image is object-fit: contain, which centres it in the slide, so the
+ * centre of the slide is also the centre of the picture — including for a
+ * portrait video letterboxed on a landscape screen.
+ */
 .video-badge {
   position: absolute;
-  bottom: 12px;
-  left: 12px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px 6px 8px;
-  background: rgba(0, 0, 0, 0.62);
-  color: #fff;
+  justify-content: center;
+  gap: 10px;
+  padding: 0;
+  background: none;
   border: none;
-  border-radius: 999px;
+  color: #fff;
   cursor: pointer;
-  opacity: 0.85;
-  transition:
-    opacity 0.2s,
-    background 0.2s;
   z-index: 100;
-  font-size: 0.95rem;
   line-height: 1;
   white-space: nowrap;
+  /* Only the icon and label should take clicks, not the whole bounding box —
+     otherwise the badge would swallow double-clicks across a wide dead zone
+     in the middle of the picture. */
+  pointer-events: none;
 }
 
-.video-badge:hover,
-.video-badge:focus-visible {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.8);
+.video-badge-icon,
+.video-badge-label {
+  pointer-events: auto;
 }
 
 .video-badge-icon {
-  width: 26px;
-  height: 26px;
+  width: 84px;
+  height: 84px;
   flex: none;
+  /* A translucent disc behind the glyph so it stays legible over a bright
+     frame without darkening the picture as a whole. */
+  background: rgba(0, 0, 0, 0.42);
+  border-radius: 50%;
+  opacity: 0.9;
+  transition:
+    opacity 0.15s,
+    transform 0.15s,
+    background 0.15s;
 }
 
-/* The disc is outlined, the triangle solid, so the icon reads as a play
+.video-badge:hover .video-badge-icon,
+.video-badge:focus-visible .video-badge-icon {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.6);
+  transform: scale(1.06);
+}
+
+.video-badge:active .video-badge-icon {
+  transform: scale(0.97);
+}
+
+/* The disc is outlined and the triangle solid, so the icon reads as a play
    button against both light and dark frames. */
 .video-badge-icon circle {
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
+  stroke-width: 1.4;
 }
 
 .video-badge-icon path {
   fill: currentColor;
+}
+
+.video-badge-label {
+  padding: 4px 12px;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 999px;
+  font-size: 0.95rem;
+  opacity: 0.92;
 }
 
 .video-badge-label:empty {
@@ -56,39 +95,58 @@
 
 /* Containers browsers generally cannot play. Muted rather than hidden: the
    video is still indexed, searchable and mapped, and clicking still opens the
-   player, which explains the situation and offers a download. */
+   player, which explains and offers a download. */
 .video-badge--unplayable {
-  color: #d6d6d6;
-  background: rgba(60, 60, 60, 0.62);
+  color: #d8d8d8;
+}
+
+.video-badge--unplayable .video-badge-icon {
+  background: rgba(45, 45, 45, 0.55);
 }
 
 .video-badge--unplayable .video-badge-icon circle {
   stroke-dasharray: 3 2;
 }
 
-/* Grid tiles are small; drop to an icon-only badge below ~140px so the label
-   never overruns the tile. */
+/* Grid tiles are much smaller than a full slide. */
 #gridViewSwiperWrapper .video-badge {
-  bottom: 6px;
-  left: 6px;
-  gap: 5px;
-  padding: 4px 8px 4px 5px;
-  font-size: 0.78rem;
+  gap: 6px;
 }
 
-#gridViewSwiperWrapper .video-badge .video-badge-icon {
-  width: 18px;
-  height: 18px;
+#gridViewSwiperWrapper .video-badge-icon {
+  width: 42px;
+  height: 42px;
 }
 
-#gridViewSwiperWrapper .swiper-slide[style*="width:75px"] .video-badge-label,
-#gridViewSwiperWrapper .swiper-slide[style*="width:100px"] .video-badge-label,
-#gridViewSwiperWrapper .swiper-slide[style*="width:125px"] .video-badge-label {
+#gridViewSwiperWrapper .video-badge-label {
+  padding: 2px 8px;
+  font-size: 0.72rem;
+}
+
+/* Below ~140px of tile there is no room for the label beside the button;
+   the class is applied in JS from the tile's own width, since a CSS rule
+   cannot match a continuously-varying inline size. */
+.video-badge--compact {
+  gap: 4px;
+}
+
+.video-badge--compact .video-badge-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.video-badge--compact .video-badge-label {
   display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .video-badge {
+  .video-badge-icon {
     transition: none;
+  }
+
+  .video-badge:hover .video-badge-icon,
+  .video-badge:focus-visible .video-badge-icon,
+  .video-badge:active .video-badge-icon {
+    transform: none;
   }
 }

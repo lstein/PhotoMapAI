@@ -139,15 +139,37 @@ export function applyVideoOverlay(slideEl, data) {
   });
   swallowSlideGestures(badge);
 
-  // The badge is absolutely positioned within the slide. On touch devices the
-  // poster lives inside `.swiper-zoom-container`; the badge is appended to the
-  // slide itself, deliberately *outside* that container, or Swiper's zoom
-  // module would scale it along with the image on a pinch.
+  if (isCompactSlide(slideEl)) {
+    badge.classList.add("video-badge--compact");
+  }
+
+  // The badge is centred within the slide. On touch devices the poster lives
+  // inside `.swiper-zoom-container`; the badge is appended to the slide
+  // itself, deliberately *outside* that container, or Swiper's zoom module
+  // would scale it along with the image on a pinch.
   slideEl.style.position = "relative";
   slideEl.appendChild(badge);
   slideEl.dataset.mediaType = "video";
 
   return badge;
+}
+
+// Tile width below which the duration/fps label has no room beside the play
+// button and is dropped, leaving a smaller icon on its own.
+const COMPACT_SLIDE_WIDTH = 140;
+
+/**
+ * True for a grid tile too small to carry the label.
+ *
+ * Reads the *inline* width that grid-view.js stamps on each tile rather than
+ * offsetWidth: the badge is applied before layout has necessarily run, and
+ * tile size varies continuously (200 * gridThumbSizeFactor, clamped 75-300),
+ * so no fixed CSS selector could match it. Swiper slides carry no inline
+ * width and are therefore never compact.
+ */
+function isCompactSlide(slideEl) {
+  const inlineWidth = parseInt(slideEl.style?.width, 10);
+  return Number.isFinite(inlineWidth) && inlineWidth < COMPACT_SLIDE_WIDTH;
 }
 
 /** Remove a slide's badge, if it has one. */

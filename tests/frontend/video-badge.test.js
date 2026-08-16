@@ -162,6 +162,32 @@ describe("applyVideoOverlay", () => {
     expect(slide.querySelectorAll(".video-badge")).toHaveLength(1);
   });
 
+  it("does not add the compact modifier to a full-size slide", () => {
+    // Swiper slides carry no inline width, so they are never compact.
+    const slide = makeSlide();
+    applyVideoOverlay(slide, VIDEO_DATA);
+    expect(slide.querySelector(".video-badge").classList.contains("video-badge--compact")).toBe(false);
+  });
+
+  it("drops the label on grid tiles too small to carry it", () => {
+    // Read from the inline width grid-view.js stamps on each tile: the badge
+    // is applied before layout has necessarily run, and tile size varies
+    // continuously, so no fixed CSS selector could match it.
+    const slide = makeSlide();
+    slide.style.width = "100px";
+    slide.style.height = "100px";
+    applyVideoOverlay(slide, VIDEO_DATA);
+    expect(slide.querySelector(".video-badge").classList.contains("video-badge--compact")).toBe(true);
+  });
+
+  it("keeps the label on a roomy grid tile", () => {
+    const slide = makeSlide();
+    slide.style.width = "240px";
+    slide.style.height = "240px";
+    applyVideoOverlay(slide, VIDEO_DATA);
+    expect(slide.querySelector(".video-badge").classList.contains("video-badge--compact")).toBe(false);
+  });
+
   it("appends the badge outside any zoom container", () => {
     // On touch devices the poster sits in .swiper-zoom-container; a badge
     // inside it would be scaled along with the image on a pinch.
