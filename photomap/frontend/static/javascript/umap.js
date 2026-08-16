@@ -847,8 +847,12 @@ window.addEventListener("stateReady", () => {
   // Media filter radio buttons - initialize from state
   const mediaFilterRadios = MEDIA_FILTER_RADIO_IDS.map((id) => document.getElementById(id));
   if (mediaFilterRadios.every(Boolean)) {
-    const active = mediaFilterRadios.find((radio) => radio.value === state.umapMediaFilter);
-    (active || mediaFilterRadios[0]).checked = true;
+    const active =
+      mediaFilterRadios.find((radio) => radio.value === state.umapMediaFilter) ||
+      mediaFilterRadios.find((radio) => radio.value === DEFAULT_MEDIA_FILTER);
+    if (active) {
+      active.checked = true;
+    }
 
     mediaFilterRadios.forEach((radio) => {
       radio.addEventListener("change", async (e) => {
@@ -887,7 +891,14 @@ function reservedControlsHeight(visibleFallback, hiddenFallback) {
   return measured > 0 ? measured + 30 : visibleFallback;
 }
 
-const MEDIA_FILTER_RADIO_IDS = ["umapMediaFilterBothRadio", "umapMediaFilterImagesRadio", "umapMediaFilterVideosRadio"];
+// Listed in the order they appear in the control row.
+const MEDIA_FILTER_RADIO_IDS = ["umapMediaFilterImagesRadio", "umapMediaFilterVideosRadio", "umapMediaFilterBothRadio"];
+
+// Selected when nothing is persisted, and fallen back to when the stored
+// value isn't one we recognize. Matched by value rather than by position in
+// the list above, so reordering the radios in the UI cannot silently change
+// which one is the default.
+const DEFAULT_MEDIA_FILTER = "both";
 
 // Offer the filter only when there is something to filter.
 //
@@ -902,8 +913,8 @@ function updateMediaFilterAvailability() {
   }
   const albumHasVideos = hasVideoPoints(points);
 
-  if (!albumHasVideos && state.umapMediaFilter !== "both") {
-    setUmapMediaFilter("both");
+  if (!albumHasVideos && state.umapMediaFilter !== DEFAULT_MEDIA_FILTER) {
+    setUmapMediaFilter(DEFAULT_MEDIA_FILTER);
   }
 
   MEDIA_FILTER_RADIO_IDS.forEach((id) => {
@@ -913,7 +924,7 @@ function updateMediaFilterAvailability() {
     }
     radio.disabled = !albumHasVideos;
     if (!albumHasVideos) {
-      radio.checked = radio.value === "both";
+      radio.checked = radio.value === DEFAULT_MEDIA_FILTER;
     }
   });
   container.style.opacity = albumHasVideos ? "1" : "0.5";
