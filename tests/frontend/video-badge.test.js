@@ -288,3 +288,76 @@ describe("removeVideoOverlay", () => {
     removeVideoOverlay(null);
   });
 });
+
+describe("accessible name", () => {
+  it("announces the duration and frame rate", () => {
+    // aria-label REPLACES element contents in the name computation, and the
+    // icon is aria-hidden — so naming the badge after only the title made the
+    // label, the entire reason it carries text, inaudible.
+    const badge = makeVideoBadge({ duration: 65, fps: 30, playable: true }, "clip.mp4");
+    const name = badge.getAttribute("aria-label");
+    expect(name).toContain("clip.mp4");
+    expect(name).toContain("1:05");
+    expect(name).toContain("30 fps");
+  });
+
+  it("keeps the filename in the unplayable announcement", () => {
+    // Otherwise every unplayable tile in a grid announces identically, with
+    // nothing to tell them apart.
+    const badge = makeVideoBadge({ duration: 5, fps: 25, playable: false }, "clip.avi");
+    expect(badge.getAttribute("aria-label")).toContain("clip.avi");
+  });
+
+  it("stays out of the tab order like every other button in the app", () => {
+    // setupAccessibility() runs once at init over buttons that exist then, so
+    // a badge created later would be the only tabbable button — and tabbing
+    // to it inside a slide triggers Swiper's slide-to-focused-element.
+    expect(makeVideoBadge({}).tabIndex).toBe(-1);
+  });
+});
+
+describe("reconciliation", () => {
+  it("replaces the badge when the slide becomes a different video", () => {
+    const slide = makeSlide();
+    applyVideoOverlay(slide, VIDEO_DATA);
+    applyVideoOverlay(slide, {
+      ...VIDEO_DATA,
+      filename: "other.mp4",
+      video_url: "videos/album/other.mp4",
+      video_info: { duration: 125, fps: 30, playable: true },
+    });
+
+    expect(slide.querySelectorAll(".video-badge")).toHaveLength(1);
+    expect(slide.querySelector(".video-badge-label").textContent).toBe("2:05 · 30 fps");
+  });
+
+  it("removes the badge when the slide becomes an image", () => {
+    const slide = makeSlide();
+    applyVideoOverlay(slide, VIDEO_DATA);
+    applyVideoOverlay(slide, IMAGE_DATA);
+
+    expect(slide.querySelector(".video-badge")).toBeNull();
+    // The declared media type follows the new payload rather than being
+    // cleared — swiper.js assigns it just before calling, so wiping it would
+    // undo an assignment this function never made.
+    expect(slide.dataset.mediaType).toBe("image");
+  });
+
+  it("keeps the same badge for the same video", () => {
+    const slide = makeSlide();
+    const first = applyVideoOverlay(slide, VIDEO_DATA);
+    const second = applyVideoOverlay(slide, VIDEO_DATA);
+    expect(second).toBe(first);
+  });
+
+  it("updates the compact class when the tile is resized", () => {
+    const slide = makeSlide();
+    slide.style.width = "220px";
+    applyVideoOverlay(slide, VIDEO_DATA);
+    expect(slide.querySelector(".video-badge").classList.contains("video-badge--compact")).toBe(false);
+
+    slide.style.width = "90px";
+    applyVideoOverlay(slide, VIDEO_DATA);
+    expect(slide.querySelector(".video-badge").classList.contains("video-badge--compact")).toBe(true);
+  });
+});

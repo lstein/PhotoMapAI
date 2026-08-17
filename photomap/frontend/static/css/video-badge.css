@@ -32,6 +32,13 @@
   z-index: 100;
   line-height: 1;
   white-space: nowrap;
+  /* A <button> does not inherit the page font, and this app has no global
+     button reset — without this the label renders in the UA form-control
+     font (Arial) while every other label uses base.css's Segoe UI stack, so
+     on Windows the one mismatched string sits in the middle of the picture.
+     The bookmark icon never exposed this because it carries no text. */
+  font: inherit;
+  font-size: 0.95rem;
   /* Only the icon and label should take clicks, not the whole bounding box —
      otherwise the badge would swallow double-clicks across a wide dead zone
      in the middle of the picture. */
@@ -96,16 +103,35 @@
 /* Containers browsers generally cannot play. Muted rather than hidden: the
    video is still indexed, searchable and mapped, and clicking still opens the
    player, which explains and offers a download. */
+/* The difference has to survive being composited over an arbitrary frame.
+   Dimming alone did not: #fff -> #d8d8d8 with a slightly *lighter* disc
+   measured brighter than the playable state over a mid-grey frame, leaving a
+   dashed 1.4-unit stroke as the only real signal — about 3px of dash at the
+   grid's icon size. An amber tint plus a slash reads at a glance and does not
+   depend on the frame behind it. */
 .video-badge--unplayable {
-  color: #d8d8d8;
+  color: #ffc65c;
 }
 
 .video-badge--unplayable .video-badge-icon {
-  background: rgba(45, 45, 45, 0.55);
+  background: rgba(0, 0, 0, 0.62);
 }
 
 .video-badge--unplayable .video-badge-icon circle {
   stroke-dasharray: 3 2;
+}
+
+/* Drawn by the same SVG so it scales with the icon; hidden for playable
+   badges, which use the identical markup. */
+.video-badge-slash {
+  display: none;
+}
+
+.video-badge--unplayable .video-badge-slash {
+  display: block;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
 }
 
 /* Grid tiles are much smaller than a full slide. */
@@ -123,19 +149,27 @@
   font-size: 0.72rem;
 }
 
-/* Below ~140px of tile there is no room for the label beside the button;
-   the class is applied in JS from the tile's own width, since a CSS rule
-   cannot match a continuously-varying inline size. */
-.video-badge--compact {
+/* Below ~140px of tile there is no room for the label beside the button; the
+   class is applied in JS from the tile's own width, since a CSS rule cannot
+   match a continuously-varying inline size.
+ *
+ * Scoped under #gridViewSwiperWrapper deliberately. An unscoped
+ * `.video-badge--compact .video-badge-icon` is specificity (0,2,0) and loses
+ * to the `#gridViewSwiperWrapper .video-badge-icon` rule above at (1,0,1) —
+ * so the icon silently stayed 42px on the smallest tiles while the label
+ * correctly hid, which is exactly the size where the icon most needed to
+ * shrink. Only grid tiles ever carry an inline width, so this is the only
+ * context the class can appear in. */
+#gridViewSwiperWrapper .video-badge--compact {
   gap: 4px;
 }
 
-.video-badge--compact .video-badge-icon {
+#gridViewSwiperWrapper .video-badge--compact .video-badge-icon {
   width: 30px;
   height: 30px;
 }
 
-.video-badge--compact .video-badge-label {
+#gridViewSwiperWrapper .video-badge--compact .video-badge-label {
   display: none;
 }
 

@@ -52,6 +52,7 @@ const PLAY_ICON_SVG = `
   <svg class="video-badge-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <circle cx="12" cy="12" r="11" />
     <path d="M9.5 7.5v9l7-4.5z" />
+    <line class="video-badge-slash" x1="4.5" y1="19.5" x2="19.5" y2="4.5" />
   </svg>
 `;
 
@@ -65,6 +66,17 @@ export function makeVideoBadge(videoInfo, filename = "") {
   const badge = document.createElement("button");
   badge.type = "button";
   badge.className = "video-badge";
+  // Matches setupAccessibility(), which takes every button out of the tab
+  // order. That pass runs once at init over buttons that exist then, so a
+  // badge created later would otherwise be the only tabbable button in the
+  // app — and tabbing to it inside a slide triggers Swiper's focus handling
+  // (it slides to the focused element), while a focused button also loses
+  // Space to the global slideshow shortcut, which preventDefaults it.
+  //
+  // Note this does not hide the badge from assistive technology: screen
+  // readers navigate by virtual cursor, not tab order, which is why the
+  // accessible name above still matters.
+  badge.tabIndex = -1;
 
   const label = formatBadgeLabel(videoInfo);
   badge.innerHTML = `${PLAY_ICON_SVG}<span class="video-badge-label"></span>`;
@@ -74,13 +86,23 @@ export function makeVideoBadge(videoInfo, filename = "") {
   // Whether a video actually plays depends on the codec inside it (an HEVC
   // .mp4 plays in Safari but not Firefox), so the player always attempts
   // playback and reacts to the element's own error event.
-  if (videoInfo?.playable === false) {
+  const unplayable = videoInfo?.playable === false;
+  const subject = filename || "video";
+  if (unplayable) {
     badge.classList.add("video-badge--unplayable");
-    badge.title = "This video format may not play in your browser — click for options";
+    badge.title = `${subject} — this format may not play in your browser; click for options`;
   } else {
-    badge.title = filename ? `Play ${filename}` : "Play video";
+    badge.title = `Play ${subject}`;
   }
-  badge.setAttribute("aria-label", badge.title);
+
+  // The accessible name is built explicitly rather than left to aria-label,
+  // which would *replace* the element's contents in the name computation —
+  // the icon is aria-hidden, so the duration and frame rate (the entire
+  // reason the badge carries text) reached no screen reader at all. Every
+  // unplayable tile in a grid also announced identically, with no filename to
+  // tell them apart.
+  const spoken = [badge.title, label].filter(Boolean).join(", ");
+  badge.setAttribute("aria-label", spoken);
 
   return badge;
 }
@@ -107,25 +129,61 @@ function swallowSlideGestures(badge) {
 }
 
 /**
- * Add the badge to a slide, if its payload describes a video.
+ * Reconcile a slide's badge with its payload.
  *
- * No-ops for images, and is idempotent — grid tiles are upgraded from
- * placeholder to real metadata in place, so this runs more than once per tile.
+ * Not merely idempotent — *reconciling*. Grid tiles are painted as
+ * placeholders and upgraded in place, and a tile's DOM node can outlive the
+ * item it was showing: the batch loader fetches metadata in a staggered
+ * background loop, so a response can land after the album changed or the tile
+ * was reassigned. Three cases have to be handled, and an early "already has a
+ * badge, leave it" guard got two of them wrong:
+ *
+ *   - now an image, previously a video  -> the stale badge must go, or the
+ *     tile offers to play a photo
+ *   - now a *different* video           -> the badge must be rebuilt, or it
+ *     shows the previous clip's duration and plays the previous clip's URL
+ *   - same video                        -> rebuild is still cheap and keeps
+ *     the compact class correct if the tile was resized
  */
 export function applyVideoOverlay(slideEl, data) {
-  if (!slideEl || data?.media_type !== "video") {
+  if (!slideEl) {
     return null;
   }
-  if (slideEl.querySelector(":scope > .video-badge")) {
-    return slideEl.querySelector(":scope > .video-badge");
+  if (data?.media_type !== "video") {
+    // Covers the image case *and* a missing payload: either way this slide
+    // must not keep a badge it was given earlier.
+    //
+    // Only the badge is removed, not the slide's declared media type —
+    // swiper.js assigns that from the payload just before calling here, so
+    // clearing it would undo an assignment this function never made.
+    slideEl.querySelector(":scope > .video-badge")?.remove();
+    if (data?.media_type) {
+      slideEl.dataset.mediaType = data.media_type;
+    }
+    return null;
   }
 
   const videoInfo = data.video_info || {};
+  const identity = `${data.video_url || ""}|${data.filename || ""}`;
+  const existing = slideEl.querySelector(":scope > .video-badge");
+  if (existing && existing.dataset.videoIdentity === identity) {
+    // Same clip. Only the size hint can have changed.
+    existing.classList.toggle("video-badge--compact", isCompactSlide(slideEl));
+    return existing;
+  }
+  existing?.remove();
+
   const badge = makeVideoBadge(videoInfo, data.filename);
+  badge.dataset.videoIdentity = identity;
 
   badge.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
+    // A clicked button keeps focus, and the global Space shortcut
+    // preventDefaults its way past the button's own activation — so a focused
+    // badge would silently toggle the slideshow instead. The radio controls
+    // in events.js blur for the same reason.
+    e.currentTarget.blur();
     window.dispatchEvent(
       new CustomEvent("videoPlayRequested", {
         detail: {

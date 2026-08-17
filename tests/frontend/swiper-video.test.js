@@ -120,6 +120,7 @@ const IMAGE_PAYLOAD = {
 describe("swiper.js video slides", () => {
   let mockSwiper;
   let manager;
+  let originalTouchCapability;
 
   async function buildManager() {
     const { initializeSingleSwiper } = await import("../../photomap/frontend/static/javascript/swiper.js");
@@ -158,10 +159,21 @@ describe("swiper.js video slides", () => {
     `;
 
     manager = await buildManager();
+    originalTouchCapability = manager.hasTouchCapability;
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    // SwiperManager short-circuits its constructor when an instance already
+    // exists, so beforeEach's buildManager() hands back the same object every
+    // test and cannot reset this. Restoring here rather than at the end of
+    // the test body matters: a failing assertion would otherwise skip the
+    // restore, and every subsequent test would silently build slides through
+    // the touch branch, producing a second wave of failures pointing at the
+    // wrong code.
+    if (manager) {
+      manager.hasTouchCapability = originalTouchCapability;
+    }
     document.body.innerHTML = "";
     delete global.Swiper;
   });
@@ -234,8 +246,6 @@ describe("swiper.js video slides", () => {
     expect(slide.querySelector(".swiper-zoom-container img")).not.toBeNull();
     expect(slide.querySelector(".swiper-zoom-container .video-badge")).toBeNull();
     expect(slide.querySelector(":scope > .video-badge")).not.toBeNull();
-
-    manager.hasTouchCapability = false;
   });
 
   it("clicking the badge asks for playback rather than changing views", async () => {

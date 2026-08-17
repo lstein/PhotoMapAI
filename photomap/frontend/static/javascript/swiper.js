@@ -496,17 +496,25 @@ class SwiperManager {
       const slide = document.createElement("div");
       slide.className = "swiper-slide";
 
+      // src and alt are assigned as properties rather than interpolated into
+      // the markup. A filename is user-controlled and needs only a double
+      // quote to escape the attribute: `evil" onerror="…` renders as a live
+      // event handler. Setting them on the element cannot inject anything,
+      // whatever the name contains.
       if (this.hasTouchCapability) {
         slide.innerHTML = `
           <div class="swiper-zoom-container">
-            <img src="${url}" alt="${data.filename}" />
+            <img />
           </div>
        `;
       } else {
         slide.innerHTML = `
-          <img src="${url}" alt="${data.filename}" />
+          <img />
         `;
       }
+      const poster = slide.querySelector("img");
+      poster.src = url;
+      poster.alt = data.filename || "";
 
       slide.dataset.filename = data.filename || "";
       slide.dataset.description = data.description || "";
