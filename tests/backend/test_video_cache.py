@@ -393,7 +393,11 @@ def test_a_failed_extraction_is_not_retried_on_every_call(cache, video, monkeypa
 def test_key_survives_a_symlink_loop(cache, tmp_path):
     """resolve() raises RuntimeError, not OSError, on 3.10-3.12."""
     loop = tmp_path / "loop"
-    loop.symlink_to(loop)
+    try:
+        loop.symlink_to(loop)
+    except (OSError, NotImplementedError) as e:
+        # Creating a symlink on Windows needs admin rights or Developer Mode.
+        pytest.skip(f"cannot create a symlink on this platform: {e}")
     assert cache.key_for(loop / "clip.mp4")
 
 
