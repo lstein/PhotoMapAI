@@ -1,0 +1,76 @@
+/* video-player.css */
+/* Modal video player, opened from the play badge on a video still. */
+
+/* The base .modal-content caps at 600px, which letterboxes a 1080p clip into
+   a stamp. The player gets a much wider box and a darker backdrop. */
+#videoPlayerModal {
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.video-player-content {
+  width: min(92vw, 1400px);
+  max-width: min(92vw, 1400px);
+  padding: 2.2em 1.2em 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75em;
+}
+
+.video-player-title {
+  color: #ddd;
+  font-size: 0.95rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.video-player-title:empty {
+  display: none;
+}
+
+.video-player-element {
+  width: 100%;
+  /* Leave room for the title and close button so the controls are never
+     pushed off the bottom of a short viewport. */
+  max-height: 78vh;
+  background: #000;
+  border-radius: 6px;
+  display: block;
+}
+
+.video-player-element[hidden] {
+  display: none;
+}
+
+/* Shown when the container is one browsers cannot play, or when the <video>
+   element reports an error. */
+.video-player-fallback {
+  padding: 2em 1em;
+  text-align: center;
+  color: #ddd;
+}
+
+.video-player-fallback[hidden] {
+  display: none;
+}
+
+.video-player-fallback p {
+  margin: 0 0 1em;
+}
+
+.video-player-download {
+  display: inline-block;
+  padding: 0.55em 1.2em;
+  background: #3a3a3a;
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.video-player-download:hover,
+.video-player-download:focus-visible {
+  background: #4a4a4a;
+}
+
+.video-player-download[hidden] {
+  display: none;
+}

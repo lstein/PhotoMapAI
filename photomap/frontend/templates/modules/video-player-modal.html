@@ -1,0 +1,37 @@
+<!-- Modal video player. Opened by the play badge on a video still. -->
+<div id="videoPlayerModal" class="modal-overlay">
+  <div class="modal-content video-player-content">
+    <button class="modal-close" id="videoPlayerCloseBtn" aria-label="Close video player">&times;</button>
+    <div class="video-player-title" id="videoPlayerTitle"></div>
+
+    <!-- The <video> lives here permanently rather than being created per
+         open, so its listeners are wired once. Its src is set on open and
+         cleared on close — leaving a src behind keeps the browser streaming
+         and, worse, keeps the audio playing.
+
+         playsinline: without it iOS Safari hijacks playback into its own
+         fullscreen view the moment the video starts, which would drop the
+         user out of the modal entirely.
+
+         tabindex="0": a no-op in browsers, where <video controls> is already
+         focusable and in the tab order (verified in Chromium — focus order
+         and Space-to-pause are unchanged). It is here to state the contract
+         the open path depends on: focus goes to the video so the native
+         controls own Space. -->
+    <video
+      id="videoPlayerElement"
+      class="video-player-element"
+      controls
+      playsinline
+      preload="metadata"
+      tabindex="0"
+    ></video>
+
+    <!-- Shown instead of the player when the container is one browsers
+         cannot play, or when the <video> reports an error. -->
+    <div class="video-player-fallback" id="videoPlayerFallback" hidden>
+      <p id="videoPlayerFallbackMessage"></p>
+      <a id="videoPlayerDownloadLink" class="video-player-download" href="#" download>Download the video</a>
+    </div>
+  </div>
+</div>
