@@ -8,6 +8,8 @@ walk (to pick up videos) cannot silently widen the serving allowlist too.
 
 from __future__ import annotations
 
+import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -32,13 +34,25 @@ def test_image_and_video_sets_are_disjoint():
     assert IMAGE_EXTENSIONS & VIDEO_EXTENSIONS == frozenset()
 
 
-def test_supported_extensions_still_means_images_only():
-    """The serving guard's allowlist must not have gained video suffixes.
+# Pinned literally rather than compared against IMAGE_EXTENSIONS, which would
+# be a tautology: embeddings.SUPPORTED_EXTENSIONS *is* IMAGE_EXTENSIONS, so
+# `assert SUPPORTED_EXTENSIONS == IMAGE_EXTENSIONS` can never fail and would
+# not notice `.svg` or `.pdf` being added to the serving allowlist.
+EXPECTED_IMAGE_EXTENSIONS = frozenset(
+    {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff", ".heif", ".heic"}
+)
 
-    ``SUPPORTED_EXTENSIONS`` guards ``/images/`` and ``/image_by_name/``.
-    Widening it is how the add_album → arbitrary-file-read chain reopens.
+
+def test_supported_extensions_still_means_images_only():
+    """The serving guard's allowlist must not have gained anything.
+
+    ``SUPPORTED_EXTENSIONS`` guards ``/images/`` and ``/image_by_name/``, so
+    widening it is how the add_album → arbitrary-file-read chain reopens.
+    Anything added here needs to be a format PIL can actually open, and needs
+    this list updated deliberately rather than as a side effect.
     """
-    assert SUPPORTED_EXTENSIONS == IMAGE_EXTENSIONS
+    assert SUPPORTED_EXTENSIONS == EXPECTED_IMAGE_EXTENSIONS
+    assert IMAGE_EXTENSIONS == EXPECTED_IMAGE_EXTENSIONS
     assert not (SUPPORTED_EXTENSIONS & VIDEO_EXTENSIONS)
 
 
@@ -48,6 +62,34 @@ def test_indexable_extensions_is_the_union():
 
 def test_web_playable_is_a_subset_of_video_extensions():
     assert WEB_PLAYABLE_EXTENSIONS <= VIDEO_EXTENSIONS
+
+
+def test_typescript_is_not_mistaken_for_a_transport_stream():
+    """``.ts`` must stay out of the taxonomy.
+
+    It is an MPEG transport stream roughly never and TypeScript constantly,
+    and the indexing walk prunes only dot-directories plus a few names — so
+    an album pointed anywhere near a source tree would collect every .ts file
+    in every node_modules as a video and spawn ffmpeg on each.
+    """
+    assert ".ts" not in VIDEO_EXTENSIONS
+    assert ".ts" not in INDEXABLE_EXTENSIONS
+    assert is_video(Path("component.ts")) is False
+    # AVCHD camcorder streams remain covered, unambiguously.
+    assert is_video(Path("00001.m2ts")) is True
+    assert is_video(Path("00001.mts")) is True
+
+
+def test_theora_containers_are_not_advertised_as_playable():
+    """Chrome removed Theora in M123 and Firefox in 126; Safari never had it.
+
+    They stay indexable and searchable — only the "this will play" promise is
+    withdrawn, so the badge does not claim something no current browser
+    delivers.
+    """
+    assert is_video(Path("clip.ogv")) is True
+    assert is_web_playable(Path("clip.ogv")) is False
+    assert is_web_playable(Path("clip.ogg")) is False
 
 
 def test_every_extension_is_normalized_lowercase_with_dot():
@@ -105,16 +147,27 @@ def test_web_playable_flags_index_only_containers():
 
 
 def test_bundled_ffmpeg_binary_is_available():
-    """Smoke test: the platform wheel actually ships a usable ffmpeg.
+    """Smoke test: this platform can actually reach an ffmpeg executable.
 
-    ``imageio-ffmpeg``'s sdist contains no binary, so on platforms without a
-    wheel (musl, linux armv7, win_arm64) ``get_ffmpeg_exe()`` raises at
-    runtime.  A skip here is the honest answer for such a platform; a failure
-    on a CI leg that *should* have a wheel is a real signal.
+    ``imageio-ffmpeg``'s sdist contains no binary, so on platforms with no
+    wheel (musl, linux armv7, win_arm64) there may be nothing bundled. A skip
+    is the honest answer there; a failure on a CI leg that should have a wheel
+    is a real signal.
+
+    Note ``get_ffmpeg_exe()`` does not raise in that case as one might expect.
+    It falls back through ``$IMAGEIO_FFMPEG_EXE``, the bundled binary, a conda
+    ``sys.prefix/bin/ffmpeg``, and finally the bare string ``"ffmpeg"`` if one
+    answers on PATH — only raising when all four miss. So this resolves the
+    result the way the extraction code will: an absolute path must exist on
+    disk, a bare name must be findable on PATH.
     """
     imageio_ffmpeg = pytest.importorskip("imageio_ffmpeg")
     try:
         exe = imageio_ffmpeg.get_ffmpeg_exe()
     except Exception as e:  # pragma: no cover - platform dependent
-        pytest.skip(f"no bundled ffmpeg binary on this platform: {e}")
-    assert Path(exe).exists()
+        pytest.skip(f"no ffmpeg executable available on this platform: {e}")
+
+    resolved = Path(exe) if os.path.isabs(exe) else shutil.which(exe)
+    if resolved is None or not Path(resolved).exists():  # pragma: no cover
+        pytest.skip(f"ffmpeg reported as {exe!r} but not present on this platform")
+    assert Path(resolved).exists()

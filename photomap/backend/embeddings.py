@@ -177,9 +177,14 @@ register_heif_opener()  # Register HEIF opener for PIL
 
 # The image-suffix allowlist. Canonically defined in ``media_types`` now that
 # videos are also a media type; re-exported here because this name is what the
-# file-serving guards in routers/search.py import, and what external callers
-# have always used.
-SUPPORTED_EXTENSIONS = IMAGE_EXTENSIONS
+# file-serving guards in routers/search.py import.
+#
+# Note this is now the same object as IMAGE_EXTENSIONS, and a frozenset rather
+# than the set it used to be — extending it in place no longer works, which is
+# intentional: the walk captures it as a default argument at definition time,
+# so a mutation would have silently failed to reach the walk anyway. Add new
+# suffixes in media_types instead.
+SUPPORTED_EXTENSIONS: frozenset[str] = IMAGE_EXTENSIONS
 
 
 def describe_image_source(image_paths_or_dir: list[Path] | Path, limit: int = 3) -> str:
