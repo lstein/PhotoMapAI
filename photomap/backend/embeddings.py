@@ -47,7 +47,6 @@ from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
 from .progress import IndexingCancelled, progress_tracker
 from .util import atomic_savez
-from .video_cache import FRAME_CACHE_DIRNAME
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +87,6 @@ EXCLUDED_SCAN_DIRS = {
     "photomap_index",
     "@eadir",  # Synology
     "__macosx",  # AppleDouble cruft from unzipped archives
-    # Stills extracted from videos. These normally live in the per-user cache
-    # directory, well outside any album tree, but they are full-resolution and
-    # so would pass BOTH gates if one ever did land inside a scanned folder —
-    # each still would then be indexed as a photo and given a still of its own.
-    FRAME_CACHE_DIRNAME,
 }
 
 # Marker file next to embeddings.npz whose mtime records when an index
