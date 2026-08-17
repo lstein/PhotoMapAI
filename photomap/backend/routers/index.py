@@ -18,6 +18,7 @@ from send2trash.exceptions import TrashPermissionError
 from .. import invokeai_client
 from ..config import get_config_manager
 from ..embeddings import LAST_UPDATED_FILENAME, Embeddings, peek_encoder_spec
+from ..media_types import is_video
 from ..progress import IndexingCancelled, progress_tracker
 from .album import (
     AlbumDep,
@@ -69,6 +70,12 @@ class EmbeddingsIndexMetadata(BaseModel):
     filename_count: int
     embeddings_path: str
     last_modified: float
+    # Broken out so the album card can say "120 images, 4 videos" rather than
+    # leaving the user to wonder why the single count jumped. Derived from the
+    # filename suffixes, so indexes written before video support report
+    # image_count == filename_count and video_count == 0.
+    image_count: int = 0
+    video_count: int = 0
 
 
 # Note: How check_album_lock is used in this file:
@@ -275,12 +282,16 @@ async def index_metadata(album_config: AlbumDep) -> EmbeddingsIndexMetadata:
     marker = index_path.parent / LAST_UPDATED_FILENAME
     if marker.exists():
         last_modified = max(last_modified, marker.stat().st_mtime)
-    filename_count = len(Embeddings.open_cached_embeddings(index_path)["filenames"])
+    filenames = Embeddings.open_cached_embeddings(index_path)["filenames"]
+    filename_count = len(filenames)
+    video_count = sum(1 for f in filenames if is_video(Path(str(f))))
 
     return EmbeddingsIndexMetadata(
         filename_count=filename_count,
         embeddings_path=str(index_path),
         last_modified=last_modified,
+        image_count=filename_count - video_count,
+        video_count=video_count,
     )
 
 

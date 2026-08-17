@@ -509,8 +509,26 @@ class BookmarkManager {
 
   async downloadSingleImage(globalIndex) {
     const data = await fetchJson(`retrieve_image/${encodeURIComponent(state.album)}/${globalIndex}`);
-    const imageUrl = data.image_url;
-    const filename = data.filename || `image_${globalIndex}.jpg`;
+    const isVideo = data.media_type === "video";
+    // For a video, download the playable file rather than its still frame.
+    const imageUrl = isVideo && data.video_url ? data.video_url : data.image_url;
+    // Derive the fallback extension from the real path — the old hardcoded
+    // .jpg would save a video under a name no player would open.
+    const fallbackExtension = data.filepath?.split(".").pop() || (isVideo ? "mp4" : "jpg");
+    const filename = data.filename || `image_${globalIndex}.${fallbackExtension}`;
+
+    if (isVideo) {
+      // Videos are far too large to buffer into a blob: a 200 MB clip would
+      // sit entirely in browser memory before the save dialog appeared. Point
+      // the download straight at the URL and let the browser stream it.
+      const a = document.createElement("a");
+      a.href = imageUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
 
     // Fetch the actual image (binary, not JSON — fetch directly)
     const imageResponse = await fetch(imageUrl);

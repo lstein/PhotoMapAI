@@ -42,6 +42,7 @@ from ..invokeai_client import (  # noqa: F401  (re-exported for tests/backward c
     _request_with_auth_fallback,
     _validate_invokeai_url,
 )
+from ..media_types import is_video
 from ..metadata_modules.invoke.invoke_metadata_view import InvokeMetadataView
 from ..metadata_modules.invokemetadata import GenerationMetadataAdapter
 from .album import get_embeddings_for_album, require_no_lock
@@ -494,7 +495,18 @@ def _load_image_path(album_key: str, index: int) -> Path:
     filenames = indexes["sorted_filenames"]
     if index < 0 or index >= len(filenames):
         raise HTTPException(status_code=404, detail="Index out of range")
-    return Path(str(filenames[index]))
+    path = Path(str(filenames[index]))
+    # The single choke point for both /recall and /use_ref_image, which upload
+    # the file to InvokeAI as a reference image. InvokeAI's upload endpoint
+    # takes images, so handing it an .mp4 would surface as an opaque 502
+    # carrying raw upstream text. The drawer already withholds the button for
+    # videos; this closes the API path behind it.
+    if is_video(path):
+        raise HTTPException(
+            status_code=400,
+            detail="InvokeAI actions are not available for video files.",
+        )
+    return path
 
 
 def _build_recall_payload(raw_metadata: dict, include_seed: bool) -> dict:
