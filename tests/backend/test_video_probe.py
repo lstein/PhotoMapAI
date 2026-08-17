@@ -266,25 +266,41 @@ def test_ffmpeg_exe_resolves_to_an_executable_path():
     assert Path(exe).exists()
 
 
-def test_a_transient_probe_failure_is_not_cached(monkeypatch):
-    """A fork failure under memory pressure must not disable video forever."""
+def test_a_transient_probe_failure_is_not_cached(monkeypatch, tmp_path):
+    """A fork failure under memory pressure must not disable video forever.
+
+    The stand-in binary is a real file under ``tmp_path`` rather than a
+    hardcoded path. ``ffmpeg_exe`` resolves a non-absolute candidate through
+    ``shutil.which``, and what counts as absolute is platform- *and*
+    version-specific: Python 3.13 changed ``ntpath.isabs`` so a leading slash
+    with no drive letter is no longer absolute on Windows. A literal
+    "/usr/bin/ffmpeg" therefore passed on win/3.10 and failed on win/3.14.
+    A tmp_path is absolute everywhere, and being a real file means the
+    existence check needs no patching either.
+    """
     video_module._reset_ffmpeg_exe_cache()
-    calls = []
+    try:
+        stand_in = tmp_path / "ffmpeg"
+        stand_in.write_text("")
+        calls = []
 
-    def flaky():
-        calls.append(1)
-        if len(calls) == 1:
-            raise OSError("Cannot allocate memory")
-        return "/usr/bin/ffmpeg"
+        def flaky():
+            calls.append(1)
+            if len(calls) == 1:
+                raise OSError("Cannot allocate memory")
+            return str(stand_in)
 
-    import imageio_ffmpeg
+        import imageio_ffmpeg
 
-    monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", flaky)
-    assert video_module.ffmpeg_exe() is None
-    # The next call retries rather than returning the memoized failure.
-    monkeypatch.setattr(Path, "exists", lambda self: True)
-    assert video_module.ffmpeg_exe() == "/usr/bin/ffmpeg"
-    video_module._reset_ffmpeg_exe_cache()
+        monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", flaky)
+
+        assert video_module.ffmpeg_exe() is None
+        # The next call retries rather than returning a memoized failure.
+        assert video_module.ffmpeg_exe() == str(stand_in)
+        assert len(calls) == 2
+    finally:
+        # Restore the real probe result for any test that runs after this one.
+        video_module._reset_ffmpeg_exe_cache()
 
 
 @requires_ffmpeg
