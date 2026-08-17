@@ -5,7 +5,9 @@ It allows searching images by similarity or text, retrieving image metadata,
 and serving images and thumbnails.
 """
 
+import asyncio
 import base64
+import functools
 import hashlib
 import json
 import re
@@ -13,15 +15,16 @@ import zipfile
 from io import BytesIO
 from logging import getLogger
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel
 
 from ..config import get_config_manager
 from ..embeddings import SUPPORTED_EXTENSIONS
-from ..media_types import VIDEO_EXTENSIONS, is_video, video_media_type
+from ..media_types import is_video, video_media_type
 from ..metadata_modules import SlideSummary, video_external_link_html
 from ..util import is_cuda_oom
 from ..video_cache import VideoFrameCache
@@ -213,6 +216,73 @@ async def get_metadata(album_key: str, index: int, embeddings: EmbeddingsDep):
     return StreamingResponse(buffer, media_type="application/json")
 
 
+async def _ensure_frame_off_loop(album_key: str, video_path: Path) -> Path | None:
+    """Resolve a video's still without blocking the event loop.
+
+    ``VideoFrameCache.ensure`` can spawn ffmpeg and wait up to
+    ``2 x FRAME_EXTRACT_TIMEOUT_SECONDS``. These handlers are ``async def``,
+    so FastAPI runs them *on the loop* rather than in its threadpool — calling
+    ``ensure`` directly froze every other request in the process for the
+    duration, since uvicorn is started with a single worker. Measured: an
+    unrelated ``/get_albums/`` stalled behind a video extraction.
+
+    ``asyncio.to_thread`` is the convention already used for the other
+    blocking work in this codebase (``cluster_labels``, the indexer).
+    """
+    return await asyncio.to_thread(VideoFrameCache(album_key).ensure, video_path)
+
+
+def _thumbnail_is_fresh(thumb_path: Path, source_path: Path) -> bool:
+    """True if the cached thumbnail exists and is newer than its source.
+
+    Tolerates the source disappearing between the check and the stat — a
+    concurrent prune of the frame cache would otherwise raise straight out of
+    the handler as a 500.
+    """
+    try:
+        return thumb_path.exists() and thumb_path.stat().st_mtime >= source_path.stat().st_mtime
+    except OSError:
+        return False
+
+
+# A neutral tile shown when a video's still cannot be produced, so a failed
+# extraction degrades to "a video we couldn't preview" rather than a broken
+# image. Cached per size: these are generated, not read from disk.
+@functools.lru_cache(maxsize=8)
+def _video_placeholder_png(size: int) -> bytes:
+    canvas = Image.new("RGBA", (size, size), (34, 34, 34, 255))
+    draw = ImageDraw.Draw(canvas)
+    # A centered play triangle, sized relative to the tile.
+    unit = max(4, size // 4)
+    cx, cy = size // 2, size // 2
+    draw.ellipse(
+        [cx - unit, cy - unit, cx + unit, cy + unit],
+        outline=(140, 140, 140, 255),
+        width=max(1, size // 64),
+    )
+    draw.polygon(
+        [
+            (cx - unit // 3, cy - unit // 2),
+            (cx - unit // 3, cy + unit // 2),
+            (cx + unit // 2, cy),
+        ],
+        fill=(140, 140, 140, 255),
+    )
+    buffer = BytesIO()
+    canvas.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _video_placeholder_response(size: int) -> Response:
+    return Response(
+        content=_video_placeholder_png(size),
+        media_type="image/png",
+        # Never cached: the still may well be extractable on the next request
+        # (a transient ffmpeg failure, a cache that has since been rebuilt).
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])
 async def serve_thumbnail(
     album_key: str,
@@ -241,21 +311,6 @@ async def serve_thumbnail(
     if not validate_image_access(album_config, image_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # A video has no pixels of its own to shrink, so the thumbnail is built
-    # from its extracted still instead. Resolving it here rather than in each
-    # caller is what lets the grid, the UMAP hover popup, the landmark
-    # overlay, the back flyout and the reference-thumbnail strip all display
-    # videos with no changes of their own — they are already index-based.
-    source_path = image_path
-    if is_video(image_path):
-        frame_path = VideoFrameCache(album_key).ensure(image_path)
-        if frame_path is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No still frame available for video {image_path.name}",
-            )
-        source_path = frame_path
-
     index_path = Path(album_config.index)
     thumb_dir = index_path.parent / "thumbnails"
     thumb_dir.mkdir(exist_ok=True)
@@ -277,11 +332,33 @@ async def serve_thumbnail(
     suffix = f"_{size}.png" if not color else f"_{size}_{color.lstrip('#')}_r{radius}.png"
     thumb_path = thumb_dir / f"{rel_hash}{suffix}"
 
+    # A video has no pixels of its own to shrink, so the thumbnail is built
+    # from its extracted still instead. Resolving it here rather than in each
+    # caller is what lets the grid, the UMAP hover popup, the landmark
+    # overlay, the back flyout and the reference-thumbnail strip all display
+    # videos with no changes of their own — they are already index-based.
+    #
+    # Deliberately *after* the cache path is known: resolving the still is the
+    # expensive half (it can spawn ffmpeg), and a warm thumbnail does not need
+    # it at all. Doing it first meant every repaint of a grid of N videos paid
+    # for it N times, and made a transient extraction failure 404 even when a
+    # perfectly good thumbnail was already on disk.
+    source_path = image_path
+    if is_video(image_path):
+        if _thumbnail_is_fresh(thumb_path, image_path):
+            return FileResponse(thumb_path.with_suffix(".png"))
+        frame_path = await _ensure_frame_off_loop(album_key, image_path)
+        if frame_path is None:
+            # A placeholder rather than a 404. Every caller sets img.src with
+            # no error handling, so a 404 paints a broken-image glyph with no
+            # diagnostic — across the grid, UMAP hover popups and landmark
+            # overlays at once, and on any platform with no ffmpeg binary that
+            # is *every* video.
+            return _video_placeholder_response(size)
+        source_path = frame_path
+
     # Generate thumbnail if not cached or outdated
-    if (
-        not thumb_path.exists()
-        or thumb_path.stat().st_mtime < source_path.stat().st_mtime
-    ):
+    if not _thumbnail_is_fresh(thumb_path, source_path):
         try:
             with Image.open(source_path) as im:
                 im = ImageOps.exif_transpose(im).convert("RGBA")
@@ -324,7 +401,7 @@ async def serve_video_frame(
     index: int,
     album_config: AlbumDep,
     embeddings: EmbeddingsDep,
-) -> FileResponse:
+) -> Response:
     """Serve the full-size still extracted from a video, by index.
 
     The slideshow shows a poster at full viewport size and so wants the whole
@@ -347,13 +424,17 @@ async def serve_video_frame(
             status_code=404, detail=f"Index {index} is not a video"
         )
 
-    frame_path = VideoFrameCache(album_key).ensure(video_path)
+    frame_path = await _ensure_frame_off_loop(album_key, video_path)
     if frame_path is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No still frame available for video {video_path.name}",
-        )
-    return FileResponse(frame_path, media_type="image/jpeg")
+        return _video_placeholder_response(_MAX_THUMB_SIZE // 2)
+    # This URL is keyed by index, and an index designates a different file
+    # after a delete or a reindex reorders the album — so the poster must not
+    # be cached across those. The bytes themselves are cheap to re-serve.
+    return FileResponse(
+        frame_path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 # File Management Routes
@@ -405,6 +486,13 @@ async def serve_video(
     ``StreamingResponse`` (as the HEIC conversion path uses) has no range
     support and would silently break seeking.
     """
+    # A NUL byte makes Path.resolve() raise ValueError (while .exists() merely
+    # returns False), and validate_image_access below calls resolve() — so
+    # without this the request escapes every handler as a 500 with a traceback
+    # instead of the 403/404 this route is designed to return.
+    if "\x00" in path:
+        raise HTTPException(status_code=404, detail="Video not found")
+
     video_path = config_manager.find_image_in_album(album_key, path)
     if not video_path:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -412,13 +500,22 @@ async def serve_video(
     if not validate_image_access(album_config, video_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    if video_path.suffix.lower() not in VIDEO_EXTENSIONS:
+    if not is_video(video_path):
         raise HTTPException(status_code=403, detail="Unsupported video type")
 
     if not video_path.exists() or not video_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    return FileResponse(video_path, media_type=video_media_type(video_path))
+    return FileResponse(
+        video_path,
+        media_type=video_media_type(video_path),
+        # FileResponse emits ETag/Last-Modified but implements no conditional
+        # handling (only StaticFiles does), so a revalidation would re-transfer
+        # the whole body. An explicit lifetime keeps a cached clip out of the
+        # network entirely; the path is content-addressed by name, and an
+        # edited video changes its mtime and therefore its validators.
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @search_router.post(
@@ -578,19 +675,29 @@ def create_slide_url(slide_metadata: SlideSummary, album_key: str) -> None:
     logger.debug(
         f"Creating URL for slide: {slide_metadata.filepath} -> {relative_path}"
     )
-    slide_metadata.metadata_url = f"get_metadata/{album_key}/{slide_metadata.index}"
+    # Percent-encode both halves. These are interpolated straight into a URL
+    # the browser will request, and ordinary filename characters break it:
+    # "beach #2.mp4" makes "#2.mp4" a fragment so the server sees
+    # "videos/<key>/beach " and 404s, "?" starts a query string, and a literal
+    # "%" reads as a broken escape. html.escape (used on the drawer link) is a
+    # different encoding entirely and does not help here. safe="/" keeps the
+    # directory separators of a nested relative path intact.
+    quoted_album = quote(album_key, safe="")
+    quoted_path = quote(relative_path or "", safe="/")
+
+    slide_metadata.metadata_url = f"get_metadata/{quoted_album}/{slide_metadata.index}"
 
     if slide_metadata.media_type == "video":
         # ``image_url`` still points at something displayable — the extracted
         # still — so every consumer that just wants a picture keeps working.
         # The playable bytes get their own field.
-        slide_metadata.image_url = f"video_frame/{album_key}/{slide_metadata.index}"
-        slide_metadata.video_url = f"videos/{album_key}/{relative_path}"
+        slide_metadata.image_url = f"video_frame/{quoted_album}/{slide_metadata.index}"
+        slide_metadata.video_url = f"videos/{quoted_album}/{quoted_path}"
         slide_metadata.description += video_external_link_html(
             slide_metadata.video_url
         )
     else:
-        slide_metadata.image_url = f"images/{album_key}/{relative_path}"
+        slide_metadata.image_url = f"images/{quoted_album}/{quoted_path}"
 
 
 # This is not currently used. It can be applied to the end of the image serving
