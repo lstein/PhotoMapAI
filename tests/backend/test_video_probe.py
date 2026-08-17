@@ -13,6 +13,7 @@ The fixtures under ``test_media/`` are deliberately tiny and purpose-built:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from photomap.backend import video as video_module
 from photomap.backend.video import (
     MAX_FRAME_EDGE,
     VideoInfo,
+    _has_decodable_video_stream,
     _parse_ffmpeg_banner,
     extract_video_frame,
     ffmpeg_exe,
@@ -192,10 +194,22 @@ def test_extract_returns_none_for_missing_file(tmp_path):
 def test_extract_downscales_oversized_frames(monkeypatch):
     """A 4K still would otherwise be megabytes on disk and over the wire."""
     monkeypatch.setattr(video_module, "MAX_FRAME_EDGE", 32)
-    frame, info = extract_video_frame(media_fixture_path("clip.mp4"))
+    frame, _info = extract_video_frame(media_fixture_path("clip.mp4"))
     assert max(frame.size) <= 32
-    # Info must describe the frame we actually kept.
-    assert (info.width, info.height) == frame.size
+
+
+def test_reported_resolution_is_the_source_not_the_thumbnail(monkeypatch):
+    """VideoInfo must describe the video, not the downscaled poster.
+
+    thumbnail() resizes in place, so reading frame.width after it would label
+    every 4K video 2048-wide — and the cap is applied to the very frames whose
+    true resolution matters most.
+    """
+    monkeypatch.setattr(video_module, "MAX_FRAME_EDGE", 32)
+    frame, info = extract_video_frame(media_fixture_path("clip.mp4"))
+
+    assert max(frame.size) <= 32, "the stored frame is still capped"
+    assert (info.width, info.height) == (64, 64), "but the source size is reported"
 
 
 @requires_ffmpeg
@@ -203,6 +217,7 @@ def test_max_frame_edge_is_sane():
     assert MAX_FRAME_EDGE >= 512
 
 
+@requires_ffmpeg
 def test_extract_returns_none_on_timeout():
     """A wedged ffmpeg must be killed and skipped, not hang indexing."""
     result = extract_video_frame(media_fixture_path("clip.mp4"), timeout=0.001)
@@ -232,12 +247,119 @@ def test_playable_flag_reflects_container(tmp_path):
     assert info.playable is False
 
 
+@requires_ffmpeg
 def test_ffmpeg_exe_is_cached():
-    """Probed once per process: the failure path logs a warning each call."""
-    assert ffmpeg_exe() is ffmpeg_exe()
-    assert ffmpeg_exe.cache_info().maxsize == 1
+    """Resolved once per process rather than per video file."""
+    assert ffmpeg_exe() == ffmpeg_exe()
+
+
+@requires_ffmpeg
+def test_ffmpeg_exe_resolves_to_an_executable_path():
+    """A bare name from PATH is resolved, not handed back unusable.
+
+    get_ffmpeg_exe() returns $IMAGEIO_FFMPEG_EXE unvalidated and can fall back
+    to the literal string "ffmpeg", so a non-None answer is not on its own
+    evidence anything can be run.
+    """
+    exe = ffmpeg_exe()
+    assert os.path.isabs(exe)
+    assert Path(exe).exists()
+
+
+def test_a_transient_probe_failure_is_not_cached(monkeypatch):
+    """A fork failure under memory pressure must not disable video forever."""
+    video_module._reset_ffmpeg_exe_cache()
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise OSError("Cannot allocate memory")
+        return "/usr/bin/ffmpeg"
+
+    import imageio_ffmpeg
+
+    monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", flaky)
+    assert video_module.ffmpeg_exe() is None
+    # The next call retries rather than returning the memoized failure.
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+    assert video_module.ffmpeg_exe() == "/usr/bin/ffmpeg"
+    video_module._reset_ffmpeg_exe_cache()
 
 
 @requires_ffmpeg
 def test_ffmpeg_exe_points_at_a_real_binary():
     assert Path(ffmpeg_exe()).exists()
+
+
+# --------------------------------------------------------------------------
+# Banner parsing against hostile input
+# --------------------------------------------------------------------------
+
+# A real banner shape: ffmpeg prints the file's OWN tags, in a Metadata block,
+# BEFORE the Duration and Stream lines it generates itself.
+HOSTILE_BANNER = """Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'clip.mp4':
+  Metadata:
+    major_brand     : isom
+    comment         : Duration: 12:34:56.00
+    description     : Stream #0:0: Video: fakecodec, 999 fps
+  Duration: 00:00:02.00, start: 0.000000, bitrate: 8 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High), yuv420p, 64x64, 10 fps, 10 tbr (default)
+      Metadata:
+        handler_name    : VideoHandler
+"""
+
+
+def test_metadata_tags_cannot_hijack_the_duration():
+    """Tags are file-controlled, so any downloaded video can carry these."""
+    info = _parse_ffmpeg_banner(HOSTILE_BANNER)
+    assert info["duration"] == pytest.approx(2.0)
+
+
+def test_metadata_tags_cannot_hijack_the_codec_or_fps():
+    info = _parse_ffmpeg_banner(HOSTILE_BANNER)
+    assert info["codec"] == "h264"
+    assert info["fps"] == pytest.approx(10.0)
+
+
+def test_a_tag_holding_newlines_cannot_fake_a_report_line():
+    """Blocks are found by indentation, so an embedded newline doesn't help."""
+    banner = HOSTILE_BANNER.replace(
+        "    comment         : Duration: 12:34:56.00",
+        "    comment         : multi\n      Duration: 44:44:44.00",
+    )
+    assert _parse_ffmpeg_banner(banner)["duration"] == pytest.approx(2.0)
+
+
+def test_a_path_containing_the_delimiter_does_not_leak_into_the_container():
+    """Greedy matching spliced the user's absolute path into the container."""
+    banner = (
+        "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from "
+        "'/photos/Trip, from Rome/clip.mp4':\n"
+        "  Duration: 00:00:02.00, start: 0.000000, bitrate: 8 kb/s\n"
+    )
+    container = _parse_ffmpeg_banner(banner)["container"]
+    assert container == "mov,mp4,m4a,3gp,3g2,mj2"
+    assert "/photos" not in container
+
+
+def test_an_absurd_duration_costs_only_that_field():
+    """int(h)*3600 on a bignum raises OverflowError on the float conversion."""
+    banner = "  Duration: " + "9" * 400 + ":00:00.00, start: 0.0\n"
+    info = _parse_ffmpeg_banner(banner)
+    assert "duration" not in info
+
+
+def test_cover_art_is_not_treated_as_a_video_stream():
+    """An .ogg is usually audio; its album art is offered as a video stream."""
+    banner = (
+        "Input #0, ogg, from 'song.ogg':\n"
+        "  Duration: 00:03:12.00, start: 0.000000, bitrate: 128 kb/s\n"
+        "  Stream #0:0: Audio: vorbis, 44100 Hz, stereo, fltp, 128 kb/s\n"
+        "  Stream #0:1: Video: mjpeg (attached pic), yuvj420p, 600x600, 90k tbr\n"
+    )
+    assert _has_decodable_video_stream(banner) is False
+
+
+def test_a_real_video_stream_is_recognized():
+    assert _has_decodable_video_stream(HOSTILE_BANNER) is True

@@ -42,14 +42,16 @@ def _frame(color=(10, 20, 30), size=(64, 64)) -> Image.Image:
 # --------------------------------------------------------------------------
 
 
-def test_cache_dir_name_is_excluded_from_indexing_scans():
-    """Belt-and-braces: a cache inside an album tree must never be walked.
+def test_cache_dir_name_does_not_shadow_a_user_folder():
+    """The cache name must NOT be pruned from album walks.
 
-    Stills are full-resolution, so they pass both the byte and pixel gates —
-    they would be indexed as photos, and each would then get a still of its
-    own.
+    Listing it in EXCLUDED_SCAN_DIRS looked like free insurance, but the walk
+    prunes on a bare name match: a user's own folder called "video_frames"
+    would stop being scanned, and the next update would drop those
+    already-indexed photos from the .npz with no log line. Keeping the cache
+    in the per-user cache directory is the actual defense.
     """
-    assert FRAME_CACHE_DIRNAME in EXCLUDED_SCAN_DIRS
+    assert FRAME_CACHE_DIRNAME not in EXCLUDED_SCAN_DIRS
 
 
 def test_cache_lives_outside_the_album_tree(video):
@@ -87,11 +89,36 @@ def test_albums_do_not_share_a_directory(tmp_path, video):
     assert a.path_for(video) != b.path_for(video)
 
 
-@pytest.mark.parametrize("bad_key", ["", "..", "a/b", "a\\b", "a\x00b"])
-def test_album_key_cannot_escape_the_cache_root(bad_key, tmp_path):
-    """Album keys are user input and land in a filesystem path."""
+@pytest.mark.parametrize(
+    "hostile_key",
+    ["..", ".", "a/b", "a\\b", "a\x00b", "C:evil", "C:/evil", "../../etc", "   "],
+)
+def test_album_key_cannot_escape_the_cache_root(hostile_key, tmp_path):
+    """Album keys are user input and become a directory clear() empties.
+
+    The name is constructed rather than validated, so rather than asserting a
+    rejection this asserts the property that matters: whatever comes out is a
+    single child of the root. A blocklist kept missing cases — "." aims at the
+    shared root (clear() would then wipe every album's stills), ".." climbs
+    out of it, and on Windows "C:evil" is drive-relative.
+    """
+    directory = VideoFrameCache(hostile_key, root=tmp_path).directory
+
+    assert directory.parent == tmp_path
+    assert directory.name not in ("", ".", "..")
+    assert tmp_path in directory.resolve().parents
+
+
+def test_empty_album_key_is_rejected(tmp_path):
     with pytest.raises(ValueError):
-        VideoFrameCache(bad_key, root=tmp_path)
+        VideoFrameCache("", root=tmp_path)
+
+
+def test_distinct_album_keys_never_share_a_directory(tmp_path):
+    """Sanitizing alone would collide "a/b" with "a_b"; the hash prevents it."""
+    a = VideoFrameCache("a/b", root=tmp_path).directory
+    b = VideoFrameCache("a_b", root=tmp_path).directory
+    assert a != b
 
 
 # --------------------------------------------------------------------------
@@ -257,3 +284,125 @@ def test_clear_removes_the_album_directory(cache, video):
 
 def test_clear_on_a_missing_directory_is_a_no_op(cache):
     cache.clear()  # must not raise
+
+
+# --------------------------------------------------------------------------
+# Robustness against the real failure modes
+# --------------------------------------------------------------------------
+
+
+def test_discard_works_after_the_video_is_deleted(cache, video):
+    """The whole point of discard is that the source has just been deleted.
+
+    Recomputing the key then stats a missing file, falls back to mtime 0.0,
+    and derives a name that never matches the one written while the file
+    existed — so the unlink removed nothing and the still leaked.
+    """
+    cache.store(video, _frame())
+    assert cache.get(video) is not None
+
+    video.unlink()
+    cache.discard(video)
+
+    assert list(cache.directory.glob("*.jpg")) == []
+
+
+def test_discard_removes_every_generation_of_a_path(cache, video):
+    """An edited video leaves one entry per mtime it was cached at."""
+    cache.store(video, _frame())
+    os.utime(video, (0, 555.0))
+    cache.store(video, _frame())
+    assert len(list(cache.directory.glob("*.jpg"))) == 2
+
+    cache.discard(video)
+
+    assert list(cache.directory.glob("*.jpg")) == []
+
+
+def test_discard_leaves_other_videos_alone(cache, video, tmp_path):
+    other = tmp_path / "other.mp4"
+    other.write_bytes(video.read_bytes())
+    cache.store(video, _frame())
+    cache.store(other, _frame())
+
+    cache.discard(video)
+
+    assert cache.get(other) is not None
+
+
+def test_a_zero_length_entry_is_not_a_cache_hit(cache, video):
+    """A crashed or out-of-space write leaves an empty file behind.
+
+    Treating it as a hit makes it a permanent one, since ensure() short
+    circuits on a hit and the broken tile could never self-heal.
+    """
+    target = cache.path_for(video)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.touch()
+
+    assert cache.get(video) is None
+
+
+def test_store_survives_a_frame_pil_refuses_to_write(cache, video):
+    """PIL raises ValueError, not OSError, for a degenerate frame."""
+    assert cache.store(video, Image.new("RGB", (0, 0))) is None
+    # ...and leaves no temp file behind.
+    if cache.directory.exists():
+        assert list(cache.directory.glob("*.tmp")) == []
+
+
+def test_store_leaves_no_temp_file_on_success(cache, video):
+    cache.store(video, _frame())
+    assert list(cache.directory.glob("*.tmp")) == []
+
+
+def test_prune_collects_orphaned_temp_files(cache, video):
+    """A killed writer leaves a .tmp; the suffix check used to skip them."""
+    cache.store(video, _frame())
+    stray = cache.directory / "abandoned.tmp"
+    stray.write_bytes(b"partial")
+
+    cache.prune({cache.key_for(video)})
+
+    assert not stray.exists()
+    assert cache.get(video) is not None
+
+
+def test_a_failed_extraction_is_not_retried_on_every_call(cache, video, monkeypatch):
+    """Otherwise one unreadable video re-spawns ffmpeg per request.
+
+    Each attempt can burn up to two ffmpeg spawns at the full timeout, and
+    ensure() is a blocking call made from async handlers — a handful of such
+    files can occupy the entire threadpool.
+    """
+    attempts = []
+
+    def always_fails(path, **_kw):
+        attempts.append(path)
+        return None
+
+    monkeypatch.setattr(cache_module, "extract_video_frame", always_fails)
+
+    assert cache.ensure(video) is None
+    assert cache.ensure(video) is None
+    assert cache.ensure(video) is None
+
+    assert len(attempts) == 1, f"re-extracted {len(attempts)} times"
+
+
+def test_key_survives_a_symlink_loop(cache, tmp_path):
+    """resolve() raises RuntimeError, not OSError, on 3.10-3.12."""
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+    assert cache.key_for(loop / "clip.mp4")
+
+
+def test_key_survives_an_undecodable_filename(cache, tmp_path):
+    """A latin-1 name from an old camera surrogate-escapes into the str."""
+    hostile = tmp_path / b"caf\xe9.mp4".decode("utf-8", errors="surrogateescape")
+    assert cache.key_for(hostile)
+
+
+def test_key_is_case_insensitive_like_the_index_diff(cache, tmp_path):
+    """embeddings._path_compare_key casefolds; disagreeing causes thrash."""
+    assert cache.key_for(tmp_path / "Clip.MP4") == cache.key_for(tmp_path / "clip.mp4")
