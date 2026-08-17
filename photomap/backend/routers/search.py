@@ -52,6 +52,19 @@ _MAX_THUMB_RADIUS = 512
 _MAX_ZIP_BYTES = 2_000_000_000
 
 
+def _format_bytes(size: int) -> str:
+    """Human-readable size for the download-limit message.
+
+    Falls back to MB below a gigabyte so a lowered ceiling doesn't render as
+    "over the 0 GB download limit".
+    """
+    if size >= 1_000_000_000:
+        return f"{size / 1_000_000_000:.1f} GB"
+    if size >= 1_000_000:
+        return f"{size / 1_000_000:.0f} MB"
+    return f"{size} bytes"
+
+
 # Response Models
 class SearchResult(BaseModel):
     index: int
@@ -114,9 +127,10 @@ async def search_with_text_and_image(
             try:
                 image_bytes = base64.b64decode(req.image_data.split(",")[-1])
                 query_image_data = Image.open(BytesIO(image_bytes))
+                # ``open`` only reads the header; without an explicit load the
+                # decode failure would surface later, from inside the encoder,
+                # as the 500 this guard is meant to replace.
                 query_image_data.load()
-            except HTTPException:
-                raise
             except Exception as e:
                 logger.info(f"Rejected an unreadable search query image: {e}")
                 raise HTTPException(
@@ -552,11 +566,14 @@ async def download_images_zip(
     # but is not for video: twenty bookmarked 200 MB clips would be several
     # gigabytes resident. Refuse above a ceiling rather than exhausting the
     # server.
+    # Applies the same access check as the loop below, so the total only counts
+    # files that would actually be written. Counting a rejected path could
+    # refuse a selection that zips to nothing.
     total_bytes = 0
     for index in req.indices:
         try:
             candidate = embeddings.get_image_path(index)
-            if candidate.is_file():
+            if validate_image_access(album_config, candidate) and candidate.is_file():
                 total_bytes += candidate.stat().st_size
         except Exception:
             continue
@@ -564,8 +581,8 @@ async def download_images_zip(
         raise HTTPException(
             status_code=413,
             detail=(
-                f"That selection is {total_bytes / 1_000_000_000:.1f} GB, over the "
-                f"{_MAX_ZIP_BYTES // 1_000_000_000} GB download limit. "
+                f"That selection is {_format_bytes(total_bytes)}, over the "
+                f"{_format_bytes(_MAX_ZIP_BYTES)} download limit. "
                 "Select fewer files, or copy them to a folder instead."
             ),
         )

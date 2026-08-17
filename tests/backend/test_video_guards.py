@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import shutil
+import zipfile
 from io import BytesIO
 from pathlib import Path
 
@@ -114,6 +115,16 @@ def test_search_rejects_a_non_image_query_blob(client, new_album):
 
 
 def test_search_still_accepts_an_image_query(client, new_album):
+    """The guard must not cost us search-by-image.
+
+    This has to build the index and assert a 200: without one the endpoint
+    500s on the missing .npz, and an ``!= 400`` assertion passes on that 500 —
+    so the test would hold even if the guard rejected every valid image.
+    """
+    from fixtures import build_index
+
+    build_index(client, new_album)
+
     buffer = BytesIO()
     Image.new("RGB", (64, 64), (10, 20, 30)).save(buffer, format="JPEG")
     payload = base64.b64encode(buffer.getvalue()).decode()
@@ -127,7 +138,8 @@ def test_search_still_accepts_an_image_query(client, new_album):
         },
     )
 
-    assert response.status_code != 400
+    assert response.status_code == 200, response.text
+    assert len(response.json()) > 0
 
 
 # --------------------------------------------------------------------------
@@ -231,6 +243,78 @@ def test_zip_download_refuses_an_oversized_selection(
     assert "limit" in response.json()["detail"].lower()
 
 
+def test_zip_stores_videos_and_deflates_images(client, tmp_path):
+    """Video streams are already compressed; deflating them burns CPU for ~0.
+
+    Asserted on the archive that comes back rather than on the call, because
+    the compress_type is a per-member argument that is easy to drop without
+    any other visible effect.
+    """
+    media = tmp_path / "zipmix"
+    media.mkdir()
+    video = media / "clip.mp4"
+    shutil.copy(media_fixture_path("clip.mp4"), video)
+    photo = media / "shot.png"
+    Image.new("RGB", (64, 64), (200, 40, 40)).save(photo)
+
+    files = sorted([video, photo])
+    index_path = media / "index" / "embeddings.npz"
+    _write_index(
+        index_path, files, np.vstack([np.array([[1.0] + [0.0] * 7])] * len(files))
+    )
+
+    album = {
+        "key": "zipmix_album",
+        "name": "Zip Mix",
+        "image_paths": [media.as_posix()],
+        "index": index_path.as_posix(),
+        "umap_eps": 0.1,
+        "description": "",
+        "encoder_spec": ENCODER_SPEC,
+    }
+    assert client.post("/add_album/", json=album).status_code == 201
+    try:
+        response = client.post(
+            "/download_images_zip/zipmix_album", json={"indices": [0, 1]}
+        )
+        assert response.status_code == 200, response.text
+
+        with zipfile.ZipFile(BytesIO(response.content)) as archive:
+            by_name = {info.filename: info for info in archive.infolist()}
+            assert by_name["clip.mp4"].compress_type == zipfile.ZIP_STORED
+            assert by_name["shot.png"].compress_type == zipfile.ZIP_DEFLATED
+    finally:
+        client.delete("/delete_album/zipmix_album")
+
+
+def test_zip_size_check_ignores_files_it_would_not_include(client, new_album, monkeypatch):
+    """The ceiling must be measured over what actually gets written.
+
+    An index can name a path outside the album (a moved directory, an edited
+    config); those are skipped when building the archive, so counting their
+    bytes could refuse a selection that zips to almost nothing.
+    """
+    from fixtures import build_index
+
+    from photomap.backend.routers import search as search_router_module
+
+    build_index(client, new_album)
+
+    monkeypatch.setattr(
+        search_router_module, "validate_image_access", lambda *args, **kwargs: False
+    )
+    monkeypatch.setattr(search_router_module, "_MAX_ZIP_BYTES", 1)
+
+    response = client.post(
+        f"/download_images_zip/{new_album['key']}", json={"indices": [0, 1]}
+    )
+
+    # Nothing is includable, so nothing counts: an empty archive, not a 413.
+    assert response.status_code == 200, response.text
+    with zipfile.ZipFile(BytesIO(response.content)) as archive:
+        assert archive.namelist() == []
+
+
 def test_zip_download_still_works_under_the_limit(client, new_album):
     from fixtures import build_index
 
@@ -322,6 +406,25 @@ def test_adding_the_same_warning_twice_does_not_duplicate_it():
     tracker.complete_operation("album")
 
     assert tracker.get_progress("album").warning_message.count("2 videos") == 1
+
+
+def test_adding_a_warning_that_is_a_substring_of_another_keeps_both():
+    """Deduplication compares whole notices, not substrings of the joined text.
+
+    "2 videos could not be read." is a substring of "12 videos could not be
+    read.", so a containment check against the accumulated string dropped it —
+    the exact silent discard this method exists to prevent.
+    """
+    tracker = ProgressTracker()
+    tracker.add_completion_warning("album", "12 videos could not be read.")
+    tracker.add_completion_warning("album", "2 videos could not be read.")
+
+    tracker.start_operation("album", total_images=1, operation_type="indexing")
+    tracker.complete_operation("album")
+
+    warning = tracker.get_progress("album").warning_message
+    assert "12 videos could not be read." in warning
+    assert warning.count("videos could not be read.") == 2
 
 
 def test_adding_an_empty_warning_is_a_noop():
