@@ -309,6 +309,15 @@ export async function fetchUmapData() {
     const yMin = getPercentile(ys, 1);
     const yMax = getPercentile(ys, 99);
 
+    // Reconcile the filter against this album *before* the trace is built.
+    // The album may have no videos at all, in which case a persisted
+    // "videos only" would otherwise plot an empty trace. Doing it afterwards
+    // still ended up looking right, but only because the setUmapColorMode()
+    // at the end of this function happens to redraw trace 0 from the
+    // corrected filter — a rescue that reads like a coincidence and would
+    // stop working the moment that call moved or became conditional.
+    updateMediaFilterAvailability();
+
     // Prepare marker arrays
     const drawn = visiblePoints();
     const markerColors = drawn.map((p) => getClusterColor(p.cluster));
@@ -572,7 +581,13 @@ export async function fetchUmapData() {
         // Get all points in this cluster, then click through to whatever image
         // we showed as the landmark thumbnail (medoid when available, else the
         // 2D-position pick). Keeps display and navigation consistent.
-        const clusterPoints = points.filter((p) => p.cluster === clickedLandmarkCluster);
+        // Drawn members only. A landmark is placed from the visible members of
+        // its cluster, but the click target used to be chosen from *all* of
+        // them — so on a filtered map a mixed cluster resolved to a point that
+        // isn't on the plot. handleClusterClick then built its walk over the
+        // visible set with that hidden point as the start, and threw on the
+        // first distance calculation, leaving the spinner up for good.
+        const clusterPoints = visiblePoints().filter((p) => p.cluster === clickedLandmarkCluster);
         if (clusterPoints.length > 0) {
           const targetIndex = getLandmarkImageIndex(clickedLandmarkCluster, clusterPoints);
           if (state.umapClickSelectsCluster) {
@@ -598,10 +613,6 @@ export async function fetchUmapData() {
 
     window.umapPoints = points;
     state.dataChanged = false;
-
-    // The album may have no videos at all, in which case the filter is
-    // pointless and a stale "videos only" would render a blank map.
-    updateMediaFilterAvailability();
 
     // Dispatch event to notify that UMAP data has been loaded
     window.dispatchEvent(new CustomEvent("umapDataLoaded"));
@@ -874,21 +885,32 @@ window.addEventListener("stateReady", () => {
   }
 });
 
+// Height of the controls block before this file started measuring it. Used as
+// the fallback when the element isn't laid out yet (initial paint, jsdom), so
+// the numbers below still reproduce the original constants exactly.
+const UNMEASURED_CONTROLS_HEIGHT = 60;
+
 // Vertical space to reserve for the controls block below the plot.
 //
 // Measured rather than hardcoded. There used to be two independent magic
 // numbers here (110/40 and 130/60), so adding a control row meant remembering
 // to bump both — miss one and the new row is clipped in exactly one of
-// {fullscreen, windowed}. The constants survive only as fallbacks for when
-// the element isn't laid out yet (initial paint, jsdom).
-function reservedControlsHeight(visibleFallback, hiddenFallback) {
+// {fullscreen, windowed}.
+//
+// ``gap`` is what each call site needs *on top of* the block's own height, and
+// the two are genuinely different: the fullscreen branch reserves space inside
+// an already-sized window, while the windowed branch sizes the whole window
+// and so must also cover the 51px titlebar. Measured in Chromium against the
+// pre-existing layout, where the block was 60px: 110 - 60 = 50 for fullscreen,
+// 130 - 60 = 70 for windowed. Collapsing both to one allowance left the
+// windowed layout 3px of clearance instead of 23.
+function reservedControlsHeight(gap, hiddenFallback) {
   if (!state.umapControlsVisible) {
     return hiddenFallback;
   }
   const controls = document.getElementById("umapControls");
   const measured = controls ? Math.ceil(controls.getBoundingClientRect().height) : 0;
-  // +30 for the gap between the plot and the controls block.
-  return measured > 0 ? measured + 30 : visibleFallback;
+  return (measured > 0 ? measured : UNMEASURED_CONTROLS_HEIGHT) + gap;
 }
 
 // Listed in the order they appear in the control row.
@@ -1297,8 +1319,13 @@ function updateUmapColorModeAvailability(searchResults = []) {
 // thumbnail and click target change.
 function getLandmarkImageIndex(cluster, clusterPoints) {
   const labelInfo = getClusterLabelInfo(cluster);
-  if (labelInfo && typeof labelInfo.medoid_index === "number") {
-    return labelInfo.medoid_index;
+  const medoid = labelInfo?.medoid_index;
+  // The medoid comes from the labels endpoint, which computes it over every
+  // member of the cluster — so it can name a point the media filter is
+  // hiding. Only honour it when it is one of the points passed in (which the
+  // caller has already restricted to what's drawn).
+  if (typeof medoid === "number" && clusterPoints.some((p) => p.index === medoid)) {
+    return medoid;
   }
   return getLandmarkForCluster(clusterPoints).index;
 }
@@ -1639,7 +1666,13 @@ function proximityClusterOrder(clusterIndices, points, startIndex) {
 
 // Shared function for cluster clicks
 async function handleClusterClick(clickedIndex) {
-  const clickedPoint = points.find((p) => p.index === clickedIndex);
+  // Looked up among the drawn points, not all of them. The walk below is built
+  // over the visible set, so a start point that isn't in it throws on the
+  // first distance calculation — and because the spinner is shown just after
+  // this check, the failure presented as a spinner that never stopped. Bailing
+  // is right rather than defensive: there is nothing sensible to select from a
+  // point the user cannot see.
+  const clickedPoint = visiblePoints().find((p) => p.index === clickedIndex);
   if (!clickedPoint) {
     return;
   }
@@ -1853,7 +1886,7 @@ function setUmapWindowSize(sizeKey) {
       contentDiv.style.display = "block";
     }
     // controlsHeight: space reserved below the plot for UMAP controls
-    const controlsHeight = reservedControlsHeight(110, 40);
+    const controlsHeight = reservedControlsHeight(50, 40);
     // Measure how much vertical space the bottom Control/Search panels occupy.
     // The window covers the full viewport; its dark background fills the dead zone behind the panels.
     const bottomPanel = document.getElementById("controlPanel");
@@ -1893,7 +1926,7 @@ function setUmapWindowSize(sizeKey) {
     }
     const { width, height } = UMAP_SIZES[sizeKey];
     const bottomPadding = 8; // add breathing room under plot
-    const extraWindowHeight = reservedControlsHeight(130, 60);
+    const extraWindowHeight = reservedControlsHeight(70, 60);
     const desiredWindowHeight = height + extraWindowHeight + bottomPadding;
     win.style.width = width + 60 + "px";
     win.style.height = Math.min(desiredWindowHeight, window.innerHeight - 20) + "px"; // window taller, capped at viewport

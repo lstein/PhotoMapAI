@@ -1,7 +1,10 @@
 from collections import Counter
 from pathlib import Path
 
+import pytest
 from fixtures import build_index, count_test_images, fetch_filename
+
+from photomap.backend.video import ffmpeg_exe
 
 TEST_IMAGE_COUNT = count_test_images()
 
@@ -25,11 +28,17 @@ def test_umap_construction(client, new_album, monkeypatch):
         assert point["cluster"] is not None
 
 
+@pytest.mark.skipif(
+    ffmpeg_exe() is None, reason="no bundled ffmpeg binary on this platform"
+)
 def test_umap_data_reports_media_type(client, new_media_album, monkeypatch):
     """The map needs a per-point media type to filter on.
 
     Derived from the filename suffix rather than stored per-image, so no npz
     change and no migration.
+
+    Skipped without ffmpeg: the videos would simply not be indexed and this
+    would fail rather than skip, unlike every other video test in the suite.
     """
     build_index(client, new_media_album)
 

@@ -77,6 +77,27 @@ function resolveDiv(target) {
 }
 
 /**
+ * Point-in-time copy of a trace list, arrays included.
+ *
+ * `restyle` replaces whole arrays on a trace (`trace.x = […]`), so a one-level
+ * copy is enough to freeze what was plotted; nested marker objects are cloned
+ * too since restyle writes into them via dotted paths.
+ */
+function snapshotTraces(traces) {
+  return traces.map((t) => {
+    const copy = { ...t };
+    for (const [key, value] of Object.entries(copy)) {
+      if (Array.isArray(value)) {
+        copy[key] = [...value];
+      } else if (value && typeof value === "object") {
+        copy[key] = JSON.parse(JSON.stringify(value));
+      }
+    }
+    return copy;
+  });
+}
+
+/**
  * Install a fake `window.Plotly` and return it for assertions.
  *
  * Every method records its arguments on `.calls` and returns a resolved
@@ -90,8 +111,8 @@ export function installPlotlyMock() {
 
     newPlot(target, data, layout = {}, config = {}) {
       const div = resolveDiv(target);
-      // Deep-ish copy so a later restyle can't retroactively change what the
-      // test believes was plotted.
+      // A per-trace copy, so mutating div.data doesn't reach back into the
+      // caller's array.
       div.data = data.map((t) => ({ ...t }));
       div.layout = {
         ...layout,
@@ -100,7 +121,11 @@ export function installPlotlyMock() {
         images: layout.images || [],
       };
       attachEmitter(div);
-      calls.newPlot.push({ data: div.data, layout: div.layout, config });
+      // Recorded as a real snapshot, not a reference to div.data. Sharing the
+      // array meant a later restyle rewrote what the test believed was
+      // plotted — so an assertion about the *first* draw silently became an
+      // assertion about the final state, and could not fail.
+      calls.newPlot.push({ data: snapshotTraces(div.data), layout: { ...div.layout }, config });
       return Promise.resolve(div);
     },
 
