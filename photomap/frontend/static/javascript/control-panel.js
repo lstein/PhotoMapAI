@@ -4,7 +4,6 @@ import { deleteImage, getIndexMetadata } from "./index.js";
 import { getCurrentFilepath, getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import { errorDetail, hideSpinner, showSpinner } from "./utils.js";
-import { isVideoPlayerOpen } from "./video-player.js";
 
 // Cache DOM elements
 let elements = {};
@@ -30,16 +29,23 @@ function toggleFullscreen() {
   }
 }
 
+// Panel visibility follows document.fullscreenElement and nothing else.
+//
+// A <video controls> element has its own fullscreen button, which makes this
+// fire with the video as the fullscreen element and again with none on the
+// way out. Suppressing the handler while the video player is open looks like
+// the fix and is worse than the problem: if the app leaves fullscreen while
+// the modal is open — which is what pressing Escape in fullscreen does, since
+// browsers consume that keydown to exit rather than delivering it to the page
+// — the panels keep .hidden-fullscreen (opacity:0 + visibility:hidden, both
+// !important) after the modal closes, and nothing restores them until the
+// user happens to toggle fullscreen twice.
+//
+// Letting every transition through is self-correcting instead. The video's
+// own fullscreen is entered and left in pairs, so the class ends up where it
+// started, and while the modal is open its backdrop sits at z-index 99999 —
+// so no intermediate state is ever visible to the user anyway.
 function handleFullscreenChange() {
-  // A <video controls> element has its own fullscreen button. Using it fires
-  // this handler with the video as the fullscreen element, and *leaving* it
-  // fires again with none — which would read as "the app left fullscreen"
-  // and un-hide every panel behind the still-open modal. While the player
-  // owns the screen, panel visibility is not ours to change.
-  if (isVideoPlayerOpen()) {
-    return;
-  }
-
   const isFullscreen = !!document.fullscreenElement;
 
   // Toggle visibility of UI panels

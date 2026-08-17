@@ -46,7 +46,7 @@ beforeEach(() => {
       <div class="modal-content video-player-content">
         <button class="modal-close" id="videoPlayerCloseBtn">&times;</button>
         <div class="video-player-title" id="videoPlayerTitle"></div>
-        <video id="videoPlayerElement" class="video-player-element" controls></video>
+        <video id="videoPlayerElement" class="video-player-element" controls tabindex="0"></video>
         <div class="video-player-fallback" id="videoPlayerFallback" hidden>
           <p id="videoPlayerFallbackMessage"></p>
           <a id="videoPlayerDownloadLink" href="#" download>Download the video</a>
@@ -140,6 +140,23 @@ describe("opening", () => {
     expect(isVideoPlayerOpen()).toBe(true);
   });
 
+  it("focuses the video, so Space reaches playback", () => {
+    // shouldIgnoreKeyEvent() lets Space through to the player precisely so the
+    // native controls can pause. A focused <button> activates on Space, so
+    // focusing the close button instead makes Space dismiss the player
+    // mid-clip — verified in Chromium.
+    openVideoPlayer(MP4);
+    expect(document.activeElement).toBe(video());
+  });
+
+  it("focuses the close button when the fallback is showing", () => {
+    // There is no video to drive, and a hidden element cannot take focus —
+    // leaving it on <body>, where Escape still works but Tab starts from the
+    // top of the page.
+    openVideoPlayer({ url: "videos/a/clip.avi", filename: "clip.avi", playable: false });
+    expect(document.activeElement).toBe(document.getElementById("videoPlayerCloseBtn"));
+  });
+
   it("opens from a videoPlayRequested event", () => {
     // The seam between the badge (PR 4) and the player.
     window.dispatchEvent(new CustomEvent("videoPlayRequested", { detail: MP4 }));
@@ -195,6 +212,18 @@ describe("closing", () => {
   it("is a no-op when already closed", () => {
     closeVideoPlayer();
     expect(video().pause).not.toHaveBeenCalled();
+  });
+
+  it("can stop a video that started playing during the same open", () => {
+    // close() early-returns unless the modal is marked visible, so the open
+    // path has to mark it visible *before* anything starts streaming.
+    // Otherwise a close arriving mid-open is a silent no-op and the clip
+    // plays on — audible — behind a modal that was never shown.
+    openVideoPlayer(MP4);
+    expect(modal().classList.contains("visible")).toBe(true);
+    closeVideoPlayer();
+    expect(video().pause).toHaveBeenCalled();
+    expect(video().hasAttribute("src")).toBe(false);
   });
 });
 

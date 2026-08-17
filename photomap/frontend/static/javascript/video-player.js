@@ -97,6 +97,12 @@ export function openVideoPlayer({ url, filename, playable = true } = {}) {
 
   hideFallback();
 
+  // Mark the modal open before anything can start streaming. closeVideoPlayer
+  // early-returns when the modal is not visible, so a close arriving between
+  // "src is set" and "modal is visible" would be a silent no-op and leave the
+  // video playing — audible — behind a modal the user never saw.
+  modal.classList.add("visible");
+
   if (!url) {
     showFallback("This video is unavailable.", "");
   } else if (playable === false) {
@@ -116,8 +122,19 @@ export function openVideoPlayer({ url, filename, playable = true } = {}) {
   // trying to scrub.
   state.swiper?.keyboard?.disable?.();
 
-  modal.classList.add("visible");
-  modal.querySelector(".modal-close")?.focus?.();
+  // Focus the video, not the close button.
+  //
+  // shouldIgnoreKeyEvent() lets Space through to the player precisely so the
+  // native controls can pause — but a focused <button> activates on Space, so
+  // focusing the close button hands it the key instead and Space *dismisses
+  // the player* mid-clip. Verified in Chromium: close button focused, Space
+  // fires the button's click; video focused, Space toggles playback.
+  //
+  // When the fallback is showing there is no video to drive, and the element
+  // is hidden (an unfocusable element would silently leave focus on <body>),
+  // so the close button is the right target there.
+  const focusTarget = videoEl && !videoEl.hidden ? videoEl : modal.querySelector(".modal-close");
+  focusTarget?.focus?.();
 }
 
 export function closeVideoPlayer() {

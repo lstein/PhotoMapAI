@@ -94,6 +94,10 @@ const KEYBOARD_SHORTCUTS = {
   Backspace: (e) => handleBackKey(e),
 };
 
+// Keys that must still reach KEYBOARD_SHORTCUTS while the video player is
+// open, because their handlers are how it gets dismissed.
+const PLAYER_DISMISS_KEYS = new Set(["Escape", "Backspace"]);
+
 function pauseSlideshow() {
   state.single_swiper?.pauseSlideshow();
 }
@@ -138,9 +142,13 @@ function shouldIgnoreKeyEvent(e) {
   // While the video player is open the native <video> controls own the
   // keyboard. Space would otherwise be swallowed by handleSpacebarToggle
   // (which preventDefaults it) and toggle the slideshow instead of pausing
-  // the video, and the arrows would change slides behind the modal. Escape
-  // is exempt: it is how the player is dismissed.
-  if (isVideoPlayerOpen() && e.key !== "Escape") {
+  // the video, and the arrows would change slides behind the modal.
+  //
+  // Escape and Backspace are exempt: both are ways to dismiss the player, and
+  // their handlers check for it. Leaving Backspace out made the guard inside
+  // handleBackKey unreachable — this returns before KEYBOARD_SHORTCUTS is
+  // consulted, so the shortcut never ran and the key silently did nothing.
+  if (isVideoPlayerOpen() && !PLAYER_DISMISS_KEYS.has(e.key)) {
     return true;
   }
   return false;

@@ -11,8 +11,21 @@
 
          playsinline: without it iOS Safari hijacks playback into its own
          fullscreen view the moment the video starts, which would drop the
-         user out of the modal entirely. -->
-    <video id="videoPlayerElement" class="video-player-element" controls playsinline preload="metadata"></video>
+         user out of the modal entirely.
+
+         tabindex="0": a no-op in browsers, where <video controls> is already
+         focusable and in the tab order (verified in Chromium — focus order
+         and Space-to-pause are unchanged). It is here to state the contract
+         the open path depends on: focus goes to the video so the native
+         controls own Space. -->
+    <video
+      id="videoPlayerElement"
+      class="video-player-element"
+      controls
+      playsinline
+      preload="metadata"
+      tabindex="0"
+    ></video>
 
     <!-- Shown instead of the player when the container is one browsers
          cannot play, or when the <video> reports an error. -->
