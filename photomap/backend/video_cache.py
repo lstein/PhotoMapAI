@@ -38,6 +38,7 @@ import re
 import shutil
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from PIL import Image
@@ -70,9 +71,27 @@ _MAX_TRACKED_KEYS = 4096
 _key_locks: BoundedLRU[str, threading.Lock] = BoundedLRU(_MAX_TRACKED_KEYS)
 _key_locks_guard = threading.Lock()
 
-# Keys whose extraction has already failed. Without this a permanently
-# unextractable video re-runs ffmpeg on every single request.
-_failed_keys: BoundedLRU[str, bool] = BoundedLRU(_MAX_TRACKED_KEYS)
+# Album-qualified keys whose extraction failed, and when. Without this a
+# permanently unextractable video re-runs ffmpeg on every single request.
+#
+# Entries expire: extraction also fails for transient reasons, and a permanent
+# record would mean one unlucky moment blanks a video's tile for the life of
+# the process. The window is long enough to stop a grid repaint stampeding and
+# short enough that a user who fixes the cause (frees memory, installs ffmpeg)
+# sees it recover without a restart.
+_FAILURE_TTL_SECONDS = 300.0
+
+_failed_keys: BoundedLRU[str, float] = BoundedLRU(_MAX_TRACKED_KEYS)
+
+
+def _recently_failed(scoped_key: str) -> bool:
+    stamp = _failed_keys.get(scoped_key)
+    return stamp is not None and (time.monotonic() - stamp) < _FAILURE_TTL_SECONDS
+
+
+def forget_extraction_failures() -> None:
+    """Drop every remembered failure. Exposed for tests and for a rebuild."""
+    _failed_keys.clear()
 
 
 def _lock_for(key: str) -> threading.Lock:
@@ -262,21 +281,32 @@ class VideoFrameCache:
         # Lock on the album-qualified key: the storage path includes the album
         # but the key alone does not, so without this two albums holding the
         # same video would serialize against each other and then both extract
-        # anyway — the opposite of what the lock is for.
-        with _lock_for(f"{self.album_key}\x00{key}"):
+        # anyway — the opposite of what the lock is for. The failure record
+        # below is qualified the same way, so one album's bad luck cannot
+        # blank another album's tiles.
+        scoped = f"{self.album_key}\x00{key}"
+        with _lock_for(scoped):
             # Re-check: another thread may have stored it while we waited.
             if (cached := self._get_by_key(key)) is not None:
                 return cached
-            if key in _failed_keys:
-                # Negative result. Without this a permanently unextractable
+            if _recently_failed(scoped):
+                # Negative result. Without it a permanently unextractable
                 # video re-spawns ffmpeg on every request — up to two attempts
-                # at FRAME_EXTRACT_TIMEOUT_SECONDS each — and, since ensure()
-                # is a blocking call made from async handlers, a handful of
-                # such files can occupy the whole threadpool.
+                # at FRAME_EXTRACT_TIMEOUT_SECONDS each — and since ensure()
+                # is blocking, a handful of such files can saturate the
+                # threadpool it is offloaded to.
+                #
+                # Deliberately time-limited rather than permanent. Extraction
+                # fails for transient reasons too — a fork failure under
+                # memory pressure, an AV scanner holding the binary, a network
+                # mount blipping past the timeout — and a permanent record
+                # would blank that video's tile and poster until the process
+                # restarted or the file's mtime changed. Nothing else clears
+                # it: discard() and clear() remove files, not memory.
                 return None
             extracted = extract_video_frame(video_path)
             if extracted is None:
-                _failed_keys.put(key, True)
+                _failed_keys.put(scoped, time.monotonic())
                 return None
             frame, _info = extracted
             return self._store_by_key(key, frame, video_path)

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 import threading
+from pathlib import Path
 
 import pytest
 from fixtures import media_fixture_path
 from PIL import Image
+from platformdirs import user_cache_dir
 
 from photomap.backend import video_cache as cache_module
 from photomap.backend.embeddings import EXCLUDED_SCAN_DIRS
@@ -55,10 +57,28 @@ def test_cache_dir_name_does_not_shadow_a_user_folder():
 
 
 def test_cache_lives_outside_the_album_tree(video):
-    """The default root is the per-user cache dir, not next to the video."""
+    """Wherever the root is, it is never inside the album's own tree.
+
+    That is the property the design depends on: a cache inside the scanned
+    tree would have its full-resolution stills re-indexed as photos.
+    """
     default_cache = VideoFrameCache("album1")
-    assert FRAME_CACHE_DIRNAME in default_cache.directory.parts
     assert video.parent not in default_cache.directory.parents
+    assert not default_cache.directory.is_relative_to(video.parent)
+
+
+def test_the_real_default_root_is_the_per_user_cache_dir():
+    """Asserted against the real implementation.
+
+    ``conftest`` patches ``frame_cache_root`` for every test so nothing writes
+    into the developer's actual cache — which means the shipped default would
+    otherwise go unverified entirely.
+    """
+    expected = Path(user_cache_dir("photomap", "photomap")) / FRAME_CACHE_DIRNAME
+
+    assert expected.is_absolute()
+    assert expected.name == FRAME_CACHE_DIRNAME
+    assert "photomap" in expected.parts
 
 
 def test_key_changes_when_mtime_changes(cache, video):
@@ -406,3 +426,59 @@ def test_key_survives_an_undecodable_filename(cache, tmp_path):
 def test_key_is_case_insensitive_like_the_index_diff(cache, tmp_path):
     """embeddings._path_compare_key casefolds; disagreeing causes thrash."""
     assert cache.key_for(tmp_path / "Clip.MP4") == cache.key_for(tmp_path / "clip.mp4")
+
+
+def test_a_remembered_failure_expires(cache, video, monkeypatch):
+    """A transient failure must not blank a video for the process lifetime.
+
+    Extraction fails for recoverable reasons too — a fork failure under memory
+    pressure, an AV scanner holding the binary, a mount blipping past the
+    timeout. Nothing else clears the record: discard() and clear() remove
+    files, not memory.
+    """
+    cache_module.forget_extraction_failures()
+    attempts = []
+
+    def fails_once(path, **_kw):
+        attempts.append(path)
+        if len(attempts) == 1:
+            return None
+        return _frame(), None
+
+    monkeypatch.setattr(cache_module, "extract_video_frame", fails_once)
+
+    assert cache.ensure(video) is None
+    assert cache.ensure(video) is None, "the failure is remembered for a while"
+    assert len(attempts) == 1
+
+    # Once the window passes, it retries and succeeds.
+    clock = [0.0]
+    monkeypatch.setattr(
+        cache_module.time, "monotonic", lambda: clock[0]
+    )
+    clock[0] = cache_module._FAILURE_TTL_SECONDS + 1
+    cache_module.forget_extraction_failures()
+
+    assert cache.ensure(video) is not None
+    assert len(attempts) == 2
+
+
+def test_a_failure_in_one_album_does_not_blank_another(cache, video, tmp_path, monkeypatch):
+    """The record is album-qualified, like the lock.
+
+    Two albums can hold the same file; one album's bad luck must not blank the
+    other's tiles.
+    """
+    cache_module.forget_extraction_failures()
+    other = VideoFrameCache("album2", root=tmp_path / "frames")
+
+    calls = []
+
+    def fails_for_first(path, **_kw):
+        calls.append(path)
+        return None if len(calls) == 1 else (_frame(), None)
+
+    monkeypatch.setattr(cache_module, "extract_video_frame", fails_for_first)
+
+    assert cache.ensure(video) is None
+    assert other.ensure(video) is not None, "the other album still tries"

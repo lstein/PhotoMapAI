@@ -1,17 +1,27 @@
 """Render video facts for the metadata drawer.
 
 Emits a panel in the same shape ``exif_formatter`` uses — a bold section
-heading over an ``exif-table`` of ``<th>label</th><td>value</td>`` rows — so
-the drawer's existing styling and copy-icon delegation apply unchanged.
+heading over a table of ``<th>label</th><td>value</td>`` rows, inside an
+``exif-metadata`` wrapper, which is the ancestor selector the drawer
+stylesheet actually targets.
 
-This panel *precedes* rather than replaces the EXIF panel: phone videos
-routinely carry a creation date and GPS coordinates worth showing, so both
-are rendered when both are present.
+This panel *precedes* rather than replaces the EXIF panel, so that a video
+carrying a creation date or GPS shows both. Note that today the indexer never
+produces EXIF for a video — ``_load_video`` writes only the probe dict — so in
+the current pipeline this is always the sole panel. The composition is kept
+because it is the correct behavior the moment video EXIF extraction is added,
+but no test here should be read as evidence that it happens now.
+
+Every helper returns a placeholder rather than raising. That matters more than
+it looks: the values come from parsing ffmpeg's stderr, so ``inf`` is
+reachable from a long digit run, and an exception here does not degrade one
+row — it takes down the whole ``/retrieve_image`` response.
 """
 
 from __future__ import annotations
 
 import html
+import math
 from logging import getLogger
 
 from .slide_summary import SlideSummary
@@ -19,47 +29,70 @@ from .slide_summary import SlideSummary
 logger = getLogger(__name__)
 
 
+UNKNOWN = "Unknown"
+
+
 def _esc(value: object) -> str:
-    return html.escape(str(value))
+    return html.escape("" if value is None else str(value))
 
 
 def format_duration(seconds: float | None) -> str:
-    """Human-readable clock time: 7.4 -> '0:07', 3725 -> '1:02:05'."""
+    """Human-readable clock time: 7.4 -> '0:07', 3725 -> '1:02:05'.
+
+    Returns ``"Unknown"`` for anything unusable rather than raising. Note the
+    conversions must ALL sit inside the guard: ``round(inf)`` raises
+    ``OverflowError``, which is neither a ``TypeError`` nor a ``ValueError``,
+    and ``inf`` is reachable — the banner's fps/duration patterns match an
+    arbitrarily long digit run and ``float("9" * 400)`` is ``inf`` with no
+    exception at all.
+    """
     if seconds is None:
-        return "Unknown"
+        return UNKNOWN
     try:
-        total = int(round(float(seconds)))
-    except (TypeError, ValueError):
-        return "Unknown"
-    if total < 0:
-        return "Unknown"
-    hours, remainder = divmod(total, 3600)
-    minutes, secs = divmod(remainder, 60)
+        value = float(seconds)
+        if not math.isfinite(value) or value < 0:
+            return UNKNOWN
+        total = int(round(value))
+        hours, remainder = divmod(total, 3600)
+        minutes, secs = divmod(remainder, 60)
+    except (TypeError, ValueError, OverflowError):
+        return UNKNOWN
     if hours:
         return f"{hours}:{minutes:02d}:{secs:02d}"
     return f"{minutes}:{secs:02d}"
 
 
 def format_fps(fps: float | None) -> str:
-    """'30 fps' for whole rates, '29.97 fps' otherwise."""
+    """'30 fps' for whole rates, '29.97 fps' otherwise, else ``"Unknown"``."""
     if fps is None:
-        return "Unknown"
+        return UNKNOWN
     try:
         value = float(fps)
-    except (TypeError, ValueError):
-        return "Unknown"
-    if value <= 0:
-        return "Unknown"
-    if abs(value - round(value)) < 0.01:
-        return f"{int(round(value))} fps"
-    return f"{value:.2f} fps"
+        if not math.isfinite(value) or value <= 0:
+            return UNKNOWN
+        if abs(value - round(value)) < 0.01:
+            return f"{int(round(value))} fps"
+        return f"{value:.2f} fps"
+    except (TypeError, ValueError, OverflowError):
+        return UNKNOWN
 
 
 def _resolution(info: dict) -> str | None:
-    width, height = info.get("width"), info.get("height")
-    if not width or not height:
+    """``"1920 × 1080"``, or ``None`` when either dimension is unusable.
+
+    Guarded like every other helper here: the falsy check alone let a
+    non-integral value such as ``"1920.0"`` through to ``int()``, which raises
+    ``ValueError`` and took down the whole drawer render rather than dropping
+    one row.
+    """
+    try:
+        width = int(info.get("width") or 0)
+        height = int(info.get("height") or 0)
+    except (TypeError, ValueError, OverflowError):
         return None
-    return f"{int(width)} × {int(height)}"
+    if width <= 0 or height <= 0:
+        return None
+    return f"{width} × {height}"
 
 
 def video_external_link_html(video_url: str) -> str:
@@ -98,13 +131,22 @@ def format_video_metadata(slide_data: SlideSummary, info: dict | None) -> SlideS
         rows.append(("Codec", str(codec)))
     if container := info.get("container"):
         rows.append(("Container", str(container)))
-    if info.get("playable") is False:
-        rows.append(
-            ("Playback", "Not supported by browsers — use the download link")
-        )
+    playable = info.get("playable")
+    if playable is not None and not playable:
+        # Truthiness rather than `is False`: an identity check silently skips
+        # a numpy bool or a 0, both of which can survive a round trip through
+        # the pickled metadata dict.
+        rows.append(("Playback", "Not supported by most browsers"))
 
+    # The wrapper carries `exif-metadata` because that is the ancestor
+    # selector metadata-drawer.css actually styles (`.exif-metadata table`,
+    # `.exif-metadata th/td`). A bare `video-metadata` matched no rule in any
+    # stylesheet, so the panel rendered with no borders, padding or width —
+    # and since the indexer writes video metadata as *only* the video dict,
+    # this panel is normally the sole panel, so nothing else pulled the
+    # styling in. The second class is a hook for future video-only styling.
     html_doc = (
-        "<div class='video-metadata'>"
+        "<div class='exif-metadata video-metadata'>"
         "<div style=\"font-weight: bold; margin-bottom: 4px;\">🎬 Video</div>"
         "<table class='exif-table'>"
     )

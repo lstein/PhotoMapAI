@@ -6,6 +6,7 @@ Returns an HTML representation of the metadata.
 """
 
 import logging
+import math
 from pathlib import Path
 
 from .config import get_config_manager
@@ -20,6 +21,38 @@ from .metadata_modules import (
 from .video import VIDEO_METADATA_KEY
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitized_video_info(metadata: dict | None) -> dict | None:
+    """The probe dict, made safe to put on a JSON response model.
+
+    Three problems this closes, all of which surface as a 500 on
+    ``/retrieve_image`` — i.e. a blank slideshow, not a missing field:
+
+    * The value is whatever is in the ``.npz``. A non-dict (a JSON *string*,
+      say, from a hand-edited or older index) makes the formatter's ``.get``
+      raise ``AttributeError``.
+    * Non-finite floats are reachable, because the banner parser's numeric
+      patterns match arbitrarily long digit runs and ``float("9" * 400)`` is
+      ``inf``. Starlette serializes with ``allow_nan=False``, so an ``inf``
+      here 500s the response *even if* every formatter handles it — the two
+      are independent failure sites.
+    * The dict handed over belongs to the ``lru_cache``d index; assigning it
+      straight onto the response model shares mutable state with the
+      process-wide cache. Copying breaks that aliasing.
+    """
+    if not metadata:
+        return None
+    raw = metadata.get(VIDEO_METADATA_KEY)
+    if not isinstance(raw, dict):
+        return None
+
+    clean: dict = {}
+    for key, value in raw.items():
+        if isinstance(value, float) and not math.isfinite(value):
+            continue
+        clean[key] = value
+    return clean
 
 
 def format_metadata(
@@ -52,7 +85,7 @@ def format_metadata(
     # it an .mkv is a live bug, so videos never get that button.
     if media_type_for(filepath) == "video":
         result.media_type = "video"
-        video_info = metadata.get(VIDEO_METADATA_KEY) if metadata else None
+        video_info = _sanitized_video_info(metadata)
         result.video_info = video_info
         result = format_video_metadata(result, video_info)
 

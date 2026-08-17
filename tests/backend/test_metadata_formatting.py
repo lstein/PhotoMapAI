@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from starlette.responses import JSONResponse
 
 from photomap.backend.config import get_config_manager
 from photomap.backend.metadata_formatting import format_metadata
@@ -204,7 +205,7 @@ class TestVideoMetadata:
         result = format_metadata(
             Path("/tmp/example.avi"), {VIDEO_METADATA_KEY: info}, 0, 1
         )
-        assert "Not supported by browsers" in result.description
+        assert "Not supported by most browsers" in result.description
 
 
 class TestVideoDurationAndFpsFormatting:
@@ -219,6 +220,10 @@ class TestVideoDurationAndFpsFormatting:
             (None, "Unknown"),
             (-5, "Unknown"),
             ("nonsense", "Unknown"),
+            # round(inf) raises OverflowError, which is neither TypeError nor
+            # ValueError — the guard has to cover the conversion too.
+            (float("inf"), "Unknown"),
+            (float("nan"), "Unknown"),
         ],
     )
     def test_format_duration(self, seconds, expected):
@@ -233,7 +238,98 @@ class TestVideoDurationAndFpsFormatting:
             (None, "Unknown"),
             (0, "Unknown"),
             ("nonsense", "Unknown"),
+            (float("inf"), "Unknown"),
+            (float("nan"), "Unknown"),
         ],
     )
     def test_format_fps(self, fps, expected):
         assert format_fps(fps) == expected
+
+
+class TestVideoMetadataAgainstBadProbeData:
+    """The probe dict comes from parsing ffmpeg's stderr, so it can hold
+    anything. A bad value must cost one row, never the response."""
+
+    def _path(self) -> Path:
+        return Path("/tmp/example.mp4")
+
+    @pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])
+    def test_non_finite_numbers_are_dropped_rather_than_rendered(
+        self, bad, clear_invokeai_config
+    ):
+        """Reachable: the banner's numeric patterns match arbitrarily long
+        digit runs, and float("9" * 400) is inf with no exception at all.
+
+        Sanitizing drops the field outright, so no row appears — better than
+        an "Unknown" row, which would imply the probe reported something.
+        """
+        result = format_metadata(
+            self._path(),
+            {VIDEO_METADATA_KEY: {"duration": bad, "fps": bad, "codec": "h264"}},
+            0,
+            1,
+        )
+        assert "Duration" not in result.description
+        assert "Frame Rate" not in result.description
+        assert "h264" in result.description
+
+    def test_non_finite_numbers_are_dropped_from_the_response_model(
+        self, clear_invokeai_config
+    ):
+        """A second, independent failure site from the formatters.
+
+        Starlette serializes with allow_nan=False, so an inf on the response
+        model 500s the request even when every formatter handles it.
+        """
+        result = format_metadata(
+            self._path(),
+            {VIDEO_METADATA_KEY: {"duration": float("inf"), "codec": "h264"}},
+            0,
+            1,
+        )
+        assert "duration" not in result.video_info
+        assert result.video_info["codec"] == "h264"
+        JSONResponse({"video_info": result.video_info})  # must not raise
+
+    def test_a_non_dict_probe_value_does_not_crash(self, clear_invokeai_config):
+        """An older or hand-edited index can hold a JSON string here."""
+        result = format_metadata(
+            self._path(), {VIDEO_METADATA_KEY: '{"codec": "h264"}'}, 0, 1
+        )
+        assert result.media_type == "video"
+        assert result.video_info is None
+
+    def test_an_unparseable_resolution_drops_only_that_row(
+        self, clear_invokeai_config
+    ):
+        result = format_metadata(
+            self._path(),
+            {VIDEO_METADATA_KEY: {"width": "1920.0", "height": "1080", "codec": "h264"}},
+            0,
+            1,
+        )
+        assert "Resolution" not in result.description
+        assert "h264" in result.description
+
+    def test_the_response_model_does_not_alias_the_index_cache(
+        self, clear_invokeai_config
+    ):
+        """The dict handed in belongs to the lru_cached npz view."""
+        source = {VIDEO_METADATA_KEY: {"codec": "h264"}}
+        result = format_metadata(self._path(), source, 0, 1)
+        assert result.video_info is not source[VIDEO_METADATA_KEY]
+
+    def test_the_panel_uses_a_class_the_drawer_actually_styles(
+        self, clear_invokeai_config
+    ):
+        """metadata-drawer.css targets `.exif-metadata table`, nothing else.
+
+        A bare `video-metadata` wrapper matched no rule in any stylesheet, so
+        the table rendered with no borders, padding or width — and since the
+        indexer writes only the video dict, this panel is normally the only
+        panel, so nothing else pulled the styling in.
+        """
+        result = format_metadata(
+            self._path(), {VIDEO_METADATA_KEY: {"codec": "h264"}}, 0, 1
+        )
+        assert "exif-metadata" in result.description
