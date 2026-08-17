@@ -30,14 +30,21 @@ dependencies = [
     "clip-anytorch",
     "colorama",
     "dash",
+    "fastapi",
     # Range/206 handling in Starlette's FileResponse is load-bearing for video
-    # seeking; 0.115 is the first FastAPI requiring a Starlette with the
-    # reworked range support.
-    "fastapi>=0.115",
+    # seeking, and it landed in Starlette 0.39.0 — so the floor belongs on
+    # starlette directly. Constraining fastapi instead does not work: 0.115.0
+    # and 0.115.1 both pin starlette<0.39.0, so a fastapi>=0.115 floor is
+    # satisfied by a Starlette that ignores Range and answers 200 with the
+    # whole file, making <video> re-download the clip on every scrub.
+    # 0.49.1 additionally fixes a Range-parser advisory in this exact path.
+    "starlette>=0.49.1",
     # Bundles a static ffmpeg binary used to extract a still frame from videos.
-    # Ships py3-none-<platform> wheels (no ABI tag), so every supported Python
-    # is satisfied identically.
-    "imageio-ffmpeg>=0.5.1",
+    # Floor is 0.6.0 because that is the first release publishing a
+    # macosx_11_0_arm64 wheel — earlier ones ship Intel-only macOS wheels, so
+    # an Apple Silicon resolve falls back to the sdist, which contains no
+    # binary at all and fails only later, at the first video indexed.
+    "imageio-ffmpeg>=0.6.0",
     "jinja2",
     "networkx",
     "numpy",

@@ -47,49 +47,10 @@ IMAGE_EXTENSIONS: frozenset[str] = frozenset(
     }
 )
 
-VIDEO_EXTENSIONS: frozenset[str] = frozenset(
-    {
-        # Generally web-playable containers
-        ".mp4",
-        ".m4v",
-        ".mov",
-        ".webm",
-        ".ogv",
-        ".ogg",
-        # Index-only containers: ffmpeg decodes them, browsers do not play them
-        ".mkv",
-        ".avi",
-        ".wmv",
-        ".flv",
-        ".asf",
-        ".mpg",
-        ".mpeg",
-        ".m2v",
-        ".vob",
-        # Camcorder transport streams
-        ".ts",
-        ".m2ts",
-        ".mts",
-        # Phone
-        ".3gp",
-        ".3g2",
-    }
-)
-
-WEB_PLAYABLE_EXTENSIONS: frozenset[str] = frozenset(
-    {
-        ".mp4",
-        ".m4v",
-        ".mov",
-        ".webm",
-        ".ogv",
-        ".ogg",
-    }
-)
-
-INDEXABLE_EXTENSIONS: frozenset[str] = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
-
-# Explicit container -> MIME map.
+# Container -> MIME map, and the single source of truth for which containers
+# are video at all: ``VIDEO_EXTENSIONS`` is derived from its keys below. Listing
+# the suffixes twice invited the two sets drifting apart, with the subset test
+# still passing.
 #
 # Deliberately NOT ``mimetypes.guess_type``.  Two ways that bites:
 #   * ``.ogg`` maps to ``audio/ogg`` in the stdlib table (the extension is
@@ -98,6 +59,12 @@ INDEXABLE_EXTENSIONS: frozenset[str] = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 #   * On Windows ``guess_type`` consults the registry, so a stripped machine
 #     can return ``None`` for ``.mp4``; Starlette then falls back to
 #     ``text/plain``, which no browser will play.
+#
+# Deliberately absent: ``.ts``. It is an MPEG transport stream roughly never,
+# and TypeScript constantly, and the indexing walk prunes only dot-directories
+# plus a handful of names — an album pointed at a home directory would collect
+# every .ts source file in every node_modules as a video and spawn ffmpeg on
+# each. ``.m2ts``/``.mts`` cover AVCHD camcorders unambiguously.
 VIDEO_MEDIA_TYPES: dict[str, str] = {
     ".mp4": "video/mp4",
     ".m4v": "video/x-m4v",
@@ -114,16 +81,43 @@ VIDEO_MEDIA_TYPES: dict[str, str] = {
     ".mpeg": "video/mpeg",
     ".m2v": "video/mpeg",
     ".vob": "video/mpeg",
-    ".ts": "video/mp2t",
     ".m2ts": "video/mp2t",
     ".mts": "video/mp2t",
     ".3gp": "video/3gpp",
     ".3g2": "video/3gpp2",
 }
 
-# Fallback for a video suffix with no explicit mapping. Should be unreachable
-# (a test asserts VIDEO_EXTENSIONS and VIDEO_MEDIA_TYPES agree), but a generic
-# video type still beats Starlette's text/plain default.
+VIDEO_EXTENSIONS: frozenset[str] = frozenset(VIDEO_MEDIA_TYPES)
+
+# Containers current browsers generally play in a <video> element.
+#
+# Ogg/Theora is deliberately NOT here despite ffmpeg decoding it happily:
+# Chrome removed Theora in M123 (March 2024) and Firefox in 126, and Safari
+# never supported it, so a play badge on a .ogv would promise something no
+# current browser delivers.
+#
+# The conservative direction is the safe one. A container listed here that
+# turns out not to play still lands on the player's <video> error handler,
+# which names the format and offers a download; one omitted merely warns
+# first and then plays anyway. Codec, not container, decides in the end — an
+# HEVC .mp4 plays in Safari but not Firefox — which is why the player always
+# attempts playback rather than trusting this set.
+WEB_PLAYABLE_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".mp4",
+        ".m4v",
+        ".mov",
+        ".webm",
+    }
+)
+
+INDEXABLE_EXTENSIONS: frozenset[str] = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+
+# Fallback for a suffix with no explicit mapping. Unreachable for anything in
+# VIDEO_EXTENSIONS, since that set is now derived from VIDEO_MEDIA_TYPES' own
+# keys; it exists only for callers that pass an arbitrary path. Deliberately
+# not a video type: ``video_media_type`` does not validate its argument, so a
+# caller handing it a non-video must not get something that looks playable.
 DEFAULT_VIDEO_MEDIA_TYPE = "application/octet-stream"
 
 
@@ -138,26 +132,42 @@ def is_image(path: Path | str) -> bool:
 
 
 def media_type_for(path: Path | str) -> MediaType:
-    """Classify ``path`` by suffix.
+    """Classify an **already-admitted** album entry by suffix.
 
     Deriving media type from the filename — rather than storing it as a
     per-image column in the ``.npz`` — is what lets indexes written before
     video support was added report the right type with no migration and no
-    legacy fallback branch.  Anything that is not a known video container is
-    reported as an image, matching the pre-video behavior of every caller.
+    legacy fallback branch.
+
+    .. warning::
+       This is **not** a membership test and must never be used as a serving
+       guard. Everything that is not a known video container is reported as
+       ``"image"``, including ``passwd`` and ``notes.txt`` — the point is that
+       entries already in an index predate the video split and must keep
+       classifying as images. Use :func:`is_image` to decide whether a path
+       may be opened or served; that is what closes the ``add_album`` →
+       ``/images/<key>/passwd`` arbitrary-read chain.
     """
     return "video" if is_video(path) else "image"
 
 
 def is_web_playable(path: Path | str) -> bool:
-    """True if browsers can *generally* play this container.
+    """True if browsers generally play this container. See
+    :data:`WEB_PLAYABLE_EXTENSIONS`.
 
-    A hint for badge styling only — the real answer depends on the codec
-    inside, so the player attempts playback regardless and handles failure.
+    Drives how the play badge is styled and whether the player explains
+    up front. Not authoritative: the codec inside decides, so the player
+    attempts playback either way and falls back on the element's own error.
     """
     return Path(path).suffix.lower() in WEB_PLAYABLE_EXTENSIONS
 
 
 def video_media_type(path: Path | str) -> str:
-    """MIME type to serve ``path`` with. See :data:`VIDEO_MEDIA_TYPES`."""
+    """MIME type to serve ``path`` with. See :data:`VIDEO_MEDIA_TYPES`.
+
+    Does **not** validate that ``path`` is a video — an unknown suffix gets
+    :data:`DEFAULT_VIDEO_MEDIA_TYPE`, which is deliberately not a video type.
+    Callers must gate on :func:`is_video` first; this returning a string is
+    not evidence that the file is servable.
+    """
     return VIDEO_MEDIA_TYPES.get(Path(path).suffix.lower(), DEFAULT_VIDEO_MEDIA_TYPE)
