@@ -93,8 +93,10 @@ def mixed_album(client, tmp_path):
         "description": "",
         "encoder_spec": ENCODER_SPEC,
     }
-    assert client.post("/add_album/", json=album).status_code == 201
     try:
+        # Inside the try: a failure here would otherwise leak the album past
+        # teardown and poison every later test using this fixture.
+        assert client.post("/add_album/", json=album).status_code == 201
         yield {**album, "video": video, "photo": photo, "media_dir": media_dir}
     finally:
         VideoFrameCache(album["key"]).clear()
@@ -239,8 +241,10 @@ def test_thumbnail_endpoint_renders_a_video_via_its_still(client, mixed_album):
     assert max(thumb.size) <= 32
 
 
-@requires_ffmpeg
 def test_thumbnail_endpoint_still_works_for_images(client, mixed_album):
+    """Index 1 is the .jpeg, so this needs no ffmpeg — and must not be gated
+    on it, or the only guard that the new video branch did not break image
+    thumbnailing skips silently wherever no binary is installed."""
     response = client.get("/thumbnails/mixed_album/1?size=32")
     assert response.status_code == 200
 
@@ -294,3 +298,116 @@ def test_get_metadata_serializes_video_info(client, mixed_album):
     response = client.get("/get_metadata/mixed_album/0")
     assert response.status_code == 200
     assert response.json()[VIDEO_METADATA_KEY]["codec"] == "h264"
+
+
+# --------------------------------------------------------------------------
+# Robustness of the serving layer
+# --------------------------------------------------------------------------
+
+
+def test_a_nul_byte_in_the_path_is_a_404_not_a_500(client, mixed_album):
+    """Path.resolve() raises ValueError on a NUL, while .exists() returns False.
+
+    validate_image_access calls resolve(), so without an explicit guard the
+    request escapes every handler as a 500 with a traceback.
+    """
+    response = client.get("/videos/mixed_album/clip%00.mp4")
+    assert response.status_code in (400, 404)
+
+
+def test_serve_video_sets_an_explicit_cache_lifetime(client, mixed_album):
+    """FileResponse emits validators but implements no conditional handling.
+
+    Only StaticFiles does, so a revalidation would re-transfer the whole clip.
+    """
+    response = client.get("/videos/mixed_album/clip.mp4")
+    assert "max-age" in response.headers.get("cache-control", "")
+
+
+def test_the_poster_is_not_cached_across_reindexes(client, mixed_album):
+    """video_frame is keyed by index, and an index designates a different
+    file once a delete or reindex reorders the album."""
+    response = client.get("/video_frame/mixed_album/0")
+    assert response.headers.get("cache-control") == "no-cache"
+
+
+def test_slide_urls_are_percent_encoded(client, tmp_path):
+    """A '#' in a filename would otherwise become a URL fragment."""
+    from photomap.backend.metadata_modules import SlideSummary
+    from photomap.backend.routers.search import create_slide_url
+
+    media = tmp_path / "encoded"
+    media.mkdir()
+    awkward = media / "beach #2.mp4"
+    awkward.write_bytes(b"stub")
+    index_path = media / "index" / "embeddings.npz"
+    _write_synthetic_index(index_path, [awkward], [{}])
+
+    album = {
+        "key": "encoded_album",
+        "name": "Encoded",
+        "image_paths": [media.as_posix()],
+        "index": index_path.as_posix(),
+        "umap_eps": 0.1,
+        "description": "",
+        "encoder_spec": ENCODER_SPEC,
+    }
+    assert client.post("/add_album/", json=album).status_code == 201
+    try:
+        slide = SlideSummary(
+            filename=awkward.name, filepath=awkward.as_posix(), media_type="video"
+        )
+        create_slide_url(slide, "encoded_album")
+
+        assert "#" not in slide.video_url, slide.video_url
+        assert "%232" in slide.video_url
+        # And the encoded URL actually resolves back to the file.
+        assert client.get("/" + slide.video_url).status_code == 200
+    finally:
+        client.delete("/delete_album/encoded_album")
+
+
+def test_a_video_with_no_still_gets_a_placeholder_not_a_404(
+    client, mixed_album, monkeypatch
+):
+    """Every img.src caller sets no onerror handler.
+
+    A 404 therefore paints a bare broken-image glyph across the grid, the UMAP
+    hover popups and the landmark overlay at once — and on a platform with no
+    ffmpeg binary that is every video in the album.
+    """
+    from photomap.backend.routers import search as search_module
+
+    async def no_frame(*_a, **_kw):
+        return None
+
+    monkeypatch.setattr(search_module, "_ensure_frame_off_loop", no_frame)
+
+    response = client.get("/thumbnails/mixed_album/0?size=64")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers.get("cache-control") == "no-store"
+
+    response = client.get("/video_frame/mixed_album/0")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+
+
+def test_frame_resolution_is_skipped_when_the_thumbnail_is_warm(
+    client, mixed_album, monkeypatch
+):
+    """Resolving the still can spawn ffmpeg; a warm thumbnail must not pay it."""
+    from photomap.backend.routers import search as search_module
+
+    assert client.get("/thumbnails/mixed_album/0?size=64").status_code == 200
+
+    calls = []
+
+    async def counted(album_key, video_path):
+        calls.append(video_path)
+        return None
+
+    monkeypatch.setattr(search_module, "_ensure_frame_off_loop", counted)
+
+    assert client.get("/thumbnails/mixed_album/0?size=64").status_code == 200
+    assert calls == [], "a cached thumbnail should not re-resolve the still"
