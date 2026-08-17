@@ -367,5 +367,175 @@ describe("grid-view.js", () => {
       const img = slideEl.querySelector("img");
       expect(img.alt).toBe("test-image.jpg");
     });
+
+    it("should badge a video tile once its metadata arrives", async () => {
+      // Tiles paint as placeholders first, so this is the earliest point at
+      // which the media type is known.
+      gridViewManager = await initializeGridSwiper();
+
+      // Mirrors a real tile: inside #gridViewSwiperWrapper (the scope for
+      // every grid CSS rule the badge adds) and carrying the inline width
+      // grid-view.js stamps on it — which is the only input isCompactSlide
+      // reads. Without both, this fixture cannot observe the compact path at
+      // all, and would pass just as happily if that path were deleted.
+      document.querySelector("#gridViewContainer .swiper.grid-mode").innerHTML = `
+        <div class="swiper-wrapper" id="gridViewSwiperWrapper">
+          <div class="swiper-slide" style="width:220px; height:220px;"
+               data-global-index="7" data-filepath="">
+            <img alt="Loading..." />
+          </div>
+        </div>
+      `;
+
+      const videoData = {
+        filename: "clip.mp4",
+        filepath: "/path/to/clip.mp4",
+        globalIndex: 7,
+        media_type: "video",
+        video_url: "videos/album/clip.mp4",
+        video_info: { duration: 65, fps: 30, playable: true },
+      };
+
+      gridViewManager.updateSlideWithMetadata(7, videoData);
+
+      const slideEl = document.querySelector('[data-global-index="7"]');
+      const badge = slideEl.querySelector(".video-badge");
+      expect(badge).not.toBeNull();
+      expect(badge.querySelector(".video-badge-label").textContent).toBe("1:05 · 30 fps");
+      // The thumbnail <img> must survive — curation.js skips tiles without one.
+      expect(slideEl.querySelector("img")).not.toBeNull();
+    });
+
+    it("should drop the label on a narrow tile", async () => {
+      // The compact class is the only thing that shrinks the badge on small
+      // tiles, and it is driven purely by the inline width — so a fixture
+      // without one cannot see this at all.
+      gridViewManager = await initializeGridSwiper();
+
+      document.querySelector("#gridViewContainer .swiper.grid-mode").innerHTML = `
+        <div class="swiper-wrapper" id="gridViewSwiperWrapper">
+          <div class="swiper-slide" style="width:90px; height:90px;"
+               data-global-index="9" data-filepath="">
+            <img alt="Loading..." />
+          </div>
+        </div>
+      `;
+
+      gridViewManager.updateSlideWithMetadata(9, {
+        filename: "clip.mp4",
+        filepath: "/path/to/clip.mp4",
+        globalIndex: 9,
+        media_type: "video",
+        video_url: "videos/album/clip.mp4",
+        video_info: { duration: 65, fps: 30, playable: true },
+      });
+
+      const badge = document.querySelector('[data-global-index="9"] .video-badge');
+      expect(badge.classList.contains("video-badge--compact")).toBe(true);
+    });
+
+    it("should drop a stale badge when a tile becomes an image", async () => {
+      // A tile's DOM node can outlive the item it showed: metadata is fetched
+      // in a staggered background loop, so a response can land after the album
+      // changed. Without reconciliation the tile offers to play a photo.
+      gridViewManager = await initializeGridSwiper();
+
+      document.querySelector("#gridViewContainer .swiper.grid-mode").innerHTML = `
+        <div class="swiper-wrapper" id="gridViewSwiperWrapper">
+          <div class="swiper-slide" style="width:220px; height:220px;"
+               data-global-index="11" data-filepath="">
+            <img alt="Loading..." />
+          </div>
+        </div>
+      `;
+
+      gridViewManager.updateSlideWithMetadata(11, {
+        filename: "clip.mp4",
+        globalIndex: 11,
+        media_type: "video",
+        video_url: "videos/album/clip.mp4",
+        video_info: { duration: 5, fps: 25, playable: true },
+      });
+      expect(document.querySelector('[data-global-index="11"] .video-badge')).not.toBeNull();
+
+      gridViewManager.updateSlideWithMetadata(11, {
+        filename: "photo.jpg",
+        globalIndex: 11,
+        media_type: "image",
+      });
+
+      expect(document.querySelector('[data-global-index="11"] .video-badge')).toBeNull();
+    });
+
+    it("should rebuild the badge when a tile becomes a different video", async () => {
+      gridViewManager = await initializeGridSwiper();
+
+      document.querySelector("#gridViewContainer .swiper.grid-mode").innerHTML = `
+        <div class="swiper-wrapper" id="gridViewSwiperWrapper">
+          <div class="swiper-slide" style="width:220px; height:220px;"
+               data-global-index="12" data-filepath="">
+            <img alt="Loading..." />
+          </div>
+        </div>
+      `;
+
+      gridViewManager.updateSlideWithMetadata(12, {
+        filename: "first.mp4",
+        globalIndex: 12,
+        media_type: "video",
+        video_url: "videos/album/first.mp4",
+        video_info: { duration: 5, fps: 25, playable: true },
+      });
+      gridViewManager.updateSlideWithMetadata(12, {
+        filename: "second.mp4",
+        globalIndex: 12,
+        media_type: "video",
+        video_url: "videos/album/second.mp4",
+        video_info: { duration: 125, fps: 30, playable: true },
+      });
+
+      const badge = document.querySelector('[data-global-index="12"] .video-badge');
+      // Stale badge would show the first clip's duration and play its URL.
+      expect(badge.querySelector(".video-badge-label").textContent).toBe("2:05 · 30 fps");
+
+      const handler = jest.fn();
+      window.addEventListener("videoPlayRequested", handler);
+      badge.click();
+      expect(handler.mock.calls[0][0].detail.url).toBe("videos/album/second.mp4");
+      window.removeEventListener("videoPlayRequested", handler);
+    });
+
+    it("should not badge an image tile, and should not double-badge on refresh", async () => {
+      gridViewManager = await initializeGridSwiper();
+
+      document.querySelector("#gridViewContainer .swiper.grid-mode").innerHTML = `
+        <div class="swiper-wrapper" id="gridViewSwiperWrapper">
+          <div class="swiper-slide" style="width:220px; height:220px;"
+               data-global-index="8" data-filepath="">
+            <img alt="Loading..." />
+          </div>
+        </div>
+      `;
+
+      gridViewManager.updateSlideWithMetadata(8, {
+        filename: "photo.jpg",
+        filepath: "/path/to/photo.jpg",
+        globalIndex: 8,
+        media_type: "image",
+      });
+      const slideEl = document.querySelector('[data-global-index="8"]');
+      expect(slideEl.querySelector(".video-badge")).toBeNull();
+
+      const videoData = {
+        filename: "clip.mp4",
+        filepath: "/path/to/clip.mp4",
+        globalIndex: 8,
+        media_type: "video",
+        video_info: { duration: 5, fps: 25, playable: true },
+      };
+      gridViewManager.updateSlideWithMetadata(8, videoData);
+      gridViewManager.updateSlideWithMetadata(8, videoData);
+      expect(slideEl.querySelectorAll(".video-badge")).toHaveLength(1);
+    });
   });
 });
