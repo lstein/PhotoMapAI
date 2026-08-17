@@ -20,6 +20,7 @@ from ..config import get_config_manager
 from ..embeddings import LAST_UPDATED_FILENAME, Embeddings, peek_encoder_spec
 from ..media_types import is_video
 from ..progress import IndexingCancelled, progress_tracker
+from ..video_cache import VideoFrameCache
 from .album import (
     AlbumDep,
     EmbeddingsDep,
@@ -341,6 +342,16 @@ def _remove_image_file(image_path: Path, move_to_trash: bool) -> None:
         ) from e
 
 
+def _discard_cached_frame(album_key: str, path: Path) -> None:
+    """Remove a deleted video's cached still. Never raises."""
+    if not is_video(path):
+        return
+    try:
+        VideoFrameCache(album_key).discard(path)
+    except Exception as e:
+        logger.debug(f"Could not discard cached frame for {path}: {e}")
+
+
 @index_router.delete(
     "/delete_image/{album_key}/{index}",
     tags=["Index"],
@@ -385,6 +396,11 @@ async def delete_image(
 
         print(f"{'Trashing' if move_to_trash else 'Deleting'} image: {image_path}")
         _remove_image_file(image_path, move_to_trash)
+
+        # Drop the extracted still too. The index-time sweep would collect it
+        # eventually, but not until the next update — and a stale frame for a
+        # deleted file is exactly the kind of thing users notice.
+        _discard_cached_frame(album_key, image_path)
 
         # Remove from embeddings
         embeddings.remove_image_from_embeddings(index)
@@ -464,6 +480,7 @@ async def delete_images(
                     else:
                         image_path.unlink()
 
+                _discard_cached_frame(album_key, image_path)
                 deleted_indices.append(index)
                 deleted_files.append(image_path.name)
             except Exception as e:
@@ -690,7 +707,12 @@ async def _resolve_board_album_files(album_config) -> tuple[list[Path], int]:
         album_config.invokeai_password,
     )
     images_dir = Path(album_config.invokeai_root).expanduser() / "outputs" / "images"
-    paths = [images_dir / name for name in names]
+    # Board albums stay image-only for now. Newer InvokeAI versions can hold
+    # video assets, but deletion for board albums routes through
+    # invokeai_client.delete_image, which has not been verified against them —
+    # indexing a video we could not then delete would be worse than skipping
+    # it. Directory albums are unaffected.
+    paths = [images_dir / name for name in names if not is_video(Path(name))]
     existing = [p for p in paths if p.is_file()]
     missing = len(paths) - len(existing)
     if missing and not existing:
@@ -751,6 +773,7 @@ async def _update_index_background_async(album_key: str, album_config):
             encoder_spec=album_config.encoder_spec,
             min_image_dimension=album_config.min_image_dimension,
             min_image_bytes=getattr(album_config, "min_image_bytes", 8192),
+            album_key=album_key,
         )
 
         if index_path.exists():
@@ -788,6 +811,11 @@ async def _update_index_background_async(album_key: str, album_config):
             await embeddings.create_index_async(
                 image_paths, album_key, create_index=True
             )
+
+        # The "N files were skipped" notice is registered inside the indexing
+        # calls above, not here: ``complete_operation`` runs before they
+        # return, and it is what folds pending notices into the ProgressInfo
+        # the poller reads. Anything added at this point is stranded.
 
         logger.info(f"Index update completed for album '{album_key}'")
 
