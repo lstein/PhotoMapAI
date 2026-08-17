@@ -139,7 +139,9 @@ def test_search_still_accepts_an_image_query(client, new_album):
     )
 
     assert response.status_code == 200, response.text
-    assert len(response.json()) > 0
+    # Index into "results": the response is a SearchResultsResponse object, so
+    # len() over the whole payload counts its one key and is always truthy.
+    assert len(response.json()["results"]) > 0
 
 
 # --------------------------------------------------------------------------

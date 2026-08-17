@@ -1142,6 +1142,37 @@ class Embeddings(BaseModel):
             index_result.filenames, index_result.modification_times
         )
 
+    @staticmethod
+    def _register_unreadable_files_warning(
+        album_key: str, result: "IndexResult | None"
+    ) -> None:
+        """Queue the "N files were skipped" notice for this run's completion.
+
+        Files that could not be read at all were collected in ``bad_files`` and
+        reported nowhere — the user just saw a smaller count than expected.
+        Videos make it far more likely (a truncated download, a codec ffmpeg
+        cannot handle), so it needs surfacing.
+
+        This has to run *before* ``complete_operation``, which is what folds
+        pending notices into the ProgressInfo the poller reads and clears the
+        queue. Registering it afterwards — from the router, once the index call
+        has returned — left the notice stranded in the queue: never shown for
+        this run, and silently attached to whichever run completed next.
+        """
+        if result is None or not result.bad_files:
+            return
+        count = len(result.bad_files)
+        noun, verb = ("file", "was") if count == 1 else ("files", "were")
+        progress_tracker.add_completion_warning(
+            album_key,
+            f"{count} {noun} could not be read and {verb} skipped.",
+        )
+        logger.warning(
+            f"Skipped {count} unreadable {noun} in album '{album_key}': "
+            + ", ".join(p.name for p in result.bad_files[:5])
+            + ("…" if count > 5 else "")
+        )
+
     def _prune_video_frame_cache(self, filenames, modification_times) -> None:
         """Drop cached stills that the just-written index no longer refers to.
 
@@ -1459,6 +1490,7 @@ class Embeddings(BaseModel):
                 self.create_umap_index, result.embeddings
             )
             result.umap_embeddings = umap_embeddings
+            self._register_unreadable_files_warning(album_key, result)
             progress_tracker.complete_operation(
                 album_key, "Indexing completed successfully"
             )
@@ -1728,6 +1760,11 @@ class Embeddings(BaseModel):
                 len(missing_image_paths),
                 on_save_start=_on_save_start,
             )
+            # Before either completion path below: a run that indexed nothing
+            # new can still have skipped files, and complete_operation is what
+            # consumes the queue.
+            self._register_unreadable_files_warning(album_key, result)
+
             if not did_rebuild:
                 logger.info(
                     "No new images needed to be indexed. Will not regenerate umap"

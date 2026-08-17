@@ -786,7 +786,6 @@ async def _update_index_background_async(album_key: str, album_config):
                 )
                 stored_spec = None
 
-            result = None
             if stored_spec is not None and stored_spec != album_config.encoder_spec:
                 logger.warning(
                     f"Encoder mismatch for album '{album_key}': existing index was built "
@@ -801,36 +800,22 @@ async def _update_index_background_async(album_key: str, album_config):
                 )
                 index_path.unlink()
                 logger.info(f"Creating new index for album '{album_key}'...")
-                result = await embeddings.create_index_async(
+                await embeddings.create_index_async(
                     image_paths, album_key, create_index=True
                 )
             else:
                 logger.info(f"Updating existing index for album '{album_key}'...")
-                result = await embeddings.update_index_async(image_paths, album_key)
+                await embeddings.update_index_async(image_paths, album_key)
         else:
             logger.info(f"Creating new index for album '{album_key}'...")
-            result = await embeddings.create_index_async(
+            await embeddings.create_index_async(
                 image_paths, album_key, create_index=True
             )
 
-        # Files that couldn't be read at all are collected but were, until
-        # now, reported nowhere — the user just saw a smaller count than
-        # expected. Videos make that much more likely (a truncated download, a
-        # codec ffmpeg can't handle), so surface it. ``add_`` rather than
-        # ``set_`` so this composes with the board album's
-        # "N of M missing on disk" notice instead of discarding it.
-        if result is not None and result.bad_files:
-            count = len(result.bad_files)
-            noun = "file" if count == 1 else "files"
-            progress_tracker.add_completion_warning(
-                album_key,
-                f"{count} {noun} could not be read and were skipped.",
-            )
-            logger.warning(
-                f"Skipped {count} unreadable {noun} in album '{album_key}': "
-                + ", ".join(p.name for p in result.bad_files[:5])
-                + ("…" if count > 5 else "")
-            )
+        # The "N files were skipped" notice is registered inside the indexing
+        # calls above, not here: ``complete_operation`` runs before they
+        # return, and it is what folds pending notices into the ProgressInfo
+        # the poller reads. Anything added at this point is stranded.
 
         logger.info(f"Index update completed for album '{album_key}'")
 

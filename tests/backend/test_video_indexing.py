@@ -20,6 +20,7 @@ from fixtures import (
 )
 
 from photomap.backend.embeddings import Embeddings, _open_npz_file
+from photomap.backend.progress import progress_tracker
 from photomap.backend.video import VIDEO_METADATA_KEY, ffmpeg_exe
 from photomap.backend.video_cache import VideoFrameCache
 
@@ -39,6 +40,21 @@ pytestmark = pytest.mark.skipif(
 def _clear_frame_cache():
     yield
     VideoFrameCache("test_media_album").clear()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_completion_warnings():
+    """``progress_tracker`` is a module-level singleton shared by every test.
+
+    A notice queued but never consumed leaks into whichever run completes
+    next, which is how the "skipped files are reported" test came to pass:
+    it was reading the *previous* test's stranded warning, and failed as soon
+    as it ran on its own. Clearing on both sides makes each test's assertion
+    about its own run.
+    """
+    progress_tracker._completion_warnings.clear()
+    yield
+    progress_tracker._completion_warnings.clear()
 
 
 def _index_filenames(album) -> list[str]:
@@ -74,13 +90,33 @@ def test_unreadable_video_is_skipped_without_aborting(client, new_media_album):
 
 
 def test_skipped_files_are_reported_to_the_user(client, new_media_album):
-    """bad_files used to be collected and surfaced nowhere."""
+    """bad_files used to be collected and surfaced nowhere.
+
+    The notice has to be queued before ``complete_operation``, which is what
+    folds it into the ProgressInfo the poller reads and then clears the queue.
+    Queue it afterwards and it is stranded: invisible for this run, and
+    attached to whichever run finishes next.
+    """
     build_index(client, new_media_album)
 
     progress = client.get(f"/index_progress/{new_media_album['key']}").json()
 
-    assert progress["warning_message"]
-    assert "could not be read" in progress["warning_message"]
+    # Exactly one fixture (broken.mp4) is unreadable, so the wording is
+    # pinnable — including the verb agreement.
+    assert progress["warning_message"] == "1 file could not be read and was skipped."
+
+
+def test_a_clean_album_reports_no_warning(client, new_album):
+    """Nothing to skip must mean no notice at all, not an empty string.
+
+    Also the control for the test above: it fails if a notice from an earlier
+    run is still queued when this album completes.
+    """
+    build_index(client, new_album)
+
+    progress = client.get(f"/index_progress/{new_album['key']}").json()
+
+    assert progress["warning_message"] is None
 
 
 def test_video_metadata_records_duration_fps_and_resolution(client, new_media_album):
@@ -213,15 +249,36 @@ def test_videos_bypass_the_dimension_gate(client, tmp_path):
 
     embeddings = Embeddings(
         embeddings_path=media / "index" / "embeddings.npz",
-        # Far above anything the fixtures could satisfy.
+        # Both bands set far above anything the fixtures could satisfy. The
+        # byte floor matters as much as the pixel gate here: clip.mp4 is ~2 KB,
+        # under even the *default* min_image_bytes of 8192, so a small real
+        # video would be rejected on size alone without the early return.
         min_image_dimension=100_000,
-        min_image_bytes=0,
+        min_image_bytes=1_000_000,
     )
     found = embeddings.get_image_files(media)
     names = {p.name for p in found}
 
-    assert "clip.mp4" in names, "the video must survive an aggressive pixel gate"
+    assert "clip.mp4" in names, "the video must survive both gate bands"
     assert "building1.jpeg" not in names, "the gate must still reject small images"
+
+
+def test_a_small_video_survives_the_default_byte_floor(client, tmp_path):
+    """The fixtures are all smaller than the 8 KB default floor.
+
+    Worth its own case because it is the configuration users actually run,
+    and because the byte floor is checked before the pixel probe — so a
+    regression there would not show up in the aggressive-gate test above if
+    that test only raised min_image_dimension.
+    """
+    media = tmp_path / "smallvid"
+    media.mkdir()
+    shutil.copy(media_fixture_path("clip.webm"), media / "clip.webm")  # ~940 bytes
+
+    embeddings = Embeddings(embeddings_path=media / "index" / "embeddings.npz")
+    assert embeddings.min_image_bytes > (media / "clip.webm").stat().st_size
+
+    assert {p.name for p in embeddings.get_image_files(media)} == {"clip.webm"}
 
 
 def test_videos_never_enter_the_scan_reject_cache(client, tmp_path):
