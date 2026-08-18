@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 from fixtures import build_index
 
 from photomap.backend.config import get_config_manager
@@ -169,3 +170,17 @@ def test_cleared_eps_survives_a_config_reload(client, new_album):
     manager = get_config_manager()
     manager.reload_config()
     assert manager.get_album(new_album["key"]).umap_eps is None
+
+
+def test_a_derived_eps_is_written_as_an_absent_key(client, new_album):
+    """Not `umap_eps: null`: a PhotoMapAI predating the nullable field parses
+    an explicit null into a non-nullable float and refuses to load the config,
+    so writing one would stop the older version from starting on a config file
+    the two share."""
+    client.post("/set_umap_eps/", json={"album": new_album["key"], "eps": None})
+
+    album = get_config_manager().get_album(new_album["key"])
+    assert "umap_eps" not in album.to_dict()
+
+    stored = yaml.safe_load(get_config_manager().config_path.read_text())
+    assert "umap_eps" not in stored["albums"][new_album["key"]]

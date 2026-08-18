@@ -244,7 +244,6 @@ class Album(BaseModel):
             "source_type": self.source_type,
             "image_paths": self.image_paths,
             "index": self.index,
-            "umap_eps": self.umap_eps,
             "description": self.description,
             "encoder_spec": self.encoder_spec,
             "min_search_score": self.min_search_score,
@@ -253,6 +252,14 @@ class Album(BaseModel):
             "min_image_dimension": self.min_image_dimension,
             "min_image_bytes": self.min_image_bytes,
         }
+        # A derived Cluster Strength is written as an *absent* key rather
+        # than an explicit null. Both mean the same thing to this codebase,
+        # but versions before umap_eps became nullable parse a null into a
+        # non-nullable float field and refuse to load the whole config —
+        # i.e. writing null here would stop an older PhotoMapAI from
+        # starting at all, on a config file the two share.
+        if self.umap_eps is not None:
+            data["umap_eps"] = self.umap_eps
         # Keep directory-album YAML free of irrelevant InvokeAI keys.
         if self.source_type == "invokeai_board":
             data["invokeai_url"] = self.invokeai_url
