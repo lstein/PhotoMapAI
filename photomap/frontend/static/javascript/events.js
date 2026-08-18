@@ -23,6 +23,7 @@ import { initializeSingleSwiper } from "./swiper.js";
 import {} from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 import { setCheckmarkOnIcon } from "./utils.js";
+import { closeVideoPlayer, initializeVideoPlayer, isVideoPlayerOpen } from "./video-player.js";
 
 // MAIN INITIALIZATION FUNCTIONS
 // Initialize event listeners after the DOM is fully loaded
@@ -75,7 +76,15 @@ const KEYBOARD_SHORTCUTS = {
   ArrowLeft: () => pauseSlideshow(),
   ArrowRight: () => pauseSlideshow(),
   i: () => toggleMetadataOverlay(),
-  Escape: () => hideMetadataOverlay(),
+  Escape: () => {
+    // The video player is the topmost layer, so Escape dismisses it first
+    // and leaves the metadata drawer alone.
+    if (isVideoPlayerOpen()) {
+      closeVideoPlayer();
+      return;
+    }
+    hideMetadataOverlay();
+  },
   f: () => toggleFullscreen(),
   g: () => toggleGridSwiperView(),
   m: () => toggleUmapWindow(),
@@ -85,6 +94,10 @@ const KEYBOARD_SHORTCUTS = {
   Backspace: (e) => handleBackKey(e),
 };
 
+// Keys that must still reach KEYBOARD_SHORTCUTS while the video player is
+// open, because their handlers are how it gets dismissed.
+const PLAYER_DISMISS_KEYS = new Set(["Escape", "Backspace"]);
+
 function pauseSlideshow() {
   state.single_swiper?.pauseSlideshow();
 }
@@ -92,6 +105,13 @@ function pauseSlideshow() {
 function handleBackKey(e) {
   e.preventDefault();
   e.stopPropagation();
+  // The player is a transient overlay, not a navigation state — it pushes no
+  // history entry, so Back dismisses it rather than moving the slideshow
+  // underneath it.
+  if (isVideoPlayerOpen()) {
+    closeVideoPlayer();
+    return;
+  }
   backStack.popOne();
 }
 
@@ -116,12 +136,30 @@ function handleKeydown(e) {
 }
 
 function shouldIgnoreKeyEvent(e) {
-  return e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) {
+    return true;
+  }
+  // While the video player is open the native <video> controls own the
+  // keyboard. Space would otherwise be swallowed by handleSpacebarToggle
+  // (which preventDefaults it) and toggle the slideshow instead of pausing
+  // the video, and the arrows would change slides behind the modal.
+  //
+  // Escape and Backspace are exempt: both are ways to dismiss the player, and
+  // their handlers check for it. Leaving Backspace out made the guard inside
+  // handleBackKey unreachable — this returns before KEYBOARD_SHORTCUTS is
+  // consulted, so the shortcut never ran and the key silently did nothing.
+  if (isVideoPlayerOpen() && !PLAYER_DISMISS_KEYS.has(e.key)) {
+    return true;
+  }
+  return false;
 }
 
 function setupGlobalEventListeners() {
   // Keyboard navigation
   window.addEventListener("keydown", handleKeydown);
+
+  // Modal video player, opened by the play badge on a video still.
+  initializeVideoPlayer();
 
   // Window resize event
   window.addEventListener("resize", positionMetadataDrawer);

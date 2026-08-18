@@ -85,8 +85,10 @@ class ProgressTracker:
         # folded into the ProgressInfo when the run completes (see
         # ``complete_operation``). Kept separate from ``_progress`` because the
         # per-phase ``start_operation`` calls recreate ProgressInfo and would
-        # otherwise wipe a warning recorded earlier in the same run.
-        self._completion_warnings: dict[str, str] = {}
+        # otherwise wipe a warning recorded earlier in the same run. Held as a
+        # list per album so several notices can accumulate and be compared
+        # exactly; joined with a space when handed to the poller.
+        self._completion_warnings: dict[str, list[str]] = {}
         self._lock = threading.Lock()
 
     def start_operation(self, album_key: str, total_images: int, operation_type: str):
@@ -199,12 +201,35 @@ class ProgressTracker:
         and is folded in atomically by ``complete_operation``. A falsy
         ``message`` clears any pending notice so a clean re-run doesn't inherit
         a stale one.
+
+        Replaces whatever was pending. Use :meth:`add_completion_warning` to
+        contribute an additional notice without discarding an existing one.
         """
         with self._lock:
             if message:
-                self._completion_warnings[album_key] = message
+                self._completion_warnings[album_key] = [message]
             else:
                 self._completion_warnings.pop(album_key, None)
+
+    def add_completion_warning(self, album_key: str, message: str | None) -> None:
+        """Append a notice, keeping any already pending for this album.
+
+        A run can now produce more than one: a board album may have images
+        missing on disk *and* videos that could not be decoded. This used to
+        be a single slot, so the second writer silently discarded the first.
+
+        Repeating an identical notice is ignored. Notices are held as a list so
+        that comparison is against whole notices: testing ``message not in
+        existing`` against the joined text made "2 videos could not be read."
+        a substring of "12 videos could not be read." and dropped it, which is
+        exactly the silent discard this method exists to prevent.
+        """
+        if not message:
+            return
+        with self._lock:
+            pending = self._completion_warnings.setdefault(album_key, [])
+            if message not in pending:
+                pending.append(message)
 
     def get_progress(self, album_key: str) -> ProgressInfo | None:
         """Get progress info for an album."""
@@ -258,9 +283,8 @@ class ProgressTracker:
                 progress.images_processed = progress.total_images
                 # Fold in (and consume) any pending non-fatal notice so it
                 # lands atomically with the COMPLETED status the poller reads.
-                progress.warning_message = self._completion_warnings.pop(
-                    album_key, None
-                )
+                pending = self._completion_warnings.pop(album_key, None)
+                progress.warning_message = " ".join(pending) if pending else None
 
 
 # Global instance

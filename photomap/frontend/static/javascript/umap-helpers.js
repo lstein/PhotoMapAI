@@ -15,3 +15,34 @@ export function findLandmarkClusterAt(point, landmarkXs, landmarkYs, landmarkClu
   }
   return null;
 }
+
+// Valid values for the semantic map's media filter.
+export const MEDIA_FILTERS = ["both", "images", "videos"];
+
+// Restrict `points` to one media type.
+//
+// A point with no `media` field counts as an image: /umap_data only started
+// reporting it when video support landed, and a cached response from an older
+// build should keep behaving exactly as it did.
+//
+// Anything other than "images"/"videos" — including a persisted value from a
+// future build — falls through to showing everything, which is the safe
+// failure mode for a filter.
+export function filterPointsByMediaType(points, filter) {
+  if (!Array.isArray(points)) {
+    return [];
+  }
+  if (filter === "images") {
+    return points.filter((p) => (p?.media ?? "image") === "image");
+  }
+  if (filter === "videos") {
+    return points.filter((p) => p?.media === "video");
+  }
+  return points;
+}
+
+// True if any point is a video. Drives whether the filter is offered at all —
+// a "videos only" radio on an all-photo album can only produce a blank map.
+export function hasVideoPoints(points) {
+  return Array.isArray(points) && points.some((p) => p?.media === "video");
+}

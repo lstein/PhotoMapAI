@@ -4,7 +4,7 @@ import pytest
 import yaml
 
 # Import fixtures so they're available to all tests
-from fixtures import client, new_album  # noqa: F401
+from fixtures import client, new_album, new_media_album  # noqa: F401
 
 
 @pytest.fixture(autouse=True)

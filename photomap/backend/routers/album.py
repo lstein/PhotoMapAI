@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from ..config import Album, create_album, default_board_index_path, get_config_manager
 from ..embeddings import Embeddings
 from ..encoders import default_encoder_spec
+from ..video_cache import VideoFrameCache
 
 
 class UmapEpsSetRequest(BaseModel):
@@ -105,9 +106,7 @@ def get_embeddings_for_album(album_key: str) -> Embeddings:
         encoder_spec=album_config.encoder_spec,
         min_image_dimension=album_config.min_image_dimension,
         min_image_bytes=album_config.min_image_bytes,
-        # Only affects scanning, which read paths never do — set anyway so
-        # every Embeddings built from an album config describes that album.
-        index_videos=album_config.source_type == "invokeai_board",
+        album_key=album_key,
     )
 
 
@@ -193,6 +192,19 @@ def _cleanup_derived_index(album: Album | None) -> None:
         shutil.rmtree(derived_dir)
     except OSError as e:
         logger.warning(f"Could not remove index directory {derived_dir}: {e}")
+
+
+def _cleanup_video_frames(album_key: str) -> None:
+    """Remove an album's extracted video stills when the album goes away.
+
+    The frame cache lives in the per-user cache directory, keyed by album, so
+    nothing else would ever reclaim it. Never raises: a failure here costs
+    disk space, not correctness.
+    """
+    try:
+        VideoFrameCache(album_key).clear()
+    except Exception as e:
+        logger.warning(f"Could not clear video frame cache for '{album_key}': {e}")
 
 
 def _album_public_dict(album: Album) -> dict[str, Any]:
@@ -352,6 +364,7 @@ async def delete_album(album_key: str) -> JSONResponse:
         album = config_manager.get_album(album_key)
         if config_manager.delete_album(album_key):
             _cleanup_derived_index(album)
+            _cleanup_video_frames(album_key)
             return JSONResponse(
                 content={
                     "success": True,

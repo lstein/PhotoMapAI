@@ -29,7 +29,7 @@ window that prompts you to enter the following fields:
 
 At least one image folder needs to be defined. You can type the path in manually, or browse the filesystem for a folder by clicking on the folder icon to the right of the image folder field. Each time you enter a path, a new empty field will appear, allowing you to add additional folders to the album. You can remove a previously-entered folder by clicking a trash icon that appears next to it.
 
-You are free to organize your image files in any way you wish. You can dump them into a single big folder, or organize them into multiple nested subfolders. During indexing, PhotoMapAI will traverse the folder structure and identify all image files of type JPEG, PNG, TIFF, HEIF, and HEIC.
+You are free to organize your image files in any way you wish. You can dump them into a single big folder, or organize them into multiple nested subfolders. During indexing, PhotoMapAI will traverse the folder structure and identify all image files of type JPEG, PNG, TIFF, HEIF, and HEIC, as well as video files such as MP4, MOV, WebM, AVI and MKV. Each video is indexed by a still frame captured shortly after its start, so it takes part in search and clustering exactly like a photo.
 
 ### InvokeAI-Backed Albums
 

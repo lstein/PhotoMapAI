@@ -20,6 +20,7 @@ from ..config import get_config_manager
 from ..embeddings import LAST_UPDATED_FILENAME, Embeddings, peek_encoder_spec
 from ..media_types import is_video
 from ..progress import IndexingCancelled, progress_tracker
+from ..video_cache import VideoFrameCache
 from .album import (
     AlbumDep,
     EmbeddingsDep,
@@ -70,6 +71,12 @@ class EmbeddingsIndexMetadata(BaseModel):
     filename_count: int
     embeddings_path: str
     last_modified: float
+    # Broken out so the album card can say "120 images, 4 videos" rather than
+    # leaving the user to wonder why the single count jumped. Derived from the
+    # filename suffixes, so indexes written before video support report
+    # image_count == filename_count and video_count == 0.
+    image_count: int = 0
+    video_count: int = 0
 
 
 # Note: How check_album_lock is used in this file:
@@ -276,12 +283,16 @@ async def index_metadata(album_config: AlbumDep) -> EmbeddingsIndexMetadata:
     marker = index_path.parent / LAST_UPDATED_FILENAME
     if marker.exists():
         last_modified = max(last_modified, marker.stat().st_mtime)
-    filename_count = len(Embeddings.open_cached_embeddings(index_path)["filenames"])
+    filenames = Embeddings.open_cached_embeddings(index_path)["filenames"]
+    filename_count = len(filenames)
+    video_count = sum(1 for f in filenames if is_video(Path(str(f))))
 
     return EmbeddingsIndexMetadata(
         filename_count=filename_count,
         embeddings_path=str(index_path),
         last_modified=last_modified,
+        image_count=filename_count - video_count,
+        video_count=video_count,
     )
 
 
@@ -358,6 +369,16 @@ def _remove_image_file(image_path: Path, move_to_trash: bool) -> None:
         ) from e
 
 
+def _discard_cached_frame(album_key: str, path: Path) -> None:
+    """Remove a deleted video's cached still. Never raises."""
+    if not is_video(path):
+        return
+    try:
+        VideoFrameCache(album_key).discard(path)
+    except Exception as e:
+        logger.debug(f"Could not discard cached frame for {path}: {e}")
+
+
 @index_router.delete(
     "/delete_image/{album_key}/{index}",
     tags=["Index"],
@@ -397,6 +418,11 @@ async def delete_image(
 
         print(f"{'Trashing' if move_to_trash else 'Deleting'} image: {image_path}")
         _remove_image_file(image_path, move_to_trash)
+
+        # Drop the extracted still too. The index-time sweep would collect it
+        # eventually, but not until the next update — and a stale frame for a
+        # deleted file is exactly the kind of thing users notice.
+        _discard_cached_frame(album_key, image_path)
 
         # Remove from embeddings
         embeddings.remove_image_from_embeddings(index)
@@ -471,6 +497,7 @@ async def delete_images(
                     else:
                         image_path.unlink()
 
+                _discard_cached_frame(album_key, image_path)
                 deleted_indices.append(index)
                 deleted_files.append(image_path.name)
             except Exception as e:
@@ -772,10 +799,7 @@ async def _update_index_background_async(album_key: str, album_config):
             encoder_spec=album_config.encoder_spec,
             min_image_dimension=album_config.min_image_dimension,
             min_image_bytes=getattr(album_config, "min_image_bytes", 8192),
-            # A board holds videos next to its images and the InvokeAI
-            # gallery shows both, so a board album indexes both.
-            index_videos=getattr(album_config, "source_type", "directory")
-            == "invokeai_board",
+            album_key=album_key,
         )
 
         if index_path.exists():
@@ -813,6 +837,11 @@ async def _update_index_background_async(album_key: str, album_config):
             await embeddings.create_index_async(
                 image_paths, album_key, create_index=True
             )
+
+        # The "N files were skipped" notice is registered inside the indexing
+        # calls above, not here: ``complete_operation`` runs before they
+        # return, and it is what folds pending notices into the ProgressInfo
+        # the poller reads. Anything added at this point is stranded.
 
         logger.info(f"Index update completed for album '{album_key}'")
 

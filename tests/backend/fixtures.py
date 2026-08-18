@@ -52,6 +52,44 @@ def new_album(client, tmp_path) -> dict:
     client.delete(f"/delete_album/{album_data['key']}")
 
 
+@pytest.fixture
+def new_media_album(client, tmp_path) -> dict:
+    """A temp album holding both the test images and the test videos.
+
+    Kept separate from ``new_album`` so existing suites see zero churn: they
+    keep their exact image counts, and only video tests pay the ffmpeg cost.
+    """
+    src_images = Path(__file__).parent / "test_images"
+    temp_dir = tmp_path / "media"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    for f in src_images.iterdir():
+        if f.is_file():
+            shutil.copy(f, temp_dir / f.name)
+    for f in TEST_MEDIA_DIR.iterdir():
+        if f.is_file():
+            shutil.copy(f, temp_dir / f.name)
+
+    album_data = {
+        "key": "test_media_album",
+        "name": "Test Media Album",
+        "image_paths": [temp_dir.as_posix()],
+        # The index deliberately lives inside the media directory, mirroring
+        # ``new_album`` — that is the layout that would let a frame cache
+        # placed next to the index get re-indexed as photos.
+        "index": (temp_dir / "embeddings.npz").as_posix(),
+        "umap_eps": 0.1,
+        "description": "A test album with videos",
+        "encoder_spec": "openai-clip:ViT-B/32",
+    }
+    response = client.post("/add_album/", json=album_data)
+    assert response.status_code == 201
+
+    yield {**album_data, "media_dir": temp_dir}
+
+    client.delete(f"/delete_album/{album_data['key']}")
+
+
 def poll_during_indexing(client, album_key, timeout=60):
     """Poll the index progress until it completes or times out."""
     start_time = time.time()

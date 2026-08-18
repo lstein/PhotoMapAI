@@ -97,10 +97,10 @@ def board_album(client, tmp_path, monkeypatch):
         "invokeai_board_ids": ["b1"],
         "index": index_path.as_posix(),
         "encoder_spec": "openai-clip:ViT-B/32",
-        # The byte floor applies to videos as well as images, and the video
-        # fixtures are deliberately tiny (~2 KB) so the suite stays fast.
-        # Disabling it here keeps these tests about board plumbing rather
-        # than about the scan gate, which test_index.py covers directly.
+        # The bundled fixtures are deliberately tiny so the suite stays fast.
+        # Videos bypass the scan gate outright, but the images still have to
+        # clear it, and these tests are about board plumbing rather than
+        # about the gate — which test_index.py covers directly.
         "min_image_bytes": 0,
     }
     response = client.post("/add_album/", json=album)
@@ -170,6 +170,8 @@ def test_board_videos_are_indexed_alongside_images(client, board_album):
 
     metadata = client.get(f"/index_metadata/{ALBUM_KEY}").json()
     assert metadata["filename_count"] == 5
+    assert metadata["image_count"] == 4
+    assert metadata["video_count"] == 1
     assert video_name in _index_filenames(board_album["index_path"])
 
 

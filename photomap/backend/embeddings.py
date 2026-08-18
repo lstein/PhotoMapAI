@@ -48,6 +48,7 @@ from .metadata_modules import SlideSummary
 from .progress import IndexingCancelled, progress_tracker
 from .util import atomic_savez
 from .video import VIDEO_METADATA_KEY, extract_video_frame
+from .video_cache import VideoFrameCache
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,11 @@ LAST_UPDATED_FILENAME = "last_updated"
 # thumbnail population that is as many header opens as the album has photos,
 # on every single update.
 SCAN_REJECTS_FILENAME = "scan_rejects.npz"
+
+# Bump to discard every existing scan-reject cache once. Version 1 retires
+# caches written while videos still went through the pixel gate, which could
+# hold permanent rejections for perfectly good video files.
+SCAN_REJECTS_VERSION = 1
 
 # Process-wide gate around the GPU-using portion of indexing. Two concurrent
 # albums each spinning up a CLIP/SigLIP encoder will OOM a typical 8-12 GiB
@@ -182,11 +188,9 @@ register_heif_opener()  # Register HEIF opener for PIL
 #
 # Note this is now the same object as IMAGE_EXTENSIONS, and a frozenset rather
 # than the set it used to be — extending it in place no longer works, which is
-# intentional. Add new suffixes in media_types instead.
-#
-# No longer what the walk itself defaults to: which suffixes an album collects
-# now depends on whether it indexes videos, so the scan resolves them per
-# instance from ``Embeddings.scan_extensions``.
+# intentional: the walk captures it as a default argument at definition time,
+# so a mutation would have silently failed to reach the walk anyway. Add new
+# suffixes in media_types instead.
 SUPPORTED_EXTENSIONS: frozenset[str] = IMAGE_EXTENSIONS
 
 
@@ -464,17 +468,11 @@ class Embeddings(BaseModel):
     # heavy upscaling. Default mirrors the Album field default in config.py.
     min_image_dimension: int = 256
     min_image_bytes: int = DIMENSION_REJECT_MIN_BYTES
-    # Whether videos are collected alongside images. Off by default: turning
-    # it on for an existing album silently re-scans it for a whole new media
-    # type and makes indexing depend on ffmpeg, so it is opted into per
-    # album. InvokeAI-board albums set it, because a board holds videos and
-    # images side by side and the InvokeAI gallery shows both.
-    index_videos: bool = False
-
-    @property
-    def scan_extensions(self) -> frozenset[str]:
-        """Suffixes this album's scan collects. See :attr:`index_videos`."""
-        return INDEXABLE_EXTENSIONS if self.index_videos else IMAGE_EXTENSIONS
+    # Album this index belongs to, used to address the per-album video-frame
+    # cache. Optional because the CLI entry points build an Embeddings from a
+    # bare .npz path with no album behind it; videos still index there, their
+    # stills just aren't persisted and get re-extracted on demand.
+    album_key: str | None = None
 
     def __init__(self, **data):
         """Ensure embeddings_path is always resolved to prevent cache key mismatches."""
@@ -549,14 +547,22 @@ class Embeddings(BaseModel):
         The byte and pixel thresholds are independent album settings,
         surfaced side by side in the album editor; either can be disabled.
         Callers that already stat'ed the file pass the result as ``st``.
-
-        **Videos are gated on bytes only.** A container has no header PIL can
-        read, so the pixel probe would raise and reject every video small
-        enough to reach it — silently dropping short clips while letting long
-        ones through, purely on file size. Learning a video's real dimensions
-        costs an ffmpeg decode, which is exactly what the gate exists to
-        avoid paying during a scan.
         """
+        # Videos bypass the gate entirely. Its bands are image heuristics: the
+        # middle band opens the file with ``Image.open(path).size``, which
+        # raises on a video, and the caller memoizes that ``False`` into
+        # scan_rejects.npz keyed by (size, mtime) — so a video rejected once
+        # would stay invisible until the file itself changed, with no UI to
+        # clear it. An explicit early return is the point, not an accident of
+        # the byte bands: most real videos exceed the probe ceiling and would
+        # pass on size alone, so the bug would never reproduce in manual
+        # testing with real footage, only with small clips.
+        #
+        # Nor is the pixel gate applied after extraction: a 240p home video is
+        # legitimately worth indexing.
+        if is_video(path):
+            return True
+
         min_dim = self.min_image_dimension
         byte_floor = self.min_image_bytes
         pixel_gate_active = min_dim > 1
@@ -567,11 +573,7 @@ class Embeddings(BaseModel):
                 st = path.stat()
             if byte_floor > 0 and st.st_size < byte_floor:
                 return False
-            if (
-                not pixel_gate_active
-                or is_video(path)
-                or st.st_size > DIMENSION_PROBE_MAX_BYTES
-            ):
+            if not pixel_gate_active or st.st_size > DIMENSION_PROBE_MAX_BYTES:
                 return True
         except OSError as e:
             logger.debug(f"Skipping unstattable image during scan: {path}: {e}")
@@ -617,6 +619,18 @@ class Embeddings(BaseModel):
                     or int(data["min_bytes"]) != self.min_image_bytes
                 ):
                     return {}
+                # A cache written before videos bypassed the gate can hold
+                # permanent rejections for them: the gate opened the file with
+                # PIL, that raised, and the verdict was memoized against
+                # (size, mtime). Since those only change if the file itself
+                # does, such a video would stay invisible forever with no UI
+                # to clear it. Discarding the whole cache once on version
+                # change is cheap — it only costs one re-probe per file.
+                version = (
+                    int(data["cache_version"]) if "cache_version" in data.files else 0
+                )
+                if version != SCAN_REJECTS_VERSION:
+                    return {}
                 return {
                     str(key): (int(size), float(mtime))
                     for key, size, mtime in zip(
@@ -640,6 +654,7 @@ class Embeddings(BaseModel):
                 mtimes=np.array([v[1] for v in rejects.values()], dtype=np.float64),
                 min_dim=np.int64(self.min_image_dimension),
                 min_bytes=np.int64(self.min_image_bytes),
+                cache_version=np.int64(SCAN_REJECTS_VERSION),
             )
         except OSError as e:
             logger.warning(f"Could not save scan-reject cache {path}: {e}")
@@ -647,7 +662,7 @@ class Embeddings(BaseModel):
     def get_image_files_from_directory(
         self,
         directory: Path,
-        exts: AbstractSet[str] | None = None,
+        exts: AbstractSet[str] = INDEXABLE_EXTENSIONS,
         progress_callback: Callable | None = None,
         update_interval: int = 100,
         apply_dimension_gate: bool = True,
@@ -670,7 +685,7 @@ class Embeddings(BaseModel):
 
         Args:
             directory: Directory to scan
-            exts: File extensions to include (default: :attr:`scan_extensions`)
+            exts: File extensions to include
             progress_callback: Optional callback function(count, message) for progress updates
             update_interval: How often to call progress_callback (every N files found)
             apply_dimension_gate: Probe pixel dimensions during the walk
@@ -679,8 +694,6 @@ class Embeddings(BaseModel):
                 scan-reject cache and skipped on later scans
         """
         logger.info(f"Scanning directory {directory} for image files...")
-        if exts is None:
-            exts = self.scan_extensions
         image_files = []
         files_checked = 0
         skipped_too_small = 0
@@ -740,7 +753,7 @@ class Embeddings(BaseModel):
     def get_image_files(
         self,
         image_paths_or_dir: list[Path] | Path,
-        exts: AbstractSet[str] | None = None,
+        exts: AbstractSet[str] = INDEXABLE_EXTENSIONS,
         progress_callback: Callable | None = None,
         apply_dimension_gate: bool = True,
         reject_sink: dict[str, tuple[int, float]] | None = None,
@@ -760,8 +773,6 @@ class Embeddings(BaseModel):
             list of Path: List of image file paths.
         """
         logger.info("get_image_files called with progress_callback")
-        if exts is None:
-            exts = self.scan_extensions
         if isinstance(image_paths_or_dir, Path):
             # If it's a single Path object, treat it as a directory
             images = self.get_image_files_from_directory(
@@ -856,41 +867,47 @@ class Embeddings(BaseModel):
         """Root directory for CLIP model caching (None = use the default cache)."""
         return None
 
-    def _load_video(
-        self, video_path: Path
-    ) -> tuple[Image.Image, float, dict] | None:
-        """Load the still frame that represents a video. None on failure.
+    def _load_video(self, video_path: Path) -> tuple[Image.Image, float, dict] | None:
+        """Extract a video's still frame, cache it, and describe the video.
 
-        A video is indexed through one frame taken near its start, so from
-        here on it flows through the encoder exactly like a photo. The facts
-        ffmpeg reported about the file ride along under
-        :data:`~photomap.backend.video.VIDEO_METADATA_KEY` in the per-image
-        metadata dict, which is what makes the slide show a duration and a
-        play badge instead of treating it as a still.
+        Returns the same shape as :meth:`_load_image` so the batch encoder
+        treats a video exactly like a photo from here on. ``None`` on any
+        failure — the caller already records that as a ``bad_file`` and moves
+        on, so "skip with a warning, never abort" is the pre-existing
+        contract rather than something new.
 
-        There is no EXIF to read a capture date from, so ordering falls back
-        to the file's mtime — the same fallback photos without EXIF get.
+        Thread-safe: each call spawns and owns its own ffmpeg process.
         """
-        extracted = extract_video_frame(video_path)
-        if extracted is None:
-            # extract_video_frame never raises and has already logged why.
-            return None
-        frame, info = extracted
         try:
-            modification_time = video_path.stat().st_mtime
-        except OSError as e:
-            logger.error(f"Error processing {video_path}: {e}")
-            return None
-        return frame, modification_time, {VIDEO_METADATA_KEY: info.model_dump()}
+            extracted = extract_video_frame(video_path)
+            if extracted is None:
+                return None
+            frame, info = extracted
 
-    def _load_image(
-        self, image_path: Path
-    ) -> tuple[Image.Image, float, dict] | None:
+            # Persist the still so the grid, slideshow poster and UMAP
+            # thumbnails have something to show without re-running ffmpeg.
+            # Extraction happens here, at index time, and never in a request
+            # handler — a lazy path would spawn dozens of concurrent ffmpeg
+            # processes on the first grid paint, with no timeout, no cancel
+            # and nowhere to surface a warning.
+            if self.album_key:
+                VideoFrameCache(self.album_key).store(video_path, frame)
+
+            # Video facts ride inside the existing per-image metadata dict, so
+            # every .npz rewrite path carries them for free and indexes
+            # predating video support need no migration.
+            metadata = {VIDEO_METADATA_KEY: info.model_dump()}
+            # Videos carry no EXIF for _get_modification_time to read.
+            return frame, video_path.stat().st_mtime, metadata
+        except Exception as e:
+            logger.error(f"Error processing video {video_path}: {e}")
+            return None
+
+    def _load_image(self, image_path: Path) -> tuple[Image.Image, float, dict] | None:
         """Open an image and extract modtime + metadata. Returns None on failure.
 
-        Videos are dispatched to :meth:`_load_video`, which hands back a still
-        frame in place of the image — everything downstream (batching, the
-        encoder, the .npz layout) is then identical for both media types.
+        Videos are dispatched to :meth:`_load_video`, which returns the same
+        shape, so everything downstream of here is media-agnostic.
 
         Thread-safe: PIL decoders release the GIL during native I/O and the
         helpers used here don't share mutable state.
@@ -957,20 +974,38 @@ class Embeddings(BaseModel):
         buf_modtimes: list[float] = []
         buf_metadatas: list[dict] = []
 
+        def keep(j: int, path: Path, embedding) -> None:
+            embeddings.append(embedding)
+            filenames.append(path.resolve().as_posix())
+            modification_times.append(buf_modtimes[j])
+            metadatas.append(buf_metadatas[j])
+
         def flush() -> None:
             if not buf_images:
                 return
             try:
                 batch_emb = encoder.encode_images(buf_images)
             except Exception as e:
-                logger.error(f"Error encoding batch of {len(buf_images)} images: {e}")
-                bad_files.extend(buf_paths)
+                # Retry the batch one item at a time so a single hostile
+                # image costs only itself. Extracted video frames are the
+                # first realistic source of such an image, and losing a whole
+                # batch of unrelated photos to one of them would be a
+                # confusing, hard-to-attribute data loss.
+                logger.warning(
+                    f"Error encoding batch of {len(buf_images)} images ({e}); "
+                    "retrying them individually."
+                )
+                for j, path in enumerate(buf_paths):
+                    try:
+                        single = encoder.encode_images([buf_images[j]])
+                    except Exception as inner:
+                        logger.error(f"Error encoding {path}: {inner}")
+                        bad_files.append(path)
+                    else:
+                        keep(j, path, single[0])
             else:
                 for j, path in enumerate(buf_paths):
-                    embeddings.append(batch_emb[j])
-                    filenames.append(path.resolve().as_posix())
-                    modification_times.append(buf_modtimes[j])
-                    metadatas.append(buf_metadatas[j])
+                    keep(j, path, batch_emb[j])
             buf_paths.clear()
             buf_images.clear()
             buf_modtimes.clear()
@@ -1102,6 +1137,69 @@ class Embeddings(BaseModel):
 
         # Clear cache after saving
         _open_npz_file.cache_clear()
+
+        self._prune_video_frame_cache(
+            index_result.filenames, index_result.modification_times
+        )
+
+    @staticmethod
+    def _register_unreadable_files_warning(
+        album_key: str, result: "IndexResult | None"
+    ) -> None:
+        """Queue the "N files were skipped" notice for this run's completion.
+
+        Files that could not be read at all were collected in ``bad_files`` and
+        reported nowhere — the user just saw a smaller count than expected.
+        Videos make it far more likely (a truncated download, a codec ffmpeg
+        cannot handle), so it needs surfacing.
+
+        This has to run *before* ``complete_operation``, which is what folds
+        pending notices into the ProgressInfo the poller reads and clears the
+        queue. Registering it afterwards — from the router, once the index call
+        has returned — left the notice stranded in the queue: never shown for
+        this run, and silently attached to whichever run completed next.
+        """
+        if result is None or not result.bad_files:
+            return
+        count = len(result.bad_files)
+        noun, verb = ("file", "was") if count == 1 else ("files", "were")
+        progress_tracker.add_completion_warning(
+            album_key,
+            f"{count} {noun} could not be read and {verb} skipped.",
+        )
+        logger.warning(
+            f"Skipped {count} unreadable {noun} in album '{album_key}': "
+            + ", ".join(p.name for p in result.bad_files[:5])
+            + ("…" if count > 5 else "")
+        )
+
+    def _prune_video_frame_cache(self, filenames, modification_times) -> None:
+        """Drop cached stills that the just-written index no longer refers to.
+
+        One sweep here replaces what would otherwise be seven separate
+        cleanups — mtime changes, moves, copies, single and batch deletes, and
+        files removed outside the app all leave orphans behind, and each would
+        need its own hook. Running at save time means it runs exactly when the
+        index is authoritative.
+
+        Failures only waste disk, so they are logged and swallowed.
+        """
+        if not self.album_key:
+            return
+        try:
+            cache = VideoFrameCache(self.album_key)
+            if not cache.directory.is_dir():
+                return
+            keep = {
+                cache.key_for(Path(str(name)), float(mtime))
+                for name, mtime in zip(filenames, modification_times, strict=False)
+                if is_video(Path(str(name)))
+            }
+            removed = cache.prune(keep)
+            if removed:
+                logger.info(f"Removed {removed} stale video frame(s) from the cache")
+        except Exception as e:
+            logger.warning(f"Could not prune the video frame cache: {e}")
 
     @staticmethod
     def _path_compare_key(p: Path) -> str:
@@ -1392,6 +1490,7 @@ class Embeddings(BaseModel):
                 self.create_umap_index, result.embeddings
             )
             result.umap_embeddings = umap_embeddings
+            self._register_unreadable_files_warning(album_key, result)
             progress_tracker.complete_operation(
                 album_key, "Indexing completed successfully"
             )
@@ -1661,6 +1760,11 @@ class Embeddings(BaseModel):
                 len(missing_image_paths),
                 on_save_start=_on_save_start,
             )
+            # Before either completion path below: a run that indexed nothing
+            # new can still have skipped files, and complete_operation is what
+            # consumes the queue.
+            self._register_unreadable_files_warning(album_key, result)
+
             if not did_rebuild:
                 logger.info(
                     "No new images needed to be indexed. Will not regenerate umap"
@@ -1918,6 +2022,18 @@ class Embeddings(BaseModel):
         data = np.load(self.embeddings_path, allow_pickle=True)
         embeddings = data["embeddings"]
         filenames = data["filenames"]
+
+        # Videos are excluded from duplicate detection. Their embedding
+        # describes one extracted frame, and opening frames are frequently a
+        # black slate or a title card — two unrelated clips would then sit at
+        # ~1.0 cosine and be reported as duplicates, which users act on by
+        # deleting. Their frames can also legitimately duplicate a photo.
+        keep = np.array([not is_video(Path(str(f))) for f in filenames], dtype=bool)
+        if not keep.all():
+            embeddings = embeddings[keep]
+            filenames = filenames[keep]
+        if len(embeddings) == 0:
+            return
 
         # Normalize embeddings. ``_l2_normalize`` carries an epsilon guard so
         # an all-zero row can't produce NaN here.
