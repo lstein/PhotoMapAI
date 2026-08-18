@@ -1,9 +1,14 @@
 """Tests for indexing and curating InvokeAI board-backed albums.
 
-The InvokeAI HTTP API is stubbed at the ``invokeai_client`` layer: a fake
-``fetch_board_image_names`` serves a mutable board → image-name mapping, and
-the images themselves are UUID-named copies of the bundled test images laid
-out under a fake ``<root>/outputs/images`` directory.
+The InvokeAI HTTP API is stubbed at the ``invokeai_client`` layer: fake
+``fetch_board_image_names`` / ``fetch_board_video_names`` serve mutable
+board → name mappings, and the files themselves are UUID-named copies of the
+bundled fixtures laid out under fake ``<root>/outputs/images`` and
+``<root>/outputs/videos`` directories.
+
+The video mapping starts out empty, which is also the shape a board album
+sees against an InvokeAI too old to have a video API — so the image-only
+tests below double as coverage of that case.
 """
 
 import shutil
@@ -14,10 +19,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 from fastapi import HTTPException
+from fixtures import media_fixture_path
 
 from photomap.backend import invokeai_client
+from photomap.backend.video import VIDEO_METADATA_KEY, ffmpeg_exe
 
 ALBUM_KEY = "board_index_album"
+
+requires_ffmpeg = pytest.mark.skipif(
+    ffmpeg_exe() is None, reason="no bundled ffmpeg binary on this platform"
+)
 
 
 def _index_filenames(index_path: Path) -> set[str]:
@@ -46,6 +57,8 @@ def board_album(client, tmp_path, monkeypatch):
     """
     images_dir = tmp_path / "invokeai" / "outputs" / "images"
     images_dir.mkdir(parents=True)
+    videos_dir = tmp_path / "invokeai" / "outputs" / "videos"
+    videos_dir.mkdir(parents=True)
     src_images = sorted(
         p for p in (Path(__file__).parent / "test_images").iterdir() if p.is_file()
     )[:4]
@@ -57,14 +70,22 @@ def board_album(client, tmp_path, monkeypatch):
         names.append(name)
 
     boards = {"b1": list(names)}
+    video_boards: dict[str, list[str]] = {}
 
-    async def fake_fetch(base_url, board_ids, username, password):
+    def _merged(mapping, board_ids):
         merged = []
         for board_id in board_ids:
-            merged.extend(boards.get(board_id, []))
+            merged.extend(mapping.get(board_id, []))
         return list(dict.fromkeys(merged))
 
+    async def fake_fetch(base_url, board_ids, username, password):
+        return _merged(boards, board_ids)
+
+    async def fake_fetch_videos(base_url, board_ids, username, password):
+        return _merged(video_boards, board_ids)
+
     monkeypatch.setattr(invokeai_client, "fetch_board_image_names", fake_fetch)
+    monkeypatch.setattr(invokeai_client, "fetch_board_video_names", fake_fetch_videos)
 
     index_path = tmp_path / "index" / "embeddings.npz"
     album = {
@@ -76,6 +97,11 @@ def board_album(client, tmp_path, monkeypatch):
         "invokeai_board_ids": ["b1"],
         "index": index_path.as_posix(),
         "encoder_spec": "openai-clip:ViT-B/32",
+        # The byte floor applies to videos as well as images, and the video
+        # fixtures are deliberately tiny (~2 KB) so the suite stays fast.
+        # Disabling it here keeps these tests about board plumbing rather
+        # than about the scan gate, which test_index.py covers directly.
+        "min_image_bytes": 0,
     }
     response = client.post("/add_album/", json=album)
     assert response.status_code == 201, response.text
@@ -83,7 +109,9 @@ def board_album(client, tmp_path, monkeypatch):
     yield {
         "album": album,
         "boards": boards,
+        "video_boards": video_boards,
         "images_dir": images_dir,
+        "videos_dir": videos_dir,
         "index_path": index_path,
         "src_images": src_images,
     }
@@ -106,6 +134,152 @@ def test_board_album_index_contains_board_images(client, board_album):
     assert _index_filenames(board_album["index_path"]) == set(
         board_album["boards"]["b1"]
     )
+
+
+def _add_board_video(board_album, fixture="clip.mp4"):
+    """Copy a video fixture into the fake outputs/videos and list it on b1."""
+    name = f"{uuid.uuid4()}.mp4"
+    shutil.copy(media_fixture_path(fixture), board_album["videos_dir"] / name)
+    board_album["video_boards"].setdefault("b1", []).append(name)
+    return name
+
+
+def _index_of(client, name, count):
+    """The sorted-index position holding ``name``, or None."""
+    for idx in range(count):
+        filename = client.get(f"/retrieve_image/{ALBUM_KEY}/{idx}").json()["filename"]
+        if Path(filename).name == name:
+            return idx
+    return None
+
+
+def test_board_album_covers_both_output_directories(client, board_album):
+    """Board albums derive their paths from the InvokeAI root, and the videos
+    directory has to be one of them: ``image_paths`` is what gates file access
+    and relative-path resolution, so a board video that is indexed but not
+    covered here would be refused by ``/videos/…`` at playback time."""
+    album = client.get(f"/album/{ALBUM_KEY}/").json()
+    assert [Path(p).name for p in album["image_paths"]] == ["images", "videos"]
+
+
+@requires_ffmpeg
+def test_board_videos_are_indexed_alongside_images(client, board_album):
+    video_name = _add_board_video(board_album)
+
+    _build_index(client)
+
+    metadata = client.get(f"/index_metadata/{ALBUM_KEY}").json()
+    assert metadata["filename_count"] == 5
+    assert video_name in _index_filenames(board_album["index_path"])
+
+
+@requires_ffmpeg
+def test_indexed_board_video_carries_its_probe_facts(client, board_album):
+    """The video rides through the encoder as a still frame, but the facts
+    ffmpeg reported have to survive into the index — they are what make the
+    slide render as a video rather than as a photo."""
+    video_name = _add_board_video(board_album)
+    _build_index(client)
+
+    idx = _index_of(client, video_name, 5)
+    assert idx is not None, "indexed video not found by name"
+    slide = client.get(f"/retrieve_image/{ALBUM_KEY}/{idx}").json()
+
+    assert slide["media_type"] == "video"
+    assert slide["video_info"]["duration"] > 0
+    # The still, not the raw container, is what `image_url` points at.
+    assert slide["image_url"].startswith("video_frame/")
+    assert slide["video_url"].endswith(video_name)
+
+    data = np.load(board_album["index_path"], allow_pickle=True)
+    stored = {
+        Path(str(f)).name: m
+        for f, m in zip(data["filenames"], data["metadata"], strict=True)
+    }
+    assert VIDEO_METADATA_KEY in stored[video_name]
+
+
+@requires_ffmpeg
+def test_deleting_a_board_video_uses_the_video_endpoint(
+    client, board_album, monkeypatch
+):
+    """Videos are a separate resource on the InvokeAI side. Sending a video
+    name to the *image* delete endpoint 404s, which the client treats as
+    'already gone' — the row would leave the index while the video stayed on
+    the board."""
+    video_name = _add_board_video(board_album)
+    _build_index(client)
+
+    deleted_videos = []
+    deleted_images = []
+
+    async def fake_delete_video(base_url, name, username, password):
+        deleted_videos.append(name)
+
+    async def fake_delete_image(base_url, name, username, password):
+        deleted_images.append(name)
+
+    monkeypatch.setattr(invokeai_client, "delete_video", fake_delete_video)
+    monkeypatch.setattr(invokeai_client, "delete_image", fake_delete_image)
+
+    idx = _index_of(client, video_name, 5)
+    assert idx is not None
+    response = client.delete(f"/delete_image/{ALBUM_KEY}/{idx}")
+    assert response.status_code == 200, response.text
+
+    assert deleted_videos == [video_name]
+    assert deleted_images == []
+    # InvokeAI owns the file; PhotoMap only drops the index row.
+    assert (board_album["videos_dir"] / video_name).exists()
+    assert video_name not in _index_filenames(board_album["index_path"])
+
+
+@requires_ffmpeg
+def test_batch_delete_splits_videos_from_images(client, board_album, monkeypatch):
+    video_name = _add_board_video(board_album)
+    _build_index(client)
+
+    deleted_videos = []
+    deleted_images = []
+
+    async def fake_delete_video(base_url, name, username, password):
+        deleted_videos.append(name)
+
+    async def fake_delete_image(base_url, name, username, password):
+        deleted_images.append(name)
+
+    monkeypatch.setattr(invokeai_client, "delete_video", fake_delete_video)
+    monkeypatch.setattr(invokeai_client, "delete_image", fake_delete_image)
+
+    video_idx = _index_of(client, video_name, 5)
+    image_idx = next(i for i in range(5) if i != video_idx)
+    image_name = Path(
+        client.get(f"/retrieve_image/{ALBUM_KEY}/{image_idx}").json()["filename"]
+    ).name
+
+    response = client.post(
+        f"/delete_images/{ALBUM_KEY}", json={"indices": [video_idx, image_idx]}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["deleted_count"] == 2
+
+    assert deleted_videos == [video_name]
+    assert deleted_images == [image_name]
+
+
+@requires_ffmpeg
+def test_missing_board_video_is_skipped_not_fatal(client, board_album):
+    """A video InvokeAI lists but that is absent on disk is counted in the
+    same discrepancy warning as a missing image."""
+    board_album["video_boards"].setdefault("b1", []).append(f"{uuid.uuid4()}.mp4")
+
+    _build_index(client)
+
+    progress = client.get(f"/index_progress/{ALBUM_KEY}").json()
+    assert progress["status"] == "completed"
+    assert "1 of 5" in progress["warning_message"]
+    metadata = client.get(f"/index_metadata/{ALBUM_KEY}").json()
+    assert metadata["filename_count"] == 4
 
 
 def test_missing_board_images_surface_completion_warning(client, board_album):

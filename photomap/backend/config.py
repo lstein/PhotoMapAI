@@ -143,17 +143,28 @@ class Album(BaseModel):
     def _derive_board_album_fields(cls, data: Any) -> Any:
         """Fill in `image_paths` and `index` for InvokeAI-board albums.
 
-        Board albums have no user-chosen image directory: their images live
-        under `<invokeai_root>/outputs/images` and their index in the user
-        data directory. Both must be derived *before* field validation
-        because `image_paths` has `min_length=1` and `index` is required.
+        Board albums have no user-chosen image directory: their media live
+        under `<invokeai_root>/outputs/images` and `<invokeai_root>/outputs/videos`,
+        and their index in the user data directory. Both must be derived
+        *before* field validation because `image_paths` has `min_length=1`
+        and `index` is required.
+
+        The paths are recomputed on every construction rather than only when
+        absent. They are derived, not user-chosen, so whatever was persisted
+        must never win over the current root — and albums written before
+        video support stored only the images directory, which is how those
+        pick up the videos directory with no migration step. (`image_paths`
+        is what gates file access and relative-path resolution, so a board
+        video would otherwise be indexed but refused by `/videos/…`.)
         """
         if not isinstance(data, dict) or data.get("source_type") != "invokeai_board":
             return data
         root = data.get("invokeai_root")
-        if root and not data.get("image_paths"):
+        if root:
+            outputs = Path(root).expanduser() / "outputs"
             data["image_paths"] = [
-                str(Path(root).expanduser() / "outputs" / "images")
+                str(outputs / "images"),
+                str(outputs / "videos"),
             ]
         if not data.get("index") and data.get("key"):
             data["index"] = default_board_index_path(str(data["key"])).as_posix()

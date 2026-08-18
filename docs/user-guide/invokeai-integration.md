@@ -111,6 +111,19 @@ present on the select board(s) will be displayed, and deleting an
 image within PhotoMapAI will trigger a deletion event in InvokeAI so
 that the gallery and albumm remain in sync.
 
+Videos on the selected board(s) are indexed too, alongside the
+images. A video is represented by a still frame taken shortly after
+its start, so it can be searched and clustered just like a photo; the
+metadata drawer shows its duration, frame rate and format, along with
+a link that plays the video. Deleting a video also routes through
+InvokeAI, so the gallery stays in sync the same way it does for
+images.
+
+!!! note
+    Videos are only indexed for album types that come from an InvokeAI
+    board. A plain directory album still collects images only, even if
+    the folder also contains videos.
+
 !!! warning
     PhotoMapAI does not automatically watch the InvokeAI gallery for new
 	or deleted files. Whenever you have generated a batch of images you want to

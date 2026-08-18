@@ -413,8 +413,11 @@ def test_add_board_album_derives_paths_and_index(client):
         album = manager.get_album("board_album")
         assert album is not None
         assert album.source_type == "invokeai_board"
+        # Both output directories: a board's videos are indexed alongside its
+        # images, and ``image_paths`` is what grants access to them.
         assert album.image_paths == [
-            str(Path("/srv/invokeai") / "outputs" / "images")
+            str(Path("/srv/invokeai") / "outputs" / "images"),
+            str(Path("/srv/invokeai") / "outputs" / "videos"),
         ]
         assert album.index == default_board_index_path("board_album").as_posix()
         assert album.invokeai_board_ids == ["b1", "none"]

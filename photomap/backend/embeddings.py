@@ -41,12 +41,13 @@ from .encoders import (
     capture_download_progress,
     get_cached_encoder,
 )
-from .media_types import IMAGE_EXTENSIONS
+from .media_types import IMAGE_EXTENSIONS, INDEXABLE_EXTENSIONS, is_video
 from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
 from .progress import IndexingCancelled, progress_tracker
 from .util import atomic_savez
+from .video import VIDEO_METADATA_KEY, extract_video_frame
 
 logger = logging.getLogger(__name__)
 
@@ -181,9 +182,11 @@ register_heif_opener()  # Register HEIF opener for PIL
 #
 # Note this is now the same object as IMAGE_EXTENSIONS, and a frozenset rather
 # than the set it used to be — extending it in place no longer works, which is
-# intentional: the walk captures it as a default argument at definition time,
-# so a mutation would have silently failed to reach the walk anyway. Add new
-# suffixes in media_types instead.
+# intentional. Add new suffixes in media_types instead.
+#
+# No longer what the walk itself defaults to: which suffixes an album collects
+# now depends on whether it indexes videos, so the scan resolves them per
+# instance from ``Embeddings.scan_extensions``.
 SUPPORTED_EXTENSIONS: frozenset[str] = IMAGE_EXTENSIONS
 
 
@@ -461,6 +464,17 @@ class Embeddings(BaseModel):
     # heavy upscaling. Default mirrors the Album field default in config.py.
     min_image_dimension: int = 256
     min_image_bytes: int = DIMENSION_REJECT_MIN_BYTES
+    # Whether videos are collected alongside images. Off by default: turning
+    # it on for an existing album silently re-scans it for a whole new media
+    # type and makes indexing depend on ffmpeg, so it is opted into per
+    # album. InvokeAI-board albums set it, because a board holds videos and
+    # images side by side and the InvokeAI gallery shows both.
+    index_videos: bool = False
+
+    @property
+    def scan_extensions(self) -> frozenset[str]:
+        """Suffixes this album's scan collects. See :attr:`index_videos`."""
+        return INDEXABLE_EXTENSIONS if self.index_videos else IMAGE_EXTENSIONS
 
     def __init__(self, **data):
         """Ensure embeddings_path is always resolved to prevent cache key mismatches."""
@@ -535,6 +549,13 @@ class Embeddings(BaseModel):
         The byte and pixel thresholds are independent album settings,
         surfaced side by side in the album editor; either can be disabled.
         Callers that already stat'ed the file pass the result as ``st``.
+
+        **Videos are gated on bytes only.** A container has no header PIL can
+        read, so the pixel probe would raise and reject every video small
+        enough to reach it — silently dropping short clips while letting long
+        ones through, purely on file size. Learning a video's real dimensions
+        costs an ffmpeg decode, which is exactly what the gate exists to
+        avoid paying during a scan.
         """
         min_dim = self.min_image_dimension
         byte_floor = self.min_image_bytes
@@ -546,7 +567,11 @@ class Embeddings(BaseModel):
                 st = path.stat()
             if byte_floor > 0 and st.st_size < byte_floor:
                 return False
-            if not pixel_gate_active or st.st_size > DIMENSION_PROBE_MAX_BYTES:
+            if (
+                not pixel_gate_active
+                or is_video(path)
+                or st.st_size > DIMENSION_PROBE_MAX_BYTES
+            ):
                 return True
         except OSError as e:
             logger.debug(f"Skipping unstattable image during scan: {path}: {e}")
@@ -622,7 +647,7 @@ class Embeddings(BaseModel):
     def get_image_files_from_directory(
         self,
         directory: Path,
-        exts: AbstractSet[str] = SUPPORTED_EXTENSIONS,
+        exts: AbstractSet[str] | None = None,
         progress_callback: Callable | None = None,
         update_interval: int = 100,
         apply_dimension_gate: bool = True,
@@ -645,7 +670,7 @@ class Embeddings(BaseModel):
 
         Args:
             directory: Directory to scan
-            exts: File extensions to include
+            exts: File extensions to include (default: :attr:`scan_extensions`)
             progress_callback: Optional callback function(count, message) for progress updates
             update_interval: How often to call progress_callback (every N files found)
             apply_dimension_gate: Probe pixel dimensions during the walk
@@ -654,6 +679,8 @@ class Embeddings(BaseModel):
                 scan-reject cache and skipped on later scans
         """
         logger.info(f"Scanning directory {directory} for image files...")
+        if exts is None:
+            exts = self.scan_extensions
         image_files = []
         files_checked = 0
         skipped_too_small = 0
@@ -713,7 +740,7 @@ class Embeddings(BaseModel):
     def get_image_files(
         self,
         image_paths_or_dir: list[Path] | Path,
-        exts: AbstractSet[str] = SUPPORTED_EXTENSIONS,
+        exts: AbstractSet[str] | None = None,
         progress_callback: Callable | None = None,
         apply_dimension_gate: bool = True,
         reject_sink: dict[str, tuple[int, float]] | None = None,
@@ -733,6 +760,8 @@ class Embeddings(BaseModel):
             list of Path: List of image file paths.
         """
         logger.info("get_image_files called with progress_callback")
+        if exts is None:
+            exts = self.scan_extensions
         if isinstance(image_paths_or_dir, Path):
             # If it's a single Path object, treat it as a directory
             images = self.get_image_files_from_directory(
@@ -827,14 +856,47 @@ class Embeddings(BaseModel):
         """Root directory for CLIP model caching (None = use the default cache)."""
         return None
 
+    def _load_video(
+        self, video_path: Path
+    ) -> tuple[Image.Image, float, dict] | None:
+        """Load the still frame that represents a video. None on failure.
+
+        A video is indexed through one frame taken near its start, so from
+        here on it flows through the encoder exactly like a photo. The facts
+        ffmpeg reported about the file ride along under
+        :data:`~photomap.backend.video.VIDEO_METADATA_KEY` in the per-image
+        metadata dict, which is what makes the slide show a duration and a
+        play badge instead of treating it as a still.
+
+        There is no EXIF to read a capture date from, so ordering falls back
+        to the file's mtime — the same fallback photos without EXIF get.
+        """
+        extracted = extract_video_frame(video_path)
+        if extracted is None:
+            # extract_video_frame never raises and has already logged why.
+            return None
+        frame, info = extracted
+        try:
+            modification_time = video_path.stat().st_mtime
+        except OSError as e:
+            logger.error(f"Error processing {video_path}: {e}")
+            return None
+        return frame, modification_time, {VIDEO_METADATA_KEY: info.model_dump()}
+
     def _load_image(
         self, image_path: Path
     ) -> tuple[Image.Image, float, dict] | None:
         """Open an image and extract modtime + metadata. Returns None on failure.
 
+        Videos are dispatched to :meth:`_load_video`, which hands back a still
+        frame in place of the image — everything downstream (batching, the
+        encoder, the .npz layout) is then identical for both media types.
+
         Thread-safe: PIL decoders release the GIL during native I/O and the
         helpers used here don't share mutable state.
         """
+        if is_video(image_path):
+            return self._load_video(image_path)
         try:
             pil = Image.open(image_path)
             pil = ImageOps.exif_transpose(pil)

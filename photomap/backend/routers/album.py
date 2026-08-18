@@ -105,6 +105,9 @@ def get_embeddings_for_album(album_key: str) -> Embeddings:
         encoder_spec=album_config.encoder_spec,
         min_image_dimension=album_config.min_image_dimension,
         min_image_bytes=album_config.min_image_bytes,
+        # Only affects scanning, which read paths never do — set anyway so
+        # every Embeddings built from an album config describes that album.
+        index_videos=album_config.source_type == "invokeai_board",
     )
 
 

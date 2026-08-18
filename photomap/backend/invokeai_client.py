@@ -4,7 +4,11 @@ This module owns everything needed to make authenticated calls against a
 running InvokeAI instance: URL validation, the JWT token cache with its
 single-user/multi-user fallback logic, and thin wrappers around the
 InvokeAI REST endpoints PhotoMap consumes (version probe, board listing,
-board image names, image deletion).
+board image and video names, image and video deletion).
+
+Images and videos are distinct resources on the InvokeAI side — separate
+routers, separate listing shapes, separate output directories — so each has
+its own wrapper here rather than one parameterized by media type.
 
 It deliberately lives outside ``routers/`` so that non-router code (the
 indexing pipeline, curation) can use it without importing a FastAPI router
@@ -346,6 +350,94 @@ async def fetch_board_image_names(
     return list(dict.fromkeys(all_names))
 
 
+async def fetch_board_video_names(
+    base_url: str,
+    board_ids: list[str],
+    username: str | None,
+    password: str | None,
+) -> list[str]:
+    """Return the video names belonging to ``board_ids``, deduplicated.
+
+    Videos are a separate resource from images in InvokeAI, with their own
+    router: this calls ``GET /api/v1/videos/names?board_id=...`` once per
+    board (the board is a *query* parameter here, unlike the images
+    endpoint's path parameter) and reads the ``video_names`` array out of the
+    returned ``VideoNamesResult`` object.  Returned names include their
+    extension (``{uuid}.mp4``) and resolve under
+    ``<invokeai_root>/outputs/videos``.
+
+    The same ``is_intermediate``/``categories`` filters as
+    :func:`fetch_board_image_names` are applied, and they matter just as much
+    here: a Wan pipeline writes its intermediate clips to the board too, so
+    an unfiltered listing returns videos the InvokeAI gallery itself hides.
+
+    A backend predating video support has no ``/api/v1/videos`` router at
+    all and answers **404**, which is treated as "this server has no videos"
+    rather than an error — board albums must keep indexing their images
+    against an older InvokeAI.  A 404 cannot mean anything else here, since
+    the board is a query parameter and an unknown board id yields an empty
+    list, not a 404.
+    """
+    filter_params = {
+        "is_intermediate": "false",
+        "categories": ["general", "user"],
+    }
+    names_url = f"{base_url.rstrip('/')}/api/v1/videos/names"
+    all_names: list[str] = []
+    try:
+        async with httpx.AsyncClient(timeout=_BOARD_FETCH_TIMEOUT) as client:
+            for board_id in board_ids:
+                params = {**filter_params, "board_id": board_id}
+
+                async def _do(
+                    headers: dict[str, str], params: dict = params
+                ) -> httpx.Response:
+                    return await client.get(names_url, params=params, headers=headers)
+
+                response = await _request_with_auth_fallback(
+                    base_url, username, password, _do
+                )
+                if response.status_code == 404:
+                    logger.info(
+                        "InvokeAI backend at %s has no video API; "
+                        "indexing board images only.",
+                        base_url,
+                    )
+                    return []
+                if response.status_code >= 400:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=(
+                            f"InvokeAI backend returned {response.status_code} for "
+                            f"videos on board {board_id!r}: {response.text[:200]}"
+                        ),
+                    )
+                try:
+                    payload = response.json()
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Video-names endpoint for board {board_id!r} did not return JSON",
+                    ) from exc
+                names = payload.get("video_names") if isinstance(payload, dict) else None
+                if not isinstance(names, list):
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Video-names endpoint for board {board_id!r} returned an unexpected shape",
+                    )
+                all_names.extend(str(name) for name in names)
+    except httpx.RequestError as exc:
+        logger.warning("InvokeAI video-names request failed: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach InvokeAI backend at {base_url}: {exc}",
+        ) from exc
+
+    # A video belongs to one board, but overlapping selections (a board plus
+    # "none") must not index the same file twice — dedupe preserving order.
+    return list(dict.fromkeys(all_names))
+
+
 async def delete_image(
     base_url: str,
     image_name: str,
@@ -388,4 +480,67 @@ async def delete_image(
                 f"InvokeAI image delete returned {response.status_code}: "
                 f"{response.text[:200]}"
             ),
+        )
+
+
+async def delete_video(
+    base_url: str,
+    video_name: str,
+    username: str | None,
+    password: str | None,
+) -> None:
+    """Delete ``video_name`` on the InvokeAI backend.
+
+    The video counterpart of :func:`delete_image`, and it needs to be a
+    separate call rather than a different path passed to that one: the video
+    endpoint answers with a ``DeleteVideosResult`` body instead of the bare
+    success the images route returns, and a name landing in its
+    ``failed_videos`` list is a failure reported *with* HTTP 200.  Accepting
+    that as success would drop the row from the local index while the file
+    stayed in InvokeAI — the video would silently reappear on the next
+    re-index.
+
+    As with images, a 404 means InvokeAI no longer knows the video: log and
+    return so the caller can still drop it locally.
+    """
+    url = f"{base_url.rstrip('/')}/api/v1/videos/i/{video_name}"
+    try:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+
+            async def _do(headers: dict[str, str]) -> httpx.Response:
+                return await client.delete(url, headers=headers)
+
+            response = await _request_with_auth_fallback(
+                base_url, username, password, _do
+            )
+    except httpx.RequestError as exc:
+        logger.warning("InvokeAI video delete request failed: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach InvokeAI backend at {base_url}: {exc}",
+        ) from exc
+
+    if response.status_code == 404:
+        logger.warning(
+            "InvokeAI no longer has video %s; removing from index anyway",
+            video_name,
+        )
+        return
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"InvokeAI video delete returned {response.status_code}: "
+                f"{response.text[:200]}"
+            ),
+        )
+
+    try:
+        failed = response.json().get("failed_videos")
+    except ValueError:
+        failed = None
+    if isinstance(failed, list) and video_name in failed:
+        raise HTTPException(
+            status_code=502,
+            detail=f"InvokeAI reported that {video_name} could not be deleted",
         )
