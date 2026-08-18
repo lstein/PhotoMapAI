@@ -4,7 +4,7 @@ Here are some frequently-encountered issues and their resolutions.
 
 ## No images are showing up in my display
 
-Make sure that you have configured and indexed a [photo album](user-guide/albums.md), that the directory(s) associated with the album contain valid images (JPEG, PNG, HEIC), and that the images are readable by your user account. Scroll to the album in question using the [Album Manager](user-guide/albums.md#managing-albums) and make sure that it has been indexed and that at least two images exist in the album. If necessary, reindex using the **Index** button.
+Make sure that you have configured and indexed a [photo album](user-guide/albums.md), that the directory(s) associated with the album contain valid images (JPEG, PNG, HEIC) or videos, and that the images are readable by your user account. Scroll to the album in question using the [Album Manager](user-guide/albums.md#managing-albums) and make sure that it has been indexed and that at least two images exist in the album. If necessary, reindex using the **Index** button.
 
 If these attempts fail, send a bug report to the [PhotoMap Issues](https://github.com/lstein/PhotoMapAI/issues) page, copying any error messages you see in the browser's JavaScript console and the PhotoMapAI launch script window.
 

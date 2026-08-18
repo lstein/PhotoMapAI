@@ -248,11 +248,13 @@
   outline: none;
 }
 
-#umapClickBehaviorContainer {
+#umapClickBehaviorContainer,
+#umapMediaFilterContainer {
   font-size: 0.85em;
 }
 
-#umapClickBehaviorContainer label {
+#umapClickBehaviorContainer label,
+#umapMediaFilterContainer label {
   cursor: pointer;
   user-select: none;
 }

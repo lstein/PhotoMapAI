@@ -33,7 +33,8 @@ themes.
 - A [curator mode](user-guide/curator-mode) for creating training sets for LoRA models.
 - Extensible [backend](developer/architecture) (FastAPI)
 - Responsive UI for desktop and mobile
-- Support for wide range of image formats, including Apple's HEIC
+- Support for a wide range of image formats, including Apple's HEIC
+- Video support: clips are indexed by an extracted still, so they appear in search and on the semantic map, and play in an embedded player
 - All images are local to your computer; nothing goes out to the internet
 
 Quick Links:

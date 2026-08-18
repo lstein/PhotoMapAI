@@ -217,6 +217,28 @@
           </div>
         </div>
 
+        <!-- Which media the map draws. Disabled (not hidden) for albums with
+             no videos, so the control row's height stays constant — the
+             window-sizing constants in umap.js depend on it. -->
+        <div
+          id="umapMediaFilterContainer"
+          style="display: flex; flex-direction: row; gap: 12px; align-items: center;"
+        >
+          <span id="umapMediaFilterLabel">Show:</span>
+          <label style="display: flex; align-items: center; gap: 6px;">
+            <input type="radio" name="umapMediaFilter" id="umapMediaFilterImagesRadio" value="images" />
+            Images
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px;">
+            <input type="radio" name="umapMediaFilter" id="umapMediaFilterVideosRadio" value="videos" />
+            Videos
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px;">
+            <input type="radio" name="umapMediaFilter" id="umapMediaFilterBothRadio" value="both" checked />
+            Both
+          </label>
+        </div>
+
         <!-- Rows 2-3: Checkboxes in 2 aligned columns -->
         <div
           id="umapColorModeContainer"

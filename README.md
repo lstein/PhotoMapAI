@@ -17,7 +17,8 @@ PhotoMapAI is a fast, modern image browser and search tool for large photo colle
 - Bookmark images for quick access, batch download, or deletion
 - Curator mode for selecting a balanced set of images to use for LoRA training
 - Responsive UI for desktop and mobile
-- Support for wide range of image formats, including Apple's HEIC
+- Support for a wide range of image formats, including Apple's HEIC
+- Video support: clips are indexed by an extracted still, so they appear in search and on the semantic map, and play in an embedded player
 - Integration with the <a href="https://github.com/invoke-ai/InvokeAI">InvokeAI</a> AI image generation system
 - Extensible backend (FastAPI)
 

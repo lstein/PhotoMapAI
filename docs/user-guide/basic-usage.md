@@ -12,7 +12,7 @@ Enter a short lowercase key for the album, such as "family", a longer descriptiv
 
 You'll now need to tell the album where its photos are stored. Enter one or more filesystem paths in the text field at the bottom named "Image Paths". Photos can be stored in a single large folder, or stored in multiple nestered folders. They can reside on the local disk or on a shared disk. If you wish, you can point the album to multiple folders, and their contents will be combined into a single album.
 
-PhotoMapAI supports photos in JPEG, PNG, TIFF, GIF, and HEIC/HEIF formats.
+PhotoMapAI supports photos in JPEG, PNG, TIFF, GIF, and HEIC/HEIF formats, and videos in MP4, MOV, WebM, OGV, AVI, MKV and other formats ffmpeg can read. Videos display their opening still overlaid with a play button, duration and frame rate; click it to play the video in an embedded player. Formats browsers cannot play natively (such as AVI and MKV) are still indexed and searchable, and offer a download link instead.
 
 The screenshot below shows the dialogue after populating it on a Linux or MacOS system. On Windows systems use the usual `C:\path\to\directory` notation.
 

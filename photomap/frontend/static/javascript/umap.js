@@ -15,13 +15,14 @@ import { switchAlbum } from "./settings.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import {
   setUmapClickSelectsCluster,
+  setUmapMediaFilter,
   setUmapControlsVisible,
   setUmapExitFullscreenOnSelection,
   setUmapShowHoverThumbnails,
   setUmapShowLandmarks,
   state,
 } from "./state.js";
-import { findLandmarkClusterAt } from "./umap-helpers.js";
+import { filterPointsByMediaType, findLandmarkClusterAt, hasVideoPoints } from "./umap-helpers.js";
 import { checkUmapReindexOngoing, initUmapReindexButton } from "./umap-reindex.js";
 import { debounce, getPercentile, isColorLight, makeDraggable } from "./utils.js";
 
@@ -170,6 +171,19 @@ export function setUmapClickCallback(callback) {
 let points = [];
 let clusters = [];
 let colors = [];
+
+// The points the map should currently draw, after the images/videos filter.
+//
+// Deliberately a derived view rather than a second Plotly trace. `colorizeUmap`
+// hardcodes trace [0] in *both* branches — including the else-branch that
+// restores every point on "clear selection" — so a second trace would be
+// silently wiped there. `plotly_click` also has a `points[pt.pointIndex]`
+// fallback that uses a per-trace index and would resolve to the wrong image.
+// Keeping the trace count fixed means moveTraces, the HighlightedPoints
+// add/delete, the landmark traces and `customdata` all keep working untouched.
+function visiblePoints() {
+  return filterPointsByMediaType(points, state.umapMediaFilter);
+}
 let mapExists = false;
 let isShaded = false;
 let umapWindowHasBeenShown = false; // Track if window has been shown at least once
@@ -295,14 +309,24 @@ export async function fetchUmapData() {
     const yMin = getPercentile(ys, 1);
     const yMax = getPercentile(ys, 99);
 
-    // Prepare marker arrays
-    const markerColors = points.map((p) => getClusterColor(p.cluster));
-    const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.08 : 0.75));
+    // Reconcile the filter against this album *before* the trace is built.
+    // The album may have no videos at all, in which case a persisted
+    // "videos only" would otherwise plot an empty trace. Doing it afterwards
+    // still ended up looking right, but only because the setUmapColorMode()
+    // at the end of this function happens to redraw trace 0 from the
+    // corrected filter — a rescue that reads like a coincidence and would
+    // stop working the moment that call moved or became conditional.
+    updateMediaFilterAvailability();
 
-    // Main trace: all points
+    // Prepare marker arrays
+    const drawn = visiblePoints();
+    const markerColors = drawn.map((p) => getClusterColor(p.cluster));
+    const markerAlphas = drawn.map((p) => (p.cluster === -1 ? 0.08 : 0.75));
+
+    // Main trace: all points (subject to the media filter)
     const allPointsTrace = {
-      x: points.map((p) => p.x),
-      y: points.map((p) => p.y),
+      x: drawn.map((p) => p.x),
+      y: drawn.map((p) => p.y),
       mode: "markers",
       type: "scattergl",
       marker: {
@@ -310,7 +334,7 @@ export async function fetchUmapData() {
         opacity: markerAlphas,
         size: 5,
       },
-      customdata: points.map((p) => p.index),
+      customdata: drawn.map((p) => p.index),
       name: "All Points",
       hoverinfo: "none",
     };
@@ -557,7 +581,13 @@ export async function fetchUmapData() {
         // Get all points in this cluster, then click through to whatever image
         // we showed as the landmark thumbnail (medoid when available, else the
         // 2D-position pick). Keeps display and navigation consistent.
-        const clusterPoints = points.filter((p) => p.cluster === clickedLandmarkCluster);
+        // Drawn members only. A landmark is placed from the visible members of
+        // its cluster, but the click target used to be chosen from *all* of
+        // them — so on a filtered map a mixed cluster resolved to a point that
+        // isn't on the plot. handleClusterClick then built its walk over the
+        // visible set with that hidden point as the start, and threw on the
+        // first distance calculation, leaving the spinner up for good.
+        const clusterPoints = visiblePoints().filter((p) => p.cluster === clickedLandmarkCluster);
         if (clusterPoints.length > 0) {
           const targetIndex = getLandmarkImageIndex(clickedLandmarkCluster, clusterPoints);
           if (state.umapClickSelectsCluster) {
@@ -643,9 +673,11 @@ export async function colorizeUmap({ highlight = false, searchResults = [] } = {
   if (highlight && searchResults.length > 0) {
     const searchSet = new Set(searchResults.map((r) => r.index));
 
-    // Split points into two groups
-    const regularPoints = points.filter((p) => !searchSet.has(p.index));
-    const highlightedPoints = points.filter((p) => searchSet.has(p.index));
+    // Split points into two groups. Both halves come from the filtered set,
+    // so a videos-only map cannot highlight an image that isn't drawn.
+    const drawn = visiblePoints();
+    const regularPoints = drawn.filter((p) => !searchSet.has(p.index));
+    const highlightedPoints = drawn.filter((p) => searchSet.has(p.index));
 
     // Update main trace with only regular points
     await Plotly.restyle(
@@ -709,21 +741,24 @@ export async function colorizeUmap({ highlight = false, searchResults = [] } = {
       await Plotly.deleteTraces(plotDiv, highlightTraceIdx);
     }
 
-    // Restore ALL points to main trace with normal coloring
-    const markerColors = points.map((p) => getClusterColor(p.cluster));
-    const markerAlphas = points.map((p) => (p.cluster === -1 ? 0.2 : 0.75));
-    const markerSizes = points.map(() => 5);
+    // Restore all *visible* points to the main trace with normal coloring.
+    // This branch runs on every "clear selection", so it is the one that
+    // would silently undo the media filter if it used the unfiltered list.
+    const drawn = visiblePoints();
+    const markerColors = drawn.map((p) => getClusterColor(p.cluster));
+    const markerAlphas = drawn.map((p) => (p.cluster === -1 ? 0.2 : 0.75));
+    const markerSizes = drawn.map(() => 5);
 
     await Plotly.restyle(
       "umapPlot",
       {
-        x: [points.map((p) => p.x)],
-        y: [points.map((p) => p.y)],
+        x: [drawn.map((p) => p.x)],
+        y: [drawn.map((p) => p.y)],
         "marker.color": [markerColors],
         "marker.opacity": [markerAlphas],
         "marker.size": [markerSizes],
         "marker.line.width": [0],
-        customdata: [points.map((p) => p.index)],
+        customdata: [drawn.map((p) => p.index)],
       },
       [0]
     );
@@ -819,7 +854,104 @@ window.addEventListener("stateReady", () => {
       }
     });
   }
+
+  // Media filter radio buttons - initialize from state
+  const mediaFilterRadios = MEDIA_FILTER_RADIO_IDS.map((id) => document.getElementById(id));
+  if (mediaFilterRadios.every(Boolean)) {
+    const active =
+      mediaFilterRadios.find((radio) => radio.value === state.umapMediaFilter) ||
+      mediaFilterRadios.find((radio) => radio.value === DEFAULT_MEDIA_FILTER);
+    if (active) {
+      active.checked = true;
+    }
+
+    mediaFilterRadios.forEach((radio) => {
+      radio.addEventListener("change", async (e) => {
+        if (!e.target.checked) {
+          return;
+        }
+        setUmapMediaFilter(e.target.value);
+        // Redraw through the normal colorize path so an active search
+        // highlight is re-derived from the new visible set rather than being
+        // left pointing at hidden points.
+        await colorizeUmap({
+          highlight: state.searchType === "search" || state.searchType === "cluster",
+          searchResults: state.searchResults || [],
+        });
+        await updateCurrentImageMarker();
+        debouncedUpdateLandmarkTrace();
+      });
+    });
+  }
 });
+
+// Height of the controls block before this file started measuring it. Used as
+// the fallback when the element isn't laid out yet (initial paint, jsdom), so
+// the numbers below still reproduce the original constants exactly.
+const UNMEASURED_CONTROLS_HEIGHT = 60;
+
+// Vertical space to reserve for the controls block below the plot.
+//
+// Measured rather than hardcoded. There used to be two independent magic
+// numbers here (110/40 and 130/60), so adding a control row meant remembering
+// to bump both — miss one and the new row is clipped in exactly one of
+// {fullscreen, windowed}.
+//
+// ``gap`` is what each call site needs *on top of* the block's own height, and
+// the two are genuinely different: the fullscreen branch reserves space inside
+// an already-sized window, while the windowed branch sizes the whole window
+// and so must also cover the 51px titlebar. Measured in Chromium against the
+// pre-existing layout, where the block was 60px: 110 - 60 = 50 for fullscreen,
+// 130 - 60 = 70 for windowed. Collapsing both to one allowance left the
+// windowed layout 3px of clearance instead of 23.
+function reservedControlsHeight(gap, hiddenFallback) {
+  if (!state.umapControlsVisible) {
+    return hiddenFallback;
+  }
+  const controls = document.getElementById("umapControls");
+  const measured = controls ? Math.ceil(controls.getBoundingClientRect().height) : 0;
+  return (measured > 0 ? measured : UNMEASURED_CONTROLS_HEIGHT) + gap;
+}
+
+// Listed in the order they appear in the control row.
+const MEDIA_FILTER_RADIO_IDS = ["umapMediaFilterImagesRadio", "umapMediaFilterVideosRadio", "umapMediaFilterBothRadio"];
+
+// Selected when nothing is persisted, and fallen back to when the stored
+// value isn't one we recognize. Matched by value rather than by position in
+// the list above, so reordering the radios in the UI cannot silently change
+// which one is the default.
+const DEFAULT_MEDIA_FILTER = "both";
+
+// Offer the filter only when there is something to filter.
+//
+// A persisted "videos only" restored on an all-photo album would otherwise
+// render a blank map, which reads as "the semantic map is broken". The
+// controls are disabled rather than hidden so the control row keeps its
+// height — the window-sizing constants depend on that.
+function updateMediaFilterAvailability() {
+  const container = document.getElementById("umapMediaFilterContainer");
+  if (!container) {
+    return;
+  }
+  const albumHasVideos = hasVideoPoints(points);
+
+  if (!albumHasVideos && state.umapMediaFilter !== DEFAULT_MEDIA_FILTER) {
+    setUmapMediaFilter(DEFAULT_MEDIA_FILTER);
+  }
+
+  MEDIA_FILTER_RADIO_IDS.forEach((id) => {
+    const radio = document.getElementById(id);
+    if (!radio) {
+      return;
+    }
+    radio.disabled = !albumHasVideos;
+    if (!albumHasVideos) {
+      radio.checked = radio.value === DEFAULT_MEDIA_FILTER;
+    }
+  });
+  container.style.opacity = albumHasVideos ? "1" : "0.5";
+  container.title = albumHasVideos ? "" : "This album contains no videos";
+}
 
 // Helper function to update the "Exit fullscreen on selection" checkbox state
 function updateExitFullscreenCheckboxState() {
@@ -880,8 +1012,12 @@ export async function updateCurrentImageMarker() {
   if (globalIndex === -1) {
     return;
   } // No current image
-  const currentPoint = points.find((p) => p.index === globalIndex);
+  // Looked up among the *drawn* points: with a media filter active the
+  // current slide may not be on the map, and a gold dot floating over
+  // nothing is worse than no dot at all.
+  const currentPoint = visiblePoints().find((p) => p.index === globalIndex);
   if (!currentPoint) {
+    Plotly.restyle("umapPlot", { x: [[]], y: [[]] }, markerTraceIndex);
     return;
   }
 
@@ -1013,7 +1149,7 @@ async function createUmapThumbnail({ x, y, index, cluster }) {
 
   // Find cluster color and calculate cluster size
   const clusterColor = getClusterColor(cluster);
-  const clusterSize = points.filter((p) => p.cluster === cluster).length;
+  const clusterSize = visiblePoints().filter((p) => p.cluster === cluster).length;
   const sizeStr = cluster === -1 ? "Unclustered" : `Cluster ${cluster} (size=${clusterSize})`;
   // Falls back gracefully when the labels endpoint hasn't populated this
   // cluster (or is unavailable).
@@ -1183,8 +1319,13 @@ function updateUmapColorModeAvailability(searchResults = []) {
 // thumbnail and click target change.
 function getLandmarkImageIndex(cluster, clusterPoints) {
   const labelInfo = getClusterLabelInfo(cluster);
-  if (labelInfo && typeof labelInfo.medoid_index === "number") {
-    return labelInfo.medoid_index;
+  const medoid = labelInfo?.medoid_index;
+  // The medoid comes from the labels endpoint, which computes it over every
+  // member of the cluster — so it can name a point the media filter is
+  // hiding. Only honour it when it is one of the points passed in (which the
+  // caller has already restricted to what's drawn).
+  if (typeof medoid === "number" && clusterPoints.some((p) => p.index === medoid)) {
+    return medoid;
   }
   return getLandmarkForCluster(clusterPoints).index;
 }
@@ -1225,7 +1366,7 @@ function getLargestClustersInView(maxLandmarks = 10) {
 
   // Group points by cluster
   const clusterMap = new Map();
-  points.forEach((p) => {
+  visiblePoints().forEach((p) => {
     if (p.cluster === -1) {
       return;
     }
@@ -1260,6 +1401,27 @@ function getLargestClustersInView(maxLandmarks = 10) {
 let isRenderingLandmarks = false;
 let lastImagesJSON = null;
 let suppressRelayoutEvent = false; // Add this flag
+
+/**
+ * Remove any landmark thumbnails currently on the plot.
+ *
+ * Landmarks are two things: triangle marker traces, and thumbnails in
+ * ``layout.images``. Deleting the traces does not touch the images, so every
+ * path that bails out of drawing landmarks has to come through here or it
+ * leaves the thumbnails behind.
+ *
+ * ``lastImagesJSON`` is reset so the next draw is not mistaken for a no-op.
+ */
+function clearLandmarkImages(plotDiv) {
+  if (lastImagesJSON === null) {
+    return;
+  }
+  suppressRelayoutEvent = true;
+  Plotly.relayout(plotDiv, { images: [] }).then(() => {
+    suppressRelayoutEvent = false;
+    lastImagesJSON = null;
+  });
+}
 
 function updateLandmarkTrace() {
   if (isRenderingLandmarks) {
@@ -1299,19 +1461,19 @@ function updateLandmarkTrace() {
     }
 
     if (!landmarksVisible) {
-      if (lastImagesJSON !== null) {
-        suppressRelayoutEvent = true;
-        Plotly.relayout(plotDiv, { images: [] }).then(() => {
-          suppressRelayoutEvent = false;
-          lastImagesJSON = null;
-        });
-      }
+      clearLandmarkImages(plotDiv);
       return;
     }
 
     // Get clusters in view
     const clusters = getLargestClustersInView(100);
     if (!clusters.length) {
+      // The triangle traces were deleted above, but the thumbnails live in
+      // layout.images and need clearing separately — otherwise they hang over
+      // a region that no longer has any points under it. Reachable whenever
+      // the last cluster in view stops being drawn: most easily by switching
+      // the media filter to one that hides every member of it.
+      clearLandmarkImages(plotDiv);
       return;
     }
 
@@ -1504,7 +1666,13 @@ function proximityClusterOrder(clusterIndices, points, startIndex) {
 
 // Shared function for cluster clicks
 async function handleClusterClick(clickedIndex) {
-  const clickedPoint = points.find((p) => p.index === clickedIndex);
+  // Looked up among the drawn points, not all of them. The walk below is built
+  // over the visible set, so a start point that isn't in it throws on the
+  // first distance calculation — and because the spinner is shown just after
+  // this check, the failure presented as a spinner that never stopped. Bailing
+  // is right rather than defensive: there is nothing sensible to select from a
+  // point the user cannot see.
+  const clickedPoint = visiblePoints().find((p) => p.index === clickedIndex);
   if (!clickedPoint) {
     return;
   }
@@ -1517,14 +1685,18 @@ async function handleClusterClick(clickedIndex) {
 
   const clickedCluster = clickedPoint.cluster;
   const clusterColor = getClusterColor(clickedCluster);
-  let clusterIndices = points.filter((p) => p.cluster === clickedCluster).map((p) => p.index);
+  // Only the drawn members. Selecting a cluster on a videos-only map must not
+  // put images into the search results — the swiper would open one, and the
+  // gold current-image marker would land on a point that isn't rendered.
+  const drawn = visiblePoints();
+  let clusterIndices = drawn.filter((p) => p.cluster === clickedCluster).map((p) => p.index);
 
   // Remove clickedFilename from the list
   clusterIndices = clusterIndices.filter((fn) => fn !== clickedIndex);
 
   // --- Greedy random walk order from clicked point ---
   const sort_algorithm = clusterIndices.length > randomWalkMaxSize ? proximityClusterOrder : randomWalkClusterOrder;
-  const sortedClusterIndices = sort_algorithm([clickedIndex, ...clusterIndices], points, clickedIndex);
+  const sortedClusterIndices = sort_algorithm([clickedIndex, ...clusterIndices], drawn, clickedIndex);
 
   const clusterMembers = sortedClusterIndices.map((index) => ({
     index: index,
@@ -1714,7 +1886,7 @@ function setUmapWindowSize(sizeKey) {
       contentDiv.style.display = "block";
     }
     // controlsHeight: space reserved below the plot for UMAP controls
-    const controlsHeight = state.umapControlsVisible ? 110 : 40;
+    const controlsHeight = reservedControlsHeight(50, 40);
     // Measure how much vertical space the bottom Control/Search panels occupy.
     // The window covers the full viewport; its dark background fills the dead zone behind the panels.
     const bottomPanel = document.getElementById("controlPanel");
@@ -1754,7 +1926,7 @@ function setUmapWindowSize(sizeKey) {
     }
     const { width, height } = UMAP_SIZES[sizeKey];
     const bottomPadding = 8; // add breathing room under plot
-    const extraWindowHeight = state.umapControlsVisible ? 130 : 60;
+    const extraWindowHeight = reservedControlsHeight(70, 60);
     const desiredWindowHeight = height + extraWindowHeight + bottomPadding;
     win.style.width = width + 60 + "px";
     win.style.height = Math.min(desiredWindowHeight, window.innerHeight - 20) + "px"; // window taller, capped at viewport

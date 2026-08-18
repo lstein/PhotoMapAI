@@ -78,6 +78,19 @@ With "Show hover thumbnails" turned on and "Show landmarks" turned off:
 
 <img src="../../img/photomap_hover_thumbnail.png" width="480" alt="Thumbnail controls" class="img-hover-zoom">
 
+## Showing images, videos, or both
+
+If the album contains videos as well as photos, the **Show** radio buttons choose
+which of them the map draws: **Both**, **Images only**, or **Videos only**.
+Videos are placed by the same semantic embedding as photos — computed from a
+still captured shortly after the video starts — so a clip lands next to the
+pictures it looks like.
+
+Filtering changes only what the map displays. Cluster identity is unaffected,
+so a cluster keeps its colour and its members whichever setting you pick;
+selecting a cluster while a filter is active loads only the media types
+currently shown. The controls are disabled for albums that contain no videos.
+
 By default, landmarks will be turned on and hover images turned off when you enter the map's fullscreen mode. The opposite happens when  you leave fullscreen mode and enter windowed mode. See below for more information on window modes and sizes.
 
 ---

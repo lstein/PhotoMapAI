@@ -2,7 +2,12 @@
  * @jest-environment jsdom
  */
 
-import { findLandmarkClusterAt } from "../../photomap/frontend/static/javascript/umap-helpers.js";
+import {
+  MEDIA_FILTERS,
+  filterPointsByMediaType,
+  findLandmarkClusterAt,
+  hasVideoPoints,
+} from "../../photomap/frontend/static/javascript/umap-helpers.js";
 
 describe("findLandmarkClusterAt", () => {
   // Three landmarks at distinct positions, deliberately covering cluster ids
@@ -67,5 +72,71 @@ describe("findLandmarkClusterAt", () => {
   it("returns null when customdata is missing for a matched landmark", () => {
     const result = findLandmarkClusterAt({ x: 10, y: 10 }, landmarkXs, landmarkYs, [], halfSizeX, halfSizeY);
     expect(result).toBeNull();
+  });
+});
+
+describe("filterPointsByMediaType", () => {
+  const IMAGE = { index: 0, media: "image" };
+  const VIDEO = { index: 1, media: "video" };
+  const LEGACY = { index: 2 }; // no media field
+  const points = [IMAGE, VIDEO, LEGACY];
+
+  it("returns everything for 'both'", () => {
+    expect(filterPointsByMediaType(points, "both")).toEqual(points);
+  });
+
+  it("keeps only images for 'images'", () => {
+    expect(filterPointsByMediaType(points, "images")).toEqual([IMAGE, LEGACY]);
+  });
+
+  it("keeps only videos for 'videos'", () => {
+    expect(filterPointsByMediaType(points, "videos")).toEqual([VIDEO]);
+  });
+
+  it("treats a point with no media field as an image", () => {
+    // /umap_data only started reporting `media` when video support landed; a
+    // response cached from an older build must behave exactly as before.
+    expect(filterPointsByMediaType([LEGACY], "images")).toEqual([LEGACY]);
+    expect(filterPointsByMediaType([LEGACY], "videos")).toEqual([]);
+  });
+
+  it("shows everything for an unrecognized filter", () => {
+    // The safe failure mode for a filter — e.g. a value persisted by a newer
+    // build than the one now running.
+    expect(filterPointsByMediaType(points, "sideways")).toEqual(points);
+    expect(filterPointsByMediaType(points, undefined)).toEqual(points);
+  });
+
+  it("returns an empty array for a missing point list", () => {
+    expect(filterPointsByMediaType(undefined, "both")).toEqual([]);
+    expect(filterPointsByMediaType(null, "videos")).toEqual([]);
+    expect(filterPointsByMediaType([], "images")).toEqual([]);
+  });
+
+  it("does not mutate the input", () => {
+    const original = [...points];
+    filterPointsByMediaType(points, "videos");
+    expect(points).toEqual(original);
+  });
+
+  it("is one of the documented filter values", () => {
+    expect(MEDIA_FILTERS).toEqual(["both", "images", "videos"]);
+  });
+});
+
+describe("hasVideoPoints", () => {
+  it("detects a video among the points", () => {
+    expect(hasVideoPoints([{ media: "image" }, { media: "video" }])).toBe(true);
+  });
+
+  it("reports false for an all-image album", () => {
+    // Drives disabling the filter: a "videos only" radio on an all-photo
+    // album can only ever produce a blank map.
+    expect(hasVideoPoints([{ media: "image" }, {}])).toBe(false);
+  });
+
+  it("reports false for empty or missing input", () => {
+    expect(hasVideoPoints([])).toBe(false);
+    expect(hasVideoPoints(undefined)).toBe(false);
   });
 });
