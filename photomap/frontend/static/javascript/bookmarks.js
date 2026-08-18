@@ -869,7 +869,10 @@ class BookmarkManager {
           name: albumConfig.name,
           image_paths: updatedPaths,
           index: albumConfig.index,
-          umap_eps: albumConfig.umap_eps || 0.07,
+          // `?? null` rather than `|| 0.07`: an album whose Cluster Strength
+          // has never been set carries null, and adding a folder to it must
+          // not quietly pin it to a number.
+          umap_eps: albumConfig.umap_eps ?? null,
           description: albumConfig.description || "",
         },
       });

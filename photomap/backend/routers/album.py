@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import shutil
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from ..cluster_eps import FALLBACK_CLUSTER_EPS, cached_adaptive_cluster_eps
 from ..config import Album, create_album, default_board_index_path, get_config_manager
 from ..embeddings import Embeddings
 from ..encoders import default_encoder_spec
@@ -16,7 +18,11 @@ from ..video_cache import VideoFrameCache
 
 class UmapEpsSetRequest(BaseModel):
     album: str
-    eps: float
+    # None clears the album's stored Cluster Strength, putting it back to a
+    # value derived from the album's own coordinates. Without this the UI
+    # would be a one-way door: once a number is typed there is no way back
+    # to the derived value short of editing the config file.
+    eps: float | None = None
 
 
 class UmapEpsGetRequest(BaseModel):
@@ -108,6 +114,21 @@ def get_embeddings_for_album(album_key: str) -> Embeddings:
         min_image_bytes=album_config.min_image_bytes,
         album_key=album_key,
     )
+
+
+def album_umap_coords(embeddings: Embeddings):
+    """An album's cached UMAP coordinates, or ``None`` if it has no index yet.
+
+    Every eps-resolving endpoint needs these, and every one of them can be
+    called on an album that is configured but not yet indexed — the semantic
+    map is opened on exactly that album while its first index runs. Letting
+    the ``FileNotFoundError`` out turns that into a 500 on a screen the user
+    is watching indexing progress from.
+    """
+    try:
+        return embeddings.umap_embeddings
+    except FileNotFoundError:
+        return None
 
 
 def validate_image_access(album_config, image_path: Path) -> bool:
@@ -320,7 +341,11 @@ async def update_album(album_data: dict) -> JSONResponse:
             name=album_data["name"],
             image_paths=album_data.get("image_paths"),
             index=index,
-            umap_eps=album_data.get("umap_eps", 0.07),
+            # Omitted means "leave it derived" — see Album.umap_eps. The old
+            # 0.07 fallback materialized a number on every edit, so an album
+            # that had never had its Cluster Strength touched acquired one
+            # the moment anything else about it was saved.
+            umap_eps=album_data.get("umap_eps"),
             description=album_data.get("description", ""),
             encoder_spec=album_data.get("encoder_spec"),
             min_search_score=album_data.get("min_search_score"),
@@ -420,6 +445,11 @@ async def set_locationiq_key(request: LocationIQSetRequest):
     "/set_umap_eps/", tags=["Albums"], dependencies=[Depends(require_no_lock)]
 )
 async def set_umap_eps(request: UmapEpsSetRequest):
+    """Store an album's Cluster Strength, or clear it back to derived.
+
+    ``eps: null`` is the clear: the album stops carrying a number and
+    ``/get_umap_eps`` starts deriving one again.
+    """
     album_config = config_manager.get_album(request.album)
     if not album_config:
         raise HTTPException(status_code=404, detail="Album not found")
@@ -430,10 +460,39 @@ async def set_umap_eps(request: UmapEpsSetRequest):
 
 @album_router.post("/get_umap_eps/", tags=["Albums"])
 async def get_umap_eps(request: UmapEpsGetRequest):
+    """The Cluster Strength value the semantic map should show for an album.
+
+    Returns a number either way, plus ``auto`` saying where it came from: a
+    stored ``umap_eps`` (the user has tuned this album) or one derived from
+    the album's UMAP coordinates. The frontend fills its spinner from this
+    and then passes the number explicitly to ``/umap_data`` and
+    ``/cluster_labels``, so all three agree on the clustering without either
+    of those endpoints having to resolve it a second time.
+
+    Deriving costs a k-distance pass plus a handful of DBSCAN fits — seconds
+    on a six-figure album — so it runs in a thread and is memoized on disk
+    against the coordinates it was computed from.
+    """
     check_album_lock(request.album)  # May raise a 403 exception
     album_config = config_manager.get_album(request.album)
     if not album_config:
         raise HTTPException(status_code=404, detail="Album not found")
-    return {"success": True, "eps": album_config.umap_eps}
+
+    if album_config.umap_eps is not None:
+        return {"success": True, "eps": album_config.umap_eps, "auto": False}
+
+    coords = album_umap_coords(get_embeddings_for_album(request.album))
+    if coords is None or coords.shape[0] == 0:
+        # Not indexed yet: nothing to derive from, and the map will be empty
+        # regardless. The historical default keeps the spinner showing a
+        # usable number rather than blank.
+        return {"success": True, "eps": FALLBACK_CLUSTER_EPS, "auto": True}
+
+    eps = await asyncio.to_thread(
+        cached_adaptive_cluster_eps,
+        coords,
+        Path(album_config.index).parent,
+    )
+    return {"success": True, "eps": eps, "auto": True}
 
 

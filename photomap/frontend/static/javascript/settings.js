@@ -97,7 +97,9 @@ function populateAlbumOptions(albums) {
     option.value = album.key;
     option.textContent = album.name;
     option.dataset.embeddingsFile = album.embeddings_file; // Store embeddings path
-    option.dataset.umapEps = album.umap_eps || 0.07; // Store EPS
+    // Empty when the album has no stored Cluster Strength — the semantic map
+    // asks the server for a derived one rather than assuming a number here.
+    option.dataset.umapEps = album.umap_eps ?? "";
     elements.albumSelect.appendChild(option);
   });
 }

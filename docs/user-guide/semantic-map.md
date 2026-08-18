@@ -12,11 +12,13 @@ In the second phase, PhotoMapAI applies an algorithm known as DBSCAN [Density-Ba
 
 ### Tuning Clusters
 
-The overall topology of the semantic map is fixed during the indexing process, but the clustering phase can be adjusted on the fly. At the bottom of the semantic map window is a field labeled "Cluster Strength," and contains a floating point value ranging from 0.0 to 1.0. This parameter (technically called epsilon, or "eps") controls the clustering size. Higher values of eps will create a smaller number of large clusters, while lower values will create a larger number of small clusters.
+The overall topology of the semantic map is fixed during the indexing process, but the clustering phase can be adjusted on the fly. At the bottom of the semantic map window is a field labeled "Cluster Strength," containing a floating point value. This parameter (technically called epsilon, or "eps") controls the clustering size. Higher values of eps will create a smaller number of large clusters, while lower values will create a larger number of small clusters.
 
 <img src="../../img/photomap_semantic_map_eps.png" width="480" class="img-hover-zoom">
 
-The default value of eps is 0.07, which empirically seems to work well for collections of a few tens of thousands of photographs. For smaller collections, you may wish to increase eps to 0.1 through 0.5. If the eps is too low, you may also see a lot of unclustered images, which are represented as faint gray dots. If you initially don't see much when you pull up the semantic map, gradually increase the "Cluster Strength" field until the display is satisfactory.
+Until you set a value yourself, PhotoMapAI chooses one for the album and marks it **auto** beside the field. There is no single number that suits every collection: the map's coordinates have no fixed scale, and the same eps that carves a library of tens of thousands of photos into useful clusters can leave a few hundred photos entirely unclustered. The chosen value is derived from how tightly that album's own images sit together, taking the most generous clustering that does not merge the map into one giant cluster.
+
+Typing in the field replaces the derived value with yours, the **auto** marker disappears, and the album keeps your number from then on. If the eps is too low, you will see a lot of unclustered images, represented as faint gray dots; if it is too high, the map collapses toward a single color. Adjust the "Cluster Strength" field until the display is satisfactory — and clear the field back to empty if you would rather have the derived value again.
 
 ### Interpreting Clusters
 
@@ -105,4 +107,4 @@ When a cluster is selected, the image search results will be sorted according to
 
 There will often be images that can't be assigned to any cluster. These appear as light gray dots in scatterplot. Click on one of these to highlight the unclustered images and browse through them.
 
-You can decrease the number of unclustered images by increasing EPS. This will cluster the images more aggressively and also merge existing clusters. Experiment until you find the setting that works best for you.
+You can decrease the number of unclustered images by increasing EPS. This will cluster the images more aggressively and also merge existing clusters. Experiment until you find the setting that works best for you — the derived starting point aims for a balance between the two, so both raising and lowering it are useful.

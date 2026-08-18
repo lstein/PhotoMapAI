@@ -1,5 +1,6 @@
 # UMAP Routes
 
+import asyncio
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sklearn.cluster import DBSCAN
 
+from ..cluster_eps import resolve_album_cluster_eps
 from ..config import get_config_manager
 from ..media_types import media_type_for
 from .album import AlbumDep, EmbeddingsDep
@@ -29,24 +31,33 @@ async def get_umap_data(
     Args:
         album_key: The key of the album to retrieve data for.
         cluster_eps: Epsilon parameter for DBSCAN clustering. Omit (or send
-            ``None``) to use the album's persisted ``umap_eps`` from YAML.
+            ``None``) to use the album's persisted ``umap_eps``, or — when
+            that has never been set — a value derived from the album's own
+            coordinates.
         cluster_min_samples: Min samples parameter for DBSCAN clustering.
 
     Returns:
         JSONResponse containing a list of points with x, y, index, and cluster ID.
     """
-    # When the caller doesn't override eps, fall back to the album's
-    # persisted ``umap_eps``. This used to be dead code: the parameter
-    # defaulted to ``0.07``, so ``cluster_eps is not None`` was always
-    # true and ``album_config.umap_eps`` was silently ignored. The
-    # corresponding parameter on ``/cluster_labels`` is kept in lockstep
-    # so the two endpoints resolve identical eps values for the same
-    # request — otherwise the cluster IDs they return would disagree
-    # and the hover-label feature would break.
-    cluster_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
-
     # Load cached UMAP embeddings (will compute/cache if missing)
     umap_embeddings = embeddings.umap_embeddings
+
+    # Resolve eps against the coordinates: query parameter, else the album's
+    # persisted value, else derived. ``/cluster_labels`` resolves through the
+    # same helper for the same request — if the two disagree, the cluster ids
+    # they return refer to different clusterings and the hover labels attach
+    # to the wrong blobs.
+    # Threaded: deriving an eps runs several DBSCAN fits, seconds of CPU on a
+    # large album, and this endpoint is fetched while the map is opening.
+    cluster_eps = await asyncio.to_thread(
+        resolve_album_cluster_eps,
+        umap_embeddings,
+        Path(album_config.index).parent,
+        cluster_eps,
+        album_config.umap_eps,
+        cluster_min_samples,
+    )
+
     embeddings = embeddings.open_cached_embeddings(embeddings.embeddings_path)
     filenames = embeddings["filenames"]
     filename_map = embeddings["filename_map"]

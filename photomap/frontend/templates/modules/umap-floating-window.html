@@ -183,16 +183,24 @@
           <div id="umapEpsContainer" style="display: none; padding: 0px">
             <button id="umapClusterInfoBtn" type="button" class="umap-info-btn" title="Cluster information">i</button>
             <label for="umapEpsSpinner">Cluster Strength</label>
+            <!-- max was 1.0, but a derived strength for a small album can
+                 legitimately exceed it: UMAP spreads few points over a wide
+                 area, so the distances that separate clusters are larger.
+                 A lower ceiling would display a number the map is not
+                 actually clustering with. -->
             <input
               type="number"
               id="umapEpsSpinner"
               min="0.01"
-              max="1.0"
+              max="3.0"
               step="0.01"
               value="0.1"
               autocomplete="off"
               style="width: 60px"
             />
+            <!-- Shown while the strength is derived rather than chosen;
+                 umap.js clears it as soon as the user edits the spinner. -->
+            <span id="umapEpsAutoBadge" class="umap-eps-auto-badge" hidden>auto</span>
           </div>
           <div id="umapClickBehaviorContainer" style="display: flex; flex-direction: row; gap: 12px;">
             <label style="display: flex; align-items: center; gap: 6px;">

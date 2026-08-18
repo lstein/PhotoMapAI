@@ -10,12 +10,14 @@ exactly so cluster IDs returned here match cluster IDs returned by
 """
 
 import asyncio
+from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from ..cluster_eps import resolve_album_cluster_eps
 from ..cluster_labels import compute_image_label, get_or_build_cluster_labels
-from .album import AlbumDep, EmbeddingsDep
+from .album import AlbumDep, EmbeddingsDep, album_umap_coords
 
 cluster_labels_router = APIRouter()
 
@@ -34,7 +36,8 @@ async def get_cluster_labels(
     Args:
         album_key: Album to label.
         cluster_eps: DBSCAN epsilon. Omit (or send ``None``) to use the
-            album's persisted ``umap_eps`` — the same resolution
+            album's persisted ``umap_eps``, or a value derived from its
+            coordinates when that has never been set — the same resolution
             ``/umap_data`` uses, so cluster IDs align between the two
             endpoints.
         cluster_min_samples: DBSCAN min_samples. Same constraint.
@@ -45,11 +48,21 @@ async def get_cluster_labels(
         `{"labels": {"<cluster_id>": {"label": str, "alternates": [str, ...],
         "score": float}, ...}}`. Cluster `-1` (DBSCAN noise) is omitted.
     """
-    # Mirror ``routers/umap.py``'s eps fallback so ``/cluster_labels`` and
-    # ``/umap_data`` resolve to the same value for the same request.
-    # If they disagree, the cluster IDs returned by the two endpoints
-    # diverge and the hover-label feature breaks.
-    cluster_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
+    # Resolve through the same helper ``routers/umap.py`` uses, against the
+    # same coordinates, so ``/cluster_labels`` and ``/umap_data`` agree for
+    # a given request. If they disagree the cluster IDs returned by the two
+    # endpoints diverge and the hover-label feature breaks.
+    # In a thread for the same reason the label build below is: deriving an
+    # eps runs several DBSCAN fits, which is seconds of CPU on a large album
+    # and would otherwise hold the event loop.
+    cluster_eps = await asyncio.to_thread(
+        resolve_album_cluster_eps,
+        album_umap_coords(embeddings),
+        Path(album_config.index).parent,
+        cluster_eps,
+        album_config.umap_eps,
+        cluster_min_samples,
+    )
     labels = await asyncio.to_thread(
         get_or_build_cluster_labels,
         embeddings,

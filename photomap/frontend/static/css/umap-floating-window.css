@@ -248,6 +248,26 @@
   outline: none;
 }
 
+/* Marks a Cluster Strength the map derived rather than one the user chose.
+   Deliberately quiet — it explains the number in the spinner, it is not a
+   control. `hidden` is honored explicitly because the flex display on the
+   surrounding row would otherwise override it. */
+.umap-eps-auto-badge {
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid #4a9eff;
+  border-radius: 8px;
+  color: #80c0ff;
+  font-size: 0.7em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.umap-eps-auto-badge[hidden] {
+  display: none;
+}
+
 #umapClickBehaviorContainer,
 #umapMediaFilterContainer {
   font-size: 0.85em;

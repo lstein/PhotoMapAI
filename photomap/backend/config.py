@@ -85,7 +85,17 @@ class Album(BaseModel):
             "id 'none' is InvokeAI's Uncategorized bucket."
         ),
     )
-    umap_eps: float = Field(default=0.2, description="UMAP epsilon parameter")
+    umap_eps: float | None = Field(
+        default=None,
+        description=(
+            "DBSCAN epsilon for the semantic map's clustering. None means "
+            "'not chosen': the value is derived from the album's own UMAP "
+            "coordinates (see backend/cluster_eps.py), which is what keeps "
+            "small albums from clustering into nothing. Adjusting Cluster "
+            "Strength in the UI stores a number here and the derived value "
+            "is no longer consulted."
+        ),
+    )
     description: str = Field(default="", description="Album description")
     encoder_spec: str = Field(
         # Resolved per-host: OpenCLIP ViT-L-14 on CUDA/macOS, lighter OpenAI CLIP
@@ -262,7 +272,11 @@ class Album(BaseModel):
             source_type=data.get("source_type", "directory"),
             image_paths=data.get("image_paths", []),
             index=data["index"],
-            umap_eps=data.get("umap_eps", 0.07),
+            # Absent from the YAML means nobody chose one, which is exactly
+            # what None asks the map to derive. The old 0.07 fallback here
+            # was a number for *every* album regardless of size, which is
+            # what left small albums with no clusters at all.
+            umap_eps=data.get("umap_eps"),
             description=data.get("description", ""),
             # Legacy YAML albums predate the encoder_spec field; their indexes
             # were built with the original CLIP, so fall back to that to stay
@@ -696,7 +710,7 @@ def create_album(
     name: str,
     image_paths: list[str] | None,
     index: str | None,
-    umap_eps: float,
+    umap_eps: float | None = None,
     description: str = "",
     encoder_spec: str | None = None,
     min_search_score: float | None = None,
