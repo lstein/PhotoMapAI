@@ -21,6 +21,25 @@ from .util import atomic_write_text
 logger = logging.getLogger(__name__)
 
 
+# The DBSCAN epsilon the semantic map falls back to when an album has not
+# chosen one. Named because three places used to spell it out and two of them
+# disagreed (the field default said 0.2, the YAML reader said 0.07).
+DEFAULT_UMAP_EPS = 0.07
+
+
+def resolve_umap_eps(eps: float | None) -> float:
+    """``eps`` if an album actually chose one, else :data:`DEFAULT_UMAP_EPS`.
+
+    DBSCAN requires a positive epsilon and raises on anything else, so a
+    stored zero or negative — which older builds accepted through
+    ``/set_umap_eps/`` — is treated as "not chosen" rather than passed on to
+    fail the request. Every consumer resolves through here: the map and the
+    label endpoints must agree, or their cluster ids describe different
+    clusterings and the hover labels attach to the wrong blobs.
+    """
+    return eps if eps is not None and eps > 0 else DEFAULT_UMAP_EPS
+
+
 def default_board_index_path(album_key: str) -> Path:
     """Index location for albums that have no image directory of their own.
 
@@ -85,7 +104,15 @@ class Album(BaseModel):
             "id 'none' is InvokeAI's Uncategorized bucket."
         ),
     )
-    umap_eps: float = Field(default=0.2, description="UMAP epsilon parameter")
+    umap_eps: float | None = Field(
+        default=None,
+        description=(
+            "DBSCAN epsilon for the semantic map's clustering. None means "
+            "'not chosen' — the map falls back to DEFAULT_UMAP_EPS — and is "
+            "how a config written by a newer PhotoMapAI records an album "
+            "whose Cluster Strength is left to the app."
+        ),
+    )
     description: str = Field(default="", description="Album description")
     encoder_spec: str = Field(
         # Resolved per-host: OpenCLIP ViT-L-14 on CUDA/macOS, lighter OpenAI CLIP
@@ -207,7 +234,6 @@ class Album(BaseModel):
             "source_type": self.source_type,
             "image_paths": self.image_paths,
             "index": self.index,
-            "umap_eps": self.umap_eps,
             "description": self.description,
             "encoder_spec": self.encoder_spec,
             "min_search_score": self.min_search_score,
@@ -216,6 +242,12 @@ class Album(BaseModel):
             "min_image_dimension": self.min_image_dimension,
             "min_image_bytes": self.min_image_bytes,
         }
+        # An unset Cluster Strength is written as an *absent* key rather than
+        # an explicit null: both mean the same thing here, but a null is what
+        # older PhotoMapAI versions choke on, and this file is shared with
+        # them whenever a user moves between releases.
+        if self.umap_eps is not None:
+            data["umap_eps"] = self.umap_eps
         # Keep directory-album YAML free of irrelevant InvokeAI keys.
         if self.source_type == "invokeai_board":
             data["invokeai_url"] = self.invokeai_url
@@ -235,7 +267,11 @@ class Album(BaseModel):
             source_type=data.get("source_type", "directory"),
             image_paths=data.get("image_paths", []),
             index=data["index"],
-            umap_eps=data.get("umap_eps", 0.07),
+            # Absent — or an explicit null, which a newer PhotoMapAI wrote
+            # for a while — means nobody chose one. Refusing to load the whole
+            # config over that field left users unable to start the app at
+            # all, which no single album setting should ever be able to do.
+            umap_eps=data.get("umap_eps"),
             description=data.get("description", ""),
             # Legacy YAML albums predate the encoder_spec field; their indexes
             # were built with the original CLIP, so fall back to that to stay
@@ -669,7 +705,7 @@ def create_album(
     name: str,
     image_paths: list[str] | None,
     index: str | None,
-    umap_eps: float,
+    umap_eps: float | None = None,
     description: str = "",
     encoder_spec: str | None = None,
     min_search_score: float | None = None,

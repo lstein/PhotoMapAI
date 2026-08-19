@@ -15,6 +15,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from ..cluster_labels import compute_image_label, get_or_build_cluster_labels
+from ..config import resolve_umap_eps
 from .album import AlbumDep, EmbeddingsDep
 
 cluster_labels_router = APIRouter()
@@ -49,7 +50,9 @@ async def get_cluster_labels(
     # ``/umap_data`` resolve to the same value for the same request.
     # If they disagree, the cluster IDs returned by the two endpoints
     # diverge and the hover-label feature breaks.
-    cluster_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
+    cluster_eps = (
+        cluster_eps if cluster_eps is not None else resolve_umap_eps(album_config.umap_eps)
+    )
     labels = await asyncio.to_thread(
         get_or_build_cluster_labels,
         embeddings,

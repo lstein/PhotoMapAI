@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sklearn.cluster import DBSCAN
 
-from ..config import get_config_manager
+from ..config import get_config_manager, resolve_umap_eps
 from ..media_types import media_type_for
 from .album import AlbumDep, EmbeddingsDep
 
@@ -43,7 +43,11 @@ async def get_umap_data(
     # so the two endpoints resolve identical eps values for the same
     # request — otherwise the cluster IDs they return would disagree
     # and the hover-label feature would break.
-    cluster_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
+    # ``album_config.umap_eps`` is None for an album whose Cluster Strength
+    # was never set, so the album's own fallback has a fallback.
+    cluster_eps = (
+        cluster_eps if cluster_eps is not None else resolve_umap_eps(album_config.umap_eps)
+    )
 
     # Load cached UMAP embeddings (will compute/cache if missing)
     umap_embeddings = embeddings.umap_embeddings

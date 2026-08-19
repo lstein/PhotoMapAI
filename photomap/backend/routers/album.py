@@ -6,9 +6,15 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from ..config import Album, create_album, default_board_index_path, get_config_manager
+from ..config import (
+    Album,
+    create_album,
+    default_board_index_path,
+    get_config_manager,
+    resolve_umap_eps,
+)
 from ..embeddings import Embeddings
 from ..encoders import default_encoder_spec
 from ..video_cache import VideoFrameCache
@@ -16,7 +22,10 @@ from ..video_cache import VideoFrameCache
 
 class UmapEpsSetRequest(BaseModel):
     album: str
-    eps: float
+    # DBSCAN raises on a non-positive epsilon, so storing one only defers the
+    # failure to the next time the map is opened — and the stored value is
+    # then invisible, since every reader resolves it away.
+    eps: float = Field(gt=0)
 
 
 class UmapEpsGetRequest(BaseModel):
@@ -320,7 +329,7 @@ async def update_album(album_data: dict) -> JSONResponse:
             name=album_data["name"],
             image_paths=album_data.get("image_paths"),
             index=index,
-            umap_eps=album_data.get("umap_eps", 0.07),
+            umap_eps=album_data.get("umap_eps"),
             description=album_data.get("description", ""),
             encoder_spec=album_data.get("encoder_spec"),
             min_search_score=album_data.get("min_search_score"),
@@ -434,6 +443,8 @@ async def get_umap_eps(request: UmapEpsGetRequest):
     album_config = config_manager.get_album(request.album)
     if not album_config:
         raise HTTPException(status_code=404, detail="Album not found")
-    return {"success": True, "eps": album_config.umap_eps}
+    # An album that never set one reports the value the map will actually
+    # use, so the slider opens where the clustering really is.
+    return {"success": True, "eps": resolve_umap_eps(album_config.umap_eps)}
 
 
