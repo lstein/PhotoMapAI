@@ -8,7 +8,9 @@ import logging
 import os
 import shutil
 from pathlib import Path
+from typing import NamedTuple
 
+import numpy as np
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -296,6 +298,34 @@ async def index_metadata(album_config: AlbumDep) -> EmbeddingsIndexMetadata:
     )
 
 
+async def _delete_board_media(album_config, media_path: Path) -> None:
+    """Delete one file of an InvokeAI-board album through InvokeAI's API.
+
+    Images and videos are distinct resources over there, with their own
+    delete endpoints, and a mis-dispatch fails *quietly*: InvokeAI's
+    ``DELETE /images/i/{name}`` wraps its lookup in a bare ``except`` and
+    answers 200 with an empty ``deleted_images`` for a name it does not know,
+    so handing it a video name would read as success. The row would vanish
+    from the local index while the video stayed on the board, then reappear
+    on the next re-index. Dispatch on the suffix so each name reaches its own
+    endpoint.
+    """
+    if is_video(media_path):
+        await invokeai_client.delete_video(
+            album_config.invokeai_url,
+            media_path.name,
+            album_config.invokeai_username,
+            album_config.invokeai_password,
+        )
+    else:
+        await invokeai_client.delete_image(
+            album_config.invokeai_url,
+            media_path.name,
+            album_config.invokeai_username,
+            album_config.invokeai_password,
+        )
+
+
 def _remove_image_file(image_path: Path, move_to_trash: bool) -> None:
     """Trash or unlink ``image_path``, translating OS failures into HTTP
     errors whose ``detail`` tells the user what to fix.
@@ -376,12 +406,11 @@ async def delete_image(
             # would leave a dangling row in InvokeAI's database, so route
             # the deletion through its API (which also removes the file).
             # ``move_to_trash`` has no meaning here and is ignored.
-            await invokeai_client.delete_image(
-                album_config.invokeai_url,
-                image_path.name,
-                album_config.invokeai_username,
-                album_config.invokeai_password,
-            )
+            await _delete_board_media(album_config, image_path)
+            # Same reason as the non-board branch below: a board album can
+            # hold videos, and their extracted stills outlive the row unless
+            # they are discarded here.
+            _discard_cached_frame(album_key, image_path)
             embeddings.remove_image_from_embeddings(index)
             return JSONResponse(
                 content={
@@ -465,12 +494,7 @@ async def delete_images(
                     # database, so route each deletion through its API
                     # (which also removes the file). ``move_to_trash`` has
                     # no meaning here and is ignored.
-                    await invokeai_client.delete_image(
-                        album_config.invokeai_url,
-                        image_path.name,
-                        album_config.invokeai_username,
-                        album_config.invokeai_password,
-                    )
+                    await _delete_board_media(album_config, image_path)
                 else:
                     if not image_path.exists() or not image_path.is_file():
                         errors.append(f"Index {index}: File not found")
@@ -687,47 +711,110 @@ async def copy_images(
         raise HTTPException(status_code=500, detail=f"Failed to copy images: {str(e)}") from e
 
 
-async def _resolve_board_album_files(album_config) -> tuple[list[Path], int]:
-    """Resolve an InvokeAI-board album's images to local file paths.
+class BoardAlbumFiles(NamedTuple):
+    """What :func:`_resolve_board_album_files` found for a board album."""
 
-    Fetches the selected boards' image names from the InvokeAI API and maps
-    them to ``<invokeai_root>/outputs/images/<name>``. Names the API lists
-    but that don't exist locally are skipped with a warning; if *none* of
-    them exist the InvokeAI root is almost certainly wrong, which deserves
-    a pointed error instead of a generic "no images found".
+    paths: list[Path]
+    missing: int
+    video_api_available: bool
 
-    Returns the existing files plus the count of listed-but-missing ones, so
-    the caller can surface that discrepancy to the user (the InvokeAI gallery
-    will show a higher total than the album indexes).
+
+async def _resolve_board_album_files(album_config) -> BoardAlbumFiles:
+    """Resolve an InvokeAI-board album's images and videos to local paths.
+
+    Fetches the selected boards' image names *and* video names from the
+    InvokeAI API and maps them to ``<invokeai_root>/outputs/images/<name>``
+    and ``<invokeai_root>/outputs/videos/<name>`` respectively — the two are
+    separate resources on the InvokeAI side, listed by separate endpoints and
+    stored in separate directories, so both have to be asked for by name.
+    Names the API lists but that don't exist locally are skipped with a
+    warning; if *none* of them exist the InvokeAI root is almost certainly
+    wrong, which deserves a pointed error instead of a generic "no images
+    found". The error names the directory that actually came up empty, since
+    a board holding only videos would otherwise blame ``outputs`` as a whole.
+
+    Returns the existing files, the count of listed-but-missing ones (so the
+    caller can surface that discrepancy — the InvokeAI gallery will show a
+    higher total than the album indexes), and whether the video listing could
+    be obtained at all. That last flag is not cosmetic: an index update drops
+    rows for every file the resolver did not return, so a video listing that
+    failed rather than came back empty would silently prune videos that are
+    still on the board.
     """
-    names = await invokeai_client.fetch_board_image_names(
+    outputs = Path(album_config.invokeai_root).expanduser() / "outputs"
+    image_names = await invokeai_client.fetch_board_image_names(
         album_config.invokeai_url,
         album_config.invokeai_board_ids,
         album_config.invokeai_username,
         album_config.invokeai_password,
     )
-    images_dir = Path(album_config.invokeai_root).expanduser() / "outputs" / "images"
-    # Board albums stay image-only for now. Newer InvokeAI versions can hold
-    # video assets, but deletion for board albums routes through
-    # invokeai_client.delete_image, which has not been verified against them —
-    # indexing a video we could not then delete would be worse than skipping
-    # it. Directory albums are unaffected.
-    paths = [images_dir / name for name in names if not is_video(Path(name))]
+    # ``api_available`` is False against an InvokeAI with no video API, so a
+    # board album on an older backend keeps indexing exactly as it did before
+    # — the caller only has to say so when it costs the album something.
+    video_names, video_api_available = await invokeai_client.fetch_board_video_names(
+        album_config.invokeai_url,
+        album_config.invokeai_board_ids,
+        album_config.invokeai_username,
+        album_config.invokeai_password,
+    )
+
+    image_paths = [outputs / "images" / name for name in image_names]
+    video_paths = [outputs / "videos" / name for name in video_names]
+    paths = image_paths + video_paths
     existing = [p for p in paths if p.is_file()]
     missing = len(paths) - len(existing)
     if missing and not existing:
+        if not video_paths:
+            what, where = f"{len(paths)} board image(s)", outputs / "images"
+        elif not image_paths:
+            what, where = f"{len(paths)} board video(s)", outputs / "videos"
+        else:
+            what, where = f"{len(paths)} board image(s) and video(s)", outputs
         raise HTTPException(
             status_code=502,
             detail=(
-                f"None of the {len(paths)} board images were found under "
-                f"{images_dir} — check the InvokeAI root directory."
+                f"None of the {what} listed by InvokeAI were found under "
+                f"{where} — check the InvokeAI root directory."
             ),
         )
     if missing:
         logger.warning(
-            f"{missing} of {len(paths)} board images not found under {images_dir}; skipping them."
+            f"{missing} of {len(paths)} board files not found under {outputs}; skipping them."
         )
-    return existing, missing
+    return BoardAlbumFiles(existing, missing, video_api_available)
+
+
+def _indexed_videos_dropped(index_path: Path, listed: list[Path]) -> int:
+    """How many indexed video rows are absent from ``listed``.
+
+    Counting *all* indexed videos would be wrong: a video listing can fail
+    part-way (an unreadable board among several) and still return names, and
+    the update only prunes rows for files the resolver did not return. The
+    keys come from :meth:`Embeddings._path_compare_key` applied to the same
+    paths the update itself will diff, so this count is exactly what that
+    diff will drop.
+
+    The .npz is read directly rather than through
+    ``Embeddings.open_cached_embeddings``: this runs *before* the index is
+    rewritten (and before an encoder-mismatch rebuild may unlink it), and
+    that opener is an lru_cache keyed on the path alone, so priming it here
+    would hand the pre-update contents to any later reader.
+    """
+    if not index_path.exists():
+        return 0
+    keep = {Embeddings._path_compare_key(p) for p in listed if is_video(p)}
+    try:
+        with np.load(index_path, allow_pickle=True) as data:
+            filenames = [str(f) for f in data["filenames"]]
+    except Exception as e:  # pragma: no cover - unreadable index
+        logger.warning(f"Could not read {index_path} to count indexed videos: {e}")
+        return 0
+    return sum(
+        1
+        for name in filenames
+        if is_video(Path(name))
+        and Embeddings._path_compare_key(Path(name)) not in keep
+    )
 
 
 # Background Tasks
@@ -739,7 +826,7 @@ async def _update_index_background_async(album_key: str, album_config):
                 album_key, 0, "Fetching board contents from InvokeAI..."
             )
             try:
-                image_paths, missing = await _resolve_board_album_files(album_config)
+                board_files = await _resolve_board_album_files(album_config)
             except HTTPException as e:
                 progress_tracker.set_error(
                     album_key,
@@ -747,9 +834,18 @@ async def _update_index_background_async(album_key: str, album_config):
                     f"{album_config.invokeai_url}: {e.detail}",
                 )
                 return
+            image_paths, missing = board_files.paths, board_files.missing
             if not image_paths:
+                # "No videos" is something we only know when the listing
+                # answered. Saying it after an outage would state as fact the
+                # very thing that could not be checked.
                 progress_tracker.set_error(
-                    album_key, "Selected InvokeAI board(s) contain no images"
+                    album_key,
+                    "Selected InvokeAI board(s) contain no images, and InvokeAI "
+                    "did not answer the video listing, so any videos on them "
+                    "could not be indexed."
+                    if not board_files.video_api_available
+                    else "Selected InvokeAI board(s) contain no images or videos",
                 )
                 return
             # Surface the gallery-vs-indexed discrepancy (always set so a clean
@@ -759,11 +855,30 @@ async def _update_index_background_async(album_key: str, album_config):
                 total = len(image_paths) + missing
                 progress_tracker.set_completion_warning(
                     album_key,
-                    f"{missing} of {total} image(s) listed by InvokeAI were not "
+                    f"{missing} of {total} file(s) listed by InvokeAI were not "
                     f"found on disk and were skipped.",
                 )
             else:
                 progress_tracker.set_completion_warning(album_key, None)
+            # An unavailable video API is silent when the album has no videos
+            # to lose (an InvokeAI predating video support, which is a
+            # supported setup). When rows *are* about to be pruned for a
+            # reason that has nothing to do with the board's contents, say so
+            # — otherwise the run reports a clean success while the album
+            # quietly shrinks.
+            if not board_files.video_api_available:
+                at_risk = _indexed_videos_dropped(
+                    Path(album_config.index), board_files.paths
+                )
+                if at_risk:
+                    progress_tracker.add_completion_warning(
+                        album_key,
+                        f"InvokeAI did not answer the video listing, so this "
+                        f"album's videos could not be checked; {at_risk} "
+                        f"previously indexed video(s) were dropped. They are "
+                        f"restored by the next update that reaches the video "
+                        f"API.",
+                    )
         else:
             image_paths = [Path(path) for path in album_config.image_paths]
         index_path = Path(album_config.index)

@@ -143,17 +143,28 @@ class Album(BaseModel):
     def _derive_board_album_fields(cls, data: Any) -> Any:
         """Fill in `image_paths` and `index` for InvokeAI-board albums.
 
-        Board albums have no user-chosen image directory: their images live
-        under `<invokeai_root>/outputs/images` and their index in the user
-        data directory. Both must be derived *before* field validation
-        because `image_paths` has `min_length=1` and `index` is required.
+        Board albums have no user-chosen image directory: their media live
+        under `<invokeai_root>/outputs/images` and `<invokeai_root>/outputs/videos`,
+        and their index in the user data directory. Both must be derived
+        *before* field validation because `image_paths` has `min_length=1`
+        and `index` is required.
+
+        The paths are recomputed on every construction rather than only when
+        absent. They are derived, not user-chosen, so whatever was persisted
+        must never win over the current root — and albums written before
+        video support stored only the images directory, which is how those
+        pick up the videos directory with no migration step. (`image_paths`
+        is what gates file access and relative-path resolution, so a board
+        video would otherwise be indexed but refused by `/videos/…`.)
         """
         if not isinstance(data, dict) or data.get("source_type") != "invokeai_board":
             return data
         root = data.get("invokeai_root")
-        if root and not data.get("image_paths"):
+        if root:
+            outputs = Path(root).expanduser() / "outputs"
             data["image_paths"] = [
-                str(Path(root).expanduser() / "outputs" / "images")
+                str(outputs / "images"),
+                str(outputs / "videos"),
             ]
         if not data.get("index") and data.get("key"):
             data["index"] = default_board_index_path(str(data["key"])).as_posix()
@@ -183,13 +194,29 @@ class Album(BaseModel):
 
     @field_validator("image_paths")
     @classmethod
-    def expand_and_validate_image_paths(cls, v: list[str]) -> list[str]:
-        """Expand ~ and warn if image paths do not exist."""
-        expanded = [str(Path(path).expanduser()) for path in v]
-        for path in expanded:
+    def expand_image_paths(cls, v: list[str]) -> list[str]:
+        """Expand ``~`` in image paths."""
+        return [str(Path(path).expanduser()) for path in v]
+
+    @model_validator(mode="after")
+    def _warn_about_missing_image_paths(self) -> "Album":
+        """Warn about configured directories that are not on disk.
+
+        Runs after the model is built rather than as a field validator so it
+        can see ``source_type``: a board album's ``outputs/videos`` is derived
+        from the InvokeAI root, and InvokeAI does not create that directory
+        until it first writes a video. Warning about it would fire on every
+        config load for a perfectly correct setup, so a board album's derived
+        directories are exempt — for those, a wrong root surfaces as the
+        pointed "none of the board files were found" error at index time,
+        which is a better diagnosis than this warning could give.
+        """
+        if self.source_type == "invokeai_board":
+            return self
+        for path in self.image_paths:
             if not Path(path).exists():
                 logger.warning(f"Image path does not exist: {path}")
-        return expanded
+        return self
 
     @field_validator("index")
     @classmethod

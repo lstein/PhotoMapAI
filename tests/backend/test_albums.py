@@ -413,14 +413,66 @@ def test_add_board_album_derives_paths_and_index(client):
         album = manager.get_album("board_album")
         assert album is not None
         assert album.source_type == "invokeai_board"
+        # Both output directories: a board's videos are indexed alongside its
+        # images, and ``image_paths`` is what grants access to them.
         assert album.image_paths == [
-            str(Path("/srv/invokeai") / "outputs" / "images")
+            str(Path("/srv/invokeai") / "outputs" / "images"),
+            str(Path("/srv/invokeai") / "outputs" / "videos"),
         ]
         assert album.index == default_board_index_path("board_album").as_posix()
         assert album.invokeai_board_ids == ["b1", "none"]
         assert album.invokeai_password == "secret"
     finally:
         client.delete("/delete_album/board_album")
+
+
+def test_board_album_written_before_video_support_gains_the_videos_path():
+    """Albums persisted when only ``outputs/images`` was derived must pick up
+    the videos directory on load, with no migration step: ``image_paths`` is
+    what gates file access, so without it a board video indexes and then 403s
+    at playback."""
+    from photomap.backend.config import Album
+
+    album = Album(
+        **_board_album_payload(image_paths=[str(Path("/srv/invokeai/outputs/images"))])
+    )
+
+    assert album.image_paths == [
+        str(Path("/srv/invokeai") / "outputs" / "images"),
+        str(Path("/srv/invokeai") / "outputs" / "videos"),
+    ]
+
+
+def test_board_album_does_not_warn_about_an_absent_videos_directory(caplog):
+    """InvokeAI creates ``outputs/videos`` only once it writes a video, and the
+    directory is derived rather than user-chosen — warning about it would fire
+    on every config load for a correct setup."""
+    import logging
+
+    from photomap.backend.config import Album
+
+    with caplog.at_level(logging.WARNING, logger="photomap.backend.config"):
+        Album(**_board_album_payload())
+
+    assert "Image path does not exist" not in caplog.text
+
+
+def test_directory_album_still_warns_about_a_missing_path(caplog, tmp_path):
+    """The warning itself stays: it is the only notice a directory album gets
+    for a path that is not there."""
+    import logging
+
+    from photomap.backend.config import Album
+
+    with caplog.at_level(logging.WARNING, logger="photomap.backend.config"):
+        Album(
+            key="dir_album",
+            name="Dir Album",
+            image_paths=[str(tmp_path / "not-there")],
+            index=str(tmp_path / "idx.npz"),
+        )
+
+    assert "Image path does not exist" in caplog.text
 
 
 def test_board_album_yaml_round_trip(client):

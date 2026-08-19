@@ -111,6 +111,13 @@ present on the select board(s) will be displayed, and deleting an
 image within PhotoMapAI will trigger a deletion event in InvokeAI so
 that the gallery and albumm remain in sync.
 
+Videos on the selected board(s) are indexed too, alongside the
+images. As in any other album, a video is represented by a still frame
+taken shortly after its start, so it takes part in search and
+clustering just like a photo, and clicking its play button opens it in
+the embedded player. Deleting a video routes through InvokeAI as well,
+so the gallery stays in sync the same way it does for images.
+
 !!! warning
     PhotoMapAI does not automatically watch the InvokeAI gallery for new
 	or deleted files. Whenever you have generated a batch of images you want to
