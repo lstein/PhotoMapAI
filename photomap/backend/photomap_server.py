@@ -4,6 +4,7 @@ Main entry point for the PhotoMapAI backend server.
 Initializes the FastAPI app, mounts routers, and handles server startup.
 """
 import logging
+import math
 import os
 import signal
 import subprocess
@@ -12,7 +13,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -72,6 +75,30 @@ for router in [
     app.include_router(router)
 
 app.include_router(curation_router, prefix="/api/curation", tags=["curation"])
+
+
+@app.exception_handler(RequestValidationError)
+async def json_safe_validation_error(request: Request, exc: RequestValidationError):
+    """Return a 422 whose body can actually be serialized.
+
+    FastAPI's default handler echoes the rejected input back in the error
+    detail. Python's ``json`` module parses the bare ``NaN``/``Infinity``
+    literals on the way in but refuses to emit them, so rejecting a
+    non-finite number produced an unserializable 422 — which surfaces to the
+    client as a 500, i.e. the validation looked like a server bug. Replace
+    any value that cannot survive the round trip with its repr.
+    """
+
+    def sanitized(error: dict) -> dict:
+        value = error.get("input")
+        if isinstance(value, float) and not math.isfinite(value):
+            return {**error, "input": repr(value)}
+        return error
+
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder({"detail": [sanitized(e) for e in exc.errors()]}),
+    )
 
 
 class IECompatibilityMiddleware(BaseHTTPMiddleware):

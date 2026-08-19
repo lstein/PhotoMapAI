@@ -2,9 +2,10 @@
 
 import asyncio
 from pathlib import Path
+from typing import Annotated
 
 import numpy as np
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from sklearn.cluster import DBSCAN
 
@@ -22,7 +23,9 @@ async def get_umap_data(
     album_key: str,
     album_config: AlbumDep,
     embeddings: EmbeddingsDep,
-    cluster_eps: float | None = None,
+    # Same bound as the stored value: a query parameter DBSCAN cannot run
+    # with should be a 422 from the caller, not a 500 from sklearn.
+    cluster_eps: Annotated[float | None, Query(gt=0, allow_inf_nan=False)] = None,
     cluster_min_samples: int = 10,
 ) -> JSONResponse:
     """

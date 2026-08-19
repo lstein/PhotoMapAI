@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import invokeai_client
 from ..cluster_eps import FALLBACK_CLUSTER_EPS, cached_adaptive_cluster_eps
@@ -28,7 +28,13 @@ class UmapEpsSetRequest(BaseModel):
     # value derived from the album's own coordinates. Without this the UI
     # would be a one-way door: once a number is typed there is no way back
     # to the derived value short of editing the config file.
-    eps: float | None = None
+    #
+    # A number, though, is constrained: DBSCAN rejects a non-positive epsilon,
+    # and a non-finite one cannot be serialized back out at all, so storing
+    # either left the album's Cluster Strength lying about what the map is
+    # doing — or, for NaN, made /get_umap_eps fail outright. A 422 says no
+    # before anything is written.
+    eps: float | None = Field(default=None, gt=0, allow_inf_nan=False)
 
 
 class UmapEpsGetRequest(BaseModel):

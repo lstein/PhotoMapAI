@@ -5,6 +5,7 @@ This module handles loading, saving, and managing photo album configurations.
 It uses a YAML file to store album details and provides methods to manipulate albums.
 """
 import logging
+import math
 import os
 import threading
 from functools import lru_cache
@@ -24,6 +25,7 @@ from .encoders import (
 from .util import atomic_write_text
 
 logger = logging.getLogger(__name__)
+
 
 
 def default_board_index_path(album_key: str) -> Path:
@@ -98,10 +100,38 @@ class Album(BaseModel):
             "coordinates (see backend/cluster_eps.py), which is what keeps "
             "small albums from clustering into nothing. Adjusting Cluster "
             "Strength in the UI stores a number here and the derived value "
-            "is no longer consulted."
+            "is no longer consulted. A number stored here must be positive "
+            "and finite; anything else is treated as 'not chosen'."
         ),
     )
     description: str = Field(default="", description="Album description")
+
+    @field_validator("umap_eps")
+    @classmethod
+    def discard_unusable_umap_eps(cls, v: float | None) -> float | None:
+        """Treat a stored Cluster Strength DBSCAN cannot use as "not chosen".
+
+        Validation refuses these at the API boundary now, but a config
+        written before that can already hold one, and it does real damage: a
+        stored NaN cannot be serialized, so ``/get_umap_eps`` fails outright,
+        and a non-positive value is silently replaced at clustering time, so
+        the map is drawn at a strength the field never showed.
+
+        ``None`` rather than a fixed fallback, because ``None`` is what asks
+        for a value derived from the album's own coordinates — the same
+        treatment an album that never had one gets, and a better answer than
+        any constant.
+        """
+        if v is None:
+            return None
+        if not math.isfinite(v) or v <= 0:
+            logger.warning(
+                f"Ignoring unusable stored Cluster Strength {v!r}; "
+                "deriving one from the album's coordinates instead."
+            )
+            return None
+        return v
+
     encoder_spec: str = Field(
         # Resolved per-host: OpenCLIP ViT-L-14 on CUDA/macOS, lighter OpenAI CLIP
         # ViT-B/32 on CPU-only Linux/Windows. See encoders.default_encoder_spec.
