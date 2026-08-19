@@ -2262,11 +2262,19 @@ document.addEventListener("DOMContentLoaded", () => {
 // Album Management): the map data is stale. Reload right away if the window
 // is showing; otherwise the dataChanged flag makes toggleUmapWindow's show
 // path refetch, without rendering Plotly into a hidden container here.
-window.addEventListener("albumIndexUpdated", (e) => {
+window.addEventListener("albumIndexUpdated", async (e) => {
   if (e.detail?.albumKey === state.album) {
     state.dataChanged = true;
     const umapWindow = document.getElementById("umapFloatingWindow");
     if (umapWindow?.style.display === "block") {
+      // Re-resolve the strength before redrawing. New coordinates invalidate
+      // a derived one (the server keys its memo on them), and fetchUmapData
+      // sends whatever the spinner holds — so skipping this clusters the new
+      // map at the old album's number while the badge still reads "auto".
+      // The album that was empty when the map opened is the case that bites:
+      // its spinner holds the not-indexed-yet fallback, which is exactly the
+      // fixed value that leaves a small album with no clusters at all.
+      await refreshResolvedEps();
       fetchUmapData();
     }
   }
