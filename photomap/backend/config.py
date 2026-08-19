@@ -565,8 +565,15 @@ class ConfigManager:
 
             config.albums[album.key] = album
             self._config = config
-            self.save_config()
-            self._config = None  # Clear cache to ensure fresh reads
+            try:
+                self.save_config()
+            finally:
+                # Invalidated even when the save raised. The cached config now
+                # holds a change that is not on disk, and leaving it in place
+                # lets a later, unrelated save write out an edit the caller
+                # was told had failed — a stored Cluster Strength that came
+                # back from the dead when the album was next renamed, for one.
+                self._config = None  # Clear cache to ensure fresh reads
             return True
 
     def update_album(self, album: Album) -> bool:
@@ -586,8 +593,15 @@ class ConfigManager:
 
             config.albums[album.key] = album
             self._config = config
-            self.save_config()
-            self._config = None  # Clear cache to ensure fresh reads
+            try:
+                self.save_config()
+            finally:
+                # Invalidated even when the save raised. The cached config now
+                # holds a change that is not on disk, and leaving it in place
+                # lets a later, unrelated save write out an edit the caller
+                # was told had failed — a stored Cluster Strength that came
+                # back from the dead when the album was next renamed, for one.
+                self._config = None  # Clear cache to ensure fresh reads
             return True
 
     def delete_album(self, key: str) -> bool:
@@ -607,8 +621,15 @@ class ConfigManager:
 
             del config.albums[key]
             self._config = config
-            self.save_config()
-            self._config = None  # Clear cache to ensure fresh reads
+            try:
+                self.save_config()
+            finally:
+                # Invalidated even when the save raised. The cached config now
+                # holds a change that is not on disk, and leaving it in place
+                # lets a later, unrelated save write out an edit the caller
+                # was told had failed — a stored Cluster Strength that came
+                # back from the dead when the album was next renamed, for one.
+                self._config = None  # Clear cache to ensure fresh reads
             return True
 
     def get_photo_albums_dict(self) -> dict[str, str]:

@@ -338,3 +338,31 @@ def test_an_explicit_null_in_an_update_still_clears(client, new_album):
     assert response.status_code == 200
 
     assert get_config_manager().get_album(key).umap_eps is None
+
+
+def test_a_failed_set_umap_eps_does_not_come_back_later(client, new_album, monkeypatch):
+    """A write the user was told had failed must not become durable.
+
+    `set_umap_eps` mutates the Album object the config manager has cached, so
+    a save that raises leaves the cache holding a value that is not on disk.
+    The next unrelated edit reads that value forward — and now that an
+    omitted `umap_eps` means "keep what is stored", it gets written out.
+    """
+    key = new_album["key"]
+
+    def _no_disk(*args, **kwargs):
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr("photomap.backend.config.atomic_write_text", _no_disk)
+    with pytest.raises(RuntimeError):
+        client.post("/set_umap_eps/", json={"album": key, "eps": 0.99})
+    monkeypatch.undo()
+
+    # The album kept the value it had on disk, not the one that failed.
+    assert get_config_manager().get_album(key).umap_eps == pytest.approx(0.1)
+
+    response = client.post(
+        "/update_album/", json=_album_edit_payload(key, name="Renamed")
+    )
+    assert response.status_code == 200
+    assert get_config_manager().get_album(key).umap_eps == pytest.approx(0.1)
