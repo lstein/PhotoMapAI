@@ -512,6 +512,465 @@ def test_album_endpoints_never_leak_password(client):
         client.delete("/delete_album/board_album")
 
 
+def test_partial_update_does_not_demote_a_board_album(client):
+    """A payload that omits ``source_type`` is a patch, not a replacement: the
+    bookmark menu sends key/name/image_paths only, and rebuilding the album
+    from that used to reset it to a directory album with every ``invokeai_*``
+    field cleared — after which indexing walked InvokeAI's output directories
+    directly and deletions stopped routing through its API (issue #371)."""
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        response = client.post(
+            "/update_album/",
+            json={"key": "board_album", "name": "Board Album"},
+        )
+        assert response.status_code == 200, response.text
+
+        manager = get_config_manager()
+        manager.reload_config()
+        album = manager.get_album("board_album")
+        assert album.source_type == "invokeai_board"
+        assert album.invokeai_root == "/srv/invokeai"
+        assert album.invokeai_url == "http://localhost:9090"
+        assert album.invokeai_board_ids == ["b1", "none"]
+        assert album.invokeai_username == "alice"
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_adding_a_folder_to_a_board_album_is_refused(client):
+    """A board album's directories are derived from the InvokeAI root, so an
+    added folder cannot survive. Accepting the request and discarding it would
+    make "add this folder to the album" look like it worked."""
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        album = client.get("/album/board_album/").json()
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": "board_album",
+                "name": "Board Album",
+                "image_paths": [*album["image_paths"], "/tmp/somewhere-else"],
+            },
+        )
+        assert response.status_code == 400, response.text
+        assert "InvokeAI root" in response.json()["detail"]
+
+        manager = get_config_manager()
+        manager.reload_config()
+        assert manager.get_album("board_album").image_paths == album["image_paths"]
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_unresolvable_path_is_refused_not_a_crash(client, tmp_path):
+    """The board guard normalizes paths to compare them, and what
+    ``Path.resolve()`` raises for an unresolvable one is interpreter-dependent
+    (a symlink loop is a RuntimeError up to 3.12, an OSError from 3.13). The
+    request is still just a refused change, not a 500."""
+    loop = tmp_path / "loop"
+    loop.symlink_to(tmp_path / "loop2")
+    (tmp_path / "loop2").symlink_to(loop)
+
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": "board_album",
+                "name": "Board Album",
+                "image_paths": [str(loop)],
+            },
+        )
+        assert response.status_code == 400, response.text
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_partial_update_keeps_tuning_fields(client, tmp_path):
+    """The same patch rule for every other field: a payload that carries only
+    a rename must not reset the encoder, the scan gates or the search
+    settings to their model defaults."""
+    key = "patch_album"
+    client.post(
+        "/add_album/",
+        json={
+            "key": key,
+            "name": "Patch Album",
+            "image_paths": [str(tmp_path)],
+            "index": str(tmp_path / "photomap_index" / "embeddings.npz"),
+            "encoder_spec": "openai-clip:ViT-L/14",
+            "min_image_dimension": 512,
+            "min_image_bytes": 0,
+            "max_search_results": 42,
+            "use_query_optimization": False,
+            "description": "keep me",
+        },
+    )
+    try:
+        response = client.post(
+            "/update_album/", json={"key": key, "name": "Renamed"}
+        )
+        assert response.status_code == 200, response.text
+
+        manager = get_config_manager()
+        manager.reload_config()
+        album = manager.get_album(key)
+        assert album.name == "Renamed"
+        assert album.encoder_spec == "openai-clip:ViT-L/14"
+        assert album.min_image_dimension == 512
+        # 0 is a real setting (the gate off), not a missing value.
+        assert album.min_image_bytes == 0
+        assert album.max_search_results == 42
+        assert album.use_query_optimization is False
+        assert album.description == "keep me"
+        assert album.image_paths == [str(tmp_path)]
+    finally:
+        client.delete(f"/delete_album/{key}")
+
+
+def test_update_can_still_clear_and_change_values(client, tmp_path):
+    """Patching must not become "you can never change anything": explicit
+    values, including a falsy one, still win over what is stored."""
+    key = "patch_album_2"
+    client.post(
+        "/add_album/",
+        json={
+            "key": key,
+            "name": "Patch Album 2",
+            "image_paths": [str(tmp_path)],
+            "index": str(tmp_path / "photomap_index" / "embeddings.npz"),
+            "description": "original",
+            "min_image_bytes": 8192,
+        },
+    )
+    try:
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": key,
+                "name": "Patch Album 2",
+                "description": "",
+                "min_image_bytes": 0,
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        manager = get_config_manager()
+        manager.reload_config()
+        album = manager.get_album(key)
+        assert album.description == ""
+        assert album.min_image_bytes == 0
+    finally:
+        client.delete(f"/delete_album/{key}")
+
+
+def test_changing_the_invokeai_root_moves_the_derived_paths(client):
+    """A board album's directories are derived from its root, so an edit that
+    moves the root has to move them: carrying the stored list over would
+    suppress the derivation and leave the access gate pointing at the old
+    root, 404ing every image the re-index just wrote."""
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        # Exactly what the album editor sends: image_paths and index omitted.
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": "board_album",
+                "name": "Board Album",
+                "source_type": "invokeai_board",
+                "invokeai_url": "http://localhost:9090",
+                "invokeai_root": "/srv/invokeai2",
+                "invokeai_board_ids": ["b1", "none"],
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        manager = get_config_manager()
+        manager.reload_config()
+        album = manager.get_album("board_album")
+        assert album.invokeai_root == "/srv/invokeai2"
+        assert album.image_paths[0].startswith(str(Path("/srv/invokeai2")))
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_source_type_cannot_be_changed_by_an_update(client):
+    """The kind of an album is fixed at creation. A payload that disagrees is
+    a partial payload being read as a replacement, which is how board albums
+    used to be demoted (issue #371).
+
+    ``image_paths`` is deliberately omitted: with it, the request would be
+    refused by the board-paths guard instead, and this test would pass while
+    the source type went unchecked."""
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": "board_album",
+                "name": "Board Album",
+                "source_type": "directory",
+            },
+        )
+        assert response.status_code == 400, response.text
+
+        manager = get_config_manager()
+        manager.reload_config()
+        assert manager.get_album("board_album").source_type == "invokeai_board"
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_invokeai_username_can_be_cleared(client):
+    """The edit form sends null for an emptied username — InvokeAI dropping
+    out of multi-user mode — and that has to clear it rather than read as
+    'field omitted'."""
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": "board_album",
+                "name": "Board Album",
+                "source_type": "invokeai_board",
+                "invokeai_url": "http://localhost:9090",
+                "invokeai_root": "/srv/invokeai",
+                "invokeai_board_ids": ["b1", "none"],
+                "invokeai_username": None,
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        manager = get_config_manager()
+        manager.reload_config()
+        album = manager.get_album("board_album")
+        assert album.invokeai_username is None
+        assert album.invokeai_password == "secret"  # still kept
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_unrelated_edits_keep_a_tuned_min_search_score(client, tmp_path):
+    """The score is tuned from the search dialog and never sent by the album
+    editor, so any other edit — including swapping one CLIP model for another
+    — has to leave it alone."""
+    key = "tuned_score_album"
+    client.post(
+        "/add_album/",
+        json={
+            "key": key,
+            "name": "Tuned Score",
+            "image_paths": [str(tmp_path)],
+            "index": str(tmp_path / "photomap_index" / "embeddings.npz"),
+            "encoder_spec": "openai-clip:ViT-B/32",
+            "min_search_score": 0.35,
+        },
+    )
+    try:
+        manager = get_config_manager()
+
+        response = client.post("/update_album/", json={"key": key, "name": "Renamed"})
+        assert response.status_code == 200, response.text
+        manager.reload_config()
+        assert manager.get_album(key).min_search_score == 0.35
+
+        # Same family, different model: still no reason to touch the score.
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": key,
+                "name": "Renamed",
+                "encoder_spec": "openai-clip:ViT-L/14",
+            },
+        )
+        assert response.status_code == 200, response.text
+        manager.reload_config()
+        assert manager.get_album(key).min_search_score == 0.35
+    finally:
+        client.delete(f"/delete_album/{key}")
+
+
+def test_null_does_not_reset_a_tuning_field_to_its_default(client, tmp_path):
+    """``create_album`` turns a None into the *model default*, so honoring an
+    explicit null here would quietly re-encode an album under a different
+    encoder rather than clear anything."""
+    key = "null_field_album"
+    client.post(
+        "/add_album/",
+        json={
+            "key": key,
+            "name": "Null Field",
+            "image_paths": [str(tmp_path)],
+            "index": str(tmp_path / "photomap_index" / "embeddings.npz"),
+            "encoder_spec": "openai-clip:ViT-L/14",
+            "min_image_bytes": 0,
+        },
+    )
+    try:
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": key,
+                "name": "Null Field",
+                "encoder_spec": None,
+                "min_image_bytes": None,
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        manager = get_config_manager()
+        manager.reload_config()
+        album = manager.get_album(key)
+        assert album.encoder_spec == "openai-clip:ViT-L/14"
+        assert album.min_image_bytes == 0
+    finally:
+        client.delete(f"/delete_album/{key}")
+
+
+def test_board_album_accepts_the_paths_its_own_root_change_derives(client):
+    """A caller that computes the new derived paths and sends them is not
+    asking for a change, and neither is one still echoing the stored list
+    while a root edit is in flight."""
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        base = {
+            "key": "board_album",
+            "name": "Board Album",
+            "source_type": "invokeai_board",
+            "invokeai_url": "http://localhost:9090",
+            "invokeai_root": "/srv/invokeai2",
+            "invokeai_board_ids": ["b1", "none"],
+        }
+        derived = str(Path("/srv/invokeai2") / "outputs" / "images")
+        response = client.post(
+            "/update_album/", json={**base, "image_paths": [derived]}
+        )
+        assert response.status_code == 200, response.text
+
+        # A root edit that carries the album's *stored* paths — what the
+        # album editor's own GET-then-POST produces — is likewise not a
+        # request to change them.
+        response = client.post(
+            "/update_album/",
+            json={
+                **base,
+                "invokeai_root": "/srv/invokeai3",
+                "image_paths": [str(Path("/srv/invokeai2") / "outputs" / "images")],
+            },
+        )
+        assert response.status_code == 200, response.text
+        manager = get_config_manager()
+        manager.reload_config()
+        album = manager.get_album("board_album")
+        assert album.invokeai_root == "/srv/invokeai3"
+        assert album.image_paths[0].startswith(str(Path("/srv/invokeai3")))
+
+        # A stale writer that fetched the album before the root moved posts
+        # the old root together with the old paths: consistent with itself,
+        # asking for nothing, and not the guard's business (it loses the root
+        # edit, which is the pre-existing last-write-wins race).
+        stale_root = {**base, "invokeai_root": "/srv/invokeai2"}
+        stale_paths = [str(Path("/srv/invokeai2") / "outputs" / "images")]
+        response = client.post(
+            "/update_album/", json={**stale_root, "image_paths": stale_paths}
+        )
+        assert response.status_code == 200, response.text
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_changing_the_encoder_reresolves_min_search_score(client, tmp_path):
+    """The sensible score floor differs by an order of magnitude between
+    encoder families, and the edit form never sends one. Carrying the old
+    value across an encoder change makes the new encoder look broken."""
+    key = "encoder_switch_album"
+    client.post(
+        "/add_album/",
+        json={
+            "key": key,
+            "name": "Encoder Switch",
+            "image_paths": [str(tmp_path)],
+            "index": str(tmp_path / "photomap_index" / "embeddings.npz"),
+            "encoder_spec": "siglip:google/siglip2-base-patch16-224",
+        },
+    )
+    try:
+        manager = get_config_manager()
+        manager.reload_config()
+        assert manager.get_album(key).min_search_score == 0.005
+
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": key,
+                "name": "Encoder Switch",
+                "encoder_spec": "openai-clip:ViT-B/32",
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        manager.reload_config()
+        assert manager.get_album(key).min_search_score == 0.2
+
+        # An explicit score still wins over the re-resolution.
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": key,
+                "name": "Encoder Switch",
+                "encoder_spec": "siglip:google/siglip2-base-patch16-224",
+                "min_search_score": 0.15,
+            },
+        )
+        assert response.status_code == 200, response.text
+        manager.reload_config()
+        assert manager.get_album(key).min_search_score == 0.15
+    finally:
+        client.delete(f"/delete_album/{key}")
+
+
+def test_blank_index_keeps_the_stored_one(client, tmp_path):
+    """The edit form sends "" for the index when an album has no paths left to
+    derive one from; that must not be resolved against the server's working
+    directory."""
+    key = "blank_index_album"
+    index = str(tmp_path / "photomap_index" / "embeddings.npz")
+    client.post(
+        "/add_album/",
+        json={
+            "key": key,
+            "name": "Blank Index",
+            "image_paths": [str(tmp_path)],
+            "index": index,
+        },
+    )
+    try:
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": key,
+                "name": "Blank Index",
+                "image_paths": [str(tmp_path)],
+                "index": "",
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        manager = get_config_manager()
+        manager.reload_config()
+        assert manager.get_album(key).index == index
+    finally:
+        client.delete(f"/delete_album/{key}")
+
+
 def test_update_board_album_keeps_password_and_index_when_omitted(client):
     """The edit form omits the password (never echoed) and the index — both
     must survive an update untouched."""

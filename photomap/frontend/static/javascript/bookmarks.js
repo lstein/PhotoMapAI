@@ -686,8 +686,13 @@ class BookmarkManager {
         return cleanPath === targetPath;
       });
 
+      // A board album's directories come from the InvokeAI root and cannot
+      // be added to, so offering would promise something the backend has to
+      // refuse. (The move itself is rejected below with its own message.)
+      const isBoardAlbum = albumConfig.source_type === "invokeai_board";
+
       // If target folder is not in album, ask user to confirm adding it
-      if (!targetInAlbum) {
+      if (!targetInAlbum && !isBoardAlbum) {
         hideSpinner();
         const shouldAddFolder = await showConfirmModal(
           `The destination folder is not in the current album.\n\nWould you like to add "${targetDirectory}" to the "${state.album}" album?`,
@@ -863,17 +868,13 @@ class BookmarkManager {
     const updatedPaths = [...albumConfig.image_paths, folderPath];
 
     try {
+      // Deliberately partial: /update_album/ keeps every field this payload
+      // leaves out, so the album's encoder, gates and source type survive.
       await fetchJson("update_album/", {
         json: {
           key: albumConfig.key,
           name: albumConfig.name,
           image_paths: updatedPaths,
-          index: albumConfig.index,
-          // `?? null` rather than `|| 0.07`: an album whose Cluster Strength
-          // has never been set carries null, and adding a folder to it must
-          // not quietly pin it to a number.
-          umap_eps: albumConfig.umap_eps ?? null,
-          description: albumConfig.description || "",
         },
       });
     } catch {
