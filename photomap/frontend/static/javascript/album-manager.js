@@ -1170,7 +1170,10 @@ export class AlbumManager {
       newAlbum = {
         key: formData.key,
         name: formData.name,
-        umap_eps: 0.1,
+        // umap_eps is deliberately omitted: the semantic map derives a
+        // Cluster Strength from the album's own coordinates until the user
+        // sets one. A number sent here would be that setting, and a fixed
+        // one leaves small albums with no clusters at all.
         description: formData.description,
         encoder_spec: formData.encoder_spec,
         source_type: "invokeai_board",
@@ -1192,7 +1195,7 @@ export class AlbumManager {
         name: formData.name,
         image_paths: paths,
         index: indexPath,
-        umap_eps: 0.1,
+        // Omitted for the same reason as the board branch above.
         description: formData.description,
         encoder_spec: formData.encoder_spec,
       };

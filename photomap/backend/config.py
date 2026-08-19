@@ -85,7 +85,17 @@ class Album(BaseModel):
             "id 'none' is InvokeAI's Uncategorized bucket."
         ),
     )
-    umap_eps: float = Field(default=0.2, description="UMAP epsilon parameter")
+    umap_eps: float | None = Field(
+        default=None,
+        description=(
+            "DBSCAN epsilon for the semantic map's clustering. None means "
+            "'not chosen': the value is derived from the album's own UMAP "
+            "coordinates (see backend/cluster_eps.py), which is what keeps "
+            "small albums from clustering into nothing. Adjusting Cluster "
+            "Strength in the UI stores a number here and the derived value "
+            "is no longer consulted."
+        ),
+    )
     description: str = Field(default="", description="Album description")
     encoder_spec: str = Field(
         # Resolved per-host: OpenCLIP ViT-L-14 on CUDA/macOS, lighter OpenAI CLIP
@@ -234,7 +244,6 @@ class Album(BaseModel):
             "source_type": self.source_type,
             "image_paths": self.image_paths,
             "index": self.index,
-            "umap_eps": self.umap_eps,
             "description": self.description,
             "encoder_spec": self.encoder_spec,
             "min_search_score": self.min_search_score,
@@ -243,6 +252,14 @@ class Album(BaseModel):
             "min_image_dimension": self.min_image_dimension,
             "min_image_bytes": self.min_image_bytes,
         }
+        # A derived Cluster Strength is written as an *absent* key rather
+        # than an explicit null. Both mean the same thing to this codebase,
+        # but versions before umap_eps became nullable parse a null into a
+        # non-nullable float field and refuse to load the whole config —
+        # i.e. writing null here would stop an older PhotoMapAI from
+        # starting at all, on a config file the two share.
+        if self.umap_eps is not None:
+            data["umap_eps"] = self.umap_eps
         # Keep directory-album YAML free of irrelevant InvokeAI keys.
         if self.source_type == "invokeai_board":
             data["invokeai_url"] = self.invokeai_url
@@ -262,7 +279,11 @@ class Album(BaseModel):
             source_type=data.get("source_type", "directory"),
             image_paths=data.get("image_paths", []),
             index=data["index"],
-            umap_eps=data.get("umap_eps", 0.07),
+            # Absent from the YAML means nobody chose one, which is exactly
+            # what None asks the map to derive. The old 0.07 fallback here
+            # was a number for *every* album regardless of size, which is
+            # what left small albums with no clusters at all.
+            umap_eps=data.get("umap_eps"),
             description=data.get("description", ""),
             # Legacy YAML albums predate the encoder_spec field; their indexes
             # were built with the original CLIP, so fall back to that to stay
@@ -544,8 +565,15 @@ class ConfigManager:
 
             config.albums[album.key] = album
             self._config = config
-            self.save_config()
-            self._config = None  # Clear cache to ensure fresh reads
+            try:
+                self.save_config()
+            finally:
+                # Invalidated even when the save raised. The cached config now
+                # holds a change that is not on disk, and leaving it in place
+                # lets a later, unrelated save write out an edit the caller
+                # was told had failed — a stored Cluster Strength that came
+                # back from the dead when the album was next renamed, for one.
+                self._config = None  # Clear cache to ensure fresh reads
             return True
 
     def update_album(self, album: Album) -> bool:
@@ -565,8 +593,15 @@ class ConfigManager:
 
             config.albums[album.key] = album
             self._config = config
-            self.save_config()
-            self._config = None  # Clear cache to ensure fresh reads
+            try:
+                self.save_config()
+            finally:
+                # Invalidated even when the save raised. The cached config now
+                # holds a change that is not on disk, and leaving it in place
+                # lets a later, unrelated save write out an edit the caller
+                # was told had failed — a stored Cluster Strength that came
+                # back from the dead when the album was next renamed, for one.
+                self._config = None  # Clear cache to ensure fresh reads
             return True
 
     def delete_album(self, key: str) -> bool:
@@ -586,8 +621,15 @@ class ConfigManager:
 
             del config.albums[key]
             self._config = config
-            self.save_config()
-            self._config = None  # Clear cache to ensure fresh reads
+            try:
+                self.save_config()
+            finally:
+                # Invalidated even when the save raised. The cached config now
+                # holds a change that is not on disk, and leaving it in place
+                # lets a later, unrelated save write out an edit the caller
+                # was told had failed — a stored Cluster Strength that came
+                # back from the dead when the album was next renamed, for one.
+                self._config = None  # Clear cache to ensure fresh reads
             return True
 
     def get_photo_albums_dict(self) -> dict[str, str]:
@@ -696,7 +738,7 @@ def create_album(
     name: str,
     image_paths: list[str] | None,
     index: str | None,
-    umap_eps: float,
+    umap_eps: float | None = None,
     description: str = "",
     encoder_spec: str | None = None,
     min_search_score: float | None = None,

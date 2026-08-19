@@ -12,6 +12,7 @@ import functools
 import gc
 import logging
 import os
+import threading
 import warnings
 from collections import deque
 from collections.abc import Callable, Generator
@@ -106,6 +107,25 @@ LAST_UPDATED_FILENAME = "last_updated"
 # thumbnail population that is as many header opens as the album has photos,
 # on every single update.
 SCAN_REJECTS_FILENAME = "scan_rejects.npz"
+
+# One lock per umap.npz path, so two threads cannot both decide the cache is
+# stale and both refit. Keyed by resolved path rather than by Embeddings
+# instance: every request builds its own instance for the same album, so an
+# instance-level lock would guard nothing.
+_UMAP_BUILD_LOCKS: dict[Path, threading.Lock] = {}
+_UMAP_BUILD_LOCKS_GUARD = threading.Lock()
+
+
+def _umap_build_lock(cache_file: Path) -> threading.Lock:
+    """The rebuild lock for one ``umap.npz``, created on first use.
+
+    Never evicted: one lock object per album per process is nothing, and
+    dropping one while a thread still holds it would let a later caller build
+    a second, unrelated lock and defeat the exclusion.
+    """
+    key = cache_file.resolve()
+    with _UMAP_BUILD_LOCKS_GUARD:
+        return _UMAP_BUILD_LOCKS.setdefault(key, threading.Lock())
 
 # Bump to discard every existing scan-reject cache once. Version 1 retires
 # caches written while videos still went through the pixel gate, which could
@@ -1827,21 +1847,43 @@ class Embeddings(BaseModel):
     @property
     def umap_embeddings(self) -> np.ndarray:
         """
-        Load UMAP embeddings from disk.
+        Load UMAP embeddings from disk, rebuilding the cache when it is stale.
+
+        Rebuilds are serialized per index path. Callers reach this from worker
+        threads (the semantic map fetches ``/umap_data`` and ``/cluster_labels``
+        in parallel, and both resolve coordinates off the event loop), and the
+        freshness check is a check-then-act on an mtime that is not written
+        until the fit *finishes* — so without the lock both callers see the
+        same stale cache and both fit.
+
+        That is not merely wasteful. ``UMAP`` is constructed without a
+        ``random_state``, so two fits of the same input produce *different*
+        layouts; the two endpoints would then return cluster ids describing
+        different coordinate sets, which is exactly the divergence the map's
+        hover labels rely on not happening.
 
         Returns:
             np.ndarray: The UMAP embeddings.
         """
         cache_file = self.embeddings_path.parent / "umap.npz"
-        if (
-            not cache_file.exists()
-            or cache_file.stat().st_mtime < self.embeddings_path.stat().st_mtime
-        ):  # If UMAP index does not exist or is outdated, create it
+        if not self._umap_cache_is_stale(cache_file):
+            return np.load(cache_file, allow_pickle=True)["umap"]
+
+        with _umap_build_lock(cache_file):
+            # Re-check under the lock: whoever held it before us has almost
+            # certainly just written the cache we were about to rebuild.
+            if not self._umap_cache_is_stale(cache_file):
+                return np.load(cache_file, allow_pickle=True)["umap"]
             embeddings = self.open_cached_embeddings(self.embeddings_path)["embeddings"]
             logger.info(f"Creating UMAP index for {embeddings.shape[0]} embeddings")
             return self.create_umap_index(embeddings)
-        data = np.load(cache_file, allow_pickle=True)
-        return data["umap"]
+
+    def _umap_cache_is_stale(self, cache_file: Path) -> bool:
+        """Whether ``umap.npz`` is missing or older than the index it describes."""
+        return (
+            not cache_file.exists()
+            or cache_file.stat().st_mtime < self.embeddings_path.stat().st_mtime
+        )
 
     @property
     def indexes(self) -> dict[str, np.ndarray]:

@@ -152,7 +152,9 @@ def test_album_routes(client):
     assert response.json() == {"success": True, "eps": 0.50}
     response = client.post("/get_umap_eps", json={"album": album.key})
     assert response.status_code == 200
-    assert response.json() == {"success": True, "eps": 0.50}
+    # ``auto`` false: the value was stored by the caller above, not derived
+    # from the album's coordinates.
+    assert response.json() == {"success": True, "eps": 0.50, "auto": False}
 
     # Check that we can delete the album
     response = client.delete(f"/delete_album/{album.key}")
