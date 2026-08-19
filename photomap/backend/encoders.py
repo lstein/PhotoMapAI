@@ -36,6 +36,54 @@ logger = logging.getLogger(__name__)
 # misfire).
 DEFAULT_ENCODER_SPEC = "open-clip:ViT-L-14/dfn2b_s39b"
 
+# The score floor a search applies when the album has not set one. It is
+# per-encoder because the three backends do not share a scale — the numbers
+# below were measured on the same 400 images with the same eight queries, and
+# again on a 38,000-image photo library:
+#
+#   encoder                        mean top-1   median   strong matches
+#   openai-clip:ViT-B/32              0.267      0.17     0.24 - 0.30
+#   open-clip:ViT-L-14/dfn2b_s39b     0.151     -0.07     0.15 - 0.26
+#   siglip (calibrated probability)   0.015      0.00     compressed to ~0
+#
+# OpenCLIP's band sits roughly 0.1 below OpenAI CLIP's, which is why the old
+# blanket 0.2 for everything CLIP-shaped returned *nothing* on the encoder
+# PhotoMapAI recommends by default: on the 38k library, 0.2 gave zero results
+# for five of eight ordinary queries and fewer than five for two more. 0.1
+# clears the noise floor (that library's median is -0.07) while keeping the
+# whole match band, and costs at most ~8% of the album on a very broad query.
+#
+# The same 0.1 would be far too low for OpenAI CLIP, whose *median* image
+# scores 0.17 against an arbitrary query — it would return the entire album,
+# ranked. Hence a table rather than one number.
+LEGACY_CLIP_MIN_SEARCH_SCORE = 0.2
+
+_MIN_SEARCH_SCORE_BY_BACKEND: dict[str, float] = {
+    "siglip": 0.005,
+    "openai-clip": 0.2,
+    "open-clip": 0.1,
+}
+
+# Anything unrecognized is scored like OpenCLIP: an unknown backend is far
+# likelier to be another modern CLIP variant (they cluster near this band)
+# than a copy of OpenAI's original, and erring low shows weak matches rather
+# than hiding real ones.
+_DEFAULT_MIN_SEARCH_SCORE = 0.1
+
+
+def default_min_search_score(encoder_spec: str) -> float:
+    """The score floor to apply when an album has not chosen one.
+
+    Callers that need to know whether a *change* of encoder warrants
+    re-resolving a stored floor should compare this across the two specs
+    rather than comparing the specs themselves: swapping one OpenCLIP model
+    for another shares a scale and must not discard a hand-tuned value.
+    """
+    backend = encoder_spec.split(":", 1)[0]
+    return _MIN_SEARCH_SCORE_BY_BACKEND.get(backend, _DEFAULT_MIN_SEARCH_SCORE)
+
+
+
 # Encoder assumed when a legacy ``.npz`` cache or pre-swap-layer YAML album
 # omits the ``model_id`` / ``encoder_spec`` field. Before the encoder swap
 # layer existed, legacy CLIP was the only option, so any cache that predates
@@ -133,8 +181,10 @@ class ImageTextEncoder(ABC):
 
         Default implementation is the identity, which is appropriate for CLIP-style
         contrastive encoders whose cosine scores are already in a usable range.
-        SigLIP overrides this to apply the learned sigmoid calibration so a single
-        threshold (e.g. 0.2) produces sane recall across encoder choices.
+        SigLIP overrides this to apply the learned sigmoid calibration, which
+        pulls its scores onto a bounded scale — not onto CLIP's. No calibration
+        makes one threshold serve every encoder, which is why the default floor
+        is a per-backend table (:func:`default_min_search_score`).
         """
         return cosines
 
@@ -400,7 +450,10 @@ class SiglipEncoder(ImageTextEncoder):
         calibration, a CLIP-tuned threshold like 0.2 filters out almost every
         true match. The model's ``logit_scale`` and ``logit_bias`` recover
         per-pair match probabilities via ``sigmoid(cos * exp(scale) + bias)``,
-        which restores comparable threshold semantics across encoders.
+        which makes the score readable as a probability. It does *not* make
+        the threshold comparable to CLIP's: calibrated SigLIP probabilities
+        are compressed toward zero, hence its own entry (0.005) in
+        :func:`default_min_search_score`.
         """
         if self._logit_scale is None:
             return cosines

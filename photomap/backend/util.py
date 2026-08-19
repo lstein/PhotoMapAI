@@ -3,6 +3,7 @@ This module provides utility functions for the PhotoMap application."""
 
 import os
 import socket
+import stat
 import threading
 from collections import OrderedDict
 from collections.abc import Hashable
@@ -116,12 +117,31 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None
 
     Used for long-lived config files where a partial write would leave the
     user unable to reload the app.
+
+    The rename replaces the file rather than writing through it, so two
+    properties of the *existing* file have to be carried across by hand:
+
+    * its permissions — config.yaml holds an InvokeAI password and a
+      LocationIQ key, and a fresh file created at the process umask is
+      typically world-readable, so a user who tightened it to 0600 would
+      have it quietly widened again by the next album edit;
+    * its identity when it is a symlink — a dotfiles setup symlinks
+      config.yaml into a repo, and replacing the link with a regular file
+      leaves the real config behind, still holding the old content.
     """
+    if path.is_symlink():
+        path = Path(os.path.realpath(path))
     path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        existing_mode = stat.S_IMODE(path.stat().st_mode)
+    except OSError:
+        existing_mode = None
     tmp_path = path.with_name(path.name + ".tmp")
     try:
         with tmp_path.open("w", encoding=encoding) as fh:
             fh.write(text)
+        if existing_mode is not None:
+            os.chmod(tmp_path, existing_mode)
         os.replace(tmp_path, path)
     except BaseException:
         if tmp_path.exists():

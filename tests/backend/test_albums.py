@@ -254,7 +254,8 @@ def test_per_album_search_settings_round_trip(client, tmp_path):
 
     Also locks in the encoder-aware default for min_search_score: SigLIP
     albums default to 0.005 (its compressed-cosine band needs a much lower
-    threshold than CLIP), CLIP-style albums default to 0.2.
+    threshold than CLIP) and OpenAI CLIP albums to 0.2. The per-family table
+    itself lives in test_score_floors.py.
     """
     img_dir = tmp_path / "imgs"
     img_dir.mkdir()

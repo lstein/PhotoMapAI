@@ -10,7 +10,7 @@ Three encoders are bundled with PhotoMapAI. They have different strengths, and t
 
 A larger, better-trained successor to the original CLIP. Apple released the `DFN-2B` weights in 2023, retrained on a heavily filtered 2-billion image-caption dataset. It scores meaningfully higher than legacy CLIP on virtually every published benchmark and behaves robustly across messy real-world photo collections.
 
-- **Strengths.** Best general-purpose match for typical photo libraries — family snapshots, vacations, mixed media. Cosine similarities are in a familiar range (matching pairs around 0.20–0.35), so a threshold of 0.2 catches most legitimate hits without flooding the results with false positives. Threshold semantics are predictable and don't need per-album tuning.
+- **Strengths.** Best general-purpose match for typical photo libraries — family snapshots, vacations, mixed media. Its similarity scale sits about 0.1 below legacy CLIP's — matching pairs land around 0.15–0.26 against a median near zero — so the default threshold is 0.1. Measured on a 38,000-image library, that returns the whole match band for ordinary queries while a 0.2 threshold returned nothing at all for most of them.
 - **Weaknesses.** Larger model than legacy CLIP — ~600 MB to download and slower per image to index. First-time indexing of a big album takes noticeably longer than the legacy CLIP option.
 - **Pick this if** you don't have a strong reason to pick something else.
 
@@ -26,7 +26,7 @@ Google's 2024–25 update to SigLIP, trained with a sigmoid loss instead of CLIP
 
 The original 2021 CLIP — the model PhotoMapAI used for everything before the encoder layer was added. It's the smallest of the three (~150 MB, fastest to index) and uses a familiar contrastive cosine similarity.
 
-- **Strengths.** Fastest indexing, smallest disk footprint, well-understood threshold behavior.
+- **Strengths.** Fastest indexing, smallest disk footprint, well-understood threshold behavior. Its scores run higher than OpenCLIP's — matching pairs around 0.24–0.35, and a median near 0.17 even for an unrelated query — so its default threshold is the traditional 0.2.
 - **Weaknesses.** Substantially weaker than the newer alternatives across published benchmarks (e.g. ~63% ImageNet zero-shot vs. 82% for OpenCLIP-DFN). Recall on photo-style content is noticeably worse, and false positives are more frequent.
 - **Pick this if** you're constrained on disk or time, or you want to keep a legacy album working without re-indexing it. Albums created before the encoder layer existed default to this, and re-indexing isn't required just because a newer option is available.
 

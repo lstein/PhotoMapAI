@@ -15,7 +15,12 @@ import yaml
 from platformdirs import user_config_dir, user_data_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .encoders import LEGACY_ENCODER_SPEC, default_encoder_spec
+from .encoders import (
+    LEGACY_CLIP_MIN_SEARCH_SCORE,
+    LEGACY_ENCODER_SPEC,
+    default_encoder_spec,
+    default_min_search_score,
+)
 from .util import atomic_write_text
 
 logger = logging.getLogger(__name__)
@@ -121,8 +126,8 @@ class Album(BaseModel):
         ),
     )
     # Per-album search controls. min_search_score defaults to None so a
-    # validator can resolve it from the encoder (0.005 for SigLIP's compressed
-    # cosine band, 0.2 for CLIP-style backends) at construction time.
+    # validator can resolve it from the encoder at construction time — the
+    # backends do not share a score scale, see ``default_min_search_score``.
     min_search_score: float | None = Field(
         default=None,
         description="Minimum similarity score below which results are filtered out.",
@@ -314,10 +319,64 @@ class Album(BaseModel):
         )
 
 
+# Bumped when a load-time migration is added below. 1.1.0 re-resolves the
+# score floor of albums that never chose one — see ``_migrate_score_floors``.
+CONFIG_VERSION = "1.1.0"
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    """``"1.10.2"`` -> ``(1, 10, 2)``, for ordering config versions.
+
+    A version this build cannot parse sorts as newer than anything it knows,
+    so an unreadable stamp is never mistaken for an un-migrated old file.
+    """
+    try:
+        return tuple(int(part) for part in version.split("."))
+    except ValueError:
+        return (999,)
+
+
+def _migrate_score_floors(albums: dict[str, "Album"]) -> bool:
+    """Re-resolve score floors left at the old blanket CLIP default.
+
+    Before :func:`default_min_search_score` learned that OpenCLIP scores a
+    tenth of a point below OpenAI CLIP, every non-SigLIP album was given
+    ``0.2`` at creation — a floor above the entire match band of the encoder
+    PhotoMapAI recommends, so those albums answer most searches with nothing
+    at all. The value is stored per album, so fixing the default alone would
+    only help albums created after the upgrade.
+
+    Only the exact machine-chosen 0.2 is touched, and only where the album's
+    encoder now resolves to something else; a floor the user typed stays put.
+    Runs only for a config written before this build (see ``CONFIG_VERSION``),
+    so 0.2 remains a value the user can choose afterwards.
+
+    Returns whether anything changed, for the caller's logging.
+    """
+    changed = False
+    for key, album in albums.items():
+        resolved = default_min_search_score(album.encoder_spec)
+        if album.min_search_score == LEGACY_CLIP_MIN_SEARCH_SCORE != resolved:
+            album.min_search_score = resolved
+            changed = True
+            logger.info(
+                "Album %r: search score floor %.3f -> %.3f, the measured "
+                "default for %s (searches at the old floor returned almost "
+                "nothing). Adjust it in the search dialog if you preferred it.",
+                key,
+                LEGACY_CLIP_MIN_SEARCH_SCORE,
+                resolved,
+                album.encoder_spec,
+            )
+    return changed
+
+
 class Config(BaseModel):
     """Main configuration model."""
 
-    config_version: str = Field("1.0.0", description="Configuration format version")
+    config_version: str = Field(
+        CONFIG_VERSION, description="Configuration format version"
+    )
     albums: dict[str, Album] = Field(
         default_factory=dict, description="Album configurations"
     )
@@ -495,7 +554,7 @@ class ConfigManager:
             if self._config is None:
                 if not self.config_path.exists():
                     self._config = Config(
-                        config_version="1.0.0",
+                        config_version=CONFIG_VERSION,
                         albums={},
                         locationiq_api_key=None,
                     )
@@ -514,8 +573,22 @@ class ConfigManager:
                             extra["encoder_idle_timeout_seconds"] = config_data[
                                 "encoder_idle_timeout_seconds"
                             ]
+                        # Migrations run once, against a config older than
+                        # this build. Re-running them on every load would make
+                        # the migrated-away value permanently unsettable — a
+                        # user typing 0.2 back into an OpenCLIP album would
+                        # watch the next read undo it.
+                        stored_version = config_data.get("config_version", "1.0.0")
+                        if _version_tuple(stored_version) < _version_tuple(
+                            CONFIG_VERSION
+                        ):
+                            _migrate_score_floors(albums)
+                            stored_version = CONFIG_VERSION
+                        # A config stamped *newer* than this build keeps its
+                        # stamp: rewriting it as 1.1.0 would tell the build
+                        # that wrote it that its own migrations had run.
                         self._config = Config(
-                            config_version=config_data.get("config_version", "1.0.0"),
+                            config_version=stored_version,
                             albums=albums,
                             locationiq_api_key=config_data.get("locationiq_api_key"),
                             invokeai_url=config_data.get("invokeai_url"),
@@ -524,6 +597,13 @@ class ConfigManager:
                             invokeai_board_id=config_data.get("invokeai_board_id"),
                             **extra,
                         )
+                        # Deliberately not saved here. Loading a config is a
+                        # read, and a rewrite drops comments and any key this
+                        # build does not know — an unprompted one, on every
+                        # user's first start after upgrading, is not a trade
+                        # worth making. The new stamp rides along with the
+                        # next save the user actually causes, and until then
+                        # the migration is simply re-applied in memory.
 
                     except Exception as e:
                         raise RuntimeError(

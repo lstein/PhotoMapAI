@@ -33,7 +33,7 @@ export const state = {
   // album switch and persisted back via /update_album/ when the user edits
   // them in the search dialog. Initial values are placeholders before the
   // first album is loaded.
-  minSearchScore: 0.2, // [0.0, 1.0]
+  minSearchScore: 0.1, // [0.0, 1.0]; matches the backend's OpenCLIP default
   maxSearchResults: 100, // positive integer
   useQueryOptimization: true, // SigLIP-only; ignored by other encoders
   albumEncoderSpec: null, // mirrored from the active album's config
