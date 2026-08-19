@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from .. import invokeai_client
 from ..cluster_eps import FALLBACK_CLUSTER_EPS, cached_adaptive_cluster_eps
 from ..config import (
     Album,
@@ -417,11 +418,17 @@ async def update_album(album_data: dict) -> JSONResponse:
             )
 
         # The edit form never sees the saved InvokeAI password, so it sends a
-        # blank one; unlike the fields above, "" here means "keep what's
-        # stored" rather than "clear it".
-        password = album_data.get("invokeai_password") or (
-            existing.invokeai_password if existing else None
-        )
+        # blank one for "I did not touch this": "" means keep, unlike every
+        # other field here. An explicit null is the form's *Forget saved
+        # password* box — the only way to say "clear it", which a backend
+        # leaving multi-user mode needs, since a stored password with no
+        # username is dead weight the config keeps offering.
+        if "invokeai_password" in album_data and album_data["invokeai_password"] is None:
+            password = None
+        else:
+            password = album_data.get("invokeai_password") or (
+                existing.invokeai_password if existing else None
+            )
         is_board = kept("source_type", "directory") == "invokeai_board"
         # Only a change of encoder *family* invalidates a stored score: the
         # floors are 0.005 for SigLIP and 0.2 for CLIP, so swapping one CLIP
@@ -521,6 +528,17 @@ async def update_album(album_data: dict) -> JSONResponse:
                         "added to."
                     ),
                 )
+
+        # The JWT cache is keyed on (url, username), neither of which has to
+        # change when credentials do — so a password that was just cleared (or
+        # replaced) would otherwise keep working from cache until the token
+        # expired, up to a day later.
+        if existing is not None and (
+            album.invokeai_password != existing.invokeai_password
+            or album.invokeai_username != existing.invokeai_username
+            or album.invokeai_url != existing.invokeai_url
+        ):
+            invokeai_client._invalidate_token_cache()
 
         logger.info(f"Updating album: {album.key} with index {album.index}")
 

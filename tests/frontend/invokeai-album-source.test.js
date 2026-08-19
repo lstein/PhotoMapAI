@@ -445,7 +445,7 @@ describe("AlbumManager source-section toggle", () => {
 });
 
 describe("AlbumManager edit-save payloads for board albums", () => {
-  function buildEditDom({ loaded = true, boardIds = ["b1"] } = {}) {
+  function buildEditDom({ loaded = true, boardIds = ["b1"], password = "", forget = false } = {}) {
     document.body.innerHTML = `
       <div class="album-card">
         <div class="edit-form">
@@ -456,7 +456,10 @@ describe("AlbumManager edit-save payloads for board albums", () => {
           <input class="edit-album-invoke-url" value="http://localhost:9090" />
           <div class="edit-album-invoke-root-row"><input class="invoke-root-input" value="/srv/invokeai" /></div>
           <input class="edit-album-invoke-username" value="alice" />
-          <input class="edit-album-invoke-password" value="" />
+          <input class="edit-album-invoke-password" value="${password}" />
+          <label class="edit-album-invoke-forget-password-row" ${forget ? "" : "hidden"}>
+            <input class="edit-album-invoke-forget-password" type="checkbox" ${forget ? "checked" : ""} />
+          </label>
           <div class="edit-album-invoke-boards" ${loaded ? 'data-loaded="true"' : ""}>
             ${boardIds
               .map((id) => `<label><input type="checkbox" class="board-checkbox" value="${id}" checked /></label>`)
@@ -501,6 +504,34 @@ describe("AlbumManager edit-save payloads for board albums", () => {
     expect(manager.send_update_index_event).toHaveBeenCalledWith("board_album");
   });
 
+  test.each([
+    // typed password, forget box, what the payload should carry
+    ["", false, "absent"],
+    ["", true, "null"],
+    ["typed", false, "typed"],
+    // A password typed in the same edit is the later intent of the two.
+    ["typed", true, "typed"],
+  ])("password %p with forget=%p sends %s", async (password, forget, expected) => {
+    const card = buildEditDom({ password, forget });
+    const manager = makeEditStub();
+    fetchJson.mockResolvedValue({ success: true });
+
+    await AlbumManager.prototype.saveAlbumChanges.call(manager, card, album);
+
+    const payload = fetchJson.mock.calls[0][1].json;
+    if (expected === "absent") {
+      // Absent and null are the same after JSON.stringify but opposite in
+      // meaning to the backend: absent keeps the stored password, null
+      // clears it.
+      expect(Object.hasOwn(payload, "invokeai_password")).toBe(false);
+    } else if (expected === "null") {
+      expect(Object.hasOwn(payload, "invokeai_password")).toBe(true);
+      expect(payload.invokeai_password).toBeNull();
+    } else {
+      expect(payload.invokeai_password).toBe(expected);
+    }
+  });
+
   test("unloaded board checklist falls back to the saved selection", async () => {
     const card = buildEditDom({ loaded: false, boardIds: [] });
     const manager = makeEditStub();
@@ -517,10 +548,22 @@ describe("AlbumManager edit-save payloads for board albums", () => {
 describe("AlbumManager board-album edit form population", () => {
   function buildBoardEditForm() {
     document.body.innerHTML = `
+      <style>
+        /* The real stylesheet's .form-group label rule is what made the
+           hidden attribute a no-op on this row; keep both here so the test
+           fails if the override is dropped. */
+        .form-group label { display: block; }
+        .edit-album-invoke-forget-password-row[hidden] { display: none; }
+      </style>
       <div class="edit-form">
         <input class="edit-album-invoke-url" />
         <input class="edit-album-invoke-username" />
-        <input class="edit-album-invoke-password" />
+        <div class="form-group">
+          <input class="edit-album-invoke-password" />
+          <label class="edit-album-invoke-forget-password-row" hidden>
+            <input class="edit-album-invoke-forget-password" type="checkbox" />
+          </label>
+        </div>
         <small class="edit-album-invoke-status-hint"></small>
         <div class="edit-album-invoke-root-row"></div>
         <button class="edit-album-invoke-connect-btn"></button>
@@ -555,6 +598,47 @@ describe("AlbumManager board-album edit form population", () => {
   // Flush the async connectAndLoadBoards() chain populateBoardAlbumEditForm
   // kicks off but doesn't await.
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  test("the forget-password row is only offered when a password is stored", async () => {
+    const editForm = buildBoardEditForm();
+    const manager = makeStub();
+    fetchJson.mockResolvedValue({ reachable: false, detail: "not reachable" });
+    const row = editForm.querySelector(".edit-album-invoke-forget-password-row");
+
+    manager.populateBoardAlbumEditForm(editForm, {
+      ...album,
+      has_invokeai_password: false,
+    });
+    // Computed style, not just the attribute: `.form-group label` sets
+    // display:block, which beats the UA stylesheet's [hidden] rule — the
+    // attribute alone would report hidden while the box stayed on screen.
+    expect(getComputedStyle(row).display).toBe("none");
+
+    manager.populateBoardAlbumEditForm(editForm, {
+      ...album,
+      has_invokeai_password: true,
+    });
+    expect(getComputedStyle(row).display).not.toBe("none");
+
+    // populateBoardAlbumEditForm kicks off connectAndLoadBoards without
+    // awaiting it; drain it here so it cannot land inside the next test.
+    await flush();
+  });
+
+  test("re-opening the form clears a previously checked forget box", async () => {
+    const editForm = buildBoardEditForm();
+    const manager = makeStub();
+    fetchJson.mockResolvedValue({ reachable: false, detail: "not reachable" });
+    const box = editForm.querySelector(".edit-album-invoke-forget-password");
+
+    manager.populateBoardAlbumEditForm(editForm, album);
+    box.checked = true;
+    manager.populateBoardAlbumEditForm(editForm, album);
+
+    expect(box.checked).toBe(false);
+
+    await flush();
+  });
 
   test("checks every saved board on reopen, even when Uncategorized is among them", async () => {
     // Regression: the placeholder render only paints the (checked)

@@ -887,6 +887,47 @@ def test_board_album_accepts_the_paths_its_own_root_change_derives(client):
         client.delete("/delete_album/board_album")
 
 
+def test_invokeai_password_can_be_forgotten(client):
+    """A blank password means "I did not touch this", so clearing one needs a
+    signal of its own: the edit form's *Forget saved password* box sends an
+    explicit null. Without it a backend that leaves multi-user mode keeps
+    offering a credential nobody can remove short of editing YAML."""
+    response = client.post("/add_album/", json=_board_album_payload())
+    assert response.status_code == 201, response.text
+    try:
+        base = {
+            "key": "board_album",
+            "name": "Board Album",
+            "source_type": "invokeai_board",
+            "invokeai_url": "http://localhost:9090",
+            "invokeai_root": "/srv/invokeai",
+            "invokeai_board_ids": ["b1", "none"],
+        }
+        manager = get_config_manager()
+
+        # Blank still means keep.
+        response = client.post(
+            "/update_album/", json={**base, "invokeai_password": ""}
+        )
+        assert response.status_code == 200, response.text
+        manager.reload_config()
+        assert manager.get_album("board_album").invokeai_password == "secret"
+        assert client.get("/album/board_album/").json()["has_invokeai_password"] is True
+
+        # Null clears it.
+        response = client.post(
+            "/update_album/", json={**base, "invokeai_password": None}
+        )
+        assert response.status_code == 200, response.text
+        manager.reload_config()
+        assert manager.get_album("board_album").invokeai_password is None
+        assert (
+            client.get("/album/board_album/").json()["has_invokeai_password"] is False
+        )
+    finally:
+        client.delete("/delete_album/board_album")
+
+
 def test_changing_the_encoder_reresolves_min_search_score(client, tmp_path):
     """The sensible score floor differs by an order of magnitude between
     encoder families, and the edit form never sends one. Carrying the old
