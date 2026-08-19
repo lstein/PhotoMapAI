@@ -255,22 +255,40 @@ function setEpsAutoBadge(isAuto) {
 // --- EPS Spinner Debounce ---
 let epsUpdateTimer = null;
 document.getElementById("umapEpsSpinner").oninput = async () => {
+  // Drop any pending save first, and before every early return below: what
+  // the field holds now supersedes it. Leaving it armed lets a save from an
+  // earlier keystroke fire a second later carrying a number the field no
+  // longer shows.
+  if (epsUpdateTimer) {
+    clearTimeout(epsUpdateTimer);
+    epsUpdateTimer = null;
+  }
   // An empty field means "go back to deriving it" — otherwise the only way
   // out of a value you typed once would be to edit the config file. null is
   // sent verbatim; a numeric fallback here is what used to pin every album
   // to 0.07 the moment the field was cleared.
+  //
+  // But `type="number"` reports an empty value for anything it cannot parse
+  // *yet* — "0.", "-", "1e" — so an empty field alone cannot be read as the
+  // user asking for a derived strength. `validity.badInput` is what separates
+  // the two: it is set only while the input holds text the browser could not
+  // turn into a number, so a pause mid-keystroke no longer throws away the
+  // value the album was tuned to. (`Number.isNaN` cannot do this job: the
+  // sanitized value is "", never "NaN".)
+  if (document.getElementById("umapEpsSpinner").validity?.badInput) {
+    return;
+  }
   const eps = readSpinnerEps();
-  if (eps !== null && Number.isNaN(eps)) {
-    return; // mid-typing garbage ("-", "0.") — wait for something parseable
+  // DBSCAN refuses a non-positive epsilon, so storing one leaves the map
+  // clustering at something other than the number on screen.
+  if (eps !== null && !(Number.isFinite(eps) && eps > 0)) {
+    return;
   }
   // Typing a number is what turns a derived strength into a chosen one, so
   // the badge goes immediately rather than after the debounced save. Clearing
   // the field keeps it until the derived value comes back below.
   if (eps !== null) {
     setEpsAutoBadge(false);
-  }
-  if (epsUpdateTimer) {
-    clearTimeout(epsUpdateTimer);
   }
   epsUpdateTimer = setTimeout(async () => {
     // Cleared as the save starts, not left holding a fired timer's handle:
