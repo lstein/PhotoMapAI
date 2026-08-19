@@ -18,7 +18,13 @@ The overall topology of the semantic map is fixed during the indexing process, b
 
 Until you set a value yourself, PhotoMapAI chooses one for the album and marks it **auto** beside the field. There is no single number that suits every collection: the map's coordinates have no fixed scale, and the same eps that carves a library of tens of thousands of photos into useful clusters can leave a few hundred photos entirely unclustered. The chosen value is derived from how tightly that album's own images sit together, taking the most generous clustering that does not merge the map into one giant cluster.
 
-Typing in the field replaces the derived value with yours, the **auto** marker disappears, and the album keeps your number from then on. If the eps is too low, you will see a lot of unclustered images, represented as faint gray dots; if it is too high, the map collapses toward a single color. Adjust the "Cluster Strength" field until the display is satisfactory — and clear the field back to empty if you would rather have the derived value again.
+Typing in the field replaces the derived value with yours, the **auto** marker disappears, and the album keeps your number from then on. If the eps is too low, you will see a lot of unclustered images, represented as faint gray dots; if it is too high, the map collapses toward a single color. Adjust the "Cluster Strength" field until the display is satisfactory.
+
+!!! tip "Clear the field to get a value chosen for you"
+
+    Deleting everything in the "Cluster Strength" box — leaving it empty — hands the album back to PhotoMapAI, which picks a reasonable value from that album's own map and marks it **auto**. Nothing is lost by trying it: if you prefer your own number, type it back in.
+
+    This is worth doing on albums you created before this feature existed. Those albums all carry a saved Cluster Strength, so they will not show the **auto** marker until you clear the field once, even though the value they carry may be one nobody chose deliberately. Small albums are where it matters most: a number that clusters tens of thousands of photos nicely can leave a few hundred photos completely unclustered.
 
 ### Interpreting Clusters
 
