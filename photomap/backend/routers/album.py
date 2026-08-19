@@ -124,11 +124,27 @@ def album_umap_coords(embeddings: Embeddings):
     map is opened on exactly that album while its first index runs. Letting
     the ``FileNotFoundError`` out turns that into a 500 on a screen the user
     is watching indexing progress from.
+
+    Blocking, and not always cheaply: ``umap_embeddings`` is a *rebuild* and
+    not a read whenever ``umap.npz`` is missing or older than
+    ``embeddings.npz``, which is the state any rewrite of the index leaves
+    behind (an image delete, an ``update_images`` run). Async callers must go
+    through :func:`album_umap_coords_async`.
     """
     try:
         return embeddings.umap_embeddings
     except FileNotFoundError:
         return None
+
+
+async def album_umap_coords_async(embeddings: Embeddings):
+    """:func:`album_umap_coords` off the event loop.
+
+    Note this cannot be spelled ``asyncio.to_thread(f, album_umap_coords(e))``
+    at the call site: the argument would be evaluated — and the UMAP possibly
+    refitted, for minutes — before the thread is ever spawned.
+    """
+    return await asyncio.to_thread(album_umap_coords, embeddings)
 
 
 def validate_image_access(album_config, image_path: Path) -> bool:
@@ -481,7 +497,7 @@ async def get_umap_eps(request: UmapEpsGetRequest):
     if album_config.umap_eps is not None:
         return {"success": True, "eps": album_config.umap_eps, "auto": False}
 
-    coords = album_umap_coords(get_embeddings_for_album(request.album))
+    coords = await album_umap_coords_async(get_embeddings_for_album(request.album))
     if coords is None or coords.shape[0] == 0:
         # Not indexed yet: nothing to derive from, and the map will be empty
         # regardless. The historical default keeps the spinner showing a

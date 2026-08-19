@@ -39,8 +39,12 @@ async def get_umap_data(
     Returns:
         JSONResponse containing a list of points with x, y, index, and cluster ID.
     """
-    # Load cached UMAP embeddings (will compute/cache if missing)
-    umap_embeddings = embeddings.umap_embeddings
+    # Load cached UMAP embeddings (will compute/cache if missing). Threaded
+    # because "compute if missing" is a full UMAP fit, which is minutes on a
+    # large album: the map is fetched in parallel with /cluster_labels, so
+    # leaving this one on the event loop would stall the server no matter what
+    # the other endpoint does.
+    umap_embeddings = await asyncio.to_thread(lambda: embeddings.umap_embeddings)
 
     # Resolve eps against the coordinates: query parameter, else the album's
     # persisted value, else derived. ``/cluster_labels`` resolves through the

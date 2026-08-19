@@ -7,6 +7,8 @@ return are joined by the UI: a mismatch attaches hover labels to the wrong
 blobs.
 """
 
+import asyncio
+import os
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +16,7 @@ import pytest
 import yaml
 from fixtures import build_index
 
+from photomap.backend import embeddings as embeddings_module
 from photomap.backend.config import get_config_manager
 
 
@@ -184,3 +187,79 @@ def test_a_derived_eps_is_written_as_an_absent_key(client, new_album):
 
     stored = yaml.safe_load(get_config_manager().config_path.read_text())
     assert "umap_eps" not in stored["albums"][new_album["key"]]
+
+
+# ---------------------------------------------------------------------------
+# The coordinate load is a rebuild in disguise
+# ---------------------------------------------------------------------------
+
+
+def _stale_umap_cache(album_key):
+    """Leave ``umap.npz`` older than ``embeddings.npz``, as any rewrite of the
+    index does — deleting an image, an ``update_images`` run.
+
+    That is the state in which ``Embeddings.umap_embeddings`` stops being a
+    read and becomes a full UMAP refit.
+    """
+    album = get_config_manager().get_album(album_key)
+    index_path = Path(album.index)
+    umap_path = index_path.parent / "umap.npz"
+    newer = umap_path.stat().st_mtime + 100
+    os.utime(index_path, (newer, newer))
+
+
+def _spy_on_umap_refit(monkeypatch):
+    """Record which kind of thread each UMAP refit happens on.
+
+    ``asyncio.get_running_loop()`` succeeds only on the thread running the
+    event loop, so it distinguishes "inside the endpoint coroutine" from
+    "inside a worker" without depending on thread names.
+    """
+    threads = []
+    real = embeddings_module.Embeddings.create_umap_index
+
+    def spy(self, embeddings):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            threads.append("worker")
+        else:
+            threads.append("event-loop")
+        return real(self, embeddings)
+
+    monkeypatch.setattr(embeddings_module.Embeddings, "create_umap_index", spy)
+    return threads
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda client, key: client.post("/get_umap_eps/", json={"album": key}),
+        lambda client, key: client.get(f"/cluster_labels/{key}"),
+        lambda client, key: client.get(f"/umap_data/{key}"),
+    ],
+    ids=["get_umap_eps", "cluster_labels", "umap_data"],
+)
+def test_a_stale_umap_cache_is_rebuilt_off_the_event_loop(
+    client, new_album, monkeypatch, call
+):
+    """Loading an album's coordinates can refit UMAP outright, which is
+    minutes on a large album. Doing that in the endpoint coroutine stalls
+    every other request — including the indexing-progress polling on the very
+    screen the semantic map is opened from.
+
+    Note this cannot be left to ``asyncio.to_thread(f, album_umap_coords(e))``:
+    the argument is evaluated before the thread is spawned.
+    """
+    build_index(client, new_album)
+    _clear_stored_eps(new_album["key"])
+    _stale_umap_cache(new_album["key"])
+
+    threads = _spy_on_umap_refit(monkeypatch)
+
+    assert call(client, new_album["key"]).status_code == 200
+
+    # Non-vacuous: the refit really did happen, it just happened elsewhere.
+    assert threads, "expected the stale cache to trigger a UMAP refit"
+    assert "event-loop" not in threads
+

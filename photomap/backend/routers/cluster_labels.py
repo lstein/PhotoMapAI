@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from ..cluster_eps import resolve_album_cluster_eps
 from ..cluster_labels import compute_image_label, get_or_build_cluster_labels
-from .album import AlbumDep, EmbeddingsDep, album_umap_coords
+from .album import AlbumDep, EmbeddingsDep, album_umap_coords_async
 
 cluster_labels_router = APIRouter()
 
@@ -54,10 +54,14 @@ async def get_cluster_labels(
     # endpoints diverge and the hover-label feature breaks.
     # In a thread for the same reason the label build below is: deriving an
     # eps runs several DBSCAN fits, which is seconds of CPU on a large album
-    # and would otherwise hold the event loop.
+    # and would otherwise hold the event loop. Loading the coordinates is
+    # awaited separately rather than passed as an argument here — an argument
+    # is evaluated *before* the thread is spawned, and loading them can mean
+    # refitting UMAP outright (see album_umap_coords).
+    coords = await album_umap_coords_async(embeddings)
     cluster_eps = await asyncio.to_thread(
         resolve_album_cluster_eps,
-        album_umap_coords(embeddings),
+        coords,
         Path(album_config.index).parent,
         cluster_eps,
         album_config.umap_eps,
