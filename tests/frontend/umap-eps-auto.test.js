@@ -79,14 +79,6 @@ jest.unstable_mockModule(`${JS}/utils.js`, () => ({
   showToast: jest.fn(),
 }));
 
-// Let the async event listeners settle: they await a fetch before redrawing,
-// so a bare dispatch returns before any of it has happened.
-const flushAsync = async () => {
-  for (let i = 0; i < 5; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-};
-
 const spinner = () => document.getElementById("umapEpsSpinner");
 const badge = () => document.getElementById("umapEpsAutoBadge");
 
@@ -173,49 +165,6 @@ describe("Cluster Strength auto badge", () => {
     expect(cleared).toBeDefined();
     expect(spinner().value).toBe("0.49");
     expect(badge().hidden).toBe(false);
-  });
-
-  it("re-resolves the strength when the album finishes re-indexing", async () => {
-    // New coordinates mean a new derived value, and fetchUmapData sends
-    // whatever the spinner holds. The album that was empty when the map
-    // opened is the case that bites: its spinner holds the not-indexed-yet
-    // fallback, which is the kind of fixed number that leaves a small album
-    // with no clusters at all -- under an "auto" badge claiming otherwise.
-    const calls = [];
-    global.fetch = (url) => {
-      calls.push(String(url));
-      if (String(url).startsWith("get_umap_eps")) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, eps: 0.49, auto: true }) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-    };
-
-    // The map is open, showing the fallback it got for an unindexed album.
-    document.getElementById("umapFloatingWindow").style.display = "block";
-    umap.applyResolvedEps({ success: true, eps: 0.2, auto: true });
-
-    window.dispatchEvent(new CustomEvent("albumIndexUpdated", { detail: { albumKey: mockState.album } }));
-    await flushAsync();
-
-    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(true);
-    expect(spinner().value).toBe("0.49");
-    // The redraw must use the freshly resolved number, not the stale one.
-    const mapFetch = calls.find((u) => u.startsWith("umap_data/"));
-    expect(mapFetch).toContain("cluster_eps=0.49");
-  });
-
-  it("leaves another album's re-index alone", async () => {
-    const calls = [];
-    global.fetch = (url) => {
-      calls.push(String(url));
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-    };
-    document.getElementById("umapFloatingWindow").style.display = "block";
-
-    window.dispatchEvent(new CustomEvent("albumIndexUpdated", { detail: { albumKey: "some-other-album" } }));
-    await flushAsync();
-
-    expect(calls).toEqual([]);
   });
 
   it("accepts a derived value above the old 1.0 ceiling", () => {

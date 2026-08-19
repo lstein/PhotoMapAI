@@ -273,6 +273,10 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
     clearTimeout(epsUpdateTimer);
   }
   epsUpdateTimer = setTimeout(async () => {
+    // Cleared as the save starts, not left holding a fired timer's handle:
+    // it is what tells the rest of the module an edit is still pending, and
+    // a stale handle would read as "forever mid-edit" after the first edit.
+    epsUpdateTimer = null;
     await fetch("set_umap_eps/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -295,20 +299,37 @@ function readSpinnerEps() {
   return raw === "" ? null : parseFloat(raw);
 }
 
-// Ask the server what this album's Cluster Strength resolves to and show it.
-async function refreshResolvedEps() {
+// Whether the semantic map is on screen. Worth re-checking after any await:
+// rendering Plotly into a hidden container leaves a plot nobody asked for and
+// consumes the dataChanged flag the next open relies on to redraw.
+function umapWindowIsOpen() {
+  return document.getElementById("umapFloatingWindow")?.style.display === "block";
+}
+
+// Ask the server what an album's Cluster Strength resolves to and show it.
+// Returns whether the spinner now holds that album's resolved value.
+//
+// The album is pinned for the round-trip rather than read from `state` on the
+// way back: resolving can mean deriving, which on a large album is seconds to
+// minutes, and the user is free to switch albums while it runs. Writing a
+// late reply into the shared spinner would show one album's number — and its
+// auto badge — against another album's map.
+async function refreshResolvedEps(albumKey = state.album) {
   try {
     const response = await fetch("get_umap_eps/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ album: state.album }),
+      body: JSON.stringify({ album: albumKey }),
     });
     const data = await response.json();
-    if (data.success) {
-      applyResolvedEps(data);
+    if (!data.success || state.album !== albumKey) {
+      return false;
     }
+    applyResolvedEps(data);
+    return true;
   } catch (err) {
     console.warn("Could not fetch the resolved cluster strength:", err);
+    return false;
   }
 }
 
@@ -2263,21 +2284,41 @@ document.addEventListener("DOMContentLoaded", () => {
 // is showing; otherwise the dataChanged flag makes toggleUmapWindow's show
 // path refetch, without rendering Plotly into a hidden container here.
 window.addEventListener("albumIndexUpdated", async (e) => {
-  if (e.detail?.albumKey === state.album) {
-    state.dataChanged = true;
-    const umapWindow = document.getElementById("umapFloatingWindow");
-    if (umapWindow?.style.display === "block") {
-      // Re-resolve the strength before redrawing. New coordinates invalidate
-      // a derived one (the server keys its memo on them), and fetchUmapData
-      // sends whatever the spinner holds — so skipping this clusters the new
-      // map at the old album's number while the badge still reads "auto".
-      // The album that was empty when the map opened is the case that bites:
-      // its spinner holds the not-indexed-yet fallback, which is exactly the
-      // fixed value that leaves a small album with no clusters at all.
-      await refreshResolvedEps();
-      fetchUmapData();
-    }
+  const albumKey = state.album;
+  if (e.detail?.albumKey !== albumKey) {
+    return;
   }
+  state.dataChanged = true;
+  if (!umapWindowIsOpen()) {
+    return;
+  }
+  // Re-resolve the strength before redrawing. New coordinates invalidate a
+  // derived one (the server keys its memo on them), and fetchUmapData sends
+  // whatever the spinner holds — so skipping this clusters the new map at the
+  // old number while the badge still reads "auto". The album that was empty
+  // when the map opened is the case that bites: its spinner holds the
+  // not-indexed-yet fallback, exactly the kind of fixed value that leaves a
+  // small album with no clusters at all.
+  //
+  // Skipped while an edit is pending: the spinner belongs to whoever is
+  // typing in it, and the number they are mid-way through is about to become
+  // a stored one that no derived value can override. The debounce redraws
+  // against the new coordinates a moment later anyway.
+  if (epsUpdateTimer === null && !(await refreshResolvedEps(albumKey))) {
+    console.warn("Redrawing the semantic map with the previous cluster strength.");
+  }
+  // Re-check rather than trust the checks above: resolving is a round-trip
+  // that can take minutes on a large album, and the user is free to switch
+  // albums or close the window while it runs.
+  if (state.album !== albumKey || !umapWindowIsOpen()) {
+    return;
+  }
+  // Re-arm rather than rely on the flag set before the await: any redraw that
+  // completed during it (a debounced save, an album switch) has since cleared
+  // the flag, and fetchUmapData would silently no-op on the one redraw this
+  // listener exists to guarantee.
+  state.dataChanged = true;
+  await fetchUmapData();
 });
 window.addEventListener("albumChanged", (e) => {
   // A "refresh" is the same album re-indexed in place: the map reload is
