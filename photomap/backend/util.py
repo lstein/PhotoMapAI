@@ -83,13 +83,21 @@ class BoundedLRU(Generic[K, V]):
 def atomic_savez(path: Path, **arrays: Any) -> None:
     """Write a ``.npz`` archive to ``path`` atomically.
 
-    Writes to a sibling ``<name>.tmp`` and then ``Path.replace``s into place,
-    so a crash or concurrent reader never sees a half-written file. Callers
-    that previously called ``np.savez(path, ...)`` directly risked leaving a
+    Writes to a sibling temp file and then ``Path.replace``s into place, so a
+    crash or concurrent reader never sees a half-written file. Callers that
+    previously called ``np.savez(path, ...)`` directly risked leaving a
     truncated index that the next read would fail to load.
+
+    The temp name carries the pid and thread id rather than being a fixed
+    ``<name>.tmp``: two threads writing the same target would otherwise open
+    the *same* temp file, interleave their writes, and rename a corrupt
+    archive into place — which, for a cache whose freshness is judged by
+    mtime, is a permanently poisoned file rather than a transient error.
+    Concurrent writers of one path now simply race to rename, and the winner's
+    file is whole.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(path.name + ".tmp")
+    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         with tmp_path.open("wb") as fh:
             np.savez(fh, **arrays)
