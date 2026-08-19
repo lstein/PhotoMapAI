@@ -194,13 +194,29 @@ class Album(BaseModel):
 
     @field_validator("image_paths")
     @classmethod
-    def expand_and_validate_image_paths(cls, v: list[str]) -> list[str]:
-        """Expand ~ and warn if image paths do not exist."""
-        expanded = [str(Path(path).expanduser()) for path in v]
-        for path in expanded:
+    def expand_image_paths(cls, v: list[str]) -> list[str]:
+        """Expand ``~`` in image paths."""
+        return [str(Path(path).expanduser()) for path in v]
+
+    @model_validator(mode="after")
+    def _warn_about_missing_image_paths(self) -> "Album":
+        """Warn about configured directories that are not on disk.
+
+        Runs after the model is built rather than as a field validator so it
+        can see ``source_type``: a board album's ``outputs/videos`` is derived
+        from the InvokeAI root, and InvokeAI does not create that directory
+        until it first writes a video. Warning about it would fire on every
+        config load for a perfectly correct setup, so a board album's derived
+        directories are exempt — for those, a wrong root surfaces as the
+        pointed "none of the board files were found" error at index time,
+        which is a better diagnosis than this warning could give.
+        """
+        if self.source_type == "invokeai_board":
+            return self
+        for path in self.image_paths:
             if not Path(path).exists():
                 logger.warning(f"Image path does not exist: {path}")
-        return expanded
+        return self
 
     @field_validator("index")
     @classmethod

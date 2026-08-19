@@ -95,11 +95,12 @@ async def test_fetch_board_video_names_queries_each_board_with_filters(monkeypat
     )
     monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
 
-    names = await invokeai_client.fetch_board_video_names(
+    result = await invokeai_client.fetch_board_video_names(
         "http://localhost:9090", ["board-1", "none"], None, None
     )
 
-    assert names == ["a.mp4", "b.mp4", "c.mp4"]
+    assert result.names == ["a.mp4", "b.mp4", "c.mp4"]
+    assert result.api_available is True
     assert [call["url"] for call in stub.calls] == [
         "http://localhost:9090/api/v1/videos/names",
         "http://localhost:9090/api/v1/videos/names",
@@ -113,15 +114,39 @@ async def test_fetch_board_video_names_queries_each_board_with_filters(monkeypat
 @pytest.mark.asyncio
 async def test_fetch_board_video_names_tolerates_backend_without_videos(monkeypatch):
     """An InvokeAI predating the video API 404s the whole router; that must
-    read as 'no videos here', not as a failed index run."""
+    not fail the index run, and it must be distinguishable from a board that
+    genuinely holds no videos — the caller prunes rows for anything absent
+    from the listing."""
     stub = _RecordingClient([_Resp(status_code=404, text="Not Found")])
     monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
 
-    names = await invokeai_client.fetch_board_video_names(
+    result = await invokeai_client.fetch_board_video_names(
         "http://localhost:9090", ["board-1"], None, None
     )
 
-    assert names == []
+    assert result.names == []
+    assert result.api_available is False
+
+
+@pytest.mark.asyncio
+async def test_fetch_board_video_names_keeps_names_from_earlier_boards(monkeypatch):
+    """A 404 on a later board must not discard what earlier boards returned.
+    InvokeAI answers 404 for a board a non-admin cannot read, not only for a
+    missing video router, so the successful listings are still good data."""
+    stub = _RecordingClient(
+        [
+            _Resp(json_body={"video_names": ["a.mp4"], "total_count": 1}),
+            _Resp(status_code=404, text="Board not found"),
+        ]
+    )
+    monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
+
+    result = await invokeai_client.fetch_board_video_names(
+        "http://localhost:9090", ["board-1", "board-gone"], None, None
+    )
+
+    assert result.names == ["a.mp4"]
+    assert result.api_available is False
 
 
 @pytest.mark.asyncio
@@ -182,3 +207,15 @@ async def test_delete_video_tolerates_already_gone(monkeypatch):
     await invokeai_client.delete_video(
         "http://localhost:9090", "a.mp4", None, None
     )
+
+
+@pytest.mark.asyncio
+async def test_delete_video_accepts_a_200_that_is_not_an_object(monkeypatch):
+    """The success check reads ``failed_videos`` off the body, so a 200
+    carrying anything but a JSON object must not blow up: InvokeAI has
+    already deleted the video at that point, and an exception here would keep
+    the index row pointing at a file that is gone."""
+    stub = _RecordingClient([_Resp(json_body=["a.mp4"])])
+    monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
+
+    await invokeai_client.delete_video("http://localhost:9090", "a.mp4", None, None)

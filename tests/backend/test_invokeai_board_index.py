@@ -6,9 +6,10 @@ board → name mappings, and the files themselves are UUID-named copies of the
 bundled fixtures laid out under fake ``<root>/outputs/images`` and
 ``<root>/outputs/videos`` directories.
 
-The video mapping starts out empty, which is also the shape a board album
-sees against an InvokeAI too old to have a video API — so the image-only
-tests below double as coverage of that case.
+The video mapping starts out empty, so the image-only tests below run the
+same path as a board that simply has no videos. An InvokeAI too old to have
+a video API is a *different* shape — an unavailable listing rather than an
+empty one — and is exercised by flipping ``video_api_available``.
 """
 
 import shutil
@@ -22,7 +23,9 @@ from fastapi import HTTPException
 from fixtures import media_fixture_path
 
 from photomap.backend import invokeai_client
+from photomap.backend.invokeai_client import BoardVideoNames
 from photomap.backend.video import VIDEO_METADATA_KEY, ffmpeg_exe
+from photomap.backend.video_cache import VideoFrameCache
 
 ALBUM_KEY = "board_index_album"
 
@@ -71,6 +74,11 @@ def board_album(client, tmp_path, monkeypatch):
 
     boards = {"b1": list(names)}
     video_boards: dict[str, list[str]] = {}
+    # Flipped by tests that need the "InvokeAI did not answer the video
+    # listing" case, which is not the same as a board with no videos.
+    # ``names_on_outage`` covers the partial variant: some boards answered
+    # before a later one 404'd, so names come back *with* the failure flag.
+    video_api: dict = {"available": True, "names_on_outage": []}
 
     def _merged(mapping, board_ids):
         merged = []
@@ -82,7 +90,9 @@ def board_album(client, tmp_path, monkeypatch):
         return _merged(boards, board_ids)
 
     async def fake_fetch_videos(base_url, board_ids, username, password):
-        return _merged(video_boards, board_ids)
+        if not video_api["available"]:
+            return BoardVideoNames(list(video_api["names_on_outage"]), False)
+        return BoardVideoNames(_merged(video_boards, board_ids), True)
 
     monkeypatch.setattr(invokeai_client, "fetch_board_image_names", fake_fetch)
     monkeypatch.setattr(invokeai_client, "fetch_board_video_names", fake_fetch_videos)
@@ -97,11 +107,6 @@ def board_album(client, tmp_path, monkeypatch):
         "invokeai_board_ids": ["b1"],
         "index": index_path.as_posix(),
         "encoder_spec": "openai-clip:ViT-B/32",
-        # The bundled fixtures are deliberately tiny so the suite stays fast.
-        # Videos bypass the scan gate outright, but the images still have to
-        # clear it, and these tests are about board plumbing rather than
-        # about the gate — which test_index.py covers directly.
-        "min_image_bytes": 0,
     }
     response = client.post("/add_album/", json=album)
     assert response.status_code == 201, response.text
@@ -110,6 +115,7 @@ def board_album(client, tmp_path, monkeypatch):
         "album": album,
         "boards": boards,
         "video_boards": video_boards,
+        "video_api": video_api,
         "images_dir": images_dir,
         "videos_dir": videos_dir,
         "index_path": index_path,
@@ -205,10 +211,10 @@ def test_indexed_board_video_carries_its_probe_facts(client, board_album):
 def test_deleting_a_board_video_uses_the_video_endpoint(
     client, board_album, monkeypatch
 ):
-    """Videos are a separate resource on the InvokeAI side. Sending a video
-    name to the *image* delete endpoint 404s, which the client treats as
-    'already gone' — the row would leave the index while the video stayed on
-    the board."""
+    """Videos are a separate resource on the InvokeAI side, and a mis-dispatch
+    is silent: the *image* delete endpoint answers 200 with an empty
+    ``deleted_images`` for a name it does not know, so the row would leave the
+    index while the video stayed on the board."""
     video_name = _add_board_video(board_album)
     _build_index(client)
 
@@ -269,7 +275,6 @@ def test_batch_delete_splits_videos_from_images(client, board_album, monkeypatch
     assert deleted_images == [image_name]
 
 
-@requires_ffmpeg
 def test_missing_board_video_is_skipped_not_fatal(client, board_album):
     """A video InvokeAI lists but that is absent on disk is counted in the
     same discrepancy warning as a missing image."""
@@ -282,6 +287,126 @@ def test_missing_board_video_is_skipped_not_fatal(client, board_album):
     assert "1 of 5" in progress["warning_message"]
     metadata = client.get(f"/index_metadata/{ALBUM_KEY}").json()
     assert metadata["filename_count"] == 4
+
+
+@requires_ffmpeg
+def test_board_video_is_served_through_the_video_routes(client, board_album):
+    """The whole point of covering ``outputs/videos`` in ``image_paths``: an
+    indexed board video must actually be fetchable, both the container and
+    its extracted still, instead of being refused by the access gate."""
+    video_name = _add_board_video(board_album)
+    _build_index(client)
+
+    idx = _index_of(client, video_name, 5)
+    slide = client.get(f"/retrieve_image/{ALBUM_KEY}/{idx}").json()
+
+    assert client.get(f"/{slide['video_url']}").status_code == 200
+    assert client.get(f"/{slide['image_url']}").status_code == 200
+
+
+@requires_ffmpeg
+def test_deleting_a_board_video_discards_its_cached_still(
+    client, board_album, monkeypatch
+):
+    """InvokeAI owns the container, but the extracted still is ours: it has to
+    go with the row, or it lingers until the next index-time sweep and can be
+    served for a slide that no longer exists."""
+    video_name = _add_board_video(board_album)
+    _build_index(client)
+
+    async def fake_delete_video(base_url, name, username, password):
+        return None
+
+    monkeypatch.setattr(invokeai_client, "delete_video", fake_delete_video)
+
+    video_path = board_album["videos_dir"] / video_name
+    cache = VideoFrameCache(ALBUM_KEY)
+    assert cache.get(video_path) is not None, "indexing should have cached a still"
+
+    idx = _index_of(client, video_name, 5)
+    assert client.delete(f"/delete_image/{ALBUM_KEY}/{idx}").status_code == 200
+
+    assert cache.get(video_path) is None
+
+
+@requires_ffmpeg
+def test_video_api_outage_warns_when_indexed_videos_are_dropped(client, board_album):
+    """A video listing that could not be fetched looks exactly like a board
+    whose videos were all deleted, and the update prunes rows for everything
+    the listing omits. Losing them silently would report a clean success while
+    the album quietly shrank, so the run has to say what happened."""
+    _add_board_video(board_album)
+    _build_index(client)
+    assert client.get(f"/index_metadata/{ALBUM_KEY}").json()["video_count"] == 1
+
+    board_album["video_api"]["available"] = False
+    _build_index(client)
+
+    progress = client.get(f"/index_progress/{ALBUM_KEY}").json()
+    assert "1 previously indexed video(s) were dropped" in progress["warning_message"]
+    assert client.get(f"/index_metadata/{ALBUM_KEY}").json()["video_count"] == 0
+
+
+@requires_ffmpeg
+def test_partial_video_listing_does_not_claim_kept_videos_were_dropped(
+    client, board_album
+):
+    """A listing can fail on one board after another answered, so names come
+    back *with* the failure flag. Those videos are still indexed, and saying
+    they were dropped would be plainly false."""
+    video_name = _add_board_video(board_album)
+    _build_index(client)
+
+    board_album["video_api"]["available"] = False
+    board_album["video_api"]["names_on_outage"] = [video_name]
+    _build_index(client)
+
+    progress = client.get(f"/index_progress/{ALBUM_KEY}").json()
+    assert not progress["warning_message"]
+    assert client.get(f"/index_metadata/{ALBUM_KEY}").json()["video_count"] == 1
+
+
+def test_video_outage_on_an_image_free_board_does_not_claim_there_are_no_videos(
+    client, board_album
+):
+    """With no images on the board and no answer about its videos, the album
+    is empty for a reason worth naming — "contains no videos" is exactly what
+    could not be checked."""
+    board_album["boards"]["b1"].clear()
+    board_album["video_api"]["available"] = False
+
+    response = client.post("/update_index_async", json={"album_key": ALBUM_KEY})
+    assert response.status_code == 202
+    progress = _poll_until(client, ALBUM_KEY, {"completed", "error"})
+    assert progress["status"] == "error"
+    assert "did not answer the video listing" in progress["error_message"]
+
+
+def test_video_api_outage_is_silent_with_no_indexed_videos(client, board_album):
+    """The same outage against an InvokeAI predating video support costs the
+    album nothing, and that is the common case — it must not nag."""
+    board_album["video_api"]["available"] = False
+
+    _build_index(client)
+
+    progress = client.get(f"/index_progress/{ALBUM_KEY}").json()
+    assert progress["status"] == "completed"
+    assert not progress["warning_message"]
+    assert client.get(f"/index_metadata/{ALBUM_KEY}").json()["filename_count"] == 4
+
+
+def test_videos_only_board_error_names_the_videos_directory(client, board_album):
+    """A board holding only videos, none of them on disk, must not be blamed
+    on ``outputs`` as a whole — the images directory is fine and untouched."""
+    board_album["boards"]["b1"].clear()
+    board_album["video_boards"]["b1"] = [f"{uuid.uuid4()}.mp4" for _ in range(2)]
+
+    response = client.post("/update_index_async", json={"album_key": ALBUM_KEY})
+    assert response.status_code == 202
+    progress = _poll_until(client, ALBUM_KEY, {"completed", "error"})
+    assert progress["status"] == "error"
+    assert "2 board video(s)" in progress["error_message"]
+    assert str(board_album["videos_dir"]) in progress["error_message"]
 
 
 def test_missing_board_images_surface_completion_warning(client, board_album):
