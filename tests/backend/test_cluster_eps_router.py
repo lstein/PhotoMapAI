@@ -263,3 +263,78 @@ def test_a_stale_umap_cache_is_rebuilt_off_the_event_loop(
     assert threads, "expected the stale cache to trigger a UMAP refit"
     assert "event-loop" not in threads
 
+# ---------------------------------------------------------------------------
+# Album edits must not discard a tuned Cluster Strength
+# ---------------------------------------------------------------------------
+
+
+def _album_edit_payload(album_key, **overrides):
+    """The payload the album-manager edit form actually sends.
+
+    ``saveAlbumChanges()`` builds it from the fields the form has, and the
+    form has no Cluster Strength control — so ``umap_eps`` is absent, which
+    is the whole point of the tests below.
+    """
+    album = get_config_manager().get_album(album_key)
+    payload = {
+        "key": album_key,
+        "name": album.name,
+        "description": album.description,
+        "encoder_spec": album.encoder_spec,
+        "image_paths": album.image_paths,
+        "index": album.index,
+        "min_image_dimension": album.min_image_dimension,
+        "min_image_bytes": album.min_image_bytes,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_editing_an_album_keeps_a_tuned_cluster_strength(client, new_album):
+    """Renaming an album must not undo the user's tuning.
+
+    The edit form omits ``umap_eps``, so an update that treats "absent" as
+    "clear it" throws the number away the moment anything else about the
+    album is saved — while the docs promise the album keeps it.
+    """
+    key = new_album["key"]
+    client.post("/set_umap_eps/", json={"album": key, "eps": 0.55})
+
+    response = client.post(
+        "/update_album/", json=_album_edit_payload(key, name="Renamed")
+    )
+    assert response.status_code == 200
+
+    assert get_config_manager().get_album(key).name == "Renamed"
+    assert get_config_manager().get_album(key).umap_eps == pytest.approx(0.55)
+    assert client.post("/get_umap_eps/", json={"album": key}).json() == {
+        "success": True,
+        "eps": 0.55,
+        "auto": False,
+    }
+
+
+def test_editing_an_album_leaves_a_derived_strength_derived(client, new_album):
+    """The other half: preserving an omitted value must not resurrect one for
+    an album that never had it."""
+    key = new_album["key"]
+    client.post("/set_umap_eps/", json={"album": key, "eps": None})
+
+    response = client.post("/update_album/", json=_album_edit_payload(key))
+    assert response.status_code == 200
+
+    assert get_config_manager().get_album(key).umap_eps is None
+
+
+def test_an_explicit_null_in_an_update_still_clears(client, new_album):
+    """Absent means "keep"; null means "clear". Bookmarks send the album's
+    own value back verbatim, so both spellings have to keep working."""
+    key = new_album["key"]
+    client.post("/set_umap_eps/", json={"album": key, "eps": 0.55})
+
+    response = client.post(
+        "/update_album/", json=_album_edit_payload(key, umap_eps=None)
+    )
+    assert response.status_code == 200
+
+    assert get_config_manager().get_album(key).umap_eps is None

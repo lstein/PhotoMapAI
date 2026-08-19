@@ -357,11 +357,15 @@ async def update_album(album_data: dict) -> JSONResponse:
             name=album_data["name"],
             image_paths=album_data.get("image_paths"),
             index=index,
-            # Omitted means "leave it derived" — see Album.umap_eps. The old
-            # 0.07 fallback materialized a number on every edit, so an album
-            # that had never had its Cluster Strength touched acquired one
-            # the moment anything else about it was saved.
-            umap_eps=album_data.get("umap_eps"),
+            # Omitted means "keep whatever the album already has", the same
+            # rule as index and the InvokeAI password above: the edit form
+            # has no Cluster Strength control and never sends this key, so
+            # anything else here loses the user's tuning the moment they
+            # rename the album. An explicit null is still a clear — that is
+            # how /set_umap_eps hands an album back to the derived value.
+            umap_eps=album_data.get(
+                "umap_eps", existing.umap_eps if existing else None
+            ),
             description=album_data.get("description", ""),
             encoder_spec=album_data.get("encoder_spec"),
             min_search_score=album_data.get("min_search_score"),
