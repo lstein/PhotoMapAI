@@ -1140,3 +1140,173 @@ def test_min_image_bytes_round_trips(client, tmp_path):
         assert response.status_code == 200
         listing = {a["key"]: a for a in client.get("/available_albums/").json()}
         assert listing["bytes_default"]["min_image_bytes"] == value
+
+
+def _directory_album(client, tmp_path, key, **overrides):
+    """A plain directory album to patch in the tests below."""
+    images = tmp_path / key
+    images.mkdir()
+    payload = {
+        "key": key,
+        "name": key.capitalize(),
+        "image_paths": [str(images)],
+        "index": str(tmp_path / f"{key}.npz"),
+        "encoder_spec": "openai-clip:ViT-B/32",
+    }
+    payload.update(overrides)
+    assert client.post("/add_album/", json=payload).status_code == 201
+    return payload
+
+
+def test_a_null_score_still_re_resolves_across_an_encoder_family_change(
+    client, tmp_path
+):
+    """Null means "not supplied" to ``kept``, so it has to mean that here too.
+
+    Testing presence instead made the two halves of this rule disagree: an
+    explicit null suppressed the re-resolve *and* then fell through ``kept``
+    to the stored number, leaving a CLIP floor of 0.35 on a SigLIP album.
+    SigLIP similarities sit around 0.05-0.15, so that floor matches nothing
+    and the album's search silently returns empty.
+    """
+    _directory_album(client, tmp_path, "nullscore", min_search_score=0.35)
+
+    response = client.post(
+        "/update_album/",
+        json={
+            "key": "nullscore",
+            "encoder_spec": "siglip:google/siglip2-large-patch16-256",
+            "min_search_score": None,
+        },
+    )
+    assert response.status_code == 200
+
+    album = get_config_manager().get_album("nullscore")
+    assert album.encoder_spec.startswith("siglip:")
+    assert album.min_search_score == pytest.approx(0.005)
+
+
+def test_a_hand_tuned_score_survives_a_change_within_one_family(client, tmp_path):
+    """The other half: swapping one CLIP model for another must not touch a
+    score the user chose."""
+    _directory_album(client, tmp_path, "tuned", min_search_score=0.35)
+
+    # `name` carried so this pins the family logic alone, not the separate
+    # fix that made an omitted name patchable.
+    response = client.post(
+        "/update_album/",
+        json={
+            "key": "tuned",
+            "name": "Tuned",
+            "encoder_spec": "open-clip:ViT-L-14/dfn2b_s39b",
+        },
+    )
+    assert response.status_code == 200
+    assert get_config_manager().get_album("tuned").min_search_score == pytest.approx(0.35)
+
+
+def test_name_is_patchable_like_every_other_field(client, tmp_path):
+    """The endpoint documents "a key the payload does not carry keeps its
+    current value"; name was read straight out of the payload, so omitting it
+    raised a KeyError that surfaced as a 500 whose detail was the word
+    "name"."""
+    _directory_album(client, tmp_path, "namekeep")
+
+    response = client.post(
+        "/update_album/", json={"key": "namekeep", "min_search_score": 0.3}
+    )
+    assert response.status_code == 200
+    album = get_config_manager().get_album("namekeep")
+    assert album.name == "Namekeep"
+    assert album.min_search_score == pytest.approx(0.3)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"key": "ghost", "name": "Ghost"},
+        {"key": "ghost"},
+        {
+            "key": "ghost",
+            "name": "Ghost",
+            "image_paths": ["/tmp/ghost"],
+            "index": "/tmp/ghost/i.npz",
+        },
+    ],
+    ids=["partial", "key-only", "complete"],
+)
+def test_updating_a_missing_album_is_always_a_404(client, payload):
+    """It used to depend on the payload: a complete one reached the failed
+    write and got a 404, a partial one died in create_album and got a 500.
+    There is nothing to patch either way."""
+    response = client.post("/update_album/", json=payload)
+    assert response.status_code == 404
+    assert get_config_manager().get_album("ghost") is None
+
+
+def test_the_token_cache_is_invalidated_only_once_the_change_is_stored(
+    client, monkeypatch
+):
+    """Order matters: the cache key is (url, username), so the password is
+    not part of it.
+
+    Invalidating before the write leaves a window in which any request that
+    reads the album — an index scan, a board delete — logs in with the *old*
+    password and re-caches a token that then outlives the change by up to a
+    day, which is exactly what this invalidation exists to prevent.
+    """
+    from photomap.backend import invokeai_client
+    from photomap.backend.routers import album as album_router
+
+    assert client.post("/add_album/", json=_board_album_payload()).status_code == 201
+    try:
+        order = []
+
+        def record_invalidate():
+            order.append("invalidate")
+
+        real_update = album_router.config_manager.update_album
+
+        def record_update(album):
+            order.append("write")
+            return real_update(album)
+
+        monkeypatch.setattr(
+            invokeai_client, "_invalidate_token_cache", record_invalidate
+        )
+        monkeypatch.setattr(album_router.config_manager, "update_album", record_update)
+
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": "board_album",
+                "invokeai_password": None,
+            },
+        )
+        assert response.status_code == 200
+        assert order == ["write", "invalidate"]
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_the_token_cache_is_left_alone_when_credentials_did_not_change(
+    client, monkeypatch
+):
+    """Every album edit would otherwise force a fresh login on the next
+    InvokeAI call, for a rename."""
+    from photomap.backend import invokeai_client
+
+    assert client.post("/add_album/", json=_board_album_payload()).status_code == 201
+    try:
+        calls = []
+        monkeypatch.setattr(
+            invokeai_client, "_invalidate_token_cache", lambda: calls.append(1)
+        )
+
+        response = client.post(
+            "/update_album/", json={"key": "board_album", "name": "Renamed"}
+        )
+        assert response.status_code == 200
+        assert calls == []
+    finally:
+        client.delete("/delete_album/board_album")

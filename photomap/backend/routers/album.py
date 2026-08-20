@@ -369,6 +369,15 @@ async def update_album(album_data: dict) -> JSONResponse:
     """
     try:
         existing = config_manager.get_album(album_data["key"])
+        # Answered here rather than by the failed write at the end: with
+        # patch semantics there is nothing to patch, and the half-built
+        # Album that a partial payload produces raises out of create_album
+        # as a 500 before the write is ever reached. Both shapes of payload
+        # deserve the same 404.
+        if existing is None:
+            raise HTTPException(
+                status_code=404, detail=f"Album '{album_data['key']}' not found"
+            )
 
         def kept(field: str, default: Any = None) -> Any:
             """The payload's value for ``field``, else the stored one.
@@ -438,7 +447,11 @@ async def update_album(album_data: dict) -> JSONResponse:
         ) != default_min_search_score(existing.encoder_spec)
         album = create_album(
             key=album_data["key"],
-            name=album_data["name"],
+            # Patched like every other field. Reading it straight out of the
+            # payload contradicted the rule this endpoint documents, and a
+            # payload without it raised a bare KeyError that surfaced as a
+            # 500 whose detail was the word "name".
+            name=kept("name"),
             # Board albums derive their directories from the InvokeAI root,
             # so theirs are never carried over: a non-empty list suppresses
             # that derivation, which would pin the album to its old root the
@@ -458,9 +471,14 @@ async def update_album(album_data: dict) -> JSONResponse:
             # Left to the model to re-resolve when the encoder family changed
             # and the payload said nothing: carrying the other family's floor
             # over makes the new encoder look like it returns nothing.
+            # ``is None`` rather than ``not in``: ``kept`` treats a null as
+            # absent, so testing presence made the two halves disagree — an
+            # explicit null suppressed the re-resolve *and* fell through to
+            # the stored value, leaving a CLIP floor on a SigLIP album, where
+            # it matches nothing.
             min_search_score=(
                 None
-                if score_band_changed and "min_search_score" not in album_data
+                if score_band_changed and album_data.get("min_search_score") is None
                 else kept("min_search_score")
             ),
             max_search_results=kept("max_search_results"),
@@ -533,16 +551,23 @@ async def update_album(album_data: dict) -> JSONResponse:
         # change when credentials do — so a password that was just cleared (or
         # replaced) would otherwise keep working from cache until the token
         # expired, up to a day later.
-        if existing is not None and (
+        credentials_changed = (
             album.invokeai_password != existing.invokeai_password
             or album.invokeai_username != existing.invokeai_username
             or album.invokeai_url != existing.invokeai_url
-        ):
-            invokeai_client._invalidate_token_cache()
+        )
 
         logger.info(f"Updating album: {album.key} with index {album.index}")
 
         if config_manager.update_album(album):
+            # After the write, not before it. The cache is keyed on
+            # (url, username) alone, so a request that reads the album in
+            # between — an index scan, a board delete — logs in with the
+            # *old* password and re-caches a token that then outlives the
+            # change by up to a day, which is the thing this invalidation
+            # exists to stop.
+            if credentials_changed:
+                invokeai_client._invalidate_token_cache()
             return JSONResponse(
                 content={
                     "success": True,
