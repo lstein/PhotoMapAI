@@ -1019,7 +1019,11 @@ def test_blank_index_keeps_the_stored_one(client, tmp_path):
 
         manager = get_config_manager()
         manager.reload_config()
-        assert manager.get_album(key).index == index
+        # Compared as paths, not strings: Album.validate_index_path stores the
+        # posix form, so on Windows the stored value uses forward slashes
+        # while str(tmp_path / ...) uses backslashes. Both name the same file,
+        # which is what this test is about.
+        assert Path(manager.get_album(key).index) == Path(index)
     finally:
         client.delete(f"/delete_album/{key}")
 
