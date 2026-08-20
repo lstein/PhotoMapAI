@@ -32,7 +32,6 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from pathlib import PurePosixPath
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
@@ -49,13 +48,14 @@ _HTTP_TIMEOUT = 5.0
 # than the snappy 5s used for control-plane calls.
 _BOARD_FETCH_TIMEOUT = 30.0
 
-# InvokeAI clamps its listing endpoints at MAX_PAGE_SIZE (1000) and answers
-# 422 for anything larger, so this is the biggest page we may ask for.
+# The videos listing declares ``limit: le=MAX_PAGE_SIZE`` and answers 422
+# above it; the images listing has no such clamp.  MAX_PAGE_SIZE has been
+# 1000 since it was introduced, so this is the largest page both will serve.
 _DTO_PAGE_SIZE = 1000
 
-# Backstop against a backend that keeps answering full pages forever (a
-# board of a million items is not a real library, it is a paging bug).
-_MAX_DTO_PAGES = 10_000
+# Last-resort backstop.  A server that ignores ``offset`` is normally caught
+# far sooner, by the "paged past the declared total" break in the walk.
+_MAX_DTO_PAGES = 1_000
 
 # ── InvokeAI JWT token cache ──────────────────────────────────────────
 _cached_token: str | None = None
@@ -292,6 +292,17 @@ async def list_boards(
     ]
 
 
+def _has_path_syntax(part: str) -> bool:
+    """True if ``part`` is anything other than one plain path component.
+
+    An empty string, a dot segment, or a component carrying a separator of
+    either flavour all mean the server handed back structure where a bare
+    name was expected — which is the only way a joined path can leave the
+    outputs directory.
+    """
+    return not part or part in {".", ".."} or "/" in part or "\\" in part
+
+
 def _media_relpath(name: object, subfolder: object, resource: str) -> str | None:
     """Join InvokeAI's stored subfolder onto a media name, or ``None``.
 
@@ -307,8 +318,24 @@ def _media_relpath(name: object, subfolder: object, resource: str) -> str | None
     server's string is treated as untrusted: a name that is not a bare
     basename, or a subfolder that is absolute or walks upwards, is dropped
     with a warning rather than allowed to escape the outputs directory.
+
+    The accepted grammar is deliberately the one InvokeAI itself enforces
+    when it *writes* a subfolder (``DiskImageFileStorage._validate_subfolder``):
+    forward-slash separated, relative, no empty or dot segments, and no
+    backslashes at all.  Every strategy emits ``/`` even when InvokeAI runs
+    on Windows, so a backslash is not a separator to be normalized but a
+    value InvokeAI would have refused to store.  Rewriting them to ``/``
+    instead is actively unsafe: a lone backslash followed by ``etc`` is not
+    absolute as written, so an is-absolute check on it passes, and it then
+    *becomes* ``/etc`` — and joining an absolute path discards the outputs
+    directory entirely.
+
+    Names are held to the same rule.  Testing only for ``/`` leaves a
+    backslash-separated ``..`` chain looking like an ordinary filename,
+    which it is on Linux but is not on a Windows PhotoMap host, where those
+    segments would be walked.
     """
-    if not isinstance(name, str) or not name or PurePosixPath(name).name != name:
+    if not isinstance(name, str) or _has_path_syntax(name):
         logger.warning("Ignoring InvokeAI %s with a suspicious name: %r", resource, name)
         return None
     if not subfolder:
@@ -318,15 +345,13 @@ def _media_relpath(name: object, subfolder: object, resource: str) -> str | None
             "Ignoring InvokeAI %s %r: non-string subfolder %r", resource, name, subfolder
         )
         return None
-    # A Windows-hosted InvokeAI can report a backslash-separated subfolder;
-    # PhotoMap always builds the path with pathlib, so normalize to "/".
-    parts = PurePosixPath(subfolder.replace("\\", "/")).parts
-    if PurePosixPath(subfolder).is_absolute() or any(part in {"", ".", ".."} for part in parts):
+    parts = subfolder.split("/")
+    if any(_has_path_syntax(part) for part in parts):
         logger.warning(
             "Ignoring InvokeAI %s %r: unsafe subfolder %r", resource, name, subfolder
         )
         return None
-    return PurePosixPath(*parts, name).as_posix()
+    return "/".join([*parts, name])
 
 
 class BoardMediaPaths(NamedTuple):
@@ -348,6 +373,23 @@ class BoardMediaPaths(NamedTuple):
     api_available: bool
 
 
+class _BoardWalk(NamedTuple):
+    """One pass over a single board's listing.
+
+    ``relpaths`` is in listing order and may repeat an entry: rows added
+    while the walk is in progress shift later rows to a higher offset, so a
+    page can re-show something an earlier page already returned.
+
+    ``seen_names`` holds the raw names, deduped, *before* sanitizing — it is
+    what gets compared against ``declared_total``, so a row dropped for an
+    unsafe path does not read as a page the server failed to serve.
+    """
+
+    relpaths: list[str]
+    seen_names: set[str]
+    declared_total: int | None
+
+
 async def _fetch_board_media_relpaths(
     base_url: str,
     board_ids: list[str],
@@ -366,14 +408,28 @@ async def _fetch_board_media_relpaths(
     subfolder, and without it there is no way to locate the file on disk on
     any InvokeAI not configured for the flat layout.  (The name endpoints
     are deprecated upstream in favour of the polymorphic gallery listing
-    anyway.)  The listing is paginated and clamped server-side, so each
-    board is walked a page at a time until a short page arrives.
+    anyway.)  It costs roughly one request per 1000 rows and a fatter
+    payload, since a whole DTO is fetched to read one field.
 
     Canvas intermediates (region masks, staging composites) and
     control/mask-category assets are excluded, matching what InvokeAI's own
     gallery shows — a Wan pipeline writes its intermediate clips to the
     board just as canvas writes its staging images.  Servers that predate
     these query params ignore them and return the unfiltered list.
+
+    **Completeness matters more than freshness here.**  The caller feeds
+    this list to an index *update*, which prunes every indexed row the list
+    does not mention, so a listing that is quietly short deletes rows for
+    files that are still on the board.  Offset pagination is not a snapshot:
+    InvokeAI orders by ``starred DESC, created_at DESC`` and serves each page
+    from a separate query, so deleting, unstarring or un-boarding one row
+    between pages shifts every later row down an offset and skips exactly one
+    of them.  Each board is therefore checked against the ``total`` its own
+    listing reported, re-walked once if it came up short, and only then
+    failed — an aborted update leaves the previous index intact, which is the
+    recoverable outcome; silently pruning live rows is not.  (Rows *added*
+    mid-walk are harmless: they push entries to a higher offset, so they can
+    only produce a repeat, which the dedupe absorbs.)
 
     ``tolerate_absent_router`` reports a 404 as ``api_available=False``
     instead of raising.  That matters only for videos: an InvokeAI predating
@@ -396,9 +452,20 @@ async def _fetch_board_media_relpaths(
     }
     list_url = f"{base_url.rstrip('/')}/api/v1/{resource}/"
     all_relpaths: list[str] = []
+
+    def _incomplete(walk: _BoardWalk) -> bool:
+        """Did the walk return fewer distinct rows than the server claimed?"""
+        return walk.declared_total is not None and len(walk.seen_names) < walk.declared_total
+
     try:
         async with httpx.AsyncClient(timeout=_BOARD_FETCH_TIMEOUT) as client:
-            for board_id in board_ids:
+
+            async def _walk(board_id: str) -> _BoardWalk | None:
+                """One full pass over ``board_id``; ``None`` if it 404'd and
+                a 404 is tolerated for this resource."""
+                relpaths: list[str] = []
+                seen_names: set[str] = set()
+                declared_total: int | None = None
                 offset = 0
                 for _ in range(_MAX_DTO_PAGES):
                     params = {**filter_params, "board_id": board_id, "offset": offset}
@@ -421,7 +488,7 @@ async def _fetch_board_media_relpaths(
                             board_id,
                             resource,
                         )
-                        return BoardMediaPaths(list(dict.fromkeys(all_relpaths)), False)
+                        return None
                     if response.status_code >= 400:
                         raise HTTPException(
                             status_code=502,
@@ -446,20 +513,31 @@ async def _fetch_board_media_relpaths(
                                 "returned an unexpected shape"
                             ),
                         )
+                    total = payload.get("total")
+                    if declared_total is None and isinstance(total, int) and total >= 0:
+                        declared_total = total
                     for item in items:
                         if not isinstance(item, dict):
                             continue
+                        name = item.get(name_key)
+                        if isinstance(name, str):
+                            seen_names.add(name)
                         relpath = _media_relpath(
-                            item.get(name_key), item.get(subfolder_key, ""), resource
+                            name, item.get(subfolder_key, ""), resource
                         )
                         if relpath is not None:
-                            all_relpaths.append(relpath)
-                    # A short page is the last page.  Trusting ``total``
-                    # instead would loop forever against a backend that
-                    # reports a total it will not serve.
+                            relpaths.append(relpath)
+                    # A short page is the last page.
                     if len(items) < _DTO_PAGE_SIZE:
                         break
                     offset += len(items)
+                    # Paging past what the server said it holds means it is
+                    # not honouring ``offset`` (a caching or query-stripping
+                    # proxy will re-serve page one forever).  Stop and let the
+                    # completeness check below report it, rather than grinding
+                    # through the whole page budget.
+                    if declared_total is not None and offset >= declared_total + _DTO_PAGE_SIZE:
+                        break
                 else:
                     logger.warning(
                         "Stopped paging %s on board %r after %d pages.",
@@ -467,6 +545,37 @@ async def _fetch_board_media_relpaths(
                         board_id,
                         _MAX_DTO_PAGES,
                     )
+                return _BoardWalk(relpaths, seen_names, declared_total)
+
+            for board_id in board_ids:
+                walk = await _walk(board_id)
+                if walk is None:
+                    return BoardMediaPaths(list(dict.fromkeys(all_relpaths)), False)
+                if _incomplete(walk):
+                    logger.warning(
+                        "InvokeAI listed %d of %d %s for board %r; the board "
+                        "changed mid-listing. Re-reading it.",
+                        len(walk.seen_names),
+                        walk.declared_total,
+                        resource,
+                        board_id,
+                    )
+                    retry = await _walk(board_id)
+                    if retry is None:
+                        return BoardMediaPaths(list(dict.fromkeys(all_relpaths)), False)
+                    if _incomplete(retry):
+                        raise HTTPException(
+                            status_code=502,
+                            detail=(
+                                f"InvokeAI listed only {len(retry.seen_names)} of "
+                                f"{retry.declared_total} {resource} on board "
+                                f"{board_id!r}, twice in a row. Indexing was "
+                                f"stopped rather than treat the missing entries "
+                                f"as deleted; try again once the board is idle."
+                            ),
+                        )
+                    walk = retry
+                all_relpaths.extend(walk.relpaths)
     except httpx.RequestError as exc:
         logger.warning("InvokeAI %s listing request failed: %s", resource, exc)
         raise HTTPException(

@@ -45,6 +45,12 @@ def _index_filenames(index_path: Path) -> set[str]:
     return {Path(str(f)).name for f in data["filenames"]}
 
 
+def _index_paths(index_path: Path) -> set[str]:
+    """The full paths in the index, for assertions a basename cannot make."""
+    data = np.load(index_path, allow_pickle=True)
+    return {str(f) for f in data["filenames"]}
+
+
 def _poll_until(client, album_key, statuses, timeout=60):
     start = time.time()
     while True:
@@ -68,9 +74,8 @@ def board_album(client, tmp_path, monkeypatch):
     images_dir.mkdir(parents=True)
     videos_dir = tmp_path / "invokeai" / "outputs" / "videos"
     videos_dir.mkdir(parents=True)
-    # The subfolders a ``type``-organized InvokeAI files media into; the
-    # flat-layout tests simply never put anything in them.
-    (images_dir / "general").mkdir()
+    # A subfolder of the kind a ``type``-organized InvokeAI files media
+    # into; the flat-layout tests simply never put anything in it.
     (videos_dir / "user").mkdir()
     src_images = sorted(
         p for p in (Path(__file__).parent / "test_images").iterdir() if p.is_file()
@@ -201,17 +206,17 @@ def test_board_media_in_subfolders_are_found(client, board_album):
     visibly for videos, which are written entirely under those subfolders.
     The client now returns the subfolder-qualified path, and indexing has to
     honour it."""
-    image_name = f"{uuid.uuid4()}.png"
-    shutil.copy(
-        board_album["src_images"][0], board_album["images_dir"] / "general" / image_name
-    )
-    board_album["boards"]["b1"].append(f"general/{image_name}")
+    # A ``date``-organized image (three segments) and a ``type``-organized
+    # video (one), so the join is exercised at both depths.
+    image_rel = f"2026/08/19/{uuid.uuid4()}.png"
+    image_path = board_album["images_dir"] / image_rel
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(board_album["src_images"][0], image_path)
+    board_album["boards"]["b1"].append(image_rel)
 
-    video_name = f"{uuid.uuid4()}.mp4"
-    shutil.copy(
-        media_fixture_path("clip.mp4"), board_album["videos_dir"] / "user" / video_name
-    )
-    board_album["video_boards"].setdefault("b1", []).append(f"user/{video_name}")
+    video_rel = f"user/{uuid.uuid4()}.mp4"
+    shutil.copy(media_fixture_path("clip.mp4"), board_album["videos_dir"] / video_rel)
+    board_album["video_boards"].setdefault("b1", []).append(video_rel)
 
     _build_index(client)
 
@@ -219,7 +224,11 @@ def test_board_media_in_subfolders_are_found(client, board_album):
     assert metadata["filename_count"] == 6
     assert metadata["image_count"] == 5
     assert metadata["video_count"] == 1
-    assert {image_name, video_name} <= _index_filenames(board_album["index_path"])
+    # Assert the *stored* paths, not the basenames: a basename check would
+    # pass even if the file had been found somewhere else entirely.
+    indexed = _index_paths(board_album["index_path"])
+    assert str(board_album["images_dir"] / image_rel) in indexed
+    assert str(board_album["videos_dir"] / video_rel) in indexed
 
 
 @requires_ffmpeg

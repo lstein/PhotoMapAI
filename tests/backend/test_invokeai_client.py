@@ -9,6 +9,8 @@ and that each file's on-disk subfolder is read off its DTO rather than
 assumed flat.
 """
 
+from pathlib import Path
+
 import pytest
 from fastapi import HTTPException
 
@@ -57,18 +59,29 @@ def _clear_token_cache():
     invokeai_client._invalidate_token_cache()
 
 
-def _page(items, name_key="image_name", subfolder_key="image_subfolder"):
-    """One page of a listing endpoint, in the DTO shape InvokeAI returns."""
-    return _Resp(
-        json_body={
-            "items": [
-                {name_key: name, subfolder_key: subfolder} for name, subfolder in items
-            ],
-            "total": len(items),
-            "offset": 0,
-            "limit": invokeai_client._DTO_PAGE_SIZE,
-        }
-    )
+_UNSET = object()
+
+
+def _page(
+    items, name_key="image_name", subfolder_key="image_subfolder", total=_UNSET
+):
+    """One page of a listing endpoint, in the DTO shape InvokeAI returns.
+
+    ``total`` is the count of *all* rows matching the query, not the page's
+    own length; it defaults to the page length so single-page tests read as
+    a complete listing.  Pass ``None`` for a server that omits it.
+    """
+    body = {
+        "items": [
+            {name_key: name, subfolder_key: subfolder} for name, subfolder in items
+        ],
+        "offset": 0,
+        "limit": invokeai_client._DTO_PAGE_SIZE,
+    }
+    resolved = len(items) if total is _UNSET else total
+    if resolved is not None:
+        body["total"] = resolved
+    return _Resp(json_body=body)
 
 
 @pytest.mark.asyncio
@@ -118,20 +131,84 @@ async def test_fetch_board_relpaths_prefix_the_reported_subfolder(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fetch_board_relpaths_reject_paths_that_escape_outputs(monkeypatch):
+@pytest.mark.parametrize(
+    "name, subfolder",
+    [
+        ("escape.png", "../../../etc"),
+        ("absolute.png", "/etc"),
+        ("../traversal.png", "general"),
+        # Backslash spellings.  These are the dangerous ones: none of them
+        # look absolute as written, but rewriting the separators — which an
+        # earlier version of this code did, to "support" a Windows-hosted
+        # InvokeAI — turns them into absolute paths, and joining an absolute
+        # path throws the outputs directory away entirely.  InvokeAI refuses
+        # to store a backslash in a subfolder at all, so no real server
+        # reports one.
+        ("bs.png", "\\etc"),
+        ("bs-unc.png", "\\\\server\\share"),
+        ("bs-root.png", "\\"),
+        ("..\\..\\win.png", "general"),
+        # Empty and dot segments, rejected by InvokeAI's own validator too.
+        ("dot.png", "."),
+        ("empty-seg.png", "a//b"),
+        ("blank.png", " /../.."),
+    ],
+)
+async def test_fetch_board_relpaths_reject_paths_that_escape_outputs(
+    monkeypatch, name, subfolder
+):
     """The subfolder is a server-supplied string that PhotoMap turns into a
-    local filesystem path, so a traversal or an absolute path is dropped
-    rather than followed out of the outputs directory."""
+    local filesystem path, so anything that is not a plain relative path is
+    dropped rather than followed out of the outputs directory.
+
+    Asserted through the joined path, not just the returned string: what
+    matters is where ``outputs/images / relpath`` lands, and an absolute
+    relpath silently discards the left-hand side of that join."""
+    stub = _RecordingClient([_page([("ok.png", "general"), (name, subfolder)])])
+    monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
+
+    relpaths = await invokeai_client.fetch_board_image_relpaths(
+        "http://localhost:9090", ["board-1"], None, None
+    )
+
+    assert relpaths == ["general/ok.png"]
+    outputs = Path("/invokeai/outputs/images")
+    for rel in relpaths:
+        assert (outputs / rel).is_relative_to(outputs)
+
+
+@pytest.mark.asyncio
+async def test_fetch_board_relpaths_keep_legitimate_nested_subfolders(monkeypatch):
+    """The rejection rule must not swallow the layouts InvokeAI really
+    produces — ``type`` yields one segment, ``date`` yields three."""
+    stub = _RecordingClient(
+        [_page([("a.png", "general"), ("b.png", "2026/08/19"), ("c.png", "ab")])]
+    )
+    monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
+
+    relpaths = await invokeai_client.fetch_board_image_relpaths(
+        "http://localhost:9090", ["board-1"], None, None
+    )
+
+    assert relpaths == ["general/a.png", "2026/08/19/b.png", "ab/c.png"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_board_relpaths_retry_a_listing_that_came_up_short(monkeypatch):
+    """Offset pagination is not a snapshot: deleting one row between pages
+    shifts every later row down an offset, so exactly one live row is skipped.
+    The caller prunes indexed rows this list does not mention, so a short
+    listing silently deletes a file that is still on the board — it has to be
+    caught against the server's own ``total`` and re-read."""
+    monkeypatch.setattr(invokeai_client, "_DTO_PAGE_SIZE", 2)
     stub = _RecordingClient(
         [
-            _page(
-                [
-                    ("ok.png", "general"),
-                    ("escape.png", "../../../etc"),
-                    ("absolute.png", "/etc"),
-                    ("../traversal.png", "general"),
-                ]
-            ),
+            # First walk: server says 4, a deletion mid-walk means we see 3.
+            _page([("a.png", ""), ("b.png", "")], total=4),
+            _page([("d.png", "")], total=4),
+            # Re-read: quiet server, all 3 remaining rows, total agrees.
+            _page([("a.png", ""), ("b.png", "")], total=3),
+            _page([("d.png", "")], total=3),
         ]
     )
     monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
@@ -140,7 +217,97 @@ async def test_fetch_board_relpaths_reject_paths_that_escape_outputs(monkeypatch
         "http://localhost:9090", ["board-1"], None, None
     )
 
-    assert relpaths == ["general/ok.png"]
+    assert relpaths == ["a.png", "b.png", "d.png"]
+    assert len(stub.calls) == 4
+
+
+@pytest.mark.asyncio
+async def test_fetch_board_relpaths_fail_rather_than_prune_a_short_listing(monkeypatch):
+    """A listing that stays short across two reads is not churn — it is a
+    backend (or an intermediary) that will not serve what it says it holds.
+    Failing leaves the previous index intact; returning the short list would
+    delete an indexed row for every entry the server withheld."""
+    monkeypatch.setattr(invokeai_client, "_DTO_PAGE_SIZE", 2)
+    stub = _RecordingClient(
+        [
+            _page([("a.png", ""), ("b.png", "")], total=99),
+            _page([("c.png", "")], total=99),
+            _page([("a.png", ""), ("b.png", "")], total=99),
+            _page([("c.png", "")], total=99),
+        ]
+    )
+    monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await invokeai_client.fetch_board_image_relpaths(
+            "http://localhost:9090", ["board-1"], None, None
+        )
+
+    assert excinfo.value.status_code == 502
+    assert "3 of 99" in excinfo.value.detail
+
+
+@pytest.mark.asyncio
+async def test_fetch_board_relpaths_stop_paging_a_server_that_ignores_offset(
+    monkeypatch,
+):
+    """A caching or query-stripping proxy can re-serve page one forever.  The
+    short-page rule alone never fires there, so the walk has to give up once
+    it has paged past the total the server declared — and then report the
+    listing as unusable rather than return the fragment it did get."""
+    monkeypatch.setattr(invokeai_client, "_DTO_PAGE_SIZE", 2)
+    same_page = [("a.png", ""), ("b.png", "")]
+    stub = _RecordingClient([_page(same_page, total=10) for _ in range(50)])
+    monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await invokeai_client.fetch_board_image_relpaths(
+            "http://localhost:9090", ["board-1"], None, None
+        )
+
+    assert excinfo.value.status_code == 502
+    # 6 pages per walk (offset runs 0..10, then passes total + one page),
+    # twice — bounded, and nowhere near the 1000-page budget.
+    assert len(stub.calls) == 12
+
+
+@pytest.mark.asyncio
+async def test_fetch_board_relpaths_tolerate_a_listing_with_no_total(monkeypatch):
+    """The completeness check is best-effort: a payload without a usable
+    ``total`` must still index, not fail."""
+    stub = _RecordingClient([_page([("a.png", "general")], total=None)])
+    monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
+
+    relpaths = await invokeai_client.fetch_board_image_relpaths(
+        "http://localhost:9090", ["board-1"], None, None
+    )
+
+    assert relpaths == ["general/a.png"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_board_relpaths_tolerate_rows_added_mid_walk(monkeypatch):
+    """Rows added while the walk is in flight push existing rows to a higher
+    offset, so a page can repeat what an earlier one returned.  That is a
+    duplicate, not a gap: it must dedupe, not trigger a re-read."""
+    monkeypatch.setattr(invokeai_client, "_DTO_PAGE_SIZE", 2)
+    stub = _RecordingClient(
+        [
+            _page([("b.png", ""), ("c.png", "")], total=3),
+            # "a.png" was created mid-walk and sorts first, so page two
+            # re-shows c.png before reaching d.png.
+            _page([("c.png", ""), ("d.png", "")], total=4),
+            _page([], total=4),
+        ]
+    )
+    monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
+
+    relpaths = await invokeai_client.fetch_board_image_relpaths(
+        "http://localhost:9090", ["board-1"], None, None
+    )
+
+    assert relpaths == ["b.png", "c.png", "d.png"]
+    assert len(stub.calls) == 3
 
 
 @pytest.mark.asyncio
@@ -151,9 +318,11 @@ async def test_fetch_board_relpaths_page_until_a_short_page(monkeypatch):
     monkeypatch.setattr(invokeai_client, "_DTO_PAGE_SIZE", 2)
     stub = _RecordingClient(
         [
-            _page([("a.png", "general"), ("b.png", "general")]),
-            _page([("c.png", "general"), ("d.png", "general")]),
-            _page([("e.png", "general")]),
+            # ``total`` is the whole board, not the page — every page repeats
+            # the same figure, which is what the real endpoint does.
+            _page([("a.png", "general"), ("b.png", "general")], total=5),
+            _page([("c.png", "general"), ("d.png", "general")], total=5),
+            _page([("e.png", "general")], total=5),
         ]
     )
     monkeypatch.setattr(invokeai_client.httpx, "AsyncClient", stub)
