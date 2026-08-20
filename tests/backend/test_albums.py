@@ -834,6 +834,17 @@ def test_null_does_not_reset_a_tuning_field_to_its_default(client, tmp_path):
         client.delete(f"/delete_album/{key}")
 
 
+def _derived_board_paths(root: str) -> list[str]:
+    """The image directories a board album derives from ``root``.
+
+    Both of them — board albums have indexed videos alongside images since
+    #369, so the derived list is a pair and a caller echoing only the images
+    directory is not echoing what the album has.
+    """
+    outputs = Path(root) / "outputs"
+    return [str(outputs / "images"), str(outputs / "videos")]
+
+
 def test_board_album_accepts_the_paths_its_own_root_change_derives(client):
     """A caller that computes the new derived paths and sends them is not
     asking for a change, and neither is one still echoing the stored list
@@ -849,10 +860,11 @@ def test_board_album_accepts_the_paths_its_own_root_change_derives(client):
             "invokeai_root": "/srv/invokeai2",
             "invokeai_board_ids": ["b1", "none"],
         }
-        derived = str(Path("/srv/invokeai2") / "outputs" / "images")
-        response = client.post(
-            "/update_album/", json={**base, "image_paths": [derived]}
-        )
+        # Both of them: a board album derives an images *and* a videos
+        # directory from its root, so "the paths this root derives" is the
+        # pair, not the images one alone.
+        derived = _derived_board_paths("/srv/invokeai2")
+        response = client.post("/update_album/", json={**base, "image_paths": derived})
         assert response.status_code == 200, response.text
 
         # A root edit that carries the album's *stored* paths — what the
@@ -863,7 +875,7 @@ def test_board_album_accepts_the_paths_its_own_root_change_derives(client):
             json={
                 **base,
                 "invokeai_root": "/srv/invokeai3",
-                "image_paths": [str(Path("/srv/invokeai2") / "outputs" / "images")],
+                "image_paths": _derived_board_paths("/srv/invokeai2"),
             },
         )
         assert response.status_code == 200, response.text
@@ -878,7 +890,7 @@ def test_board_album_accepts_the_paths_its_own_root_change_derives(client):
         # asking for nothing, and not the guard's business (it loses the root
         # edit, which is the pre-existing last-write-wins race).
         stale_root = {**base, "invokeai_root": "/srv/invokeai2"}
-        stale_paths = [str(Path("/srv/invokeai2") / "outputs" / "images")]
+        stale_paths = _derived_board_paths("/srv/invokeai2")
         response = client.post(
             "/update_album/", json={**stale_root, "image_paths": stale_paths}
         )
