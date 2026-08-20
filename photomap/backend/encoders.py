@@ -83,7 +83,6 @@ def default_min_search_score(encoder_spec: str) -> float:
     return _MIN_SEARCH_SCORE_BY_BACKEND.get(backend, _DEFAULT_MIN_SEARCH_SCORE)
 
 
-
 # Encoder assumed when a legacy ``.npz`` cache or pre-swap-layer YAML album
 # omits the ``model_id`` / ``encoder_spec`` field. Before the encoder swap
 # layer existed, legacy CLIP was the only option, so any cache that predates
@@ -445,10 +444,10 @@ class SiglipEncoder(ImageTextEncoder):
     def calibrate_similarity(self, cosines: np.ndarray) -> np.ndarray:
         """Apply SigLIP's learned sigmoid calibration.
 
-        SigLIP's training objective produces image-text cosines of order 0.05-0.20
-        for matching pairs — much smaller than CLIP's 0.20-0.35 range. Without
-        calibration, a CLIP-tuned threshold like 0.2 filters out almost every
-        true match. The model's ``logit_scale`` and ``logit_bias`` recover
+        SigLIP's training objective produces image-text cosines of order
+        0.05-0.20 for matching pairs — smaller than either CLIP family's band
+        (OpenAI CLIP 0.24-0.30, OpenCLIP 0.15-0.26). Without calibration, a
+        CLIP-tuned threshold filters out almost every true match. The model's ``logit_scale`` and ``logit_bias`` recover
         per-pair match probabilities via ``sigmoid(cos * exp(scale) + bias)``,
         which makes the score readable as a probability. It does *not* make
         the threshold comparable to CLIP's: calibrated SigLIP probabilities

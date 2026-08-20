@@ -15,11 +15,10 @@ from ..config import (
     Album,
     create_album,
     default_board_index_path,
-    default_min_search_score,
     get_config_manager,
 )
 from ..embeddings import Embeddings
-from ..encoders import default_encoder_spec
+from ..encoders import default_encoder_spec, default_min_search_score
 from ..video_cache import VideoFrameCache
 
 
@@ -439,9 +438,13 @@ async def update_album(album_data: dict) -> JSONResponse:
                 existing.invokeai_password if existing else None
             )
         is_board = kept("source_type", "directory") == "invokeai_board"
-        # Only a change of encoder *family* invalidates a stored score: the
-        # floors are 0.005 for SigLIP and 0.2 for CLIP, so swapping one CLIP
-        # model for another must leave a hand-tuned value alone.
+        # Only a change of encoder *band* invalidates a stored score. The
+        # test is the resolved floor, not the spec: swapping one OpenCLIP
+        # model for another shares a scale and must leave a hand-tuned value
+        # alone, while OpenAI CLIP -> OpenCLIP moves the whole distribution
+        # down by about 0.1 (see ``default_min_search_score``) and carrying
+        # the old number over would judge the new encoder at a threshold
+        # above most of its match band.
         score_band_changed = existing is not None and default_min_search_score(
             kept("encoder_spec", existing.encoder_spec)
         ) != default_min_search_score(existing.encoder_spec)

@@ -128,6 +128,13 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None
     * its identity when it is a symlink — a dotfiles setup symlinks
       config.yaml into a repo, and replacing the link with a regular file
       leaves the real config behind, still holding the old content.
+
+    The temp file is created 0600 and widened to the target's mode only once
+    it is written. It holds the same secrets as the target, so creating it at
+    the process umask would publish them for the length of every write; and
+    when there is no target yet, 0600 is where the file stays — a config with
+    a password in it should not be world-readable from the moment it is
+    first written.
     """
     if path.is_symlink():
         path = Path(os.path.realpath(path))
@@ -138,10 +145,16 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None
         existing_mode = None
     tmp_path = path.with_name(path.name + ".tmp")
     try:
-        with tmp_path.open("w", encoding=encoding) as fh:
+        # O_TRUNC rather than O_EXCL: a .tmp left behind by a killed process
+        # would otherwise make every later write fail until it was removed by
+        # hand. That is also why the creation mode is not enough — an
+        # inherited .tmp keeps whatever mode it already had — so narrow it
+        # explicitly before any of the payload lands in it.
+        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding=encoding) as fh:
+            os.chmod(tmp_path, 0o600)
             fh.write(text)
-        if existing_mode is not None:
-            os.chmod(tmp_path, existing_mode)
+        os.chmod(tmp_path, existing_mode if existing_mode is not None else 0o600)
         os.replace(tmp_path, path)
     except BaseException:
         if tmp_path.exists():

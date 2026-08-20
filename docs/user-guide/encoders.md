@@ -26,7 +26,7 @@ Google's 2024–25 update to SigLIP, trained with a sigmoid loss instead of CLIP
 
 The original 2021 CLIP — the model PhotoMapAI used for everything before the encoder layer was added. It's the smallest of the three (~150 MB, fastest to index) and uses a familiar contrastive cosine similarity.
 
-- **Strengths.** Fastest indexing, smallest disk footprint, well-understood threshold behavior. Its scores run higher than OpenCLIP's — matching pairs around 0.24–0.35, and a median near 0.17 even for an unrelated query — so its default threshold is the traditional 0.2.
+- **Strengths.** Fastest indexing, smallest disk footprint, well-understood threshold behavior. Its scores run higher than OpenCLIP's — matching pairs around 0.24–0.30, and a median near 0.17 even for an unrelated query — so its default threshold is the traditional 0.2.
 - **Weaknesses.** Substantially weaker than the newer alternatives across published benchmarks (e.g. ~63% ImageNet zero-shot vs. 82% for OpenCLIP-DFN). Recall on photo-style content is noticeably worse, and false positives are more frequent.
 - **Pick this if** you're constrained on disk or time, or you want to keep a legacy album working without re-indexing it. Albums created before the encoder layer existed default to this, and re-indexing isn't required just because a newer option is available.
 

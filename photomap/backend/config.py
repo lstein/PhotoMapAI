@@ -47,18 +47,6 @@ def default_board_index_path(album_key: str) -> Path:
     return data_dir / "indexes" / album_key / "embeddings.npz"
 
 
-def default_min_search_score(encoder_spec: str) -> float:
-    """The sensible score floor for ``encoder_spec``'s encoder family.
-
-    SigLIP's cosine similarities live an order of magnitude below CLIP's, so
-    a floor tuned for one family hides every result under the other. Callers
-    that need to know whether a re-resolve is warranted compare this across
-    two specs rather than comparing the specs themselves — swapping one CLIP
-    model for another must not discard a score the user tuned by hand.
-    """
-    return 0.005 if encoder_spec.startswith("siglip:") else 0.2
-
-
 class Album(BaseModel):
     """Represents a photo album configuration."""
 
@@ -327,8 +315,12 @@ CONFIG_VERSION = "1.1.0"
 def _version_tuple(version: str) -> tuple[int, ...]:
     """``"1.10.2"`` -> ``(1, 10, 2)``, for ordering config versions.
 
-    A version this build cannot parse sorts as newer than anything it knows,
-    so an unreadable stamp is never mistaken for an un-migrated old file.
+    Only ever called with a stamp read straight out of the YAML, before the
+    :class:`Config` model has had a chance to reject it. Anything that is not
+    ``x.y.z`` sorts as newer than every version this build knows, so a stamp
+    it cannot read is never mistaken for an un-migrated old file — belt and
+    braces, since ``Config.validate_version`` refuses to build the model at
+    all a few lines later and the load fails outright.
     """
     try:
         return tuple(int(part) for part in version.split("."))
@@ -336,7 +328,14 @@ def _version_tuple(version: str) -> tuple[int, ...]:
         return (999,)
 
 
-def _migrate_score_floors(albums: dict[str, "Album"]) -> bool:
+# Albums already announced as migrated, so the notice below is printed once
+# per album per process. The migration itself is re-applied on every load
+# until a save persists it (see ``load_config``), and repeating the same
+# three lines at every reload would read as a change happening over and over.
+_announced_score_floor_migrations: set[tuple[str, float]] = set()
+
+
+def _migrate_score_floors(albums: dict[str, "Album"]) -> None:
     """Re-resolve score floors left at the old blanket CLIP default.
 
     Before :func:`default_min_search_score` learned that OpenCLIP scores a
@@ -346,29 +345,33 @@ def _migrate_score_floors(albums: dict[str, "Album"]) -> bool:
     at all. The value is stored per album, so fixing the default alone would
     only help albums created after the upgrade.
 
-    Only the exact machine-chosen 0.2 is touched, and only where the album's
-    encoder now resolves to something else; a floor the user typed stays put.
+    Touches only the exact 0.2, and only where the album's encoder now
+    resolves to something else. That is a heuristic, not a proof of
+    authorship: nothing records *who* chose a floor, so a user who typed 0.2
+    into an OpenCLIP album before upgrading is moved off it along with every
+    album that merely inherited it. The log line below is what tells them,
+    and the value is one edit away in the search dialog. Any other floor —
+    including 0.2 on the encoder whose default it still is — is left alone.
+
     Runs only for a config written before this build (see ``CONFIG_VERSION``),
     so 0.2 remains a value the user can choose afterwards.
-
-    Returns whether anything changed, for the caller's logging.
     """
-    changed = False
     for key, album in albums.items():
         resolved = default_min_search_score(album.encoder_spec)
         if album.min_search_score == LEGACY_CLIP_MIN_SEARCH_SCORE != resolved:
             album.min_search_score = resolved
-            changed = True
-            logger.info(
-                "Album %r: search score floor %.3f -> %.3f, the measured "
-                "default for %s (searches at the old floor returned almost "
-                "nothing). Adjust it in the search dialog if you preferred it.",
-                key,
-                LEGACY_CLIP_MIN_SEARCH_SCORE,
-                resolved,
-                album.encoder_spec,
-            )
-    return changed
+            if (key, resolved) not in _announced_score_floor_migrations:
+                _announced_score_floor_migrations.add((key, resolved))
+                logger.info(
+                    "Album %r: search score floor %.3f -> %.3f, the measured "
+                    "default for %s (searches at the old floor returned almost "
+                    "nothing). Adjust it in the search dialog if you preferred "
+                    "the old value.",
+                    key,
+                    LEGACY_CLIP_MIN_SEARCH_SCORE,
+                    resolved,
+                    album.encoder_spec,
+                )
 
 
 class Config(BaseModel):

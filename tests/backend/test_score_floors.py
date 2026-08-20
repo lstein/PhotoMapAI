@@ -120,6 +120,35 @@ def test_migration_does_not_run_again_on_a_migrated_config(tmp_path):
     ).min_search_score == pytest.approx(0.2)
 
 
+def test_the_migration_notice_is_printed_once_per_process(tmp_path, caplog):
+    """Until a save persists it, the migration is re-applied on every load.
+    Announcing it each time would read as the floor changing over and over,
+    on a config that has not changed at all."""
+    import logging
+
+    from photomap.backend import config as config_module
+
+    config_path = tmp_path / "config.yaml"
+    _write_config(
+        config_path,
+        {
+            "openclip": _album_entry(
+                tmp_path, "open-clip:ViT-L-14/dfn2b_s39b", LEGACY_CLIP_MIN_SEARCH_SCORE
+            )
+        },
+    )
+    config_module._announced_score_floor_migrations.clear()
+
+    manager = ConfigManager(config_path=config_path)
+    with caplog.at_level(logging.INFO, logger="photomap.backend.config"):
+        for _ in range(3):
+            manager._config = None  # what every save does, via the cache reset
+            assert manager.get_album("openclip").min_search_score == pytest.approx(0.1)
+
+    notices = [r for r in caplog.records if "score floor" in r.getMessage()]
+    assert len(notices) == 1, [r.getMessage() for r in notices]
+
+
 def test_a_newer_config_is_left_alone(tmp_path):
     """A config stamped by a future build keeps its stamp: claiming it as
     1.1.0 would tell that build its own migrations had already run."""
@@ -168,9 +197,16 @@ def test_migration_leaves_hand_tuned_and_matching_floors_alone(tmp_path):
 def test_search_without_an_explicit_floor_uses_the_encoder_default(
     tmp_path, monkeypatch
 ):
-    """The search entry point is reachable without an album (the CLI uses it),
-    so its own default has to be encoder-aware too rather than a CLIP number
-    that silences OpenCLIP."""
+    """The search entry point is reachable without an album — anything
+    holding an ``Embeddings`` can call it — so its own default has to be
+    encoder-aware too rather than a CLIP number that silences OpenCLIP.
+
+    Note this only helps callers that pass an ``encoder_spec``: the
+    ``search_images``/``search_text`` CLI entry points build a bare
+    ``Embeddings``, which falls back to ``LEGACY_ENCODER_SPEC`` and so
+    resolves OpenAI CLIP's 0.2 (as does the query encoder they use, which is
+    a separate problem for a modern index).
+    """
     from photomap.backend import encoders as encoders_module
     from photomap.backend.embeddings import Embeddings
 
@@ -255,3 +291,68 @@ def test_config_rewrites_follow_a_symlink(tmp_path):
 
     assert link.is_symlink()
     assert "rewritten" in real.read_text()
+
+
+def test_a_config_written_for_the_first_time_is_private(tmp_path):
+    """There is no existing mode to preserve on the very first write, and the
+    process umask is typically 022 — which would publish the InvokeAI
+    password to every account on the machine from the moment the file exists.
+    """
+    import os
+    import stat
+
+    from photomap.backend.util import atomic_write_text
+
+    path = tmp_path / "config.yaml"
+    previous_umask = os.umask(0o022)
+    try:
+        atomic_write_text(path, "invokeai_password: hunter2\n")
+    finally:
+        os.umask(previous_umask)
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_the_temp_file_is_never_wider_than_the_target(tmp_path, monkeypatch):
+    """The rewrite goes through a .tmp holding the same secrets, so it has to
+    be narrowed *before* the payload is written, not after.
+
+    The leftover .tmp here is the case the O_CREAT mode cannot cover: a file
+    inherited from a killed run keeps whatever mode it already had, so
+    without the explicit narrowing the password would be written into a
+    world-readable file and only tightened once it was already there.
+    """
+    import os
+    import stat
+
+    from photomap.backend import util
+
+    path = tmp_path / "config.yaml"
+    path.write_text("albums: {}\n")
+    os.chmod(path, 0o600)
+    stale = tmp_path / "config.yaml.tmp"
+    stale.write_text("left behind by a killed write\n")
+    os.chmod(stale, 0o644)
+
+    modes_while_writing: list[int] = []
+    real_fdopen = os.fdopen
+
+    def watching_fdopen(fd, *args, **kwargs):
+        handle = real_fdopen(fd, *args, **kwargs)
+        real_write = handle.write
+
+        def write(text):
+            modes_while_writing.append(stat.S_IMODE(stale.stat().st_mode))
+            return real_write(text)
+
+        handle.write = write
+        return handle
+
+    monkeypatch.setattr(os, "fdopen", watching_fdopen)
+    util.atomic_write_text(path, "invokeai_password: hunter2\n")
+
+    assert modes_while_writing == [0o600], (
+        f".tmp held the payload at {[oct(m) for m in modes_while_writing]}"
+    )
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert "hunter2" in path.read_text()
