@@ -24,6 +24,7 @@ the call to be retried anonymously without requiring a restart.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import mimetypes
 import re
@@ -544,7 +545,9 @@ async def recall_parameters(request: RecallRequest) -> dict:
             ),
         )
 
-    raw_metadata = _load_raw_metadata(request.album_key, request.index)
+    raw_metadata = await asyncio.to_thread(
+        _load_raw_metadata, request.album_key, request.index
+    )
     payload = _build_recall_payload(raw_metadata, include_seed=request.include_seed)
     if not payload:
         raise HTTPException(
@@ -699,7 +702,9 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
             ),
         )
 
-    image_path = _load_image_path(request.album_key, request.index)
+    image_path = await asyncio.to_thread(
+        _load_image_path, request.album_key, request.index
+    )
     if not image_path.is_file():
         raise HTTPException(
             status_code=404, detail=f"Image file not found on disk: {image_path.name}"
@@ -710,7 +715,9 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
     # still matches InvokeAI's ``{uuid}.{ext}`` convention, or the PNG
     # carries Invoke generation metadata.  Loading the metadata here is the
     # same lookup used by /invokeai/recall, so it's cheap and local.
-    raw_metadata = _load_raw_metadata(request.album_key, request.index)
+    raw_metadata = await asyncio.to_thread(
+        _load_raw_metadata, request.album_key, request.index
+    )
     filename_matches = _looks_like_invoke_filename(image_path.name)
     metadata_matches = _has_invoke_metadata(raw_metadata)
     should_probe = filename_matches or metadata_matches

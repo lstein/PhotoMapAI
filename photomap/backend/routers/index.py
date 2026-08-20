@@ -4,6 +4,7 @@ This module contains the index-related API endpoints for the Clipslide backend.
 It allows creating, deleting, and checking the existence of embeddings indices for albums.
 """
 
+import asyncio
 import logging
 import os
 import shutil
@@ -285,7 +286,9 @@ async def index_metadata(album_config: AlbumDep) -> EmbeddingsIndexMetadata:
     marker = index_path.parent / LAST_UPDATED_FILENAME
     if marker.exists():
         last_modified = max(last_modified, marker.stat().st_mtime)
-    filenames = Embeddings.open_cached_embeddings(index_path)["filenames"]
+    filenames = (
+        await asyncio.to_thread(Embeddings.open_cached_embeddings, index_path)
+    )["filenames"]
     filename_count = len(filenames)
     video_count = sum(1 for f in filenames if is_video(Path(str(f))))
 

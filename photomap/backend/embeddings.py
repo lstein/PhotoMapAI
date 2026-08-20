@@ -1890,6 +1890,11 @@ class Embeddings(BaseModel):
         """
         Load all indexes from the embeddings file.
 
+        Blocking, and not always cheaply: on a cache miss this is a full
+        ``np.load`` of the index — including unpickling the per-image
+        metadata object array — plus copies and a sort. Async callers must
+        use :meth:`load_indexes`.
+
         Returns:
             Dict[str, np.ndarray]: Dictionary containing all indexes.
         """
@@ -2144,6 +2149,24 @@ class Embeddings(BaseModel):
             len(sorted_filenames),
         )
 
+    async def load_indexes(self) -> dict[str, np.ndarray]:
+        """:attr:`indexes` off the event loop.
+
+        The cache behind it holds three entries, so any request touching a
+        fourth album — or the first request after an index is rewritten —
+        pays the full load. Measured at 0.34s for a 50,000-image index with
+        modest metadata, page cache warm; a large library with real
+        generation metadata and a cold cache is several times that, and the
+        whole server is stopped for the duration.
+        """
+        return await asyncio.to_thread(lambda: self.indexes)
+
+    async def load_cached_embeddings(self) -> dict[str, Any]:
+        """:meth:`open_cached_embeddings` for this index, off the event loop."""
+        return await asyncio.to_thread(
+            self.open_cached_embeddings, self.embeddings_path
+        )
+
     def remove_image_from_embeddings(self, index: int) -> None:
         """
         Remove an image from the embeddings file.
@@ -2208,7 +2231,13 @@ class Embeddings(BaseModel):
                 **extras,
             )
 
-            # 6. Re-prime the cache immediately to verify the write
+            # 6. Re-prime the cache to verify the write. Cleared again first:
+            # a reader that missed the cache before step 4 can finish its load
+            # at any point after it and store the pre-delete snapshot, and
+            # then this would be a cache hit that verifies nothing and goes on
+            # serving images that are no longer in the index. Readers run in
+            # worker threads, so this is not hypothetical.
+            _open_npz_file.cache_clear()
             _open_npz_file(self.embeddings_path)
 
         except Exception as e:

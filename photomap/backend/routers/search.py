@@ -211,7 +211,7 @@ async def image_info(
     embeddings: EmbeddingsDep,
 ) -> ImageData:
     """Retrieve basic metadata on an image."""
-    data = embeddings.indexes
+    data = await embeddings.load_indexes()
     sorted_filenames = data["sorted_filenames"]
     filename_map = data["filename_map"]
     modification_times = data["sorted_modification_times"]
@@ -238,7 +238,7 @@ async def get_metadata(album_key: str, index: int, embeddings: EmbeddingsDep):
     """
     Download the JSON-formatted metadata for an image by album key and index.
     """
-    indexes = embeddings.indexes
+    indexes = await embeddings.load_indexes()
     metadata = indexes["sorted_metadata"]
     if index < 0 or index >= len(metadata):
         raise HTTPException(status_code=404, detail="Index out of range")
@@ -664,7 +664,7 @@ async def lookup_image_indices(
     as clickable thumbnails. Filenames not found in the album map to ``null``.
     Duplicate basenames in the album resolve to the first matching index.
     """
-    sorted_filenames = embeddings.indexes["sorted_filenames"]
+    sorted_filenames = (await embeddings.load_indexes())["sorted_filenames"]
     basename_to_index: dict[str, int] = {}
     for idx, full_path in enumerate(sorted_filenames):
         basename = Path(full_path).name
@@ -692,7 +692,7 @@ async def get_image_by_name(
     if Path(filename).suffix.lower() not in SUPPORTED_EXTENSIONS:
         raise HTTPException(status_code=403, detail="Unsupported image type")
 
-    indexes = embeddings.indexes
+    indexes = await embeddings.load_indexes()
     # inefficient linear search for the filename, but still pretty quick!
     absolute_paths = [
         x for x in indexes["sorted_filenames"] if Path(x).name == filename
