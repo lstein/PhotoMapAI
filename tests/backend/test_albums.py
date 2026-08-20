@@ -1310,3 +1310,58 @@ def test_the_token_cache_is_left_alone_when_credentials_did_not_change(
         assert calls == []
     finally:
         client.delete("/delete_album/board_album")
+
+
+@pytest.mark.parametrize(
+    "paths_for",
+    [
+        lambda root: list(reversed(_derived_board_paths(root))),
+        lambda root: _derived_board_paths(root)[:1],
+        lambda root: _derived_board_paths(root)[1:],
+    ],
+    ids=["reordered", "images-only", "videos-only"],
+)
+def test_echoing_part_of_a_board_albums_paths_is_not_a_change(client, paths_for):
+    """The guard asks whether the caller is requesting a *change*.
+
+    Order carries no meaning here, and the derived list has grown — board
+    albums gained an ``outputs/videos`` directory — so a client holding a
+    snapshot from before that sends one path where the album now has two.
+    Neither is asking for anything, and both used to be refused.
+    """
+    assert client.post("/add_album/", json=_board_album_payload()).status_code == 201
+    try:
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": "board_album",
+                "name": "Board Album",
+                "image_paths": paths_for("/srv/invokeai"),
+            },
+        )
+        assert response.status_code == 200, response.text
+        # Still derived from the root, whatever the caller echoed.
+        assert get_config_manager().get_album("board_album").image_paths == (
+            _derived_board_paths("/srv/invokeai")
+        )
+    finally:
+        client.delete("/delete_album/board_album")
+
+
+def test_a_board_album_still_refuses_a_directory_it_does_not_derive(client):
+    """The tolerance above must not become "anything goes": a genuinely new
+    directory is still refused out loud rather than silently ignored."""
+    assert client.post("/add_album/", json=_board_album_payload()).status_code == 201
+    try:
+        response = client.post(
+            "/update_album/",
+            json={
+                "key": "board_album",
+                "name": "Board Album",
+                "image_paths": _derived_board_paths("/srv/invokeai") + ["/srv/elsewhere"],
+            },
+        )
+        assert response.status_code == 400
+        assert "InvokeAI root" in response.json()["detail"]
+    finally:
+        client.delete("/delete_album/board_album")

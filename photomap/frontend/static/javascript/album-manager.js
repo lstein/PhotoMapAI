@@ -9,7 +9,7 @@ import {
 } from "./invokeai-album-source.js";
 import { exitSearchMode } from "./search-ui.js";
 import { closeSettingsModal, loadAvailableAlbums, openSettingsModal } from "./settings.js";
-import { setAlbum, state } from "./state.js";
+import { refreshActiveAlbumSearchSettings, setAlbum, state } from "./state.js";
 import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 // Encoder backends offered in the album manager dropdown. Values must match
@@ -1593,6 +1593,11 @@ export class AlbumManager {
 
     try {
       await fetchJson("update_album/", { json: updatedAlbum });
+      // Before anything can persist the stale ones back: an encoder-family
+      // change re-resolves min_search_score server-side, and the search
+      // dialog would otherwise write the old album's floor over it on the
+      // next nudge of any setting.
+      await refreshActiveAlbumSearchSettings(updatedAlbum.key);
       await this.refreshAlbumsAndDropdown();
       if (sourceChanged) {
         this.send_update_index_event(updatedAlbum.key);

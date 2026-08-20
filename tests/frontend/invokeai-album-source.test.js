@@ -30,6 +30,7 @@ jest.unstable_mockModule(`${M}/settings.js`, () => ({
 }));
 jest.unstable_mockModule(`${M}/state.js`, () => ({
   setAlbum: jest.fn(),
+  refreshActiveAlbumSearchSettings: jest.fn(() => Promise.resolve()),
   state: {},
 }));
 jest.unstable_mockModule(`${M}/utils.js`, () => ({

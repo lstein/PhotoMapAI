@@ -512,16 +512,16 @@ async def update_album(album_data: dict) -> JSONResponse:
             and requested_paths is not None
         ):
 
-            def _normalized(paths: list[str]) -> list[str]:
+            def _normalized(paths: list[str]) -> set[str]:
                 # Normalized the way ``create_album`` stores them, so a
                 # symlinked root echoed back does not read as a change. A path
                 # that cannot be resolved at all (symlink loop, embedded NUL)
                 # is left as-is: it will not match either list, which is the
                 # 400 this guard exists to raise, not a 500.
-                normalized = []
+                normalized = set()
                 for path in paths:
                     try:
-                        normalized.append(str(Path(path).expanduser().resolve()))
+                        normalized.add(str(Path(path).expanduser().resolve()))
                     except Exception:
                         # Deliberately broad: what ``resolve()`` raises for an
                         # unresolvable path is interpreter-dependent (a symlink
@@ -530,12 +530,24 @@ async def update_album(album_data: dict) -> JSONResponse:
                         # supports 3.10–3.13. Whatever it is, the path is not
                         # one of the album's own — leave it unnormalized so it
                         # falls through to the 400 rather than a 500.
-                        normalized.append(str(path))
+                        normalized.add(str(path))
                 return normalized
 
-            unchanged = _normalized(requested_paths) in (
-                _normalized(existing.image_paths),
-                _normalized(album.image_paths),
+            # Sets, and subsets: this asks "is the caller requesting a
+            # change", and a caller echoing back part of what the album has
+            # is not. Order carries no meaning — nothing downstream depends
+            # on it — and comparing lists made a reordered echo a 400.
+            #
+            # A subset counts because the derived list has grown: board
+            # albums gained an ``outputs/videos`` directory alongside
+            # ``outputs/images``, so a client still holding a snapshot from
+            # before that sends one path where the album now has two. It is
+            # asking for nothing, exactly like the caller mid-root-edit that
+            # the second accepted list below exists for.
+            requested = _normalized(requested_paths)
+            unchanged = bool(requested) and (
+                requested <= _normalized(existing.image_paths)
+                or requested <= _normalized(album.image_paths)
             )
             if not unchanged:
                 raise HTTPException(
