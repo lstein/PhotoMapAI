@@ -9,7 +9,7 @@ import {
 } from "./invokeai-album-source.js";
 import { exitSearchMode } from "./search-ui.js";
 import { closeSettingsModal, loadAvailableAlbums, openSettingsModal } from "./settings.js";
-import { setAlbum, state } from "./state.js";
+import { refreshActiveAlbumSearchSettings, setAlbum, state } from "./state.js";
 import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 // Encoder backends offered in the album manager dropdown. Values must match
@@ -1431,6 +1431,16 @@ export class AlbumManager {
         ? "(password saved — leave blank to keep)"
         : "(optional, multi-user mode)";
     }
+    // Offering "forget" with nothing stored would be a checkbox that does
+    // nothing, so the row only appears when there is a password to forget.
+    const forgetRow = editForm.querySelector(".edit-album-invoke-forget-password-row");
+    const forgetBox = editForm.querySelector(".edit-album-invoke-forget-password");
+    if (forgetRow) {
+      forgetRow.hidden = !album.has_invokeai_password;
+    }
+    if (forgetBox) {
+      forgetBox.checked = false;
+    }
     this._createInvokeRootRow(editForm.querySelector(".edit-album-invoke-root-row"), album.invokeai_root || "");
 
     // preferredIds wins when given; otherwise fall back to the album's saved
@@ -1546,10 +1556,15 @@ export class AlbumManager {
       updatedAlbum.invokeai_url = url;
       updatedAlbum.invokeai_root = root;
       updatedAlbum.invokeai_username = editForm.querySelector(".edit-album-invoke-username")?.value.trim() || null;
-      // Blank password means "keep the stored one" — omit it entirely.
+      // Blank password means "keep the stored one" — omit it entirely. An
+      // explicit null is the one way to clear it, and a freshly typed
+      // password wins over the checkbox: the user typed it last.
       const password = editForm.querySelector(".edit-album-invoke-password")?.value;
+      const forgetPassword = editForm.querySelector(".edit-album-invoke-forget-password")?.checked;
       if (password) {
         updatedAlbum.invokeai_password = password;
+      } else if (forgetPassword) {
+        updatedAlbum.invokeai_password = null;
       }
       updatedAlbum.invokeai_board_ids = boardIds;
       // index and image_paths are omitted: the backend keeps the stored
@@ -1578,6 +1593,11 @@ export class AlbumManager {
 
     try {
       await fetchJson("update_album/", { json: updatedAlbum });
+      // Before anything can persist the stale ones back: an encoder-family
+      // change re-resolves min_search_score server-side, and the search
+      // dialog would otherwise write the old album's floor over it on the
+      // next nudge of any setting.
+      await refreshActiveAlbumSearchSettings(updatedAlbum.key);
       await this.refreshAlbumsAndDropdown();
       if (sourceChanged) {
         this.send_update_index_event(updatedAlbum.key);

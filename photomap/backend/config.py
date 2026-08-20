@@ -42,6 +42,18 @@ def default_board_index_path(album_key: str) -> Path:
     return data_dir / "indexes" / album_key / "embeddings.npz"
 
 
+def default_min_search_score(encoder_spec: str) -> float:
+    """The sensible score floor for ``encoder_spec``'s encoder family.
+
+    SigLIP's cosine similarities live an order of magnitude below CLIP's, so
+    a floor tuned for one family hides every result under the other. Callers
+    that need to know whether a re-resolve is warranted compare this across
+    two specs rather than comparing the specs themselves — swapping one CLIP
+    model for another must not discard a score the user tuned by hand.
+    """
+    return 0.005 if encoder_spec.startswith("siglip:") else 0.2
+
+
 class Album(BaseModel):
     """Represents a photo album configuration."""
 
@@ -183,9 +195,7 @@ class Album(BaseModel):
     @model_validator(mode="after")
     def _resolve_min_search_score(self) -> "Album":
         if self.min_search_score is None:
-            self.min_search_score = (
-                0.005 if self.encoder_spec.startswith("siglip:") else 0.2
-            )
+            self.min_search_score = default_min_search_score(self.encoder_spec)
         return self
 
     @model_validator(mode="after")

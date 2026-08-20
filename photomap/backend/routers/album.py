@@ -9,8 +9,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from .. import invokeai_client
 from ..cluster_eps import FALLBACK_CLUSTER_EPS, cached_adaptive_cluster_eps
-from ..config import Album, create_album, default_board_index_path, get_config_manager
+from ..config import (
+    Album,
+    create_album,
+    default_board_index_path,
+    default_min_search_score,
+    get_config_manager,
+)
 from ..embeddings import Embeddings
 from ..encoders import default_encoder_spec
 from ..video_cache import VideoFrameCache
@@ -342,48 +349,237 @@ async def add_album(album: Album) -> JSONResponse:
     "/update_album/", tags=["Albums"], dependencies=[Depends(require_no_lock)]
 )
 async def update_album(album_data: dict) -> JSONResponse:
-    """Update an existing album in the configuration."""
+    """Update an existing album, keeping any field the payload leaves out.
+
+    An update is a *patch*, not a replacement. Callers send partial payloads —
+    the bookmark menu sends five keys, the search dialog sends the album plus
+    three overrides — and rebuilding the album from those alone silently reset
+    everything else to model defaults. The damage was worst for InvokeAI-board
+    albums: ``source_type`` defaulted back to ``"directory"`` and the
+    ``invokeai_*`` fields to None, quietly demoting the album, after which
+    indexing walked InvokeAI's output directories directly and deletions
+    stopped routing through its API (issue #371).
+
+    So every field falls back to what is stored: a key the payload does not
+    carry keeps its current value. Presence is what decides — a key that *is*
+    present wins even when its value is falsy or null, because
+    ``min_image_bytes: 0``, ``use_query_optimization: false``, an emptied
+    description and ``invokeai_username: null`` are all real edits the UI
+    sends.
+    """
     try:
         existing = config_manager.get_album(album_data["key"])
-        # Edits never relocate an index: when the payload omits it, keep the
-        # stored path. Likewise the edit form never sees the saved InvokeAI
-        # password, so a blank/omitted one means "keep what's stored".
-        index = album_data.get("index") or (existing.index if existing else None)
-        password = album_data.get("invokeai_password") or (
-            existing.invokeai_password if existing else None
-        )
+        # Answered here rather than by the failed write at the end: with
+        # patch semantics there is nothing to patch, and the half-built
+        # Album that a partial payload produces raises out of create_album
+        # as a 500 before the write is ever reached. Both shapes of payload
+        # deserve the same 404.
+        if existing is None:
+            raise HTTPException(
+                status_code=404, detail=f"Album '{album_data['key']}' not found"
+            )
+
+        def kept(field: str, default: Any = None) -> Any:
+            """The payload's value for ``field``, else the stored one.
+
+            Falsy is not absent: ``0``, ``false`` and ``""`` are real settings
+            here and are honored. Null *is* treated as absent, because
+            ``create_album`` turns a None into the model default rather than
+            into a cleared field — so honoring it would reset an album's
+            encoder or scan gates to factory values instead of clearing them.
+            The one field that genuinely needs clearing is handled by
+            :func:`cleared_or_kept`.
+            """
+            value = album_data.get(field)
+            if value is not None:
+                return value
+            if existing is not None:
+                return getattr(existing, field, default)
+            return default
+
+        def cleared_or_kept(field: str) -> Any:
+            """Like :func:`kept`, but an explicit null clears the field.
+
+            The edit form sends ``invokeai_username: null`` when the user
+            empties the username box — InvokeAI dropped out of multi-user
+            mode — and that has to stop the stored credentials being sent.
+            """
+            if field in album_data:
+                return album_data[field]
+            return getattr(existing, field, None) if existing else None
+
+        # An album's kind is fixed at creation: the edit form branches on the
+        # stored value and never offers to switch, so a payload that disagrees
+        # is a partial payload being read as a replacement — the bug this
+        # patch semantics exists to prevent (issue #371).
+        requested_type = album_data.get("source_type")
+        if (
+            existing is not None
+            and requested_type is not None
+            and requested_type != existing.source_type
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Album '{existing.key}' is a {existing.source_type} album; "
+                    f"its source type cannot be changed by an update."
+                ),
+            )
+
+        # The edit form never sees the saved InvokeAI password, so it sends a
+        # blank one for "I did not touch this": "" means keep, unlike every
+        # other field here. An explicit null is the form's *Forget saved
+        # password* box — the only way to say "clear it", which a backend
+        # leaving multi-user mode needs, since a stored password with no
+        # username is dead weight the config keeps offering.
+        if "invokeai_password" in album_data and album_data["invokeai_password"] is None:
+            password = None
+        else:
+            password = album_data.get("invokeai_password") or (
+                existing.invokeai_password if existing else None
+            )
+        is_board = kept("source_type", "directory") == "invokeai_board"
+        # Only a change of encoder *family* invalidates a stored score: the
+        # floors are 0.005 for SigLIP and 0.2 for CLIP, so swapping one CLIP
+        # model for another must leave a hand-tuned value alone.
+        score_band_changed = existing is not None and default_min_search_score(
+            kept("encoder_spec", existing.encoder_spec)
+        ) != default_min_search_score(existing.encoder_spec)
         album = create_album(
             key=album_data["key"],
-            name=album_data["name"],
-            image_paths=album_data.get("image_paths"),
-            index=index,
-            # Omitted means "keep whatever the album already has", the same
-            # rule as index and the InvokeAI password above: the edit form
-            # has no Cluster Strength control and never sends this key, so
-            # anything else here loses the user's tuning the moment they
-            # rename the album. An explicit null is still a clear — that is
-            # how /set_umap_eps hands an album back to the derived value.
-            umap_eps=album_data.get(
-                "umap_eps", existing.umap_eps if existing else None
+            # Patched like every other field. Reading it straight out of the
+            # payload contradicted the rule this endpoint documents, and a
+            # payload without it raised a bare KeyError that surfaced as a
+            # 500 whose detail was the word "name".
+            name=kept("name"),
+            # Board albums derive their directories from the InvokeAI root,
+            # so theirs are never carried over: a non-empty list suppresses
+            # that derivation, which would pin the album to its old root the
+            # moment the user edits the root.
+            image_paths=None if is_board else kept("image_paths"),
+            # Falsy, not just absent: the edit form sends "" when an album has
+            # no paths left to derive an index from, and an edit never
+            # relocates an index anyway.
+            index=album_data.get("index") or (existing.index if existing else None),
+            # cleared_or_kept, not kept: absent means "keep the tuning",
+            # but an explicit null is how an album is handed back to a
+            # strength derived from its own coordinates. 0.07 is gone as a
+            # fallback — "no value" now means "derive one".
+            umap_eps=cleared_or_kept("umap_eps"),
+            description=kept("description", ""),
+            encoder_spec=kept("encoder_spec"),
+            # Left to the model to re-resolve when the encoder family changed
+            # and the payload said nothing: carrying the other family's floor
+            # over makes the new encoder look like it returns nothing.
+            # ``is None`` rather than ``not in``: ``kept`` treats a null as
+            # absent, so testing presence made the two halves disagree — an
+            # explicit null suppressed the re-resolve *and* fell through to
+            # the stored value, leaving a CLIP floor on a SigLIP album, where
+            # it matches nothing.
+            min_search_score=(
+                None
+                if score_band_changed and album_data.get("min_search_score") is None
+                else kept("min_search_score")
             ),
-            description=album_data.get("description", ""),
-            encoder_spec=album_data.get("encoder_spec"),
-            min_search_score=album_data.get("min_search_score"),
-            max_search_results=album_data.get("max_search_results"),
-            use_query_optimization=album_data.get("use_query_optimization"),
-            min_image_dimension=album_data.get("min_image_dimension"),
-            min_image_bytes=album_data.get("min_image_bytes"),
-            source_type=album_data.get("source_type", "directory"),
-            invokeai_url=album_data.get("invokeai_url"),
-            invokeai_username=album_data.get("invokeai_username"),
+            max_search_results=kept("max_search_results"),
+            use_query_optimization=kept("use_query_optimization"),
+            min_image_dimension=kept("min_image_dimension"),
+            min_image_bytes=kept("min_image_bytes"),
+            source_type=kept("source_type", "directory"),
+            invokeai_url=kept("invokeai_url"),
+            invokeai_username=cleared_or_kept("invokeai_username"),
             invokeai_password=password,
-            invokeai_root=album_data.get("invokeai_root"),
-            invokeai_board_ids=album_data.get("invokeai_board_ids"),
+            invokeai_root=kept("invokeai_root"),
+            invokeai_board_ids=kept("invokeai_board_ids"),
+        )
+
+        # A board album's directories are derived from the InvokeAI root, not
+        # chosen: an added folder would widen the album's file-access gate to
+        # a directory InvokeAI knows nothing about, and the next index run
+        # would ignore it anyway. Refusing out loud beats accepting the
+        # request and quietly doing something else with it.
+        #
+        # Echoing back what the album already has is not a change, and there
+        # are two such lists while a root edit is in flight: the stored one
+        # and the one this request derives. Callers that GET an album and POST
+        # it back — the search-settings persister does exactly that — send one
+        # or the other depending on how the two raced, and neither is asking
+        # for anything.
+        requested_paths = album_data.get("image_paths")
+        if (
+            existing is not None
+            and existing.source_type == "invokeai_board"
+            and requested_paths is not None
+        ):
+
+            def _normalized(paths: list[str]) -> set[str]:
+                # Normalized the way ``create_album`` stores them, so a
+                # symlinked root echoed back does not read as a change. A path
+                # that cannot be resolved at all (symlink loop, embedded NUL)
+                # is left as-is: it will not match either list, which is the
+                # 400 this guard exists to raise, not a 500.
+                normalized = set()
+                for path in paths:
+                    try:
+                        normalized.add(str(Path(path).expanduser().resolve()))
+                    except Exception:
+                        # Deliberately broad: what ``resolve()`` raises for an
+                        # unresolvable path is interpreter-dependent (a symlink
+                        # loop is a RuntimeError up to 3.12 and an OSError from
+                        # 3.13, an embedded NUL a ValueError), and this project
+                        # supports 3.10–3.13. Whatever it is, the path is not
+                        # one of the album's own — leave it unnormalized so it
+                        # falls through to the 400 rather than a 500.
+                        normalized.add(str(path))
+                return normalized
+
+            # Sets, and subsets: this asks "is the caller requesting a
+            # change", and a caller echoing back part of what the album has
+            # is not. Order carries no meaning — nothing downstream depends
+            # on it — and comparing lists made a reordered echo a 400.
+            #
+            # A subset counts because the derived list has grown: board
+            # albums gained an ``outputs/videos`` directory alongside
+            # ``outputs/images``, so a client still holding a snapshot from
+            # before that sends one path where the album now has two. It is
+            # asking for nothing, exactly like the caller mid-root-edit that
+            # the second accepted list below exists for.
+            requested = _normalized(requested_paths)
+            unchanged = bool(requested) and (
+                requested <= _normalized(existing.image_paths)
+                or requested <= _normalized(album.image_paths)
+            )
+            if not unchanged:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "InvokeAI-board albums take their image directories "
+                        "from the InvokeAI root; they cannot be changed or "
+                        "added to."
+                    ),
+                )
+
+        # The JWT cache is keyed on (url, username), neither of which has to
+        # change when credentials do — so a password that was just cleared (or
+        # replaced) would otherwise keep working from cache until the token
+        # expired, up to a day later.
+        credentials_changed = (
+            album.invokeai_password != existing.invokeai_password
+            or album.invokeai_username != existing.invokeai_username
+            or album.invokeai_url != existing.invokeai_url
         )
 
         logger.info(f"Updating album: {album.key} with index {album.index}")
 
         if config_manager.update_album(album):
+            # After the write, not before it. The cache is keyed on
+            # (url, username) alone, so a request that reads the album in
+            # between — an index scan, a board delete — logs in with the
+            # *old* password and re-caches a token that then outlives the
+            # change by up to a day, which is the thing this invalidation
+            # exists to stop.
+            if credentials_changed:
+                invokeai_client._invalidate_token_cache()
             return JSONResponse(
                 content={
                     "success": True,
@@ -396,6 +592,10 @@ async def update_album(album_data: dict) -> JSONResponse:
                 status_code=404, detail=f"Album '{album.key}' not found"
             )
 
+    except HTTPException:
+        # A 400/404 raised above is the answer; wrapping it in a 500 would
+        # bury the reason the update was refused.
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update album: {str(e)}") from e
 
