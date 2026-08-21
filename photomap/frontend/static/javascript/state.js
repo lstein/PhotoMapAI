@@ -33,7 +33,7 @@ export const state = {
   // album switch and persisted back via /update_album/ when the user edits
   // them in the search dialog. Initial values are placeholders before the
   // first album is loaded.
-  minSearchScore: 0.2, // [0.0, 1.0]
+  minSearchScore: 0.1, // [0.0, 1.0]; matches the backend's OpenCLIP default
   maxSearchResults: 100, // positive integer
   useQueryOptimization: true, // SigLIP-only; ignored by other encoders
   albumEncoderSpec: null, // mirrored from the active album's config
@@ -491,7 +491,8 @@ export async function setAlbum(newAlbumKey, force = false) {
 
 // Pulls per-album search settings from the backend and copies them into
 // state. Called on every album switch so the search dialog always reflects
-// the active album.
+// the active album, and after an album edit that can have changed them
+// server-side (see refreshActiveAlbumSearchSettings).
 async function applyAlbumSearchSettings(albumKey) {
   const album = await fetchJson(`album/${encodeURIComponent(albumKey)}/`).catch(() => null);
   if (!album) {
@@ -520,6 +521,23 @@ async function applyAlbumSearchSettings(albumKey) {
       },
     })
   );
+}
+
+// Reload the active album's search settings from the backend.
+//
+// Needed after an album edit, because the backend can change these without
+// being asked to: changing an album's encoder *band* re-resolves
+// min_search_score, and the three bands are far apart — 0.2 for OpenAI CLIP,
+// 0.1 for OpenCLIP, 0.005 for SigLIP — so one band's floor matches almost
+// nothing under another. Without this, state keeps the old album's floor,
+// and the next search-dialog edit persists it straight back over the
+// re-resolved one — where it now survives, because an update keeps every
+// field its payload carries.
+export async function refreshActiveAlbumSearchSettings(albumKey) {
+  if (!albumKey || albumKey !== state.album) {
+    return;
+  }
+  await applyAlbumSearchSettings(albumKey).catch((err) => console.warn("Failed to reload album search settings:", err));
 }
 
 // Persist the current state's per-album search settings back to the active

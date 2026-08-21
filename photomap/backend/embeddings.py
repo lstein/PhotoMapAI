@@ -40,6 +40,7 @@ from .encoders import (
     ImageTextEncoder,
     build_encoder,
     capture_download_progress,
+    default_min_search_score,
     get_cached_encoder,
 )
 from .media_types import IMAGE_EXTENSIONS, INDEXABLE_EXTENSIONS, is_video
@@ -1906,7 +1907,7 @@ class Embeddings(BaseModel):
         positive_weight: float = 0.5,
         negative_weight: float = 0.5,
         top_k: int = 5,
-        minimum_score: float = 0.2,
+        minimum_score: float | None = None,
         use_query_optimization: bool | None = None,
     ) -> tuple[list[int], list[float]]:
         """
@@ -1920,7 +1921,10 @@ class Embeddings(BaseModel):
             positive_weight (float): Weight for positive text embedding.
             negative_weight (float): Weight for negative text embedding (should be positive; will be subtracted).
             top_k (int): Number of top results.
-            minimum_score (float): Minimum similarity score.
+            minimum_score (float or None): Minimum similarity score. None
+                resolves the encoder's own default floor — the three backends
+                do not share a score scale, so there is no one number that
+                filters honestly for all of them.
             use_query_optimization (bool or None): Per-album SigLIP toggle. When
                 set, controls prompt-template ensembling for SigLIP encoders.
                 Ignored by other backends. ``None`` keeps the encoder's current
@@ -1928,6 +1932,9 @@ class Embeddings(BaseModel):
         Returns:
             tuple: (indexes, similarities)
         """
+        if minimum_score is None:
+            minimum_score = default_min_search_score(self.encoder_spec)
+
         data = self.open_cached_embeddings(self.embeddings_path)
         embeddings = data["embeddings"]
         filenames = data["filenames"]

@@ -100,6 +100,19 @@
   margin-bottom: 0.5em;
 }
 
+/* The rule above is an author rule, so it beats the UA stylesheet's
+   [hidden] { display: none } — a label carrying the hidden attribute would
+   stay on screen. Same shape as the .video-player-* rules. */
+.edit-album-invoke-forget-password-row[hidden] {
+  display: none;
+}
+
+/* .form-group input is 100% wide, which is not what a checkbox wants. */
+.edit-album-invoke-forget-password-row input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.4em;
+}
+
 .form-group input,
 .form-group textarea,
 .form-group select {
