@@ -28,6 +28,24 @@ def isolate_video_frame_cache(tmp_path_factory, monkeypatch):
     return root
 
 
+@pytest.fixture(autouse=True)
+def isolate_user_data_dir(tmp_path_factory, monkeypatch):
+    """Keep derived board-album indexes out of the real user data directory.
+
+    ``default_board_index_path`` resolves against
+    ``platformdirs.user_data_dir``, and deleting a board album ``rmtree``s that
+    album's directory under it — so a test using an album key that matches a
+    real one deletes the real index. ``set_temp_config_env`` isolates only
+    ``PHOTOMAP_CONFIG``, the same gap ``isolate_video_frame_cache`` covers for
+    the cache directory.
+    """
+    from photomap.backend import config as config_module
+
+    root = tmp_path_factory.mktemp("user_data")
+    monkeypatch.setattr(config_module, "user_data_dir", lambda *a, **k: str(root))
+    return root
+
+
 @pytest.fixture(scope="session", autouse=True)
 def set_temp_config_env(tmp_path_factory):
     config_path = tmp_path_factory.mktemp("data") / "test_config.yaml"

@@ -12,7 +12,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -32,7 +34,7 @@ from photomap.backend.routers.search import search_router
 from photomap.backend.routers.umap import umap_router
 from photomap.backend.routers.upgrade import upgrade_router
 from photomap.backend.static_assets import VersionedStaticFiles, compute_asset_version
-from photomap.backend.util import get_app_url
+from photomap.backend.util import get_app_url, json_safe
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -72,6 +74,26 @@ for router in [
     app.include_router(router)
 
 app.include_router(curation_router, prefix="/api/curation", tags=["curation"])
+
+
+@app.exception_handler(RequestValidationError)
+async def json_safe_validation_error(request: Request, exc: RequestValidationError):
+    """Return a 422 whose body can actually be serialized.
+
+    FastAPI's default handler echoes the rejected input back in the error
+    detail. Python's ``json`` module parses the bare ``NaN``/``Infinity``
+    literals on the way in but refuses to emit them, so rejecting a
+    non-finite number produced an unserializable 422 — which surfaces to the
+    client as a 500, i.e. the validation looked like a server bug.
+
+    Sanitizing runs *after* ``jsonable_encoder`` rather than before: the
+    encoder is what turns an error's ``ctx`` objects into plain containers,
+    and a NaN sitting inside one of those is only reachable once it has.
+    """
+    return JSONResponse(
+        status_code=422,
+        content=json_safe(jsonable_encoder({"detail": exc.errors()})),
+    )
 
 
 class IECompatibilityMiddleware(BaseHTTPMiddleware):

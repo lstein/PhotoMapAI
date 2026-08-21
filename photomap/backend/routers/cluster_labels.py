@@ -11,11 +11,12 @@ exactly so cluster IDs returned here match cluster IDs returned by
 
 import asyncio
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from ..cluster_eps import resolve_album_cluster_eps
+from ..cluster_eps import MIN_CLUSTER_EPS, resolve_album_cluster_eps
 from ..cluster_labels import compute_image_label, get_or_build_cluster_labels
 from .album import AlbumDep, EmbeddingsDep, album_umap_coords_async
 
@@ -27,8 +28,13 @@ async def get_cluster_labels(
     album_key: str,
     album_config: AlbumDep,
     embeddings: EmbeddingsDep,
-    cluster_eps: float | None = None,
-    cluster_min_samples: int = 10,
+    # Same bounds as the stored value: a query parameter the map cannot be
+    # clustered with should be a 422 naming the field, not a 500 out of
+    # sklearn. MIN_CLUSTER_EPS rather than "positive" because that is the
+    # floor resolve_cluster_eps applies anyway — accepting anything under it
+    # would cluster at one number while the caller was told another.
+    cluster_eps: Annotated[float | None, Query(ge=MIN_CLUSTER_EPS, allow_inf_nan=False)] = None,
+    cluster_min_samples: Annotated[int, Query(ge=1)] = 10,
     top_k: int = 3,
 ) -> JSONResponse:
     """Return one short text label per DBSCAN cluster for an album's UMAP.

@@ -91,7 +91,10 @@ class SearchWithTextAndImageRequest(BaseModel):
     image_weight: float = 0.5
     positive_weight: float = 0.5
     negative_weight: float = 0.5
-    min_search_score: float = 0.2
+    # None means "whatever this album's encoder resolves to" — the backends
+    # do not share a score scale, so a fixed number here would filter one of
+    # them into silence.
+    min_search_score: float | None = None
     max_search_results: int = 100
     # Optional: per-request SigLIP prompt-ensembling toggle. Frontend sources
     # this from the album's ``use_query_optimization`` setting. ``None`` keeps
@@ -111,6 +114,7 @@ class DownloadImagesZipRequest(BaseModel):
 async def search_with_text_and_image(
     album_key: str,
     req: SearchWithTextAndImageRequest,
+    album_config: AlbumDep,
     embeddings: EmbeddingsDep,
 ) -> SearchResultsResponse:
     """
@@ -149,7 +153,15 @@ async def search_with_text_and_image(
                 image_weight=req.image_weight,
                 positive_weight=req.positive_weight,
                 negative_weight=req.negative_weight,
-                minimum_score=req.min_search_score,
+                # Omitted means "this album's floor" — the album knows one,
+                # resolved from its encoder when it was created. Falling
+                # straight through to the encoder default would ignore a
+                # value the user tuned.
+                minimum_score=(
+                    req.min_search_score
+                    if req.min_search_score is not None
+                    else album_config.min_search_score
+                ),
                 top_k=req.max_search_results,
                 use_query_optimization=req.use_query_optimization,
             )

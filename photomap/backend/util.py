@@ -1,8 +1,10 @@
 """
 This module provides utility functions for the PhotoMap application."""
 
+import math
 import os
 import socket
+import stat
 import threading
 from collections import OrderedDict
 from collections.abc import Hashable
@@ -13,6 +15,29 @@ import numpy as np
 
 K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")
+
+
+def json_safe(value: Any) -> Any:
+    """``value`` with every non-finite float replaced by its repr.
+
+    ``json`` parses the bare ``NaN``/``Infinity`` literals on the way in but
+    refuses to emit them, and the JSON responses this app returns are
+    rendered with ``allow_nan=False``. So any error body that echoes a
+    rejected request back to the client has to come through here first, or
+    refusing a NaN becomes a 500 — the validation reads as a server bug.
+
+    Recursive, because the float is rarely at the top: pydantic reports the
+    *containing* object as an error's ``input`` whenever the field that
+    failed is not the float itself, so a NaN travels inside a dict or a list
+    far more often than it arrives alone.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    return value
 
 
 def is_cuda_oom(err: BaseException) -> bool:
@@ -116,12 +141,51 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None
 
     Used for long-lived config files where a partial write would leave the
     user unable to reload the app.
+
+    The rename replaces the file rather than writing through it, so two
+    properties of the *existing* file have to be carried across by hand:
+
+    * its permissions — config.yaml holds an InvokeAI password and a
+      LocationIQ key, and a fresh file created at the process umask is
+      typically world-readable, so a user who tightened it to 0600 would
+      have it quietly widened again by the next album edit;
+    * its identity when it is a symlink — a dotfiles setup symlinks
+      config.yaml into a repo, and replacing the link with a regular file
+      leaves the real config behind, still holding the old content.
+
+    The temp file is created 0600 and widened to the target's mode only once
+    it is written. It holds the same secrets as the target, so creating it at
+    the process umask would publish them for the length of every write; and
+    when there is no target yet, 0600 is where the file stays — a config with
+    a password in it should not be world-readable from the moment it is
+    first written.
     """
+    if path.is_symlink():
+        path = Path(os.path.realpath(path))
     path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        existing_mode = stat.S_IMODE(path.stat().st_mode)
+    except OSError:
+        existing_mode = None
     tmp_path = path.with_name(path.name + ".tmp")
     try:
+        # Create the temp file empty and private, then write it through the
+        # normal text path. The two steps are separate on purpose: writing
+        # through the raw descriptor would skip ``io.open``'s explicit binary
+        # mode, and on Windows a text-mode descriptor under a text-mode
+        # wrapper translates each newline twice.
+        #
+        # O_TRUNC rather than O_EXCL: a .tmp left behind by a killed process
+        # would otherwise make every later write fail until it was removed by
+        # hand. That is also why the creation mode is not enough — an
+        # inherited .tmp keeps whatever mode it already had — so narrow it
+        # explicitly. Both happen while the file is still empty, so the
+        # payload never exists at a wider mode than the target's.
+        os.close(os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600))
+        os.chmod(tmp_path, 0o600)
         with tmp_path.open("w", encoding=encoding) as fh:
             fh.write(text)
+        os.chmod(tmp_path, existing_mode if existing_mode is not None else 0o600)
         os.replace(tmp_path, path)
     except BaseException:
         if tmp_path.exists():

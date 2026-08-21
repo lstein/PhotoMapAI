@@ -5,6 +5,7 @@ This module handles loading, saving, and managing photo album configurations.
 It uses a YAML file to store album details and provides methods to manipulate albums.
 """
 import logging
+import math
 import os
 import threading
 from functools import lru_cache
@@ -15,7 +16,13 @@ import yaml
 from platformdirs import user_config_dir, user_data_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .encoders import LEGACY_ENCODER_SPEC, default_encoder_spec
+from .cluster_eps import MIN_CLUSTER_EPS
+from .encoders import (
+    LEGACY_CLIP_MIN_SEARCH_SCORE,
+    LEGACY_ENCODER_SPEC,
+    default_encoder_spec,
+    default_min_search_score,
+)
 from .util import atomic_write_text
 
 logger = logging.getLogger(__name__)
@@ -40,6 +47,56 @@ def default_board_index_path(album_key: str) -> Path:
         raise ValueError(f"Album key not usable as a directory name: {album_key!r}")
     data_dir = Path(user_data_dir("photomap", "photomap"))
     return data_dir / "indexes" / album_key / "embeddings.npz"
+
+
+def repaired_umap_eps(raw: Any) -> float | None:
+    """A Cluster Strength read off disk, brought inside the bounds the model
+    now enforces.
+
+    The API refuses an unusable value before it can be written, but a config
+    file written before that bound existed can hold anything, and the model
+    would now refuse to load it — which would take the whole config down over
+    one album's number. The two ways a stored value can be out of bounds want
+    different answers:
+
+    * Non-finite, zero or negative is not a strength anyone chose; it is
+      damage. ``None`` — "nobody chose one" — hands the album back to a value
+      derived from its own coordinates, the same treatment an album that never
+      had one gets, and a better answer than any constant.
+    * Positive but under the floor *is* an intent: the tightest clustering the
+      control can ask for. ``resolve_cluster_eps`` already floors it at
+      :data:`MIN_CLUSTER_EPS` before clustering, so raising it here changes
+      nothing about the map — it only stops the field from reporting a number
+      the map is not using.
+
+    Anything that is not a number at all is left alone for the model to
+    reject in its own words; this repairs values, it does not launder types.
+    Being liberal about *what counts as* a number matters, though: the model
+    refuses out-of-bounds values now, so any number this hands back unrepaired
+    takes the whole config file down, not just one album's Cluster Strength.
+    That is why ``bool`` is not special-cased — pydantic accepts one as a
+    float, so ``umap_eps: false`` reaches the model as ``0.0``, and a config
+    holding one has to load.
+    """
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return raw
+    if not math.isfinite(value) or value <= 0:
+        logger.warning(
+            f"Ignoring unusable stored Cluster Strength {raw!r}; "
+            "deriving one from the album's coordinates instead."
+        )
+        return None
+    if value < MIN_CLUSTER_EPS:
+        logger.warning(
+            f"Raising stored Cluster Strength {raw!r} to the {MIN_CLUSTER_EPS} "
+            "the semantic map clusters with anyway."
+        )
+        return MIN_CLUSTER_EPS
+    return value
 
 
 class Album(BaseModel):
@@ -87,13 +144,19 @@ class Album(BaseModel):
     )
     umap_eps: float | None = Field(
         default=None,
+        ge=MIN_CLUSTER_EPS,
+        allow_inf_nan=False,
         description=(
             "DBSCAN epsilon for the semantic map's clustering. None means "
             "'not chosen': the value is derived from the album's own UMAP "
             "coordinates (see backend/cluster_eps.py), which is what keeps "
             "small albums from clustering into nothing. Adjusting Cluster "
             "Strength in the UI stores a number here and the derived value "
-            "is no longer consulted."
+            "is no longer consulted. A number stored here is bounded below "
+            "by MIN_CLUSTER_EPS — the floor resolve_cluster_eps applies "
+            "anyway — so the stored number and the number the map clusters "
+            "with cannot disagree. A config written before that bound can "
+            "still hold anything; see repaired_umap_eps."
         ),
     )
     description: str = Field(default="", description="Album description")
@@ -109,8 +172,8 @@ class Album(BaseModel):
         ),
     )
     # Per-album search controls. min_search_score defaults to None so a
-    # validator can resolve it from the encoder (0.005 for SigLIP's compressed
-    # cosine band, 0.2 for CLIP-style backends) at construction time.
+    # validator can resolve it from the encoder at construction time — the
+    # backends do not share a score scale, see ``default_min_search_score``.
     min_search_score: float | None = Field(
         default=None,
         description="Minimum similarity score below which results are filtered out.",
@@ -183,9 +246,7 @@ class Album(BaseModel):
     @model_validator(mode="after")
     def _resolve_min_search_score(self) -> "Album":
         if self.min_search_score is None:
-            self.min_search_score = (
-                0.005 if self.encoder_spec.startswith("siglip:") else 0.2
-            )
+            self.min_search_score = default_min_search_score(self.encoder_spec)
         return self
 
     @model_validator(mode="after")
@@ -283,7 +344,11 @@ class Album(BaseModel):
             # what None asks the map to derive. The old 0.07 fallback here
             # was a number for *every* album regardless of size, which is
             # what left small albums with no clusters at all.
-            umap_eps=data.get("umap_eps"),
+            #
+            # This is the one door untrusted numbers come through — the API
+            # refuses them now, but a file written before it did cannot be
+            # allowed to make the whole config unloadable.
+            umap_eps=repaired_umap_eps(data.get("umap_eps")),
             description=data.get("description", ""),
             # Legacy YAML albums predate the encoder_spec field; their indexes
             # were built with the original CLIP, so fall back to that to stay
@@ -304,10 +369,79 @@ class Album(BaseModel):
         )
 
 
+# Bumped when a load-time migration is added below. 1.1.0 re-resolves the
+# score floor of albums that never chose one — see ``_migrate_score_floors``.
+CONFIG_VERSION = "1.1.0"
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    """``"1.10.2"`` -> ``(1, 10, 2)``, for ordering config versions.
+
+    Only ever called with a stamp read straight out of the YAML, before the
+    :class:`Config` model has had a chance to reject it. Anything that is not
+    ``x.y.z`` sorts as newer than every version this build knows, so a stamp
+    it cannot read is never mistaken for an un-migrated old file — belt and
+    braces, since ``Config.validate_version`` refuses to build the model at
+    all a few lines later and the load fails outright.
+    """
+    try:
+        return tuple(int(part) for part in version.split("."))
+    except ValueError:
+        return (999,)
+
+
+# Albums already announced as migrated, so the notice below is printed once
+# per album per process. The migration itself is re-applied on every load
+# until a save persists it (see ``load_config``), and repeating the same
+# three lines at every reload would read as a change happening over and over.
+_announced_score_floor_migrations: set[tuple[str, float]] = set()
+
+
+def _migrate_score_floors(albums: dict[str, "Album"]) -> None:
+    """Re-resolve score floors left at the old blanket CLIP default.
+
+    Before :func:`default_min_search_score` learned that OpenCLIP scores a
+    tenth of a point below OpenAI CLIP, every non-SigLIP album was given
+    ``0.2`` at creation — a floor above the entire match band of the encoder
+    PhotoMapAI recommends, so those albums answer most searches with nothing
+    at all. The value is stored per album, so fixing the default alone would
+    only help albums created after the upgrade.
+
+    Touches only the exact 0.2, and only where the album's encoder now
+    resolves to something else. That is a heuristic, not a proof of
+    authorship: nothing records *who* chose a floor, so a user who typed 0.2
+    into an OpenCLIP album before upgrading is moved off it along with every
+    album that merely inherited it. The log line below is what tells them,
+    and the value is one edit away in the search dialog. Any other floor —
+    including 0.2 on the encoder whose default it still is — is left alone.
+
+    Runs only for a config written before this build (see ``CONFIG_VERSION``),
+    so 0.2 remains a value the user can choose afterwards.
+    """
+    for key, album in albums.items():
+        resolved = default_min_search_score(album.encoder_spec)
+        if album.min_search_score == LEGACY_CLIP_MIN_SEARCH_SCORE != resolved:
+            album.min_search_score = resolved
+            if (key, resolved) not in _announced_score_floor_migrations:
+                _announced_score_floor_migrations.add((key, resolved))
+                logger.info(
+                    "Album %r: search score floor %.3f -> %.3f, the measured "
+                    "default for %s (searches at the old floor returned almost "
+                    "nothing). Adjust it in the search dialog if you preferred "
+                    "the old value.",
+                    key,
+                    LEGACY_CLIP_MIN_SEARCH_SCORE,
+                    resolved,
+                    album.encoder_spec,
+                )
+
+
 class Config(BaseModel):
     """Main configuration model."""
 
-    config_version: str = Field("1.0.0", description="Configuration format version")
+    config_version: str = Field(
+        CONFIG_VERSION, description="Configuration format version"
+    )
     albums: dict[str, Album] = Field(
         default_factory=dict, description="Album configurations"
     )
@@ -485,7 +619,7 @@ class ConfigManager:
             if self._config is None:
                 if not self.config_path.exists():
                     self._config = Config(
-                        config_version="1.0.0",
+                        config_version=CONFIG_VERSION,
                         albums={},
                         locationiq_api_key=None,
                     )
@@ -504,8 +638,22 @@ class ConfigManager:
                             extra["encoder_idle_timeout_seconds"] = config_data[
                                 "encoder_idle_timeout_seconds"
                             ]
+                        # Migrations run once, against a config older than
+                        # this build. Re-running them on every load would make
+                        # the migrated-away value permanently unsettable — a
+                        # user typing 0.2 back into an OpenCLIP album would
+                        # watch the next read undo it.
+                        stored_version = config_data.get("config_version", "1.0.0")
+                        if _version_tuple(stored_version) < _version_tuple(
+                            CONFIG_VERSION
+                        ):
+                            _migrate_score_floors(albums)
+                            stored_version = CONFIG_VERSION
+                        # A config stamped *newer* than this build keeps its
+                        # stamp: rewriting it as 1.1.0 would tell the build
+                        # that wrote it that its own migrations had run.
                         self._config = Config(
-                            config_version=config_data.get("config_version", "1.0.0"),
+                            config_version=stored_version,
                             albums=albums,
                             locationiq_api_key=config_data.get("locationiq_api_key"),
                             invokeai_url=config_data.get("invokeai_url"),
@@ -514,6 +662,13 @@ class ConfigManager:
                             invokeai_board_id=config_data.get("invokeai_board_id"),
                             **extra,
                         )
+                        # Deliberately not saved here. Loading a config is a
+                        # read, and a rewrite drops comments and any key this
+                        # build does not know — an unprompted one, on every
+                        # user's first start after upgrading, is not a trade
+                        # worth making. The new stamp rides along with the
+                        # next save the user actually causes, and until then
+                        # the migration is simply re-applied in memory.
 
                     except Exception as e:
                         raise RuntimeError(
