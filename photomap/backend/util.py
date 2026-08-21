@@ -145,14 +145,21 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None
         existing_mode = None
     tmp_path = path.with_name(path.name + ".tmp")
     try:
+        # Create the temp file empty and private, then write it through the
+        # normal text path. The two steps are separate on purpose: writing
+        # through the raw descriptor would skip ``io.open``'s explicit binary
+        # mode, and on Windows a text-mode descriptor under a text-mode
+        # wrapper translates each newline twice.
+        #
         # O_TRUNC rather than O_EXCL: a .tmp left behind by a killed process
         # would otherwise make every later write fail until it was removed by
         # hand. That is also why the creation mode is not enough — an
         # inherited .tmp keeps whatever mode it already had — so narrow it
-        # explicitly before any of the payload lands in it.
-        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding=encoding) as fh:
-            os.chmod(tmp_path, 0o600)
+        # explicitly. Both happen while the file is still empty, so the
+        # payload never exists at a wider mode than the target's.
+        os.close(os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600))
+        os.chmod(tmp_path, 0o600)
+        with tmp_path.open("w", encoding=encoding) as fh:
             fh.write(text)
         os.chmod(tmp_path, existing_mode if existing_mode is not None else 0o600)
         os.replace(tmp_path, path)

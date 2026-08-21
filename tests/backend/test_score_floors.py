@@ -7,6 +7,8 @@ what these tests protect is that each encoder family keeps *its own* number
 and that albums created before the table existed are moved onto it.
 """
 
+import sys
+
 import numpy as np
 import pytest
 import yaml
@@ -15,6 +17,17 @@ from photomap.backend.config import Album, ConfigManager
 from photomap.backend.encoders import (
     LEGACY_CLIP_MIN_SEARCH_SCORE,
     default_min_search_score,
+)
+
+# Windows has no POSIX permission bits: ``os.chmod`` there toggles the
+# read-only flag and nothing else, so every readable file reports 0o666 and a
+# "keep this config to its owner" assertion cannot mean anything. The
+# behaviour under test is real on the platforms that have it — the production
+# code runs the same chmod calls on Windows, they just have no user to
+# exclude — so these skip rather than branching on an expected mode.
+posix_modes_only = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX permission bits; Windows chmod only toggles read-only",
 )
 
 
@@ -256,6 +269,7 @@ def test_search_without_an_explicit_floor_uses_the_encoder_default(
         encoders_module.clear_encoder_cache()
 
 
+@posix_modes_only
 def test_config_rewrites_keep_the_file_private(tmp_path):
     """config.yaml holds an InvokeAI password and a LocationIQ key. The
     atomic write replaces the file rather than writing through it, so a mode
@@ -293,6 +307,7 @@ def test_config_rewrites_follow_a_symlink(tmp_path):
     assert "rewritten" in real.read_text()
 
 
+@posix_modes_only
 def test_a_config_written_for_the_first_time_is_private(tmp_path):
     """There is no existing mode to preserve on the very first write, and the
     process umask is typically 022 — which would publish the InvokeAI
@@ -313,16 +328,18 @@ def test_a_config_written_for_the_first_time_is_private(tmp_path):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+@posix_modes_only
 def test_the_temp_file_is_never_wider_than_the_target(tmp_path, monkeypatch):
     """The rewrite goes through a .tmp holding the same secrets, so it has to
-    be narrowed *before* the payload is written, not after.
+    be private *before* it is opened for the payload, not tightened after.
 
-    The leftover .tmp here is the case the O_CREAT mode cannot cover: a file
+    The leftover .tmp here is the case the creation mode cannot cover: a file
     inherited from a killed run keeps whatever mode it already had, so
     without the explicit narrowing the password would be written into a
     world-readable file and only tightened once it was already there.
     """
     import os
+    import pathlib
     import stat
 
     from photomap.backend import util
@@ -334,25 +351,19 @@ def test_the_temp_file_is_never_wider_than_the_target(tmp_path, monkeypatch):
     stale.write_text("left behind by a killed write\n")
     os.chmod(stale, 0o644)
 
-    modes_while_writing: list[int] = []
-    real_fdopen = os.fdopen
+    modes_when_opened: list[int] = []
+    real_open = pathlib.Path.open
 
-    def watching_fdopen(fd, *args, **kwargs):
-        handle = real_fdopen(fd, *args, **kwargs)
-        real_write = handle.write
+    def watching_open(self, *args, **kwargs):
+        if self.name.endswith(".tmp"):
+            modes_when_opened.append(stat.S_IMODE(self.stat().st_mode))
+        return real_open(self, *args, **kwargs)
 
-        def write(text):
-            modes_while_writing.append(stat.S_IMODE(stale.stat().st_mode))
-            return real_write(text)
-
-        handle.write = write
-        return handle
-
-    monkeypatch.setattr(os, "fdopen", watching_fdopen)
+    monkeypatch.setattr(pathlib.Path, "open", watching_open)
     util.atomic_write_text(path, "invokeai_password: hunter2\n")
 
-    assert modes_while_writing == [0o600], (
-        f".tmp held the payload at {[oct(m) for m in modes_while_writing]}"
+    assert modes_when_opened == [0o600], (
+        f".tmp was opened for the payload at {[oct(m) for m in modes_when_opened]}"
     )
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert "hunter2" in path.read_text()
