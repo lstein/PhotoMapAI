@@ -317,6 +317,24 @@ describe("albumIndexUpdated on the album being shown", () => {
     expect(spinner().value).toBe("0.49");
   });
 
+  it("stops holding the field once its contents have been replaced", async () => {
+    // Half-typed text holds the guard across a blur on purpose. But the hold
+    // has to end when the text does: re-opening the map refills the field
+    // from the server, and a guard still set for a value that is no longer
+    // there disables every re-resolve for the rest of the session.
+    typeUnparseable();
+    blurField();
+    restoreValidity();
+    umap.applyResolvedEps({ success: true, eps: 0.4, auto: false });
+
+    const calls = immediateFetch({ eps: 0.49 });
+    reindexed("test-album");
+    await flushAsync();
+
+    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(true);
+    expect(spinner().value).toBe("0.49");
+  });
+
   it("does not let a failed save leave the field reading as mid-edit", async () => {
     // The flag that says "someone is typing in here" suppresses this
     // re-resolve. Stranded on an error path — the save rejects, and the user

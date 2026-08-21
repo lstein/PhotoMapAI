@@ -119,14 +119,18 @@ const badge = () => document.getElementById("umapEpsAutoBadge");
 
 /** Everything POSTed to set_umap_eps, in order. */
 let savedEps;
+/** The full body of each of those POSTs, so a test can check the album. */
+let savedBodies;
 
 function installEpsFetchMock() {
   savedEps = [];
+  savedBodies = [];
   fetched = [];
   global.fetch = (url, options) => {
     const href = String(url);
     fetched.push(href);
     if (href.startsWith("set_umap_eps")) {
+      savedBodies.push(JSON.parse(options.body));
       savedEps.push(JSON.parse(options.body).eps);
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
     }
@@ -417,6 +421,38 @@ describe("Cluster Strength debounce", () => {
     expect(savedEps).toEqual([]);
     const mapUrl = fetched.find((u) => u.startsWith("umap_data/"));
     expect(mapUrl).toBe("umap_data/test-album");
+  });
+
+  it("saves the number to the album it was typed in, not the one in view a second later", async () => {
+    // Switching albums inside the debounce window used to hand the number to
+    // whichever album `state.album` pointed at when the timer fired: album B
+    // silently acquired a Cluster Strength typed for album A, and nothing on
+    // screen said so until the next time B's map was opened.
+    type("0.4");
+    mockState.album = "other-album";
+    await pastTheDebounce();
+
+    expect(savedBodies).toEqual([{ album: "test-album", eps: 0.4 }]);
+    // And the other album's map is not redrawn with it.
+    expect(fetched.some((u) => u.startsWith("umap_data/"))).toBe(false);
+  });
+
+  it("marks a stored strength the map cannot cluster with", async () => {
+    // Versions before the spinner refused these could store them, and the
+    // config file is hand-editable. Leaving it unmarked is this module saying
+    // the number is in effect when the server has floored it.
+    umap.applyResolvedEps({ success: true, eps: 0.005, auto: false });
+
+    expect(spinner().value).toBe("0.005");
+    expect(isMarkedUnusable()).toBe(true);
+  });
+
+  it("does not mark a derived strength, however small", async () => {
+    // A degenerate album can derive its way below the floor. The spinner
+    // would refuse the number, but it is the one the map is clustered with.
+    umap.applyResolvedEps({ success: true, eps: 9.3e-7, auto: true });
+
+    expect(isMarkedUnusable()).toBe(false);
   });
 
   it("does not put a derived strength back over a number typed during the save", async () => {

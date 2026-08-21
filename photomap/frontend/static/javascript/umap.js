@@ -241,9 +241,21 @@ export function applyResolvedEps(data) {
   const epsSpinner = document.getElementById("umapEpsSpinner");
   if (epsSpinner && typeof data?.eps === "number") {
     epsSpinner.value = data.eps;
-    // The field now holds a number the server itself resolved, so whatever it
-    // was marked for — half-typed, or under the floor — is gone with it.
-    markEpsUnusable(false);
+    // Replacing the contents ends whatever edit was in there, guard included.
+    // Half-typed text holds the guard even across a blur, on purpose — but it
+    // cannot go on holding it once the text it was protecting is gone, or one
+    // abandoned "0." disables re-resolving for the rest of the session.
+    epsEditPending = false;
+    // A *stored* strength the map cannot cluster with is still marked. The
+    // spinner refuses to save one now, but versions before it did, and the
+    // config file is hand-editable — and an unmarked field is this module
+    // asserting the number is in effect when the server has floored it. A
+    // derived value is never marked, however small: floored or not, it is
+    // exactly what the map was clustered with.
+    markEpsUnusable(
+      !data.auto && !epsIsUsable(data.eps),
+      `The album stores ${data.eps}, which is below the ${epsFloor()} the map can cluster with.`
+    );
   }
   setEpsAutoBadge(Boolean(data?.auto));
 }
@@ -350,6 +362,12 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
   if (eps !== null) {
     setEpsAutoBadge(false);
   }
+  // Pinned when the save is armed, not read when it fires: the user typed this
+  // number while looking at this album, and they are free to switch to another
+  // one inside the debounce window. `state.album` at fire time is whichever
+  // album they are looking at *then* — which is how a number typed for one
+  // album ends up stored on a different one.
+  const albumAtEdit = state.album;
   epsUpdateTimer = setTimeout(async () => {
     // Cleared as the save starts, not left holding a fired timer's handle:
     // it is what tells the rest of the module an edit is still pending, and
@@ -368,7 +386,7 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
         const response = await fetch("set_umap_eps/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ album: state.album, eps }),
+          body: JSON.stringify({ album: albumAtEdit, eps }),
         });
         saved = response.ok;
       } catch (err) {
@@ -382,14 +400,22 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
         // keystroke armed its own save and owns the flag from here.
         epsEditPending = false;
       }
+      // Everything below writes to the screen, so it belongs to the album on
+      // screen. If the user has moved on, the save has done its job for the
+      // album it was typed in and there is nothing here to say about it.
+      const stillShowingThisAlbum = state.album === albumAtEdit;
       if (!saved) {
         // Nothing was stored and nothing about the map changed, so leave the
         // map alone — but say so on the field, which is now showing a number
-        // the album does not have. Only if it is still that number: a
-        // keystroke since means the mark would describe the wrong value.
-        if (epsEditSeq === seq) {
+        // the album does not have. Only if it is still that field's number: a
+        // keystroke since, or another album since, and the mark would be
+        // describing something else.
+        if (stillShowingThisAlbum && epsEditSeq === seq) {
           markEpsUnusable(true, "Could not be saved — the album still has its previous Cluster Strength.");
         }
+        return;
+      }
+      if (!stillShowingThisAlbum) {
         return;
       }
       if (eps === null) {
@@ -399,7 +425,7 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
         // The sequence pinned above is passed rather than re-read: a keystroke
         // during the save itself already means the derive is answering a
         // question the user has moved on from.
-        await refreshResolvedEps(state.album, seq);
+        await refreshResolvedEps(albumAtEdit, seq);
       }
       state.dataChanged = true;
       // Not while the window is closed: Plotly would lay the plot out at zero
