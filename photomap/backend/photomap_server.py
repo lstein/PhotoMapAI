@@ -4,7 +4,6 @@ Main entry point for the PhotoMapAI backend server.
 Initializes the FastAPI app, mounts routers, and handles server startup.
 """
 import logging
-import math
 import os
 import signal
 import subprocess
@@ -35,7 +34,7 @@ from photomap.backend.routers.search import search_router
 from photomap.backend.routers.umap import umap_router
 from photomap.backend.routers.upgrade import upgrade_router
 from photomap.backend.static_assets import VersionedStaticFiles, compute_asset_version
-from photomap.backend.util import get_app_url
+from photomap.backend.util import get_app_url, json_safe
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -85,19 +84,15 @@ async def json_safe_validation_error(request: Request, exc: RequestValidationErr
     detail. Python's ``json`` module parses the bare ``NaN``/``Infinity``
     literals on the way in but refuses to emit them, so rejecting a
     non-finite number produced an unserializable 422 — which surfaces to the
-    client as a 500, i.e. the validation looked like a server bug. Replace
-    any value that cannot survive the round trip with its repr.
+    client as a 500, i.e. the validation looked like a server bug.
+
+    Sanitizing runs *after* ``jsonable_encoder`` rather than before: the
+    encoder is what turns an error's ``ctx`` objects into plain containers,
+    and a NaN sitting inside one of those is only reachable once it has.
     """
-
-    def sanitized(error: dict) -> dict:
-        value = error.get("input")
-        if isinstance(value, float) and not math.isfinite(value):
-            return {**error, "input": repr(value)}
-        return error
-
     return JSONResponse(
         status_code=422,
-        content=jsonable_encoder({"detail": [sanitized(e) for e in exc.errors()]}),
+        content=json_safe(jsonable_encoder({"detail": exc.errors()})),
     )
 
 

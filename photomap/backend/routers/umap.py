@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from sklearn.cluster import DBSCAN
 
-from ..cluster_eps import resolve_album_cluster_eps
+from ..cluster_eps import MIN_CLUSTER_EPS, resolve_album_cluster_eps
 from ..config import get_config_manager
 from ..media_types import media_type_for
 from .album import AlbumDep, EmbeddingsDep
@@ -23,10 +23,13 @@ async def get_umap_data(
     album_key: str,
     album_config: AlbumDep,
     embeddings: EmbeddingsDep,
-    # Same bound as the stored value: a query parameter DBSCAN cannot run
-    # with should be a 422 from the caller, not a 500 from sklearn.
-    cluster_eps: Annotated[float | None, Query(gt=0, allow_inf_nan=False)] = None,
-    cluster_min_samples: int = 10,
+    # Same bounds as the stored value: a query parameter the map cannot be
+    # clustered with should be a 422 naming the field, not a 500 out of
+    # sklearn. MIN_CLUSTER_EPS rather than "positive" because that is the
+    # floor resolve_cluster_eps applies anyway — accepting anything under it
+    # would cluster at one number while the caller was told another.
+    cluster_eps: Annotated[float | None, Query(ge=MIN_CLUSTER_EPS, allow_inf_nan=False)] = None,
+    cluster_min_samples: Annotated[int, Query(ge=1)] = 10,
 ) -> JSONResponse:
     """
     Get UMAP coordinates for all images in an album.
