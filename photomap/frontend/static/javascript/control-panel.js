@@ -1,6 +1,7 @@
 // control-panel.js
 // This file manages control panel button events (fullscreen, copy, delete)
 import { deleteImage, getIndexMetadata } from "./index.js";
+import { initializePanelAnchor, syncPanelAnchor } from "./panel-anchor.js";
 import { getCurrentFilepath, getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { saveSettingsToLocalStorage, state } from "./state.js";
 import { errorDetail, hideSpinner, showSpinner } from "./utils.js";
@@ -19,17 +20,48 @@ function cacheElements() {
   };
 }
 
-// Toggle fullscreen mode
+// Is the document (or anything in it) currently fullscreen?
+//
+// Which spelling of the Fullscreen API a browser exposes is not something this
+// app gets to assume — reading only document.fullscreenElement can report "not
+// fullscreen" while the app plainly is, and the panels then stay hidden with
+// no way back. touch.js already checks all four; this now agrees with it
+// rather than answering the same question differently.
+function isDocumentFullscreen() {
+  return !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.webkitCurrentFullScreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
+}
+
+// Toggle fullscreen mode.
+//
+// The exit chain has to cover every spelling the state check above accepts, or
+// the button becomes a one-way trip: enter succeeds, isDocumentFullscreen()
+// then reports true through a prefixed property, and the exit call is missing.
+// Note that neither legacy vendor spells it "exit" — Firefox cancels, and so
+// did older WebKit.
 function toggleFullscreen() {
   const elem = document.documentElement;
-  if (!document.fullscreenElement) {
-    elem.requestFullscreen();
+  if (isDocumentFullscreen()) {
+    const exit =
+      document.exitFullscreen ||
+      document.webkitExitFullscreen ||
+      document.webkitCancelFullScreen ||
+      document.mozCancelFullScreen ||
+      document.msExitFullscreen;
+    exit?.call(document);
   } else {
-    document.exitFullscreen();
+    const request =
+      elem.requestFullscreen || elem.webkitRequestFullscreen || elem.mozRequestFullScreen || elem.msRequestFullscreen;
+    request?.call(elem);
   }
 }
 
-// Panel visibility follows document.fullscreenElement and nothing else.
+// Panel visibility follows the current fullscreen state and nothing else.
 //
 // A <video controls> element has its own fullscreen button, which makes this
 // fire with the video as the fullscreen element and again with none on the
@@ -45,8 +77,12 @@ function toggleFullscreen() {
 // own fullscreen is entered and left in pairs, so the class ends up where it
 // started, and while the modal is open its backdrop sits at z-index 99999 —
 // so no intermediate state is ever visible to the user anyway.
-function handleFullscreenChange() {
-  const isFullscreen = !!document.fullscreenElement;
+//
+// Because the class is derived from the current state rather than flipped,
+// calling this more often than strictly necessary is always a no-op — which is
+// what lets the extra resyncs below exist.
+function syncPanelVisibility() {
+  const isFullscreen = isDocumentFullscreen();
 
   // Toggle visibility of UI panels
   [elements.controlPanel, elements.searchPanel, elements.scoreDisplay].forEach((panel) => {
@@ -54,6 +90,26 @@ function handleFullscreenChange() {
       panel.classList.toggle("hidden-fullscreen", isFullscreen);
     }
   });
+
+  // Leaving fullscreen is the transition that strands the panels below the
+  // visible area on iPadOS; see panel-anchor.js. Entering is corrected too,
+  // since the layout viewport changes in both directions.
+  syncPanelAnchor();
+}
+
+// Neither the fullscreen state nor the viewport can be trusted to be settled
+// at the moment the event fires. An exit event delivered while the document
+// still names the outgoing fullscreen element reads as "still fullscreen" and
+// latches the panels hidden in windowed mode, and iPadOS finishes resizing the
+// viewport well after the event — the exit is animated. Both are unrecoverable
+// if sampled once: visibility:hidden takes the fullscreen button out of hit
+// testing, and a stranded panel is off the bottom of the screen, so in either
+// case the user cannot reach the control that would undo it. Resampling over
+// the following second costs nothing, because both syncs derive their result
+// from the current state rather than toggling it.
+function handleFullscreenChange() {
+  syncPanelVisibility();
+  [0, 250, 750].forEach((delay) => setTimeout(syncPanelVisibility, delay));
 }
 
 // Copy text to clipboard
@@ -226,14 +282,36 @@ function setupControlPanelEventListeners() {
     elements.deleteCurrentFileBtn.addEventListener("click", handleDeleteCurrentFile);
   }
 
-  // Fullscreen change event
-  document.addEventListener("fullscreenchange", handleFullscreenChange);
+  // Fullscreen change event. The prefixed spellings are for iPad browsers that
+  // only emit those; a browser emitting both just resyncs twice, which is a
+  // no-op.
+  ["fullscreenchange", "webkitfullscreenchange", "mozfullscreenchange", "MSFullscreenChange"].forEach((eventName) => {
+    document.addEventListener(eventName, handleFullscreenChange);
+  });
+
+  // Self-healing resync. If a fullscreen transition is ever missed entirely —
+  // no event delivered, or every sample taken while the document still reports
+  // the outgoing element — the panels would otherwise stay hidden until a
+  // reload, with the button that would undo it out of hit testing. The visual
+  // viewport is included deliberately: on a stranded iPadOS exit the layout
+  // viewport does not change, so window.resize may never fire, while the
+  // visible area shrinking always does.
+  window.addEventListener("resize", syncPanelVisibility);
+  window.addEventListener("orientationchange", syncPanelVisibility);
+  window.visualViewport?.addEventListener("resize", syncPanelVisibility);
 }
 
 // Initialize control panel
 export function initializeControlPanel() {
   cacheElements();
   setupControlPanelEventListeners();
+  // Every bottom-anchored element that a stranded layout viewport carries off
+  // the screen with it. The score display is not one: it hangs off the *top*
+  // of the viewport, and lifting it would push it off that edge instead.
+  // .curation-panel is bottom-anchored too but animates itself with a
+  // transform, which this would overwrite; it belongs to a separate mode and
+  // is left alone.
+  initializePanelAnchor([elements.controlPanel, elements.searchPanel, document.getElementById("textSearchPanel")]);
 }
 
 // Export for keyboard shortcuts

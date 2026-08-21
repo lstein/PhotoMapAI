@@ -6,6 +6,7 @@ import { showDeleteConfirmModal } from "./control-panel.js";
 import { createSimpleDirectoryPicker } from "./filetree.js";
 import { deleteImages } from "./index.js";
 import { showConfirmModal } from "./modal-utils.js";
+import { visibleViewportBottom } from "./panel-anchor.js";
 import { setSearchResults } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
@@ -1006,7 +1007,9 @@ class BookmarkManager {
     // Position after appending so we can measure
     const menuHeight = menu.offsetHeight;
     const menuWidth = menu.offsetWidth;
-    const windowHeight = window.innerHeight;
+    // The visible bottom edge, which on iPadOS is not always the layout
+    // viewport's bottom edge — see panel-anchor.js.
+    const windowHeight = visibleViewportBottom();
     const windowWidth = window.innerWidth;
 
     // Position above the click if would go off bottom
