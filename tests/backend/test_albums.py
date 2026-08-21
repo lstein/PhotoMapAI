@@ -254,7 +254,8 @@ def test_per_album_search_settings_round_trip(client, tmp_path):
 
     Also locks in the encoder-aware default for min_search_score: SigLIP
     albums default to 0.005 (its compressed-cosine band needs a much lower
-    threshold than CLIP), CLIP-style albums default to 0.2.
+    threshold than CLIP) and OpenAI CLIP albums to 0.2. The per-family table
+    itself lives in test_score_floors.py.
     """
     img_dir = tmp_path / "imgs"
     img_dir.mkdir()
@@ -1191,9 +1192,20 @@ def test_a_null_score_still_re_resolves_across_an_encoder_family_change(
 
 
 def test_a_hand_tuned_score_survives_a_change_within_one_family(client, tmp_path):
-    """The other half: swapping one CLIP model for another must not touch a
-    score the user chose."""
-    _directory_album(client, tmp_path, "tuned", min_search_score=0.35)
+    """The other half: swapping one OpenCLIP model for another must not touch
+    a score the user chose.
+
+    "Family" is the *score band*, not the word CLIP: OpenAI CLIP and OpenCLIP
+    are two bands about 0.1 apart (see ``default_min_search_score``), so the
+    pair swapped here has to sit inside one backend to test what it claims.
+    """
+    _directory_album(
+        client,
+        tmp_path,
+        "tuned",
+        encoder_spec="open-clip:ViT-B-32/laion2b_s34b_b79k",
+        min_search_score=0.35,
+    )
 
     # `name` carried so this pins the family logic alone, not the separate
     # fix that made an omitted name patchable.
@@ -1207,6 +1219,37 @@ def test_a_hand_tuned_score_survives_a_change_within_one_family(client, tmp_path
     )
     assert response.status_code == 200
     assert get_config_manager().get_album("tuned").min_search_score == pytest.approx(0.35)
+
+
+def test_a_hand_tuned_score_is_re_resolved_across_the_two_clip_bands(
+    client, tmp_path
+):
+    """OpenAI CLIP -> OpenCLIP is a band change, not a model swap.
+
+    OpenCLIP's whole distribution sits about 0.1 below OpenAI CLIP's, so a
+    0.35 tuned against the latter is above nearly every match the former
+    produces. Carrying it over would leave the album searching into silence,
+    which is the same failure the per-encoder floors exist to prevent.
+    """
+    _directory_album(
+        client,
+        tmp_path,
+        "crossband",
+        encoder_spec="openai-clip:ViT-B/32",
+        min_search_score=0.35,
+    )
+
+    response = client.post(
+        "/update_album/",
+        json={
+            "key": "crossband",
+            "name": "Crossband",
+            "encoder_spec": "open-clip:ViT-L-14/dfn2b_s39b",
+        },
+    )
+    assert response.status_code == 200
+    album = get_config_manager().get_album("crossband")
+    assert album.min_search_score == pytest.approx(0.1)
 
 
 def test_name_is_patchable_like_every_other_field(client, tmp_path):
