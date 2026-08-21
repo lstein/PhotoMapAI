@@ -6,11 +6,12 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 
 from .. import invokeai_client
-from ..cluster_eps import FALLBACK_CLUSTER_EPS, cached_adaptive_cluster_eps
+from ..cluster_eps import FALLBACK_CLUSTER_EPS, MIN_CLUSTER_EPS, cached_adaptive_cluster_eps
 from ..config import (
     Album,
     create_album,
@@ -19,6 +20,7 @@ from ..config import (
 )
 from ..embeddings import Embeddings
 from ..encoders import default_encoder_spec, default_min_search_score
+from ..util import json_safe
 from ..video_cache import VideoFrameCache
 
 
@@ -28,7 +30,15 @@ class UmapEpsSetRequest(BaseModel):
     # value derived from the album's own coordinates. Without this the UI
     # would be a one-way door: once a number is typed there is no way back
     # to the derived value short of editing the config file.
-    eps: float | None = None
+    #
+    # A number, though, is constrained. The bound is MIN_CLUSTER_EPS rather
+    # than a bare "positive" because that is the floor resolve_cluster_eps
+    # applies before clustering: anything under it is stored and displayed as
+    # one number while the map is drawn with another, which is the whole
+    # failure this constraint exists to prevent. A non-finite one is worse
+    # still — it cannot be serialized back out, so /get_umap_eps fails on its
+    # own response. A 422 says no before anything is written.
+    eps: float | None = Field(default=None, ge=MIN_CLUSTER_EPS, allow_inf_nan=False)
 
 
 class UmapEpsGetRequest(BaseModel):
@@ -599,6 +609,15 @@ async def update_album(album_data: dict) -> JSONResponse:
         # A 400/404 raised above is the answer; wrapping it in a 500 would
         # bury the reason the update was refused.
         raise
+    except ValidationError as e:
+        # This endpoint takes a free-form dict rather than a request model, so
+        # a field the Album model refuses — a Cluster Strength the map cannot
+        # cluster with, say — surfaces here rather than as FastAPI's own 422.
+        # It is still the caller's mistake, and it must not be reported as
+        # success: /update_album silently dropping an unusable umap_eps is how
+        # a client would end up believing it had stored one.
+        detail = json_safe(jsonable_encoder(e.errors(include_url=False)))
+        raise HTTPException(status_code=422, detail=detail) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update album: {str(e)}") from e
 

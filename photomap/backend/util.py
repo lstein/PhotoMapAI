@@ -1,6 +1,7 @@
 """
 This module provides utility functions for the PhotoMap application."""
 
+import math
 import os
 import socket
 import stat
@@ -14,6 +15,29 @@ import numpy as np
 
 K = TypeVar("K", bound=Hashable)
 V = TypeVar("V")
+
+
+def json_safe(value: Any) -> Any:
+    """``value`` with every non-finite float replaced by its repr.
+
+    ``json`` parses the bare ``NaN``/``Infinity`` literals on the way in but
+    refuses to emit them, and the JSON responses this app returns are
+    rendered with ``allow_nan=False``. So any error body that echoes a
+    rejected request back to the client has to come through here first, or
+    refusing a NaN becomes a 500 — the validation reads as a server bug.
+
+    Recursive, because the float is rarely at the top: pydantic reports the
+    *containing* object as an error's ``input`` whenever the field that
+    failed is not the float itself, so a NaN travels inside a dict or a list
+    far more often than it arrives alone.
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    return value
 
 
 def is_cuda_oom(err: BaseException) -> bool:

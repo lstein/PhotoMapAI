@@ -5,6 +5,7 @@ This module handles loading, saving, and managing photo album configurations.
 It uses a YAML file to store album details and provides methods to manipulate albums.
 """
 import logging
+import math
 import os
 import threading
 from functools import lru_cache
@@ -15,6 +16,7 @@ import yaml
 from platformdirs import user_config_dir, user_data_dir
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .cluster_eps import MIN_CLUSTER_EPS
 from .encoders import (
     LEGACY_CLIP_MIN_SEARCH_SCORE,
     LEGACY_ENCODER_SPEC,
@@ -45,6 +47,56 @@ def default_board_index_path(album_key: str) -> Path:
         raise ValueError(f"Album key not usable as a directory name: {album_key!r}")
     data_dir = Path(user_data_dir("photomap", "photomap"))
     return data_dir / "indexes" / album_key / "embeddings.npz"
+
+
+def repaired_umap_eps(raw: Any) -> float | None:
+    """A Cluster Strength read off disk, brought inside the bounds the model
+    now enforces.
+
+    The API refuses an unusable value before it can be written, but a config
+    file written before that bound existed can hold anything, and the model
+    would now refuse to load it — which would take the whole config down over
+    one album's number. The two ways a stored value can be out of bounds want
+    different answers:
+
+    * Non-finite, zero or negative is not a strength anyone chose; it is
+      damage. ``None`` — "nobody chose one" — hands the album back to a value
+      derived from its own coordinates, the same treatment an album that never
+      had one gets, and a better answer than any constant.
+    * Positive but under the floor *is* an intent: the tightest clustering the
+      control can ask for. ``resolve_cluster_eps`` already floors it at
+      :data:`MIN_CLUSTER_EPS` before clustering, so raising it here changes
+      nothing about the map — it only stops the field from reporting a number
+      the map is not using.
+
+    Anything that is not a number at all is left alone for the model to
+    reject in its own words; this repairs values, it does not launder types.
+    Being liberal about *what counts as* a number matters, though: the model
+    refuses out-of-bounds values now, so any number this hands back unrepaired
+    takes the whole config file down, not just one album's Cluster Strength.
+    That is why ``bool`` is not special-cased — pydantic accepts one as a
+    float, so ``umap_eps: false`` reaches the model as ``0.0``, and a config
+    holding one has to load.
+    """
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return raw
+    if not math.isfinite(value) or value <= 0:
+        logger.warning(
+            f"Ignoring unusable stored Cluster Strength {raw!r}; "
+            "deriving one from the album's coordinates instead."
+        )
+        return None
+    if value < MIN_CLUSTER_EPS:
+        logger.warning(
+            f"Raising stored Cluster Strength {raw!r} to the {MIN_CLUSTER_EPS} "
+            "the semantic map clusters with anyway."
+        )
+        return MIN_CLUSTER_EPS
+    return value
 
 
 class Album(BaseModel):
@@ -92,13 +144,19 @@ class Album(BaseModel):
     )
     umap_eps: float | None = Field(
         default=None,
+        ge=MIN_CLUSTER_EPS,
+        allow_inf_nan=False,
         description=(
             "DBSCAN epsilon for the semantic map's clustering. None means "
             "'not chosen': the value is derived from the album's own UMAP "
             "coordinates (see backend/cluster_eps.py), which is what keeps "
             "small albums from clustering into nothing. Adjusting Cluster "
             "Strength in the UI stores a number here and the derived value "
-            "is no longer consulted."
+            "is no longer consulted. A number stored here is bounded below "
+            "by MIN_CLUSTER_EPS — the floor resolve_cluster_eps applies "
+            "anyway — so the stored number and the number the map clusters "
+            "with cannot disagree. A config written before that bound can "
+            "still hold anything; see repaired_umap_eps."
         ),
     )
     description: str = Field(default="", description="Album description")
@@ -286,7 +344,11 @@ class Album(BaseModel):
             # what None asks the map to derive. The old 0.07 fallback here
             # was a number for *every* album regardless of size, which is
             # what left small albums with no clusters at all.
-            umap_eps=data.get("umap_eps"),
+            #
+            # This is the one door untrusted numbers come through — the API
+            # refuses them now, but a file written before it did cannot be
+            # allowed to make the whole config unloadable.
+            umap_eps=repaired_umap_eps(data.get("umap_eps")),
             description=data.get("description", ""),
             # Legacy YAML albums predate the encoder_spec field; their indexes
             # were built with the original CLIP, so fall back to that to stay

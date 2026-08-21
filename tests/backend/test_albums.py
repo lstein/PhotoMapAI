@@ -375,7 +375,12 @@ def test_min_image_dimension_round_trips(client, tmp_path):
             "min_image_dimension": 0,
         },
     )
-    assert response.status_code == 500
+    # 422, not 500: /update_album takes a free-form dict, so a field the Album
+    # model refuses arrives as a ValidationError rather than as FastAPI's own
+    # body validation. It used to fall through to the endpoint's catch-all and
+    # be reported as a server error, which reads as "PhotoMap broke" for what
+    # is squarely the caller's mistake.
+    assert response.status_code == 422
     # Previous valid value must remain — failed update must not corrupt state.
     listing = {a["key"]: a for a in client.get("/available_albums/").json()}
     assert listing["dim_default"]["min_image_dimension"] == 512
