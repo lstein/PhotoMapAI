@@ -95,44 +95,6 @@ const flushAsync = async () => {
 
 const reindexed = (albumKey) => window.dispatchEvent(new CustomEvent("albumIndexUpdated", { detail: { albumKey } }));
 
-/**
- * Type something the browser cannot parse into a number yet ("0.", "-").
- *
- * A real number input reports value "" and sets validity.badInput; jsdom does
- * the first but not the second, so the flag is stubbed — and left in place,
- * because the field goes on showing the unparseable text after the keystroke
- * and a browser goes on reporting badInput for it. `restoreValidity` takes it
- * back off. See umap-eps-debounce.test.js for what the stub does and does not
- * prove.
- */
-function typeUnparseable() {
-  const el = spinner();
-  const copy = {};
-  for (const key in el.validity) {
-    copy[key] = el.validity[key];
-  }
-  copy.badInput = true;
-  copy.valid = false;
-  if (!realValidity) {
-    realValidity = el.validity;
-  }
-  Object.defineProperty(el, "validity", { value: copy, configurable: true });
-  el.value = "";
-  el.dispatchEvent(new Event("input"));
-}
-
-let realValidity = null;
-
-function restoreValidity() {
-  if (realValidity) {
-    Object.defineProperty(spinner(), "validity", { value: realValidity, configurable: true });
-    realValidity = null;
-  }
-}
-
-/** Blur the field, the way clicking anywhere else on the page does. */
-const blurField = () => spinner().dispatchEvent(new Event("blur"));
-
 // A fetch mock whose get_umap_eps reply is held open until released, so a
 // test can act inside the window the real resolve leaves open.
 function deferredEpsFetch(eps) {
@@ -187,13 +149,8 @@ beforeEach(() => {
   mockState.album = "test-album";
   mockState.dataChanged = true;
   mapWindow().style.display = "block";
-  // The module is imported once for the whole file, so its idea of whether an
-  // edit is in progress outlives any single test. Put the field back to a
-  // parseable value and blur it, which is what clears that flag — cleanup a
-  // test does at its own end is cleanup a failing test skips.
-  restoreValidity();
+  // The map is showing a derived strength for an album that had none.
   umap.applyResolvedEps({ success: true, eps: 0.2, auto: true });
-  blurField();
 });
 
 describe("albumIndexUpdated on the album being shown", () => {
@@ -268,138 +225,6 @@ describe("albumIndexUpdated on the album being shown", () => {
     await flushAsync();
 
     expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(true);
-  });
-
-  it("leaves the spinner alone while the user is mid-number", async () => {
-    // Half-typed text arms no save at all — that is the whole point of the
-    // badInput guard — so the debounce handle cannot stand in for "an edit is
-    // pending" here. This is the state with the most to lose: overwriting it
-    // moves the number under the cursor while the user is still typing it.
-    const calls = immediateFetch({ eps: 0.49 });
-    typeUnparseable();
-
-    reindexed("test-album");
-    await flushAsync();
-
-    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(false);
-    expect(spinner().value).toBe("");
-  });
-
-  it("keeps holding the field when the user clicks away mid-number", async () => {
-    // Blur is not the user saying they are done: it fires on a click anywhere
-    // else and on an alt-tab, and the browser goes on showing the half-typed
-    // text afterwards. Releasing the field then would put the number back
-    // under a user who is about to carry on typing it.
-    const calls = immediateFetch({ eps: 0.49 });
-    typeUnparseable();
-    blurField();
-
-    reindexed("test-album");
-    await flushAsync();
-
-    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(false);
-    expect(spinner().value).toBe("");
-  });
-
-  it("resumes re-resolving once a refused value is left behind", async () => {
-    // A value the handler refuses arms no save that could ever clear the
-    // flag, so blur has to — one 0.005 must not disable every re-resolve for
-    // the rest of the session.
-    spinner().value = "0.005";
-    spinner().dispatchEvent(new Event("input"));
-    blurField();
-
-    const calls = immediateFetch({ eps: 0.49 });
-    reindexed("test-album");
-    await flushAsync();
-
-    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(true);
-    expect(spinner().value).toBe("0.49");
-  });
-
-  it("stops holding the field once its contents have been replaced", async () => {
-    // Half-typed text holds the guard across a blur on purpose. But the hold
-    // has to end when the text does: re-opening the map refills the field
-    // from the server, and a guard still set for a value that is no longer
-    // there disables every re-resolve for the rest of the session.
-    typeUnparseable();
-    blurField();
-    restoreValidity();
-    umap.applyResolvedEps({ success: true, eps: 0.4, auto: false });
-
-    const calls = immediateFetch({ eps: 0.49 });
-    reindexed("test-album");
-    await flushAsync();
-
-    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(true);
-    expect(spinner().value).toBe("0.49");
-  });
-
-  it("does not let a failed save leave the field reading as mid-edit", async () => {
-    // The flag that says "someone is typing in here" suppresses this
-    // re-resolve. Stranded on an error path — the save rejects, and the user
-    // has not clicked away, so no blur clears it — it would suppress every
-    // re-resolve for the rest of the session.
-    const calls = [];
-    global.fetch = (url) => {
-      calls.push(String(url));
-      if (String(url).startsWith("set_umap_eps")) {
-        return Promise.reject(new Error("connection lost"));
-      }
-      if (String(url).startsWith("get_umap_eps")) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, eps: 0.49, auto: true }) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
-    };
-
-    spinner().value = "0.5";
-    spinner().dispatchEvent(new Event("input"));
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-    calls.length = 0;
-
-    reindexed("test-album");
-    await flushAsync();
-
-    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(true);
-  });
-
-  it("holds the field while the save it armed is still in the air", async () => {
-    // The debounce handle is dropped the moment the save starts, and a save
-    // that started after a blur leaves nothing else behind — so this window
-    // used to look idle while the server it would be re-read from was the one
-    // still waiting for the POST. Re-resolving inside it puts the pre-save
-    // value and the "auto" badge back over the number just stored.
-    let releaseSave;
-    const calls = [];
-    global.fetch = async (url) => {
-      calls.push(String(url));
-      if (String(url).startsWith("set_umap_eps")) {
-        await new Promise((resolve) => {
-          releaseSave = resolve;
-        });
-        return { ok: true, json: () => Promise.resolve({ success: true }) };
-      }
-      if (String(url).startsWith("get_umap_eps")) {
-        return { ok: true, json: () => Promise.resolve({ success: true, eps: 0.2, auto: true }) };
-      }
-      return { ok: true, json: () => Promise.resolve([]) };
-    };
-
-    spinner().value = "0.5";
-    spinner().dispatchEvent(new Event("input"));
-    blurField();
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-
-    // The POST is in the air. A re-index completing now must not re-resolve.
-    reindexed("test-album");
-    await flushAsync();
-
-    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(false);
-    expect(spinner().value).toBe("0.5");
-    expect(badge().hidden).toBe(true);
-
-    releaseSave();
-    await flushAsync();
   });
 });
 

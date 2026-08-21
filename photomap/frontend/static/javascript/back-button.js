@@ -4,6 +4,7 @@
 // recent positions as thumbnails the user can jump to directly.
 
 import { backStack } from "./back-stack.js";
+import { visibleViewportBottom } from "./panel-anchor.js";
 import { state } from "./state.js";
 
 const FLYOUT_ROWS = 3;
@@ -68,13 +69,17 @@ function populateFlyout(flyout) {
 function clampFlyoutPosition(flyout) {
   const rect = flyout.getBoundingClientRect();
   const margin = 6;
+  // Not window.innerHeight: on iPadOS the bottom of the layout viewport can be
+  // off the screen (see panel-anchor.js), and clamping to it puts the bottom
+  // row of thumbnails somewhere the user cannot see.
+  const bottom = visibleViewportBottom();
   let left = flyout._anchorX;
   let top = flyout._anchorY;
   if (left + rect.width > window.innerWidth - margin) {
     left = Math.max(margin, window.innerWidth - rect.width - margin);
   }
-  if (top + rect.height > window.innerHeight - margin) {
-    top = Math.max(margin, window.innerHeight - rect.height - margin);
+  if (top + rect.height > bottom - margin) {
+    top = Math.max(margin, bottom - rect.height - margin);
   }
   flyout.style.left = `${left}px`;
   flyout.style.top = `${top}px`;
