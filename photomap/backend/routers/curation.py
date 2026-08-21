@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import random
@@ -251,7 +252,10 @@ async def run_curation_sync(request: CurationRequest):
     try:
         _validate_curation_request(request)
         logger.info(f"Curation: Running {request.method.upper()} x{request.iterations}...")
-        return _compute_curation(request)
+        # Off the loop: this is N rounds of kmeans/FPS over the whole index
+        # plus the index load itself, all of which used to run inside the
+        # coroutine and freeze every other request for the duration.
+        return await asyncio.to_thread(_compute_curation, request)
 
     except HTTPException:
         raise
