@@ -1,10 +1,16 @@
 """Tests for indexing and curating InvokeAI board-backed albums.
 
 The InvokeAI HTTP API is stubbed at the ``invokeai_client`` layer: fake
-``fetch_board_image_names`` / ``fetch_board_video_names`` serve mutable
-board → name mappings, and the files themselves are UUID-named copies of the
+``fetch_board_image_relpaths`` / ``fetch_board_video_relpaths`` serve mutable
+board → path mappings, and the files themselves are UUID-named copies of the
 bundled fixtures laid out under fake ``<root>/outputs/images`` and
 ``<root>/outputs/videos`` directories.
+
+Those mappings hold paths *relative to* those two directories, which is what
+the real client returns: InvokeAI files each image and video into a subfolder
+chosen by a server-side strategy.  Most of the fixture is flat (every relative
+path is a bare name), matching a ``flat`` backend;
+``test_board_media_in_subfolders_are_found`` covers the organized layout.
 
 The video mapping starts out empty, so the image-only tests below run the
 same path as a board that simply has no videos. An InvokeAI too old to have
@@ -23,7 +29,7 @@ from fastapi import HTTPException
 from fixtures import media_fixture_path
 
 from photomap.backend import invokeai_client
-from photomap.backend.invokeai_client import BoardVideoNames
+from photomap.backend.invokeai_client import BoardMediaPaths
 from photomap.backend.video import VIDEO_METADATA_KEY, ffmpeg_exe
 from photomap.backend.video_cache import VideoFrameCache
 
@@ -37,6 +43,22 @@ requires_ffmpeg = pytest.mark.skipif(
 def _index_filenames(index_path: Path) -> set[str]:
     data = np.load(index_path, allow_pickle=True)
     return {Path(str(f)).name for f in data["filenames"]}
+
+
+def _index_paths(index_path: Path) -> set[str]:
+    """The full paths in the index, for assertions a basename cannot make.
+
+    Compare against :func:`_indexed_form`, not ``str(path)``: the index
+    stores ``path.resolve().as_posix()``, so on Windows every stored path is
+    forward-slash separated while ``str(Path(...))`` is not.
+    """
+    data = np.load(index_path, allow_pickle=True)
+    return {str(f) for f in data["filenames"]}
+
+
+def _indexed_form(path: Path) -> str:
+    """``path`` written the way the index writes it (see embeddings.py)."""
+    return path.resolve().as_posix()
 
 
 def _poll_until(client, album_key, statuses, timeout=60):
@@ -62,6 +84,9 @@ def board_album(client, tmp_path, monkeypatch):
     images_dir.mkdir(parents=True)
     videos_dir = tmp_path / "invokeai" / "outputs" / "videos"
     videos_dir.mkdir(parents=True)
+    # A subfolder of the kind a ``type``-organized InvokeAI files media
+    # into; the flat-layout tests simply never put anything in it.
+    (videos_dir / "user").mkdir()
     src_images = sorted(
         p for p in (Path(__file__).parent / "test_images").iterdir() if p.is_file()
     )[:4]
@@ -91,11 +116,11 @@ def board_album(client, tmp_path, monkeypatch):
 
     async def fake_fetch_videos(base_url, board_ids, username, password):
         if not video_api["available"]:
-            return BoardVideoNames(list(video_api["names_on_outage"]), False)
-        return BoardVideoNames(_merged(video_boards, board_ids), True)
+            return BoardMediaPaths(list(video_api["names_on_outage"]), False)
+        return BoardMediaPaths(_merged(video_boards, board_ids), True)
 
-    monkeypatch.setattr(invokeai_client, "fetch_board_image_names", fake_fetch)
-    monkeypatch.setattr(invokeai_client, "fetch_board_video_names", fake_fetch_videos)
+    monkeypatch.setattr(invokeai_client, "fetch_board_image_relpaths", fake_fetch)
+    monkeypatch.setattr(invokeai_client, "fetch_board_video_relpaths", fake_fetch_videos)
 
     index_path = tmp_path / "index" / "embeddings.npz"
     album = {
@@ -179,6 +204,41 @@ def test_board_videos_are_indexed_alongside_images(client, board_album):
     assert metadata["image_count"] == 4
     assert metadata["video_count"] == 1
     assert video_name in _index_filenames(board_album["index_path"])
+
+
+@requires_ffmpeg
+def test_board_media_in_subfolders_are_found(client, board_album):
+    """InvokeAI does not necessarily store a board's media flat under
+    ``outputs/images`` / ``outputs/videos``: with the ``type`` subfolder
+    strategy every non-intermediate file lands in ``general/``, and with
+    ``date`` in ``YYYY/MM/DD/``.  PhotoMap used to join the bare filename to
+    the outputs directory, so on such a backend *nothing* resolved — most
+    visibly for videos, which are written entirely under those subfolders.
+    The client now returns the subfolder-qualified path, and indexing has to
+    honour it."""
+    # A ``date``-organized image (three segments) and a ``type``-organized
+    # video (one), so the join is exercised at both depths.
+    image_rel = f"2026/08/19/{uuid.uuid4()}.png"
+    image_path = board_album["images_dir"] / image_rel
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(board_album["src_images"][0], image_path)
+    board_album["boards"]["b1"].append(image_rel)
+
+    video_rel = f"user/{uuid.uuid4()}.mp4"
+    shutil.copy(media_fixture_path("clip.mp4"), board_album["videos_dir"] / video_rel)
+    board_album["video_boards"].setdefault("b1", []).append(video_rel)
+
+    _build_index(client)
+
+    metadata = client.get(f"/index_metadata/{ALBUM_KEY}").json()
+    assert metadata["filename_count"] == 6
+    assert metadata["image_count"] == 5
+    assert metadata["video_count"] == 1
+    # Assert the *stored* paths, not the basenames: a basename check would
+    # pass even if the file had been found somewhere else entirely.
+    indexed = _index_paths(board_album["index_path"])
+    assert _indexed_form(board_album["images_dir"] / image_rel) in indexed
+    assert _indexed_form(board_album["videos_dir"] / video_rel) in indexed
 
 
 @requires_ffmpeg
@@ -465,7 +525,7 @@ def test_unreachable_invokeai_fails_indexing_and_keeps_old_index(
     async def broken_fetch(base_url, board_ids, username, password):
         raise HTTPException(status_code=502, detail="connection refused")
 
-    monkeypatch.setattr(invokeai_client, "fetch_board_image_names", broken_fetch)
+    monkeypatch.setattr(invokeai_client, "fetch_board_image_relpaths", broken_fetch)
 
     response = client.post("/update_index_async", json={"album_key": ALBUM_KEY})
     assert response.status_code == 202
@@ -642,7 +702,7 @@ def test_first_update_failure_surfaces_error_without_prior_run(
     async def broken_fetch(base_url, board_ids, username, password):
         raise HTTPException(status_code=502, detail="connection refused")
 
-    monkeypatch.setattr(invokeai_client, "fetch_board_image_names", broken_fetch)
+    monkeypatch.setattr(invokeai_client, "fetch_board_image_relpaths", broken_fetch)
 
     response = client.post("/update_index_async", json={"album_key": ALBUM_KEY})
     assert response.status_code == 202

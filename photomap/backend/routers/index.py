@@ -722,12 +722,20 @@ class BoardAlbumFiles(NamedTuple):
 async def _resolve_board_album_files(album_config) -> BoardAlbumFiles:
     """Resolve an InvokeAI-board album's images and videos to local paths.
 
-    Fetches the selected boards' image names *and* video names from the
-    InvokeAI API and maps them to ``<invokeai_root>/outputs/images/<name>``
-    and ``<invokeai_root>/outputs/videos/<name>`` respectively — the two are
-    separate resources on the InvokeAI side, listed by separate endpoints and
-    stored in separate directories, so both have to be asked for by name.
-    Names the API lists but that don't exist locally are skipped with a
+    Fetches the selected boards' images *and* videos from the InvokeAI API
+    and joins the returned paths to ``<invokeai_root>/outputs/images`` and
+    ``<invokeai_root>/outputs/videos`` respectively — the two are separate
+    resources on the InvokeAI side, listed by separate endpoints and stored
+    in separate directories, so both have to be asked for.
+
+    Those paths are *relative*, not bare filenames: InvokeAI files each
+    image and video into a subfolder chosen by a server-side strategy
+    (``flat``, ``type``, ``date``, ``hash``), recorded per row, so a board's
+    videos routinely live at ``outputs/videos/general/<name>`` rather than
+    ``outputs/videos/<name>``. The client hands back whatever prefix the
+    server reported (empty for a flat backend), and this only joins it.
+
+    Files the API lists but that don't exist locally are skipped with a
     warning; if *none* of them exist the InvokeAI root is almost certainly
     wrong, which deserves a pointed error instead of a generic "no images
     found". The error names the directory that actually came up empty, since
@@ -742,7 +750,7 @@ async def _resolve_board_album_files(album_config) -> BoardAlbumFiles:
     still on the board.
     """
     outputs = Path(album_config.invokeai_root).expanduser() / "outputs"
-    image_names = await invokeai_client.fetch_board_image_names(
+    image_relpaths = await invokeai_client.fetch_board_image_relpaths(
         album_config.invokeai_url,
         album_config.invokeai_board_ids,
         album_config.invokeai_username,
@@ -751,15 +759,18 @@ async def _resolve_board_album_files(album_config) -> BoardAlbumFiles:
     # ``api_available`` is False against an InvokeAI with no video API, so a
     # board album on an older backend keeps indexing exactly as it did before
     # — the caller only has to say so when it costs the album something.
-    video_names, video_api_available = await invokeai_client.fetch_board_video_names(
+    (
+        video_relpaths,
+        video_api_available,
+    ) = await invokeai_client.fetch_board_video_relpaths(
         album_config.invokeai_url,
         album_config.invokeai_board_ids,
         album_config.invokeai_username,
         album_config.invokeai_password,
     )
 
-    image_paths = [outputs / "images" / name for name in image_names]
-    video_paths = [outputs / "videos" / name for name in video_names]
+    image_paths = [outputs / "images" / rel for rel in image_relpaths]
+    video_paths = [outputs / "videos" / rel for rel in video_relpaths]
     paths = image_paths + video_paths
     existing = [p for p in paths if p.is_file()]
     missing = len(paths) - len(existing)
