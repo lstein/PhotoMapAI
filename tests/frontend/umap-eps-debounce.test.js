@@ -8,12 +8,19 @@
 //
 // `validity.badInput` is what separates them, and it is the one thing here
 // jsdom cannot produce: it sets value to "" for unparseable input but never
-// sets badInput (verified -- see the `stubs` helper). The tests below drive it
+// sets badInput (verified -- see `typeUnparseable`). The tests below drive it
 // with a stub, so they pin THIS MODULE's logic; that badInput is really set by
 // a browser for a half-typed number is a platform guarantee, not something
 // this suite proves.
 //
 // See umap-harness.js for why umap.js needs a harness to be importable.
+//
+// This file re-imports umap.js per test, and nothing unregisters the window
+// listeners a previous import left behind. So do not assert on what a
+// `window.dispatchEvent` did here — every stale module answers it too, and the
+// one with no edit pending will happily satisfy an assertion the module under
+// test failed. Those cases belong in umap-reindex-refresh.test.js, which
+// imports once.
 
 import { jest, describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 
@@ -115,8 +122,10 @@ let savedEps;
 
 function installEpsFetchMock() {
   savedEps = [];
+  fetched = [];
   global.fetch = (url, options) => {
     const href = String(url);
+    fetched.push(href);
     if (href.startsWith("set_umap_eps")) {
       savedEps.push(JSON.parse(options.body).eps);
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
@@ -130,24 +139,59 @@ function installEpsFetchMock() {
 
 /** Type into the spinner the way a user does: set the value, fire input. */
 function type(value) {
-  spinner().value = value;
-  spinner().dispatchEvent(new Event("input"));
+  const el = spinner();
+  if (el.dataset.realValidity) {
+    // Whatever the browser could not parse is gone, and so is badInput.
+    Object.defineProperty(el, "validity", { value: realValidity.get(el), configurable: true });
+    delete el.dataset.realValidity;
+  }
+  el.value = value;
+  el.dispatchEvent(new Event("input"));
 }
 
 /**
- * Type something the browser cannot parse into a number yet.
+ * A copy of a ValidityState with badInput forced on.
  *
- * A real number input reports value "" and sets validity.badInput. jsdom does
- * the first but not the second, so the flag is stubbed for the dispatch.
+ * Spreading it would produce `{}` — every flag is a getter on the prototype,
+ * so none of them is an own enumerable property. `for...in` walks the
+ * prototype chain and reads each getter against the real object, which is
+ * what keeps the stub honest as umap.js starts consulting other flags.
+ */
+function validityWithBadInput(real) {
+  const copy = {};
+  for (const key in real) {
+    copy[key] = real[key];
+  }
+  copy.badInput = true;
+  copy.valid = false;
+  return copy;
+}
+
+/**
+ * Put the field into the state a real browser reports for text it cannot turn
+ * into a number yet ("0.", "-", "1e"): value "" and validity.badInput set.
+ *
+ * jsdom does the first but not the second, so badInput is stubbed. The stub
+ * stays installed — a browser does not stop reporting badInput just because
+ * the keystroke is over, and the field goes on showing the unparseable text
+ * until something replaces it. `type()` takes it back off, the way entering a
+ * parseable value does.
  */
 function typeUnparseable() {
   const el = spinner();
-  const real = el.validity;
-  Object.defineProperty(el, "validity", { value: { ...real, badInput: true }, configurable: true });
+  if (!el.dataset.realValidity) {
+    realValidity.set(el, el.validity);
+    el.dataset.realValidity = "stubbed";
+  }
+  Object.defineProperty(el, "validity", {
+    value: validityWithBadInput(realValidity.get(el)),
+    configurable: true,
+  });
   el.value = "";
   el.dispatchEvent(new Event("input"));
-  Object.defineProperty(el, "validity", { value: real, configurable: true });
 }
+
+const realValidity = new WeakMap();
 
 /**
  * Run out the debounce.
@@ -163,6 +207,11 @@ const pastTheDebounce = () => jest.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS + 1
 /** Whether the field is marked as holding a value that cannot be saved. */
 const isMarkedUnusable = () => spinner().classList.contains("umap-eps-unusable");
 
+/** URLs fetched, in order — so a test can see what the map was asked for. */
+let fetched;
+
+let umap;
+
 describe("Cluster Strength debounce", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -170,8 +219,12 @@ describe("Cluster Strength debounce", () => {
     loadUmapDom();
     installPlotlyMock();
     installFetchMock([]);
-    await import(`${JS}/umap.js`);
+    umap = await import(`${JS}/umap.js`);
     installEpsFetchMock();
+    // The map is on screen: a save redraws it, which is the path every one of
+    // these tests should be running unless it says otherwise.
+    document.getElementById("umapFloatingWindow").style.display = "block";
+    mockState.dataChanged = true;
   });
 
   afterEach(() => {
@@ -306,6 +359,64 @@ describe("Cluster Strength debounce", () => {
 
     expect(spinner().value).toBe("0.5");
     expect(badge().hidden).toBe(true);
+  });
+
+  it("does not redraw the map when the save fails", async () => {
+    // A rejection is the server being unreachable. Nothing was stored, so
+    // redrawing would show the map at a strength the album does not have.
+    const realFetch = global.fetch;
+    global.fetch = (url, options) =>
+      String(url).startsWith("set_umap_eps") ? Promise.reject(new Error("offline")) : realFetch(url, options);
+
+    type("0.5");
+    await pastTheDebounce();
+
+    expect(fetched.some((u) => u.startsWith("umap_data/"))).toBe(false);
+    expect(isMarkedUnusable()).toBe(true);
+  });
+
+  it("does not redraw the map when the server refuses the save", async () => {
+    // The refusal in practice is the 403 from require_no_lock: the album is
+    // being indexed, which is exactly when someone is likely to be tuning it.
+    const realFetch = global.fetch;
+    global.fetch = (url, options) =>
+      String(url).startsWith("set_umap_eps")
+        ? Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve({ detail: "locked" }) })
+        : realFetch(url, options);
+
+    type("0.5");
+    await pastTheDebounce();
+
+    expect(fetched.some((u) => u.startsWith("umap_data/"))).toBe(false);
+    expect(isMarkedUnusable()).toBe(true);
+  });
+
+  it("leaves the redraw to the next window open when the save lands on a closed map", async () => {
+    // Plotly lays a plot out at zero size in a hidden container, and the
+    // redraw would consume the flag the next open depends on to refetch.
+    type("0.5");
+    document.getElementById("umapFloatingWindow").style.display = "none";
+    await pastTheDebounce();
+
+    expect(savedEps).toEqual([0.5]);
+    expect(fetched.some((u) => u.startsWith("umap_data/"))).toBe(false);
+    expect(mockState.dataChanged).toBe(true);
+  });
+
+  it("does not send a strength it refused to save", async () => {
+    // Refusing to store 0.005 but still asking the map for it gets the map
+    // clustered at the server's floor — the very divergence the refusal is
+    // there to prevent.
+    type("0.005");
+    await pastTheDebounce();
+    fetched.length = 0;
+
+    mockState.dataChanged = true;
+    await umap.fetchUmapData();
+
+    expect(savedEps).toEqual([]);
+    const mapUrl = fetched.find((u) => u.startsWith("umap_data/"));
+    expect(mapUrl).toBe("umap_data/test-album");
   });
 
   it("does not put a derived strength back over a number typed during the save", async () => {

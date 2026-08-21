@@ -268,13 +268,19 @@ let epsEditPending = false;
 // that no longer matches on the way back means the user has typed since, and
 // whatever that await resolved to is about to be written over their edit.
 let epsEditSeq = 0;
+// Saves in the air. The debounce handle is nulled the moment the save starts,
+// and a save that started after the field was blurred leaves nothing else
+// behind — so without this the round trip is a window in which the field
+// looks idle to everything that writes into it, while the server it would be
+// re-read from is precisely the one still waiting for this POST.
+let epsSavesInFlight = 0;
 
 // Whether the Cluster Strength field belongs to a user who is part-way
 // through changing it. Anything that would write into the spinner from the
 // outside — a post-re-index re-resolve, a late reply to an earlier fetch —
 // has to ask first, or it moves the number under the cursor.
 function epsEditInProgress() {
-  return epsUpdateTimer !== null || epsEditPending;
+  return epsUpdateTimer !== null || epsEditPending || epsSavesInFlight > 0;
 }
 
 // Show that the field holds something the album cannot be set to, since the
@@ -350,37 +356,79 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
     // a stale handle would read as "forever mid-edit" after the first edit.
     epsUpdateTimer = null;
     const seq = epsEditSeq;
-    await fetch("set_umap_eps/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ album: state.album, eps }),
-    });
-    if (epsEditSeq === seq) {
-      // Nothing typed while the save was in the air, so the field and the
-      // album now agree and the edit is over. If something was typed, that
-      // keystroke armed its own save and owns the flag from here.
-      epsEditPending = false;
+    epsSavesInFlight++;
+    try {
+      // Both failure modes are handled the same way, because they mean the
+      // same thing to the user: the album is not set to what the field shows.
+      // A rejection is the server being unreachable; !ok is most often the
+      // 403 from require_no_lock, which is to say "not while this album is
+      // being indexed" — a state the user is quite likely to be tuning in.
+      let saved = false;
+      try {
+        const response = await fetch("set_umap_eps/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ album: state.album, eps }),
+        });
+        saved = response.ok;
+      } catch (err) {
+        console.warn("Could not save the cluster strength:", err);
+      }
+      if (epsEditSeq === seq) {
+        // Nothing typed while the save was in the air, so this edit is over
+        // either way — cleared here rather than after the success check, or a
+        // failed save would leave the field reading as mid-edit forever and
+        // silently disable every re-resolve. If something *was* typed, that
+        // keystroke armed its own save and owns the flag from here.
+        epsEditPending = false;
+      }
+      if (!saved) {
+        // Nothing was stored and nothing about the map changed, so leave the
+        // map alone — but say so on the field, which is now showing a number
+        // the album does not have. Only if it is still that number: a
+        // keystroke since means the mark would describe the wrong value.
+        if (epsEditSeq === seq) {
+          markEpsUnusable(true, "Could not be saved — the album still has its previous Cluster Strength.");
+        }
+        return;
+      }
+      if (eps === null) {
+        // Put the derived number back in the field before redrawing, so the
+        // map is fetched with the value the user can actually see.
+        //
+        // The sequence pinned above is passed rather than re-read: a keystroke
+        // during the save itself already means the derive is answering a
+        // question the user has moved on from.
+        await refreshResolvedEps(state.album, seq);
+      }
+      state.dataChanged = true;
+      // Not while the window is closed: Plotly would lay the plot out at zero
+      // size and consume the flag that the next open depends on to redraw.
+      // Leaving the flag set is what makes toggleUmapWindow refetch instead.
+      if (umapWindowIsOpen()) {
+        await fetchUmapData();
+      }
+    } finally {
+      epsSavesInFlight--;
     }
-    if (eps === null) {
-      // Put the derived number back in the field before redrawing, so the
-      // map is fetched with the value the user can actually see.
-      //
-      // The sequence pinned above is passed rather than re-read: a keystroke
-      // during the save itself already means the derive is answering a
-      // question the user has moved on from.
-      await refreshResolvedEps(state.album, seq);
-    }
-    state.dataChanged = true;
-    await fetchUmapData();
   }, 1000);
 };
 
-// Leaving the field ends the edit. Without this, text that never becomes a
-// number — "0.", abandoned — would keep `epsEditPending` set for the rest of
-// the session and quietly disable every re-resolve. A save still in the air
-// is not affected: the timer keeps epsEditInProgress() true on its own.
+// Leaving the field ends the edit — otherwise a value the handler refused,
+// which arms no save that could clear the flag, would read as mid-edit for
+// the rest of the session and quietly disable every re-resolve.
+//
+// Except while the field still shows text the browser cannot parse. Blur is
+// not the user saying they are done: it fires on a click anywhere else and on
+// an alt-tab, and the half-typed text goes on sitting there in the field
+// afterwards, so releasing the guard then is just the original bug with extra
+// steps. That leaves the guard held until the text is dealt with, which costs
+// only the display refresh after a re-index: the map itself is redrawn with
+// no cluster_eps at all, so it clusters at the album's own strength.
 document.getElementById("umapEpsSpinner").onblur = () => {
-  epsEditPending = false;
+  if (!document.getElementById("umapEpsSpinner").validity?.badInput) {
+    epsEditPending = false;
+  }
 };
 
 // The floor the spinner will accept, read from the element so it cannot drift
@@ -429,6 +477,12 @@ function umapWindowIsOpen() {
 // the round-trip — the debounced save — pass the sequence they pinned then,
 // since a keystroke during the save counts as having moved on too.
 async function refreshResolvedEps(albumKey = state.album, seq = epsEditSeq) {
+  if (epsEditSeq !== seq) {
+    // Stale before it is even asked. Deriving is real server CPU — seconds to
+    // minutes — so don't spend it on an answer that would be discarded on
+    // arrival by the check below.
+    return false;
+  }
   try {
     const response = await fetch("get_umap_eps/", {
       method: "POST",
@@ -461,7 +515,12 @@ export async function fetchUmapData() {
     // derives the strength. Substituting a number here would quietly cluster
     // at something the user never chose and the spinner never showed.
     const eps = readSpinnerEps();
-    const epsQuery = eps !== null ? `?cluster_eps=${eps}` : "";
+    // A value the spinner refuses to save must not be sent either. The server
+    // floors anything under MIN_CLUSTER_EPS, so sending one clusters the map
+    // at a number that is neither what the album stores nor what the field
+    // shows — the exact divergence refusing to save it is meant to prevent.
+    // Omitting it is the honest request: the album's own strength applies.
+    const epsQuery = eps !== null && epsIsUsable(eps) ? `?cluster_eps=${eps}` : "";
     const album = encodeURIComponent(state.album);
     // Fetch UMAP data and cluster labels in parallel. Labels are best-effort:
     // a failure leaves clusterLabels empty and the hover popup falls back to
