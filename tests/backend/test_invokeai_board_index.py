@@ -46,9 +46,19 @@ def _index_filenames(index_path: Path) -> set[str]:
 
 
 def _index_paths(index_path: Path) -> set[str]:
-    """The full paths in the index, for assertions a basename cannot make."""
+    """The full paths in the index, for assertions a basename cannot make.
+
+    Compare against :func:`_indexed_form`, not ``str(path)``: the index
+    stores ``path.resolve().as_posix()``, so on Windows every stored path is
+    forward-slash separated while ``str(Path(...))`` is not.
+    """
     data = np.load(index_path, allow_pickle=True)
     return {str(f) for f in data["filenames"]}
+
+
+def _indexed_form(path: Path) -> str:
+    """``path`` written the way the index writes it (see embeddings.py)."""
+    return path.resolve().as_posix()
 
 
 def _poll_until(client, album_key, statuses, timeout=60):
@@ -227,8 +237,8 @@ def test_board_media_in_subfolders_are_found(client, board_album):
     # Assert the *stored* paths, not the basenames: a basename check would
     # pass even if the file had been found somewhere else entirely.
     indexed = _index_paths(board_album["index_path"])
-    assert str(board_album["images_dir"] / image_rel) in indexed
-    assert str(board_album["videos_dir"] / video_rel) in indexed
+    assert _indexed_form(board_album["images_dir"] / image_rel) in indexed
+    assert _indexed_form(board_album["videos_dir"] / video_rel) in indexed
 
 
 @requires_ffmpeg
