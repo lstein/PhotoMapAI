@@ -108,6 +108,7 @@ jest.unstable_mockModule(`${JS}/utils.js`, () => ({
 const SAVE_DEBOUNCE_MS = 1000;
 
 const spinner = () => document.getElementById("umapEpsSpinner");
+const badge = () => document.getElementById("umapEpsAutoBadge");
 
 /** Everything POSTed to set_umap_eps, in order. */
 let savedEps;
@@ -148,11 +149,24 @@ function typeUnparseable() {
   Object.defineProperty(el, "validity", { value: real, configurable: true });
 }
 
-const pastTheDebounce = () => new Promise((resolve) => setTimeout(resolve, SAVE_DEBOUNCE_MS + 150));
+/**
+ * Run out the debounce.
+ *
+ * Fake timers rather than a real 1.15s wait per assertion: the debounce is a
+ * second long by design, and five of those waits cost more wall clock than
+ * the rest of the frontend suite put together. `advanceTimersByTimeAsync`
+ * drains the microtask queue between firings, so the fetch chain the timer
+ * starts finishes before this returns.
+ */
+const pastTheDebounce = () => jest.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS + 150);
+
+/** Whether the field is marked as holding a value that cannot be saved. */
+const isMarkedUnusable = () => spinner().classList.contains("umap-eps-unusable");
 
 describe("Cluster Strength debounce", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
     loadUmapDom();
     installPlotlyMock();
     installFetchMock([]);
@@ -161,6 +175,8 @@ describe("Cluster Strength debounce", () => {
   });
 
   afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
     removePlotlyMock();
     delete global.fetch;
     document.body.innerHTML = "";
@@ -218,5 +234,111 @@ describe("Cluster Strength debounce", () => {
     await pastTheDebounce();
 
     expect(savedEps).toEqual([]);
+  });
+
+  it("refuses a strength the server would silently raise", async () => {
+    // Positive, but under the spinner's own min and the server's
+    // MIN_CLUSTER_EPS: storing it means the map clusters at 0.01 while the
+    // spinner and the cluster-info modal both report 0.005.
+    type("0.005");
+    await pastTheDebounce();
+
+    expect(savedEps).toEqual([]);
+  });
+
+  it("saves a strength above the spinner's display max", async () => {
+    // The ceiling is not enforced: a derived strength for a small album can
+    // legitimately exceed it, and refusing those would leave the albums that
+    // need tuning most unable to be tuned.
+    type("4.5");
+    await pastTheDebounce();
+
+    expect(savedEps).toEqual([4.5]);
+  });
+
+  it("marks the field while it holds something that cannot be saved", async () => {
+    // The handler answers a value it will not store by doing nothing, so
+    // without a mark a refused keystroke looks exactly like a saved one.
+    typeUnparseable();
+    expect(isMarkedUnusable()).toBe(true);
+    expect(spinner().title).not.toBe("");
+
+    type("0.005");
+    expect(isMarkedUnusable()).toBe(true);
+
+    type("0.4");
+    expect(isMarkedUnusable()).toBe(false);
+    expect(spinner().hasAttribute("title")).toBe(false);
+
+    await pastTheDebounce();
+    expect(savedEps).toEqual([0.4]);
+  });
+
+  it("does not put a derived strength back over a number typed since", async () => {
+    // Clearing the field asks the server to derive one, and on a large album
+    // that answer can be a minute coming — long enough for the user to change
+    // their mind and type a number, which saves and redraws on its own.
+    // Applying the late reply then shows a derived value and an "auto" badge
+    // for an album that is storing the user's number.
+    let releaseDerive;
+    const realFetch = global.fetch;
+    global.fetch = (url, options) => {
+      if (String(url).startsWith("get_umap_eps")) {
+        return new Promise((resolve) => {
+          releaseDerive = () =>
+            resolve({ ok: true, json: () => Promise.resolve({ success: true, eps: 0.07, auto: true }) });
+        });
+      }
+      return realFetch(url, options);
+    };
+
+    type("");
+    await pastTheDebounce();
+    expect(savedEps).toEqual([null]);
+
+    // The derive is still running; the user types a strength instead.
+    type("0.5");
+    await pastTheDebounce();
+    expect(savedEps).toEqual([null, 0.5]);
+
+    releaseDerive();
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(spinner().value).toBe("0.5");
+    expect(badge().hidden).toBe(true);
+  });
+
+  it("does not put a derived strength back over a number typed during the save", async () => {
+    // The same race one step earlier: the keystroke lands while the clear is
+    // still being POSTed, before the derive has even been asked for. Reading
+    // the edit sequence when the derive starts would miss it, which is why
+    // the save pins the sequence it began with and passes that down.
+    let releaseSave;
+    let held = true;
+    const realFetch = global.fetch;
+    global.fetch = (url, options) => {
+      if (held && String(url).startsWith("set_umap_eps")) {
+        held = false;
+        return new Promise((resolve) => {
+          releaseSave = () => {
+            realFetch(url, options);
+            resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
+          };
+        });
+      }
+      return realFetch(url, options);
+    };
+
+    type("");
+    await pastTheDebounce();
+
+    // The clear is in the air; the user changes their mind before it lands.
+    type("0.5");
+    releaseSave();
+    await pastTheDebounce();
+
+    expect(savedEps).toEqual([null, 0.5]);
+    expect(spinner().value).toBe("0.5");
+    expect(badge().hidden).toBe(true);
   });
 });

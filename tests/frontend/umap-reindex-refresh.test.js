@@ -95,6 +95,22 @@ const flushAsync = async () => {
 
 const reindexed = (albumKey) => window.dispatchEvent(new CustomEvent("albumIndexUpdated", { detail: { albumKey } }));
 
+/**
+ * Type something the browser cannot parse into a number yet ("0.", "-").
+ *
+ * A real number input reports value "" and sets validity.badInput; jsdom does
+ * the first but not the second, so the flag is stubbed for the dispatch. See
+ * umap-eps-debounce.test.js for what that stub does and does not prove.
+ */
+function typeUnparseable() {
+  const el = spinner();
+  const real = el.validity;
+  Object.defineProperty(el, "validity", { value: { ...real, badInput: true }, configurable: true });
+  el.value = "";
+  el.dispatchEvent(new Event("input"));
+  Object.defineProperty(el, "validity", { value: real, configurable: true });
+}
+
 // A fetch mock whose get_umap_eps reply is held open until released, so a
 // test can act inside the window the real resolve leaves open.
 function deferredEpsFetch(eps) {
@@ -225,6 +241,37 @@ describe("albumIndexUpdated on the album being shown", () => {
     await flushAsync();
 
     expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(true);
+  });
+
+  it("leaves the spinner alone while the user is mid-number", async () => {
+    // Half-typed text arms no save at all — that is the whole point of the
+    // badInput guard — so the debounce handle cannot stand in for "an edit is
+    // pending" here. This is the state with the most to lose: overwriting it
+    // moves the number under the cursor while the user is still typing it.
+    const calls = immediateFetch({ eps: 0.49 });
+    typeUnparseable();
+
+    reindexed("test-album");
+    await flushAsync();
+
+    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(false);
+    expect(spinner().value).toBe("");
+    spinner().dispatchEvent(new Event("blur"));
+  });
+
+  it("resumes re-resolving once an abandoned edit is left behind", async () => {
+    // The other side of the same flag: text that never becomes a number
+    // never reaches a save that could clear it, so without blur one "0."
+    // would disable every re-resolve for the rest of the session.
+    typeUnparseable();
+    spinner().dispatchEvent(new Event("blur"));
+
+    const calls = immediateFetch({ eps: 0.49 });
+    reindexed("test-album");
+    await flushAsync();
+
+    expect(calls.some((u) => u.startsWith("get_umap_eps"))).toBe(true);
+    expect(spinner().value).toBe("0.49");
   });
 });
 
