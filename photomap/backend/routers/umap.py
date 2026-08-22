@@ -68,7 +68,9 @@ async def get_umap_data(
         cluster_min_samples,
     )
 
-    embeddings = embeddings.open_cached_embeddings(embeddings.embeddings_path)
+    # Threaded for the same reason as the coordinates above: on a cache miss
+    # this is a full np.load of the index, metadata unpickling included.
+    embeddings = await embeddings.load_cached_embeddings()
     filenames = embeddings["filenames"]
     filename_map = embeddings["filename_map"]
 

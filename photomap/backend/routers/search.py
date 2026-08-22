@@ -146,25 +146,33 @@ async def search_with_text_and_image(
             f"Search request: {req.min_search_score=}, {req.max_search_results=}"
         )
         try:
-            results, scores = embeddings.search_images_by_text_and_image(
-                query_image_data=query_image_data,
-                positive_query=req.positive_query,
-                negative_query=req.negative_query,
-                image_weight=req.image_weight,
-                positive_weight=req.positive_weight,
-                negative_weight=req.negative_weight,
-                # Omitted means "this album's floor" — the album knows one,
-                # resolved from its encoder when it was created. Falling
-                # straight through to the encoder default would ignore a
-                # value the user tuned.
-                minimum_score=(
-                    req.min_search_score
-                    if req.min_search_score is not None
-                    else album_config.min_search_score
-                ),
-                top_k=req.max_search_results,
-                use_query_optimization=req.use_query_optimization,
-            )
+            # Threaded like the other index readers, but behind a semaphore:
+            # the loop is what serializes searches today, and a search is a
+            # CLIP encode plus a full-index matmul. Letting two run at once
+            # would be a new way to OOM the GPU (the handler below already
+            # treats that as a live outcome), so the gate keeps concurrency
+            # exactly where it was and only the blocking goes away.
+            async with _search_gate():
+                results, scores = await asyncio.to_thread(
+                    embeddings.search_images_by_text_and_image,
+                    query_image_data=query_image_data,
+                    positive_query=req.positive_query,
+                    negative_query=req.negative_query,
+                    image_weight=req.image_weight,
+                    positive_weight=req.positive_weight,
+                    negative_weight=req.negative_weight,
+                    # Omitted means "this album's floor" — the album knows one,
+                    # resolved from its encoder when it was created. Falling
+                    # straight through to the encoder default would ignore a
+                    # value the user tuned.
+                    minimum_score=(
+                        req.min_search_score
+                        if req.min_search_score is not None
+                        else album_config.min_search_score
+                    ),
+                    top_k=req.max_search_results,
+                    use_query_optimization=req.use_query_optimization,
+                )
         except HTTPException:
             # Pass-through (e.g. AlbumDep / EmbeddingsDep already raised
             # a useful HTTPException; don't bury it under a generic one).
@@ -194,6 +202,19 @@ async def search_with_text_and_image(
             temp_path.unlink(missing_ok=True)
 
 
+# Process-wide gate around search. Created lazily on first use because
+# asyncio.Semaphore wants a running event loop, matching the indexing and
+# scan semaphores in embeddings.py.
+_search_semaphore: asyncio.Semaphore | None = None
+
+
+def _search_gate() -> asyncio.Semaphore:
+    global _search_semaphore
+    if _search_semaphore is None:
+        _search_semaphore = asyncio.Semaphore(1)
+    return _search_semaphore
+
+
 # Image Retrieval Routes
 @search_router.get(
     "/retrieve_image/{album_key}/{index}",
@@ -206,7 +227,10 @@ async def retrieve_image(
     embeddings: EmbeddingsDep,
 ) -> SlideSummary:
     """Retrieve metadata for a specific image."""
-    slide_metadata = embeddings.retrieve_image(index)
+    # Threaded for the same reason as /image_info/ below. This one matters
+    # most: the slideshow calls it per slide, so it is usually the endpoint
+    # that *takes* the cold miss after an album switch or an index rewrite.
+    slide_metadata = await asyncio.to_thread(embeddings.retrieve_image, index)
     create_slide_url(slide_metadata, album_key)
     return slide_metadata
 
@@ -223,7 +247,7 @@ async def image_info(
     embeddings: EmbeddingsDep,
 ) -> ImageData:
     """Retrieve basic metadata on an image."""
-    data = embeddings.indexes
+    data = await embeddings.load_indexes()
     sorted_filenames = data["sorted_filenames"]
     filename_map = data["filename_map"]
     modification_times = data["sorted_modification_times"]
@@ -250,7 +274,7 @@ async def get_metadata(album_key: str, index: int, embeddings: EmbeddingsDep):
     """
     Download the JSON-formatted metadata for an image by album key and index.
     """
-    indexes = embeddings.indexes
+    indexes = await embeddings.load_indexes()
     metadata = indexes["sorted_metadata"]
     if index < 0 or index >= len(metadata):
         raise HTTPException(status_code=404, detail="Index out of range")
@@ -345,7 +369,9 @@ async def serve_thumbnail(
         raise HTTPException(status_code=400, detail="Invalid color parameter")
 
     try:
-        image_path = embeddings.get_image_path(index)
+        # A thumbnail grid fires this many times at once; on a cold index
+        # every one of them would otherwise be a full np.load on the loop.
+        image_path = await asyncio.to_thread(embeddings.get_image_path, index)
     except Exception as e:
         raise HTTPException(
             status_code=404, detail=f"Image not found for index {index}: {e}"
@@ -453,7 +479,7 @@ async def serve_video_frame(
     instead of leaving a broken image on screen.
     """
     try:
-        video_path = embeddings.get_image_path(index)
+        video_path = await asyncio.to_thread(embeddings.get_image_path, index)
     except Exception as e:
         raise HTTPException(
             status_code=404, detail=f"Image not found for index {index}: {e}"
@@ -574,6 +600,19 @@ async def download_images_zip(
     """
     Download multiple images as a ZIP file.
     """
+    # Prime the index off the loop once. Both loops below resolve paths
+    # through get_image_path, which reads the same cached index -- with it
+    # warm they are dictionary lookups, so threading each of them
+    # individually would buy nothing and cost a hop per file.
+    #
+    # Best-effort: both loops already treat an unreadable index as "no
+    # files matched" and return an empty archive. Letting a missing index
+    # escape from here would turn that into a 500.
+    try:
+        await embeddings.load_indexes()
+    except Exception as e:  # noqa: BLE001 - priming only; the loops re-raise
+        logger.debug(f"Could not prime the index for {album_key}: {e}")
+
     # The archive is assembled entirely in memory, which was fine for photos
     # but is not for video: twenty bookmarked 200 MB clips would be several
     # gigabytes resident. Refuse above a ceiling rather than exhausting the
@@ -642,7 +681,7 @@ async def get_image_path(album_key: str, index: int, embeddings: EmbeddingsDep) 
     Return the image path for a given index in the album.
     """
     try:
-        image_path = embeddings.get_image_path(index)
+        image_path = await asyncio.to_thread(embeddings.get_image_path, index)
         return image_path.as_posix()
     except Exception as e:
         raise HTTPException(
@@ -676,7 +715,7 @@ async def lookup_image_indices(
     as clickable thumbnails. Filenames not found in the album map to ``null``.
     Duplicate basenames in the album resolve to the first matching index.
     """
-    sorted_filenames = embeddings.indexes["sorted_filenames"]
+    sorted_filenames = (await embeddings.load_indexes())["sorted_filenames"]
     basename_to_index: dict[str, int] = {}
     for idx, full_path in enumerate(sorted_filenames):
         basename = Path(full_path).name
@@ -704,7 +743,7 @@ async def get_image_by_name(
     if Path(filename).suffix.lower() not in SUPPORTED_EXTENSIONS:
         raise HTTPException(status_code=403, detail="Unsupported image type")
 
-    indexes = embeddings.indexes
+    indexes = await embeddings.load_indexes()
     # inefficient linear search for the filename, but still pretty quick!
     absolute_paths = [
         x for x in indexes["sorted_filenames"] if Path(x).name == filename

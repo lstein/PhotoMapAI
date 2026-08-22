@@ -8,13 +8,12 @@ OpenAI CLIP ``ViT-B/32`` behavior.
 """
 
 import asyncio
-import functools
 import gc
 import logging
 import os
 import threading
 import warnings
-from collections import deque
+from collections import OrderedDict, deque
 from collections.abc import Callable, Generator
 from collections.abc import Set as AbstractSet
 from concurrent.futures import ThreadPoolExecutor
@@ -381,11 +380,12 @@ def _copy_non_per_image_keys(data: Any) -> dict[str, Any]:
     return {key: data[key].copy() for key in data.files if key not in _PER_IMAGE_KEYS}
 
 
-@functools.lru_cache(maxsize=3)
-def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
-    """
-    Global helper to open .npz files with caching.
-    Uses context manager to ensure file handles are released.
+def _load_npz_file(embeddings_path: Path) -> dict[str, Any]:
+    """Read one .npz index off disk and derive its sorted views.
+
+    The uncached half of :data:`_open_npz_file` — call that instead unless
+    you specifically want to bypass the cache. Uses a context manager so
+    the file handle is released before we return.
     """
     embeddings_path = Path(embeddings_path).resolve()
 
@@ -432,6 +432,121 @@ def _open_npz_file(embeddings_path: Path) -> dict[str, Any]:
         "model_id": model_id,
         "embedding_dim": embedding_dim,
     }
+
+
+class _NpzCacheInfo(NamedTuple):
+    """``functools.lru_cache``-shaped stats, so existing callers still read."""
+
+    hits: int
+    misses: int
+    maxsize: int
+    currsize: int
+
+
+class _NpzIndexCache:
+    """Path-keyed cache of loaded ``.npz`` indexes.
+
+    This was a ``functools.lru_cache`` until index reads moved onto worker
+    threads (see :meth:`Embeddings.load_indexes`). Two things that
+    ``lru_cache`` cannot express became load-bearing at that point:
+
+    **One load per path at a time.** ``lru_cache`` does not dedupe in-flight
+    calls, so N concurrent requests for an uncached album each ran a full
+    ``np.load``. The event loop used to serialize them down to one; worker
+    threads do not. Measured on a 50,000-image / 111 MB index: eight
+    concurrent requests meant eight loads and 1.7 GB peak RSS, against one
+    load and 0.26 GB for a single request. Latecomers now wait on the
+    in-flight load and take its result.
+
+    **Invalidation that outruns an in-flight load.** Whether a loaded
+    snapshot may be cached depends on when the load *started*, not on when
+    it finished: a reader that began before a rewrite is holding pre-rewrite
+    data no matter how late it returns. Every :meth:`cache_clear` bumps a
+    generation counter and a load stores its result only if the generation
+    it started under is still current. ``lru_cache`` got this backwards --
+    it *refuses* to overwrite a key that appeared while the wrapped call was
+    running, so a stale reader that landed mid-reload won and the fresh
+    value was silently dropped, leaving deleted images served forever.
+    """
+
+    def __init__(
+        self,
+        loader: Callable[[Path], dict[str, Any]],
+        maxsize: int = 3,
+    ) -> None:
+        # Named ``__wrapped__`` for parity with the lru_cache this replaced:
+        # tests reach through it to instrument the real load.
+        self.__wrapped__ = loader
+        self._maxsize = maxsize
+        self._guard = threading.Lock()
+        self._entries: OrderedDict[Path, dict[str, Any]] = OrderedDict()
+        # One lock per index path. Never evicted, for the same reason as
+        # _UMAP_BUILD_LOCKS: one lock per album per process is nothing, and
+        # dropping one while a thread still held it would let the next
+        # caller build a second, unrelated lock and defeat the exclusion.
+        self._load_locks: dict[Path, threading.Lock] = {}
+        self._generation = 0
+        self._hits = 0
+        self._misses = 0
+
+    def __call__(self, embeddings_path: Path) -> dict[str, Any]:
+        # Keyed on the path as given, like the lru_cache this replaced.
+        # Resolving here would put a filesystem round-trip on every cache
+        # hit -- /retrieve_image/ takes one per slide, and album paths can
+        # be network mounts -- to dedupe spellings that no call site
+        # actually produces. Invalidation does not need it either:
+        # cache_clear() drops every entry, not one key.
+        key = embeddings_path
+
+        with self._guard:
+            cached = self._entries.get(key)
+            if cached is not None:
+                self._entries.move_to_end(key)
+                self._hits += 1
+                return cached
+            load_lock = self._load_locks.setdefault(key, threading.Lock())
+
+        # Held across the load so concurrent callers queue behind it rather
+        # than each running their own. cache_clear() deliberately does not
+        # take this lock: a writer must never wait on a reader.
+        with load_lock:
+            with self._guard:
+                cached = self._entries.get(key)
+                if cached is not None:
+                    # Filled by whoever held the lock before us.
+                    self._entries.move_to_end(key)
+                    self._hits += 1
+                    return cached
+                generation = self._generation
+                self._misses += 1
+
+            data = self.__wrapped__(embeddings_path)
+
+            with self._guard:
+                if generation == self._generation:
+                    self._entries[key] = data
+                    self._entries.move_to_end(key)
+                    while len(self._entries) > self._maxsize:
+                        self._entries.popitem(last=False)
+                # Otherwise the index was rewritten while we were reading it.
+                # Our caller still gets this snapshot -- it was valid when
+                # asked for -- but it must not outlive the request.
+            return data
+
+    def cache_clear(self) -> None:
+        """Drop every entry, and disqualify every load already in flight."""
+        with self._guard:
+            self._entries.clear()
+            self._generation += 1
+
+    def cache_info(self) -> _NpzCacheInfo:
+        with self._guard:
+            return _NpzCacheInfo(
+                self._hits, self._misses, self._maxsize, len(self._entries)
+            )
+
+
+_open_npz_file = _NpzIndexCache(_load_npz_file)
 
 
 class IndexResult(BaseModel):
@@ -1891,6 +2006,11 @@ class Embeddings(BaseModel):
         """
         Load all indexes from the embeddings file.
 
+        Blocking, and not always cheaply: on a cache miss this is a full
+        ``np.load`` of the index — including unpickling the per-image
+        metadata object array — plus copies and a sort. Async callers must
+        use :meth:`load_indexes`.
+
         Returns:
             Dict[str, np.ndarray]: Dictionary containing all indexes.
         """
@@ -2151,6 +2271,24 @@ class Embeddings(BaseModel):
             len(sorted_filenames),
         )
 
+    async def load_indexes(self) -> dict[str, np.ndarray]:
+        """:attr:`indexes` off the event loop.
+
+        The cache behind it holds three entries, so any request touching a
+        fourth album — or the first request after an index is rewritten —
+        pays the full load. Measured at 0.34s for a 50,000-image index with
+        modest metadata, page cache warm; a large library with real
+        generation metadata and a cold cache is several times that, and the
+        whole server is stopped for the duration.
+        """
+        return await asyncio.to_thread(lambda: self.indexes)
+
+    async def load_cached_embeddings(self) -> dict[str, Any]:
+        """:meth:`open_cached_embeddings` for this index, off the event loop."""
+        return await asyncio.to_thread(
+            self.open_cached_embeddings, self.embeddings_path
+        )
+
     def remove_image_from_embeddings(self, index: int) -> None:
         """
         Remove an image from the embeddings file.
@@ -2215,7 +2353,21 @@ class Embeddings(BaseModel):
                 **extras,
             )
 
-            # 6. Re-prime the cache immediately to verify the write
+            # 6. Clear once more, then re-prime to verify the write.
+            #
+            # The second clear is the load-bearing one, and it has to come
+            # *after* the rename: a reader that missed the cache before step 4
+            # is holding the pre-delete snapshot, and bumping the generation
+            # here is what stops it from caching that snapshot whenever it
+            # happens to finish. Readers run in worker threads now, so that
+            # interleaving is reachable; without this the index goes on
+            # serving images that are no longer in it.
+            #
+            # Clearing alone is not enough, which is why _NpzIndexCache tracks
+            # generations rather than just emptying a dict: the stale reader
+            # can finish *during* the re-prime below, and a plain cache would
+            # take its value and discard the fresh one.
+            _open_npz_file.cache_clear()
             _open_npz_file(self.embeddings_path)
 
         except Exception as e:
@@ -2288,8 +2440,10 @@ class Embeddings(BaseModel):
             logger.error(f"Failed to update image path in embeddings: {e}")
             raise
 
-        # Re-clear after the write so any reader that primed the cache mid-flight
-        # is also invalidated.
+        # Re-clear after the write. As in remove_images_from_embeddings, this
+        # is what disqualifies a reader still loading the pre-update file --
+        # it bumps the cache generation, so that reader's result is dropped
+        # rather than cached, whenever it lands.
         _open_npz_file.cache_clear()
 
     # This is not used in the current implementation, but can be useful for testing.
