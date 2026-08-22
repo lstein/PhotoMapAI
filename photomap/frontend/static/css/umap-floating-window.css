@@ -268,6 +268,17 @@
   display: none;
 }
 
+/* The Cluster Strength field holds something the album cannot be set to — a
+   half-typed number, or one below the floor the server would silently raise.
+   umap.js answers those by doing nothing, so without a mark a refused
+   keystroke and a saved one look the same. Set from JS rather than `:invalid`
+   so it never fires on a derived strength that simply exceeds the spinner's
+   display `max`, which is a real number the map is clustering with. */
+#umapEpsSpinner.umap-eps-unusable {
+  border: 1px solid #ff8080;
+  outline: none;
+}
+
 #umapClickBehaviorContainer,
 #umapMediaFilterContainer {
   font-size: 0.85em;

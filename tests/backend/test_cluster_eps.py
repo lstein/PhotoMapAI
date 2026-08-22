@@ -7,6 +7,7 @@ of the coordinates must not matter — which is the whole reason a fixed eps
 fails on small albums.
 """
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -225,3 +226,26 @@ def test_unwritable_cache_dir_still_returns_a_value(tmp_path, monkeypatch):
         lambda *a, **k: (_ for _ in ()).throw(OSError("read-only")),
     )
     assert cached_adaptive_cluster_eps(blobs(), Path(tmp_path)) > 0
+
+
+def test_spinner_min_matches_the_floor_the_server_enforces():
+    """The Cluster Strength spinner refuses what the server would floor.
+
+    The frontend reads its floor off the input's own ``min`` attribute rather
+    than hardcoding a number, so the two can only drift here — and drifting
+    means either the spinner accepts a value the map then clusters at
+    something else, or it refuses one the server would have honored.
+    """
+    template = (
+        Path(__file__).parent.parent.parent
+        / "photomap"
+        / "frontend"
+        / "templates"
+        / "modules"
+        / "umap-floating-window.html"
+    ).read_text(encoding="utf-8")
+    spinner = template[template.index('id="umapEpsSpinner"') :]
+    spinner = spinner[: spinner.index(">")]
+    match = re.search(r'min="([^"]+)"', spinner)
+    assert match, "the Cluster Strength spinner has lost its min attribute"
+    assert float(match.group(1)) == pytest.approx(MIN_CLUSTER_EPS)
