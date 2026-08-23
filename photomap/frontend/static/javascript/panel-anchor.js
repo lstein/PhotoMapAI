@@ -29,17 +29,44 @@ const MIN_OVERSHOOT_PX = 24;
 // event that would correct it may already have fired.
 const SETTLE_DELAY_MS = 300;
 
+// How long after a text field blurs the correction stays held. On iPad the
+// blur arrives while the software keyboard is still fully on screen — hiding
+// the search panel blurs its input first, the keyboard collapses after — so
+// the first resyncs after blur sample a viewport still shrunk by the
+// keyboard. Recomputing then would briefly treat the keyboard as browser
+// chrome and bounce everything sized by the correction. The keyboard's hide
+// animation is well under this; the timer resyncs with the truth at the end.
+const KEYBOARD_COLLAPSE_MS = 700;
+
 let anchored = [];
-let appliedOvershoot = 0;
 let settleTimer = null;
+let keyboardSettling = false;
+let keyboardCollapseTimer = null;
+
+/** Can focusing this element summon the software keyboard? */
+function isTextEntry(element) {
+  if (!element) {
+    return false;
+  }
+  return element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName);
+}
 
 /** Is the software keyboard likely to be the reason the viewport shrank? */
 function isTextEntryFocused() {
-  const active = document.activeElement;
-  if (!active) {
-    return false;
+  return isTextEntry(document.activeElement);
+}
+
+/** Keep the correction held across the keyboard's hide animation. */
+function noteTextEntryBlur(element) {
+  if (!isTextEntry(element)) {
+    return;
   }
-  return active.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
+  keyboardSettling = true;
+  clearTimeout(keyboardCollapseTimer);
+  keyboardCollapseTimer = setTimeout(() => {
+    keyboardSettling = false;
+    syncPanelAnchor();
+  }, KEYBOARD_COLLAPSE_MS);
 }
 
 /**
@@ -81,16 +108,40 @@ export function syncPanelAnchor() {
   // opening the text search dialog would otherwise fling both panels several
   // hundred pixels up into the middle of the photo, on top of the dialog they
   // belong under. There is nothing in the geometry to tell the two apart, so
-  // while a text field holds focus the last correction is held instead of
-  // recomputed.
-  const overshoot = isTextEntryFocused() ? appliedOvershoot : liveOvershoot();
-  appliedOvershoot = overshoot;
+  // from focus until the keyboard has finished collapsing after blur, the
+  // correction is left exactly as it is — recomputing on the blur edge would
+  // sample the still-raised keyboard, and recomputing the published height
+  // from a fresh clientHeight against a held overshoot mixes two moments.
+  //
+  // Pinch-zoom holds for the same reason: zoomed in, the visual viewport is a
+  // window onto the page and WebKit already treats fixed elements specially.
+  // Recomputing per-frame would drag the panels under the user's fingers, and
+  // clearing would grow the photo 40px mid-gesture on a stranded viewport —
+  // the overshoot has not gone away just because the user zoomed.
+  const zoomed = window.visualViewport && window.visualViewport.scale > 1.01;
+  if (isTextEntryFocused() || keyboardSettling || zoomed) {
+    return;
+  }
+
+  const overshoot = liveOvershoot();
 
   anchored.forEach((panel) => {
     if (panel) {
       panel.style.transform = overshoot ? `translateY(${-overshoot}px)` : "";
     }
   });
+
+  // The swiper container and slide images are sized with 100dvh, which
+  // resolves against the same stranded layout viewport the panels are anchored
+  // to — so after a stranded fullscreen exit the bottom of the photo hangs off
+  // the screen too. Publish the visible height for those rules to consume
+  // (they fall back to 100dvh when it is unset).
+  const root = document.documentElement;
+  if (overshoot) {
+    root.style.setProperty("--visible-viewport-height", `${root.clientHeight - overshoot}px`);
+  } else {
+    root.style.removeProperty("--visible-viewport-height");
+  }
 }
 
 /** Resync once more after the viewport has settled, coalescing repeat calls. */
@@ -107,7 +158,8 @@ function scheduleSettleResync() {
  */
 export function initializePanelAnchor(panels) {
   anchored = panels.filter(Boolean);
-  appliedOvershoot = 0;
+  keyboardSettling = false;
+  clearTimeout(keyboardCollapseTimer);
 
   window.addEventListener("resize", scheduleSettleResync);
   window.addEventListener("orientationchange", scheduleSettleResync);
@@ -119,9 +171,13 @@ export function initializePanelAnchor(panels) {
     window.visualViewport.addEventListener("scroll", scheduleSettleResync);
   }
   // Focus changes bracket the software keyboard, and the held correction has
-  // to be recomputed once it goes away again.
+  // to be recomputed once it goes away again — but only after the keyboard's
+  // hide animation, which starts after the blur, has finished.
   window.addEventListener("focusin", scheduleSettleResync);
-  window.addEventListener("focusout", scheduleSettleResync);
+  window.addEventListener("focusout", (event) => {
+    noteTextEntryBlur(event.target);
+    scheduleSettleResync();
+  });
 
   syncPanelAnchor();
 }

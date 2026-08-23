@@ -1,7 +1,11 @@
 /* ===== SWIPER CORE STYLES ===== */
 .swiper {
   width: 100vw;
-  height: 100dvh;
+  /* --visible-viewport-height is set by panel-anchor.js when iPadOS strands
+     the layout viewport at fullscreen size after leaving fullscreen; 100dvh
+     resolves against that stranded viewport and would hang the bottom of the
+     photo off the screen. */
+  height: var(--visible-viewport-height, 100dvh);
   box-sizing: border-box;
   background: #111;
   position: relative;
@@ -16,7 +20,7 @@
 
 .swiper-slide img {
   width: 100vw;
-  height: 100dvh;
+  height: var(--visible-viewport-height, 100dvh);
   object-fit: contain;
   display: block;
   margin: 0 auto;
@@ -83,7 +87,7 @@
 
 .slide-image {
   max-width: 100vw;
-  max-height: 100dvh;
+  max-height: var(--visible-viewport-height, 100dvh);
   display: block;
   margin: auto;
 }
