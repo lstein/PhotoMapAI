@@ -40,6 +40,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete window.visualViewport;
+  document.documentElement.style.removeProperty("--visible-viewport-height");
 });
 
 describe("a layout viewport taller than the visible area", () => {
@@ -125,6 +126,23 @@ describe("cases that must not move the panels", () => {
     expect(panel().style.transform).toBe("");
   });
 
+  it("holds an applied correction through a pinch instead of clearing it", () => {
+    // The stranded overshoot has not gone away just because the user zoomed;
+    // clearing it mid-gesture would grow the photo 130px under their fingers.
+    setVisualViewport({ height: 870 });
+    initializePanelAnchor([panel()]);
+    expect(panel().style.transform).toBe("translateY(-130px)");
+
+    setVisualViewport({ height: 500, scale: 2 });
+    syncPanelAnchor();
+    expect(panel().style.transform).toBe("translateY(-130px)");
+
+    // Zoomed back out onto a viewport that has recovered, it clears.
+    setVisualViewport({ height: 1000 });
+    syncPanelAnchor();
+    expect(panel().style.transform).toBe("");
+  });
+
   it("does nothing on a browser without visualViewport", () => {
     setVisualViewport(null);
     setLayoutViewportHeight(1000);
@@ -167,7 +185,8 @@ describe("the software keyboard", () => {
     expect(panel().style.transform).toBe("translateY(-130px)");
   });
 
-  it("recomputes once the field is blurred again", () => {
+  it("recomputes once the field is blurred and the keyboard has collapsed", () => {
+    jest.useFakeTimers();
     setVisualViewport({ height: 870 });
     initializePanelAnchor([panel()]);
     document.getElementById("searchInput").focus();
@@ -176,9 +195,31 @@ describe("the software keyboard", () => {
 
     document.getElementById("searchInput").blur();
     setVisualViewport({ height: 1000 });
-    syncPanelAnchor();
+    jest.runAllTimers();
 
     expect(panel().style.transform).toBe("");
+    jest.useRealTimers();
+  });
+
+  it("does not treat the still-raised keyboard as chrome on the blur edge", () => {
+    // Hiding the search panel blurs its input while the keyboard is still
+    // fully on screen — the keyboard only collapses afterwards. Sampling at
+    // the blur would read the keyboard as a 360px overshoot and fling the
+    // panels (and now the photo) before growing them back.
+    jest.useFakeTimers();
+    initializePanelAnchor([panel()]);
+    document.getElementById("searchInput").focus();
+    setVisualViewport({ height: 640 });
+    syncPanelAnchor();
+
+    document.getElementById("searchInput").blur();
+    syncPanelAnchor();
+    expect(panel().style.transform).toBe("");
+
+    setVisualViewport({ height: 1000 });
+    jest.runAllTimers();
+    expect(panel().style.transform).toBe("");
+    jest.useRealTimers();
   });
 });
 
@@ -198,6 +239,90 @@ describe("resampling after the viewport settles", () => {
 
     expect(panel().style.transform).toBe("translateY(-130px)");
     jest.useRealTimers();
+  });
+});
+
+describe("the --visible-viewport-height custom property", () => {
+  // The swiper container and slide images are sized with 100dvh, which
+  // resolves against the same stranded layout viewport as the panels: after a
+  // stranded fullscreen exit the bottom of the photo hangs off the screen.
+  // swiper.css consumes this property with 100dvh as its fallback.
+  const heightVar = () => document.documentElement.style.getPropertyValue("--visible-viewport-height");
+
+  it("publishes the visible height while the layout viewport is stranded", () => {
+    setVisualViewport({ height: 870 });
+    initializePanelAnchor([panel()]);
+
+    expect(heightVar()).toBe("870px");
+  });
+
+  it("is unset while the viewports agree, leaving the 100dvh fallback in force", () => {
+    initializePanelAnchor([panel()]);
+
+    expect(heightVar()).toBe("");
+  });
+
+  it("clears again once the viewport catches up", () => {
+    setVisualViewport({ height: 870 });
+    initializePanelAnchor([panel()]);
+    expect(heightVar()).toBe("870px");
+
+    setVisualViewport({ height: 1000 });
+    syncPanelAnchor();
+
+    expect(heightVar()).toBe("");
+  });
+
+  it("is held with the panel correction while the software keyboard is up", () => {
+    setVisualViewport({ height: 870 });
+    initializePanelAnchor([panel()]);
+    document.getElementById("searchInput").focus();
+
+    setVisualViewport({ height: 490 });
+    syncPanelAnchor();
+
+    expect(heightVar()).toBe("870px");
+  });
+
+  it("does not shrink the photo for the keyboard alone", () => {
+    initializePanelAnchor([panel()]);
+    document.getElementById("searchInput").focus();
+
+    setVisualViewport({ height: 620 });
+    syncPanelAnchor();
+
+    expect(heightVar()).toBe("");
+  });
+
+  it("does not shrink the photo on the blur edge while the keyboard is still up", () => {
+    jest.useFakeTimers();
+    initializePanelAnchor([panel()]);
+    document.getElementById("searchInput").focus();
+    setVisualViewport({ height: 640 });
+    syncPanelAnchor();
+
+    document.getElementById("searchInput").blur();
+    syncPanelAnchor();
+    expect(heightVar()).toBe("");
+
+    setVisualViewport({ height: 1000 });
+    jest.runAllTimers();
+    expect(heightVar()).toBe("");
+    jest.useRealTimers();
+  });
+
+  it("stays untouched on a rotate with the keyboard up, not recomputed from mixed moments", () => {
+    // A held overshoot from portrait against a fresh landscape clientHeight
+    // would publish a height belonging to neither orientation.
+    setVisualViewport({ height: 870 });
+    initializePanelAnchor([panel()]);
+    document.getElementById("searchInput").focus();
+
+    setVisualViewport({ height: 400 });
+    setLayoutViewportHeight(768);
+    window.dispatchEvent(new Event("orientationchange"));
+
+    expect(heightVar()).toBe("870px");
   });
 });
 
