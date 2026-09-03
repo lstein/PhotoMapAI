@@ -4,7 +4,7 @@ import pytest
 import yaml
 
 # Import fixtures so they're available to all tests
-from fixtures import client, new_album, new_media_album  # noqa: F401
+from fixtures import client, mixed_album, new_album, new_media_album  # noqa: F401
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +26,29 @@ def isolate_video_frame_cache(tmp_path_factory, monkeypatch):
     root = tmp_path_factory.mktemp("video_frames")
     monkeypatch.setattr(video_cache, "frame_cache_root", lambda: root)
     return root
+
+
+@pytest.fixture(autouse=True)
+def isolate_video_transcode_cache(tmp_path_factory, monkeypatch):
+    """The same isolation for converted videos, for the same reason.
+
+    ``TranscodeCache`` also defaults to ``platformdirs.user_cache_dir`` and is
+    also constructed inside the routes with no seam, and deleting an album
+    ``rmtree``s its directory. The stakes are higher here than for stills:
+    these files are whole movies.
+
+    The job registry is reset alongside it. Jobs are module-level state keyed
+    by album and content digest, so a test that leaves a "failed" entry behind
+    would make the next test's request return that stale failure instead of
+    starting work.
+    """
+    from photomap.backend import video_transcode
+
+    root = tmp_path_factory.mktemp("video_transcodes")
+    monkeypatch.setattr(video_transcode, "transcode_cache_root", lambda: root)
+    video_transcode._reset_jobs_for_tests()
+    yield root
+    video_transcode._reset_jobs_for_tests()
 
 
 @pytest.fixture(autouse=True)

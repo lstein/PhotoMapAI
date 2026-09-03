@@ -22,6 +22,7 @@ from ..embeddings import Embeddings
 from ..encoders import default_encoder_spec, default_min_search_score
 from ..util import json_safe
 from ..video_cache import VideoFrameCache
+from ..video_transcode import TranscodeCache
 
 
 class UmapEpsSetRequest(BaseModel):
@@ -248,16 +249,27 @@ def _cleanup_derived_index(album: Album | None) -> None:
 
 
 def _cleanup_video_frames(album_key: str) -> None:
-    """Remove an album's extracted video stills when the album goes away.
+    """Remove an album's derived video files when the album goes away.
 
-    The frame cache lives in the per-user cache directory, keyed by album, so
-    nothing else would ever reclaim it. Never raises: a failure here costs
-    disk space, not correctness.
+    Both caches live in the per-user cache directory, keyed by album, so
+    nothing else would ever reclaim them. The converted copies matter more
+    than the stills: those are whole movies, and the size-budget sweeper only
+    runs when something new is converted — an album deleted and never replaced
+    would otherwise leave gigabytes behind indefinitely.
+
+    Each cache is cleared independently so a failure on one still reclaims the
+    other. Never raises: a failure here costs disk space, not correctness.
     """
-    try:
-        VideoFrameCache(album_key).clear()
-    except Exception as e:
-        logger.warning(f"Could not clear video frame cache for '{album_key}': {e}")
+    for cache_name, factory in (
+        ("frame", VideoFrameCache),
+        ("conversion", TranscodeCache),
+    ):
+        try:
+            factory(album_key).clear()
+        except Exception as e:
+            logger.warning(
+                f"Could not clear video {cache_name} cache for '{album_key}': {e}"
+            )
 
 
 def _album_public_dict(album: Album) -> dict[str, Any]:

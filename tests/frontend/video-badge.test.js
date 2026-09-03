@@ -18,6 +18,8 @@ const VIDEO_DATA = {
   filename: "clip.mp4",
   media_type: "video",
   video_url: "videos/album/clip.mp4",
+  video_transcode_url: "prepare_video/album/clip.mp4",
+  image_url: "video_frame/album/3",
   video_info: { duration: 7.4, fps: 30, playable: true },
 };
 
@@ -216,6 +218,11 @@ describe("badge click", () => {
       url: "videos/album/clip.mp4",
       filename: "clip.mp4",
       playable: true,
+      // The still, so the player can size its frame and keep something on
+      // screen while an unplayable container is converted.
+      poster: "video_frame/album/3",
+      // Where the player asks for a playable copy of an unplayable file.
+      transcodeUrl: "prepare_video/album/clip.mp4",
       globalIndex: 3,
     });
     window.removeEventListener("videoPlayRequested", handler);

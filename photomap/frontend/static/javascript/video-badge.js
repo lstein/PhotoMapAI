@@ -190,6 +190,14 @@ export function applyVideoOverlay(slideEl, data) {
           url: data.video_url || "",
           filename: data.filename || "",
           playable: videoInfo.playable !== false,
+          // The extracted still. The player shows it while a conversion
+          // runs, and sizes its frame from it before any metadata has
+          // arrived — without it the frame has no aspect ratio to take.
+          poster: data.image_url || "",
+          // Where the player asks for a browser-playable copy when the
+          // original turns out not to be one. Empty from a server predating
+          // conversion support, which the player reads as "download only".
+          transcodeUrl: data.video_transcode_url || "",
           globalIndex: Number(slideEl.dataset.globalIndex ?? -1),
         },
       })

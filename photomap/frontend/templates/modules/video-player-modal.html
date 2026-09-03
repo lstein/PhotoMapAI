@@ -1,9 +1,20 @@
-<!-- Modal video player. Opened by the play badge on a video still. -->
-<div id="videoPlayerModal" class="modal-overlay">
-  <div class="modal-content video-player-content">
-    <button class="modal-close" id="videoPlayerCloseBtn" aria-label="Close video player">&times;</button>
-    <div class="video-player-title" id="videoPlayerTitle"></div>
+<!-- Modal video player. Opened by the play badge on a video still.
 
+     Deliberately NOT built on `.modal-content`. That is a #222 panel with a
+     2em pad and a rounded border, and wrapping it around a black <video> —
+     itself a bordered rectangle — reads as a frame inside a frame. This is a
+     lightbox instead: the media card sits directly on the dimmed backdrop,
+     the way InvokeAI's preview stage does, with the filename as a caption
+     below it rather than a title row above it. -->
+<div id="videoPlayerModal" class="modal-overlay video-player-overlay">
+  <button class="video-player-close" id="videoPlayerCloseBtn" aria-label="Close video player">&times;</button>
+
+  <!-- Shrink-wraps the video: the border and shadow hug the picture at
+       whatever aspect ratio the clip turns out to have, instead of boxing a
+       portrait phone video into a landscape panel. The min-height in the CSS
+       is what keeps it from collapsing to nothing in the moment before a
+       poster or any metadata has arrived. -->
+  <div class="video-player-frame" id="videoPlayerFrame">
     <!-- The <video> lives here permanently rather than being created per
          open, so its listeners are wired once. Its src is set on open and
          cleared on close — leaving a src behind keeps the browser streaming
@@ -27,11 +38,31 @@
       tabindex="0"
     ></video>
 
-    <!-- Shown instead of the player when the container is one browsers
-         cannot play, or when the <video> reports an error. -->
-    <div class="video-player-fallback" id="videoPlayerFallback" hidden>
-      <p id="videoPlayerFallbackMessage"></p>
+    <!-- Both panels are absolutely positioned OVER the frame rather than
+         replacing the video. The poster stays visible underneath, so the
+         frame keeps the clip's own aspect ratio and the user is looking at
+         the video they asked for while it converts, not at a grey box. -->
+    <div class="video-player-panel video-player-progress" id="videoPlayerProgress" hidden>
+      <p class="video-player-panel-message" id="videoPlayerProgressMessage"></p>
+      <div
+        class="video-player-bar"
+        id="videoPlayerProgressBar"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+      >
+        <div class="video-player-bar-fill" id="videoPlayerProgressFill"></div>
+      </div>
+      <p class="video-player-panel-note" id="videoPlayerProgressPercent"></p>
+    </div>
+
+    <!-- Shown when the video cannot be played and cannot be converted either. -->
+    <div class="video-player-panel video-player-fallback" id="videoPlayerFallback" hidden>
+      <p class="video-player-panel-message" id="videoPlayerFallbackMessage"></p>
       <a id="videoPlayerDownloadLink" class="video-player-download" href="#" download>Download the video</a>
     </div>
   </div>
+
+  <div class="video-player-title" id="videoPlayerTitle"></div>
 </div>

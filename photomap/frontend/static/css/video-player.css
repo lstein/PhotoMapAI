@@ -1,60 +1,194 @@
 /* video-player.css */
 /* Modal video player, opened from the play badge on a video still. */
 
-/* The base .modal-content caps at 600px, which letterboxes a 1080p clip into
-   a stamp. The player gets a much wider box and a darker backdrop. */
+/* A lightbox, not a dialog: the media card sits straight on the backdrop.
+   `.modal-content` is not used at all here — see the template. */
 #videoPlayerModal {
-  background: rgba(0, 0, 0, 0.82);
-}
-
-.video-player-content {
-  width: min(92vw, 1400px);
-  max-width: min(92vw, 1400px);
-  padding: 2.2em 1.2em 1.2em;
-  display: flex;
+  /* --visible-viewport-height is published by panel-anchor.js when iPadOS
+     strands the layout viewport after a fullscreen exit: `position: fixed`
+     and `100vh` both resolve against that stranded viewport, so the flex
+     centring below puts the whole player *below* the middle of the screen,
+     and its bottom edge off it. This is the same variable swiper.css consumes
+     for the photo itself, and it is unset (falling back to 100dvh) on every
+     browser that does not have the bug. */
+  height: var(--visible-viewport-height, 100dvh);
+  background: rgba(0, 0, 0, 0.92);
   flex-direction: column;
-  gap: 0.75em;
+  gap: 12px;
+  /* Room for the close button, which floats over the backdrop's top-right. */
+  padding: 24px;
+  box-sizing: border-box;
 }
 
+/* Floats over the backdrop rather than sitting inside the frame: a control
+   drawn on top of the picture is one more thing between the viewer and the
+   video, and the corner of a shrink-wrapped frame moves with every clip's
+   aspect ratio. */
+.video-player-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font: inherit;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.video-player-close:hover,
+.video-player-close:focus-visible {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* The media card. Shrink-wraps its <video>, so the border traces the picture
+   at any aspect ratio instead of letterboxing it inside a fixed panel.
+
+   The min sizes matter only for the moments when there is nothing to size
+   against — no poster, no metadata yet, or an error before either arrived —
+   and stop the frame collapsing to a sliver behind the overlay panels. */
+.video-player-frame {
+  position: relative;
+  display: flex;
+  min-width: min(320px, 78vw);
+  min-height: 180px;
+  max-width: 100%;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  /* Clips the native control bar to the rounded corners. */
+  overflow: hidden;
+}
+
+/* `width`/`height: auto` with only maxima set is what makes the element size
+   itself from the video's (or poster's) intrinsic aspect ratio, which is in
+   turn what the frame shrink-wraps. Setting `width: 100%` here instead would
+   pin the frame to the cap and put black bars back inside it. */
+.video-player-element {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(94vw, 1600px);
+  /* The overlay's own 24px padding top and bottom, plus the caption row and
+     its gap. Resolved against the visible viewport for the reason given
+     above. */
+  max-height: calc(var(--visible-viewport-height, 100dvh) - 104px);
+  background: #000;
+}
+
+/* The filename, as a caption on the backdrop rather than a title bar above
+   the video — a row of chrome attached to the frame is most of what made the
+   old player read as a dialog. */
 .video-player-title {
-  color: #ddd;
-  font-size: 0.95rem;
+  flex: none;
+  max-width: min(94vw, 1600px);
+  color: #bbb;
+  font-size: 0.9rem;
   text-align: center;
   overflow-wrap: anywhere;
+  /* Clamped to two lines because the video's max-height above subtracts a
+     fixed allowance for this row. A long filename broken at arbitrary
+     characters on a narrow screen would otherwise run to four or five lines
+     and push the bottom of the picture back off the display — the exact
+     problem the visible-viewport height is here to fix. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .video-player-title:empty {
   display: none;
 }
 
-.video-player-element {
-  width: 100%;
-  /* Leave room for the title and close button so the controls are never
-     pushed off the bottom of a short viewport. */
-  max-height: 78vh;
-  background: #000;
-  border-radius: 6px;
-  display: block;
-}
+/* ===== Overlay panels (conversion progress, and failure) ===== */
 
-.video-player-element[hidden] {
-  display: none;
-}
-
-/* Shown when the container is one browsers cannot play, or when the <video>
-   element reports an error. */
-.video-player-fallback {
-  padding: 2em 1em;
+/* Drawn over the frame, never in place of the video, so the poster stays
+   visible behind the scrim and the frame keeps the clip's aspect ratio. */
+.video-player-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  box-sizing: border-box;
+  /* Heavy enough that the status text reads over an arbitrary frame — a
+     bright or busy still shows straight through a lighter scrim — but not so
+     heavy that the poster stops being visible. The point of overlaying rather
+     than replacing the video is that the user keeps looking at the clip they
+     asked for. */
+  background: rgba(0, 0, 0, 0.82);
+  color: #eee;
   text-align: center;
-  color: #ddd;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
-.video-player-fallback[hidden] {
+.video-player-panel[hidden] {
   display: none;
 }
 
-.video-player-fallback p {
-  margin: 0 0 1em;
+.video-player-panel-message {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.video-player-panel-note {
+  margin: 0;
+  color: #aaa;
+  font-size: 0.85rem;
+  /* Reserves the line so the panel does not jump when the first percentage
+     replaces an empty string. */
+  min-height: 1em;
+}
+
+.video-player-bar {
+  width: min(320px, 76%);
+  height: 6px;
+  border-radius: 999px;
+  /* Opaque, not translucent: over a light frame a translucent trough is
+     brighter than the fill and the bar reads backwards. */
+  background: #2c2c2c;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.video-player-bar-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #6ea8fe;
+  transition: width 0.3s ease;
+}
+
+/* A source whose duration ffmpeg could not determine gives no percentage to
+   show, so the bar sweeps rather than lying about progress it does not have. */
+.video-player-bar--indeterminate .video-player-bar-fill {
+  width: 35%;
+  animation: video-player-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes video-player-sweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(340%);
+  }
 }
 
 .video-player-download {
@@ -73,4 +207,19 @@
 
 .video-player-download[hidden] {
   display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-player-close,
+  .video-player-bar-fill {
+    transition: none;
+  }
+
+  /* Still distinguishable from a real 100%: dimmed, and paired with the
+     "unknown duration" wording in the panel above it. */
+  .video-player-bar--indeterminate .video-player-bar-fill {
+    width: 100%;
+    animation: none;
+    opacity: 0.45;
+  }
 }
