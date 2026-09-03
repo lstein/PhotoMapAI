@@ -52,7 +52,6 @@ const PLAY_ICON_SVG = `
   <svg class="video-badge-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <circle cx="12" cy="12" r="11" />
     <path d="M9.5 7.5v9l7-4.5z" />
-    <line class="video-badge-slash" x1="4.5" y1="19.5" x2="19.5" y2="4.5" />
   </svg>
 `;
 
@@ -82,24 +81,23 @@ export function makeVideoBadge(videoInfo, filename = "") {
   badge.innerHTML = `${PLAY_ICON_SVG}<span class="video-badge-label"></span>`;
   badge.querySelector(".video-badge-label").textContent = label;
 
-  // `playable` is a hint from the container extension, used for styling only.
-  // Whether a video actually plays depends on the codec inside it (an HEVC
-  // .mp4 plays in Safari but not Firefox), so the player always attempts
-  // playback and reacts to the element's own error event.
-  const unplayable = videoInfo?.playable === false;
+  // Every video gets the same badge, whatever container it is in.
+  //
+  // There used to be a second, amber-and-slashed variant for containers no
+  // browser decodes, warning that clicking would only offer a download. It is
+  // gone because it is no longer true: the player converts those on demand
+  // and plays them, so the only thing the variant still communicated was a
+  // limitation that had been removed. `playable` itself stays in the payload
+  // — the player reads it to skip a direct attempt that is going to fail and
+  // go straight to converting — it just no longer changes how this looks.
   const subject = filename || "video";
-  if (unplayable) {
-    badge.classList.add("video-badge--unplayable");
-    badge.title = `${subject} — this format may not play in your browser; click for options`;
-  } else {
-    badge.title = `Play ${subject}`;
-  }
+  badge.title = `Play ${subject}`;
 
   // The accessible name is built explicitly rather than left to aria-label,
   // which would *replace* the element's contents in the name computation —
   // the icon is aria-hidden, so the duration and frame rate (the entire
-  // reason the badge carries text) reached no screen reader at all. Every
-  // unplayable tile in a grid also announced identically, with no filename to
+  // reason the badge carries text) reached no screen reader at all. Without
+  // the filename, every tile in a grid announces identically, with nothing to
   // tell them apart.
   const spoken = [badge.title, label].filter(Boolean).join(", ");
   badge.setAttribute("aria-label", spoken);

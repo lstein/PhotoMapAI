@@ -100,39 +100,11 @@
   display: none;
 }
 
-/* Containers browsers generally cannot play. Muted rather than hidden: the
-   video is still indexed, searchable and mapped, and clicking still opens the
-   player, which explains and offers a download. */
-/* The difference has to survive being composited over an arbitrary frame.
-   Dimming alone did not: #fff -> #d8d8d8 with a slightly *lighter* disc
-   measured brighter than the playable state over a mid-grey frame, leaving a
-   dashed 1.4-unit stroke as the only real signal — about 3px of dash at the
-   grid's icon size. An amber tint plus a slash reads at a glance and does not
-   depend on the frame behind it. */
-.video-badge--unplayable {
-  color: #ffc65c;
-}
-
-.video-badge--unplayable .video-badge-icon {
-  background: rgba(0, 0, 0, 0.62);
-}
-
-.video-badge--unplayable .video-badge-icon circle {
-  stroke-dasharray: 3 2;
-}
-
-/* Drawn by the same SVG so it scales with the icon; hidden for playable
-   badges, which use the identical markup. */
-.video-badge-slash {
-  display: none;
-}
-
-.video-badge--unplayable .video-badge-slash {
-  display: block;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
+/* There is deliberately no second "cannot play this" badge variant. It used
+   to exist — amber, with a dashed disc and a slash — for containers no
+   browser decodes, and it earned its keep while clicking one could only offer
+   a download. On-demand conversion removed the limitation it described, so
+   every video now gets the same play badge. */
 
 /* Grid tiles are much smaller than a full slide. */
 #gridViewSwiperWrapper .video-badge {

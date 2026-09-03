@@ -109,10 +109,13 @@ describe("makeVideoBadge", () => {
     expect(badge.querySelector(".video-badge-label").innerHTML).not.toContain("<");
   });
 
-  it("marks containers browsers cannot play", () => {
+  it("offers to play a container the browser cannot decode, like any other", () => {
+    // The player converts these on demand now, so singling them out with a
+    // slashed badge would advertise a limitation that no longer exists.
     const badge = makeVideoBadge({ duration: 5, fps: 25, playable: false }, "clip.avi");
-    expect(badge.classList.contains("video-badge--unplayable")).toBe(true);
-    expect(badge.title).toMatch(/may not play/i);
+    expect(badge.classList.contains("video-badge--unplayable")).toBe(false);
+    expect(badge.title).toBe("Play clip.avi");
+    expect(badge.querySelector(".video-badge-slash")).toBeNull();
   });
 
   it("carries an accessible label", () => {
@@ -228,7 +231,7 @@ describe("badge click", () => {
     window.removeEventListener("videoPlayRequested", handler);
   });
 
-  it("reports an unplayable container so the player can explain", () => {
+  it("still reports the container hint, so the player can skip a doomed attempt", () => {
     const slide = makeSlide();
     applyVideoOverlay(slide, {
       ...VIDEO_DATA,
@@ -308,9 +311,9 @@ describe("accessible name", () => {
     expect(name).toContain("30 fps");
   });
 
-  it("keeps the filename in the unplayable announcement", () => {
-    // Otherwise every unplayable tile in a grid announces identically, with
-    // nothing to tell them apart.
+  it("keeps the filename in the announcement", () => {
+    // Otherwise every tile in a grid announces identically, with nothing to
+    // tell them apart.
     const badge = makeVideoBadge({ duration: 5, fps: 25, playable: false }, "clip.avi");
     expect(badge.getAttribute("aria-label")).toContain("clip.avi");
   });
