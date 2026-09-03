@@ -328,3 +328,40 @@ def test_frame_resolution_is_skipped_when_the_thumbnail_is_warm(
 
     assert client.get("/thumbnails/mixed_album/0?size=64").status_code == 200
     assert calls == [], "a cached thumbnail should not re-resolve the still"
+
+
+@requires_ffmpeg
+def test_a_new_frame_selection_generation_rebuilds_the_video_thumbnail(
+    client, mixed_album, monkeypatch
+):
+    """A release that picks a different frame must reach the grid.
+
+    The tile is built from the still, but its freshness is judged against the
+    *video's* mtime, which does not move when only the choice of frame
+    changes. Without the generation in the tile's key, every grid tile, UMAP
+    hover popup and landmark overlay would serve the previous release's black
+    title card forever, while the slideshow poster showed the new frame.
+    """
+    from photomap.backend.routers import search as search_module
+
+    assert client.get("/thumbnails/mixed_album/0?size=64").status_code == 200
+
+    calls = []
+    real = search_module._ensure_frame_off_loop
+
+    async def counted(album_key, video_path):
+        calls.append(video_path)
+        return await real(album_key, video_path)
+
+    monkeypatch.setattr(search_module, "_ensure_frame_off_loop", counted)
+    monkeypatch.setattr(search_module, "FRAME_SELECTION_GENERATION", 99)
+
+    assert client.get("/thumbnails/mixed_album/0?size=64").status_code == 200
+    assert calls, "the tile must be rebuilt from a freshly chosen frame"
+
+    # An image has pixels of its own, so nothing about frame selection
+    # applies to it and its tile must stay warm.
+    calls.clear()
+    assert client.get("/thumbnails/mixed_album/1?size=64").status_code == 200
+    assert client.get("/thumbnails/mixed_album/1?size=64").status_code == 200
+    assert calls == []

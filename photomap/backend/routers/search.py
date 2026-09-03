@@ -27,6 +27,7 @@ from ..embeddings import SUPPORTED_EXTENSIONS, MediaFilter
 from ..media_types import is_video, video_media_type
 from ..metadata_modules import SlideSummary, video_external_link_html
 from ..util import is_cuda_oom
+from ..video import FRAME_SELECTION_GENERATION
 from ..video_cache import VideoFrameCache
 from ..video_transcode import TranscodeCache, TranscodeStatus, request_transcode
 from .album import (
@@ -403,7 +404,18 @@ async def serve_thumbnail(
     # collided ``/a/b.jpg`` with ``/a_b.jpg`` (same mangled name) and
     # ``a.png`` with ``a.jpg`` (same stem) — both observable cache-poisoning
     # bugs. blake2b-128 makes collisions effectively impossible.
-    rel_hash = hashlib.blake2b(relative_path.encode("utf-8"), digest_size=16).hexdigest()
+    # A video's tile is built from its extracted still, not from pixels of its
+    # own, so it also has to be invalidated when a new release picks a
+    # *different* frame out of the same unchanged file. The freshness check
+    # below compares the tile against the video's own mtime, which does not
+    # move when that happens — without the generation in the key, the grid,
+    # the UMAP hover popup and the landmark overlay would serve the previous
+    # release's black title card forever, while the slideshow poster (which
+    # goes straight to the frame cache) showed the new frame.
+    cache_subject = relative_path
+    if is_video(image_path):
+        cache_subject = f"{relative_path}|frames{FRAME_SELECTION_GENERATION}"
+    rel_hash = hashlib.blake2b(cache_subject.encode("utf-8"), digest_size=16).hexdigest()
     suffix = f"_{size}.png" if not color else f"_{size}_{color.lstrip('#')}_r{radius}.png"
     thumb_path = thumb_dir / f"{rel_hash}{suffix}"
 

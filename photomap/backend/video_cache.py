@@ -45,7 +45,7 @@ from PIL import Image
 from platformdirs import user_cache_dir
 
 from .util import BoundedLRU
-from .video import extract_video_frame
+from .video import FRAME_SELECTION_GENERATION, extract_video_frame
 
 logger = logging.getLogger(__name__)
 
@@ -186,13 +186,20 @@ class VideoFrameCache:
         generation of a path by globbing the prefix — necessary because the
         usual reason to discard is that the file has just been deleted, so its
         mtime can no longer be read.
+
+        FRAME_SELECTION_GENERATION rides in the second digest so that changing
+        *which* frame is extracted invalidates every cached still, the same
+        way touching the file does. Without it an existing album would keep
+        showing the frames chosen by the previous release forever: the file
+        has not changed, so nothing else would ever miss.
         """
         if mtime is None:
             try:
                 mtime = video_path.stat().st_mtime
             except OSError:
                 mtime = 0.0
-        stamp = hashlib.blake2b(f"{mtime:.6f}".encode(), digest_size=8).hexdigest()
+        stamped = f"{mtime:.6f}|{FRAME_SELECTION_GENERATION}"
+        stamp = hashlib.blake2b(stamped.encode(), digest_size=8).hexdigest()
         return f"{_path_digest(video_path)}-{stamp}"
 
     def path_for(self, video_path: Path, mtime: float | None = None) -> Path:

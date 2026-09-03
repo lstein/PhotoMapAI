@@ -486,3 +486,23 @@ def test_a_failure_in_one_album_does_not_blank_another(cache, video, tmp_path, m
 
     assert cache.ensure(video) is None
     assert other.ensure(video) is not None, "the other album still tries"
+
+
+def test_cache_key_changes_with_the_frame_selection_generation(tmp_path, monkeypatch):
+    """Choosing a different frame must invalidate the cached stills.
+
+    The video file itself has not changed, so path and mtime are identical
+    and nothing else in the key would ever miss — an upgraded install would
+    keep serving the previous release's black title frames forever.
+    """
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"not really a video")
+
+    before = VideoFrameCache.key_for(video)
+    monkeypatch.setattr(cache_module, "FRAME_SELECTION_GENERATION", 99)
+    after = VideoFrameCache.key_for(video)
+
+    assert before != after
+    assert before.split("-")[0] == after.split("-")[0], (
+        "the path digest is unchanged, so discard() still finds both"
+    )
