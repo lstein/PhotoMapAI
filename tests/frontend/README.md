@@ -26,6 +26,7 @@ npm test
 The following JavaScript modules are covered by unit tests:
 
 ### utils.js (33 tests)
+
 - `showSpinner()` - Shows the loading spinner
 - `hideSpinner()` - Hides the loading spinner
 - `joinPath()` - Joins directory paths correctly
@@ -35,15 +36,18 @@ The following JavaScript modules are covered by unit tests:
 - `setCheckmarkOnIcon()` - Adds/removes checkmark overlays on icons
 
 ### search.js
+
 - `setSearchResults()` - Sets search results and dispatches events
 
 ### slideshow.js (23 tests)
+
 - `slideShowRunning()` - Checks if slideshow autoplay is active
 - `updateSlideshowButtonIcon()` - Updates play/pause button icons
 - `showPlayPauseIndicator()` - Shows fullscreen play/pause indicator
 - `removeExistingIndicator()` - Removes existing indicators
 
 ### score-display.js (26 tests)
+
 - `ScoreDisplay` class
   - `show()` - Displays score with formatting
   - `showIndex()` - Displays slide index
@@ -52,6 +56,7 @@ The following JavaScript modules are covered by unit tests:
   - `update()` - Updates displayed score
 
 ### weight-slider.js (28 tests)
+
 - `WeightSlider` class
   - Constructor and initialization
   - `render()` - Renders slider UI
@@ -83,6 +88,7 @@ The following modules are not yet covered by tests and represent areas for futur
 ## CI Integration
 
 JavaScript tests run automatically on pull requests via GitHub Actions when changes are made to:
+
 - `photomap/frontend/static/javascript/**`
 - `tests/frontend/**`
 - `package.json`
@@ -97,18 +103,22 @@ When adding new tests:
 1. Create a test file in `tests/frontend/` with the naming convention `<module-name>.test.js`
 2. Import Jest globals and the module under test:
    ```javascript
-   import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-   import { functionToTest } from '../../photomap/frontend/static/javascript/module.js';
+   import { jest, describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+   import { functionToTest } from "../../photomap/frontend/static/javascript/module.js";
    ```
 3. If the module has dependencies with DOM side effects (like album-manager.js), use `jest.unstable_mockModule()` to mock them before importing:
    ```javascript
-   jest.unstable_mockModule('../../photomap/frontend/static/javascript/album-manager.js', () => ({
-     albumManager: { fetchAvailableAlbums: jest.fn(() => Promise.resolve([])) }
+   jest.unstable_mockModule("../../photomap/frontend/static/javascript/album-manager.js", () => ({
+     albumManager: { fetchAvailableAlbums: jest.fn(() => Promise.resolve([])) },
    }));
-   const { functionToTest } = await import('../../photomap/frontend/static/javascript/module.js');
+   const { functionToTest } = await import("../../photomap/frontend/static/javascript/module.js");
    ```
 4. Use fake timers for testing debounce, setTimeout, and animation-related code:
    ```javascript
-   beforeEach(() => { jest.useFakeTimers(); });
-   afterEach(() => { jest.useRealTimers(); });
+   beforeEach(() => {
+     jest.useFakeTimers();
+   });
+   afterEach(() => {
+     jest.useRealTimers();
+   });
    ```

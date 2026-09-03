@@ -1,5 +1,6 @@
 // control-panel.js
 // This file manages control panel button events (fullscreen, copy, delete)
+import { downloadItem } from "./download.js";
 import { deleteImage, getIndexMetadata } from "./index.js";
 import { initializePanelAnchor, syncPanelAnchor } from "./panel-anchor.js";
 import { getCurrentFilepath, getCurrentSlideIndex, slideState } from "./slide-state.js";
@@ -14,6 +15,7 @@ function cacheElements() {
     fullscreenBtn: document.getElementById("fullscreenBtn"),
     copyTextBtn: document.getElementById("copyTextBtn"),
     deleteCurrentFileBtn: document.getElementById("deleteCurrentFileBtn"),
+    downloadCurrentFileBtn: document.getElementById("downloadCurrentFileBtn"),
     controlPanel: document.getElementById("controlPanel"),
     searchPanel: document.getElementById("searchPanel"),
     scoreDisplay: document.getElementById("fixedScoreDisplay"),
@@ -163,6 +165,31 @@ function handleCopyText() {
 }
 
 // Delete the current file
+/**
+ * Save the current slide to disk.
+ *
+ * Resolved through getCurrentSlideIndex() rather than from any view's own
+ * DOM, which is what makes one button serve both the swiper and the grid —
+ * the same reason the delete button below works in both.
+ */
+async function handleDownloadCurrentFile() {
+  const [globalIndex] = getCurrentSlideIndex();
+  if (globalIndex === -1) {
+    alert("No image selected for download.");
+    return;
+  }
+
+  try {
+    showSpinner();
+    await downloadItem(globalIndex);
+  } catch (error) {
+    alert(`Download failed: ${errorDetail(error)}`);
+    console.error("Download failed:", error);
+  } finally {
+    hideSpinner();
+  }
+}
+
 async function handleDeleteCurrentFile() {
   const [globalIndex] = getCurrentSlideIndex();
   const currentFilepath = await getCurrentFilepath();
@@ -278,6 +305,10 @@ function setupControlPanelEventListeners() {
   }
 
   // Delete current file button
+  if (elements.downloadCurrentFileBtn) {
+    elements.downloadCurrentFileBtn.addEventListener("click", handleDownloadCurrentFile);
+  }
+
   if (elements.deleteCurrentFileBtn) {
     elements.deleteCurrentFileBtn.addEventListener("click", handleDeleteCurrentFile);
   }

@@ -386,7 +386,9 @@ def test_every_plan_front_loads_the_index_and_states_the_container():
     assert args[args.index("-movflags") + 1] == "+faststart"
     # The output is a mkstemp ".tmp" name no muxer would recognize.
     assert args[args.index("-f") + 1] == "mp4"
-    assert args[-1] == "/out/clip.tmp"
+    # Compared through Path, not as a literal: ffmpeg_args stringifies the
+    # path, and str(Path("/out/clip.tmp")) is "\\out\\clip.tmp" on Windows.
+    assert args[-1] == str(Path("/out/clip.tmp"))
     assert "-progress" in args and args[args.index("-progress") + 1] == "pipe:1"
 
 
@@ -616,13 +618,29 @@ def test_a_remembered_failure_is_not_retried_on_every_poll(tmp_path):
     assert calls == []
 
 
+def _filesystem_is_case_sensitive(directory: Path) -> bool:
+    probe = directory / "CaseProbe.tmp"
+    probe.write_bytes(b"")
+    try:
+        return not (directory / "caseprobe.tmp").exists()
+    finally:
+        probe.unlink()
+
+
 def test_names_differing_only_in_case_get_different_conversions(tmp_path):
     """On a case-sensitive filesystem these are two different movies.
 
     The frame cache casefolds its key, so with matching mtimes — routine for
     anything unpacked from one archive — both would map to one entry. For a
     still that is the wrong thumbnail; here it would play the wrong film.
+
+    Skipped where the filesystem is case-insensitive (Windows, and macOS by
+    default): there the two names *are* one file, so sharing a cache entry is
+    the correct answer rather than the bug.
     """
+    if not _filesystem_is_case_sensitive(tmp_path):
+        pytest.skip("filesystem is case-insensitive; the two names are one file")
+
     cache = TranscodeCache("album", root=tmp_path)
     lower = tmp_path / "clip.mp4"
     upper = tmp_path / "Clip.mp4"

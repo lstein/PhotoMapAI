@@ -4,6 +4,7 @@
 
 import { showDeleteConfirmModal } from "./control-panel.js";
 import { createSimpleDirectoryPicker } from "./filetree.js";
+import { downloadItem, triggerSave } from "./download.js";
 import { deleteImages } from "./index.js";
 import { showConfirmModal } from "./modal-utils.js";
 import { visibleViewportBottom } from "./panel-anchor.js";
@@ -509,44 +510,8 @@ class BookmarkManager {
   }
 
   async downloadSingleImage(globalIndex) {
-    const data = await fetchJson(`retrieve_image/${encodeURIComponent(state.album)}/${globalIndex}`);
-    const isVideo = data.media_type === "video";
-    // For a video, download the playable file rather than its still frame.
-    const imageUrl = isVideo && data.video_url ? data.video_url : data.image_url;
-    // Derive the fallback extension from the real path — the old hardcoded
-    // .jpg would save a video under a name no player would open.
-    const fallbackExtension = data.filepath?.split(".").pop() || (isVideo ? "mp4" : "jpg");
-    const filename = data.filename || `image_${globalIndex}.${fallbackExtension}`;
-
-    if (isVideo) {
-      // Videos are far too large to buffer into a blob: a 200 MB clip would
-      // sit entirely in browser memory before the save dialog appeared. Point
-      // the download straight at the URL and let the browser stream it.
-      const a = document.createElement("a");
-      a.href = imageUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      return;
-    }
-
-    // Fetch the actual image (binary, not JSON — fetch directly)
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) {
-      throw new Error("Failed to fetch image");
-    }
-
-    const blob = await imageResponse.blob();
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Shared with the control panel's download button — see download.js.
+    return downloadItem(globalIndex);
   }
 
   async downloadAsZip(indices) {
@@ -561,15 +526,8 @@ class BookmarkManager {
       throw new Error(`Server error: ${response.status}`);
     }
 
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${state.album}_bookmarked_images.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const url = URL.createObjectURL(await response.blob());
+    triggerSave(url, `${state.album}_bookmarked_images.zip`);
     URL.revokeObjectURL(url);
   }
 
