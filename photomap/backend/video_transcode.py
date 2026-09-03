@@ -32,6 +32,8 @@ the player is what abandonment looks like from here.
 
 from __future__ import annotations
 
+import atexit
+import hashlib
 import logging
 import os
 import shutil
@@ -48,7 +50,7 @@ from platformdirs import user_cache_dir
 from pydantic import BaseModel
 
 from .video import StreamProbe, ffmpeg_exe, probe_streams
-from .video_cache import VideoFrameCache, album_dirname
+from .video_cache import album_dirname
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +110,13 @@ WATCHDOG_INTERVAL_SECONDS = 2.0
 # by a client that has genuinely gone away.
 ABANDON_AFTER_SECONDS = 45.0
 
+# A conversion whose mtime was refreshed this recently is never evicted.
+# ``TranscodeCache.get`` stamps an entry every time it is served, so this is
+# what stops the sweeper deleting the film somebody is in the middle of
+# watching — which, since the browser fetches it with Range requests over the
+# whole viewing session, would otherwise 404 mid-playback.
+EVICTION_GRACE_SECONDS = 900.0
+
 # How long a failure is remembered.  Without this a permanently unconvertible
 # file re-runs ffmpeg on every poll — several times a second.  It expires
 # because failure is also transient (a full disk, a mount that came back), and
@@ -154,13 +163,18 @@ def plan_for(probe: StreamProbe | None) -> TranscodePlan:
     """Decide what has to be re-encoded, from what the probe could determine.
 
     Every unknown resolves to "re-encode".  A probe that returned ``None``, a
+    probe whose banner could not be fully attributed to ffmpeg
+    (``trusted=False`` — see :func:`~photomap.backend.video.probe_streams`), a
     codec line the banner parser did not match, an unrecognized pixel format —
     all of them mean *we cannot prove a copy would play*, and the cost of
     guessing wrong is the exact black rectangle this module exists to remove.
     Re-encoding when a copy would have done merely wastes time once, and the
     result is cached.
     """
-    if probe is None:
+    if probe is None or not probe.trusted:
+        # Duration is dropped along with the rest: on the untrusted path it is
+        # the same forged text, and a bogus duration drives both the progress
+        # readout and the job deadline.
         return TranscodePlan(copy_video=False, has_audio=True, copy_audio=False)
 
     copy_video = (
@@ -220,8 +234,21 @@ def ffmpeg_args(source: Path, target: Path, plan: TranscodePlan) -> list[str]:
             # to 1.50 instead of 1.778 if the sample aspect is dropped.  Only
             # on the re-encode path — a stream copy carries the source's own
             # aspect metadata through untouched.
+            #
+            # Both axes are rounded to even numbers, which is not decoration:
+            # ``scale`` truncates to int, and libx264 refuses a yuv420p frame
+            # with an odd dimension outright ("width not divisible by 2").
+            # 720*32/27 is 853.33 -> 853, so the single most common shape this
+            # filter exists for — 16:9 NTSC DVD — failed every time without
+            # the rounding.  ``setsar=1`` then states that the output pixels
+            # really are square, so nothing downstream re-applies the source's
+            # aspect a second time.
+            #
+            # The comma here separates two filters, which is what a filtergraph
+            # wants; note that a comma *inside* one of these expressions would
+            # have to be escaped, which is why none of them contains one.
             "-vf",
-            "scale=iw*sar:ih",
+            "scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1",
         ]
 
     if not plan.has_audio:
@@ -282,15 +309,113 @@ class TranscodeCache:
 
     @staticmethod
     def key_for(video_path: Path, mtime: float | None = None) -> str:
-        return VideoFrameCache.key_for(video_path, mtime)
+        """``<exact-case path digest>-<mtime digest>``.
+
+        Shaped like :meth:`VideoFrameCache.key_for` but deliberately **not**
+        delegating to it: that one casefolds the path, so on a case-sensitive
+        filesystem two genuinely different files whose names differ only in
+        case (``clip.mp4`` and ``Clip.mp4``) collide whenever their mtimes also
+        match — which is routine for anything unpacked from one archive. For a
+        still that means the wrong thumbnail; here it would mean **playing the
+        wrong movie**, and reporting it ``ready`` without converting it.
+
+        The casefold exists there to stop a case-insensitive filesystem
+        presenting one file under two spellings and thrashing the extract/prune
+        loop. This cache has no such loop — it is swept by byte budget, not
+        against the index — so the worst an exact-case key costs it is
+        converting one file twice on macOS or Windows. That is the right way
+        round: duplicated work over wrong content.
+        """
+        if mtime is None:
+            try:
+                mtime = video_path.stat().st_mtime
+            except OSError:
+                mtime = 0.0
+        try:
+            resolved = Path(video_path).resolve().as_posix()
+        except (OSError, RuntimeError, ValueError):
+            resolved = Path(video_path).as_posix()
+        digest = hashlib.blake2b(
+            resolved.encode("utf-8", errors="surrogatepass"), digest_size=16
+        ).hexdigest()
+        stamp = hashlib.blake2b(f"{mtime:.6f}".encode(), digest_size=8).hexdigest()
+        return f"{digest}-{stamp}"
 
     def path_for(self, video_path: Path, mtime: float | None = None) -> Path:
         return self.directory / f"{self.key_for(video_path, mtime)}.mp4"
 
     def get(self, video_path: Path, mtime: float | None = None) -> Path | None:
-        """The converted file, if one has already been produced."""
+        """The converted file, if one has already been produced.
+
+        Stamps the entry as used. That is what keeps it out of the sweeper's
+        reach while it is being watched: the browser fetches a film with Range
+        requests spread over the whole viewing session, and without a stamp
+        here its mtime would be frozen at the moment the progress panel last
+        polled — making the film currently on screen the *first* thing evicted
+        when some other conversion finishes.
+        """
         path = self.path_for(video_path, mtime)
-        return path if path.is_file() else None
+        if not path.is_file():
+            return None
+        try:
+            os.utime(path, None)
+        except OSError:
+            pass
+        return path
+
+    def prune(self, keep_keys: set[str]) -> int:
+        """Delete every conversion whose key is not in ``keep_keys``.
+
+        The index-save sweep, mirroring :meth:`VideoFrameCache.prune`: one
+        pass covers mtime changes, moves, copies, deletes and files removed
+        outside the app, none of which have a hook of their own.
+
+        Unlike the frame cache's version this deliberately leaves ``.tmp``
+        files alone. There, a stray temp is a dead extraction worth seconds;
+        here it is very likely the conversion running *right now*, which may
+        have hours invested in it. Abandoned temps are reclaimed by
+        :func:`sweep_transcode_cache`, which can tell the difference by age.
+        """
+        directory = self.directory
+        if not directory.is_dir():
+            return 0
+        try:
+            entries = list(directory.iterdir())
+        except OSError as e:
+            logger.warning(f"Could not sweep the conversion cache {directory}: {e}")
+            return 0
+        removed = 0
+        for entry in entries:
+            if entry.suffix != ".mp4" or entry.stem in keep_keys:
+                continue
+            try:
+                entry.unlink()
+                removed += 1
+            except OSError as e:
+                logger.debug(f"Could not remove stale conversion {entry}: {e}")
+        return removed
+
+    def discard(self, video_path: Path, mtime: float | None = None) -> None:
+        """Drop every converted generation of ``video_path``.
+
+        Globs the path digest rather than computing one key, for the same
+        reason :meth:`VideoFrameCache.discard` does: the usual reason to
+        discard is that the source has just been deleted, so its mtime can no
+        longer be read and the exact key is unrecoverable.
+        """
+        prefix = self.key_for(video_path, mtime).split("-")[0]
+        directory = self.directory
+        if not directory.is_dir():
+            return
+        try:
+            stale = list(directory.glob(f"{prefix}-*.mp4"))
+        except OSError:
+            return
+        for entry in stale:
+            try:
+                entry.unlink()
+            except OSError as e:
+                logger.debug(f"Could not discard conversion {entry}: {e}")
 
     def clear(self) -> None:
         """Drop this album's conversions entirely (album deletion)."""
@@ -304,17 +429,40 @@ def sweep_transcode_cache(
 ) -> int:
     """Evict least-recently-used conversions until the cache fits ``budget``.
 
-    Recency is the file's mtime, which :func:`request_transcode` refreshes on
-    every cache hit — so a clip watched repeatedly outlives one converted
-    once and forgotten, regardless of when either was produced.
+    Recency is the file's mtime, which :meth:`TranscodeCache.get` and
+    :func:`request_transcode` both refresh on every hit — so a clip watched
+    repeatedly outlives one converted once and forgotten, regardless of when
+    either was produced.
 
-    ``keep`` is never evicted: it is the file the caller has just produced and
-    is about to serve, and on a cache whose budget is smaller than a single
-    movie it would otherwise be deleted before it could be played.
+    Two things are never evicted:
+
+    * ``keep`` — the file the caller has just produced and is about to serve.
+      On a cache whose budget is smaller than a single movie it would
+      otherwise be deleted before it could be played.
+    * anything stamped within :data:`EVICTION_GRACE_SECONDS`, which is what a
+      film being watched right now looks like. Honouring the budget is worth
+      less than not yanking a file out from under an open player, so the cache
+      is allowed to sit over budget until the viewing finishes.
+
+    Abandoned ``.tmp`` files are collected too, and *before* the budget test:
+    a conversion killed by a crash or a hard server stop leaves one behind,
+    and because they are not ``.mp4`` they would otherwise be invisible to the
+    accounting forever — the one class of garbage nothing else reclaims.
     """
     base = root if root is not None else transcode_cache_root()
     if not base.is_dir():
         return 0
+
+    now = time.time()
+    removed = 0
+    for stale in base.rglob("*.tmp"):
+        try:
+            if now - stale.stat().st_mtime <= EVICTION_GRACE_SECONDS:
+                continue  # very likely the conversion running right now
+            stale.unlink()
+            removed += 1
+        except OSError as e:
+            logger.debug(f"Could not remove abandoned conversion temp {stale}: {e}")
 
     entries: list[tuple[float, int, Path]] = []
     total = 0
@@ -327,12 +475,13 @@ def sweep_transcode_cache(
         total += stat.st_size
         if keep_resolved is not None and path.resolve() == keep_resolved:
             continue
+        if now - stat.st_mtime <= EVICTION_GRACE_SECONDS:
+            continue
         entries.append((stat.st_mtime, stat.st_size, path))
 
     if total <= budget:
-        return 0
+        return removed
 
-    removed = 0
     entries.sort(key=lambda item: item[0])
     for _mtime, size, path in entries:
         if total <= budget:
@@ -356,12 +505,51 @@ class _Job:
     detail: str | None = None
     last_polled: float = field(default_factory=time.monotonic)
     finished_at: float | None = None
+    #: Set when the reason to stop is *known*, not merely inferred from
+    #: silence: the album was deleted, or the process is shutting down. Kept
+    #: apart from the polling clock because the two want opposite treatment of
+    #: a conversion that finishes anyway — see :func:`_drive_ffmpeg`.
+    cancelled: bool = False
 
 
 _jobs: dict[str, _Job] = {}
 _jobs_lock = threading.Lock()
 _executor: ThreadPoolExecutor | None = None
 _executor_lock = threading.Lock()
+
+# Every ffmpeg this module currently has running, so shutdown can kill them.
+_live_processes: set[subprocess.Popen] = set()
+_live_lock = threading.Lock()
+_shutting_down = threading.Event()
+
+
+def _shutdown_conversions() -> None:
+    """Stop every conversion so the interpreter can actually exit.
+
+    ``ThreadPoolExecutor``'s worker threads are non-daemon and
+    ``concurrent.futures`` registers an ``atexit`` hook that *joins* them, so
+    without this a re-encode holds the whole process open at shutdown — the
+    watchdog would not notice for ``ABANDON_AFTER_SECONDS``, so stopping the
+    server took the better part of a minute, every time.
+
+    Registered after ``concurrent.futures``'s own hook (this module imports it
+    first) and ``atexit`` runs last-registered-first, so this gets to kill the
+    children before anything waits on the thread running them.
+    """
+    _shutting_down.set()
+    with _jobs_lock:
+        for job in _jobs.values():
+            job.cancelled = True
+    with _live_lock:
+        doomed = list(_live_processes)
+    for proc in doomed:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
+atexit.register(_shutdown_conversions)
 
 
 def _worker_pool() -> ThreadPoolExecutor:
@@ -387,10 +575,44 @@ def _scoped_key(album_key: str, key: str) -> str:
 
 
 def _forget_stale_jobs(now: float) -> None:
-    """Drop finished entries nobody can still be waiting on. Caller holds the lock."""
+    """Drop entries nobody can still be waiting on. Caller holds the lock.
+
+    Two kinds, and the second is what bounds the registry:
+
+    * finished entries older than :data:`FAILURE_MEMORY_SECONDS`;
+    * **queued or running** entries whose client stopped polling. Reaping
+      these is not merely tidiness — a source whose mtime keeps moving (a
+      file still being copied in, a growing recording) produces a *new* cache
+      key on every poll, so every poll creates a job and queues a worker task,
+      once a second, none of which can ever be reclaimed by the first rule
+      because none of them ever finishes. Dropping the entry is also what
+      makes the watchdog treat the job as abandoned and kill its ffmpeg.
+    """
     for scoped, job in list(_jobs.items()):
-        if job.finished_at is not None and now - job.finished_at > FAILURE_MEMORY_SECONDS:
+        if job.finished_at is not None:
+            if now - job.finished_at > FAILURE_MEMORY_SECONDS:
+                del _jobs[scoped]
+        elif now - job.last_polled > ABANDON_AFTER_SECONDS:
             del _jobs[scoped]
+
+
+def forget_album(album_key: str) -> int:
+    """Cancel every conversion belonging to ``album_key``. Returns how many.
+
+    Called when the album is deleted. Without it, a conversion already in
+    flight finishes afterwards and ``mkdir(parents=True)`` **recreates the
+    directory that was just removed**, publishing a whole movie into a cache
+    nothing will ever clear again — the album key it is filed under no longer
+    exists, so the only remaining reclamation is the global byte budget.
+    """
+    prefix = f"{album_key}\x00"
+    cancelled = 0
+    with _jobs_lock:
+        for scoped, job in _jobs.items():
+            if scoped.startswith(prefix):
+                job.cancelled = True
+                cancelled += 1
+    return cancelled
 
 
 def request_transcode(
@@ -420,6 +642,14 @@ def request_transcode(
 
     key = cache.key_for(video_path, mtime)
     target = cache.path_for(video_path, mtime)
+    now = time.monotonic()
+
+    # Before the cache-hit shortcut, not after it: on a library whose videos
+    # are all already converted every call returns here, and the registry
+    # would never be swept at all.
+    with _jobs_lock:
+        _forget_stale_jobs(now)
+
     if target.is_file():
         # Refresh the LRU stamp so a clip that keeps being watched keeps its
         # place ahead of one converted once and never opened again.
@@ -430,9 +660,7 @@ def request_transcode(
         return TranscodeStatus(state="ready", progress=1.0)
 
     scoped = _scoped_key(album_key, key)
-    now = time.monotonic()
     with _jobs_lock:
-        _forget_stale_jobs(now)
         job = _jobs.get(scoped)
         if job is not None:
             job.last_polled = now
@@ -459,9 +687,23 @@ def _update(scoped: str, **fields: object) -> _Job | None:
 
 
 def _abandoned(scoped: str, now: float) -> bool:
+    """True when nothing is waiting for this job any more."""
+    if _shutting_down.is_set():
+        return True
     with _jobs_lock:
         job = _jobs.get(scoped)
-        return job is None or now - job.last_polled > ABANDON_AFTER_SECONDS
+        if job is None:
+            return True
+        return job.cancelled or now - job.last_polled > ABANDON_AFTER_SECONDS
+
+
+def _cancelled(scoped: str) -> bool:
+    """True only for a *known* reason to stop, never for mere silence."""
+    if _shutting_down.is_set():
+        return True
+    with _jobs_lock:
+        job = _jobs.get(scoped)
+        return job is None or job.cancelled
 
 
 def _drop(scoped: str) -> None:
@@ -470,8 +712,21 @@ def _drop(scoped: str) -> None:
 
 
 def _job_timeout(duration: float | None) -> float:
-    scaled = (duration or 0.0) * JOB_TIMEOUT_PER_SECOND
-    return min(max(scaled, MIN_JOB_TIMEOUT_SECONDS), MAX_JOB_TIMEOUT_SECONDS)
+    """Wall-clock ceiling for one conversion, scaled off the source duration.
+
+    An *unknown* duration takes the loosest ceiling, not the tightest. MPEG-2
+    elementary streams (``.m2v``) report ``Duration: N/A`` as a matter of
+    course, and giving those the ten-minute floor killed every one longer than
+    ten minutes of encoding — deterministically, so it recurred on every
+    retry. A genuinely wedged job is caught by the stall detector instead,
+    which does not depend on knowing the duration.
+    """
+    if duration is None or duration <= 0:
+        return MAX_JOB_TIMEOUT_SECONDS
+    return min(
+        max(duration * JOB_TIMEOUT_PER_SECOND, MIN_JOB_TIMEOUT_SECONDS),
+        MAX_JOB_TIMEOUT_SECONDS,
+    )
 
 
 def _run_job(scoped: str, source: Path, target: Path) -> None:
@@ -483,7 +738,22 @@ def _run_job(scoped: str, source: Path, target: Path) -> None:
             _drop(scoped)
             return
 
-        plan = plan_for(probe_streams(source))
+        probe = probe_streams(source)
+        # An extension in VIDEO_EXTENSIONS is no promise of a video stream:
+        # .mkv, .mov, .ogg and .asf all routinely hold audio only. ffmpeg
+        # would fail on the unconditional "-map 0:v:0" with "Error opening
+        # output files: Invalid argument", which is what the player would then
+        # show the user. Say what is actually wrong instead.
+        if probe is not None and probe.trusted and not probe.has_video:
+            _update(
+                scoped,
+                state="failed",
+                detail="This file has no video track to play.",
+                finished_at=time.monotonic(),
+            )
+            return
+
+        plan = plan_for(probe)
         _update(scoped, state="running", progress=0.0)
         logger.info(
             f"Converting {source.name} for playback "
@@ -577,6 +847,39 @@ def _drive_ffmpeg(
         tmp_path.unlink(missing_ok=True)
         return f"Could not start ffmpeg: {e}"
 
+    with _live_lock:
+        _live_processes.add(proc)
+    try:
+        return _follow_ffmpeg(scoped, proc, source, tmp_path, target, plan, stderr_file)
+    except BaseException:
+        # Everything from here to the read loop's own try/finally used to be
+        # unprotected, so anything raising in between — thread exhaustion at
+        # `watcher.start()` is the reachable one — left ffmpeg running with no
+        # watchdog, unreaped, and a multi-gigabyte ".tmp" behind that the
+        # sweeper could not even see (it counts ".mp4"). Killing here costs a
+        # conversion that was already lost.
+        try:
+            proc.kill()
+            proc.wait(timeout=WATCHDOG_INTERVAL_SECONDS)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        tmp_path.unlink(missing_ok=True)
+        raise
+    finally:
+        with _live_lock:
+            _live_processes.discard(proc)
+
+
+def _follow_ffmpeg(
+    scoped: str,
+    proc: subprocess.Popen,
+    source: Path,
+    tmp_path: Path,
+    target: Path,
+    plan: TranscodePlan,
+    stderr_file: IO[bytes],
+) -> str | None:
+    """Watch a running ffmpeg to completion and publish what it produced."""
     stop = threading.Event()
     last_beat = [time.monotonic()]
     deadline = time.monotonic() + _job_timeout(plan.duration)
@@ -590,6 +893,7 @@ def _drive_ffmpeg(
             elif now > deadline:
                 killed_for[0] = "timeout"
             elif _abandoned(scoped, now):
+                # Covers the polling clock, an explicit cancel, and shutdown.
                 killed_for[0] = "abandoned"
             else:
                 continue
@@ -638,6 +942,17 @@ def _drive_ffmpeg(
     except OSError:
         succeeded = False
 
+    # Cancellation is checked here rather than only up front, because the
+    # album can be deleted (or the server stopped) at any point during a
+    # conversion that then completes perfectly well. Publishing it would
+    # recreate the directory that was just removed. Note this is
+    # ``_cancelled``, not ``_abandoned``: mere silence from the client must
+    # NOT discard a finished conversion — see the comment above `succeeded`.
+    if succeeded and _cancelled(scoped):
+        tmp_path.unlink(missing_ok=True)
+        logger.info(f"Discarded the finished conversion of {source.name}; cancelled.")
+        return _ABANDONED
+
     if succeeded:
         try:
             os.replace(tmp_path, target)
@@ -667,7 +982,16 @@ _MAX_DETAIL_CHARS = 200
 
 
 def _stderr_tail(handle: IO[bytes]) -> str | None:
-    """ffmpeg's last complaint, short enough to show in the player."""
+    """ffmpeg's *first* complaint, short enough to show in the player.
+
+    The first, not the last. Under ``-loglevel error`` ffmpeg prints the
+    diagnosis first and a generic muxer post-mortem last — "Nothing was
+    written into output file, because at least one of its streams received no
+    packets", or "Error opening output files: Invalid argument" — so taking
+    the last line reliably showed the user the one line that says nothing
+    about what went wrong, while the actual cause (say "[libx264] width not
+    divisible by 2") sat above it.
+    """
     try:
         handle.seek(0)
         text = handle.read().decode("utf-8", errors="replace")
@@ -676,7 +1000,7 @@ def _stderr_tail(handle: IO[bytes]) -> str | None:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if not lines:
         return None
-    return lines[-1][:_MAX_DETAIL_CHARS]
+    return lines[0][:_MAX_DETAIL_CHARS]
 
 
 def _reset_jobs_for_tests() -> None:

@@ -476,6 +476,12 @@ class StreamProbe(BaseModel):
     video_pix_fmt: str | None = None
     has_audio: bool = False
     audio_codec: str | None = None
+    #: False when something in the banner could not be attributed to ffmpeg
+    #: itself, so no field here may be used to justify a stream copy.  See
+    #: :func:`probe_streams` for the two ways that happens.  Callers that only
+    #: want a rough description (duration for a caption, say) may ignore it;
+    #: anything deciding whether a stream is safe to copy may not.
+    trusted: bool = True
 
 
 def probe_streams(path: Path) -> StreamProbe | None:
@@ -491,6 +497,30 @@ def probe_streams(path: Path) -> StreamProbe | None:
     reason documented there: stream and duration lines are ffmpeg's own
     report, while the ``Metadata:`` blocks above them are attacker-controlled
     file tags that would otherwise be able to spoof a codec.
+
+    Stripping those blocks is necessary but **not sufficient**, because two
+    pieces of file-controlled text are printed outside them, on ffmpeg's own
+    report lines:
+
+    * A stream's *language tag* is printed inline as ``(%s)`` in its own
+      ``Stream #`` line, before the ``: Video:``/``: Audio:`` delimiter. A tag
+      of ``x): Video: h264 (High), yuv420p`` makes an **audio** stream's line
+      match the video pattern — and it degrades toward *copy*, which is the
+      dangerous direction: a copied HEVC stream is exactly the black rectangle
+      the converter exists to remove. Detected structurally: ffmpeg prints one
+      kind delimiter per stream line, so a line carrying more than one is not
+      a line ffmpeg composed alone.
+    * The input **path** is echoed in the ``Input #0, ..., from '...':``
+      header, and a filename may contain a newline on Linux and macOS — which
+      splits it into further lines that look exactly like report lines. There
+      is no way to tell those apart after the fact, so a path containing one
+      poisons the whole banner.
+
+    Neither is recoverable by parsing harder, so both set ``trusted=False``
+    rather than trying to pick the real line out. The fields are still
+    populated on a best-effort basis for descriptive use; what changes is that
+    :func:`~photomap.backend.video_transcode.plan_for` will not copy a stream
+    on their say-so.
     """
     result = _run_ffmpeg(
         ["-nostdin", "-hide_banner", "-i", str(path)], PROBE_TIMEOUT_SECONDS
@@ -501,6 +531,12 @@ def probe_streams(path: Path) -> StreamProbe | None:
     report = _strip_metadata_blocks(result.stderr.decode("utf-8", errors="replace"))
     probe = StreamProbe()
 
+    # The banner echoes the input path, so a newline in the filename can forge
+    # whole report lines. Checked on the path rather than on the banner: by the
+    # time it is text there is nothing left to distinguish the forgery.
+    if "\n" in str(path) or "\r" in str(path):
+        probe.trusted = False
+
     if m := _DURATION_RE.search(report):
         try:
             probe.duration = (
@@ -510,6 +546,12 @@ def probe_streams(path: Path) -> StreamProbe | None:
             pass
 
     for line in report.splitlines():
+        if not line.lstrip().startswith("Stream #"):
+            continue
+        # ffmpeg emits exactly one kind delimiter per stream line. More than
+        # one means part of the line came from the file, not from ffmpeg.
+        if line.count(": Video:") + line.count(": Audio:") > 1:
+            probe.trusted = False
         if not probe.has_video:
             m = _STREAM_VIDEO_RE.match(line)
             # Cover art embedded in an audio file presents as a video stream;

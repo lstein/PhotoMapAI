@@ -357,6 +357,58 @@ describe("formats the browser cannot play", () => {
     await flush();
   });
 
+  it("does not convert when the failure was the network, not the format", () => {
+    // A transient drop on a perfectly decodable clip used to tear it down and
+    // start a full re-encode on the server.
+    openVideoPlayer({ ...MP4, transcodeUrl: "prepare_video/album/clip.mp4" });
+    Object.defineProperty(video(), "error", { value: { code: 2 }, configurable: true });
+
+    video().dispatchEvent(new Event("error"));
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(progress().hidden).toBe(true);
+    expect(fallback().hidden).toBe(false);
+    expect(fallbackMessage()).toMatch(/could not be loaded/i);
+  });
+
+  it("ignores an aborted load, which is not a failure at all", () => {
+    openVideoPlayer({ ...MP4, transcodeUrl: "prepare_video/album/clip.mp4" });
+    Object.defineProperty(video(), "error", { value: { code: 1 }, configurable: true });
+
+    video().dispatchEvent(new Event("error"));
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(fallback().hidden).toBe(true);
+  });
+
+  it("converts on an unsupported-source error", () => {
+    openVideoPlayer({ ...MP4, transcodeUrl: "prepare_video/album/clip.mp4" });
+    Object.defineProperty(video(), "error", { value: { code: 4 }, configurable: true });
+
+    video().dispatchEvent(new Event("error"));
+
+    expect(global.fetch).toHaveBeenCalledWith("prepare_video/album/clip.mp4", { method: "POST" });
+  });
+
+  it("focuses the close button when no conversion is available", () => {
+    // Otherwise focus stays on <body> (the badge blurs itself before
+    // dispatching), where Tab walks into the controls behind the backdrop.
+    openVideoPlayer(AVI_NO_CONVERSION);
+    expect(document.activeElement).toBe(document.getElementById("videoPlayerCloseBtn"));
+  });
+
+  it("releases the previous clip when reopened with nothing to play", () => {
+    // Otherwise it keeps streaming, audibly, behind the panel — with the
+    // controls hidden, so there is no way to stop it.
+    openVideoPlayer(MP4);
+    expect(video().getAttribute("src")).toBe("videos/album/clip.mp4");
+
+    openVideoPlayer({ url: "", filename: "gone.mp4", playable: true });
+
+    expect(video().hasAttribute("src")).toBe(false);
+    expect(video().pause).toHaveBeenCalled();
+  });
+
   it("falls back when an errored video has nowhere to be converted", () => {
     openVideoPlayer(MP4);
     video().dispatchEvent(new Event("error"));
@@ -428,6 +480,37 @@ describe("conversion", () => {
     await flush();
 
     expect(progressMessage()).toMatch(/waiting/i);
+  });
+
+  it("survives a transient poll failure instead of abandoning the job", async () => {
+    // The poll is also the backend's liveness signal, so giving up on one
+    // dropped request also makes the backend drop the conversion.
+    let calls = 0;
+    global.fetch = jest.fn(() => {
+      calls += 1;
+      if (calls === 1) {
+        return Promise.reject(new Error("wifi handoff"));
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ state: "running", progress: 0.6 }) });
+    });
+
+    openVideoPlayer(AVI);
+    await flush();
+    expect(fallback().hidden).toBe(true); // not given up on
+
+    jest.advanceTimersByTime(1000);
+    await flush();
+    expect(progress().hidden).toBe(false);
+    expect(document.getElementById("videoPlayerProgressPercent").textContent).toBe("60%");
+  });
+
+  it("omits aria-valuenow while the bar is indeterminate", async () => {
+    // ARIA requires the attribute to be absent, or a screen reader announces
+    // a job that is running fine as stuck at 0%.
+    mockConversion({ state: "running", progress: 0 });
+    openVideoPlayer(AVI);
+    await flush();
+    expect(document.getElementById("videoPlayerProgressBar").hasAttribute("aria-valuenow")).toBe(false);
   });
 
   it("sweeps rather than sitting at 0% when the duration is unknown", async () => {
@@ -515,10 +598,22 @@ describe("conversion", () => {
     expect(fallbackMessage()).toBe("ffmpeg is not available.");
   });
 
+  /** Drive the poll past its retry tolerance. */
+  async function exhaustPolls() {
+    for (let i = 0; i < 8; i += 1) {
+      jest.advanceTimersByTime(5000);
+      await flush();
+    }
+  }
+
   it("survives the request itself failing", async () => {
     global.fetch = jest.fn(() => Promise.reject(new Error("offline")));
     openVideoPlayer(AVI);
     await flush();
+    // One rejection is a hiccup, not a verdict — it must still be retrying.
+    expect(fallback().hidden).toBe(true);
+
+    await exhaustPolls();
 
     expect(fallback().hidden).toBe(false);
     expect(fallbackMessage()).toMatch(/could not be prepared/i);
@@ -528,6 +623,7 @@ describe("conversion", () => {
     global.fetch = jest.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
     openVideoPlayer(AVI);
     await flush();
+    await exhaustPolls();
 
     expect(fallback().hidden).toBe(false);
     expect(fallbackMessage()).toMatch(/could not be prepared/i);

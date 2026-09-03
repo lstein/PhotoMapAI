@@ -62,6 +62,13 @@ let usingConversion = false;
 // inside its abandonment window, which is measured in tens of seconds.
 const POLL_INTERVAL_MS = 1000;
 
+// Consecutive failed polls tolerated before giving up. The POST is also the
+// backend's liveness signal, so treating one dropped request as fatal both
+// told the user a five-minute conversion had failed and made the backend drop
+// it — for a wifi handoff, a sleep/wake, or a proxy hiccup.
+const MAX_POLL_FAILURES = 4;
+let pollFailures = 0;
+
 export function isVideoPlayerOpen() {
   return Boolean(modal?.classList.contains("visible"));
 }
@@ -111,7 +118,14 @@ function showProgress(message, progress) {
 
   progressMessageEl.textContent = message;
   progressBarEl?.classList.toggle("video-player-bar--indeterminate", !known);
-  progressBarEl?.setAttribute("aria-valuenow", String(percent));
+  if (known) {
+    progressBarEl?.setAttribute("aria-valuenow", String(percent));
+  } else {
+    // ARIA requires the attribute to be absent for an indeterminate
+    // progressbar; leaving it at 0 makes a screen reader announce a job that
+    // is running fine as stuck at 0%.
+    progressBarEl?.removeAttribute("aria-valuenow");
+  }
   if (progressFillEl) {
     // Cleared rather than set to 0% in the indeterminate case: the sweep
     // animation supplies the width, and an inline one would override it.
@@ -220,6 +234,13 @@ async function pollConversion(mySession, endpoint) {
       return;
     }
     console.debug("Video conversion request failed:", err);
+    pollFailures += 1;
+    if (pollFailures < MAX_POLL_FAILURES) {
+      // Keep asking. Backing off linearly stays well inside the backend's
+      // abandonment window even at the last attempt.
+      pollTimer = setTimeout(() => pollConversion(mySession, endpoint), POLL_INTERVAL_MS * pollFailures);
+      return;
+    }
     showFallback(`${subject()} could not be prepared for playback.`, current?.url || "");
     return;
   }
@@ -227,6 +248,7 @@ async function pollConversion(mySession, endpoint) {
   if (mySession !== session) {
     return;
   }
+  pollFailures = 0;
 
   if (status.state === "ready" && status.url) {
     usingConversion = true;
@@ -256,6 +278,7 @@ function beginConversion(mySession) {
     // An older server, or a payload with no conversion route. Behave the way
     // the player did before conversion existed.
     showFallback(`${subject()} is in a format your browser cannot play.`, current?.url || "");
+    focusPlayer();
     return;
   }
 
@@ -280,6 +303,7 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   pollTimer = null;
   current = { url, filename, transcodeUrl };
   usingConversion = false;
+  pollFailures = 0;
 
   if (titleEl) {
     titleEl.textContent = filename || "";
@@ -305,6 +329,10 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   modal.classList.add("visible");
 
   if (!url) {
+    // The only open path with nothing to play. Without the teardown the
+    // previous clip keeps streaming — audibly — behind the panel, and with
+    // the controls hidden there is no way to stop it.
+    teardownVideo();
     showFallback("This video is unavailable.", "");
     focusPlayer();
   } else if (playable === false) {
@@ -391,6 +419,21 @@ export function initializeVideoPlayer() {
       showFallback(`${subject()} could not be played even after conversion.`, current?.url || url);
       return;
     }
+
+    // Which failure it was decides whether converting could possibly help.
+    // Without this, a transient network drop on a perfectly decodable clip
+    // tore it down and started a full re-encode on the server.
+    const code = videoEl.error?.code;
+    if (code === 1 /* MEDIA_ERR_ABORTED */) {
+      return; // the load was cancelled, not rejected
+    }
+    if (code === 2 /* MEDIA_ERR_NETWORK */) {
+      showFallback(`${subject()} could not be loaded. Check that PhotoMapAI is still running.`, current?.url || url);
+      return;
+    }
+    // MEDIA_ERR_DECODE and MEDIA_ERR_SRC_NOT_SUPPORTED are exactly what a
+    // container or codec the browser cannot handle looks like. An absent code
+    // stays permissive, which is what the player did before.
     beginConversion(session);
   });
 
@@ -425,7 +468,12 @@ export function _resetVideoPlayerForTests() {
   slideshowWasRunning = false;
   clearTimeout(pollTimer);
   pollTimer = null;
-  session = 0;
+  // Advanced, never reset to a fixed value: session numbers are only a valid
+  // staleness guard while they are monotonic. Restarting at 0 lets a poll
+  // chain left pending by a previous test capture a number the next test
+  // reissues, so its check passes and it plays into the wrong player.
+  session += 1;
   current = null;
   usingConversion = false;
+  pollFailures = 0;
 }

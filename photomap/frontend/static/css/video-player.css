@@ -54,14 +54,21 @@
 /* The media card. Shrink-wraps its <video>, so the border traces the picture
    at any aspect ratio instead of letterboxing it inside a fixed panel.
 
-   The min sizes matter only for the moments when there is nothing to size
-   against — no poster, no metadata yet, or an error before either arrived —
-   and stop the frame collapsing to a sliver behind the overlay panels. */
+   No min-width/min-height: they were unconditional, so whenever the video was
+   height-constrained to something narrower than the minimum — a portrait phone
+   clip on a landscape screen, the most common shape in a phone library — the
+   card was up to 160px wider than the picture, with all of the surplus on one
+   side. There is no need for a floor: a <video> with nothing to size against
+   has an intrinsic 300x150 of its own, which is what the overlay panels sit
+   in until a poster or metadata arrives.
+
+   Centring is what keeps any residual surplus symmetric rather than piling it
+   against the left border. */
 .video-player-frame {
   position: relative;
   display: flex;
-  min-width: min(320px, 78vw);
-  min-height: 180px;
+  align-items: center;
+  justify-content: center;
   max-width: 100%;
   background: #000;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -79,7 +86,14 @@
   display: block;
   width: auto;
   height: auto;
-  max-width: min(94vw, 1600px);
+  /* Must not exceed what the frame can be: the frame's own max-width resolves
+     against the modal's content box, which is 100vw minus its 24px padding on
+     each side, plus the frame's 1px borders. A 94vw cap crossed that below
+     800px of viewport, and since a flex item's automatic minimum size is its
+     content size clamped by max-width, the video could not shrink to fit —
+     the frame's overflow:hidden silently sliced ~24px off the right of every
+     video on a phone. */
+  max-width: min(calc(100vw - 52px), 1600px);
   /* The overlay's own 24px padding top and bottom, plus the caption row and
      its gap. Resolved against the visible viewport for the reason given
      above. */

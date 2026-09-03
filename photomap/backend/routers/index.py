@@ -24,6 +24,7 @@ from ..embeddings import LAST_UPDATED_FILENAME, Embeddings, peek_encoder_spec
 from ..media_types import is_video
 from ..progress import IndexingCancelled, progress_tracker
 from ..video_cache import VideoFrameCache
+from ..video_transcode import TranscodeCache
 from .album import (
     AlbumDep,
     EmbeddingsDep,
@@ -376,13 +377,28 @@ def _remove_image_file(image_path: Path, move_to_trash: bool) -> None:
 
 
 def _discard_cached_frame(album_key: str, path: Path) -> None:
-    """Remove a deleted video's cached still. Never raises."""
+    """Remove a deleted video's derived files. Never raises.
+
+    Both the still and the converted copy, and the conversion is the one that
+    matters: it is a full, decodable copy of the video, so leaving it behind
+    means a user who deletes a private clip still has it sitting in
+    ``~/.cache``. (It is not reachable over HTTP once the source is gone —
+    every video route requires the source to exist — but "not served" is not
+    "not on disk".)
+
+    Each cache is discarded independently so a failure on one still reclaims
+    the other.
+    """
     if not is_video(path):
         return
-    try:
-        VideoFrameCache(album_key).discard(path)
-    except Exception as e:
-        logger.debug(f"Could not discard cached frame for {path}: {e}")
+    for name, cache in (
+        ("frame", VideoFrameCache(album_key)),
+        ("conversion", TranscodeCache(album_key)),
+    ):
+        try:
+            cache.discard(path)
+        except Exception as e:
+            logger.debug(f"Could not discard cached {name} for {path}: {e}")
 
 
 @index_router.delete(

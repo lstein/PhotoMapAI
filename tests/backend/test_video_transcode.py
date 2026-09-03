@@ -149,6 +149,50 @@ def test_probe_returns_none_when_ffmpeg_is_unavailable(monkeypatch):
     assert probe_streams(Path("anything.mkv")) is None
 
 
+# An audio stream whose *language tag* closes its own paren early and then
+# spells out a video stream. ffmpeg prints the tag inline, before the
+# ": Audio:" delimiter, so the line matches the video pattern — and it
+# degrades toward *copy*, which is the dangerous direction.
+TAG_INJECTION_BANNER = """Input #0, matroska,webm, from 'attack.mkv':
+  Duration: 00:00:02.00, start: 0.000000, bitrate: 100 kb/s
+  Stream #0:0(x): Video: h264 (High), yuv420p, 1920x1080, 25 fps): Audio: opus, 48000 Hz, mono, fltp
+  Stream #0:1: Video: hevc (Main 10), yuv420p10le(tv), 320x240, 10 fps
+At least one output file must be specified
+"""
+
+
+def test_a_language_tag_cannot_forge_a_copyable_video_stream(banner):
+    """The file's own metadata must not be able to win a stream copy.
+
+    Without the ambiguity check this probes as h264/yuv420p — so a 10-bit
+    HEVC stream would be copied into an MP4 and cached as ``ready``, which is
+    exactly the black rectangle the converter exists to remove.
+    """
+    banner(TAG_INJECTION_BANNER)
+    probe = probe_streams(Path("attack.mkv"))
+    assert probe.trusted is False
+    assert plan_for(probe).copy_video is False
+
+
+def test_a_newline_in_the_filename_cannot_forge_report_lines(banner, tmp_path):
+    """ffmpeg echoes the input path, and a filename may contain a newline.
+
+    The forged lines are indistinguishable from real ones once they are text,
+    so the path itself is what condemns the banner.
+    """
+    banner(MODERN_BANNER)  # a banner that would otherwise justify a copy
+    evil = tmp_path / "a\nStream #0:0: Video: h264 (High), yuv420p\n.mkv"
+    probe = probe_streams(evil)
+    assert probe.trusted is False
+    assert plan_for(probe).copy_video is False
+
+
+def test_an_ordinary_banner_stays_trusted(banner):
+    """The guard must not condemn every normal file."""
+    banner(MODERN_BANNER)
+    assert probe_streams(Path("modern.mkv")).trusted is True
+
+
 def test_probe_of_garbage_reports_nothing_rather_than_raising(banner):
     banner("this is not an ffmpeg banner at all")
     probe = probe_streams(Path("junk.bin"))
@@ -237,6 +281,30 @@ def test_an_unparsed_pixel_format_is_re_encoded():
     assert plan.copy_video is False
 
 
+def test_an_untrusted_probe_re_encodes_everything():
+    """A banner that could not be fully attributed to ffmpeg justifies nothing.
+
+    The fields are still populated for descriptive use; what must not happen
+    is a stream *copy* on their say-so.
+    """
+    plan = plan_for(
+        StreamProbe(
+            has_video=True,
+            video_codec="h264",
+            video_pix_fmt="yuv420p",
+            has_audio=True,
+            audio_codec="aac",
+            duration=42.0,
+            trusted=False,
+        )
+    )
+    assert plan.copy_video is False
+    assert plan.copy_audio is False
+    # The duration comes from the same forged text and drives both the
+    # progress readout and the job deadline.
+    assert plan.duration is None
+
+
 def test_a_failed_probe_re_encodes_everything():
     plan = plan_for(None)
     assert plan.copy_video is False
@@ -273,7 +341,23 @@ def test_encode_path_pins_a_browser_decodable_format():
 def test_encode_path_corrects_non_square_pixels():
     """DVD rips, .vob, .mpg and AVCHD .m2ts are all anamorphic."""
     args = _args(copy_video=False, has_audio=False, copy_audio=False)
-    assert args[args.index("-vf") + 1] == "scale=iw*sar:ih"
+    assert args[args.index("-vf") + 1] == "scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1"
+
+
+def test_the_scale_filter_rounds_both_axes_to_even():
+    """libx264 refuses an odd dimension in yuv420p outright.
+
+    720x480 SAR 32:27 is 16:9 NTSC DVD — the single most common shape this
+    filter exists for. 720*32/27 = 853.33, and ``scale`` truncates, so an
+    unrounded expression yields 853 and every such rip fails permanently.
+    """
+    vf = _args(copy_video=False, has_audio=False, copy_audio=False)[
+        _args(copy_video=False, has_audio=False, copy_audio=False).index("-vf") + 1
+    ]
+    assert "trunc(" in vf and "*2" in vf
+    # And the output must declare square pixels, or a player re-applies the
+    # source aspect on top of the correction.
+    assert vf.endswith("setsar=1")
 
 
 def test_a_silent_source_drops_audio_explicitly():
@@ -530,6 +614,237 @@ def test_a_remembered_failure_is_not_retried_on_every_poll(tmp_path):
 
     assert again.state == "failed"
     assert calls == []
+
+
+def test_names_differing_only_in_case_get_different_conversions(tmp_path):
+    """On a case-sensitive filesystem these are two different movies.
+
+    The frame cache casefolds its key, so with matching mtimes — routine for
+    anything unpacked from one archive — both would map to one entry. For a
+    still that is the wrong thumbnail; here it would play the wrong film.
+    """
+    cache = TranscodeCache("album", root=tmp_path)
+    lower = tmp_path / "clip.mp4"
+    upper = tmp_path / "Clip.mp4"
+    lower.write_bytes(b"a")
+    upper.write_bytes(b"b")
+    import os
+
+    os.utime(lower, (1000, 1000))
+    os.utime(upper, (1000, 1000))
+
+    assert cache.path_for(lower) != cache.path_for(upper)
+
+
+def test_serving_a_conversion_refreshes_its_place_in_the_queue(tmp_path):
+    """A film is fetched with Range requests across the whole viewing session.
+
+    Without a stamp here its mtime is frozen at the moment the progress panel
+    last polled, making the film on screen the first thing the sweeper evicts.
+    """
+    import os
+
+    cache = TranscodeCache("album", root=tmp_path)
+    video = tmp_path / "clip.mkv"
+    video.write_bytes(b"x")
+    target = cache.path_for(video)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"converted")
+    os.utime(target, (1000, 1000))
+
+    assert cache.get(video) == target
+    assert target.stat().st_mtime > 1000
+
+
+def test_discard_removes_every_generation(tmp_path):
+    """The usual reason to discard is that the source is gone, so its mtime
+    can no longer be read and the exact key is unrecoverable."""
+    cache = TranscodeCache("album", root=tmp_path)
+    video = tmp_path / "clip.mkv"
+    video.write_bytes(b"x")
+    directory = cache.directory
+    directory.mkdir(parents=True, exist_ok=True)
+    prefix = cache.key_for(video).split("-")[0]
+    old = directory / f"{prefix}-deadbeefdeadbeef.mp4"
+    new = cache.path_for(video)
+    old.write_bytes(b"old")
+    new.write_bytes(b"new")
+    unrelated = directory / "ffffffffffffffffffffffffffffffff-0000000000000000.mp4"
+    unrelated.write_bytes(b"other")
+
+    video.unlink()  # the realistic case: source already deleted
+    cache.discard(video)
+
+    assert not old.exists() and not new.exists()
+    assert unrelated.exists()
+
+
+def test_prune_keeps_the_index_and_spares_work_in_progress(tmp_path):
+    cache = TranscodeCache("album", root=tmp_path)
+    directory = cache.directory
+    directory.mkdir(parents=True, exist_ok=True)
+    keep = directory / "aaaa-bbbb.mp4"
+    drop = directory / "cccc-dddd.mp4"
+    running = directory / "aaaa.xyz.tmp"
+    for f in (keep, drop, running):
+        f.write_bytes(b"x")
+
+    assert cache.prune({"aaaa-bbbb"}) == 1
+    assert keep.exists() and not drop.exists()
+    # A .tmp here is very likely the conversion running right now, which may
+    # have hours invested in it; only the age-aware sweeper may remove one.
+    assert running.exists()
+
+
+def test_sweep_spares_a_conversion_that_is_being_watched(tmp_path):
+    """Honouring the budget is worth less than not yanking a file out from
+    under an open player."""
+    fresh = _make_conversion(tmp_path, "a", "watching", 500, time.time())
+    old = _make_conversion(tmp_path, "a", "cold", 500, 1000)
+
+    sweep_transcode_cache(budget=100, root=tmp_path)
+
+    assert fresh.exists()
+    assert not old.exists()
+
+
+def test_sweep_reclaims_abandoned_temp_files(tmp_path):
+    """A conversion killed by a crash leaves a .tmp behind, and because it is
+    not a .mp4 nothing else can even see it."""
+    import os
+
+    stale = tmp_path / "a" / "abc.deadbeef.tmp"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_bytes(b"\0" * 1000)
+    os.utime(stale, (1000, 1000))
+
+    assert sweep_transcode_cache(budget=10**9, root=tmp_path) == 1
+    assert not stale.exists()
+
+
+def test_an_unknown_duration_gets_the_loosest_deadline_not_the_tightest():
+    """MPEG-2 elementary streams (.m2v) always report Duration: N/A.
+
+    Giving those the ten-minute floor killed every one longer than ten minutes
+    of encoding, deterministically, on every retry.
+    """
+    assert video_transcode._job_timeout(None) == video_transcode.MAX_JOB_TIMEOUT_SECONDS
+    assert video_transcode._job_timeout(0) == video_transcode.MAX_JOB_TIMEOUT_SECONDS
+    assert video_transcode._job_timeout(5.0) == video_transcode.MIN_JOB_TIMEOUT_SECONDS
+
+
+def test_forget_album_cancels_only_that_album(monkeypatch, tmp_path):
+    monkeypatch.setattr(video_transcode, "ffmpeg_exe", lambda: "/bin/true")
+    mine = video_transcode._scoped_key("gone", "key")
+    theirs = video_transcode._scoped_key("staying", "key")
+    video_transcode._jobs[mine] = video_transcode._Job(state="running")
+    video_transcode._jobs[theirs] = video_transcode._Job(state="running")
+
+    assert video_transcode.forget_album("gone") == 1
+    assert video_transcode._cancelled(mine) is True
+    assert video_transcode._cancelled(theirs) is False
+    # An explicit cancel also reads as abandonment, so the watchdog kills it.
+    assert video_transcode._abandoned(mine, time.monotonic()) is True
+
+
+def test_a_stalled_job_nobody_polls_is_reaped_from_the_registry():
+    """A source whose mtime keeps moving (a file still being copied in) makes
+    every poll a new key, so without this the registry grows once a second and
+    nothing can ever reclaim it."""
+    scoped = video_transcode._scoped_key("album", "key")
+    video_transcode._jobs[scoped] = video_transcode._Job(
+        state="running",
+        last_polled=time.monotonic() - video_transcode.ABANDON_AFTER_SECONDS - 1,
+    )
+    with video_transcode._jobs_lock:
+        video_transcode._forget_stale_jobs(time.monotonic())
+    assert scoped not in video_transcode._jobs
+
+
+def test_stderr_reports_the_cause_not_the_muxer_post_mortem(tmp_path):
+    """ffmpeg prints the diagnosis first and a generic summary last."""
+    import io
+
+    handle = io.BytesIO(
+        b"[libx264] width not divisible by 2 (853x480)\n"
+        b"[vf#0:0] Error while filtering\n"
+        b"[out#0/mp4] Nothing was written into output file.\n"
+    )
+    assert "not divisible by 2" in video_transcode._stderr_tail(handle)
+
+
+@requires_ffmpeg
+def test_a_cancelled_job_discards_even_a_finished_conversion(tmp_path, monkeypatch):
+    """The album can be deleted while a conversion that then succeeds is still
+    running. Publishing it would recreate the directory just removed, into a
+    cache keyed by an album that no longer exists.
+
+    Drives the worker body directly rather than polling: a cancelled job never
+    reaches a terminal state, because polling for it is precisely what
+    cancellation revokes.
+    """
+    exe = ffmpeg_exe()
+    source = tmp_path / "clip.mkv"
+    subprocess.run(
+        [exe, "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+         "testsrc=size=160x120:rate=10:duration=1", "-c:v", "libx264",
+         "-pix_fmt", "yuv420p", str(source)],
+        check=True,
+    )
+    cache = TranscodeCache("album", root=tmp_path / "cache")
+    target = cache.path_for(source)
+    scoped = video_transcode._scoped_key("album", cache.key_for(source))
+    video_transcode._jobs[scoped] = video_transcode._Job(state="running")
+
+    # Cancelled only once ffmpeg has already finished, which is the case that
+    # matters: the conversion succeeded and must still be thrown away.
+    monkeypatch.setattr(video_transcode, "_cancelled", lambda key: True)
+    video_transcode._run_job(scoped, source, target)
+
+    assert not target.exists()
+    assert not list(target.parent.glob("*.mp4"))
+    assert not list(target.parent.glob("*.tmp"))
+    # Dropped rather than recorded as a failure the client would be shown.
+    assert scoped not in video_transcode._jobs
+
+
+@requires_ffmpeg
+def test_an_audio_only_container_fails_legibly(tmp_path):
+    """.mkv/.mov/.ogg are all in VIDEO_EXTENSIONS but routinely hold audio only.
+
+    ffmpeg's own message is "Error opening output files: Invalid argument",
+    which is what the player would otherwise show the user.
+    """
+    exe = ffmpeg_exe()
+    source = tmp_path / "song.mkv"
+    subprocess.run(
+        [exe, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "sine=duration=1",
+         "-c:a", "libopus", str(source)],
+        check=True,
+    )
+    status = _await_conversion("album", source, tmp_path / "cache", timeout=60)
+    assert status.state == "failed"
+    assert "no video track" in (status.detail or "")
+
+
+@requires_ffmpeg
+def test_an_anamorphic_dvd_rip_converts(tmp_path):
+    """720x480 SAR 32:27 is 16:9 NTSC DVD. 720*32/27 = 853.33, and libx264
+    refuses an odd width in yuv420p, so this failed on every retry."""
+    exe = ffmpeg_exe()
+    source = tmp_path / "dvd.mpg"
+    subprocess.run(
+        [exe, "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+         "testsrc=size=720x480:rate=10:duration=1", "-c:v", "mpeg2video",
+         "-aspect", "16:9", str(source)],
+        check=True,
+    )
+    status = _await_conversion("album", source, tmp_path / "cache", timeout=120)
+    assert status.state == "ready", status.detail
+
+    converted = TranscodeCache("album", root=tmp_path / "cache").get(source)
+    probe = probe_streams(converted)
+    assert probe.video_codec == "h264"
 
 
 # --------------------------------------------------------------------------

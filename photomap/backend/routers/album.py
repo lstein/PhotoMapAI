@@ -22,7 +22,7 @@ from ..embeddings import Embeddings
 from ..encoders import default_encoder_spec, default_min_search_score
 from ..util import json_safe
 from ..video_cache import VideoFrameCache
-from ..video_transcode import TranscodeCache
+from ..video_transcode import TranscodeCache, forget_album
 
 
 class UmapEpsSetRequest(BaseModel):
@@ -260,6 +260,20 @@ def _cleanup_video_frames(album_key: str) -> None:
     Each cache is cleared independently so a failure on one still reclaims the
     other. Never raises: a failure here costs disk space, not correctness.
     """
+    # Cancel first, then clear. A conversion already in flight would otherwise
+    # finish afterwards and recreate the directory removed below — publishing a
+    # whole movie into a cache keyed by an album that no longer exists, which
+    # nothing will ever clear again. Cancelling makes the worker discard its
+    # output instead, even if ffmpeg has already succeeded by then.
+    try:
+        cancelled = forget_album(album_key)
+        if cancelled:
+            logger.info(
+                f"Cancelled {cancelled} in-flight conversion(s) for '{album_key}'"
+            )
+    except Exception as e:
+        logger.warning(f"Could not cancel conversions for '{album_key}': {e}")
+
     for cache_name, factory in (
         ("frame", VideoFrameCache),
         ("conversion", TranscodeCache),

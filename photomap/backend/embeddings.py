@@ -50,6 +50,7 @@ from .progress import IndexingCancelled, progress_tracker
 from .util import atomic_savez
 from .video import VIDEO_METADATA_KEY, extract_video_frame
 from .video_cache import VideoFrameCache
+from .video_transcode import TranscodeCache
 
 logger = logging.getLogger(__name__)
 
@@ -1336,6 +1337,27 @@ class Embeddings(BaseModel):
                 logger.info(f"Removed {removed} stale video frame(s) from the cache")
         except Exception as e:
             logger.warning(f"Could not prune the video frame cache: {e}")
+
+        # The converted copies need the same sweep, and for a stronger reason:
+        # each one is a whole movie rather than a single JPEG, and the only
+        # other thing that reclaims them is a global byte budget that is not
+        # checked until some unrelated conversion finishes. Keyed differently
+        # from the frame cache (exact case), so the keep set is rebuilt rather
+        # than shared.
+        try:
+            transcodes = TranscodeCache(self.album_key)
+            if not transcodes.directory.is_dir():
+                return
+            keep_converted = {
+                transcodes.key_for(Path(str(name)), float(mtime))
+                for name, mtime in zip(filenames, modification_times, strict=False)
+                if is_video(Path(str(name)))
+            }
+            removed = transcodes.prune(keep_converted)
+            if removed:
+                logger.info(f"Removed {removed} stale converted video(s) from the cache")
+        except Exception as e:
+            logger.warning(f"Could not prune the video conversion cache: {e}")
 
     @staticmethod
     def _path_compare_key(p: Path) -> str:
