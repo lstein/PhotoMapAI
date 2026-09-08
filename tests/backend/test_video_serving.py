@@ -8,100 +8,17 @@ on real CLIP embeddings.
 
 from __future__ import annotations
 
-import shutil
 from io import BytesIO
 
-import numpy as np
-import pytest
-from fixtures import media_fixture_path
+from fixtures import (
+    ENCODER_SPEC,
+    _write_synthetic_index,
+    requires_ffmpeg,
+)
 from PIL import Image
 
-from photomap.backend.embeddings import _open_npz_file
-from photomap.backend.util import atomic_savez
-from photomap.backend.video import VIDEO_METADATA_KEY, ffmpeg_exe
+from photomap.backend.video import VIDEO_METADATA_KEY
 from photomap.backend.video_cache import VideoFrameCache
-
-ENCODER_SPEC = "openai-clip:ViT-B/32"
-EMBEDDING_DIM = 8
-
-requires_ffmpeg = pytest.mark.skipif(
-    ffmpeg_exe() is None, reason="no bundled ffmpeg binary on this platform"
-)
-
-
-def _write_synthetic_index(index_path, files, metadatas):
-    """Write an .npz with the given files, bypassing the real encoder."""
-    rng = np.random.default_rng(0)
-    embeddings = rng.random((len(files), EMBEDDING_DIM)).astype(np.float32)
-    embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
-    index_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_savez(
-        index_path,
-        embeddings=embeddings,
-        filenames=np.array([f.resolve().as_posix() for f in files]),
-        modification_times=np.array(
-            [float(i + 1) for i in range(len(files))], dtype=float
-        ),
-        metadata=np.array(metadatas, dtype=object),
-        model_id=np.array(ENCODER_SPEC),
-        embedding_dim=np.array(EMBEDDING_DIM),
-    )
-    _open_npz_file.cache_clear()
-
-
-VIDEO_INFO = {
-    "duration": 2.0,
-    "fps": 10.0,
-    "width": 64,
-    "height": 64,
-    "codec": "h264",
-    "container": "mov,mp4,m4a,3gp,3g2,mj2",
-    "playable": True,
-}
-
-
-@pytest.fixture
-def mixed_album(client, tmp_path):
-    """An album holding one photo and one video, with a synthetic index.
-
-    Files are ordered so the video sorts to index 0 and the photo to index 1
-    (modification_times drive the lexsort).
-    """
-    media_dir = tmp_path / "mixed"
-    media_dir.mkdir()
-
-    video = media_dir / "clip.mp4"
-    shutil.copy(media_fixture_path("clip.mp4"), video)
-    photo = media_dir / "building1.jpeg"
-    shutil.copy(
-        media_fixture_path("../test_images/building1.jpeg").resolve(), photo
-    )
-
-    index_path = media_dir / "photomap_index" / "embeddings.npz"
-    _write_synthetic_index(
-        index_path,
-        [video, photo],
-        [{VIDEO_METADATA_KEY: dict(VIDEO_INFO)}, {"Make": "TestCam"}],
-    )
-
-    album = {
-        "key": "mixed_album",
-        "name": "Mixed Album",
-        "image_paths": [media_dir.as_posix()],
-        "index": index_path.as_posix(),
-        "umap_eps": 0.1,
-        "description": "",
-        "encoder_spec": ENCODER_SPEC,
-    }
-    try:
-        # Inside the try: a failure here would otherwise leak the album past
-        # teardown and poison every later test using this fixture.
-        assert client.post("/add_album/", json=album).status_code == 201
-        yield {**album, "video": video, "photo": photo, "media_dir": media_dir}
-    finally:
-        VideoFrameCache(album["key"]).clear()
-        client.delete(f"/delete_album/{album['key']}")
-
 
 # --------------------------------------------------------------------------
 # /videos/ — byte serving and range support

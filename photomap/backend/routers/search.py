@@ -28,6 +28,7 @@ from ..media_types import is_video, video_media_type
 from ..metadata_modules import SlideSummary, video_external_link_html
 from ..util import is_cuda_oom
 from ..video_cache import VideoFrameCache
+from ..video_transcode import TranscodeCache, TranscodeStatus, request_transcode
 from .album import (
     AlbumDep,
     EmbeddingsDep,
@@ -537,6 +538,38 @@ async def serve_image(album_key: str, path: str, album_config: AlbumDep):
         return FileResponse(image_path)
 
 
+def _resolve_album_video(album_key: str, path: str, album_config) -> Path:
+    """Resolve ``path`` inside ``album_key`` to a video on disk, or raise.
+
+    Every video route shares this preamble, and the sharing is the point: the
+    checks are the arbitrary-file-read defense, not a convenience. Duplicating
+    them per route is how one of them ends up missing the ``is_video`` gate
+    and turns ``add_album(image_paths=["/etc"])`` into ``GET
+    /prepare_video/<key>/passwd``.
+    """
+    # A NUL byte makes Path.resolve() raise ValueError (while .exists() merely
+    # returns False), and validate_image_access below calls resolve() — so
+    # without this the request escapes every handler as a 500 with a traceback
+    # instead of the 403/404 these routes are designed to return.
+    if "\x00" in path:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    video_path = config_manager.find_image_in_album(album_key, path)
+    if not video_path:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    if not validate_image_access(album_config, video_path):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not is_video(video_path):
+        raise HTTPException(status_code=403, detail="Unsupported video type")
+
+    if not video_path.exists() or not video_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return video_path
+
+
 @search_router.get("/videos/{album_key}/{path:path}", tags=["Search"])
 async def serve_video(
     album_key: str, path: str, album_config: AlbumDep
@@ -555,25 +588,7 @@ async def serve_video(
     ``StreamingResponse`` (as the HEIC conversion path uses) has no range
     support and would silently break seeking.
     """
-    # A NUL byte makes Path.resolve() raise ValueError (while .exists() merely
-    # returns False), and validate_image_access below calls resolve() — so
-    # without this the request escapes every handler as a 500 with a traceback
-    # instead of the 403/404 this route is designed to return.
-    if "\x00" in path:
-        raise HTTPException(status_code=404, detail="Video not found")
-
-    video_path = config_manager.find_image_in_album(album_key, path)
-    if not video_path:
-        raise HTTPException(status_code=404, detail="Video not found")
-
-    if not validate_image_access(album_config, video_path):
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    if not is_video(video_path):
-        raise HTTPException(status_code=403, detail="Unsupported video type")
-
-    if not video_path.exists() or not video_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
+    video_path = _resolve_album_video(album_key, path, album_config)
 
     return FileResponse(
         video_path,
@@ -583,6 +598,59 @@ async def serve_video(
         # the whole body. An explicit lifetime keeps a cached clip out of the
         # network entirely; the path is content-addressed by name, and an
         # edited video changes its mtime and therefore its validators.
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+@search_router.post("/prepare_video/{album_key}/{path:path}", tags=["Search"])
+async def prepare_video(
+    album_key: str, path: str, album_config: AlbumDep
+) -> TranscodeStatus:
+    """Ensure a browser-playable copy of this video exists, and report progress.
+
+    POST because the first call starts work, but it is idempotent and doubles
+    as the poll: the player calls it about once a second while its progress
+    panel is up, and those calls are also what tell the backend somebody is
+    still waiting (see ``video_transcode``'s abandonment rule). Returns
+    immediately in every case; the conversion runs on a worker thread.
+
+    Only ``state == "ready"`` carries a ``url``, and it points at
+    ``/transcoded_video/`` rather than the original — the source bytes are
+    exactly what the browser could not play.
+    """
+    video_path = _resolve_album_video(album_key, path, album_config)
+    status = await asyncio.to_thread(request_transcode, album_key, video_path)
+    if status.state == "ready":
+        quoted_album = quote(album_key, safe="")
+        quoted_path = quote(path, safe="/")
+        status.url = f"transcoded_video/{quoted_album}/{quoted_path}"
+    return status
+
+
+@search_router.get("/transcoded_video/{album_key}/{path:path}", tags=["Search"])
+async def serve_transcoded_video(
+    album_key: str, path: str, album_config: AlbumDep
+) -> FileResponse:
+    """Serve the converted copy of a video, if one has been produced.
+
+    Guarded by the same resolution as the original bytes rather than by the
+    cache key alone: the cache is addressed by a digest of the *source* path,
+    so serving straight from it would let anyone who can name a file get its
+    converted contents without passing the album's access check.
+
+    A ``FileResponse`` again, for Range support — being able to seek is most
+    of the reason the conversion is written to disk instead of piped.
+    """
+    video_path = _resolve_album_video(album_key, path, album_config)
+    cached = await asyncio.to_thread(TranscodeCache(album_key).get, video_path)
+    if cached is None:
+        raise HTTPException(
+            status_code=404, detail="This video has not been converted for playback"
+        )
+
+    return FileResponse(
+        cached,
+        media_type="video/mp4",
         headers={"Cache-Control": "private, max-age=3600"},
     )
 
@@ -805,6 +873,14 @@ def create_slide_url(slide_metadata: SlideSummary, album_key: str) -> None:
         # The playable bytes get their own field.
         slide_metadata.image_url = f"video_frame/{quoted_album}/{slide_metadata.index}"
         slide_metadata.video_url = f"videos/{quoted_album}/{quoted_path}"
+        # Where the player asks for a playable copy when the original turns
+        # out not to be one. Handed over rather than assembled in the frontend
+        # so the route shape stays a backend concern, and so a payload from an
+        # older server (empty string) degrades to the download-only fallback
+        # instead of a 404 the player would have to interpret.
+        slide_metadata.video_transcode_url = (
+            f"prepare_video/{quoted_album}/{quoted_path}"
+        )
         slide_metadata.description += video_external_link_html(
             slide_metadata.video_url
         )

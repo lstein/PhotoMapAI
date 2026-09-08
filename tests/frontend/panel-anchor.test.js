@@ -362,6 +362,8 @@ describe("the seam with fullscreen handling", () => {
     }));
     jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", () => ({
       errorDetail: jest.fn(),
+      // control-panel.js reaches this through download.js.
+      fetchJson: jest.fn(),
       hideSpinner: jest.fn(),
       showSpinner: jest.fn(),
       setCheckmarkOnIcon: jest.fn(),

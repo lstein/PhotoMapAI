@@ -28,6 +28,8 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/slide-state.
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", () => ({
   errorDetail: jest.fn(),
+  // control-panel.js reaches this through download.js.
+  fetchJson: jest.fn(),
   hideSpinner: jest.fn(),
   showSpinner: jest.fn(),
   setCheckmarkOnIcon: jest.fn(),
@@ -85,6 +87,12 @@ describe("the modal template and the module agree", () => {
     "videoPlayerFallbackMessage",
     "videoPlayerDownloadLink",
     "videoPlayerCloseBtn",
+    "videoPlayerFrame",
+    "videoPlayerProgress",
+    "videoPlayerProgressMessage",
+    "videoPlayerProgressBar",
+    "videoPlayerProgressFill",
+    "videoPlayerProgressPercent",
   ])("the template provides #%s", (id) => {
     expect(document.getElementById(id)).not.toBeNull();
   });

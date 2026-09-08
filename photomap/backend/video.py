@@ -437,3 +437,134 @@ def extract_video_frame(
 
     logger.warning(f"Could not extract a frame from {path}; skipping it.")
     return None
+
+
+# Wall-clock ceiling for a bare ``-i`` probe.  No decoding happens, so this is
+# only ever hit by an input ffmpeg cannot open at all (a dead network mount).
+PROBE_TIMEOUT_SECONDS = 30.0
+
+# "    Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, ..."
+_STREAM_AUDIO_RE = re.compile(
+    r"^\s*Stream #\d+:\d+.*?: Audio:\s*(?P<codec>[A-Za-z0-9_.\-]+)"
+)
+# The pixel format token on a video stream line: "yuv420p", "yuvj420p",
+# "yuv420p10le", "yuv444p".  Anything this does not match is reported as
+# ``None``, which every caller must read as "not known to be safe" rather than
+# "absent" — the transcoder's copy decision depends on it.
+_PIX_FMT_RE = re.compile(r"\byuvj?\d{3}p(?:\d{1,2}(?:le|be))?\b")
+
+
+class StreamProbe(BaseModel):
+    """What the streams inside a container are, as far as ffmpeg reports them.
+
+    Distinct from :class:`VideoInfo`, which describes a video *as a slide* —
+    duration, frame rate, display geometry.  This describes it *as something
+    to remux or re-encode*: which codecs are in there and whether the pixel
+    format is one a browser's H.264 decoder will accept.
+
+    Every field is optional for the same reason ``VideoInfo``'s are: a banner
+    this does not recognize must degrade one field.  Here that degradation is
+    load-bearing rather than cosmetic, so it degrades in the *conservative*
+    direction — an unparsed ``video_pix_fmt`` is ``None``, and
+    :func:`~photomap.backend.video_transcode.plan_for` re-encodes rather than
+    copies when it cannot prove the format is safe.
+    """
+
+    duration: float | None = None
+    has_video: bool = False
+    video_codec: str | None = None
+    video_pix_fmt: str | None = None
+    has_audio: bool = False
+    audio_codec: str | None = None
+    #: False when something in the banner could not be attributed to ffmpeg
+    #: itself, so no field here may be used to justify a stream copy.  See
+    #: :func:`probe_streams` for the two ways that happens.  Callers that only
+    #: want a rough description (duration for a caption, say) may ignore it;
+    #: anything deciding whether a stream is safe to copy may not.
+    trusted: bool = True
+
+
+def probe_streams(path: Path) -> StreamProbe | None:
+    """Report the streams inside ``path``.  ``None`` if ffmpeg could not run.
+
+    Runs ffmpeg with an input and no output.  That exits non-zero — "At least
+    one output file must be specified" — which is why the return code is
+    ignored: the banner is printed to stderr before the complaint, and the
+    banner is the entire point.  ffprobe would be the obvious tool, but
+    ``imageio-ffmpeg`` ships only the ffmpeg binary.
+
+    The banner is passed through :func:`_strip_metadata_blocks` first, for the
+    reason documented there: stream and duration lines are ffmpeg's own
+    report, while the ``Metadata:`` blocks above them are attacker-controlled
+    file tags that would otherwise be able to spoof a codec.
+
+    Stripping those blocks is necessary but **not sufficient**, because two
+    pieces of file-controlled text are printed outside them, on ffmpeg's own
+    report lines:
+
+    * A stream's *language tag* is printed inline as ``(%s)`` in its own
+      ``Stream #`` line, before the ``: Video:``/``: Audio:`` delimiter. A tag
+      of ``x): Video: h264 (High), yuv420p`` makes an **audio** stream's line
+      match the video pattern — and it degrades toward *copy*, which is the
+      dangerous direction: a copied HEVC stream is exactly the black rectangle
+      the converter exists to remove. Detected structurally: ffmpeg prints one
+      kind delimiter per stream line, so a line carrying more than one is not
+      a line ffmpeg composed alone.
+    * The input **path** is echoed in the ``Input #0, ..., from '...':``
+      header, and a filename may contain a newline on Linux and macOS — which
+      splits it into further lines that look exactly like report lines. There
+      is no way to tell those apart after the fact, so a path containing one
+      poisons the whole banner.
+
+    Neither is recoverable by parsing harder, so both set ``trusted=False``
+    rather than trying to pick the real line out. The fields are still
+    populated on a best-effort basis for descriptive use; what changes is that
+    :func:`~photomap.backend.video_transcode.plan_for` will not copy a stream
+    on their say-so.
+    """
+    result = _run_ffmpeg(
+        ["-nostdin", "-hide_banner", "-i", str(path)], PROBE_TIMEOUT_SECONDS
+    )
+    if result is None or isinstance(result, _FfmpegUnavailable):
+        return None
+
+    report = _strip_metadata_blocks(result.stderr.decode("utf-8", errors="replace"))
+    probe = StreamProbe()
+
+    # The banner echoes the input path, so a newline in the filename can forge
+    # whole report lines. Checked on the path rather than on the banner: by the
+    # time it is text there is nothing left to distinguish the forgery.
+    if "\n" in str(path) or "\r" in str(path):
+        probe.trusted = False
+
+    if m := _DURATION_RE.search(report):
+        try:
+            probe.duration = (
+                int(m.group("h")) * 3600 + int(m.group("m")) * 60 + float(m.group("s"))
+            )
+        except (ValueError, OverflowError):
+            pass
+
+    for line in report.splitlines():
+        if not line.lstrip().startswith("Stream #"):
+            continue
+        # ffmpeg emits exactly one kind delimiter per stream line. More than
+        # one means part of the line came from the file, not from ffmpeg.
+        if line.count(": Video:") + line.count(": Audio:") > 1:
+            probe.trusted = False
+        if not probe.has_video:
+            m = _STREAM_VIDEO_RE.match(line)
+            # Cover art embedded in an audio file presents as a video stream;
+            # transcoding it would produce a one-frame "video".
+            if m and _ATTACHED_PIC not in line.lower():
+                probe.has_video = True
+                probe.video_codec = m.group("codec")
+                if pm := _PIX_FMT_RE.search(line):
+                    probe.video_pix_fmt = pm.group(0)
+                continue
+        if not probe.has_audio:
+            if m := _STREAM_AUDIO_RE.match(line):
+                probe.has_audio = True
+                probe.audio_codec = m.group("codec")
+
+    return probe

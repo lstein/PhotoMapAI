@@ -142,7 +142,7 @@ def _path_digest(video_path: Path) -> str:
     ).hexdigest()
 
 
-def _album_dirname(album_key: str) -> str:
+def album_dirname(album_key: str) -> str:
     """A guaranteed-safe single path component for ``album_key``.
 
     Album keys are user input and end up as a directory name that ``clear()``
@@ -175,7 +175,7 @@ class VideoFrameCache:
 
     @property
     def directory(self) -> Path:
-        return self._root / _album_dirname(self.album_key)
+        return self._root / album_dirname(self.album_key)
 
     @staticmethod
     def key_for(video_path: Path, mtime: float | None = None) -> str:

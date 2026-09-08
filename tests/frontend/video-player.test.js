@@ -26,6 +26,41 @@ const { _resetVideoPlayerForTests, closeVideoPlayer, initializeVideoPlayer, isVi
   await import("../../photomap/frontend/static/javascript/video-player.js");
 
 const MP4 = { url: "videos/album/clip.mp4", filename: "clip.mp4", playable: true };
+// A container no browser decodes, with somewhere to send it for conversion.
+const AVI = {
+  url: "videos/album/clip.avi",
+  filename: "clip.avi",
+  playable: false,
+  transcodeUrl: "prepare_video/album/clip.avi",
+};
+// The same file from a server that predates conversion support.
+const AVI_NO_CONVERSION = { url: "videos/album/clip.avi", filename: "clip.avi", playable: false };
+
+/**
+ * Queue up what POST /prepare_video should answer.
+ *
+ * The last entry repeats, so a single argument is a steady state and several
+ * describe a conversion progressing.
+ */
+function mockConversion(...responses) {
+  const queue = [...responses];
+  global.fetch = jest.fn(() => {
+    const body = queue.length > 1 ? queue.shift() : queue[0];
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+  });
+}
+
+/** Let the fetch/json microtasks settle. Works under fake timers. */
+async function flush() {
+  for (let i = 0; i < 6; i += 1) {
+    await Promise.resolve();
+  }
+}
+
+const progress = () => document.getElementById("videoPlayerProgress");
+const progressMessage = () => document.getElementById("videoPlayerProgressMessage").textContent;
+const fallbackMessage = () => document.getElementById("videoPlayerFallbackMessage").textContent;
+const downloadLink = () => document.getElementById("videoPlayerDownloadLink");
 
 function modal() {
   return document.getElementById("videoPlayerModal");
@@ -42,18 +77,29 @@ beforeEach(() => {
   mockState.swiper.autoplay.running = false;
 
   document.body.innerHTML = `
-    <div id="videoPlayerModal" class="modal-overlay">
-      <div class="modal-content video-player-content">
-        <button class="modal-close" id="videoPlayerCloseBtn">&times;</button>
-        <div class="video-player-title" id="videoPlayerTitle"></div>
+    <div id="videoPlayerModal" class="modal-overlay video-player-overlay">
+      <button class="video-player-close" id="videoPlayerCloseBtn">&times;</button>
+      <div class="video-player-frame" id="videoPlayerFrame">
         <video id="videoPlayerElement" class="video-player-element" controls tabindex="0"></video>
-        <div class="video-player-fallback" id="videoPlayerFallback" hidden>
+        <div class="video-player-panel video-player-progress" id="videoPlayerProgress" hidden>
+          <p id="videoPlayerProgressMessage"></p>
+          <div class="video-player-bar" id="videoPlayerProgressBar" role="progressbar" aria-valuenow="0">
+            <div class="video-player-bar-fill" id="videoPlayerProgressFill"></div>
+          </div>
+          <p id="videoPlayerProgressPercent"></p>
+        </div>
+        <div class="video-player-panel video-player-fallback" id="videoPlayerFallback" hidden>
           <p id="videoPlayerFallbackMessage"></p>
           <a id="videoPlayerDownloadLink" href="#" download>Download the video</a>
         </div>
       </div>
+      <div class="video-player-title" id="videoPlayerTitle"></div>
     </div>
   `;
+
+  // Nothing in this file wants a real conversion; the tests that care about
+  // one install their own queue with mockConversion().
+  mockConversion({ state: "queued", progress: 0 });
 
   // jsdom implements neither play() nor load() on HTMLMediaElement.
   window.HTMLMediaElement.prototype.play = jest.fn(() => Promise.resolve());
@@ -149,12 +195,25 @@ describe("opening", () => {
     expect(document.activeElement).toBe(video());
   });
 
-  it("focuses the close button when the fallback is showing", () => {
-    // There is no video to drive, and a hidden element cannot take focus —
-    // leaving it on <body>, where Escape still works but Tab starts from the
-    // top of the page.
-    openVideoPlayer({ url: "videos/a/clip.avi", filename: "clip.avi", playable: false });
+  it("focuses the close button when there is nothing to play yet", () => {
+    // The video element is never hidden any more — it holds the poster while
+    // a conversion runs — but with no src there is nothing for Space to
+    // drive, and the native controls are behind a panel. Leaving focus on
+    // <body> would mean Tab starts from the top of the page.
+    openVideoPlayer(AVI);
     expect(document.activeElement).toBe(document.getElementById("videoPlayerCloseBtn"));
+  });
+
+  it("shows the poster, so the frame has an aspect ratio before metadata", () => {
+    openVideoPlayer({ ...MP4, poster: "video_frame/album/3" });
+    expect(video().getAttribute("poster")).toBe("video_frame/album/3");
+  });
+
+  it("drops the previous clip's poster when this one has none", () => {
+    openVideoPlayer({ ...MP4, poster: "video_frame/album/3" });
+    closeVideoPlayer();
+    openVideoPlayer(MP4);
+    expect(video().hasAttribute("poster")).toBe(false);
   });
 
   it("opens from a videoPlayRequested event", () => {
@@ -195,10 +254,10 @@ describe("closing", () => {
     expect(isVideoPlayerOpen()).toBe(false);
   });
 
-  it("does not close on a click inside the panel", () => {
+  it("does not close on a click on the frame", () => {
     openVideoPlayer(MP4);
     modal()
-      .querySelector(".modal-content")
+      .querySelector(".video-player-frame")
       .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(isVideoPlayerOpen()).toBe(true);
   });
@@ -258,34 +317,105 @@ describe("navigation closes the player", () => {
 });
 
 describe("formats the browser cannot play", () => {
-  it("explains instead of showing a dead player", () => {
-    openVideoPlayer({ url: "videos/album/clip.avi", filename: "clip.avi", playable: false });
+  it("converts instead of showing a dead player", async () => {
+    // The static hint says no browser decodes this container, so there is
+    // nothing to gain from a black-rectangle-then-error round trip.
+    openVideoPlayer(AVI);
+
+    expect(fallback().hidden).toBe(true);
+    expect(progress().hidden).toBe(false);
+    expect(video().hasAttribute("src")).toBe(false);
+    expect(global.fetch).toHaveBeenCalledWith("prepare_video/album/clip.avi", { method: "POST" });
+    await flush();
+  });
+
+  it("explains and offers the file when the server cannot convert it", () => {
+    // A payload with no conversion route — an older server. This is exactly
+    // what the player did before conversion existed.
+    openVideoPlayer(AVI_NO_CONVERSION);
 
     expect(fallback().hidden).toBe(false);
-    expect(video().hidden).toBe(true);
-    expect(video().hasAttribute("src")).toBe(false);
-    expect(document.getElementById("videoPlayerFallbackMessage").textContent).toMatch(/cannot play/i);
+    expect(fallbackMessage()).toMatch(/cannot play/i);
+    expect(downloadLink().getAttribute("href")).toBe("videos/album/clip.avi");
+    expect(downloadLink().hidden).toBe(false);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("offers the file for download", () => {
-    openVideoPlayer({ url: "videos/album/clip.avi", filename: "clip.avi", playable: false });
-    const link = document.getElementById("videoPlayerDownloadLink");
-    expect(link.getAttribute("href")).toBe("videos/album/clip.avi");
-    expect(link.hidden).toBe(false);
-  });
-
-  it("falls back when the video element itself errors", () => {
+  it("converts when the video element itself errors", async () => {
     // The load-bearing half: no static extension list predicts this
     // correctly in either direction (an HEVC .mp4 plays in Safari but not
     // Firefox), so the player always tries and reacts to what happened.
-    openVideoPlayer(MP4);
+    openVideoPlayer({ ...MP4, transcodeUrl: "prepare_video/album/clip.mp4" });
     expect(fallback().hidden).toBe(true);
 
     video().dispatchEvent(new Event("error"));
 
+    expect(progress().hidden).toBe(false);
+    // The original is released: it is streaming bytes nothing can decode.
+    expect(video().hasAttribute("src")).toBe(false);
+    expect(global.fetch).toHaveBeenCalledWith("prepare_video/album/clip.mp4", { method: "POST" });
+    await flush();
+  });
+
+  it("does not convert when the failure was the network, not the format", () => {
+    // A transient drop on a perfectly decodable clip used to tear it down and
+    // start a full re-encode on the server.
+    openVideoPlayer({ ...MP4, transcodeUrl: "prepare_video/album/clip.mp4" });
+    Object.defineProperty(video(), "error", { value: { code: 2 }, configurable: true });
+
+    video().dispatchEvent(new Event("error"));
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(progress().hidden).toBe(true);
     expect(fallback().hidden).toBe(false);
-    expect(document.getElementById("videoPlayerFallbackMessage").textContent).toMatch(/could not be played/i);
-    expect(document.getElementById("videoPlayerDownloadLink").getAttribute("href")).toBe("videos/album/clip.mp4");
+    expect(fallbackMessage()).toMatch(/could not be loaded/i);
+  });
+
+  it("ignores an aborted load, which is not a failure at all", () => {
+    openVideoPlayer({ ...MP4, transcodeUrl: "prepare_video/album/clip.mp4" });
+    Object.defineProperty(video(), "error", { value: { code: 1 }, configurable: true });
+
+    video().dispatchEvent(new Event("error"));
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(fallback().hidden).toBe(true);
+  });
+
+  it("converts on an unsupported-source error", () => {
+    openVideoPlayer({ ...MP4, transcodeUrl: "prepare_video/album/clip.mp4" });
+    Object.defineProperty(video(), "error", { value: { code: 4 }, configurable: true });
+
+    video().dispatchEvent(new Event("error"));
+
+    expect(global.fetch).toHaveBeenCalledWith("prepare_video/album/clip.mp4", { method: "POST" });
+  });
+
+  it("focuses the close button when no conversion is available", () => {
+    // Otherwise focus stays on <body> (the badge blurs itself before
+    // dispatching), where Tab walks into the controls behind the backdrop.
+    openVideoPlayer(AVI_NO_CONVERSION);
+    expect(document.activeElement).toBe(document.getElementById("videoPlayerCloseBtn"));
+  });
+
+  it("releases the previous clip when reopened with nothing to play", () => {
+    // Otherwise it keeps streaming, audibly, behind the panel — with the
+    // controls hidden, so there is no way to stop it.
+    openVideoPlayer(MP4);
+    expect(video().getAttribute("src")).toBe("videos/album/clip.mp4");
+
+    openVideoPlayer({ url: "", filename: "gone.mp4", playable: true });
+
+    expect(video().hasAttribute("src")).toBe(false);
+    expect(video().pause).toHaveBeenCalled();
+  });
+
+  it("falls back when an errored video has nowhere to be converted", () => {
+    openVideoPlayer(MP4);
+    video().dispatchEvent(new Event("error"));
+
+    expect(fallback().hidden).toBe(false);
+    expect(fallbackMessage()).toMatch(/cannot play/i);
+    expect(downloadLink().getAttribute("href")).toBe("videos/album/clip.mp4");
   });
 
   it("ignores the error fired by teardown clearing the src", () => {
@@ -293,21 +423,226 @@ describe("formats the browser cannot play", () => {
     closeVideoPlayer();
     video().dispatchEvent(new Event("error"));
     expect(fallback().hidden).toBe(true);
+    expect(progress().hidden).toBe(true);
   });
 
   it("recovers the player on the next open", () => {
-    openVideoPlayer({ url: "videos/album/clip.avi", filename: "clip.avi", playable: false });
+    openVideoPlayer(AVI_NO_CONVERSION);
     closeVideoPlayer();
     openVideoPlayer(MP4);
     expect(fallback().hidden).toBe(true);
-    expect(video().hidden).toBe(false);
+    expect(progress().hidden).toBe(true);
     expect(video().getAttribute("src")).toBe("videos/album/clip.mp4");
   });
 
   it("explains when there is no URL at all", () => {
     openVideoPlayer({ url: "", filename: "clip.mp4", playable: true });
     expect(fallback().hidden).toBe(false);
-    expect(document.getElementById("videoPlayerDownloadLink").hidden).toBe(true);
+    expect(downloadLink().hidden).toBe(true);
+  });
+});
+
+describe("conversion", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("plays the converted copy once it is ready", async () => {
+    mockConversion({ state: "ready", progress: 1, url: "transcoded_video/album/clip.avi" });
+    openVideoPlayer(AVI);
+    await flush();
+
+    expect(video().getAttribute("src")).toBe("transcoded_video/album/clip.avi");
+    expect(progress().hidden).toBe(true);
+    expect(video().play).toHaveBeenCalled();
+    expect(document.activeElement).toBe(video());
+  });
+
+  it("reports progress while the conversion runs", async () => {
+    mockConversion({ state: "running", progress: 0.42 });
+    openVideoPlayer(AVI);
+    await flush();
+
+    expect(progress().hidden).toBe(false);
+    expect(progressMessage()).toMatch(/converting/i);
+    expect(document.getElementById("videoPlayerProgressPercent").textContent).toBe("42%");
+    expect(document.getElementById("videoPlayerProgressFill").style.width).toBe("42%");
+    expect(document.getElementById("videoPlayerProgressBar").getAttribute("aria-valuenow")).toBe("42");
+  });
+
+  it("says it is waiting while the job sits in the queue", async () => {
+    mockConversion({ state: "queued", progress: 0 });
+    openVideoPlayer(AVI);
+    await flush();
+
+    expect(progressMessage()).toMatch(/waiting/i);
+  });
+
+  it("survives a transient poll failure instead of abandoning the job", async () => {
+    // The poll is also the backend's liveness signal, so giving up on one
+    // dropped request also makes the backend drop the conversion.
+    let calls = 0;
+    global.fetch = jest.fn(() => {
+      calls += 1;
+      if (calls === 1) {
+        return Promise.reject(new Error("wifi handoff"));
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ state: "running", progress: 0.6 }) });
+    });
+
+    openVideoPlayer(AVI);
+    await flush();
+    expect(fallback().hidden).toBe(true); // not given up on
+
+    jest.advanceTimersByTime(1000);
+    await flush();
+    expect(progress().hidden).toBe(false);
+    expect(document.getElementById("videoPlayerProgressPercent").textContent).toBe("60%");
+  });
+
+  it("omits aria-valuenow while the bar is indeterminate", async () => {
+    // ARIA requires the attribute to be absent, or a screen reader announces
+    // a job that is running fine as stuck at 0%.
+    mockConversion({ state: "running", progress: 0 });
+    openVideoPlayer(AVI);
+    await flush();
+    expect(document.getElementById("videoPlayerProgressBar").hasAttribute("aria-valuenow")).toBe(false);
+  });
+
+  it("sweeps rather than sitting at 0% when the duration is unknown", async () => {
+    // ffmpeg could not determine the duration, so there is no percentage to
+    // report. A bar parked at 0% reads as stuck.
+    mockConversion({ state: "running", progress: 0 });
+    openVideoPlayer(AVI);
+    await flush();
+
+    const bar = document.getElementById("videoPlayerProgressBar");
+    expect(bar.classList.contains("video-player-bar--indeterminate")).toBe(true);
+    expect(document.getElementById("videoPlayerProgressFill").style.width).toBe("");
+  });
+
+  it("keeps polling until the conversion finishes", async () => {
+    mockConversion(
+      { state: "queued", progress: 0 },
+      { state: "running", progress: 0.5 },
+      { state: "ready", progress: 1, url: "transcoded_video/album/clip.avi" }
+    );
+    openVideoPlayer(AVI);
+    await flush();
+    expect(progressMessage()).toMatch(/waiting/i);
+
+    jest.advanceTimersByTime(1000);
+    await flush();
+    expect(progressMessage()).toMatch(/converting/i);
+
+    jest.advanceTimersByTime(1000);
+    await flush();
+    expect(video().getAttribute("src")).toBe("transcoded_video/album/clip.avi");
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops polling when the player closes", async () => {
+    // The backend drops a job nobody is asking about, so this is not merely
+    // tidy: it is how closing the player cancels the ffmpeg run.
+    mockConversion({ state: "running", progress: 0.1 });
+    openVideoPlayer(AVI);
+    await flush();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    closeVideoPlayer();
+    jest.advanceTimersByTime(10000);
+    await flush();
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a late response play into a dismissed player", async () => {
+    mockConversion({ state: "ready", progress: 1, url: "transcoded_video/album/clip.avi" });
+    openVideoPlayer(AVI);
+    closeVideoPlayer();
+    await flush();
+
+    expect(isVideoPlayerOpen()).toBe(false);
+    expect(video().hasAttribute("src")).toBe(false);
+  });
+
+  it("does not let a late response play over a different clip", async () => {
+    mockConversion({ state: "ready", progress: 1, url: "transcoded_video/album/clip.avi" });
+    openVideoPlayer(AVI);
+    openVideoPlayer(MP4);
+    await flush();
+
+    expect(video().getAttribute("src")).toBe("videos/album/clip.mp4");
+  });
+
+  it("shows the backend's reason when the conversion fails", async () => {
+    mockConversion({ state: "failed", progress: 0, detail: "This video could not be converted." });
+    openVideoPlayer(AVI);
+    await flush();
+
+    expect(fallback().hidden).toBe(false);
+    expect(fallbackMessage()).toBe("This video could not be converted.");
+    expect(downloadLink().getAttribute("href")).toBe("videos/album/clip.avi");
+  });
+
+  it("explains when the server has no ffmpeg", async () => {
+    mockConversion({ state: "unavailable", progress: 0, detail: "ffmpeg is not available." });
+    openVideoPlayer(AVI);
+    await flush();
+
+    expect(fallback().hidden).toBe(false);
+    expect(fallbackMessage()).toBe("ffmpeg is not available.");
+  });
+
+  /** Drive the poll past its retry tolerance. */
+  async function exhaustPolls() {
+    for (let i = 0; i < 8; i += 1) {
+      jest.advanceTimersByTime(5000);
+      await flush();
+    }
+  }
+
+  it("survives the request itself failing", async () => {
+    global.fetch = jest.fn(() => Promise.reject(new Error("offline")));
+    openVideoPlayer(AVI);
+    await flush();
+    // One rejection is a hiccup, not a verdict — it must still be retrying.
+    expect(fallback().hidden).toBe(true);
+
+    await exhaustPolls();
+
+    expect(fallback().hidden).toBe(false);
+    expect(fallbackMessage()).toMatch(/could not be prepared/i);
+  });
+
+  it("treats a non-OK response as a failure rather than parsing it", async () => {
+    global.fetch = jest.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
+    openVideoPlayer(AVI);
+    await flush();
+    await exhaustPolls();
+
+    expect(fallback().hidden).toBe(false);
+    expect(fallbackMessage()).toMatch(/could not be prepared/i);
+  });
+
+  it("does not convert a second time when the converted copy also errors", async () => {
+    // The conversion is H.264/AAC in an MP4. If that will not play, nothing
+    // the backend can produce will, and re-converting would loop forever.
+    mockConversion({ state: "ready", progress: 1, url: "transcoded_video/album/clip.avi" });
+    openVideoPlayer(AVI);
+    await flush();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    video().dispatchEvent(new Event("error"));
+    await flush();
+
+    expect(fallback().hidden).toBe(false);
+    expect(fallbackMessage()).toMatch(/even after conversion/i);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });
 

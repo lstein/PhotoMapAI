@@ -30,5 +30,10 @@ class SlideSummary(BaseModel):
     # something displayable — the extracted still — so existing consumers that
     # just want a picture keep working unchanged.
     video_url: str = ""
+    # Where to ask for a browser-playable conversion of ``video_url``, for the
+    # (common) case where the browser cannot decode the original. Empty for
+    # images, and empty from a server predating conversion support — the
+    # player treats that as "no conversion available" and offers a download.
+    video_transcode_url: str = ""
     # Duration / fps / resolution / codec / container, when known.
     video_info: dict | None = None
