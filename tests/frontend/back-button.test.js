@@ -19,8 +19,13 @@ function emitSlideChanged(globalIndex) {
 }
 
 function setupDom() {
+  // Mirrors control-panel.html: the chevron is a sibling of the Back button,
+  // inside the shared .icon-with-chevron wrapper.
   document.body.innerHTML = `
-    <button id="backNavBtn" class="back-nav-disabled" title="Back"></button>
+    <div class="icon-with-chevron">
+      <button id="backNavBtn" class="back-nav-disabled" title="Back"></button>
+      <button id="backNavMenuBtn" class="menu-chevron" title="Recent positions" disabled></button>
+    </div>
   `;
 }
 
@@ -172,6 +177,108 @@ describe("back-button.js", () => {
       expect(navigator).toHaveBeenCalledWith(expect.objectContaining({ globalIndex: 1 }));
       expect(backStack.size()).toBe(2);
       expect(document.getElementById("backNavFlyout")).toBeNull();
+    });
+  });
+
+  describe("the chevron pulldown", () => {
+    const chevron = () => document.getElementById("backNavMenuBtn");
+
+    it("starts disabled and tracks the Back button's own enabled state", () => {
+      expect(chevron().disabled).toBe(true);
+      emitSlideChanged(0);
+      expect(chevron().disabled).toBe(true);
+      emitSlideChanged(1);
+      expect(chevron().disabled).toBe(false);
+      document.getElementById("backNavBtn").click();
+      expect(chevron().disabled).toBe(true);
+    });
+
+    it("opens the flyout on a plain left-click", () => {
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      chevron().click();
+      expect(document.getElementById("backNavFlyout")).not.toBeNull();
+    });
+
+    it("closes the flyout when clicked a second time", () => {
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      chevron().click();
+      chevron().click();
+      expect(document.getElementById("backNavFlyout")).toBeNull();
+    });
+
+    it("does not open a flyout when there is nothing to go back to", () => {
+      emitSlideChanged(0);
+      expect(chevron().disabled).toBe(true);
+      // dispatchEvent, not .click(): jsdom (like a browser) suppresses
+      // synthetic activation on a disabled button, so .click() here would
+      // pass even with the size guard deleted and no listener bound at all.
+      chevron().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      expect(document.getElementById("backNavFlyout")).toBeNull();
+    });
+
+    it("places the flyout clear of the chevron that opened it", () => {
+      // The control panel is pinned to the bottom of the window, so a flyout
+      // merely clamped into view lands on top of the chevron — and the click
+      // meant to close it hits a thumbnail and navigates away instead. jsdom
+      // has no layout, so the geometry has to be supplied.
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      const chevronRect = { top: 727, bottom: 767, left: 300, right: 324, width: 24, height: 40 };
+      // #backNavFlyout is a fixed 4x3 grid of 72px cells whatever the entry count.
+      const FLYOUT_HEIGHT = 246;
+      // Without this jsdom reports clientHeight 0, which makes the *unfixed*
+      // clamp shove the flyout to the top of the screen — passing this test
+      // for entirely the wrong reason.
+      const heightSpy = jest.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(800);
+      const real = Element.prototype.getBoundingClientRect;
+      jest.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function mocked() {
+        if (this.id === "backNavMenuBtn") {
+          return chevronRect;
+        }
+        if (this.id === "backNavFlyout") {
+          return { top: 0, bottom: FLYOUT_HEIGHT, left: 0, right: 324, width: 324, height: FLYOUT_HEIGHT };
+        }
+        return real.call(this);
+      });
+
+      chevron().click();
+      const top = parseFloat(document.getElementById("backNavFlyout").style.top);
+      Element.prototype.getBoundingClientRect.mockRestore();
+      heightSpy.mockRestore();
+
+      expect(top + FLYOUT_HEIGHT).toBeLessThanOrEqual(chevronRect.top);
+    });
+
+    it("lets the click reach document so other popups can close themselves", () => {
+      // Every other popup in the app (bookmarks menu, slideshow mode menu)
+      // closes from its own listener on document. A stopPropagation() here
+      // would strand them open behind the flyout.
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      const onDocClick = jest.fn();
+      document.addEventListener("click", onDocClick);
+      chevron().click();
+      document.removeEventListener("click", onDocClick);
+      expect(onDocClick).toHaveBeenCalled();
+    });
+
+    it("opens the flyout on long-press rather than the browser's own menu", () => {
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      const ev = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+      chevron().dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(document.getElementById("backNavFlyout")).not.toBeNull();
+    });
+
+    it("leaves right-click on the Back button itself working", () => {
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      const ev = new MouseEvent("contextmenu", { clientX: 100, clientY: 100, bubbles: true, cancelable: true });
+      document.getElementById("backNavBtn").dispatchEvent(ev);
+      expect(document.getElementById("backNavFlyout")).not.toBeNull();
     });
   });
 });

@@ -24,8 +24,10 @@
     </div>
 
     <div class="search-icon-container">
-      <button id="showUmapBtn" title="Show UMAP">
+      <button id="showUmapBtn" title="Show semantic map">
         <span id="showUmapIcon">
+          <!-- lucide "map" (ISC): the folded paper map, matching the icon
+               InvokeAI uses for the same feature in its image-map widget. -->
           <svg
             width="32"
             height="32"
@@ -36,15 +38,11 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <!-- Outer circle -->
-            <circle cx="12" cy="12" r="9" />
-            <!-- Center dot -->
-            <circle cx="12" cy="12" r="2.2" fill="#fff" />
-            <!-- Rays -->
-            <line x1="12" y1="0" x2="12" y2="7" />
-            <line x1="12" y1="17" x2="12" y2="24" />
-            <line x1="0" y1="12" x2="7" y2="12" />
-            <line x1="17" y1="12" x2="24" y2="12" />
+            <path
+              d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"
+            />
+            <path d="M15 5.764v15" />
+            <path d="M9 3.236v15" />
           </svg>
         </span>
       </button>
@@ -95,8 +93,8 @@
       <div class="button-label">By Text</div>
     </div>
 
-    <div class="clear-search-container">
-      <button id="clearSearchBtn" title="Clear Search" style="display: none">
+    <div class="search-icon-container clear-search-container">
+      <button id="clearSearchBtn" title="Clear Search" disabled>
         <svg
           width="32"
           height="32"
@@ -113,6 +111,33 @@
         </svg>
       </button>
       <div class="button-label">Clear</div>
+    </div>
+
+    <div class="search-icon-container">
+      <button id="aboutBtn" title="About">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="#fff">
+          <circle
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="#fff"
+            stroke-width="2"
+            fill="none"
+          />
+          <text
+            x="12"
+            y="12"
+            text-anchor="middle"
+            font-size="16"
+            fill="#fff"
+            font-family="Arial"
+            dy=".3em"
+          >
+            ?
+          </text>
+        </svg>
+      </button>
+      <div class="button-label">About</div>
     </div>
   </div>
 </div>

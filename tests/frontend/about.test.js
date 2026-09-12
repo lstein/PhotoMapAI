@@ -1,5 +1,7 @@
 // Unit tests for about.js — version check caching and badge behavior
 import { jest, describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
 
 function setupDom() {
   document.body.innerHTML = `
@@ -213,5 +215,26 @@ describe("AboutManager version check badge", () => {
 
     expect(document.getElementById("aboutBtn").classList.contains("has-update")).toBe(false);
     expect(localStorage.getItem(VERSION_CACHE_KEY)).toBeNull();
+  });
+});
+
+describe("the shipped About button markup", () => {
+  // about.js looks the button up by id, so the fixture above passing proves
+  // nothing about the real page. The button lives at the far right of the
+  // Search panel (it used to sit at the far left of the Control panel).
+  const readTemplate = (name) =>
+    readFileSync(fileURLToPath(new URL(`../../photomap/frontend/templates/modules/${name}`, import.meta.url)), "utf8");
+
+  it("provides #aboutBtn in the search panel", () => {
+    expect(readTemplate("search-panel.html")).toContain('id="aboutBtn"');
+  });
+
+  it("no longer provides it in the control panel", () => {
+    expect(readTemplate("control-panel.html")).not.toContain('id="aboutBtn"');
+  });
+
+  it("puts it last, at the far right of the search panel", () => {
+    const template = readTemplate("search-panel.html");
+    expect(template.indexOf('id="aboutBtn"')).toBeGreaterThan(template.indexOf('id="clearSearchBtn"'));
   });
 });
