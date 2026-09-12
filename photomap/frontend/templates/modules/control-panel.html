@@ -5,32 +5,6 @@
   <div class="control-panel-title">Control</div>
   <div class="control-icons-row">
     <div class="control-icon-container">
-      <button id="aboutBtn" title="About">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="#fff">
-          <circle
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="#fff"
-            stroke-width="2"
-            fill="none"
-          />
-          <text
-            x="12"
-            y="12"
-            text-anchor="middle"
-            font-size="16"
-            fill="#fff"
-            font-family="Arial"
-            dy=".3em"
-          >
-            ?
-          </text>
-        </svg>
-      </button>
-      <div class="button-label">About</div>
-    </div>
-    <div class="control-icon-container">
       <button id="settingsBtn" title="Settings">
         <svg
           width="32"
@@ -119,52 +93,110 @@
       <div class="button-label">Grid View</div>
     </div>
     <div class="control-icon-container">
-      <button
-        id="backNavBtn"
-        class="back-nav-disabled"
-        title="Back (right-click for recent)"
-      >
-        <svg
-          width="32"
-          height="32"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#fff"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+      <div class="icon-with-chevron">
+        <button
+          id="backNavBtn"
+          class="back-nav-disabled"
+          title="Back (right-click for recent)"
         >
-          <path d="M9 14 L4 9 L9 4" />
-          <path d="M4 9 H15 a5 5 0 0 1 5 5 v6" />
-        </svg>
-      </button>
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M9 14 L4 9 L9 4" />
+            <path d="M4 9 H15 a5 5 0 0 1 5 5 v6" />
+          </svg>
+        </button>
+        <!-- Starts disabled: there is nowhere to go back to on a fresh load.
+             back-button.js keeps it in step with the Back button itself. -->
+        <button
+          id="backNavMenuBtn"
+          class="menu-chevron"
+          title="Recent positions"
+          aria-label="Recent positions"
+          aria-haspopup="true"
+          disabled
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <!-- The stock chevron (6 9 12 15 18 9) spans only the middle half
+                 of the viewBox, padding itself with dead space on every side.
+                 This is that path scaled 1.5x about the centre: same shape,
+                 filling the box, so the glyph grows without the button doing. -->
+            <polyline points="3 7.5 12 16.5 21 7.5" />
+          </svg>
+        </button>
+      </div>
       <div class="button-label">Back</div>
     </div>
     <div class="control-icon-container">
-      <button id="startStopSlideshowBtn" title="Start/Pause Slideshow">
-        <span id="slideshowIcon">
+      <div class="icon-with-chevron">
+        <button id="startStopSlideshowBtn" title="Start/Pause Slideshow">
+          <span id="slideshowIcon">
+            <svg
+              id="playIcon"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="#fff"
+            >
+              <polygon points="5,3 19,12 5,21" />
+            </svg>
+            <svg
+              id="pauseIcon"
+              style="display: none"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="#fff"
+            >
+              <rect x="6" y="4" width="4" height="16" />
+              <rect x="14" y="4" width="4" height="16" />
+            </svg>
+          </span>
+        </button>
+        <!-- Never disabled, unlike the Play button beside it: the mode menu is
+             exactly what you want when Play has greyed out at the end of a
+             sequential run. -->
+        <button
+          id="slideshowModeMenuBtn"
+          class="menu-chevron"
+          title="Slideshow mode"
+          aria-label="Slideshow mode"
+          aria-haspopup="true"
+        >
           <svg
-            id="playIcon"
-            width="32"
-            height="32"
+            width="22"
+            height="22"
             viewBox="0 0 24 24"
-            fill="#fff"
+            fill="none"
+            stroke="#fff"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
           >
-            <polygon points="5,3 19,12 5,21" />
+            <!-- The stock chevron (6 9 12 15 18 9) spans only the middle half
+                 of the viewBox, padding itself with dead space on every side.
+                 This is that path scaled 1.5x about the centre: same shape,
+                 filling the box, so the glyph grows without the button doing. -->
+            <polyline points="3 7.5 12 16.5 21 7.5" />
           </svg>
-          <svg
-            id="pauseIcon"
-            style="display: none"
-            width="32"
-            height="32"
-            viewBox="0 0 24 24"
-            fill="#fff"
-          >
-            <rect x="6" y="4" width="4" height="16" />
-            <rect x="14" y="4" width="4" height="16" />
-          </svg>
-        </span>
-      </button>
+        </button>
+      </div>
       <div class="button-label">Slideshow</div>
     </div>
   </div>

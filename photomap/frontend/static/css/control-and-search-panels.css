@@ -11,7 +11,7 @@
   z-index: 4000;
   background: rgba(30, 30, 30, 0.35);
   border-radius: 0.7em;
-  padding: 0.4em 0.8em;
+  padding: 0.4em 0.3em;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -60,6 +60,57 @@
 #controlPanel button.slideshow-disabled,
 #controlPanel button.slideshow-disabled:hover {
   opacity: 0.25;
+  cursor: default;
+}
+
+/* ===== Pulldown chevrons (Slideshow, Back) ===== */
+
+/* An icon that owns a pulldown menu pairs with a chevron to its right; the two
+   sit side by side above the one shared label, so the label centers under the
+   pair rather than under the icon. */
+.icon-with-chevron {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+/* Deliberately far narrower than the 40px panel buttons — the whole point of
+   this panel work is to reclaim horizontal room, and the chevron is an
+   affordance, not an icon in its own right. */
+#controlPanel button.menu-chevron {
+  width: 24px;
+  min-width: 24px;
+  border-radius: 4px;
+  /* The icon beside it is a 32px glyph centred in a 40px button, so 4px of
+     this comes free out of that slack. The remaining 2px is bought from the
+     icon's hit area, leaving it 34px wide — still comfortable for touch, but
+     this is as far as the tuck can go without making the icons awkward. */
+  margin-left: -6px;
+  /* Brighter than the 0.6 of the 32px icons beside it, not dimmer: a 16px
+     glyph lays down far less ink, so matching their opacity leaves it barely
+     separable from the translucent panel behind it. */
+  opacity: 0.9;
+}
+
+/* Same specificity as #controlPanel button:hover (1,1,1) but later in the
+   file, so the rule above would otherwise win and the chevron would never
+   brighten on hover. */
+#controlPanel button.menu-chevron:hover {
+  opacity: 1;
+}
+
+#controlPanel button.menu-chevron svg {
+  width: 22px;
+  height: 22px;
+  /* The panel is translucent, so the chevron can land on a bright photo with
+     almost no contrast of its own. The icons survive that on sheer mass; this
+     one needs the outline. */
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9));
+}
+
+#controlPanel button.menu-chevron:disabled,
+#controlPanel button.menu-chevron:disabled:hover {
+  opacity: 0.3;
   cursor: default;
 }
 
@@ -122,7 +173,7 @@
   flex-direction: row;
   align-items: flex-end;
   justify-content: center;
-  gap: 1em;
+  gap: 0.5em;
   width: 100%;
 }
 
@@ -193,7 +244,7 @@
     flex-direction: row !important;
     align-items: center;
     justify-content: center;
-    gap: 1em;
+    gap: 0.5em;
     width: 100%;
   }
 
@@ -204,5 +255,39 @@
     min-width: 48px;
     min-height: 48px;
     font-size: 2em;
+  }
+
+  /* The rule above is less specific than #controlPanel button.menu-chevron, so
+     the chevron keeps its 16px width here; only the height needs restating to
+     stay flush with the 48px button it is attached to. */
+  #controlPanel button.menu-chevron {
+    height: 48px;
+    min-height: 48px;
+  }
+}
+
+/* The Search panel carries six icons since Clear became always-visible and
+   About moved across. At the phone layout's 48px that needs 328px of row,
+   which a 320px viewport cannot give — and html/body are overflow:hidden, so
+   the excess is clipped off both ends rather than scrolled. Step the buttons
+   back down on the narrowest screens: 6x40 + 5x4 = 260px fits with room over. */
+@media (max-width: 380px) {
+  #controlPanel button,
+  #searchPanel button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 1.8em;
+  }
+
+  #controlPanel button.menu-chevron {
+    height: 40px;
+    min-height: 40px;
+  }
+
+  .control-icons-row,
+  .search-icons-row {
+    gap: 0.25em;
   }
 }

@@ -44,6 +44,7 @@ const {
   showPlayPauseIndicator,
   removeExistingIndicator,
   toggleSlideshowWithIndicator,
+  initializeSlideshowControls,
 } = await import("../../photomap/frontend/static/javascript/slideshow.js");
 
 const { state } = await import("../../photomap/frontend/static/javascript/state.js");
@@ -303,6 +304,126 @@ describe("slideshow.js", () => {
     it("should do nothing if no indicator exists", () => {
       document.body.innerHTML = "";
       expect(() => removeExistingIndicator()).not.toThrow();
+    });
+  });
+
+  describe("the mode-menu chevron", () => {
+    const chevron = () => document.getElementById("slideshowModeMenuBtn");
+    const menu = () => document.getElementById("slideshowModeMenu");
+
+    beforeEach(() => {
+      // Mirrors control-panel.html: the chevron is a sibling of the play
+      // button, inside the shared .icon-with-chevron wrapper.
+      document.body.innerHTML = `
+        <div class="icon-with-chevron">
+          <button id="startStopSlideshowBtn" title=""><span id="slideshowIcon"></span></button>
+          <button id="slideshowModeMenuBtn" class="menu-chevron" title="Slideshow mode"></button>
+        </div>
+      `;
+      state.single_swiper = { swiper: { autoplay: { running: false } } };
+      state.mode = "chronological";
+      initializeSlideshowControls();
+    });
+
+    it("opens the mode menu on a plain left-click", () => {
+      chevron().click();
+      expect(menu()).not.toBeNull();
+      expect(menu().textContent).toContain("Sequential");
+      expect(menu().textContent).toContain("Shuffled");
+    });
+
+    it("closes the menu when clicked a second time", () => {
+      chevron().click();
+      chevron().click();
+      expect(menu()).toBeNull();
+    });
+
+    it("places the menu clear of the chevron that opened it", () => {
+      // The control panel is pinned to the bottom of the window, so a menu
+      // merely flipped up off the bottom edge lands on top of the chevron —
+      // and the click meant to close it hits a mode button, silently changing
+      // and persisting the mode. jsdom has no layout, so supply the geometry.
+      const MENU_HEIGHT = 88;
+      const chevronRect = { top: 727, bottom: 767, left: 300, right: 324, width: 24, height: 40 };
+      jest.spyOn(chevron(), "getBoundingClientRect").mockReturnValue(chevronRect);
+      const heightSpy = jest.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(MENU_HEIGHT);
+      window.innerHeight = 800;
+
+      chevron().click();
+      const top = parseFloat(menu().style.top);
+      heightSpy.mockRestore();
+
+      expect(top + MENU_HEIGHT).toBeLessThanOrEqual(chevronRect.top);
+    });
+
+    it("does not change the mode when the chevron is clicked twice", () => {
+      // The end-to-end shape of the bug above: open, then click the chevron
+      // again to close. If the menu covers the chevron the second click lands
+      // on "Sequential" and flips the user's shuffle setting.
+      const MENU_HEIGHT = 88;
+      const chevronRect = { top: 727, bottom: 767, left: 300, right: 324, width: 24, height: 40 };
+      jest.spyOn(chevron(), "getBoundingClientRect").mockReturnValue(chevronRect);
+      const heightSpy = jest.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(MENU_HEIGHT);
+      window.innerHeight = 800;
+      state.mode = "random";
+
+      chevron().click();
+      const menuTop = parseFloat(menu().style.top);
+      const menuBottom = menuTop + MENU_HEIGHT;
+      chevron().click();
+      heightSpy.mockRestore();
+
+      expect(menu()).toBeNull();
+      expect(state.mode).toBe("random");
+      // The chevron must not have been under the menu at all.
+      expect(menuBottom).toBeLessThanOrEqual(chevronRect.top);
+    });
+
+    it("lets the click reach document so other popups can close themselves", () => {
+      // Every other popup in the app (bookmarks menu, back flyout) closes from
+      // its own listener on document. A stopPropagation() here would strand
+      // them open behind this menu.
+      const onDocClick = jest.fn();
+      document.addEventListener("click", onDocClick);
+      chevron().click();
+      document.removeEventListener("click", onDocClick);
+      expect(onDocClick).toHaveBeenCalled();
+    });
+
+    it("opens the menu on long-press rather than the browser's own menu", () => {
+      const ev = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+      chevron().dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(menu()).not.toBeNull();
+    });
+
+    it("leaves right-click on the play button itself working", () => {
+      const ev = new MouseEvent("contextmenu", { clientX: 50, clientY: 50, bubbles: true, cancelable: true });
+      document.getElementById("startStopSlideshowBtn").dispatchEvent(ev);
+      expect(menu()).not.toBeNull();
+    });
+
+    it("stays usable while Play is greyed out at the end of a sequential run", () => {
+      // Switching to Shuffled is the way out of that state, so the chevron
+      // must not inherit the play button's disabled treatment.
+      document.getElementById("startStopSlideshowBtn").classList.add("slideshow-disabled");
+      expect(chevron().disabled).toBe(false);
+      chevron().click();
+      expect(menu()).not.toBeNull();
+    });
+
+    it("cancels the deferred close-listeners when shut before they attach", () => {
+      // The listeners are attached on a setTimeout(0) so the opening click
+      // does not immediately close the menu. Toggling shut inside that window
+      // must cancel the timer: merely removing not-yet-added listeners would
+      // leave the timeout to attach them to a menu that no longer exists.
+      const addSpy = jest.spyOn(document, "addEventListener");
+      chevron().click();
+      chevron().click();
+      jest.runOnlyPendingTimers();
+      const attached = addSpy.mock.calls.filter(([type]) => type === "click" || type === "keydown");
+      addSpy.mockRestore();
+      expect(attached).toHaveLength(0);
     });
   });
 });
