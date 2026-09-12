@@ -11,7 +11,7 @@
   z-index: 4000;
   background: rgba(30, 30, 30, 0.35);
   border-radius: 0.7em;
-  padding: 0.4em 0.8em;
+  padding: 0.4em 0.3em;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -122,7 +122,7 @@
   flex-direction: row;
   align-items: flex-end;
   justify-content: center;
-  gap: 1em;
+  gap: 0.5em;
   width: 100%;
 }
 
@@ -193,7 +193,7 @@
     flex-direction: row !important;
     align-items: center;
     justify-content: center;
-    gap: 1em;
+    gap: 0.5em;
     width: 100%;
   }
 
