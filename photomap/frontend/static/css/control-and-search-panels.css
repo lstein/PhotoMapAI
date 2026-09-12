@@ -78,14 +78,14 @@
    this panel work is to reclaim horizontal room, and the chevron is an
    affordance, not an icon in its own right. */
 #controlPanel button.menu-chevron {
-  width: 22px;
-  min-width: 22px;
+  width: 24px;
+  min-width: 24px;
   border-radius: 4px;
-  /* The icon beside it is a 32px glyph centred in a 40px button, so it carries
-     4px of slack on this side. Pulling the chevron back by exactly that much
-     tucks it against the glyph without overlapping it — and without eating
-     into the icon's own hit area, which matters on touch. */
-  margin-left: -4px;
+  /* The icon beside it is a 32px glyph centred in a 40px button, so 4px of
+     this comes free out of that slack. The remaining 2px is bought from the
+     icon's hit area, leaving it 34px wide — still comfortable for touch, but
+     this is as far as the tuck can go without making the icons awkward. */
+  margin-left: -6px;
   /* Brighter than the 0.6 of the 32px icons beside it, not dimmer: a 16px
      glyph lays down far less ink, so matching their opacity leaves it barely
      separable from the translucent panel behind it. */
@@ -93,8 +93,8 @@
 }
 
 #controlPanel button.menu-chevron svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   /* The panel is translucent, so the chevron can land on a bright photo with
      almost no contrast of its own. The icons survive that on sheer mass; this
      one needs the outline. */
