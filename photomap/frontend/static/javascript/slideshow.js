@@ -153,8 +153,9 @@ export async function toggleSlideshowWithIndicator(e) {
   updateSlideshowButtonIcon();
 }
 
-// right-click menu to choose chronological vs random
-function createModeMenu(x, y) {
+// right-click menu to choose chronological vs random. `anchorAbove` is the
+// rect of a control the menu must not cover (see the positioning block below).
+function createModeMenu(x, y, anchorAbove = null) {
   removeModeMenu();
 
   const menu = document.createElement("div");
@@ -200,9 +201,17 @@ function createModeMenu(x, y) {
   const menuHeight = menu.offsetHeight;
   const windowHeight = window.innerHeight;
 
-  // If menu would go off bottom of screen, position it above the click
   let finalY = y;
-  if (y + menuHeight > windowHeight) {
+  if (anchorAbove) {
+    // Opened from a control rather than a pointer, so the menu has to sit
+    // fully clear above that control. The control panel is pinned to the
+    // bottom of the window, so the plain overflow flip below would always
+    // land the menu *on top of* the chevron — and the click meant to toggle
+    // the menu shut would hit a mode button instead, silently changing (and
+    // persisting) the slideshow mode.
+    finalY = Math.max(6, anchorAbove.top - menuHeight - 6);
+  } else if (y + menuHeight > windowHeight) {
+    // If menu would go off bottom of screen, position it above the click
     finalY = windowHeight - menuHeight - 6; // 6px padding from bottom
   }
 
@@ -278,16 +287,18 @@ export function initializeSlideshowControls() {
       // contextmenu is routed here too: a long-press on the chevron would
       // otherwise raise the browser's own menu instead of ours.
       e.preventDefault();
-      e.stopPropagation();
+      // Deliberately NOT stopPropagation: every other popup in the app closes
+      // from a listener on document, so swallowing this click here would
+      // strand the bookmarks menu or the back flyout open behind this one.
       if (document.getElementById("slideshowModeMenu")) {
         removeModeMenu();
         return;
       }
       // Anchor to the chevron, not the pointer, so a keyboard or touch
       // activation (which carries no useful coordinates) lands in the same
-      // place as a mouse click. createModeMenu() flips it above when needed.
+      // place as a mouse click, and so the menu can be kept clear of it.
       const rect = menuBtn.getBoundingClientRect();
-      createModeMenu(rect.left, rect.top);
+      createModeMenu(rect.left, rect.top, rect);
     };
     menuBtn.addEventListener("click", toggleModeMenu);
     menuBtn.addEventListener("contextmenu", toggleModeMenu);

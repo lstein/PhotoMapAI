@@ -210,8 +210,58 @@ describe("back-button.js", () => {
 
     it("does not open a flyout when there is nothing to go back to", () => {
       emitSlideChanged(0);
-      chevron().click();
+      expect(chevron().disabled).toBe(true);
+      // dispatchEvent, not .click(): jsdom (like a browser) suppresses
+      // synthetic activation on a disabled button, so .click() here would
+      // pass even with the size guard deleted and no listener bound at all.
+      chevron().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
       expect(document.getElementById("backNavFlyout")).toBeNull();
+    });
+
+    it("places the flyout clear of the chevron that opened it", () => {
+      // The control panel is pinned to the bottom of the window, so a flyout
+      // merely clamped into view lands on top of the chevron — and the click
+      // meant to close it hits a thumbnail and navigates away instead. jsdom
+      // has no layout, so the geometry has to be supplied.
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      const chevronRect = { top: 727, bottom: 767, left: 300, right: 324, width: 24, height: 40 };
+      // #backNavFlyout is a fixed 4x3 grid of 72px cells whatever the entry count.
+      const FLYOUT_HEIGHT = 246;
+      // Without this jsdom reports clientHeight 0, which makes the *unfixed*
+      // clamp shove the flyout to the top of the screen — passing this test
+      // for entirely the wrong reason.
+      const heightSpy = jest.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(800);
+      const real = Element.prototype.getBoundingClientRect;
+      jest.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function mocked() {
+        if (this.id === "backNavMenuBtn") {
+          return chevronRect;
+        }
+        if (this.id === "backNavFlyout") {
+          return { top: 0, bottom: FLYOUT_HEIGHT, left: 0, right: 324, width: 324, height: FLYOUT_HEIGHT };
+        }
+        return real.call(this);
+      });
+
+      chevron().click();
+      const top = parseFloat(document.getElementById("backNavFlyout").style.top);
+      Element.prototype.getBoundingClientRect.mockRestore();
+      heightSpy.mockRestore();
+
+      expect(top + FLYOUT_HEIGHT).toBeLessThanOrEqual(chevronRect.top);
+    });
+
+    it("lets the click reach document so other popups can close themselves", () => {
+      // Every other popup in the app (bookmarks menu, slideshow mode menu)
+      // closes from its own listener on document. A stopPropagation() here
+      // would strand them open behind the flyout.
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      const onDocClick = jest.fn();
+      document.addEventListener("click", onDocClick);
+      chevron().click();
+      document.removeEventListener("click", onDocClick);
+      expect(onDocClick).toHaveBeenCalled();
     });
 
     it("opens the flyout on long-press rather than the browser's own menu", () => {

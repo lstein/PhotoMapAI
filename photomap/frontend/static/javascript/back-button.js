@@ -83,7 +83,14 @@ function clampFlyoutPosition(flyout) {
   if (left + rect.width > window.innerWidth - margin) {
     left = Math.max(margin, window.innerWidth - rect.width - margin);
   }
-  if (top + rect.height > bottom - margin) {
+  if (flyout._avoidRect) {
+    // Opened from a control rather than a pointer, so the flyout has to sit
+    // fully clear above that control. The control panel is pinned to the
+    // bottom of the window, so the plain clamp below would always cover the
+    // chevron — and the click meant to toggle the flyout shut would hit a
+    // thumbnail, navigating the user somewhere they never asked to go.
+    top = Math.max(margin, flyout._avoidRect.top - rect.height - margin);
+  } else if (top + rect.height > bottom - margin) {
     top = Math.max(margin, bottom - rect.height - margin);
   }
   flyout.style.left = `${left}px`;
@@ -106,7 +113,9 @@ function refreshFlyout() {
   clampFlyoutPosition(flyout);
 }
 
-function buildFlyout(x, y) {
+// `avoidRect` is the rect of a control the flyout must not cover (see
+// clampFlyoutPosition).
+function buildFlyout(x, y, avoidRect = null) {
   removeFlyout();
 
   const entries = backStack.recent(FLYOUT_LIMIT);
@@ -118,6 +127,7 @@ function buildFlyout(x, y) {
   flyout.id = FLYOUT_ID;
   flyout._anchorX = x;
   flyout._anchorY = y;
+  flyout._avoidRect = avoidRect;
   populateFlyout(flyout);
 
   document.body.appendChild(flyout);
@@ -188,7 +198,9 @@ export function initializeBackButton() {
       // contextmenu is routed here too: a long-press on the chevron would
       // otherwise raise the browser's own menu instead of ours.
       e.preventDefault();
-      e.stopPropagation();
+      // Deliberately NOT stopPropagation: every other popup in the app closes
+      // from a listener on document, so swallowing this click here would
+      // strand the bookmarks menu or the slideshow mode menu open behind it.
       if (document.getElementById(FLYOUT_ID)) {
         removeFlyout();
         return;
@@ -198,9 +210,9 @@ export function initializeBackButton() {
       }
       // Anchor to the chevron, not the pointer, so a keyboard or touch
       // activation (which carries no useful coordinates) lands in the same
-      // place as a mouse click. clampFlyoutPosition() lifts it into view.
+      // place as a mouse click, and so the flyout can be kept clear of it.
       const rect = menuBtn.getBoundingClientRect();
-      buildFlyout(rect.left, rect.top);
+      buildFlyout(rect.left, rect.top, rect);
     };
     menuBtn.addEventListener("click", toggleFlyout);
     menuBtn.addEventListener("contextmenu", toggleFlyout);

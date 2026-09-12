@@ -338,6 +338,58 @@ describe("slideshow.js", () => {
       expect(menu()).toBeNull();
     });
 
+    it("places the menu clear of the chevron that opened it", () => {
+      // The control panel is pinned to the bottom of the window, so a menu
+      // merely flipped up off the bottom edge lands on top of the chevron —
+      // and the click meant to close it hits a mode button, silently changing
+      // and persisting the mode. jsdom has no layout, so supply the geometry.
+      const MENU_HEIGHT = 88;
+      const chevronRect = { top: 727, bottom: 767, left: 300, right: 324, width: 24, height: 40 };
+      jest.spyOn(chevron(), "getBoundingClientRect").mockReturnValue(chevronRect);
+      const heightSpy = jest.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(MENU_HEIGHT);
+      window.innerHeight = 800;
+
+      chevron().click();
+      const top = parseFloat(menu().style.top);
+      heightSpy.mockRestore();
+
+      expect(top + MENU_HEIGHT).toBeLessThanOrEqual(chevronRect.top);
+    });
+
+    it("does not change the mode when the chevron is clicked twice", () => {
+      // The end-to-end shape of the bug above: open, then click the chevron
+      // again to close. If the menu covers the chevron the second click lands
+      // on "Sequential" and flips the user's shuffle setting.
+      const MENU_HEIGHT = 88;
+      const chevronRect = { top: 727, bottom: 767, left: 300, right: 324, width: 24, height: 40 };
+      jest.spyOn(chevron(), "getBoundingClientRect").mockReturnValue(chevronRect);
+      const heightSpy = jest.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(MENU_HEIGHT);
+      window.innerHeight = 800;
+      state.mode = "random";
+
+      chevron().click();
+      const menuTop = parseFloat(menu().style.top);
+      const menuBottom = menuTop + MENU_HEIGHT;
+      chevron().click();
+      heightSpy.mockRestore();
+
+      expect(menu()).toBeNull();
+      expect(state.mode).toBe("random");
+      // The chevron must not have been under the menu at all.
+      expect(menuBottom).toBeLessThanOrEqual(chevronRect.top);
+    });
+
+    it("lets the click reach document so other popups can close themselves", () => {
+      // Every other popup in the app (bookmarks menu, back flyout) closes from
+      // its own listener on document. A stopPropagation() here would strand
+      // them open behind this menu.
+      const onDocClick = jest.fn();
+      document.addEventListener("click", onDocClick);
+      chevron().click();
+      document.removeEventListener("click", onDocClick);
+      expect(onDocClick).toHaveBeenCalled();
+    });
+
     it("opens the menu on long-press rather than the browser's own menu", () => {
       const ev = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
       chevron().dispatchEvent(ev);

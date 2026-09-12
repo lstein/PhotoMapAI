@@ -92,6 +92,13 @@
   opacity: 0.9;
 }
 
+/* Same specificity as #controlPanel button:hover (1,1,1) but later in the
+   file, so the rule above would otherwise win and the chevron would never
+   brighten on hover. */
+#controlPanel button.menu-chevron:hover {
+  opacity: 1;
+}
+
 #controlPanel button.menu-chevron svg {
   width: 22px;
   height: 22px;
@@ -256,5 +263,31 @@
   #controlPanel button.menu-chevron {
     height: 48px;
     min-height: 48px;
+  }
+}
+
+/* The Search panel carries six icons since Clear became always-visible and
+   About moved across. At the phone layout's 48px that needs 328px of row,
+   which a 320px viewport cannot give — and html/body are overflow:hidden, so
+   the excess is clipped off both ends rather than scrolled. Step the buttons
+   back down on the narrowest screens: 6x40 + 5x4 = 260px fits with room over. */
+@media (max-width: 380px) {
+  #controlPanel button,
+  #searchPanel button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 1.8em;
+  }
+
+  #controlPanel button.menu-chevron {
+    height: 40px;
+    min-height: 40px;
+  }
+
+  .control-icons-row,
+  .search-icons-row {
+    gap: 0.25em;
   }
 }
