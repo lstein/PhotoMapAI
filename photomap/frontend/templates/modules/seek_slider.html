@@ -1,5 +1,40 @@
-<!-- Score display - always visible in swiper view, independent of slider -->
+<!-- Album badge - always visible in swiper and grid view, independent of the slider.
+     Line 1 mirrors the semantic-map titlebar: reindex button (swapped for a
+     progress ring while an index update runs) and the album pulldown.
+     Line 2 is the slide position / search score written by score-display.js. -->
 <div id="fixedScoreDisplay" class="fixed-score-display" tabindex="0">
+  <div id="albumBadgeRow" class="album-badge-row">
+    <button id="albumReindexBtn" class="icon-btn" title="Update this album's index" aria-label="Update this album's index">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <polyline points="23 4 23 10 17 10" />
+        <polyline points="1 20 1 14 7 14" />
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" />
+        <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14" />
+      </svg>
+    </button>
+    <span id="albumReindexProgress" class="umap-reindex-progress" style="display: none" role="progressbar">
+      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+        <circle class="umap-reindex-track" cx="10" cy="10" r="8" />
+        <circle id="albumReindexRing" class="umap-reindex-ring" cx="10" cy="10" r="8" />
+      </svg>
+    </span>
+    {% if not album_locked or multiple_locked_albums %}
+    <select id="albumBadgeSelect" class="album-select" title="Switch album" aria-label="Switch album"></select>
+    <span class="album-select-caret" aria-hidden="true">&#9662;</span>
+    {% else %}
+    <span id="albumBadgeName" class="album-select-static"></span>
+    {% endif %}
+  </div>
   <span id="scoreText">score=0.000</span>
 </div>
 

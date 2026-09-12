@@ -207,3 +207,94 @@ describe("albumIndexStarted from another control (e.g. Album Manager)", () => {
     await waitForButtonRestore();
   });
 });
+
+describe("album badge button (second target)", () => {
+  function buildDomWithBadge() {
+    document.body.innerHTML = `
+      <button id="umapReindexBtn">🔄</button>
+      <span id="umapReindexProgress" style="display: none">
+        <svg><circle id="umapReindexRing" /></svg>
+      </span>
+      <div id="fixedScoreDisplay">
+        <button id="albumReindexBtn">🔄</button>
+        <span id="albumReindexProgress" style="display: none">
+          <svg><circle id="albumReindexRing" /></svg>
+        </span>
+      </div>`;
+  }
+
+  test("clicking the badge button starts a run and both buttons swap to rings together", async () => {
+    buildDomWithBadge();
+    initUmapReindexButton();
+    // Hold the run at "indexing" until the test releases it, so the
+    // assertions below aren't racing the poller.
+    let status = { status: "idle" };
+    fetchJson.mockImplementation(() => Promise.resolve(status));
+    updateIndex.mockImplementation(() => {
+      status = { status: "indexing", progress_percentage: 40, current_step: "Indexing" };
+      return Promise.resolve({ success: true });
+    });
+    const docClicks = jest.fn();
+    document.addEventListener("click", docClicks);
+    const badgeBtn = document.getElementById("albumReindexBtn");
+    badgeBtn.focus();
+
+    badgeBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flush();
+    document.removeEventListener("click", docClicks);
+
+    expect(updateIndex).toHaveBeenCalledWith("alb");
+    // The click bubbles (menus close on document clicks) and the button
+    // gives up focus so Enter can't start another run later.
+    expect(docClicks).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).not.toBe(badgeBtn);
+    for (const prefix of ["umap", "album"]) {
+      expect(document.getElementById(`${prefix}ReindexBtn`).style.display).toBe("none");
+      expect(document.getElementById(`${prefix}ReindexProgress`).style.display).toBe("inline-flex");
+    }
+    expect(document.getElementById("albumReindexProgress").title).toBe("Indexing (40%)");
+    expect(document.getElementById("albumReindexRing").style.stroke).toBe("#ff9800");
+
+    status = { status: "completed" };
+    await waitForButtonRestore();
+    for (const prefix of ["umap", "album"]) {
+      expect(document.getElementById(`${prefix}ReindexBtn`).style.display).toBe("");
+      expect(document.getElementById(`${prefix}ReindexProgress`).style.display).toBe("none");
+    }
+  });
+
+  test("an error lands its message on both buttons", async () => {
+    buildDomWithBadge();
+    fetchJson.mockResolvedValueOnce({ status: "idle" });
+    fetchJson.mockResolvedValue({ status: "error", error_message: "boom" });
+    updateIndex.mockResolvedValue({ success: true });
+
+    await startUmapReindex();
+    await waitForButtonRestore();
+
+    expect(document.getElementById("umapReindexBtn").title).toContain("boom");
+    expect(document.getElementById("albumReindexBtn").title).toContain("boom");
+  });
+
+  test("works with only the badge present", async () => {
+    document.body.innerHTML = `
+      <button id="albumReindexBtn">🔄</button>
+      <span id="albumReindexProgress" style="display: none">
+        <svg><circle id="albumReindexRing" /></svg>
+      </span>`;
+    fetchJson.mockResolvedValueOnce({ status: "scanning", current_step: "Traversing" });
+    fetchJson.mockResolvedValue({ status: "completed" });
+
+    await startUmapReindex();
+    expect(document.getElementById("albumReindexProgress").style.display).toBe("inline-flex");
+    expect(document.getElementById("albumReindexProgress").classList.contains("indeterminate")).toBe(true);
+
+    for (let i = 0; i < 40; i++) {
+      await flush();
+      if (document.getElementById("albumReindexBtn").style.display === "") {
+        break;
+      }
+    }
+    expect(document.getElementById("albumReindexBtn").style.display).toBe("");
+  });
+});

@@ -1,0 +1,60 @@
+/* ===== ALBUM PULLDOWN ===== */
+/* Shared by the semantic-map titlebar (#semanticMapAlbumSelect) and the album
+   badge at the top left of the swiper/grid view (#albumBadgeSelect). Both are
+   transparent native <select>s that read as a title; the options list is the
+   browser's own popup. Colour is inherited so the badge select follows the
+   cluster colour that score-display.js paints on the badge. */
+
+.album-select {
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+  font-weight: bold;
+  font-size: 1em;
+  font-family: inherit;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 22px 2px 6px;
+  margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.album-select:hover,
+.album-select:focus {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  outline: none;
+}
+
+.album-select option {
+  background: #1e1e28;
+  color: #fff;
+  font-weight: normal;
+}
+
+/* Drop-down caret drawn as text (not a background image) so it inherits the
+   current text colour and stays visible on light cluster backgrounds. It sits
+   inside the select's 22px right padding and lets clicks fall through. */
+.album-select-caret {
+  margin-left: -18px;
+  pointer-events: none;
+  font-size: 0.8em;
+  line-height: 1;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Single locked album: the name is shown as plain text instead of a select. */
+.album-select-static {
+  font-weight: bold;
+  font-size: 1em;
+  padding: 2px 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

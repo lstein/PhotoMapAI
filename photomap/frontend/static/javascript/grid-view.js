@@ -50,7 +50,10 @@ class GridViewManager {
   calculateGridGeometry() {
     const gridContainer = document.querySelector(".swiper.grid-mode");
     const availableWidth = gridContainer.offsetWidth - 24;
-    const availableHeight = window.innerHeight - 120;
+    // The grid is pushed down (grid-view.css) to clear the album badge; take
+    // that off the height so the bottom row still clears the panels.
+    const topReserve = parseFloat(getComputedStyle(gridContainer).marginTop) || 0;
+    const availableHeight = window.innerHeight - 120 - topReserve;
 
     const factor = state.gridThumbSizeFactor || 1.0;
     const targetTileSize = 200 * factor;

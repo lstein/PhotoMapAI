@@ -110,6 +110,16 @@ Going from left to right:
 - The *Magnifier* button opens up a search dialogue that lets you search by image similarity and/or a text description of image content.
 - The "Clear search* button clears any search that is currently active and returns to album browsing mode.
 
+The badge at the top left corner of the window shows the name of the
+current album above the position of the current image (or its search
+score). The album name is a pulldown menu: use it to switch to another
+album without opening the settings dialogue. The circling-arrows icon to
+its left updates the album's index, exactly like the **Update Index**
+button in the [Album Manager](albums.md); while the update runs the icon
+becomes a progress ring. Clicking the position text below the album name
+shows the seek slider, which you can also reach by hovering over the
+yellow strip along the top edge.
+
 Finally, the yellow tab with the black arrow on the left margin of the
 window opens the "metadata drawer", where you can see the image's EXIF
 date, including the date the photo was taken, GPS information (if

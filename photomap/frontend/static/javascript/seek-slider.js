@@ -61,7 +61,10 @@ class SeekSlider {
   }
 
   /**
-   * Update the left position of slider and yellow strip based on score display's right edge
+   * Update the left position of slider and yellow strip based on the album
+   * badge's right edge. The context label and the first tick label hang to
+   * the left of the slider itself, so after a first placement the row is
+   * shifted right by however far they still reach into the badge.
    */
   updateSliderPosition() {
     if (!this.scoreDisplayElement || !this.scoreSliderRow || !this.hoverStrip) {
@@ -69,10 +72,31 @@ class SeekSlider {
     }
 
     const rect = this.scoreDisplayElement.getBoundingClientRect();
-    const leftPosition = rect.right + 8; // 8px gap after score display
+    const basePosition = rect.right + 8; // 8px gap after the badge
 
-    this.scoreSliderRow.style.left = `${leftPosition}px`;
-    this.hoverStrip.style.left = `${leftPosition}px`;
+    this.scoreSliderRow.style.left = `${basePosition}px`;
+    this.hoverStrip.style.left = `${basePosition}px`;
+
+    const overhang = this.sliderLeftOverhang(basePosition);
+    if (overhang > 0) {
+      this.scoreSliderRow.style.left = `${basePosition + overhang}px`;
+    }
+  }
+
+  /**
+   * How far the slider row's left-hanging decorations (context label, first
+   * tick label) currently reach to the left of `edge`, in px; 0 if they clear it.
+   */
+  sliderLeftOverhang(edge) {
+    const decorations = [this.contextLabel, this.ticksContainer?.querySelector(".slider-tick-label")];
+    let leftmost = Infinity;
+    for (const el of decorations) {
+      if (!el || !el.textContent || getComputedStyle(el).display === "none") {
+        continue;
+      }
+      leftmost = Math.min(leftmost, el.getBoundingClientRect().left);
+    }
+    return leftmost < edge ? edge - leftmost : 0;
   }
 
   /**
@@ -127,7 +151,8 @@ class SeekSlider {
       // Only toggle slider on click, not on hover
       this.scoreDisplayElement.addEventListener("click", (e) => {
         // Don't toggle slider if clicking on the star icon (for bookmark toggle)
-        if (e.target.closest(".score-star")) {
+        // or anywhere in the album row (pulldown, reindex button, progress ring).
+        if (e.target.closest(".score-star") || e.target.closest(".album-badge-row")) {
           return;
         }
         this.toggleSlider();
@@ -438,6 +463,7 @@ class SeekSlider {
     if (!this.sliderVisible || !this.sliderContainer.classList.contains("visible")) {
       this.ticksContainer.innerHTML = "";
       this.contextLabel.textContent = "";
+      this.updateSliderPosition();
       return;
     }
 
@@ -450,6 +476,7 @@ class SeekSlider {
     if (max <= min) {
       this.ticksContainer.innerHTML = "";
       this.contextLabel.textContent = "";
+      this.updateSliderPosition();
       return;
     }
 
@@ -511,6 +538,9 @@ class SeekSlider {
 
       this.ticksContainer.appendChild(tick);
     });
+    // The label and first tick label hang left of the slider; keep them
+    // clear of the album badge now that their widths are known.
+    this.updateSliderPosition();
   }
 
   async toggleSlider() {

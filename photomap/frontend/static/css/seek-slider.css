@@ -6,14 +6,19 @@
   --slider-remaining-color: #ffffff;
 }
 
-/* Score display - fixed position, visible in swiper view only (except fullscreen) */
+/* Album badge - fixed position, visible in swiper and grid view (except
+   fullscreen). Two rows: the album row (reindex button + album pulldown,
+   mirroring the semantic-map titlebar) above the slide position / score text.
+   The seek slider measures this element's right edge and lays itself out to
+   the right of it (seek-slider.js updateSliderPosition), so the badge may grow
+   taller freely but must keep its max-width. */
 .fixed-score-display {
   position: fixed;
   top: 12px;
   left: 12px;
   max-width: 260px;
   font-size: 1.05em;
-  padding: 2px 18px;
+  padding: 4px 14px 4px 8px;
   border-radius: 12px;
   background: rgba(30, 30, 30, 0.85);
   color: #fff;
@@ -22,9 +27,10 @@
   user-select: none;
   min-height: 24px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 2px;
   white-space: nowrap;
   /* Clip long labels (e.g. "Cluster 234 · indoor general store") rather than
      letting them spill past the 260px max-width. The inner #scoreText handles
@@ -37,10 +43,48 @@
   opacity: 0.7;
 }
 
+/* The badge idles translucent; make it fully legible while the user is
+   interacting with the album pulldown or reindex button. */
+.fixed-score-display:hover,
+.fixed-score-display:focus-within {
+  opacity: 1;
+}
+
+/* Row 1: reindex button / progress ring + album pulldown. */
+.album-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The progress ring that replaces the button while indexing gets the same
+   footprint, so the badge width (which the seek slider is anchored to) does
+   not change when the swap happens. */
+.album-badge-row .umap-reindex-progress svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* <button> does not inherit color, and the reindex icon is stroked with
+   currentColor so it follows the cluster colour like the rest of the badge. */
+.album-badge-row .icon-btn {
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
 /* Allow the text span to shrink below its content size inside the flex
-   container, and ellipsize whatever doesn't fit. */
+   container, and ellipsize whatever doesn't fit. Indented so the position
+   text sits under the album name rather than under the reindex icon. */
 .fixed-score-display #scoreText {
   min-width: 0;
+  max-width: 100%;
+  padding-left: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -66,6 +110,12 @@
 .fixed-score-display.hidden {
   display: none;
   opacity: 0;
+}
+
+/* The .visible/.hidden classes set display:flex/none; keep the column layout
+   when score-display.js flips the badge visible. */
+.fixed-score-display.visible {
+  flex-direction: column;
 }
 
 /* Hide score display in fullscreen mode */
@@ -121,7 +171,9 @@
   .fixed-score-display {
     left: 8px;
     top: 8px;
-    max-width: 180px;
+    /* Narrow enough that the badge, the first tick label's overhang and the
+       slider's 140px minimum all fit across a 375px phone. */
+    max-width: 150px;
   }
   .slider-hover-strip {
     right: 8px;
@@ -242,7 +294,7 @@
   opacity: 0.9;
   /* width: 80px; */
   margin-top: 5px; /* Align with tick labels */
-  margin-right: 32px;
+  margin-right: 32px; /* Clears the first tick label, which is centred on the slider's left end */
   z-index: 3;
   background: rgba(20, 20, 20, 0.85);
   color: #fff;
@@ -253,6 +305,14 @@
   margin-bottom: 8px;
   display: inline-block;
   letter-spacing: 0.03em;
+}
+
+/* No room for the axis caption beside the badge on a phone. (After the base
+   rule above so it wins the cascade at equal specificity.) */
+@media (max-width: 480px) {
+  .context-label {
+    display: none;
+  }
 }
 
 .slider-ticks {
