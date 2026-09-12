@@ -1,7 +1,9 @@
 // umap-reindex.js
-// The 🔄 button in the semantic-map titlebar: a shortcut for "Update Index"
-// on the current album without opening Album Management. While an index
-// update runs, the button is swapped for a small progress ring whose fill
+// The 🔄 button in the semantic-map titlebar, and its twin in the album badge
+// at the top left of the swiper/grid view: a shortcut for "Update Index" on
+// the current album without opening Album Management. One poller drives
+// every button/ring pair listed in TARGETS, so both show the same state.
+// While an index update runs, the button is swapped for a small progress ring whose fill
 // tracks progress_percentage, whose colour tracks the phase (matching the
 // Album Manager's status colours), and whose hover title carries the live
 // status text. Clicking the ring does nothing — cancellation stays in the
@@ -36,59 +38,77 @@ const RING_CIRCUMFERENCE = 50.27; // 2πr for the r=8 ring in the template
 
 let pollTimer = null;
 
+// Button / ring-container / ring-arc element ids, one triple per place the
+// control appears. Missing elements (e.g. a test DOM with only the titlebar
+// ids, or the badge in a page variant without it) are skipped.
+const TARGETS = [
+  { btn: "umapReindexBtn", progress: "umapReindexProgress", ring: "umapReindexRing" },
+  { btn: "albumReindexBtn", progress: "albumReindexProgress", ring: "albumReindexRing" },
+];
+
 function elements() {
+  const byId = (id) => document.getElementById(id);
   return {
-    btn: document.getElementById("umapReindexBtn"),
-    progress: document.getElementById("umapReindexProgress"),
-    ring: document.getElementById("umapReindexRing"),
+    btns: TARGETS.map((t) => byId(t.btn)).filter(Boolean),
+    progresses: TARGETS.map((t) => byId(t.progress)).filter(Boolean),
+    // Ring arcs paired with their container so a partial DOM can't mismatch them.
+    rings: TARGETS.map((t) => ({ progress: byId(t.progress), ring: byId(t.ring) })).filter(
+      (pair) => pair.progress && pair.ring
+    ),
   };
 }
 
 function showRing() {
-  const { btn, progress } = elements();
-  if (btn) {
+  const { btns, progresses } = elements();
+  for (const btn of btns) {
     btn.style.display = "none";
   }
-  if (progress) {
+  for (const progress of progresses) {
     progress.style.display = "inline-flex";
   }
 }
 
 function showButton() {
-  const { btn, progress } = elements();
-  if (btn) {
+  const { btns, progresses } = elements();
+  for (const btn of btns) {
     btn.style.display = "";
   }
-  if (progress) {
+  for (const progress of progresses) {
     progress.style.display = "none";
   }
 }
 
 function updateRing(progressData) {
-  const { progress, ring } = elements();
-  if (!progress || !ring) {
+  const { rings } = elements();
+  if (rings.length === 0) {
     return;
   }
 
   const status = progressData.status;
-  ring.style.stroke = PHASE_COLORS[status] || "#ff9800";
+  const stroke = PHASE_COLORS[status] || "#ff9800";
 
   // The traversal phase reports counts, not a completion fraction — show a
   // spinning quarter arc there and a real fill everywhere else.
   const indeterminate = status === "scanning";
-  progress.classList.toggle("indeterminate", indeterminate);
   let percentage = Number(progressData.progress_percentage);
   if (!Number.isFinite(percentage)) {
     percentage = 0;
   }
   percentage = Math.min(100, Math.max(0, percentage));
   const fraction = indeterminate ? 0.25 : percentage / 100;
-  ring.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - fraction));
+  const dashoffset = String(RING_CIRCUMFERENCE * (1 - fraction));
 
   // Native title tooltip: shows the live status text on hover.
   const step = progressData.current_step || "Indexing in progress...";
   const suffix = indeterminate ? "" : ` (${Math.round(percentage)}%)`;
-  progress.title = `${step}${suffix}`;
+  const title = `${step}${suffix}`;
+
+  for (const { progress, ring } of rings) {
+    ring.style.stroke = stroke;
+    progress.classList.toggle("indeterminate", indeterminate);
+    ring.style.strokeDashoffset = dashoffset;
+    progress.title = title;
+  }
 }
 
 function stopPolling() {
@@ -124,8 +144,7 @@ function beginProgress(albumKey, initialProgress = null) {
         window.dispatchEvent(new CustomEvent("albumIndexUpdated", { detail: { albumKey } }));
         await refreshAlbumImageData(albumKey);
       } else if (progress.status === "error") {
-        const { btn } = elements();
-        if (btn) {
+        for (const btn of elements().btns) {
           btn.title = `Index update failed: ${progress.error_message || "unknown error"} — click to retry`;
         }
       }
@@ -214,26 +233,32 @@ export async function checkUmapReindexOngoing() {
   }
 }
 
+// Wires every button/ring pair in TARGETS (the titlebar one and the album
+// badge one). Name kept from when only the titlebar had the button.
 export function initUmapReindexButton() {
-  const { btn, progress } = elements();
-  if (!btn) {
+  const { btns, progresses } = elements();
+  if (btns.length === 0) {
     return;
   }
-  // The titlebar is draggable; keep pointer events on the button (and the
-  // ring) from starting a drag, the same way the album select does.
-  for (const el of [btn, progress]) {
-    if (!el) {
-      continue;
-    }
+  // The titlebar is draggable; keep pointer-down and double-click on the
+  // buttons (and rings) from reaching it, the same way the album select
+  // does. The badge's click handler ignores its album row on its own.
+  for (const el of [...btns, ...progresses]) {
     for (const evt of ["mousedown", "touchstart", "dblclick"]) {
       el.addEventListener(evt, (e) => e.stopPropagation());
     }
   }
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    btn.title = "Update this album's index";
-    startUmapReindex();
-  });
+  for (const btn of btns) {
+    btn.addEventListener("click", () => {
+      for (const b of elements().btns) {
+        b.title = "Update this album's index";
+      }
+      // Let the click bubble (document-level handlers close open menus on
+      // it) but drop focus so a later Enter/Space doesn't start another run.
+      btn.blur();
+      startUmapReindex();
+    });
+  }
 
   window.addEventListener("albumChanged", (e) => {
     // "refresh" is dispatched by this module when a run completes — the

@@ -1,3 +1,19 @@
+/* Keep the first row of tiles (and their bookmark stars) clear of the fixed
+   album badge at the top left: push the grid down and shorten it by the same
+   amount so Swiper's rows still divide the visible height. grid-view.js reads
+   the margin back when it works out how many rows fit. */
+#gridViewSwiper {
+  --grid-top-reserve: 80px;
+  margin-top: var(--grid-top-reserve);
+  height: calc(var(--visible-viewport-height, 100dvh) - var(--grid-top-reserve));
+}
+
+/* The badge is hidden in fullscreen (seek-slider.css), so give the row back. */
+:fullscreen #gridViewSwiper,
+:-webkit-full-screen #gridViewSwiper {
+  --grid-top-reserve: 0px;
+}
+
 #swiperGridView {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(256px, 1fr));

@@ -136,7 +136,12 @@ function handleKeydown(e) {
 }
 
 function shouldIgnoreKeyEvent(e) {
-  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) {
+  if (
+    e.target.tagName === "INPUT" ||
+    e.target.tagName === "TEXTAREA" ||
+    e.target.tagName === "SELECT" ||
+    e.target.isContentEditable
+  ) {
     return true;
   }
   // While the video player is open the native <video> controls own the

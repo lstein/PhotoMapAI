@@ -7,6 +7,7 @@
 // listeners fire in registration order; there is no capture-phase shortcut.
 import { backStack } from "./javascript/back-stack.js";
 import "./javascript/album-manager.js";
+import "./javascript/album-select.js";
 import "./javascript/bookmarks.js";
 import "./javascript/cluster-utils.js";
 import "./javascript/events.js";

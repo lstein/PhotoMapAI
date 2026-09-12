@@ -60,6 +60,9 @@ export function cacheElements() {
 export async function loadAvailableAlbums() {
   try {
     const albums = await fetchJson("available_albums/");
+    // The album pulldowns in the semantic-map titlebar and the album badge
+    // (album-select.js) rebuild from this same list.
+    window.dispatchEvent(new CustomEvent("albumListChanged", { detail: { albums } }));
     if (!elements.albumSelect) {
       return;
     } // If album selection is locked, skip
