@@ -44,6 +44,7 @@ const {
   showPlayPauseIndicator,
   removeExistingIndicator,
   toggleSlideshowWithIndicator,
+  initializeSlideshowControls,
 } = await import("../../photomap/frontend/static/javascript/slideshow.js");
 
 const { state } = await import("../../photomap/frontend/static/javascript/state.js");
@@ -303,6 +304,74 @@ describe("slideshow.js", () => {
     it("should do nothing if no indicator exists", () => {
       document.body.innerHTML = "";
       expect(() => removeExistingIndicator()).not.toThrow();
+    });
+  });
+
+  describe("the mode-menu chevron", () => {
+    const chevron = () => document.getElementById("slideshowModeMenuBtn");
+    const menu = () => document.getElementById("slideshowModeMenu");
+
+    beforeEach(() => {
+      // Mirrors control-panel.html: the chevron is a sibling of the play
+      // button, inside the shared .icon-with-chevron wrapper.
+      document.body.innerHTML = `
+        <div class="icon-with-chevron">
+          <button id="startStopSlideshowBtn" title=""><span id="slideshowIcon"></span></button>
+          <button id="slideshowModeMenuBtn" class="menu-chevron" title="Slideshow mode"></button>
+        </div>
+      `;
+      state.single_swiper = { swiper: { autoplay: { running: false } } };
+      state.mode = "chronological";
+      initializeSlideshowControls();
+    });
+
+    it("opens the mode menu on a plain left-click", () => {
+      chevron().click();
+      expect(menu()).not.toBeNull();
+      expect(menu().textContent).toContain("Sequential");
+      expect(menu().textContent).toContain("Shuffled");
+    });
+
+    it("closes the menu when clicked a second time", () => {
+      chevron().click();
+      chevron().click();
+      expect(menu()).toBeNull();
+    });
+
+    it("opens the menu on long-press rather than the browser's own menu", () => {
+      const ev = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+      chevron().dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(menu()).not.toBeNull();
+    });
+
+    it("leaves right-click on the play button itself working", () => {
+      const ev = new MouseEvent("contextmenu", { clientX: 50, clientY: 50, bubbles: true, cancelable: true });
+      document.getElementById("startStopSlideshowBtn").dispatchEvent(ev);
+      expect(menu()).not.toBeNull();
+    });
+
+    it("stays usable while Play is greyed out at the end of a sequential run", () => {
+      // Switching to Shuffled is the way out of that state, so the chevron
+      // must not inherit the play button's disabled treatment.
+      document.getElementById("startStopSlideshowBtn").classList.add("slideshow-disabled");
+      expect(chevron().disabled).toBe(false);
+      chevron().click();
+      expect(menu()).not.toBeNull();
+    });
+
+    it("cancels the deferred close-listeners when shut before they attach", () => {
+      // The listeners are attached on a setTimeout(0) so the opening click
+      // does not immediately close the menu. Toggling shut inside that window
+      // must cancel the timer: merely removing not-yet-added listeners would
+      // leave the timeout to attach them to a menu that no longer exists.
+      const addSpy = jest.spyOn(document, "addEventListener");
+      chevron().click();
+      chevron().click();
+      jest.runOnlyPendingTimers();
+      const attached = addSpy.mock.calls.filter(([type]) => type === "click" || type === "keydown");
+      addSpy.mockRestore();
+      expect(attached).toHaveLength(0);
     });
   });
 });

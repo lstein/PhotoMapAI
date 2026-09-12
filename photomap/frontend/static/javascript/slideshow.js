@@ -220,14 +220,20 @@ function createModeMenu(x, y) {
       removeModeMenu();
     }
   };
-  setTimeout(() => {
+  // Defer so the same click that opened the menu doesn't immediately close it.
+  const attachTimer = setTimeout(() => {
     document.addEventListener("click", onDocClick);
     document.addEventListener("keydown", onKey);
-    menu._cleanup = () => {
-      document.removeEventListener("click", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
   }, 0);
+  // Cancelling the timer is the load-bearing part: removeModeMenu() can run
+  // before it fires (the chevron toggles the menu shut on a second click), and
+  // removing listeners that have not been added yet would not stop the pending
+  // timeout from attaching them to a menu that no longer exists.
+  menu._cleanup = () => {
+    clearTimeout(attachTimer);
+    document.removeEventListener("click", onDocClick);
+    document.removeEventListener("keydown", onKey);
+  };
 }
 
 function removeModeMenu() {
@@ -261,6 +267,31 @@ export function initializeSlideshowControls() {
     e.stopPropagation();
     createModeMenu(e.clientX + 6, e.clientY + 6);
   });
+
+  // The chevron beside the button is the discoverable way in; right-click and
+  // long-press on the button itself still work and are unchanged. It stays
+  // live even while the Play button is greyed out at the end of a sequential
+  // run — switching to Shuffled is the way out of that state.
+  const menuBtn = document.getElementById("slideshowModeMenuBtn");
+  if (menuBtn) {
+    const toggleModeMenu = (e) => {
+      // contextmenu is routed here too: a long-press on the chevron would
+      // otherwise raise the browser's own menu instead of ours.
+      e.preventDefault();
+      e.stopPropagation();
+      if (document.getElementById("slideshowModeMenu")) {
+        removeModeMenu();
+        return;
+      }
+      // Anchor to the chevron, not the pointer, so a keyboard or touch
+      // activation (which carries no useful coordinates) lands in the same
+      // place as a mouse click. createModeMenu() flips it above when needed.
+      const rect = menuBtn.getBoundingClientRect();
+      createModeMenu(rect.left, rect.top);
+    };
+    menuBtn.addEventListener("click", toggleModeMenu);
+    menuBtn.addEventListener("contextmenu", toggleModeMenu);
+  }
 
   // ensure icon reflects current state on init
   updateSlideshowButtonIcon();

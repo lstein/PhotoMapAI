@@ -12,14 +12,19 @@ const FLYOUT_COLS = 4;
 const FLYOUT_LIMIT = FLYOUT_ROWS * FLYOUT_COLS;
 const DISABLED_CLASS = "back-nav-disabled";
 const FLYOUT_ID = "backNavFlyout";
+const MENU_BTN_ID = "backNavMenuBtn";
 
 function updateButtonState(btn) {
   // Back is possible only when there is something to back up to — i.e. at
   // least two entries (current + previous).
-  if (backStack.size() >= 2) {
-    btn.classList.remove(DISABLED_CLASS);
-  } else {
-    btn.classList.add(DISABLED_CLASS);
+  const enabled = backStack.size() >= 2;
+  btn.classList.toggle(DISABLED_CLASS, !enabled);
+  // The chevron opens a flyout built from the same stack, so it is dead
+  // whenever Back is. Kept in step here rather than in CSS because the flyout
+  // is emptied by albumChanged too, not only by navigation.
+  const menuBtn = document.getElementById(MENU_BTN_ID);
+  if (menuBtn) {
+    menuBtn.disabled = !enabled;
   }
 }
 
@@ -130,11 +135,16 @@ function buildFlyout(x, y) {
     }
   };
   // Defer so the same click that opened the flyout doesn't immediately close it.
-  setTimeout(() => {
+  const attachTimer = setTimeout(() => {
     document.addEventListener("click", onDocClick);
     document.addEventListener("keydown", onKey);
   }, 0);
+  // Cancelling the timer is the load-bearing part: removeFlyout() can run
+  // before it fires (the chevron toggles the flyout shut on a second click),
+  // and removing listeners that have not been added yet would not stop the
+  // pending timeout from attaching them to a flyout that no longer exists.
   flyout._cleanup = () => {
+    clearTimeout(attachTimer);
     document.removeEventListener("click", onDocClick);
     document.removeEventListener("keydown", onKey);
   };
@@ -169,6 +179,32 @@ export function initializeBackButton() {
     }
     buildFlyout(e.clientX + 6, e.clientY + 6);
   });
+
+  // The chevron is the discoverable way in; right-click and long-press on the
+  // Back button itself still work and are unchanged.
+  const menuBtn = document.getElementById(MENU_BTN_ID);
+  if (menuBtn) {
+    const toggleFlyout = (e) => {
+      // contextmenu is routed here too: a long-press on the chevron would
+      // otherwise raise the browser's own menu instead of ours.
+      e.preventDefault();
+      e.stopPropagation();
+      if (document.getElementById(FLYOUT_ID)) {
+        removeFlyout();
+        return;
+      }
+      if (backStack.size() < 2) {
+        return;
+      }
+      // Anchor to the chevron, not the pointer, so a keyboard or touch
+      // activation (which carries no useful coordinates) lands in the same
+      // place as a mouse click. clampFlyoutPosition() lifts it into view.
+      const rect = menuBtn.getBoundingClientRect();
+      buildFlyout(rect.left, rect.top);
+    };
+    menuBtn.addEventListener("click", toggleFlyout);
+    menuBtn.addEventListener("contextmenu", toggleFlyout);
+  }
 
   // The back stack emits backStackChanged on every mutation. Listening for
   // that (rather than slideChanged) keeps the button in sync even when the

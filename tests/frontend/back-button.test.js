@@ -19,8 +19,13 @@ function emitSlideChanged(globalIndex) {
 }
 
 function setupDom() {
+  // Mirrors control-panel.html: the chevron is a sibling of the Back button,
+  // inside the shared .icon-with-chevron wrapper.
   document.body.innerHTML = `
-    <button id="backNavBtn" class="back-nav-disabled" title="Back"></button>
+    <div class="icon-with-chevron">
+      <button id="backNavBtn" class="back-nav-disabled" title="Back"></button>
+      <button id="backNavMenuBtn" class="menu-chevron" title="Recent positions" disabled></button>
+    </div>
   `;
 }
 
@@ -172,6 +177,58 @@ describe("back-button.js", () => {
       expect(navigator).toHaveBeenCalledWith(expect.objectContaining({ globalIndex: 1 }));
       expect(backStack.size()).toBe(2);
       expect(document.getElementById("backNavFlyout")).toBeNull();
+    });
+  });
+
+  describe("the chevron pulldown", () => {
+    const chevron = () => document.getElementById("backNavMenuBtn");
+
+    it("starts disabled and tracks the Back button's own enabled state", () => {
+      expect(chevron().disabled).toBe(true);
+      emitSlideChanged(0);
+      expect(chevron().disabled).toBe(true);
+      emitSlideChanged(1);
+      expect(chevron().disabled).toBe(false);
+      document.getElementById("backNavBtn").click();
+      expect(chevron().disabled).toBe(true);
+    });
+
+    it("opens the flyout on a plain left-click", () => {
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      chevron().click();
+      expect(document.getElementById("backNavFlyout")).not.toBeNull();
+    });
+
+    it("closes the flyout when clicked a second time", () => {
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      chevron().click();
+      chevron().click();
+      expect(document.getElementById("backNavFlyout")).toBeNull();
+    });
+
+    it("does not open a flyout when there is nothing to go back to", () => {
+      emitSlideChanged(0);
+      chevron().click();
+      expect(document.getElementById("backNavFlyout")).toBeNull();
+    });
+
+    it("opens the flyout on long-press rather than the browser's own menu", () => {
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      const ev = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+      chevron().dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+      expect(document.getElementById("backNavFlyout")).not.toBeNull();
+    });
+
+    it("leaves right-click on the Back button itself working", () => {
+      emitSlideChanged(0);
+      emitSlideChanged(1);
+      const ev = new MouseEvent("contextmenu", { clientX: 100, clientY: 100, bubbles: true, cancelable: true });
+      document.getElementById("backNavBtn").dispatchEvent(ev);
+      expect(document.getElementById("backNavFlyout")).not.toBeNull();
     });
   });
 });

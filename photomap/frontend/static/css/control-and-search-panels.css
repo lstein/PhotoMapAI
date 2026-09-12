@@ -63,6 +63,40 @@
   cursor: default;
 }
 
+/* ===== Pulldown chevrons (Slideshow, Back) ===== */
+
+/* An icon that owns a pulldown menu pairs with a chevron to its right; the two
+   sit side by side above the one shared label, so the label centers under the
+   pair rather than under the icon. */
+.icon-with-chevron {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+/* Deliberately far narrower than the 40px panel buttons — the whole point of
+   this panel work is to reclaim horizontal room, and the chevron is an
+   affordance, not an icon in its own right. */
+#controlPanel button.menu-chevron {
+  width: 16px;
+  min-width: 16px;
+  border-radius: 4px;
+  /* Sits back a little further than the icon it belongs to, so the pair still
+     reads as one control; it lifts to full opacity on hover like the rest. */
+  opacity: 0.45;
+}
+
+#controlPanel button.menu-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+#controlPanel button.menu-chevron:disabled,
+#controlPanel button.menu-chevron:disabled:hover {
+  opacity: 0.2;
+  cursor: default;
+}
+
 #backNavFlyout {
   position: fixed;
   background: rgba(30, 30, 30, 0.95);
@@ -204,5 +238,13 @@
     min-width: 48px;
     min-height: 48px;
     font-size: 2em;
+  }
+
+  /* The rule above is less specific than #controlPanel button.menu-chevron, so
+     the chevron keeps its 16px width here; only the height needs restating to
+     stay flush with the 48px button it is attached to. */
+  #controlPanel button.menu-chevron {
+    height: 48px;
+    min-height: 48px;
   }
 }
