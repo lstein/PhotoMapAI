@@ -74,8 +74,6 @@
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
-  /* Clips the native control bar to the rounded corners. */
-  overflow: hidden;
 }
 
 /* `width`/`height: auto` with only maxima set is what makes the element size
@@ -99,6 +97,16 @@
      above. */
   max-height: calc(var(--visible-viewport-height, 100dvh) - 104px);
   background: #000;
+  /* The corners are rounded here rather than by an `overflow: hidden` on the
+     frame. Clipping the video to its parent is the one way the native control
+     bar can be taken away from the user entirely: the bar is drawn along the
+     bottom edge of the video's own box, so any moment the frame is shorter
+     than the video — the frame is a flex item with `overflow` set, whose
+     automatic minimum height is therefore zero, so the column above it can
+     squash it — the clip removes play/pause, the scrubber and fullscreen and
+     leaves a picture that cannot be stopped. Rounding the replaced element
+     itself clips its content the same way, and cannot cost anything. */
+  border-radius: 11px;
 }
 
 /* The filename, as a caption on the backdrop rather than a title bar above
@@ -115,10 +123,22 @@
      fixed allowance for this row. A long filename broken at arbitrary
      characters on a narrow screen would otherwise run to four or five lines
      and push the bottom of the picture back off the display — the exact
-     problem the visible-viewport height is here to fix. */
+     problem the visible-viewport height is here to fix.
+
+     The two lines are then *reserved*, at a line height fixed in pixels
+     rather than left to the font. The allowance above is a constant, so the
+     row it pays for has to be a constant too: 48px of padding, the 12px gap,
+     this 36px and the frame's 2px of border come to 98 of the 104 budgeted.
+     Sized in `em`, or left to whatever line height the platform's fallback
+     font brings, two lines can exceed the allowance instead — and a column
+     that overflows by even a few pixels squashes the frame, which is a flex
+     item whose automatic minimum height is zero. Reserving the row also
+     stops the picture jumping as the caption goes from one line to two. */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  line-height: 18px;
+  height: 36px;
   overflow: hidden;
 }
 
@@ -141,6 +161,9 @@
   gap: 14px;
   padding: 24px;
   box-sizing: border-box;
+  /* Matches the video's own rounding, which used to come from a clip on the
+     frame. */
+  border-radius: 11px;
   /* Heavy enough that the status text reads over an arbitrary frame — a
      bright or busy still shows straight through a lighter scrim — but not so
      heavy that the poster stops being visible. The point of overlaying rather
