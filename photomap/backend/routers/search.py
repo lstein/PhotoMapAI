@@ -357,6 +357,19 @@ def _video_placeholder_response(size: int) -> Response:
     )
 
 
+# Without an explicit lifetime a browser applies heuristic freshness (RFC 9111
+# 4.2.2) — a tenth of the file's age — so a tile whose video has not been
+# touched for months is reused for days without asking. That was harmless while
+# an unchanged video always produced the same tile, but the frame-selection
+# generation is precisely a way for the tile to change while the video does
+# not: only the grid busts its own URL, so the UMAP hover popup, the landmark
+# overlay, the back flyout and the reference strip would keep the old frame
+# well past the upgrade that replaced it. FileResponse answers no conditional
+# requests (see serve_video below), so "no-cache" would re-transfer every tile
+# of every grid page; a bounded lifetime caps the staleness instead.
+_THUMBNAIL_CACHE_HEADERS = {"Cache-Control": "private, max-age=3600"}
+
+
 @search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])
 async def serve_thumbnail(
     album_key: str,
@@ -433,7 +446,7 @@ async def serve_thumbnail(
     source_path = image_path
     if is_video(image_path):
         if _thumbnail_is_fresh(thumb_path, image_path):
-            return FileResponse(thumb_path.with_suffix(".png"))
+            return FileResponse(thumb_path.with_suffix(".png"), headers=_THUMBNAIL_CACHE_HEADERS)
         frame_path = await _ensure_frame_off_loop(album_key, image_path)
         if frame_path is None:
             # A placeholder rather than a 404. Every caller sets img.src with
@@ -479,7 +492,7 @@ async def serve_thumbnail(
             logger.error(f"Error generating thumbnail for {image_path}: {e}")
             raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}") from e
 
-    return FileResponse(thumb_path.with_suffix(".png"))
+    return FileResponse(thumb_path.with_suffix(".png"), headers=_THUMBNAIL_CACHE_HEADERS)
 
 
 @search_router.get("/video_frame/{album_key}/{index}", tags=["Search"])

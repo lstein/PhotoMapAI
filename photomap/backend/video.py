@@ -484,15 +484,37 @@ def _next_deeper_seek(
     else:
         candidates = [DEEPER_SEEK_FALLBACK_SECONDS]
 
+    # Deeper means *later* than the frame just rejected: this floor is what
+    # walks the ladder forward past a title sequence rather than back into it.
     floor = (current or 0.0) + MIN_DEEPER_SEEK_GAP_SECONDS
     for candidate in candidates:
         candidate = round(candidate, 3)
         if candidate < floor or candidate in tried:
             continue
+        if not _far_from_every_attempt(candidate, tried):
+            continue
         if not _seek_is_inside(candidate, duration):
             continue
         return candidate
     return None
+
+
+def _far_from_every_attempt(candidate: float, tried: set[float | None]) -> bool:
+    """Is ``candidate`` a meaningfully different frame from every one tried?
+
+    The floor above only holds ``candidate`` away from ``current``. That is
+    not enough once the no-seek rung has run: it decodes position 0, so it
+    sets the floor at 0 + the gap and re-arms the deeper ladder from the start
+    of the file — queueing an offset a fraction of a second from a frame
+    already decoded and rejected. On a clip shorter than FRAME_SEEK_SECONDS
+    that spent two of the four permitted ffmpeg spawns re-reading the same
+    second of video. A no-seek attempt counts as position 0 here, which is
+    where it decodes.
+    """
+    return all(
+        abs(candidate - (0.0 if seek is None else seek)) >= MIN_DEEPER_SEEK_GAP_SECONDS
+        for seek in tried
+    )
 
 
 def extract_video_frame(

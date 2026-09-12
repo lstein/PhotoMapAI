@@ -31,7 +31,9 @@ piping them to the bundled ffmpeg as image2pipe PNGs (``-c:v libx264
 
 from __future__ import annotations
 
+import io
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -160,16 +162,97 @@ def test_extract_returns_rgb_frame_and_populated_info():
 
 
 @requires_ffmpeg
-def test_extract_seeks_past_the_opening_frames():
-    """The seek must land in the blue half, not the red opening second.
+def test_extract_seeks_past_the_opening_frames(monkeypatch):
+    """A seek must actually happen rather than frame 0 being taken.
 
-    clip.mp4 is 2s, so the 5.0s seek finds nothing and the walk back reaches
-    1.0s. Frame 0 of consumer video is very often black or a fade-in, which
-    is a poor CLIP subject; this asserts a seek still happens.
+    clip.mp4 is 2s, so the 5.0s seek finds nothing and the aimed retry reaches
+    1.0s. Frame 0 of consumer video is very often black or a fade-in, which is
+    a poor CLIP subject.
+
+    Asserted on the seek offsets, not on the returned pixel. Both halves of
+    clip.mp4 are solid colours that score exactly -0.0, so which one comes
+    back is decided by ``score > best`` being strict and blue being decoded
+    first — a tie-break, not the behaviour under test. Any encoder change that
+    gave red a fractionally higher entropy would have failed a colour
+    assertion while the seeking it was meant to cover still worked.
     """
-    frame, _info = extract_video_frame(media_fixture_path("clip.mp4"))
-    r, g, b = frame.getpixel((32, 32))
-    assert b > 200 and r < 60, f"expected blue, got {(r, g, b)}"
+    attempts = _record_attempts(monkeypatch)
+    result = extract_video_frame(media_fixture_path("clip.mp4"))
+
+    assert result is not None
+    seeks = _seeks(attempts)
+    assert seeks[0] == video_module.FRAME_SEEK_SECONDS
+    assert 1.0 in seeks, f"expected a retry aimed into the file, got {seeks}"
+
+
+@requires_ffmpeg
+def test_a_short_clip_does_not_re_read_a_frame_it_already_rejected(monkeypatch):
+    """No attempt may land within the gap of an offset already decoded.
+
+    The floor in _next_deeper_seek only holds a candidate away from the
+    attempt that just ran. Once the no-seek rung had run — decoding position 0
+    and so setting the floor at 0 + the gap — the deeper ladder re-armed from
+    the start of the file and queued 0.1 x duration, which on clip.mp4 is
+    1.2s: two tenths of a second from the 1.0s frame it had already decoded
+    and rejected, inside the same solid-colour second. That spent one of the
+    four permitted spawns on a frame that could not differ.
+    """
+    attempts = _record_attempts(monkeypatch)
+    extract_video_frame(media_fixture_path("clip.mp4"))
+
+    positions = sorted(0.0 if seek is None else seek for seek in _seeks(attempts))
+    gaps = [b - a for a, b in zip(positions, positions[1:], strict=False)]
+    assert all(gap >= video_module.MIN_DEEPER_SEEK_GAP_SECONDS for gap in gaps), (
+        f"attempts {positions} contain a pair closer than "
+        f"{video_module.MIN_DEEPER_SEEK_GAP_SECONDS}s: gaps {gaps}"
+    )
+
+
+def test_the_deeper_ladder_stops_at_max_deeper_attempts(monkeypatch):
+    """The cap is only observable on a file long enough to have a 4th rung.
+
+    Every fixture is at most 12s, where the capped and uncapped ladders
+    coincide, so no other test notices this constant changing. At 600s the
+    third deeper fraction (0.6 -> 360s) is a real candidate, and the cap is
+    what makes the 4th attempt the walk-back to 1.0s instead.
+
+    Fully synthetic: a real decode cannot be used because no fixture is long
+    enough to seek 210s into, and rewriting only the banner of a short file
+    makes the deep rungs return nothing, which sends the ladder down the
+    short-clip path instead of the one under test.
+    """
+    seeks: list[float | None] = []
+
+    def long_and_dark(args, timeout):
+        seeks.append(float(args[args.index("-ss") + 1]) if "-ss" in args else None)
+        return subprocess.CompletedProcess(
+            args, returncode=0, stdout=_DARK_PNG, stderr=_TEN_MINUTE_BANNER
+        )
+
+    monkeypatch.setattr(video_module, "_run_ffmpeg", long_and_dark)
+    result = extract_video_frame(media_fixture_path("dark.mp4"))
+
+    assert result is not None, "a dark film still has to yield a poster"
+    assert seeks == [5.0, 60.0, 210.0, 1.0], f"unexpected ladder {seeks}"
+
+
+def _dark_png() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (320, 180), (0, 0, 0)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+_DARK_PNG = _dark_png()
+
+# Shaped after a real ffmpeg banner (see _banner_duration and
+# _has_decodable_video_stream): the duration line is what the ladder computes
+# its fractions from, and the Stream line is what proves this is real video
+# rather than an audio file's cover art.
+_TEN_MINUTE_BANNER = (
+    b"  Duration: 00:10:00.00, start: 0.000000, bitrate: 3 kb/s\n"
+    b"  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), "
+    b"yuv420p(progressive), 320x180, 2 kb/s, 10 fps, 10 tbr, 10240 tbn (default)\n"
+)
 
 
 @requires_ffmpeg
