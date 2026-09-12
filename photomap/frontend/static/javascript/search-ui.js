@@ -480,13 +480,12 @@ export function updateSearchCheckmarks(searchType = null) {
   }
   if (element_to_highlight) {
     setCheckmarkOnIcon(element_to_highlight, true);
-    if (clearSearchBtn) {
-      clearSearchBtn.style.display = "block";
-    }
-  } else {
-    if (clearSearchBtn) {
-      clearSearchBtn.style.display = "none";
-    }
+  }
+  // Clear stays visible whether or not a search is active — it is greyed out
+  // and unclickable when there is nothing to clear, so that starting a search
+  // does not change the panel's width.
+  if (clearSearchBtn) {
+    clearSearchBtn.disabled = !element_to_highlight;
   }
 }
 

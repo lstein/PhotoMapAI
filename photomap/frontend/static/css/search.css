@@ -203,12 +203,18 @@
   gap: 2px;
 }
 
-.clear-search-container:has(#clearSearchBtn[style*="display: none"]) {
-  display: none;
+/* Clear is always in the panel so its width does not jump when a search
+   starts or ends; it greys out rather than disappearing when there is
+   nothing to clear. updateSearchCheckmarks() owns the disabled attribute.
+   Both rules outrank the #searchPanel button / :hover opacities. */
+#clearSearchBtn:disabled,
+#clearSearchBtn:disabled:hover {
+  opacity: 0.25;
+  cursor: default;
 }
 
-#clearSearchBtn[style*="display: none"] + .button-label {
-  display: none;
+#clearSearchBtn:disabled + .button-label {
+  opacity: 0.25;
 }
 
 .search-bottom-row {
