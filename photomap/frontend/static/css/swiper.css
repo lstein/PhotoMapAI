@@ -146,40 +146,6 @@
   transform: translate(-50%, -50%) scale(1);
 }
 
-/* ===== SWIPER PAGINATION ===== */
-.swiper-pagination-bullet {
-  width: 8px;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid #fff;
-  box-shadow: 0 0 4px 2px rgba(0, 0, 0, 0.4);
-  opacity: 1;
-  margin: 0 6px;
-  transition: background 0.2s, border-color 0.2s;
-}
-
-.swiper-pagination-bullet-active {
-  background: rgba(250, 73, 19, 0.75);
-  border-color: #fff;
-  box-shadow: 0 0 8px 3px #fa4913cc, 0 0 4px 2px rgba(0, 0, 0, 0.4);
-}
-
-.swiper-pagination {
-  position: relative;
-  padding: 6px 18px;
-  border-radius: 16px;
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.18);
-  bottom: 25px !important;
-}
-
-/* ===== RESPONSIVE DESIGN ===== */
-@media (max-width: 480px) {
-  .swiper-pagination {
-    display: none !important;
-  }
-}
-
 /* Grid view current slide highlight - only applies in grid mode */
 .swiper.grid-mode .swiper-slide.current-slide {
   box-sizing: border-box !important;
