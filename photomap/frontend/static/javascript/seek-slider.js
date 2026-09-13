@@ -5,6 +5,22 @@ import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { debounce } from "./utils.js";
 
+// Whether the slider is walking the album itself rather than a search: no
+// results, or the media filter's browse list, which search.js dispatches
+// under searchType "clear" (see setSearchResults). Both label ticks by date.
+function browsingAlbum() {
+  return !state.searchResults || state.searchResults.length === 0 || state.searchType === "clear";
+}
+
+// The album index behind 1-based slider `value`: the value itself when
+// browsing the whole album, else the entry at that position of the list.
+function globalIndexForSliderValue(value) {
+  if (!state.searchResults || state.searchResults.length === 0) {
+    return value - 1;
+  }
+  return state.searchResults[value - 1]?.index;
+}
+
 class SeekSlider {
   constructor() {
     this.sliderVisible = false;
@@ -232,10 +248,10 @@ class SeekSlider {
 
     if (now - this.lastFetchTime >= this.FETCH_THROTTLE_MS) {
       this.lastFetchTime = now;
-      if (!state.searchResults || state.searchResults.length === 0) {
+      if (browsingAlbum()) {
         try {
           const albumKey = state.album;
-          const resp = await fetch(`image_info/${albumKey}/${value - 1}`);
+          const resp = await fetch(`image_info/${albumKey}/${globalIndexForSliderValue(value)}`);
           if (resp.ok) {
             const info = await resp.json();
             const date = new Date(info.last_modified * 1000);
@@ -256,13 +272,10 @@ class SeekSlider {
     let panelText = "";
     if (state.searchType === "bookmarks") {
       panelText = `Favorite: ${value}`;
-    } else if (state.searchResults?.length > 0 && state.searchResults[0].score !== undefined) {
-      const result = state.searchResults[value - 1];
-      panelText = result ? `Score: ${result.score.toFixed(4)}` : "";
-    } else if (!state.searchResults || state.searchResults.length === 0) {
+    } else if (browsingAlbum()) {
       try {
         const albumKey = state.album;
-        const resp = await fetch(`image_info/${albumKey}/${value - 1}`);
+        const resp = await fetch(`image_info/${albumKey}/${globalIndexForSliderValue(value)}`);
         if (resp.ok) {
           const info = await resp.json();
           const date = new Date(info.last_modified * 1000);
@@ -274,6 +287,9 @@ class SeekSlider {
       } catch {
         panelText = "";
       }
+    } else if (state.searchResults[0].score !== undefined) {
+      const result = state.searchResults[value - 1];
+      panelText = result ? `Score: ${result.score.toFixed(4)}` : "";
     } else if (state.searchResults[0].cluster !== undefined) {
       panelText = "";
     }
@@ -312,7 +328,10 @@ class SeekSlider {
       // targetIndex (matching metadata-drawer's release-time path). Passing
       // targetIndex+1 here double-incremented the badge during the drag, so the
       // live position read one too high until the thumb was released.
-      if (state.searchResults[targetIndex]?.cluster !== undefined) {
+      if (state.searchType === "clear") {
+        // The media filter's browse list: a position, not a score.
+        this.scoreDisplayObj.showIndex(targetIndex, state.searchResults.length);
+      } else if (state.searchResults[targetIndex]?.cluster !== undefined) {
         const cluster = state.searchResults[targetIndex]?.cluster;
         const color = state.searchResults[targetIndex]?.color;
         this.scoreDisplayObj.showCluster(cluster, color, targetIndex, state.searchResults.length);
@@ -486,13 +505,13 @@ class SeekSlider {
       positions.push(pos);
     }
 
-    if (!state.searchResults || state.searchResults.length === 0) {
+    if (browsingAlbum()) {
       contextText = "Date";
       ticks = await Promise.all(
         positions.map(async (idx) => {
           try {
             const albumKey = state.album;
-            const resp = await fetch(`image_info/${albumKey}/${idx - 1}`);
+            const resp = await fetch(`image_info/${albumKey}/${globalIndexForSliderValue(idx)}`);
             if (!resp.ok) {
               return "";
             }

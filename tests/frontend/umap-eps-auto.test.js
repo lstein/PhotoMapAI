@@ -19,7 +19,7 @@ const mockState = {
   album: "test-album",
   dataChanged: true,
   autotaggingEnabled: false,
-  umapMediaFilter: "both",
+  mediaFilter: "both",
   umapShowLandmarks: false,
   umapShowHoverThumbnails: false,
   umapExitFullscreenOnSelection: false,
@@ -32,7 +32,7 @@ const mockState = {
 
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
-  setUmapMediaFilter: jest.fn(),
+  setMediaFilter: jest.fn(),
   setUmapShowLandmarks: jest.fn(),
   setUmapClickSelectsCluster: jest.fn(),
   setUmapControlsVisible: jest.fn(),

@@ -461,7 +461,9 @@ class BookmarkManager {
    * Bookmark all images in the current search results
    */
   selectAllFromSearch() {
-    if (!slideState.isSearchMode) {
+    // Under a media filter the album itself is browsed as a list (searchType
+    // "clear", see search.js); that is not a search to select from.
+    if (!slideState.isSearchMode || state.searchType === "clear") {
       alert("Select All is only available when viewing search results.");
       return;
     }
@@ -857,7 +859,7 @@ class BookmarkManager {
     this.removeBookmarkMenu();
 
     const count = this.getCount();
-    const isInSearchMode = slideState.isSearchMode && !this.isShowingBookmarks;
+    const isInSearchMode = slideState.isSearchMode && state.searchType !== "clear" && !this.isShowingBookmarks;
 
     const menu = document.createElement("div");
     menu.id = "bookmarkActionsMenu";

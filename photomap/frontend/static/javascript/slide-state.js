@@ -10,6 +10,10 @@ class SlideStateManager {
     // Data references
     this.totalAlbumImages = 0; // Total images in album
     this.searchResults = []; // Current search results
+    // The media filter's browse list when one is being browsed (see
+    // search.js): the same array as searchResults then, so identity says
+    // whether the current list is a filter or a search.
+    this.browseList = null;
 
     // Event listeners for updates
     this.setupEventListeners();
@@ -71,7 +75,13 @@ class SlideStateManager {
       if (this.isSearchMode) {
         // Find corresponding search index if in search mode
         this.currentSearchIndex = this.searchResults.findIndex((result) => result.index === this.currentGlobalIndex);
-        if (this.currentSearchIndex === -1) {
+        if (this.currentSearchIndex === -1 && this.searchResults === this.browseList) {
+          // A jump (browser Back, say) to an image the media filter hides.
+          // The filter holds: land on the nearest image it shows instead of
+          // dropping back to the unfiltered album.
+          this.currentSearchIndex = this.nearestPosition(this.searchResults, this.currentGlobalIndex);
+          this.currentGlobalIndex = this.searchResults[this.currentSearchIndex].index;
+        } else if (this.currentSearchIndex === -1) {
           // Exit search mode if global index not in search results
           this.exitSearchMode();
         }
@@ -120,7 +130,7 @@ class SlideStateManager {
 
     if (this.isSearchMode) {
       this.currentSearchIndex = Math.max(0, Math.min(startIndex, this.searchResults.length - 1));
-      this.currentGlobalIndex = this.searchResults[this.currentSearchIndex]?.index || this.currentGlobalIndex;
+      this.currentGlobalIndex = this.searchResults[this.currentSearchIndex]?.index ?? this.currentGlobalIndex;
     }
 
     this.notifySlideChanged();
@@ -163,7 +173,7 @@ class SlideStateManager {
     if (this.isSearchMode && this.searchResults.length > 0) {
       // Clamp to valid range
       const clampedIndex = Math.max(0, Math.min(index, this.searchResults.length - 1));
-      return this.searchResults[clampedIndex]?.index || null;
+      return this.searchResults[clampedIndex]?.index ?? null;
     } else {
       // Clamp to valid range
       return Math.max(0, Math.min(index, this.totalAlbumImages - 1));
@@ -239,11 +249,29 @@ class SlideStateManager {
 
   // --- Event Handlers ---
   handleSearchResultsChanged({ results, searchType }) {
-    if (searchType === "clear" || results.length === 0) {
-      this.exitSearchMode();
-    } else {
-      this.enterSearchMode(results, 0);
+    if (searchType === "clear") {
+      this.browseList = results && results.length > 0 ? results : null;
     }
+    if (!results || results.length === 0) {
+      this.exitSearchMode();
+      return;
+    }
+    // A non-empty "clear" is the media filter's browse list (see search.js):
+    // the album minus the hidden media type. Stay on the current image if it
+    // survived the filter, else the next one that did, so toggling the filter
+    // does not throw the user back to the first slide.
+    const start = searchType === "clear" ? this.nearestPosition(results, this.currentGlobalIndex) : 0;
+    this.enterSearchMode(results, start);
+  }
+
+  /**
+   * Position in `results` (assumed in ascending album order) of the first
+   * entry at or after `globalIndex`, or the last position when every entry
+   * precedes it.
+   */
+  nearestPosition(results, globalIndex) {
+    const position = results.findIndex((r) => r?.index >= globalIndex);
+    return position === -1 ? results.length - 1 : position;
   }
 
   handleAlbumChanged(detail) {
@@ -320,6 +348,7 @@ class SlideStateManager {
     // For other changes (album switch, move, etc.), reset to beginning
     this.currentGlobalIndex = 0;
     this.currentSearchIndex = 0;
+    this.browseList = null;
     this.exitSearchMode();
     this.totalAlbumImages = detail.totalImages; // Update from state
   }

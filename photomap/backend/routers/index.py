@@ -83,6 +83,20 @@ class EmbeddingsIndexMetadata(BaseModel):
     video_count: int = 0
 
 
+class MediaIndicesResponse(BaseModel):
+    """Which entries of an album are videos.
+
+    ``video_indices`` are album indices in the sorted order every other
+    per-index endpoint uses (``/retrieve_image``, ``/thumbnails``, ...); the
+    images are the complement in ``range(total)``. Only the video side is
+    listed because it is the small one: albums are mostly photos, so the
+    payload stays a few KB even for a large library.
+    """
+
+    total: int
+    video_indices: list[int]
+
+
 # Note: How check_album_lock is used in this file:
 # For any state-changing operations, such as starting an index update or deleting an index,
 # if the environment variable PHOTOMAP_ALBUM_LOCKED is set, the operation is forbidden.
@@ -265,6 +279,31 @@ async def index_exists(album_config: AlbumDep) -> dict:
     """Check if the index exists for the specified album."""
     index_path = Path(album_config.index)
     return {"exists": index_path.exists()}
+
+
+# Which album indices are videos, so the UI's images/videos filter can be
+# applied to browsing and search — neither of which the backend sequences,
+# so the frontend needs the classification up front rather than per slide.
+@index_router.get(
+    "/media_indices/{album_key}",
+    response_model=MediaIndicesResponse,
+    tags=["Albums"],
+)
+async def media_indices(album_config: AlbumDep) -> MediaIndicesResponse:
+    """List the album indices that are videos, in the album's sorted order."""
+    index_path = Path(album_config.index)
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="Index file does not exist")
+
+    sorted_filenames = (
+        await asyncio.to_thread(Embeddings.open_cached_embeddings, index_path)
+    )["sorted_filenames"]
+    video_indices = [
+        i for i, f in enumerate(sorted_filenames) if is_video(Path(str(f)))
+    ]
+    return MediaIndicesResponse(
+        total=len(sorted_filenames), video_indices=video_indices
+    )
 
 
 # Return Embeddings index metadata for the specified album

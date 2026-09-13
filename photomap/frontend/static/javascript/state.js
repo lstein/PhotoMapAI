@@ -43,7 +43,7 @@ export const state = {
   umapExitFullscreenOnSelection: true, // Exit fullscreen when cluster is selected
   umapClickSelectsCluster: true, // Whether click selects cluster or single image
   umapControlsVisible: true, // Whether the UMAP controls panel is visible
-  umapMediaFilter: "both", // "both" | "images" | "videos" — what the map draws
+  mediaFilter: "both", // "both" | "images" | "videos" — applies to the map, the swiper, the grid and search
   showMetadataFields: true, // Whether the metadata-drawer fields table is shown
   autotaggingEnabled: false, // Whether to build the vocab index and show cluster/image labels
   // Dataset Curator panel state. The curator panel reads these on open and
@@ -120,8 +120,16 @@ const PERSISTED_SETTINGS = [
   { key: "umapExitFullscreenOnSelection", type: "bool", default: true },
   { key: "umapClickSelectsCluster", type: "bool", default: true },
   { key: "umapControlsVisible", type: "bool", default: true },
-  // "both" | "images" | "videos" — which media the semantic map draws.
-  { key: "umapMediaFilter", type: "string", default: "both" },
+  // "both" | "images" | "videos" — which media to show, everywhere (see
+  // media-filter.js, which listens for the event dispatched here). An onSet
+  // rather than a settingsUpdated listener so that a server-side preference
+  // applied at boot — which runs onSet but dispatches nothing — is seen too.
+  {
+    key: "mediaFilter",
+    type: "string",
+    default: "both",
+    onSet: (value) => window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value } })),
+  },
   { key: "showMetadataFields", type: "bool", default: true },
   {
     key: "autotaggingEnabled",
@@ -452,7 +460,7 @@ export const setUmapShowHoverThumbnails = _setters.umapShowHoverThumbnails;
 export const setUmapExitFullscreenOnSelection = _setters.umapExitFullscreenOnSelection;
 export const setUmapClickSelectsCluster = _setters.umapClickSelectsCluster;
 export const setUmapControlsVisible = _setters.umapControlsVisible;
-export const setUmapMediaFilter = _setters.umapMediaFilter;
+export const setMediaFilter = _setters.mediaFilter;
 export const setShowMetadataFields = _setters.showMetadataFields;
 export const setAutotaggingEnabled = _setters.autotaggingEnabled;
 export const setCurationTargetCount = _setters.curationTargetCount;

@@ -403,7 +403,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       panel.insertBefore(noResultsMsg, panel.firstChild);
     }
 
-    if (e.detail.results?.length === 0 && e.detail.searchType !== "clear") {
+    // Under a media filter a search with no hits arrives as a "clear" that
+    // carries the browse list, flagged noResults (see search.js).
+    if ((e.detail.results?.length === 0 && e.detail.searchType !== "clear") || e.detail.noResults) {
       noResultsMsg.textContent = "No images match your search.";
       noResultsMsg.style.display = "block";
       return;
