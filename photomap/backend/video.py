@@ -91,6 +91,47 @@ SEEK_TAIL_MARGIN_SECONDS = 0.25
 # wrongly kept is the black thumbnail this whole search exists to avoid.
 FRAME_ENTROPY_FLOOR = 0.75
 
+# Entropy measures flatness, not darkness, and the two come apart badly at the
+# bottom of the range. A photograph dimmed to a peak luma of 2/255 — black to
+# any viewer — still measures 1.45 bits, because the dither and encode noise
+# spread across a handful of levels carry real information; black carrying
+# nothing but half an LSB of sensor noise measures 1.27 even after an x264
+# round trip. Both sail over the floor, so the fade-to-black this whole ladder
+# exists to walk past was being accepted on the first attempt.
+#
+# The floor cannot simply be raised to catch them: the dimmest *content* in
+# the calibration corpus (an overcast snowfield) measures 1.07, below the
+# 1.45 of the black frame. Entropy alone cannot separate the two, so darkness
+# is asked about separately.
+#
+# The question is "are there any genuinely bright pixels", not "is the average
+# bright" — fireworks against a night sky and a pillarboxed phone video are
+# both overwhelmingly dark while carrying a real subject. So this is a high
+# quantile of the luma histogram rather than its mean, and a quantile rather
+# than the outright maximum so that one stuck pixel, a timecode burn-in or a
+# broadcaster's logo cannot vouch for an otherwise black frame.
+FRAME_HIGHLIGHT_QUANTILE = 0.999
+
+# Set from two measurements rather than one. Across 237 stills the shipped
+# ladder actually chose from a real video library, the *lowest* highlight of
+# any accepted frame was 32 and the 1st percentile was 104 — so every value
+# from roughly 1 to 31 has an identical (zero) false-reject rate on real
+# footage, and that corpus cannot pick one on its own. The synthetic junk band
+# sets the other end: a 1% fade measures 2, a 2% fade 5, and black carrying
+# nothing but sensor noise 7.
+#
+# Ten, not the 16 first chosen, because rejecting a frame is not free. A
+# rejected frame falls through to the ranking below, which orders by entropy —
+# and noise has near-maximal entropy, so black-with-grain outranks genuinely
+# dim content. The two are near-indistinguishable in a 1-D histogram: measured
+# against a real photograph at 4.5% brightness (entropy 3.11, highlight 11),
+# synthetic grain over black scores 3.20 and 13 — higher on *both* axes, so no
+# reranking can be made to prefer the photograph. The only protection is not
+# to reject it at all. At 10 the fades and the noise floor are still caught,
+# and a frame has to be darker than anything with recoverable content in it
+# before it is put at that risk.
+FRAME_LUMA_FLOOR = 10.0
+
 # Per-attempt wall-clock ceiling, and also the budget for the whole file:
 # once this much time has gone into one video, the search stops trying to
 # improve on the frame it already has. A wedged input therefore still costs
@@ -460,6 +501,41 @@ def _frame_entropy(frame: Image.Image) -> float:
         return math.inf
 
 
+def _frame_highlight_luma(frame: Image.Image) -> float:
+    """Luma at ``FRAME_HIGHLIGHT_QUANTILE`` of ``frame``, 0-255.
+
+    How bright the frame's brightest real region is — the signal entropy
+    cannot supply (see FRAME_LUMA_FLOOR). Read off the cumulative histogram
+    from white downwards, so it costs 256 steps rather than a sort.
+
+    Returns 255 for a frame that cannot be measured, matching
+    ``_frame_entropy``'s infinity: an unmeasurable frame is one we keep.
+    """
+    # sum() inside the try, as in _frame_entropy: a histogram() returning
+    # something unsummable must reach the sentinel, not raise out of
+    # extract_video_frame, which documents that it never raises.
+    try:
+        histogram = frame.convert("L").histogram()
+        total = sum(histogram)
+    except Exception:
+        return 255.0
+    if not total:
+        return 255.0
+    # The quantile counted from the top: how many of the brightest pixels have
+    # to be passed before the level reached is the one being asked about.
+    # Whole pixels: a float headroom makes the boundary arbitrary —
+    # 1000 * (1 - 0.999) is 1.0000000000000009, so a frame whose one bright
+    # pixel lands exactly on it would not be counted. The floor of 1 also
+    # keeps a frame of very few pixels measurable.
+    headroom = max(1, int(total * (1.0 - FRAME_HIGHLIGHT_QUANTILE)))
+    seen = 0
+    for level in range(255, -1, -1):
+        seen += histogram[level]
+        if seen >= headroom:
+            return float(level)
+    return 0.0
+
+
 def _seek_is_inside(seek: float | None, duration: float | None) -> bool:
     """Would ``seek`` land inside ``duration``, as far as we know?
 
@@ -491,30 +567,10 @@ def _next_deeper_seek(
         candidate = round(candidate, 3)
         if candidate < floor or candidate in tried:
             continue
-        if not _far_from_every_attempt(candidate, tried):
-            continue
         if not _seek_is_inside(candidate, duration):
             continue
         return candidate
     return None
-
-
-def _far_from_every_attempt(candidate: float, tried: set[float | None]) -> bool:
-    """Is ``candidate`` a meaningfully different frame from every one tried?
-
-    The floor above only holds ``candidate`` away from ``current``. That is
-    not enough once the no-seek rung has run: it decodes position 0, so it
-    sets the floor at 0 + the gap and re-arms the deeper ladder from the start
-    of the file — queueing an offset a fraction of a second from a frame
-    already decoded and rejected. On a clip shorter than FRAME_SEEK_SECONDS
-    that spent two of the four permitted ffmpeg spawns re-reading the same
-    second of video. A no-seek attempt counts as position 0 here, which is
-    where it decodes.
-    """
-    return all(
-        abs(candidate - (0.0 if seek is None else seek)) >= MIN_DEEPER_SEEK_GAP_SECONDS
-        for seek in tried
-    )
 
 
 def extract_video_frame(
@@ -648,7 +704,11 @@ def extract_video_frame(
         )
 
         score = _frame_entropy(frame)
-        if score >= FRAME_ENTROPY_FLOOR:
+        # Both have to hold: flat frames are titles and solid colours, dark
+        # ones are fades and black leader, and neither is worth embedding.
+        # An unmeasurable frame scores infinity on one and 255 on the other,
+        # so it is kept by both — never discarded for being unreadable.
+        if score >= FRAME_ENTROPY_FLOOR and _frame_highlight_luma(frame) >= FRAME_LUMA_FLOOR:
             return frame, info
         if best is None or score > best[0]:
             best = (score, frame, info)

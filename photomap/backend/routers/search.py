@@ -357,17 +357,21 @@ def _video_placeholder_response(size: int) -> Response:
     )
 
 
-# Without an explicit lifetime a browser applies heuristic freshness (RFC 9111
-# 4.2.2) — a tenth of the file's age — so a tile whose video has not been
-# touched for months is reused for days without asking. That was harmless while
-# an unchanged video always produced the same tile, but the frame-selection
-# generation is precisely a way for the tile to change while the video does
-# not: only the grid busts its own URL, so the UMAP hover popup, the landmark
-# overlay, the back flyout and the reference strip would keep the old frame
-# well past the upgrade that replaced it. FileResponse answers no conditional
-# requests (see serve_video below), so "no-cache" would re-transfer every tile
-# of every grid page; a bounded lifetime caps the staleness instead.
-_THUMBNAIL_CACHE_HEADERS = {"Cache-Control": "private, max-age=3600"}
+# Same reasoning as /video_frame below, and the same answer: this URL is keyed
+# by *index*, so it designates a different file the moment a delete or reindex
+# reorders the album, and the frame-selection generation can change the tile
+# for a file that has not moved at all. Only the grid busts its own URL; the
+# UMAP hover popup, the landmark overlay, the back flyout and the reference
+# strip do not, so anything cacheable here is served stale to four consumers.
+#
+# An earlier attempt used max-age=3600 to avoid re-transferring tiles, since
+# FileResponse answers no conditional requests. That made the common case
+# worse, not better: a freshly rebuilt tile has a near-zero heuristic lifetime
+# and would have been revalidated within seconds, and pinning it for an hour
+# is exactly how a deleted image goes on being shown. The grid already
+# re-fetches every tile per page load through its cache buster, so the
+# bandwidth this would have saved is mostly not there to save.
+_THUMBNAIL_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 
 
 @search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])

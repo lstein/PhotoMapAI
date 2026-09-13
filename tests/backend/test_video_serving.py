@@ -241,21 +241,21 @@ def test_serve_video_sets_an_explicit_cache_lifetime(client, mixed_album):
     assert "max-age" in response.headers.get("cache-control", "")
 
 
-def test_thumbnails_set_a_bounded_cache_lifetime(client, mixed_album):
-    """Heuristic freshness is what the frame-selection generation breaks.
+def test_thumbnails_are_revalidated_like_the_poster(client, mixed_album):
+    """Keyed by index, so it designates a different file after a reindex.
 
-    With no Cache-Control a browser reuses a tile for a tenth of the file's
-    age without asking (RFC 9111 4.2.2). That was harmless while an unchanged
-    video always produced the same tile; the generation is precisely a way for
-    the tile to change while the video does not, and only the grid busts its
-    own URL. Without an explicit lifetime the UMAP hover popup, the landmark
-    overlay, the back flyout and the reference strip keep serving the previous
-    release's frame for days after the upgrade that replaced it.
+    Exactly the reason /video_frame is no-cache. With no Cache-Control at all
+    a browser applies heuristic freshness (RFC 9111 4.2.2) and reuses a tile
+    for a tenth of the file's age without asking; with a bounded lifetime it
+    pins a freshly rebuilt tile for that long instead, which is worse for the
+    delete case than the heuristic was. Only the grid busts its own URL — the
+    UMAP hover popup, the landmark overlay, the back flyout and the reference
+    strip do not.
     """
     for url in ("/thumbnails/mixed_album/0", "/thumbnails/mixed_album/1"):
         response = client.get(url)
         assert response.status_code == 200, url
-        assert "max-age" in response.headers.get("cache-control", ""), url
+        assert response.headers.get("cache-control") == "no-cache", url
 
 
 def test_the_poster_is_not_cached_across_reindexes(client, mixed_album):

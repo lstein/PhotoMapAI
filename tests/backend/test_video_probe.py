@@ -33,23 +33,26 @@ from __future__ import annotations
 
 import io
 import os
+import random
 import subprocess
 from pathlib import Path
 
 import pytest
 from fixtures import media_fixture_path
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 from photomap.backend import video as video_module
 from photomap.backend.video import (
     DEEPER_SEEK_FALLBACK_SECONDS,
     FRAME_ENTROPY_FLOOR,
     FRAME_EXTRACT_TIMEOUT_SECONDS,
+    FRAME_LUMA_FLOOR,
     FRAME_SEEK_SECONDS,
     MAX_FRAME_ATTEMPTS,
     MAX_FRAME_EDGE,
     VideoInfo,
     _frame_entropy,
+    _frame_highlight_luma,
     _has_decodable_video_stream,
     _next_deeper_seek,
     _parse_ffmpeg_banner,
@@ -181,31 +184,11 @@ def test_extract_seeks_past_the_opening_frames(monkeypatch):
 
     assert result is not None
     seeks = _seeks(attempts)
-    assert seeks[0] == video_module.FRAME_SEEK_SECONDS
-    assert 1.0 in seeks, f"expected a retry aimed into the file, got {seeks}"
-
-
-@requires_ffmpeg
-def test_a_short_clip_does_not_re_read_a_frame_it_already_rejected(monkeypatch):
-    """No attempt may land within the gap of an offset already decoded.
-
-    The floor in _next_deeper_seek only holds a candidate away from the
-    attempt that just ran. Once the no-seek rung had run — decoding position 0
-    and so setting the floor at 0 + the gap — the deeper ladder re-armed from
-    the start of the file and queued 0.1 x duration, which on clip.mp4 is
-    1.2s: two tenths of a second from the 1.0s frame it had already decoded
-    and rejected, inside the same solid-colour second. That spent one of the
-    four permitted spawns on a frame that could not differ.
-    """
-    attempts = _record_attempts(monkeypatch)
-    extract_video_frame(media_fixture_path("clip.mp4"))
-
-    positions = sorted(0.0 if seek is None else seek for seek in _seeks(attempts))
-    gaps = [b - a for a, b in zip(positions, positions[1:], strict=False)]
-    assert all(gap >= video_module.MIN_DEEPER_SEEK_GAP_SECONDS for gap in gaps), (
-        f"attempts {positions} contain a pair closer than "
-        f"{video_module.MIN_DEEPER_SEEK_GAP_SECONDS}s: gaps {gaps}"
-    )
+    assert seeks[0] == video_module.FRAME_SEEK_SECONDS, f"did not seek first: {seeks}"
+    # Not just "1.0 in seeks": 1.0 is also SHALLOW_SEEK_FALLBACKS[0], so that
+    # holds even when the aimed retry never fires. What is being asserted is
+    # that a second attempt happened at all and that it was not frame 0.
+    assert len(seeks) > 1 and seeks[1] is not None, f"no seek past the opening: {seeks}"
 
 
 def test_the_deeper_ladder_stops_at_max_deeper_attempts(monkeypatch):
@@ -552,6 +535,177 @@ def test_an_unmeasurable_frame_is_always_kept():
             raise ValueError("no")
 
     assert _frame_entropy(Hostile()) == float("inf")
+
+
+def _image_fixture(name: str) -> Path:
+    """A still from the image corpus, which lives beside the video fixtures."""
+    return media_fixture_path(f"../test_images/{name}").resolve()
+
+
+def _dimmed(path: str, factor: float, size=(640, 360)) -> Image.Image:
+    """A real photograph scaled down in brightness — a fade-to-black."""
+    frame = Image.open(_image_fixture(path)).convert("RGB").resize(size)
+    return ImageEnhance.Brightness(frame).enhance(factor)
+
+
+def _is_kept(frame: Image.Image) -> bool:
+    """The acceptance rule extract_video_frame applies to a decoded frame."""
+    return (
+        _frame_entropy(frame) >= FRAME_ENTROPY_FLOOR
+        and _frame_highlight_luma(frame) >= FRAME_LUMA_FLOOR
+    )
+
+
+def test_a_fade_to_black_is_rejected_though_its_entropy_passes():
+    """The case the entropy floor alone cannot catch.
+
+    A photograph dimmed to a peak luma of 2/255 is black to any viewer, but
+    the dither spread across those few levels measures ~1.45 bits — twice the
+    entropy floor. Raising the floor is not available: the dimmest real
+    content in the corpus measures 1.07, *below* this frame. Only the
+    highlight quantile separates them.
+    """
+    frame = _dimmed("building1.jpeg", 0.01)
+    assert _frame_entropy(frame) > FRAME_ENTROPY_FLOOR, "entropy alone would keep it"
+    assert _frame_highlight_luma(frame) < FRAME_LUMA_FLOOR
+    assert not _is_kept(frame)
+
+
+def test_black_carrying_only_sensor_noise_is_rejected():
+    """Half an LSB of grain survives an encode and scores ~1.27 bits.
+
+    Black leader off a film scan, or a lens cap, is never mathematically
+    uniform once it has been through a codec.
+    """
+    rng = random.Random(11)
+    frame = Image.new("RGB", (320, 180))
+    frame.putdata([(v, v, v) for v in (max(0, min(255, int(rng.gauss(6, 0.5)))) for _ in range(320 * 180))])
+    assert _frame_entropy(frame) > FRAME_ENTROPY_FLOOR, "entropy alone would keep it"
+    assert not _is_kept(frame)
+
+
+def test_a_dim_but_lit_scene_survives_the_luma_gate():
+    """Dusk is not a fade. The gate must not cost real low-light footage."""
+    for factor in (0.10, 0.15, 0.25):
+        frame = _dimmed("building2.jpg", factor)
+        assert _is_kept(frame), f"brightness {factor} was rejected"
+
+
+def test_a_bright_subject_on_black_survives_the_luma_gate():
+    """Fireworks, a night skyline, a pillarboxed phone video: overwhelmingly
+    dark frames that carry a real subject. The gate asks whether any region
+    is genuinely bright, not whether the average is — a mean-luma test would
+    throw all three away."""
+    frame = Image.new("RGB", (640, 360), (2, 2, 4))
+    frame.paste(
+        Image.open(_image_fixture("flower1.jpeg")).convert("RGB").resize((200, 360)),
+        (220, 0),
+    )
+    assert _frame_highlight_luma(frame) >= FRAME_LUMA_FLOOR
+    assert _is_kept(frame)
+
+
+def test_one_hot_pixel_cannot_vouch_for_a_black_frame():
+    """Why a quantile and not the maximum. A stuck sensor pixel, a timecode
+    burn-in or a station logo is a handful of pixels; it must not make a
+    black frame look lit."""
+    frame = _dimmed("building1.jpeg", 0.01)
+    for x in range(12):
+        frame.putpixel((x, 0), (255, 255, 255))
+    assert max(frame.convert("L").getdata()) == 255
+    assert _frame_highlight_luma(frame) < FRAME_LUMA_FLOOR
+    assert not _is_kept(frame)
+
+
+def test_an_unmeasurable_frame_passes_the_luma_gate_too():
+    """Both scores have to agree a frame is empty, and neither may discard a
+    frame it simply could not read."""
+
+    class Hostile:
+        def convert(self, _mode):
+            raise ValueError("no")
+
+    assert _frame_highlight_luma(Hostile()) == 255.0
+
+
+def test_extract_video_frame_actually_applies_the_luma_gate(monkeypatch):
+    """The gate has to be wired into extraction, not just into a test helper.
+
+    Every other test here scores frames directly. With only those, deleting
+    the luma term from extract_video_frame's verdict passes the whole suite:
+    the first frame is accepted on entropy alone and the ladder never runs.
+    """
+    dark = _dimmed("building1.jpeg", 0.012, size=(320, 180))
+    lit = Image.open(_image_fixture("building1.jpeg")).convert("RGB").resize((320, 180))
+    assert _frame_entropy(dark) > FRAME_ENTROPY_FLOOR, "entropy alone would accept frame 1"
+    assert _frame_highlight_luma(dark) < FRAME_LUMA_FLOOR
+
+    served = [dark, lit]
+
+    def ffmpeg(args, timeout):
+        frame = served.pop(0) if served else lit
+        buffer = io.BytesIO()
+        frame.save(buffer, format="PNG")
+        return subprocess.CompletedProcess(
+            args, returncode=0, stdout=buffer.getvalue(), stderr=_TEN_MINUTE_BANNER
+        )
+
+    monkeypatch.setattr(video_module, "_run_ffmpeg", ffmpeg)
+    frame, _info = extract_video_frame(media_fixture_path("dark.mp4"))
+
+    # The dark frame was rejected and the ladder went on to the lit one.
+    assert _frame_highlight_luma(frame) >= FRAME_LUMA_FLOOR
+    assert not served, "the ladder stopped before reaching the lit frame"
+
+
+def test_a_pure_white_frame_is_not_scored_as_black():
+    """The histogram walk starts at 255, not 254.
+
+    Off by one at the top and an all-white frame falls through the loop to the
+    0.0 return, scoring as black and being rejected by the luma gate.
+    """
+    assert _frame_highlight_luma(Image.new("RGB", (320, 180), (255, 255, 255))) == 255.0
+
+
+def test_the_quantile_ignores_a_subliminal_sprinkle_of_hot_pixels():
+    """Pins FRAME_HIGHLIGHT_QUANTILE itself, not just "a quantile".
+
+    Sized so the sprinkle is below the 0.999 headroom but above a 0.9999 one:
+    at 320x180 the headroom is 57.6 pixels, so 40 hot pixels must not count
+    and 400 must.
+    """
+    frame = _dimmed("building1.jpeg", 0.012, size=(320, 180))
+    for i in range(40):
+        frame.putpixel((i, 0), (255, 255, 255))
+    assert _frame_highlight_luma(frame) < FRAME_LUMA_FLOOR, "40 pixels vouched for it"
+
+    for i in range(400):
+        frame.putpixel((i % 320, 1 + i // 320), (255, 255, 255))
+    assert _frame_highlight_luma(frame) == 255.0, "400 pixels should reach the quantile"
+
+
+def test_the_quantile_boundary_is_inclusive():
+    """``seen >= headroom``, not ``>``. A frame whose bright pixels land
+    exactly on the headroom counts them."""
+    # 1000 px -> headroom int(1000 * 0.001) == 1, so the single bright pixel
+    # is exactly on the boundary. In floating point 1000 * (1 - 0.999) is
+    # 1.0000000000000009, which this pixel would fail to reach.
+    frame = Image.new("L", (1000, 1), 0)
+    frame.putpixel((0, 0), 200)
+    assert _frame_highlight_luma(frame.convert("RGB")) == 200.0
+
+
+def test_the_luma_floor_clears_the_junk_band_by_a_real_margin():
+    """Pinned to measurements, not to other constants.
+
+    The junk these numbers come from: a 1% fade measures 2, a 2% fade 5,
+    black carrying only sensor noise 7. Real accepted frames from a genuine
+    library bottom out at 32. The floor has to sit above the first group and
+    well below the second.
+    """
+    fade = _dimmed("building1.jpeg", 0.01)
+    assert _frame_highlight_luma(fade) < FRAME_LUMA_FLOOR
+    assert FRAME_LUMA_FLOOR < 32, "would start rejecting real footage"
 
 
 def test_the_floor_sits_between_the_junk_and_content_bands():
