@@ -101,6 +101,7 @@ icloudpd
 scripts/*
 !scripts/build_vocab.py
 !scripts/download-vendor.py
+!scripts/tile_audit.py
 
 # Cache directories for mkdocs etc
 site
