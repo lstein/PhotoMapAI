@@ -344,7 +344,9 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   }
 
   // Snapshot before pausing, and restore rather than force-start on close.
-  slideshowWasRunning = Boolean(state.swiper?.autoplay?.running);
+  // Logical state rather than autoplay.running, which is false for the
+  // duration of a buffer rebuild even when the slideshow is running.
+  slideshowWasRunning = Boolean(state.single_swiper?.isSlideshowActive?.());
   state.single_swiper?.pauseSlideshow?.();
   // Otherwise the arrow keys change slides behind the modal while the user is
   // trying to scrub.
@@ -371,7 +373,7 @@ export function closeVideoPlayer() {
 
   state.swiper?.keyboard?.enable?.();
   if (slideshowWasRunning) {
-    state.single_swiper?.startSlideshow?.();
+    state.single_swiper?.resumeSlideshow?.();
   }
   slideshowWasRunning = false;
 }

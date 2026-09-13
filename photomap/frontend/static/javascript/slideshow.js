@@ -12,8 +12,22 @@ const SHUFFLE_SVG = `<svg id="shuffleIcon" width="32" height="32" viewBox="0 0 2
   <path d="M18 11l3-3-3-3"/>
 </svg>`;
 
+// Whether Swiper's autoplay timer is currently ticking. This goes false for
+// the duration of every buffer rebuild and trim, so it answers "is a slide
+// about to advance" — not "did the user start the slideshow". Use
+// isSlideshowActive() for the latter.
 export function slideShowRunning() {
   return !!state.single_swiper?.swiper?.autoplay?.running;
+}
+
+// Whether the user wants the slideshow running — true from Play until Pause,
+// a swipe, an arrow key or the end of the list (which pauses explicitly in
+// swiper.js's slideNextTransitionStart handler), and unaffected by the
+// internal autoplay stop/start of a rebuild. This is what the controls must
+// consult: pressing Pause during an album-switch rebuild has to pause, not
+// be mistaken for a Play press because autoplay happens to be stopped.
+export function isSlideshowActive() {
+  return !!state.single_swiper?.isSlideshowActive?.();
 }
 
 // In sequential mode there is a genuine end of the list, so a stopped slideshow
@@ -32,7 +46,10 @@ export function updateSlideshowButtonIcon() {
     return;
   }
 
-  const isRunning = slideShowRunning();
+  // Logical state, not autoplay.running: a rebuild stops autoplay for its
+  // duration, and the icon must not flip to Play (or the button start acting
+  // as Play) while the slideshow is merely rebuilding its buffer.
+  const isRunning = isSlideshowActive();
   const mode = state.mode || "chronological";
   const modeLabel = mode === "random" ? "shuffle mode" : "sequential mode";
 
@@ -110,11 +127,11 @@ export async function toggleSlideshowWithIndicator(e) {
 
   // Ignore clicks while parked on the last sequential slide (button is grayed
   // out): there is nothing to start.
-  if (!slideShowRunning() && atSequentialEnd()) {
+  if (!isSlideshowActive() && atSequentialEnd()) {
     return;
   }
 
-  if (slideShowRunning()) {
+  if (isSlideshowActive()) {
     // pause
     const wasShuffling = state.mode === "random";
     try {
@@ -137,6 +154,11 @@ export async function toggleSlideshowWithIndicator(e) {
     return;
   }
 
+  // Listeners prepare the view (leave grid view, rebuild the buffer around
+  // the current slide, close the semantic map). The rebuild runs
+  // asynchronously; resumeSlideshow() below records that the slideshow is
+  // wanted and the rebuild starts autoplay when it finishes — or leaves it
+  // stopped if the user pauses again before then.
   window.dispatchEvent(new Event("slideshowStartRequested"));
 
   // Ensure UMAP closed if necessary
@@ -149,6 +171,43 @@ export async function toggleSlideshowWithIndicator(e) {
     showPlayPauseIndicator(true);
   } catch (err) {
     console.warn("resumeSlideshow failed:", err);
+  }
+  updateSlideshowButtonIcon();
+}
+
+// Switch the slideshow mode ("chronological" or "random"). Shared by the mode
+// menu on the Play button and the radios in the settings modal, so both behave
+// identically: the mode is written and persisted at once, a running slideshow
+// is paused, and a shuffled buffer is rebuilt in album order.
+export async function setSlideshowMode(modeVal) {
+  const wasShuffling = state.mode === "random";
+  const wasRunning = isSlideshowActive();
+  // Write and persist the new mode synchronously so the last click always
+  // wins: the rebuild below awaits several image fetches, and a second pick
+  // made during that window must not be overwritten when this one resumes.
+  // Everything after this line is driven by the locally captured outgoing
+  // mode, never by re-reading state.mode.
+  state.mode = modeVal;
+  saveSettingsToLocalStorage();
+  // Lets the other mode control (menu icon vs settings radios) mirror the
+  // change without either importing the other's DOM.
+  window.dispatchEvent(new CustomEvent("slideshowModeChanged", { detail: { mode: modeVal } }));
+  if (wasRunning) {
+    state.single_swiper.pauseSlideshow();
+    showPlayPauseIndicator(false);
+  }
+  // A shuffle run leaves the swiper buffer in random order, so prev/next
+  // would walk the leftover shuffle instead of the current image's real
+  // neighbors. Rebuild in album order when a shuffle run was just stopped
+  // here, and also when leaving shuffle with the slideshow already stopped:
+  // an arrow key, a swipe or a scrollbar drag halts autoplay without ever
+  // running the pause path, so a shuffled buffer may still be on screen.
+  if (wasShuffling && (wasRunning || modeVal !== "random")) {
+    try {
+      await state.single_swiper?.resetAllSlides();
+    } catch (err) {
+      console.warn("resetAllSlides failed:", err);
+    }
   }
   updateSlideshowButtonIcon();
 }
@@ -182,33 +241,7 @@ function createModeMenu(x, y, anchorAbove = null) {
     b.onclick = async (ev) => {
       ev.stopPropagation();
       removeModeMenu();
-      const wasShuffling = state.mode === "random";
-      const wasRunning = slideShowRunning();
-      // Write and persist the new mode synchronously so the last click always
-      // wins: the rebuild below awaits several image fetches, and a second
-      // pick made during that window must not be overwritten when this one
-      // resumes. Everything after this line is driven by the locally captured
-      // outgoing mode, never by re-reading state.mode.
-      state.mode = modeVal;
-      saveSettingsToLocalStorage();
-      if (wasRunning) {
-        state.single_swiper.pauseSlideshow();
-        showPlayPauseIndicator(false);
-      }
-      // A shuffle run leaves the swiper buffer in random order, so prev/next
-      // would walk the leftover shuffle instead of the current image's real
-      // neighbors. Rebuild in album order when a shuffle run was just stopped
-      // here, and also when leaving shuffle with the slideshow already stopped:
-      // an arrow key, a swipe or a scrollbar drag halts autoplay without ever
-      // running the pause path, so a shuffled buffer may still be on screen.
-      if (wasShuffling && (wasRunning || modeVal !== "random")) {
-        try {
-          await state.single_swiper?.resetAllSlides();
-        } catch (err) {
-          console.warn("resetAllSlides failed:", err);
-        }
-      }
-      updateSlideshowButtonIcon();
+      await setSlideshowMode(modeVal);
     };
     return b;
   };

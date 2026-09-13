@@ -17,6 +17,9 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/search-ui.js
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/preferences-client.js", () => ({
   cancelPendingPatches: jest.fn(),
 }));
+jest.unstable_mockModule("../../photomap/frontend/static/javascript/slideshow.js", () => ({
+  setSlideshowMode: jest.fn(),
+}));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   clearPersistedSettingsCache: jest.fn(),
   saveSettingsToLocalStorage: jest.fn(),

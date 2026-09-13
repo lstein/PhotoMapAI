@@ -3,6 +3,7 @@
 import { albumManager } from "./album-manager.js";
 import { cancelPendingPatches } from "./preferences-client.js";
 import { exitSearchMode } from "./search-ui.js";
+import { setSlideshowMode } from "./slideshow.js";
 import {
   clearPersistedSettingsCache,
   saveSettingsToLocalStorage,
@@ -233,22 +234,42 @@ function setupDelayControls() {
   updateDelayDisplay(state.currentDelay);
 }
 
-function setupModeControls() {
-  // Set initial radio button state based on current mode
-  elements.modeRandom.checked = state.mode === "random";
-  elements.modeChronological.checked = state.mode === "chronological";
+function syncModeRadios() {
+  if (elements.modeRandom) {
+    elements.modeRandom.checked = state.mode === "random";
+  }
+  if (elements.modeChronological) {
+    elements.modeChronological.checked = state.mode === "chronological";
+  }
+}
 
-  // Listen for changes to the radio buttons
+// initializeSettings re-runs on every settingsUpdated, so guard the window
+// listener against being attached more than once.
+let modeSyncListenerAttached = false;
+
+export function setupModeControls() {
+  // Set initial radio button state based on current mode
+  syncModeRadios();
+
+  // The radios drive the same switch as the Play button's mode menu, so the
+  // mode changes immediately, the control-panel icon follows, a running
+  // slideshow is paused, and a shuffled buffer is rebuilt in album order.
+  // Property assignment rather than addEventListener: initializeSettings
+  // re-runs on every settingsUpdated, and stacked listeners would switch the
+  // mode once per re-run for a single click.
   document.querySelectorAll('input[name="mode"]').forEach((radio) => {
-    radio.addEventListener("change", function () {
+    radio.onchange = function () {
       if (this.checked) {
-        state.mode = this.value;
-        saveSettingsToLocalStorage();
-        state.single_swiper.removeSlidesAfterCurrent();
-        state.single_swiper.addNewSlide();
+        setSlideshowMode(this.value);
       }
-    });
+    };
   });
+
+  // Mirror changes made from the Play button's menu while the modal is open.
+  if (!modeSyncListenerAttached) {
+    window.addEventListener("slideshowModeChanged", syncModeRadios);
+    modeSyncListenerAttached = true;
+  }
 }
 
 function setupModalControls() {
