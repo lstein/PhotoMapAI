@@ -47,6 +47,8 @@ from .metadata_extraction import MetadataExtractor
 from .metadata_formatting import format_metadata
 from .metadata_modules import SlideSummary
 from .progress import IndexingCancelled, progress_tracker
+from .thumbnail_cache import keep_hashes_for, thumbnail_dir
+from .thumbnail_cache import prune as prune_thumbnails
 from .util import atomic_savez
 from .video import VIDEO_METADATA_KEY, extract_video_frame
 from .video_cache import VideoFrameCache
@@ -604,6 +606,33 @@ def media_filter_mask(filenames: Any, media_filter: str) -> np.ndarray | None:
         (is_video(Path(str(f))) for f in filenames), dtype=bool, count=len(filenames)
     )
     return videos if media_filter == "videos" else ~videos
+
+
+def _tile_dir_is_shared(manager, album_key: str, album) -> bool:
+    """Does another album keep its tiles in the same directory as this one?
+
+    The tile cache is addressed by index directory, not by album key like the
+    stills and the converted copies — two albums whose index files sit side by
+    side therefore share one tile directory, and each one's keep-set omits the
+    other's images. Sweeping would delete the neighbour's live tiles on every
+    index save. They regenerate on the next request, so this is wasted work
+    rather than breakage, but it is still a false positive and this code
+    deletes files: skip the sweep instead, and let those tiles be reclaimed
+    when the album is deleted.
+    """
+    if not album.index:
+        return False
+    tiles = thumbnail_dir(Path(album.index))
+    for other_key, other in manager.get_albums().items():
+        if other_key == album_key or not other.index:
+            continue
+        if thumbnail_dir(Path(other.index)) == tiles:
+            logger.debug(
+                f"Album '{album_key}' shares its tile directory with "
+                f"'{other_key}'; skipping the thumbnail sweep"
+            )
+            return True
+    return False
 
 
 class Embeddings(BaseModel):
@@ -1295,7 +1324,7 @@ class Embeddings(BaseModel):
         # Clear cache after saving
         _open_npz_file.cache_clear()
 
-        self._prune_video_frame_cache(
+        self._prune_per_album_caches(
             index_result.filenames, index_result.modification_times
         )
 
@@ -1330,8 +1359,8 @@ class Embeddings(BaseModel):
             + ("…" if count > 5 else "")
         )
 
-    def _prune_video_frame_cache(self, filenames, modification_times) -> None:
-        """Drop cached stills that the just-written index no longer refers to.
+    def _prune_per_album_caches(self, filenames, modification_times) -> None:
+        """Drop cached stills, tiles and converted copies the index has dropped.
 
         One sweep here replaces what would otherwise be seven separate
         cleanups — mtime changes, moves, copies, single and batch deletes, and
@@ -1343,20 +1372,55 @@ class Embeddings(BaseModel):
         """
         if not self.album_key:
             return
+        # Each sweep is independent. These used to `return` when their own
+        # directory was absent, which aborted the whole method: an album with
+        # no cached stills — every all-photo album, and any album whose frame
+        # cache had been cleared — silently never had its converted copies
+        # swept either, and those are whole movies rather than single JPEGs.
         try:
             cache = VideoFrameCache(self.album_key)
-            if not cache.directory.is_dir():
-                return
-            keep = {
+            if cache.directory.is_dir():
+                keep = {
                 cache.key_for(Path(str(name)), float(mtime))
-                for name, mtime in zip(filenames, modification_times, strict=False)
-                if is_video(Path(str(name)))
-            }
-            removed = cache.prune(keep)
-            if removed:
-                logger.info(f"Removed {removed} stale video frame(s) from the cache")
+                    for name, mtime in zip(filenames, modification_times, strict=False)
+                    if is_video(Path(str(name)))
+                }
+                removed = cache.prune(keep)
+                if removed:
+                    logger.info(f"Removed {removed} stale video frame(s) from the cache")
         except Exception as e:
             logger.warning(f"Could not prune the video frame cache: {e}")
+
+        # The reduced tiles need it too, and they are the only one of the three
+        # with no other reclaim path at all: the route rewrites a tile in
+        # place when its source changes, so an unchanged path keeps one
+        # filename forever, but a deleted or renamed file — or a video whose
+        # frame-selection generation has moved — leaves tiles nothing will
+        # ever ask for again. Keyed on the album-relative path rather than the
+        # absolute one, and on a digest prefix rather than a whole filename,
+        # because one live image legitimately has several tiles (a 128px one
+        # for the back flyout, 256px for the UMAP popup, a coloured one for
+        # the landmark overlay).
+        try:
+            # Imported here rather than at module scope: config reaches the
+            # encoder registry, and this module is on that path.
+            from .config import get_config_manager
+
+            manager = get_config_manager()
+            album = manager.get_album(self.album_key)
+            if album and not _tile_dir_is_shared(manager, self.album_key, album):
+                # The album's own index path, not self.embeddings_path, which
+                # __init__ resolves — the route builds the directory from the
+                # unresolved config value, and through a symlinked album root
+                # the two parents are different directories.
+                tiles = thumbnail_dir(Path(album.index))
+                if tiles.is_dir():
+                    keep_tiles = keep_hashes_for(filenames, album.image_paths, is_video)
+                    removed = prune_thumbnails(tiles, keep_tiles)
+                    if removed:
+                        logger.info(f"Removed {removed} stale thumbnail(s) from the cache")
+        except Exception as e:
+            logger.warning(f"Could not prune the thumbnail cache: {e}")
 
         # The converted copies need the same sweep, and for a stronger reason:
         # each one is a whole movie rather than a single JPEG, and the only
@@ -1366,16 +1430,17 @@ class Embeddings(BaseModel):
         # than shared.
         try:
             transcodes = TranscodeCache(self.album_key)
-            if not transcodes.directory.is_dir():
-                return
-            keep_converted = {
+            if transcodes.directory.is_dir():
+                keep_converted = {
                 transcodes.key_for(Path(str(name)), float(mtime))
-                for name, mtime in zip(filenames, modification_times, strict=False)
-                if is_video(Path(str(name)))
-            }
-            removed = transcodes.prune(keep_converted)
-            if removed:
-                logger.info(f"Removed {removed} stale converted video(s) from the cache")
+                    for name, mtime in zip(filenames, modification_times, strict=False)
+                    if is_video(Path(str(name)))
+                }
+                removed = transcodes.prune(keep_converted)
+                if removed:
+                    logger.info(
+                        f"Removed {removed} stale converted video(s) from the cache"
+                    )
         except Exception as e:
             logger.warning(f"Could not prune the video conversion cache: {e}")
 

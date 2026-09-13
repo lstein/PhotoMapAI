@@ -17,6 +17,7 @@ from fixtures import (
 )
 from PIL import Image
 
+from photomap.backend import thumbnail_cache
 from photomap.backend.video import VIDEO_METADATA_KEY
 from photomap.backend.video_cache import VideoFrameCache
 
@@ -371,7 +372,10 @@ def test_a_new_frame_selection_generation_rebuilds_the_video_thumbnail(
         return await real(album_key, video_path)
 
     monkeypatch.setattr(search_module, "_ensure_frame_off_loop", counted)
-    monkeypatch.setattr(search_module, "FRAME_SELECTION_GENERATION", 99)
+    # Patched where the tile key is actually built. The route now asks
+    # thumbnail_cache for the digest so the sweeper cannot drift from it, so
+    # this is the module whose view of the generation decides the filename.
+    monkeypatch.setattr(thumbnail_cache, "FRAME_SELECTION_GENERATION", 99)
 
     assert client.get("/thumbnails/mixed_album/0?size=64").status_code == 200
     assert calls, "the tile must be rebuilt from a freshly chosen frame"

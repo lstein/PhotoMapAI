@@ -17,7 +17,7 @@ from logging import getLogger
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel
@@ -26,8 +26,8 @@ from ..config import get_config_manager
 from ..embeddings import SUPPORTED_EXTENSIONS, MediaFilter
 from ..media_types import is_video, video_media_type
 from ..metadata_modules import SlideSummary, video_external_link_html
+from ..thumbnail_cache import thumbnail_dir, tile_hash
 from ..util import is_cuda_oom
-from ..video import FRAME_SELECTION_GENERATION
 from ..video_cache import VideoFrameCache
 from ..video_transcode import TranscodeCache, TranscodeStatus, request_transcode
 from .album import (
@@ -374,8 +374,45 @@ def _video_placeholder_response(size: int) -> Response:
 _THUMBNAIL_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 
 
+def _thumbnail_response(request: Request, path: Path) -> Response:
+    """A tile, or a 304 if the caller already has it.
+
+    ``no-cache`` above means the browser revalidates every time, and
+    FileResponse implements no conditional handling of its own, so without
+    this every revalidation re-transfers the whole PNG — a hundred of them on
+    one grid page.
+
+    The bytes are read here rather than handed to FileResponse, for two
+    reasons. FileResponse stats the file again when it sends, so a tile the
+    thumbnail sweep unlinks in that window raises RuntimeError out of the
+    handler and the browser gets a 500 where it used to get a picture; the
+    sweep is new, so that window is new. And an ETag over the content rather
+    than over the stat means a tile rebuilt byte-identically — the common case
+    after a reindex that changed nothing about this image — still answers 304
+    instead of re-sending. Tiles are capped at _MAX_THUMB_SIZE on a side, so
+    holding one in memory is a PNG of at most a few megabytes.
+    """
+    try:
+        payload = path.read_bytes()
+    except OSError:
+        # Swept between the freshness check and here. Nothing to serve, and
+        # the next request rebuilds it; 404 rather than a 500 so it reads as
+        # a missing tile instead of a broken server.
+        raise HTTPException(status_code=404, detail="Thumbnail is no longer available") from None
+
+    etag = f'"{hashlib.md5(payload, usedforsecurity=False).hexdigest()}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={**_THUMBNAIL_CACHE_HEADERS, "etag": etag})
+    return Response(
+        content=payload,
+        media_type="image/png",
+        headers={**_THUMBNAIL_CACHE_HEADERS, "etag": etag},
+    )
+
+
 @search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])
 async def serve_thumbnail(
+    request: Request,
     album_key: str,
     index: int,
     album_config: AlbumDep,
@@ -383,7 +420,7 @@ async def serve_thumbnail(
     size: int = 256,
     color: str | None = None,
     radius: int = 12,  # Add a radius parameter for rounded corners
-) -> FileResponse:
+) -> Response:
     """Serve a reduced-size thumbnail for an image by index, with optional colored border."""
     if size <= 0 or size > _MAX_THUMB_SIZE:
         raise HTTPException(status_code=400, detail="Invalid thumbnail size")
@@ -405,7 +442,7 @@ async def serve_thumbnail(
         raise HTTPException(status_code=403, detail="Access denied")
 
     index_path = Path(album_config.index)
-    thumb_dir = index_path.parent / "thumbnails"
+    thumb_dir = thumbnail_dir(index_path)
     thumb_dir.mkdir(exist_ok=True)
 
     relative_path = config_manager.get_relative_path(str(image_path), album_key)
@@ -415,24 +452,12 @@ async def serve_thumbnail(
         # mis-configuration, not a user-supplied bad input.
         raise HTTPException(status_code=500, detail="Image path is not inside the album")
 
-    # Hash the full relative_path (including extension) so structurally
-    # different paths can't collapse to the same cache filename. The prior
-    # implementation ran ``.replace("/", "_")`` + ``Path(...).stem``, which
-    # collided ``/a/b.jpg`` with ``/a_b.jpg`` (same mangled name) and
-    # ``a.png`` with ``a.jpg`` (same stem) — both observable cache-poisoning
-    # bugs. blake2b-128 makes collisions effectively impossible.
-    # A video's tile is built from its extracted still, not from pixels of its
-    # own, so it also has to be invalidated when a new release picks a
-    # *different* frame out of the same unchanged file. The freshness check
-    # below compares the tile against the video's own mtime, which does not
-    # move when that happens — without the generation in the key, the grid,
-    # the UMAP hover popup and the landmark overlay would serve the previous
-    # release's black title card forever, while the slideshow poster (which
-    # goes straight to the frame cache) showed the new frame.
-    cache_subject = relative_path
-    if is_video(image_path):
-        cache_subject = f"{relative_path}|frames{FRAME_SELECTION_GENERATION}"
-    rel_hash = hashlib.blake2b(cache_subject.encode("utf-8"), digest_size=16).hexdigest()
+    # Shared with the sweeper in thumbnail_cache, which has to reproduce this
+    # digest exactly: a second copy of the rule here would drift the first
+    # time either side changed, and the sweep would then either delete live
+    # tiles or keep dead ones forever. See tile_hash for why the whole
+    # relative path is hashed and why a video's generation rides along.
+    rel_hash = tile_hash(relative_path, video=is_video(image_path))
     suffix = f"_{size}.png" if not color else f"_{size}_{color.lstrip('#')}_r{radius}.png"
     thumb_path = thumb_dir / f"{rel_hash}{suffix}"
 
@@ -450,7 +475,7 @@ async def serve_thumbnail(
     source_path = image_path
     if is_video(image_path):
         if _thumbnail_is_fresh(thumb_path, image_path):
-            return FileResponse(thumb_path.with_suffix(".png"), headers=_THUMBNAIL_CACHE_HEADERS)
+            return _thumbnail_response(request, thumb_path.with_suffix(".png"))
         frame_path = await _ensure_frame_off_loop(album_key, image_path)
         if frame_path is None:
             # A placeholder rather than a 404. Every caller sets img.src with
@@ -496,7 +521,7 @@ async def serve_thumbnail(
             logger.error(f"Error generating thumbnail for {image_path}: {e}")
             raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}") from e
 
-    return FileResponse(thumb_path.with_suffix(".png"), headers=_THUMBNAIL_CACHE_HEADERS)
+    return _thumbnail_response(request, thumb_path.with_suffix(".png"))
 
 
 @search_router.get("/video_frame/{album_key}/{index}", tags=["Search"])

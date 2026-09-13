@@ -23,6 +23,8 @@ from ..config import get_config_manager
 from ..embeddings import LAST_UPDATED_FILENAME, Embeddings, peek_encoder_spec
 from ..media_types import is_video
 from ..progress import IndexingCancelled, progress_tracker
+from ..thumbnail_cache import discard as discard_tiles
+from ..thumbnail_cache import thumbnail_dir
 from ..video_cache import VideoFrameCache
 from ..video_transcode import TranscodeCache
 from .album import (
@@ -415,8 +417,14 @@ def _remove_image_file(image_path: Path, move_to_trash: bool) -> None:
         ) from e
 
 
-def _discard_cached_frame(album_key: str, path: Path) -> None:
-    """Remove a deleted video's derived files. Never raises.
+def _discard_derived_files(album_key: str, path: Path) -> None:
+    """Remove a deleted file's derived copies. Never raises.
+
+    Tiles first, and for every file rather than only videos: a photo has
+    tiles too, and the full sweep in Embeddings only runs when the index is
+    rewritten wholesale. The delete endpoints rewrite the .npz directly, so a
+    deleted image's tiles would otherwise sit there until the album happened
+    to be reindexed.
 
     Both the still and the converted copy, and the conversion is the one that
     matters: it is a full, decodable copy of the video, so leaving it behind
@@ -428,6 +436,16 @@ def _discard_cached_frame(album_key: str, path: Path) -> None:
     Each cache is discarded independently so a failure on one still reclaims
     the other.
     """
+    try:
+        album = get_config_manager().get_album(album_key)
+        relative = get_config_manager().get_relative_path(str(path), album_key)
+        if album and album.index and relative is not None:
+            discard_tiles(
+                thumbnail_dir(Path(album.index)), relative, video=is_video(path)
+            )
+    except Exception as e:
+        logger.debug(f"Could not discard tiles for {path}: {e}")
+
     if not is_video(path):
         return
     for name, cache in (
@@ -468,7 +486,7 @@ async def delete_image(
             # Same reason as the non-board branch below: a board album can
             # hold videos, and their extracted stills outlive the row unless
             # they are discarded here.
-            _discard_cached_frame(album_key, image_path)
+            _discard_derived_files(album_key, image_path)
             embeddings.remove_image_from_embeddings(index)
             return JSONResponse(
                 content={
@@ -487,7 +505,7 @@ async def delete_image(
         # Drop the extracted still too. The index-time sweep would collect it
         # eventually, but not until the next update — and a stale frame for a
         # deleted file is exactly the kind of thing users notice.
-        _discard_cached_frame(album_key, image_path)
+        _discard_derived_files(album_key, image_path)
 
         # Remove from embeddings
         embeddings.remove_image_from_embeddings(index)
@@ -562,7 +580,7 @@ async def delete_images(
                     else:
                         image_path.unlink()
 
-                _discard_cached_frame(album_key, image_path)
+                _discard_derived_files(album_key, image_path)
                 deleted_indices.append(index)
                 deleted_files.append(image_path.name)
             except Exception as e:
