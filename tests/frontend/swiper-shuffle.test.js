@@ -262,6 +262,27 @@ describe("swiper.js shuffle mode", () => {
     });
   });
 
+  describe("resetAllSlides coalescing", () => {
+    it("re-runs a coalesced rebuild with the latest caller's random_nextslide", async () => {
+      // Play in shuffle mode starts a rebuild with random neighbors; if the
+      // user switches to sequential while it is in flight, the queued re-pass
+      // must use *that* caller's flag (false), not the in-flight one (true) —
+      // otherwise the "rebuild in album order" request silently yields a
+      // shuffled buffer.
+      const { initializeSingleSwiper } = await import("../../photomap/frontend/static/javascript/swiper.js");
+      const manager = await initializeSingleSwiper();
+      manager._resetInFlight = null;
+      manager._resetPending = false;
+      manager._doResetAllSlides = jest.fn(() => Promise.resolve());
+
+      const first = manager.resetAllSlides(true);
+      const second = manager.resetAllSlides(false);
+      await Promise.all([first, second]);
+
+      expect(manager._doResetAllSlides.mock.calls.map(([flag]) => flag)).toEqual([true, false]);
+    });
+  });
+
   describe("autoplay end-of-list behavior", () => {
     // Regression tests for the linear-slideshow bug where reaching the last
     // slide jumped back ~10 slides instead of stopping. Swiper's autoplay,
