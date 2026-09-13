@@ -55,6 +55,22 @@ class SwiperManager {
     // autoplay event handlers don't flicker the play/pause icon (see below).
     this._suppressAutoplayIcon = false;
 
+    // The slideshow's *logical* run state — what the user asked for — as
+    // distinct from swiper.autoplay.running, which rebuilds and trims stop and
+    // restart internally. resumeSlideshow() sets it; pauseSlideshow() and any
+    // Swiper-initiated stop (a swipe or keypress with disableOnInteraction)
+    // clear it via the autoplayStop handler. (stopOnLastSlide does not emit
+    // autoplayStop — it just skips the wrap — so the end of the list is
+    // handled by the explicit pauseSlideshow() in slideNextTransitionStart.)
+    // Internal
+    // stops are bracketed with _internalAutoplayStop so that handler ignores
+    // them. This is what lets a rebuild that finishes after the user pressed
+    // Pause stay paused, and one that finishes while they still want the
+    // slideshow running restart it — without either party having to guess
+    // from autoplay.running, which is false for the whole rebuild.
+    this.slideshowActive = false;
+    this._internalAutoplayStop = false;
+
     // Store event listeners for cleanup
     this.eventListeners = [];
 
@@ -170,7 +186,16 @@ class SwiperManager {
 
     this.swiper.on("autoplayStart", refreshSlideshowIcon);
     this.swiper.on("autoplayResume", refreshSlideshowIcon);
-    this.swiper.on("autoplayStop", refreshSlideshowIcon);
+    this.swiper.on("autoplayStop", () => {
+      // Swiper stops autoplay itself on user interaction (disableOnInteraction:
+      // a swipe, a keypress, a mousewheel move). That is the user's doing, so
+      // drop the logical run state — but not for our own internal stops, which
+      // are bracketed with _internalAutoplayStop.
+      if (!this._internalAutoplayStop) {
+        this.slideshowActive = false;
+      }
+      refreshSlideshowIcon();
+    });
     this.swiper.on("autoplayPause", refreshSlideshowIcon);
 
     this.swiper.on("scrollbarDragStart", () => {
@@ -380,26 +405,77 @@ class SwiperManager {
     slideEl.dataset.doubleTapHandlerAttached = "true";
   }
 
+  /** The user's intent: true from resumeSlideshow() until pauseSlideshow()
+   *  or a Swiper-initiated stop. Unlike swiper.autoplay.running this stays
+   *  true across the internal stop/start of a rebuild or trim. */
+  isSlideshowActive() {
+    return this.slideshowActive;
+  }
+
   pauseSlideshow() {
+    this.slideshowActive = false;
     if (this.swiper && this.swiper.autoplay?.running) {
       this.swiper.autoplay.stop();
     }
   }
 
   resumeSlideshow() {
-    if (this.swiper) {
-      // stopOnLastSlide is a *linear-mode* backstop only (see the autoplay
-      // config comment). Shuffle has no end of list: its look-ahead append
-      // keeps a slide past the active one, but once trimShuffleBacklog starts
-      // dropping front slides at the high-water mark the index churn can briefly
-      // expose Swiper's isEnd, and a global stopOnLastSlide would then freeze
-      // autoplay (the "pauses after the 18th shuffled image" regression). Keep
-      // it off whenever we're starting in random mode.
-      this.swiper.params.autoplay.stopOnLastSlide = state.mode !== "random";
-      this.swiper.autoplay.stop();
-      setTimeout(() => {
+    if (!this.swiper) {
+      return;
+    }
+    this.slideshowActive = true;
+    // A rebuild in progress has stopped autoplay and will restart it when it
+    // finishes (see resetAllSlides), provided the slideshow is still wanted
+    // then. Starting here as well would run autoplay against a half-built
+    // buffer, and would restart a slideshow the user pauses before the
+    // rebuild completes.
+    if (this._resetInFlight) {
+      return;
+    }
+    this._startAutoplay();
+  }
+
+  // Start (or restart) autoplay without touching the logical run state. Used
+  // by resumeSlideshow and by the rebuild/trim paths that stopped autoplay
+  // internally and need to bring it back.
+  _startAutoplay() {
+    if (!this.swiper) {
+      return;
+    }
+    // stopOnLastSlide is a *linear-mode* backstop only (see the autoplay
+    // config comment). Shuffle has no end of list: its look-ahead append
+    // keeps a slide past the active one, but once trimShuffleBacklog starts
+    // dropping front slides at the high-water mark the index churn can briefly
+    // expose Swiper's isEnd, and a global stopOnLastSlide would then freeze
+    // autoplay (the "pauses after the 18th shuffled image" regression). Keep
+    // it off whenever we're starting in random mode.
+    this.swiper.params.autoplay.stopOnLastSlide = state.mode !== "random";
+    this._stopAutoplayInternal();
+    setTimeout(() => {
+      // The user may have paused during the 50ms; a stale timer must not undo
+      // that. And if a rebuild has started meanwhile, leave the start to the
+      // rebuild's runner: autoplay running against a half-built buffer would
+      // be stopped again by the rebuild's own slideTo — outside our internal
+      // bracket, so it would read as a user pause and the slideshow would end
+      // up stopped.
+      if (this.slideshowActive && !this._resetInFlight) {
         this.swiper.autoplay.start();
-      }, 50);
+      }
+    }, 50);
+  }
+
+  // Stop autoplay for our own bookkeeping (rebuild, trim, restart) without it
+  // counting as the user pausing. Swiper emits autoplayStop synchronously from
+  // stop(), so the bracket only needs to cover the call.
+  _stopAutoplayInternal() {
+    if (!this.swiper?.autoplay) {
+      return;
+    }
+    this._internalAutoplayStop = true;
+    try {
+      this.swiper.autoplay.stop();
+    } finally {
+      this._internalAutoplayStop = false;
     }
   }
 
@@ -637,6 +713,15 @@ class SwiperManager {
           await this._doResetAllSlides(random);
           random = this._resetPendingRandom;
         } while (this._resetPending);
+        // Each pass stopped autoplay internally. Restart it once, after the
+        // last pass, if the user still wants the slideshow running — a
+        // pauseSlideshow() during the rebuild clears slideshowActive and so
+        // leaves it stopped; a resumeSlideshow() during the rebuild sets it
+        // and is honoured here rather than starting against a half-built
+        // buffer.
+        if (this.slideshowActive) {
+          this._startAutoplay();
+        }
       } finally {
         this._resetInFlight = null;
       }
@@ -650,8 +735,10 @@ class SwiperManager {
       return;
     }
 
-    const slideShowRunning = this.swiper.autoplay?.running;
-    this.pauseSlideshow();
+    // Stop autoplay for the rebuild without recording a user pause; the
+    // resetAllSlides runner restarts it afterwards if the slideshow is still
+    // wanted.
+    this._stopAutoplayInternal();
 
     // Suppress the swiper.slideChange handler for the duration of the
     // rebuild. The first appendSlide after removeAllSlides moves activeIndex
@@ -686,9 +773,16 @@ class SwiperManager {
         await this.addSlideByIndex(nextGlobal, nextSearch, false, random_nextslide);
       }
 
-      // Navigate to the current slide
+      // Navigate to the current slide. Swiper's autoplay treats this
+      // programmatic move like a user interaction and stops itself if it is
+      // running; that would be our doing, not the user's.
       const slideIndex = prevGlobal !== null ? 1 : 0;
-      this.swiper.slideTo(slideIndex, 0);
+      this._internalAutoplayStop = true;
+      try {
+        this.swiper.slideTo(slideIndex, 0);
+      } finally {
+        this._internalAutoplayStop = false;
+      }
 
       await new Promise(requestAnimationFrame);
       if (swiperContainer) {
@@ -696,9 +790,6 @@ class SwiperManager {
       }
 
       updateMetadataOverlay(this.currentSlide());
-      if (slideShowRunning) {
-        this.resumeSlideshow();
-      }
 
       setTimeout(() => updateCurrentImageMarker(window.umapPoints), 500);
       window.dispatchEvent(new CustomEvent("slidesReset"));
@@ -730,7 +821,10 @@ class SwiperManager {
       return;
     }
     const wasRunning = this.swiper.autoplay?.running;
+    // removeSlide's implicit autoplay stop is our doing, not the user's, so
+    // it must not clear the logical run state either.
     this._suppressAutoplayIcon = true;
+    this._internalAutoplayStop = true;
     try {
       while (this.swiper.slides.length > maxSlides) {
         this.swiper.removeSlide(0);
@@ -740,6 +834,7 @@ class SwiperManager {
       }
     } finally {
       this._suppressAutoplayIcon = false;
+      this._internalAutoplayStop = false;
     }
   }
 
@@ -749,17 +844,22 @@ class SwiperManager {
     const slides = swiper.slides.length;
 
     if (slides > maxSlides) {
+      // Internal stop/start: trimming the buffer is not the user pausing.
       const slideShowRunning = swiper.autoplay.running;
-      this.pauseSlideshow();
-
-      if (backward) {
-        swiper.removeSlide(swiper.slides.length - 1);
-      } else {
-        swiper.removeSlide(0);
+      this._internalAutoplayStop = true;
+      try {
+        this._stopAutoplayInternal();
+        if (backward) {
+          swiper.removeSlide(swiper.slides.length - 1);
+        } else {
+          swiper.removeSlide(0);
+        }
+      } finally {
+        this._internalAutoplayStop = false;
       }
 
       if (slideShowRunning) {
-        this.resumeSlideshow();
+        this._startAutoplay();
       }
     }
   }

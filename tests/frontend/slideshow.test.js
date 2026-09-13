@@ -77,12 +77,12 @@ describe("slideshow.js", () => {
     });
 
     it("should return false when autoplay is not running", () => {
-      state.single_swiper = { swiper: { autoplay: { running: false } } };
+      state.single_swiper = { swiper: { autoplay: { running: false } }, isSlideshowActive: () => false };
       expect(slideShowRunning()).toBe(false);
     });
 
     it("should return true when autoplay is running", () => {
-      state.single_swiper = { swiper: { autoplay: { running: true } } };
+      state.single_swiper = { swiper: { autoplay: { running: true } }, isSlideshowActive: () => true };
       expect(slideShowRunning()).toBe(true);
     });
   });
@@ -96,7 +96,7 @@ describe("slideshow.js", () => {
     });
 
     it("should show pause icon when slideshow is running", () => {
-      state.single_swiper = { swiper: { autoplay: { running: true } } };
+      state.single_swiper = { swiper: { autoplay: { running: true } }, isSlideshowActive: () => true };
       state.mode = "chronological";
 
       updateSlideshowButtonIcon();
@@ -105,8 +105,20 @@ describe("slideshow.js", () => {
       expect(container.innerHTML).toContain("pauseIcon");
     });
 
+    it("keeps the pause icon while a rebuild has stopped autoplay but the slideshow is active", () => {
+      // An album switch mid-slideshow stops autoplay for the rebuild. The
+      // icon must follow the user's intent, not the transient autoplay state,
+      // or the button flips to Play for a second and then back.
+      state.single_swiper = { swiper: { autoplay: { running: false } }, isSlideshowActive: () => true };
+      state.mode = "chronological";
+
+      updateSlideshowButtonIcon();
+
+      expect(document.getElementById("slideshowIcon").innerHTML).toContain("pauseIcon");
+    });
+
     it("should show play icon when slideshow is stopped in chronological mode", () => {
-      state.single_swiper = { swiper: { autoplay: { running: false } } };
+      state.single_swiper = { swiper: { autoplay: { running: false } }, isSlideshowActive: () => false };
       state.mode = "chronological";
 
       updateSlideshowButtonIcon();
@@ -116,7 +128,7 @@ describe("slideshow.js", () => {
     });
 
     it("should show shuffle icon when slideshow is stopped in random mode", () => {
-      state.single_swiper = { swiper: { autoplay: { running: false } } };
+      state.single_swiper = { swiper: { autoplay: { running: false } }, isSlideshowActive: () => false };
       state.mode = "random";
 
       updateSlideshowButtonIcon();
@@ -126,7 +138,7 @@ describe("slideshow.js", () => {
     });
 
     it("should update button title when running in chronological mode", () => {
-      state.single_swiper = { swiper: { autoplay: { running: true } } };
+      state.single_swiper = { swiper: { autoplay: { running: true } }, isSlideshowActive: () => true };
       state.mode = "chronological";
 
       updateSlideshowButtonIcon();
@@ -136,7 +148,7 @@ describe("slideshow.js", () => {
     });
 
     it("should update button title when running in random mode", () => {
-      state.single_swiper = { swiper: { autoplay: { running: true } } };
+      state.single_swiper = { swiper: { autoplay: { running: true } }, isSlideshowActive: () => true };
       state.mode = "random";
 
       updateSlideshowButtonIcon();
@@ -146,7 +158,7 @@ describe("slideshow.js", () => {
     });
 
     it("should update button title when stopped", () => {
-      state.single_swiper = { swiper: { autoplay: { running: false } } };
+      state.single_swiper = { swiper: { autoplay: { running: false } }, isSlideshowActive: () => false };
       state.mode = "chronological";
 
       updateSlideshowButtonIcon();
@@ -161,7 +173,7 @@ describe("slideshow.js", () => {
     });
 
     it("should handle null mode", () => {
-      state.single_swiper = { swiper: { autoplay: { running: false } } };
+      state.single_swiper = { swiper: { autoplay: { running: false } }, isSlideshowActive: () => false };
       state.mode = null;
 
       updateSlideshowButtonIcon();
@@ -185,7 +197,12 @@ describe("slideshow.js", () => {
       // leftover shuffle instead of the current image's sequential neighbors.
       const resetAllSlides = jest.fn(() => Promise.resolve());
       const pauseSlideshow = jest.fn();
-      state.single_swiper = { swiper: { autoplay: { running: true } }, pauseSlideshow, resetAllSlides };
+      state.single_swiper = {
+        swiper: { autoplay: { running: true } },
+        isSlideshowActive: () => true,
+        pauseSlideshow,
+        resetAllSlides,
+      };
       state.mode = "random";
 
       await toggleSlideshowWithIndicator();
@@ -194,11 +211,42 @@ describe("slideshow.js", () => {
       expect(resetAllSlides).toHaveBeenCalled();
     });
 
+    it("pauses rather than starts when autoplay is stopped by a rebuild but the slideshow is active", async () => {
+      // An album switch mid-slideshow rebuilds the buffer, which stops autoplay
+      // for the duration. Pressing the button then must pause the slideshow,
+      // not be mistaken for a Play press that dispatches a start request.
+      const resetAllSlides = jest.fn(() => Promise.resolve());
+      const pauseSlideshow = jest.fn();
+      const resumeSlideshow = jest.fn();
+      state.single_swiper = {
+        swiper: { autoplay: { running: false } },
+        isSlideshowActive: () => true,
+        pauseSlideshow,
+        resumeSlideshow,
+        resetAllSlides,
+      };
+      state.mode = "chronological";
+      const onStart = jest.fn();
+      window.addEventListener("slideshowStartRequested", onStart);
+
+      await toggleSlideshowWithIndicator();
+      window.removeEventListener("slideshowStartRequested", onStart);
+
+      expect(pauseSlideshow).toHaveBeenCalled();
+      expect(resumeSlideshow).not.toHaveBeenCalled();
+      expect(onStart).not.toHaveBeenCalled();
+    });
+
     it("does not rebuild the buffer when pausing a sequential run", async () => {
       // Sequential runs already leave an in-order buffer, so no rebuild needed.
       const resetAllSlides = jest.fn(() => Promise.resolve());
       const pauseSlideshow = jest.fn();
-      state.single_swiper = { swiper: { autoplay: { running: true } }, pauseSlideshow, resetAllSlides };
+      state.single_swiper = {
+        swiper: { autoplay: { running: true } },
+        isSlideshowActive: () => true,
+        pauseSlideshow,
+        resetAllSlides,
+      };
       state.mode = "chronological";
 
       await toggleSlideshowWithIndicator();
@@ -320,7 +368,7 @@ describe("slideshow.js", () => {
           <button id="slideshowModeMenuBtn" class="menu-chevron" title="Slideshow mode"></button>
         </div>
       `;
-      state.single_swiper = { swiper: { autoplay: { running: false } } };
+      state.single_swiper = { swiper: { autoplay: { running: false } }, isSlideshowActive: () => false };
       state.mode = "chronological";
       initializeSlideshowControls();
     });
@@ -427,7 +475,12 @@ describe("slideshow.js", () => {
         // and skipped the rebuild.
         const resetAllSlides = jest.fn(() => Promise.resolve());
         const pauseSlideshow = jest.fn();
-        state.single_swiper = { swiper: { autoplay: { running: true } }, pauseSlideshow, resetAllSlides };
+        state.single_swiper = {
+          swiper: { autoplay: { running: true } },
+          isSlideshowActive: () => true,
+          pauseSlideshow,
+          resetAllSlides,
+        };
         state.mode = "random";
 
         chevron().click();
@@ -490,13 +543,40 @@ describe("slideshow.js", () => {
         expect(state.mode).toBe("random");
       });
 
+      it("pauses and rebuilds when leaving shuffle during a rebuild that has stopped autoplay", async () => {
+        // Same shape as an album switch mid-shuffle: autoplay is stopped by the
+        // in-flight rebuild, but the slideshow is still logically running. The
+        // pick must pause it (so the rebuild does not restart it) and rebuild.
+        const resetAllSlides = jest.fn(() => Promise.resolve());
+        const pauseSlideshow = jest.fn();
+        state.single_swiper = {
+          swiper: { autoplay: { running: false } },
+          isSlideshowActive: () => true,
+          pauseSlideshow,
+          resetAllSlides,
+        };
+        state.mode = "random";
+
+        chevron().click();
+        await pick("Sequential");
+
+        expect(pauseSlideshow).toHaveBeenCalled();
+        expect(resetAllSlides).toHaveBeenCalledTimes(1);
+        expect(state.mode).toBe("chronological");
+      });
+
       it("pauses and rebuilds when re-selecting shuffle while a shuffle run is playing", async () => {
         // Picking any mode while running pauses the slideshow, and stopping a
         // shuffle run always leaves a shuffled buffer behind — so this must
         // rebuild just like the Pause button does.
         const resetAllSlides = jest.fn(() => Promise.resolve());
         const pauseSlideshow = jest.fn();
-        state.single_swiper = { swiper: { autoplay: { running: true } }, pauseSlideshow, resetAllSlides };
+        state.single_swiper = {
+          swiper: { autoplay: { running: true } },
+          isSlideshowActive: () => true,
+          pauseSlideshow,
+          resetAllSlides,
+        };
         state.mode = "random";
 
         chevron().click();

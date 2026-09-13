@@ -163,7 +163,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    const slideShowRunning = state.swiper?.autoplay?.running;
+    // Logical state: autoplay.running is false during a buffer rebuild (e.g.
+    // right after Play), and pausing on that reading would have cleared the
+    // user's intent and left the slideshow stopped afterwards.
+    const slideShowRunning = state.single_swiper.isSlideshowActive();
     state.single_swiper.pauseSlideshow();
 
     try {
@@ -222,7 +225,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     try {
-      const slideShowRunning = state.swiper?.autoplay?.running;
+      const slideShowRunning = state.single_swiper.isSlideshowActive();
       state.single_swiper.pauseSlideshow();
       showSpinner();
       const imgResponse = await fetch(imgUrl);
