@@ -47,7 +47,7 @@ const {
   initializeSlideshowControls,
 } = await import("../../photomap/frontend/static/javascript/slideshow.js");
 
-const { state } = await import("../../photomap/frontend/static/javascript/state.js");
+const { state, saveSettingsToLocalStorage } = await import("../../photomap/frontend/static/javascript/state.js");
 
 describe("slideshow.js", () => {
   beforeEach(() => {
@@ -388,6 +388,124 @@ describe("slideshow.js", () => {
       chevron().click();
       document.removeEventListener("click", onDocClick);
       expect(onDocClick).toHaveBeenCalled();
+    });
+
+    describe("switching mode", () => {
+      // The menu handler is async (it awaits the pause + buffer rebuild), and
+      // click() does not return its promise, so drain the microtask queue.
+      const settle = async () => {
+        for (let i = 0; i < 10; i++) {
+          await Promise.resolve();
+        }
+      };
+      const pick = (label) => {
+        const btn = Array.from(menu().querySelectorAll("button")).find((b) => b.textContent.includes(label));
+        btn.click();
+        return settle();
+      };
+
+      it("rebuilds the buffer in album order when leaving shuffle while stopped", async () => {
+        // An arrow key, swipe or scrollbar drag halts autoplay without ever
+        // running the pause path, so the shuffled buffer is still on screen.
+        // Picking Sequential must rebuild it or prev/next keep walking the
+        // leftover shuffle instead of the current image's real neighbors.
+        const resetAllSlides = jest.fn(() => Promise.resolve());
+        state.single_swiper = { swiper: { autoplay: { running: false } }, pauseSlideshow: jest.fn(), resetAllSlides };
+        state.mode = "random";
+
+        chevron().click();
+        await pick("Sequential");
+
+        expect(resetAllSlides).toHaveBeenCalledTimes(1);
+        expect(state.mode).toBe("chronological");
+        expect(menu()).toBeNull();
+      });
+
+      it("rebuilds the buffer in album order when leaving shuffle while running", async () => {
+        // Regression: the handler used to write the new mode *before* pausing,
+        // so the pause path saw "chronological", concluded no shuffle had run,
+        // and skipped the rebuild.
+        const resetAllSlides = jest.fn(() => Promise.resolve());
+        const pauseSlideshow = jest.fn();
+        state.single_swiper = { swiper: { autoplay: { running: true } }, pauseSlideshow, resetAllSlides };
+        state.mode = "random";
+
+        chevron().click();
+        await pick("Sequential");
+
+        expect(pauseSlideshow).toHaveBeenCalled();
+        expect(resetAllSlides).toHaveBeenCalledTimes(1);
+        expect(state.mode).toBe("chronological");
+      });
+
+      it("does not rebuild the buffer when switching from sequential to shuffle", async () => {
+        // A sequential buffer is already in order and shuffle starts fresh.
+        const resetAllSlides = jest.fn(() => Promise.resolve());
+        state.single_swiper = { swiper: { autoplay: { running: false } }, pauseSlideshow: jest.fn(), resetAllSlides };
+        state.mode = "chronological";
+
+        chevron().click();
+        await pick("Shuffled");
+
+        expect(resetAllSlides).not.toHaveBeenCalled();
+        expect(state.mode).toBe("random");
+      });
+
+      it("does not rebuild the buffer when re-selecting sequential", async () => {
+        const resetAllSlides = jest.fn(() => Promise.resolve());
+        state.single_swiper = { swiper: { autoplay: { running: false } }, pauseSlideshow: jest.fn(), resetAllSlides };
+        state.mode = "chronological";
+
+        chevron().click();
+        await pick("Sequential");
+
+        // The handler did run (it persisted the choice); it just had no
+        // shuffled buffer to rebuild.
+        expect(saveSettingsToLocalStorage).toHaveBeenCalled();
+        expect(resetAllSlides).not.toHaveBeenCalled();
+        expect(state.mode).toBe("chronological");
+      });
+
+      it("lets the last click win when a second pick lands during the rebuild", async () => {
+        // The rebuild awaits several image fetches. A user who picks Sequential
+        // and then changes their mind to Shuffled before it finishes must end
+        // up in shuffle mode — the first handler's completion must not
+        // overwrite the second's choice.
+        let finishReset;
+        const resetAllSlides = jest.fn(() => new Promise((resolve) => (finishReset = resolve)));
+        state.single_swiper = { swiper: { autoplay: { running: false } }, pauseSlideshow: jest.fn(), resetAllSlides };
+        state.mode = "random";
+
+        chevron().click();
+        await pick("Sequential");
+        expect(resetAllSlides).toHaveBeenCalledTimes(1);
+        chevron().click();
+        await pick("Shuffled");
+        // Let the first handler's post-rebuild continuation run fully before
+        // asserting; pick() cannot await the handler itself (click() returns
+        // void), so drain the queue after releasing the rebuild.
+        finishReset();
+        await settle();
+
+        expect(state.mode).toBe("random");
+      });
+
+      it("pauses and rebuilds when re-selecting shuffle while a shuffle run is playing", async () => {
+        // Picking any mode while running pauses the slideshow, and stopping a
+        // shuffle run always leaves a shuffled buffer behind — so this must
+        // rebuild just like the Pause button does.
+        const resetAllSlides = jest.fn(() => Promise.resolve());
+        const pauseSlideshow = jest.fn();
+        state.single_swiper = { swiper: { autoplay: { running: true } }, pauseSlideshow, resetAllSlides };
+        state.mode = "random";
+
+        chevron().click();
+        await pick("Shuffled");
+
+        expect(pauseSlideshow).toHaveBeenCalled();
+        expect(resetAllSlides).toHaveBeenCalledTimes(1);
+        expect(state.mode).toBe("random");
+      });
     });
 
     it("opens the menu on long-press rather than the browser's own menu", () => {

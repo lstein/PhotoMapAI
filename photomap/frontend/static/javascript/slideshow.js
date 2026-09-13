@@ -181,11 +181,32 @@ function createModeMenu(x, y, anchorAbove = null) {
     b.style.cursor = "pointer";
     b.onclick = async (ev) => {
       ev.stopPropagation();
-      state.mode = modeVal;
       removeModeMenu();
+      const wasShuffling = state.mode === "random";
+      const wasRunning = slideShowRunning();
+      // Write and persist the new mode synchronously so the last click always
+      // wins: the rebuild below awaits several image fetches, and a second
+      // pick made during that window must not be overwritten when this one
+      // resumes. Everything after this line is driven by the locally captured
+      // outgoing mode, never by re-reading state.mode.
+      state.mode = modeVal;
       saveSettingsToLocalStorage();
-      if (slideShowRunning()) {
-        await toggleSlideshowWithIndicator();
+      if (wasRunning) {
+        state.single_swiper.pauseSlideshow();
+        showPlayPauseIndicator(false);
+      }
+      // A shuffle run leaves the swiper buffer in random order, so prev/next
+      // would walk the leftover shuffle instead of the current image's real
+      // neighbors. Rebuild in album order when a shuffle run was just stopped
+      // here, and also when leaving shuffle with the slideshow already stopped:
+      // an arrow key, a swipe or a scrollbar drag halts autoplay without ever
+      // running the pause path, so a shuffled buffer may still be on screen.
+      if (wasShuffling && (wasRunning || modeVal !== "random")) {
+        try {
+          await state.single_swiper?.resetAllSlides();
+        } catch (err) {
+          console.warn("resetAllSlides failed:", err);
+        }
       }
       updateSlideshowButtonIcon();
     };

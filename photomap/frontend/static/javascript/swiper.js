@@ -49,6 +49,7 @@ class SwiperManager {
     // the latest slideState.
     this._resetInFlight = null;
     this._resetPending = false;
+    this._resetPendingRandom = false; // random_nextslide requested by the queued reset
 
     // Set while trimShuffleBacklog is restarting autoplay after a trim, so the
     // autoplay event handlers don't flicker the play/pause icon (see below).
@@ -614,6 +615,12 @@ class SwiperManager {
     // latest slideState afterwards.
     if (this._resetInFlight) {
       this._resetPending = true;
+      // The coalesced re-pass must honour the *latest* caller's request, not
+      // the one that started the in-flight rebuild. Otherwise a Play press in
+      // shuffle mode (random_nextslide=true) followed by a switch to
+      // sequential (false) would re-run with true and deal random neighbors
+      // into a buffer the caller asked to have in album order.
+      this._resetPendingRandom = random_nextslide;
       try {
         await this._resetInFlight;
       } catch {
@@ -623,10 +630,12 @@ class SwiperManager {
     }
 
     const runner = (async () => {
+      let random = random_nextslide;
       try {
         do {
           this._resetPending = false;
-          await this._doResetAllSlides(random_nextslide);
+          await this._doResetAllSlides(random);
+          random = this._resetPendingRandom;
         } while (this._resetPending);
       } finally {
         this._resetInFlight = null;
