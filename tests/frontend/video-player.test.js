@@ -9,7 +9,8 @@ const mockKeyboardEnable = jest.fn();
 const mockState = {
   single_swiper: {
     pauseSlideshow: mockPauseSlideshow,
-    startSlideshow: mockStartSlideshow,
+    resumeSlideshow: mockStartSlideshow,
+    isSlideshowActive: () => mockState.swiper.autoplay.running,
   },
   swiper: {
     autoplay: { running: false },

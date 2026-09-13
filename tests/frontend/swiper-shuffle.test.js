@@ -283,6 +283,198 @@ describe("swiper.js shuffle mode", () => {
     });
   });
 
+  describe("logical run state across rebuilds", () => {
+    // Make the mock Swiper emit autoplayStop synchronously from stop(), as the
+    // real one does, so the manager's autoplayStop handler is exercised.
+    let handlers;
+    async function freshManager() {
+      handlers = {};
+      mockSwiper.on = jest.fn((event, cb) => {
+        handlers[event] = cb;
+      });
+      mockSwiper.autoplay.stop = jest.fn(() => {
+        mockSwiper.autoplay.running = false;
+        handlers.autoplayStop?.();
+      });
+      const { initializeSingleSwiper } = await import("../../photomap/frontend/static/javascript/swiper.js");
+      const manager = await initializeSingleSwiper();
+      // The SwiperManager singleton persists across tests: start clean, and
+      // drop any _doResetAllSlides mock an earlier test installed as an own
+      // property so tests that want the real rebuild get it.
+      delete manager._doResetAllSlides;
+      manager._resetInFlight = null;
+      manager._resetPending = false;
+      manager.slideshowActive = false;
+      return manager;
+    }
+
+    it("defers a resume requested during a rebuild until the rebuild finishes", async () => {
+      // Play dispatches slideshowStartRequested (which starts a rebuild) and
+      // then calls resumeSlideshow(). Autoplay must not start against the
+      // half-built buffer; it starts once the rebuild completes.
+      jest.useFakeTimers();
+      const manager = await freshManager();
+      let release;
+      manager._doResetAllSlides = jest.fn(() => new Promise((resolve) => (release = resolve)));
+      mockSwiper.autoplay.running = false;
+
+      const rebuild = manager.resetAllSlides(true);
+      manager.resumeSlideshow();
+      jest.advanceTimersByTime(100);
+      expect(mockSwiper.autoplay.start).not.toHaveBeenCalled();
+
+      release();
+      await rebuild;
+      jest.advanceTimersByTime(50);
+      expect(mockSwiper.autoplay.start).toHaveBeenCalledTimes(1);
+      expect(manager.isSlideshowActive()).toBe(true);
+    });
+
+    it("leaves autoplay stopped when the user pauses during a rebuild", async () => {
+      // Regression: the rebuild used to capture "was running" at entry and
+      // resume unconditionally at exit, restarting a slideshow the user had
+      // paused (or switched to sequential) while the rebuild was fetching.
+      jest.useFakeTimers();
+      const manager = await freshManager();
+      let release;
+      manager._doResetAllSlides = jest.fn(() => new Promise((resolve) => (release = resolve)));
+      manager.slideshowActive = true;
+      mockSwiper.autoplay.running = false; // stopped internally by the rebuild
+
+      const rebuild = manager.resetAllSlides();
+      manager.pauseSlideshow();
+      release();
+      await rebuild;
+      jest.advanceTimersByTime(100);
+
+      expect(mockSwiper.autoplay.start).not.toHaveBeenCalled();
+      expect(manager.isSlideshowActive()).toBe(false);
+    });
+
+    it("restarts autoplay after a rebuild when the slideshow is still wanted", async () => {
+      jest.useFakeTimers();
+      const manager = await freshManager();
+      manager._doResetAllSlides = jest.fn(() => Promise.resolve());
+      manager.slideshowActive = true;
+
+      await manager.resetAllSlides();
+      jest.advanceTimersByTime(50);
+
+      expect(mockSwiper.autoplay.start).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not let a stale start timer undo a pause made within the restart delay", async () => {
+      jest.useFakeTimers();
+      const manager = await freshManager();
+      manager.resumeSlideshow();
+      manager.pauseSlideshow();
+      jest.advanceTimersByTime(100);
+
+      expect(mockSwiper.autoplay.start).not.toHaveBeenCalled();
+      expect(manager.isSlideshowActive()).toBe(false);
+    });
+
+    it("does not fire the restart timer into a rebuild that began after it was armed", async () => {
+      // Regression: Play from grid view arms the 50 ms timer, then the
+      // grid-to-single transition starts a rebuild. If the timer started
+      // autoplay mid-rebuild, the rebuild's slideTo would stop it outside the
+      // internal bracket, read as a user pause, and the slideshow would end
+      // up stopped with the Play icon showing.
+      jest.useFakeTimers();
+      const manager = await freshManager();
+      let release;
+      manager._doResetAllSlides = jest.fn(() => new Promise((resolve) => (release = resolve)));
+
+      manager.resumeSlideshow(); // arms the timer, no rebuild in flight
+      const rebuild = manager.resetAllSlides();
+      jest.advanceTimersByTime(50);
+      expect(mockSwiper.autoplay.start).not.toHaveBeenCalled();
+
+      release();
+      await rebuild;
+      jest.advanceTimersByTime(50);
+      expect(mockSwiper.autoplay.start).toHaveBeenCalledTimes(1);
+      expect(manager.isSlideshowActive()).toBe(true);
+    });
+
+    it("keeps the run state when the rebuild's own slideTo stops a running autoplay", async () => {
+      // Belt and braces for the same hole: if autoplay is somehow running when
+      // the rebuild navigates to the current slide, Swiper stops it (it treats
+      // the programmatic move as interaction). That stop is ours.
+      const manager = await freshManager();
+      manager.slideshowActive = true;
+      mockSwiper.slideTo = jest.fn(() => {
+        if (mockSwiper.autoplay.running) {
+          mockSwiper.autoplay.stop();
+        }
+      });
+      // Simulate a timer having started autoplay after the rebuild's internal stop.
+      mockFetchImageByIndex.mockImplementation((index) => {
+        mockSwiper.autoplay.running = true;
+        return Promise.resolve({ index, filename: `image${index}.jpg`, image_url: `/images/${index}.jpg`, total: 10 });
+      });
+      mockSlideState.currentGlobalIndex = 3;
+
+      await manager.resetAllSlides();
+
+      expect(mockSwiper.slideTo).toHaveBeenCalled();
+      expect(manager.isSlideshowActive()).toBe(true);
+    });
+
+    it("clears the run state on a Swiper-initiated stop but not on an internal one", async () => {
+      const manager = await freshManager();
+      manager.slideshowActive = true;
+      mockSwiper.autoplay.running = true;
+
+      // Our own bookkeeping stop (rebuild/trim): user intent unchanged.
+      manager._stopAutoplayInternal();
+      expect(mockSwiper.autoplay.stop).toHaveBeenCalledTimes(1);
+      expect(manager.isSlideshowActive()).toBe(true);
+
+      // Swiper stopping itself (swipe with disableOnInteraction, stopOnLastSlide).
+      mockSwiper.autoplay.running = true;
+      mockSwiper.autoplay.stop();
+      expect(manager.isSlideshowActive()).toBe(false);
+    });
+
+    it("a real rebuild stops autoplay internally, keeps the run state, and restarts afterwards", async () => {
+      // End to end through _doResetAllSlides with the DOM fixture: the stop it
+      // performs must not read as a user pause.
+      const manager = await freshManager();
+      manager.slideshowActive = true;
+      mockSwiper.autoplay.running = true;
+      mockSlideState.currentGlobalIndex = 3;
+
+      await manager.resetAllSlides();
+      expect(manager.isSlideshowActive()).toBe(true);
+      expect(mockSwiper.autoplay.stop).toHaveBeenCalled();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      expect(mockSwiper.autoplay.start).toHaveBeenCalled();
+    });
+
+    it("trimming the shuffle backlog does not clear the run state", async () => {
+      const manager = await freshManager();
+      manager.slideshowActive = true;
+      mockSwiper.autoplay.running = true;
+      // removeSlide's implicit slideTo stops autoplay in real Swiper; the mock
+      // mirrors that and now also emits autoplayStop like the real one.
+      mockSwiper.removeSlide = jest.fn(() => {
+        mockSwiper.slides.shift();
+        mockSwiper.autoplay.stop();
+      });
+      const savedHighWaterMark = mockState.highWaterMark;
+      mockState.highWaterMark = 3;
+      mockSwiper.slides = [createMockSlide(1), createMockSlide(2), createMockSlide(3), createMockSlide(4)];
+
+      manager.trimShuffleBacklog();
+
+      expect(mockSwiper.slides.length).toBe(3);
+      expect(manager.isSlideshowActive()).toBe(true);
+      expect(mockSwiper.autoplay.start).toHaveBeenCalled();
+      mockState.highWaterMark = savedHighWaterMark;
+    });
+  });
+
   describe("autoplay end-of-list behavior", () => {
     // Regression tests for the linear-slideshow bug where reaching the last
     // slide jumped back ~10 slides instead of stopping. Swiper's autoplay,

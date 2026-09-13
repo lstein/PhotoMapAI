@@ -200,14 +200,14 @@ window.addEventListener("slideshowStartRequested", async () => {
   if (state.gridViewActive) {
     await toggleGridSwiperView(false);
   }
+  // Prepare the buffer only. The Play handler that dispatched this event
+  // calls resumeSlideshow() itself, which records that the slideshow is
+  // wanted; the rebuild then starts autoplay when it finishes. Resuming here
+  // as well used to restart a slideshow the user had paused (or switched to
+  // sequential mode) while this rebuild was still fetching.
   await state.single_swiper.resetAllSlides(state.mode === "random");
   if (isUmapFullscreen()) {
     toggleUmapWindow(false);
-  }
-  try {
-    state.single_swiper.resumeSlideshow();
-  } catch (err) {
-    console.warn("Failed to resume slideshow:", err);
   }
   // update icon in case slideshow started
   updateSlideshowButtonIcon();

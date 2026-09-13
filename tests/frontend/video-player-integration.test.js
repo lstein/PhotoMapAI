@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const mockState = {
-  single_swiper: { pauseSlideshow: jest.fn(), startSlideshow: jest.fn() },
+  single_swiper: { pauseSlideshow: jest.fn(), resumeSlideshow: jest.fn(), isSlideshowActive: () => false },
   swiper: { autoplay: { running: false }, keyboard: { disable: jest.fn(), enable: jest.fn() } },
 };
 
