@@ -241,6 +241,23 @@ def test_serve_video_sets_an_explicit_cache_lifetime(client, mixed_album):
     assert "max-age" in response.headers.get("cache-control", "")
 
 
+def test_thumbnails_are_revalidated_like_the_poster(client, mixed_album):
+    """Keyed by index, so it designates a different file after a reindex.
+
+    Exactly the reason /video_frame is no-cache. With no Cache-Control at all
+    a browser applies heuristic freshness (RFC 9111 4.2.2) and reuses a tile
+    for a tenth of the file's age without asking; with a bounded lifetime it
+    pins a freshly rebuilt tile for that long instead, which is worse for the
+    delete case than the heuristic was. Only the grid busts its own URL — the
+    UMAP hover popup, the landmark overlay, the back flyout and the reference
+    strip do not.
+    """
+    for url in ("/thumbnails/mixed_album/0", "/thumbnails/mixed_album/1"):
+        response = client.get(url)
+        assert response.status_code == 200, url
+        assert response.headers.get("cache-control") == "no-cache", url
+
+
 def test_the_poster_is_not_cached_across_reindexes(client, mixed_album):
     """video_frame is keyed by index, and an index designates a different
     file once a delete or reindex reorders the album."""
@@ -328,3 +345,40 @@ def test_frame_resolution_is_skipped_when_the_thumbnail_is_warm(
 
     assert client.get("/thumbnails/mixed_album/0?size=64").status_code == 200
     assert calls == [], "a cached thumbnail should not re-resolve the still"
+
+
+@requires_ffmpeg
+def test_a_new_frame_selection_generation_rebuilds_the_video_thumbnail(
+    client, mixed_album, monkeypatch
+):
+    """A release that picks a different frame must reach the grid.
+
+    The tile is built from the still, but its freshness is judged against the
+    *video's* mtime, which does not move when only the choice of frame
+    changes. Without the generation in the tile's key, every grid tile, UMAP
+    hover popup and landmark overlay would serve the previous release's black
+    title card forever, while the slideshow poster showed the new frame.
+    """
+    from photomap.backend.routers import search as search_module
+
+    assert client.get("/thumbnails/mixed_album/0?size=64").status_code == 200
+
+    calls = []
+    real = search_module._ensure_frame_off_loop
+
+    async def counted(album_key, video_path):
+        calls.append(video_path)
+        return await real(album_key, video_path)
+
+    monkeypatch.setattr(search_module, "_ensure_frame_off_loop", counted)
+    monkeypatch.setattr(search_module, "FRAME_SELECTION_GENERATION", 99)
+
+    assert client.get("/thumbnails/mixed_album/0?size=64").status_code == 200
+    assert calls, "the tile must be rebuilt from a freshly chosen frame"
+
+    # An image has pixels of its own, so nothing about frame selection
+    # applies to it and its tile must stay warm.
+    calls.clear()
+    assert client.get("/thumbnails/mixed_album/1?size=64").status_code == 200
+    assert client.get("/thumbnails/mixed_album/1?size=64").status_code == 200
+    assert calls == []

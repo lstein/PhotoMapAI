@@ -27,6 +27,7 @@ from ..embeddings import SUPPORTED_EXTENSIONS, MediaFilter
 from ..media_types import is_video, video_media_type
 from ..metadata_modules import SlideSummary, video_external_link_html
 from ..util import is_cuda_oom
+from ..video import FRAME_SELECTION_GENERATION
 from ..video_cache import VideoFrameCache
 from ..video_transcode import TranscodeCache, TranscodeStatus, request_transcode
 from .album import (
@@ -356,6 +357,23 @@ def _video_placeholder_response(size: int) -> Response:
     )
 
 
+# Same reasoning as /video_frame below, and the same answer: this URL is keyed
+# by *index*, so it designates a different file the moment a delete or reindex
+# reorders the album, and the frame-selection generation can change the tile
+# for a file that has not moved at all. Only the grid busts its own URL; the
+# UMAP hover popup, the landmark overlay, the back flyout and the reference
+# strip do not, so anything cacheable here is served stale to four consumers.
+#
+# An earlier attempt used max-age=3600 to avoid re-transferring tiles, since
+# FileResponse answers no conditional requests. That made the common case
+# worse, not better: a freshly rebuilt tile has a near-zero heuristic lifetime
+# and would have been revalidated within seconds, and pinning it for an hour
+# is exactly how a deleted image goes on being shown. The grid already
+# re-fetches every tile per page load through its cache buster, so the
+# bandwidth this would have saved is mostly not there to save.
+_THUMBNAIL_CACHE_HEADERS = {"Cache-Control": "no-cache"}
+
+
 @search_router.get("/thumbnails/{album_key}/{index}", tags=["Search"])
 async def serve_thumbnail(
     album_key: str,
@@ -403,7 +421,18 @@ async def serve_thumbnail(
     # collided ``/a/b.jpg`` with ``/a_b.jpg`` (same mangled name) and
     # ``a.png`` with ``a.jpg`` (same stem) — both observable cache-poisoning
     # bugs. blake2b-128 makes collisions effectively impossible.
-    rel_hash = hashlib.blake2b(relative_path.encode("utf-8"), digest_size=16).hexdigest()
+    # A video's tile is built from its extracted still, not from pixels of its
+    # own, so it also has to be invalidated when a new release picks a
+    # *different* frame out of the same unchanged file. The freshness check
+    # below compares the tile against the video's own mtime, which does not
+    # move when that happens — without the generation in the key, the grid,
+    # the UMAP hover popup and the landmark overlay would serve the previous
+    # release's black title card forever, while the slideshow poster (which
+    # goes straight to the frame cache) showed the new frame.
+    cache_subject = relative_path
+    if is_video(image_path):
+        cache_subject = f"{relative_path}|frames{FRAME_SELECTION_GENERATION}"
+    rel_hash = hashlib.blake2b(cache_subject.encode("utf-8"), digest_size=16).hexdigest()
     suffix = f"_{size}.png" if not color else f"_{size}_{color.lstrip('#')}_r{radius}.png"
     thumb_path = thumb_dir / f"{rel_hash}{suffix}"
 
@@ -421,7 +450,7 @@ async def serve_thumbnail(
     source_path = image_path
     if is_video(image_path):
         if _thumbnail_is_fresh(thumb_path, image_path):
-            return FileResponse(thumb_path.with_suffix(".png"))
+            return FileResponse(thumb_path.with_suffix(".png"), headers=_THUMBNAIL_CACHE_HEADERS)
         frame_path = await _ensure_frame_off_loop(album_key, image_path)
         if frame_path is None:
             # A placeholder rather than a 404. Every caller sets img.src with
@@ -467,7 +496,7 @@ async def serve_thumbnail(
             logger.error(f"Error generating thumbnail for {image_path}: {e}")
             raise HTTPException(status_code=500, detail=f"Thumbnail error: {e}") from e
 
-    return FileResponse(thumb_path.with_suffix(".png"))
+    return FileResponse(thumb_path.with_suffix(".png"), headers=_THUMBNAIL_CACHE_HEADERS)
 
 
 @search_router.get("/video_frame/{album_key}/{index}", tags=["Search"])

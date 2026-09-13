@@ -1,8 +1,8 @@
 """Still-frame extraction and probing for video files.
 
-PhotoMapAI indexes a video by CLIP-encoding one still frame taken near its
-start, so a video behaves like a photo everywhere downstream — search,
-clustering, curation.  This module owns the one job of turning a path into
+PhotoMapAI indexes a video by CLIP-encoding one still frame taken from a
+little way in, so a video behaves like a photo everywhere downstream —
+search, clustering, curation.  This module owns the one job of turning a path into
 ``(PIL frame, VideoInfo)``, and returning ``None`` rather than raising when
 anything at all goes wrong.
 
@@ -20,11 +20,13 @@ entire file to count frames, which is catastrophic on a multi-gigabyte video.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 import shutil
 import subprocess
 import threading
+import time
 from io import BytesIO
 from pathlib import Path
 
@@ -35,21 +37,125 @@ from .media_types import is_web_playable
 
 logger = logging.getLogger(__name__)
 
-# Seek this far in before grabbing the frame. Frame 0 of consumer video is
-# very often black, a fade-in, or a slate; one second in is a materially
-# better subject for CLIP at no extra cost, because `-ss` placed *before*
+# Seek this far in before grabbing the frame. The opening of real-world
+# video is very often black, a fade-in, a slate, or a title card, none of
+# which is a useful poster or a useful CLIP subject; several seconds in is a
+# materially better frame at no extra cost, because `-ss` placed *before*
 # `-i` is an input seek (jump to the preceding keyframe) rather than a decode
 # of everything up to that point.
-FRAME_SEEK_SECONDS = 1.0
+FRAME_SEEK_SECONDS = 5.0
 
-# Per-attempt wall-clock ceiling. Two attempts max, so the worst case for one
-# pathological file is 2x this.
+# When the seek above lands past the end, the retry is aimed at the middle of
+# the clip the banner has just reported. A fixed shallower offset would land
+# on the same frame the old code took and make the extra attempt pure waste.
+SHORT_FILE_SEEK_FRACTION = 0.5
+
+# Last resorts, in order, when the duration is unknown or the aimed retry
+# also comes back empty.
+SHALLOW_SEEK_FALLBACKS: tuple[float | None, ...] = (1.0, None)
+
+# Where to go when a frame *was* extracted but is empty (see `_frame_entropy`)
+# — the long title sequence case, which no fixed offset can cover because it
+# scales with the runtime. Fractions of the duration, which the successful
+# attempt has just told us. More candidates than MAX_DEEPER_ATTEMPTS on
+# purpose: the early ones are unusable on a short clip (too close to the frame
+# just rejected) and get skipped.
+DEEPER_SEEK_FRACTIONS: tuple[float, ...] = (0.1, 0.35, 0.6)
+
+# Same, for the rare file whose duration the banner does not report.
+DEEPER_SEEK_FALLBACK_SECONDS = 20.0
+
+# Ceiling on those retries, and on the whole search. Each attempt costs
+# another ffmpeg spawn, and this runs once per video across a collection.
+MAX_DEEPER_ATTEMPTS = 2
+MAX_FRAME_ATTEMPTS = 4
+
+# A deeper attempt must move meaningfully later, and no attempt may be aimed
+# at the last instant of the file: seeking there returns nothing (so the
+# attempt is wasted) or the closing fade (the same problem at the other end).
+MIN_DEEPER_SEEK_GAP_SECONDS = 1.0
+SEEK_TAIL_MARGIN_SECONDS = 0.25
+
+# Shannon entropy of the luma histogram, in bits, below which a frame is
+# treated as empty: a black screen, a fade, a solid slate, or titles over
+# black. Calibrated against a labelled corpus of synthetic-but-realistic
+# frames and real encodes. Junk frames measure 0.0-0.8 bits (a pure black
+# frame is 0.0, a one-line title card ~0.2, dense end credits ~0.65); real
+# content starts around 1.1 even when it is almost entirely dark — a night
+# skyline, fireworks against black, a snowfield, a pillarboxed phone video.
+# Entropy is what separates those: a title card is two levels, black and
+# white, while a dark *scene* has tone everywhere.
+#
+# Erring low is deliberate. A frame wrongly called empty only triggers
+# another attempt, and the best-scoring frame is returned either way; a frame
+# wrongly kept is the black thumbnail this whole search exists to avoid.
+FRAME_ENTROPY_FLOOR = 0.75
+
+# Entropy measures flatness, not darkness, and the two come apart badly at the
+# bottom of the range. A photograph dimmed to a peak luma of 2/255 — black to
+# any viewer — still measures 1.45 bits, because the dither and encode noise
+# spread across a handful of levels carry real information; black carrying
+# nothing but half an LSB of sensor noise measures 1.27 even after an x264
+# round trip. Both sail over the floor, so the fade-to-black this whole ladder
+# exists to walk past was being accepted on the first attempt.
+#
+# The floor cannot simply be raised to catch them: the dimmest *content* in
+# the calibration corpus (an overcast snowfield) measures 1.07, below the
+# 1.45 of the black frame. Entropy alone cannot separate the two, so darkness
+# is asked about separately.
+#
+# The question is "are there any genuinely bright pixels", not "is the average
+# bright" — fireworks against a night sky and a pillarboxed phone video are
+# both overwhelmingly dark while carrying a real subject. So this is a high
+# quantile of the luma histogram rather than its mean, and a quantile rather
+# than the outright maximum so that one stuck pixel, a timecode burn-in or a
+# broadcaster's logo cannot vouch for an otherwise black frame.
+FRAME_HIGHLIGHT_QUANTILE = 0.999
+
+# Set from two measurements rather than one. Across 237 stills the shipped
+# ladder actually chose from a real video library, the *lowest* highlight of
+# any accepted frame was 32 and the 1st percentile was 104 — so every value
+# from roughly 1 to 31 has an identical (zero) false-reject rate on real
+# footage, and that corpus cannot pick one on its own. The synthetic junk band
+# sets the other end: a 1% fade measures 2, a 2% fade 5, and black carrying
+# nothing but sensor noise 7.
+#
+# Ten, not the 16 first chosen, because rejecting a frame is not free. A
+# rejected frame falls through to the ranking below, which orders by entropy —
+# and noise has near-maximal entropy, so black-with-grain outranks genuinely
+# dim content. The two are near-indistinguishable in a 1-D histogram: measured
+# against a real photograph at 4.5% brightness (entropy 3.11, highlight 11),
+# synthetic grain over black scores 3.20 and 13 — higher on *both* axes, so no
+# reranking can be made to prefer the photograph. The only protection is not
+# to reject it at all. At 10 the fades and the noise floor are still caught,
+# and a frame has to be darker than anything with recoverable content in it
+# before it is put at that risk.
+FRAME_LUMA_FLOOR = 10.0
+
+# Per-attempt wall-clock ceiling, and also the budget for the whole file:
+# once this much time has gone into one video, the search stops trying to
+# improve on the frame it already has. A wedged input therefore still costs
+# at most two of these (the stalled seek, then the no-seek attempt), exactly
+# as it did before the search learned to look for a better frame.
 FRAME_EXTRACT_TIMEOUT_SECONDS = 60.0
 
 # Long-edge cap for the stored still. The CLIP encode uses the in-memory
 # frame, so this only bounds what the cache writes to disk and what the
 # browser downloads for a full-screen poster.
 MAX_FRAME_EDGE = 2048
+
+# Bumped whenever a change here would pick a different frame out of the same
+# unchanged file. Both the cached stills and the grid tiles built from them
+# are keyed on it, so an existing album shows the better frames without being
+# re-indexed.
+#
+# What that costs, once, on the release that bumps it: the previous
+# generation's stills are pruned at the next index write and re-extracted
+# lazily, one ffmpeg run per video, as the tiles that need them are painted.
+# The stored CLIP embeddings are not re-computed at all — only a re-index
+# does that — so this changes what is *displayed* immediately, and search
+# catches up whenever the album is next indexed.
+FRAME_SELECTION_GENERATION = 2
 
 # Reserved key under which VideoInfo rides inside the existing per-image
 # metadata dict. Using the metadata dict rather than a new .npz column means
@@ -324,7 +430,11 @@ def _frame_command(path: Path, seek_seconds: float | None) -> list[str]:
         # -ss BEFORE -i is an input seek: ffmpeg jumps to the nearest
         # preceding keyframe and decodes forward, so this is O(1) rather than
         # a decode of the whole file. Accurate by default since ffmpeg 2.1.
-        args += ["-ss", f"{seek_seconds:g}"]
+        # Fixed point, not %g: a container that reports no duration makes
+        # ffmpeg print Duration: 596523:14:07.99 (2^31-1 seconds), and %g
+        # renders a proportional offset into that as "2.14748e+08", which
+        # ffmpeg itself refuses to parse.
+        args += ["-ss", f"{seek_seconds:.3f}"]
     args += [
         "-i",
         str(path),
@@ -355,6 +465,114 @@ def _frame_command(path: Path, seek_seconds: float | None) -> list[str]:
     return args
 
 
+def _banner_duration(stderr: str) -> float | None:
+    """Duration from an ffmpeg banner, including one that produced no frame.
+
+    An attempt that seeked past the end still opened the file and printed its
+    header, which is what lets the retry be aimed rather than guessed.
+    """
+    try:
+        duration = _parse_ffmpeg_banner(stderr).get("duration")
+    except Exception:
+        return None
+    return duration if isinstance(duration, float) else None
+
+
+def _frame_entropy(frame: Image.Image) -> float:
+    """Shannon entropy of ``frame``'s luma histogram, in bits.
+
+    The frame's score as a poster and as a CLIP subject, in one number that
+    costs a histogram over pixels already in memory. Zero for a frame of one
+    solid colour; near zero for titles over black, because two levels carry
+    almost no information however sharp the text.
+
+    Returns infinity for a frame that cannot be measured: an unmeasurable
+    frame is one we keep, never one we discard.
+    """
+    try:
+        histogram = frame.convert("L").histogram()
+        total = sum(histogram)
+        if not total:
+            return math.inf
+        return -sum(
+            (count / total) * math.log2(count / total) for count in histogram if count
+        )
+    except Exception:
+        return math.inf
+
+
+def _frame_highlight_luma(frame: Image.Image) -> float:
+    """Luma at ``FRAME_HIGHLIGHT_QUANTILE`` of ``frame``, 0-255.
+
+    How bright the frame's brightest real region is — the signal entropy
+    cannot supply (see FRAME_LUMA_FLOOR). Read off the cumulative histogram
+    from white downwards, so it costs 256 steps rather than a sort.
+
+    Returns 255 for a frame that cannot be measured, matching
+    ``_frame_entropy``'s infinity: an unmeasurable frame is one we keep.
+    """
+    # sum() inside the try, as in _frame_entropy: a histogram() returning
+    # something unsummable must reach the sentinel, not raise out of
+    # extract_video_frame, which documents that it never raises.
+    try:
+        histogram = frame.convert("L").histogram()
+        total = sum(histogram)
+    except Exception:
+        return 255.0
+    if not total:
+        return 255.0
+    # The quantile counted from the top: how many of the brightest pixels have
+    # to be passed before the level reached is the one being asked about.
+    # Whole pixels: a float headroom makes the boundary arbitrary —
+    # 1000 * (1 - 0.999) is 1.0000000000000009, so a frame whose one bright
+    # pixel lands exactly on it would not be counted. The floor of 1 also
+    # keeps a frame of very few pixels measurable.
+    headroom = max(1, int(total * (1.0 - FRAME_HIGHLIGHT_QUANTILE)))
+    seen = 0
+    for level in range(255, -1, -1):
+        seen += histogram[level]
+        if seen >= headroom:
+            return float(level)
+    return 0.0
+
+
+def _seek_is_inside(seek: float | None, duration: float | None) -> bool:
+    """Would ``seek`` land inside ``duration``, as far as we know?
+
+    Filters out attempts that provably return nothing — the shallow fallback
+    rungs on a clip shorter than they are, for instance.
+    """
+    if seek is None or not duration or duration <= 0:
+        return True
+    return seek <= duration - SEEK_TAIL_MARGIN_SECONDS
+
+
+def _next_deeper_seek(
+    current: float | None, duration: float | None, tried: set[float | None]
+) -> float | None:
+    """The next offset to try after an empty frame, or ``None``.
+
+    ``duration`` comes from the banner of the attempt that just ran, so a
+    proportional offset is available without a separate probe.
+    """
+    if duration and duration > 0:
+        candidates = [duration * fraction for fraction in DEEPER_SEEK_FRACTIONS]
+    else:
+        candidates = [DEEPER_SEEK_FALLBACK_SECONDS]
+
+    # Deeper means *later* than the frame just rejected: this floor is what
+    # walks the ladder forward past a title sequence rather than back into it.
+    floor = (current or 0.0) + MIN_DEEPER_SEEK_GAP_SECONDS
+    for candidate in candidates:
+        candidate = round(candidate, 3)
+        if candidate < floor or candidate in tried:
+            continue
+        if not _seek_is_inside(candidate, duration):
+            continue
+        return candidate
+    return None
+
+
 def extract_video_frame(
     path: Path,
     *,
@@ -366,22 +584,75 @@ def extract_video_frame(
     Never raises.  Callers treat ``None`` as "skip this file with a warning",
     matching how the indexer already handles an unreadable image.
 
-    Two attempts at most: seek to ``seek_seconds``, and if that yields nothing
-    (a video shorter than the seek, a single-frame video, a broken index),
-    retry from the start.
-    """
-    attempts: list[float | None] = [seek_seconds, None] if seek_seconds else [None]
+    Attempts ``seek_seconds`` first, then walks in whichever direction the
+    result calls for:
 
-    for attempt_seek in attempts:
-        result = _run_ffmpeg(_frame_command(path, attempt_seek), timeout)
-        if isinstance(result, _FfmpegUnavailable):
-            return None  # nothing to run — retrying cannot help
-        if result is None:
-            # Timed out. Fall through to the no-seek attempt, which is the
-            # cheaper of the two and the one most likely to survive whatever
-            # made the seek stall.
+    * nothing came back at all — a clip shorter than the offset — so aim the
+      retry at the middle of the duration the banner just reported, and fall
+      back to the start if even that fails;
+    * a frame came back but is empty (black, a fade, titles) — retry deeper,
+      at a fraction of the duration, and if the whole film is dark, walk back
+      towards the start rather than settle for the frame in hand.
+
+    The highest-scoring frame seen is what is returned, so a video that
+    really is all black still gets indexed rather than skipped, and a frame
+    wrongly called empty is never lost to a worse one found later.
+
+    Cost is bounded two ways: at most MAX_FRAME_ATTEMPTS ffmpeg spawns, and a
+    deadline of twice ``timeout`` for the whole file — the same ceiling the
+    two-attempt version had, which callers in ``video_cache`` and the
+    thumbnail route rely on for their own sizing.
+    """
+    queue: list[float | None] = [seek_seconds if seek_seconds else None]
+    shallow: list[float | None] = list(SHALLOW_SEEK_FALLBACKS) if seek_seconds else []
+    deeper_attempts_left = MAX_DEEPER_ATTEMPTS if seek_seconds else 0
+    tried: set[float | None] = set()
+    duration: float | None = None
+    best: tuple[float, Image.Image, VideoInfo] | None = None
+    deadline = time.monotonic() + 2 * timeout
+
+    while len(tried) < MAX_FRAME_ATTEMPTS:
+        if queue:
+            attempt_seek = queue.pop(0)
+        elif shallow:
+            attempt_seek = shallow.pop(0)
+        else:
+            break
+
+        # Skip rungs that provably return nothing — a 1.0s fallback on a 0.2s
+        # clip — rather than spending an attempt proving it.
+        if attempt_seek in tried or not _seek_is_inside(attempt_seek, duration):
             continue
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        tried.add(attempt_seek)
+
+        result = _run_ffmpeg(_frame_command(path, attempt_seek), min(timeout, remaining))
+        if isinstance(result, _FfmpegUnavailable):
+            break  # nothing to run — retrying cannot help
+        if result is None:
+            # Timed out. Seeking is precisely what stalls on a fragmented
+            # file or a slow mount, so abandon the ladder and go straight to
+            # the no-seek attempt: it is the cheapest one and the one most
+            # likely to survive.
+            queue, shallow, deeper_attempts_left = [], [None], 0
+            continue
+
+        stderr = result.stderr.decode("utf-8", errors="replace")
+        if duration is None:
+            duration = _banner_duration(stderr)
+
         if result.returncode != 0 or not result.stdout:
+            # Nothing came back: the seek landed past the end of a clip
+            # shorter than the offset. The banner still reported its
+            # duration, so aim the retry at the middle of the file instead of
+            # guessing — that beats the frame a fixed shallow offset lands on.
+            if duration and not queue:
+                aimed = round(duration * SHORT_FILE_SEEK_FRACTION, 3)
+                if aimed not in tried and _seek_is_inside(aimed, duration):
+                    queue.append(aimed)
             continue
 
         # Everything below can raise — PIL on an exotic pixel format, the
@@ -390,8 +661,6 @@ def extract_video_frame(
         # skipped: the caller hands the frame straight to encoder.encode_images
         # and an exception takes the whole batch of unrelated photos with it.
         try:
-            stderr = result.stderr.decode("utf-8", errors="replace")
-
             if not _has_decodable_video_stream(_strip_metadata_blocks(stderr)):
                 # Cover art in an audio file, presented as an "(attached pic)"
                 # video stream. Extraction would have succeeded, and the album
@@ -433,7 +702,27 @@ def extract_video_frame(
             container=parsed.get("container"),
             playable=is_web_playable(path),
         )
-        return frame, info
+
+        score = _frame_entropy(frame)
+        # Both have to hold: flat frames are titles and solid colours, dark
+        # ones are fades and black leader, and neither is worth embedding.
+        # An unmeasurable frame scores infinity on one and 255 on the other,
+        # so it is kept by both — never discarded for being unreadable.
+        if score >= FRAME_ENTROPY_FLOOR and _frame_highlight_luma(frame) >= FRAME_LUMA_FLOOR:
+            return frame, info
+        if best is None or score > best[0]:
+            best = (score, frame, info)
+
+        if deeper_attempts_left:
+            deeper = _next_deeper_seek(attempt_seek, duration, tried)
+            if deeper is not None:
+                deeper_attempts_left -= 1
+                queue.append(deeper)
+
+    if best is not None:
+        # Every frame we could reach was empty. The file is genuinely dark,
+        # and a dark poster beats dropping it from the album.
+        return best[1], best[2]
 
     logger.warning(f"Could not extract a frame from {path}; skipping it.")
     return None
