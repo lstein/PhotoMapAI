@@ -289,6 +289,13 @@ export async function updateCurrentImageScore(metadata) {
     return;
   }
 
+  // Under an images/videos filter, "clear" browses the filtered album (see
+  // search.js): a position within it, not a score or a cluster.
+  if (state.searchType === "clear") {
+    scoreDisplay.showIndex(searchIndex, state.searchResults.length);
+    return;
+  }
+
   // For bookmarks, show index within bookmark results (no score)
   if (state.searchType === "bookmarks") {
     scoreDisplay.showIndex(searchIndex, state.searchResults.length);

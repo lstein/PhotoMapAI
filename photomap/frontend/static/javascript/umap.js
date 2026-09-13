@@ -13,7 +13,7 @@ import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import {
   setUmapClickSelectsCluster,
-  setUmapMediaFilter,
+  setMediaFilter,
   setUmapControlsVisible,
   setUmapExitFullscreenOnSelection,
   setUmapShowHoverThumbnails,
@@ -180,7 +180,7 @@ let colors = [];
 // Keeping the trace count fixed means moveTraces, the HighlightedPoints
 // add/delete, the landmark traces and `customdata` all keep working untouched.
 function visiblePoints() {
-  return filterPointsByMediaType(points, state.umapMediaFilter);
+  return filterPointsByMediaType(points, state.mediaFilter);
 }
 let mapExists = false;
 let isShaded = false;
@@ -1139,7 +1139,7 @@ window.addEventListener("stateReady", () => {
   const mediaFilterRadios = MEDIA_FILTER_RADIO_IDS.map((id) => document.getElementById(id));
   if (mediaFilterRadios.every(Boolean)) {
     const active =
-      mediaFilterRadios.find((radio) => radio.value === state.umapMediaFilter) ||
+      mediaFilterRadios.find((radio) => radio.value === state.mediaFilter) ||
       mediaFilterRadios.find((radio) => radio.value === DEFAULT_MEDIA_FILTER);
     if (active) {
       active.checked = true;
@@ -1150,7 +1150,7 @@ window.addEventListener("stateReady", () => {
         if (!e.target.checked) {
           return;
         }
-        setUmapMediaFilter(e.target.value);
+        setMediaFilter(e.target.value);
         // Redraw through the normal colorize path so an active search
         // highlight is re-derived from the new visible set rather than being
         // left pointing at hidden points.
@@ -1215,8 +1215,8 @@ function updateMediaFilterAvailability() {
   }
   const albumHasVideos = hasVideoPoints(points);
 
-  if (!albumHasVideos && state.umapMediaFilter !== DEFAULT_MEDIA_FILTER) {
-    setUmapMediaFilter(DEFAULT_MEDIA_FILTER);
+  if (!albumHasVideos && state.mediaFilter !== DEFAULT_MEDIA_FILTER) {
+    setMediaFilter(DEFAULT_MEDIA_FILTER);
   }
 
   MEDIA_FILTER_RADIO_IDS.forEach((id) => {
@@ -1247,12 +1247,17 @@ function updateExitFullscreenCheckboxState() {
 
 // --- Update colorization after search or cluster selection ---
 window.addEventListener("searchResultsChanged", async (e) => {
-  updateUmapColorModeAvailability(e.detail.results);
+  // Under an images/videos filter, "clear" carries the browse list (see
+  // search.js) rather than an empty array. That is the whole album minus a
+  // media type, not a selection: nothing to highlight, and no reason to drop
+  // out of fullscreen.
+  const selection = e.detail.searchType === "clear" ? [] : e.detail.results || [];
+  updateUmapColorModeAvailability(selection);
   await setUmapColorMode();
   // Hide spinner after colorization completes
   hideUmapSpinner();
   // deactivate fullscreen mode when search results have come in (if enabled)
-  if (state.searchResults.length > 0 && isFullscreen && state.umapExitFullscreenOnSelection) {
+  if (selection.length > 0 && isFullscreen && state.umapExitFullscreenOnSelection) {
     setTimeout(() => toggleFullscreen(false), 100); // slight delay to avoid flicker
   }
 });
@@ -1566,9 +1571,11 @@ export async function setUmapColorMode() {
   });
 }
 
-// Ensure color mode is respected after search or cluster selection
+// Ensure color mode is respected after search or cluster selection. A
+// "clear" may carry the media filter's browse list (see search.js); that is
+// not a selection to highlight.
 window.addEventListener("searchResultsChanged", (e) => {
-  updateUmapColorModeAvailability(e.detail.results);
+  updateUmapColorModeAvailability(e.detail.searchType === "clear" ? [] : e.detail.results);
 });
 
 function updateUmapColorModeAvailability(searchResults = []) {

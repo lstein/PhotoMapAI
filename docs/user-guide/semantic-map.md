@@ -89,15 +89,24 @@ With "Show hover thumbnails" turned on and "Show landmarks" turned off:
 ## Showing images, videos, or both
 
 If the album contains videos as well as photos, the **Show** radio buttons choose
-which of them the map draws: **Both**, **Images only**, or **Videos only**.
+which of them to show: **Both**, **Images only**, or **Videos only**.
 Videos are placed by the same semantic embedding as photos — computed from a
 still captured shortly after the video starts — so a clip lands next to the
 pictures it looks like.
 
-Filtering changes only what the map displays. Cluster identity is unaffected,
-so a cluster keeps its colour and its members whichever setting you pick;
-selecting a cluster while a filter is active loads only the media types
-currently shown. The controls are disabled for albums that contain no videos.
+The choice applies everywhere, not just to the map. With **Videos only**
+selected, the slideshow and the grid view step through the album's videos
+alone, shuffle mode draws only from them, the seek slider covers just them,
+and text and image searches return videos only (up to the album's maximum
+number of results, so a filtered search is not merely an unfiltered one with
+the photos removed). Switching back to **Both** restores the current search
+results without re-running the search.
+
+Cluster identity is unaffected, so a cluster keeps its colour and its members
+whichever setting you pick; selecting a cluster while a filter is active loads
+only the media types currently shown. The controls are disabled for albums
+that contain no videos, and the filter has no effect on albums that are all
+photos or all videos.
 
 By default, landmarks will be turned on and hover images turned off when you enter the map's fullscreen mode. The opposite happens when  you leave fullscreen mode and enter windowed mode. See below for more information on window modes and sizes.
 

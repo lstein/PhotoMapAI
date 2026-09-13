@@ -226,12 +226,15 @@
           </div>
         </div>
 
-        <!-- Which media the map draws. Disabled (not hidden) for albums with
-             no videos, so the control row's height stays constant — the
-             window-sizing constants in umap.js depend on it. -->
+        <!-- Which media to show — on the map, and also in the slideshow, the
+             grid view and search results (see media-filter.js). Disabled (not
+             hidden) for albums with no videos, so the control row's height
+             stays constant — the window-sizing constants in umap.js depend
+             on it. -->
         <div
           id="umapMediaFilterContainer"
           style="display: flex; flex-direction: row; gap: 12px; align-items: center;"
+          title="Applies to the map, the slideshow, the grid view and search results"
         >
           <span id="umapMediaFilterLabel">Show:</span>
           <label style="display: flex; align-items: center; gap: 6px;">

@@ -19,7 +19,7 @@ from collections.abc import Set as AbstractSet
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import networkx as nx
 import numpy as np
@@ -584,6 +584,26 @@ class _ExistingIndex(NamedTuple):
     metadata: np.ndarray
     model_id: str
     embedding_dim: int
+
+
+# The images/videos filter the UI offers. "both" is the absence of a filter.
+MediaFilter = Literal["both", "images", "videos"]
+
+
+def media_filter_mask(filenames: Any, media_filter: str) -> np.ndarray | None:
+    """Boolean mask over ``filenames`` of the rows ``media_filter`` keeps.
+
+    ``None`` when the filter keeps everything, so callers can skip the masking
+    step entirely for the common case. Anything other than ``"images"`` or
+    ``"videos"`` counts as "both": the filter is a narrowing, and an
+    unrecognised value must fail open rather than hide the whole album.
+    """
+    if media_filter not in ("images", "videos"):
+        return None
+    videos = np.fromiter(
+        (is_video(Path(str(f))) for f in filenames), dtype=bool, count=len(filenames)
+    )
+    return videos if media_filter == "videos" else ~videos
 
 
 class Embeddings(BaseModel):
@@ -2051,6 +2071,7 @@ class Embeddings(BaseModel):
         top_k: int = 5,
         minimum_score: float | None = None,
         use_query_optimization: bool | None = None,
+        media_filter: str = "both",
     ) -> tuple[list[int], list[float]]:
         """
         Search for images similar to a query image and a positive/negative text prompt, with separate weights.
@@ -2071,6 +2092,11 @@ class Embeddings(BaseModel):
                 set, controls prompt-template ensembling for SigLIP encoders.
                 Ignored by other backends. ``None`` keeps the encoder's current
                 setting (the module-level default, typically).
+            media_filter (str): "images" or "videos" restricts the candidates
+                to that media type *before* ``top_k`` is applied, so a
+                filtered search still returns up to ``top_k`` results rather
+                than whatever survives of an unfiltered top ``top_k``.
+                Anything else means both.
         Returns:
             tuple: (indexes, similarities)
         """
@@ -2180,6 +2206,13 @@ class Embeddings(BaseModel):
                     (norm_embeddings @ neg_emb).cpu().numpy()
                 )
                 similarities = similarities - negative_weight * cos_neg
+
+            # Hidden media types drop to -inf so they can never make the cut:
+            # the minimum-score check below discards them even when fewer
+            # than top_k candidates remain.
+            media_mask = media_filter_mask(filenames, media_filter)
+            if media_mask is not None:
+                similarities = np.where(media_mask, similarities, -np.inf)
 
             top_indices = similarities.argsort()[-top_k:][::-1]
             top_indices = [i for i in top_indices if similarities[i] >= minimum_score]

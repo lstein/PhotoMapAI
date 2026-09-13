@@ -32,7 +32,7 @@ const mockState = {
   album: "test-album",
   dataChanged: true,
   autotaggingEnabled: false,
-  umapMediaFilter: "both",
+  mediaFilter: "both",
   umapShowLandmarks: false,
   umapShowHoverThumbnails: false,
   umapExitFullscreenOnSelection: false,
@@ -43,8 +43,8 @@ const mockState = {
   searchResults: [],
 };
 
-const setUmapMediaFilter = jest.fn((v) => {
-  mockState.umapMediaFilter = v;
+const setMediaFilter = jest.fn((v) => {
+  mockState.mediaFilter = v;
 });
 const setSearchResults = jest.fn();
 // Mutable so a test can put the swiper on a specific image.
@@ -52,7 +52,7 @@ const currentSlideIndex = [-1, 0, null];
 
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
-  setUmapMediaFilter,
+  setMediaFilter,
   setUmapShowLandmarks: jest.fn((v) => {
     mockState.umapShowLandmarks = v;
   }),

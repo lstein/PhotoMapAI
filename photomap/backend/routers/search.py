@@ -23,7 +23,7 @@ from PIL import Image, ImageDraw, ImageOps
 from pydantic import BaseModel
 
 from ..config import get_config_manager
-from ..embeddings import SUPPORTED_EXTENSIONS
+from ..embeddings import SUPPORTED_EXTENSIONS, MediaFilter
 from ..media_types import is_video, video_media_type
 from ..metadata_modules import SlideSummary, video_external_link_html
 from ..util import is_cuda_oom
@@ -101,6 +101,10 @@ class SearchWithTextAndImageRequest(BaseModel):
     # this from the album's ``use_query_optimization`` setting. ``None`` keeps
     # the encoder's existing state (module default for direct callers).
     use_query_optimization: bool | None = None
+    # The UI's images/videos filter. Applied before top_k so a filtered search
+    # is still allowed max_search_results hits, not the filtered remainder of
+    # an unfiltered top max_search_results.
+    media_filter: MediaFilter = "both"
 
 
 class DownloadImagesZipRequest(BaseModel):
@@ -173,6 +177,7 @@ async def search_with_text_and_image(
                     ),
                     top_k=req.max_search_results,
                     use_query_optimization=req.use_query_optimization,
+                    media_filter=req.media_filter,
                 )
         except HTTPException:
             # Pass-through (e.g. AlbumDep / EmbeddingsDep already raised

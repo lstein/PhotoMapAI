@@ -46,7 +46,7 @@ const mockState = {
   album: "test-album",
   dataChanged: true,
   autotaggingEnabled: false,
-  umapMediaFilter: "both",
+  mediaFilter: "both",
   umapShowLandmarks: true,
   umapShowHoverThumbnails: false,
   umapExitFullscreenOnSelection: true,
@@ -57,8 +57,8 @@ const mockState = {
   searchResults: [],
 };
 
-const setUmapMediaFilter = jest.fn((v) => {
-  mockState.umapMediaFilter = v;
+const setMediaFilter = jest.fn((v) => {
+  mockState.mediaFilter = v;
 });
 const setUmapShowLandmarks = jest.fn((v) => {
   mockState.umapShowLandmarks = v;
@@ -66,7 +66,7 @@ const setUmapShowLandmarks = jest.fn((v) => {
 
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
-  setUmapMediaFilter,
+  setMediaFilter,
   setUmapShowLandmarks,
   setUmapClickSelectsCluster: jest.fn(),
   setUmapControlsVisible: jest.fn(),
@@ -174,7 +174,7 @@ describe("umap.js landmarks", () => {
     jest.clearAllMocks();
 
     Object.assign(mockState, {
-      umapMediaFilter: "both",
+      mediaFilter: "both",
       umapShowLandmarks: true,
       dataChanged: true,
       searchType: "clear",
