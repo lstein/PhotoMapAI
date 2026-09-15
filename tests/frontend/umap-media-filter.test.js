@@ -351,3 +351,69 @@ describe("an album with no videos", () => {
     expect(document.getElementById("umapMediaFilterContainer").title).toMatch(/no videos/i);
   });
 });
+
+// The filter can also change without anyone touching the radios: state.js
+// applies the server's copy of the preference after boot, which is how a
+// device whose localStorage was evicted gets its settings back. That happens
+// after the controls were built from the value the radios currently show.
+describe("a filter applied from outside the controls", () => {
+  beforeEach(async () => {
+    setMediaFilter.mockClear();
+    mockState.mediaFilter = "both";
+    currentSlideIndex = [-1, MIXED_POINTS.length, null];
+    await boot(MIXED_POINTS);
+  });
+
+  it("moves the checked radio to match", () => {
+    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(true);
+
+    mockState.mediaFilter = "videos";
+    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+
+    expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(true);
+    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(false);
+  });
+});
+
+// Each case boots its own module: the radios are only disabled by a real
+// fetchUmapData, and a second boot() inside one test would reuse the cached
+// module, whose map is already current and skips the redraw.
+describe("a filter applied from outside the controls, on an album with no videos", () => {
+  let umapModule;
+
+  beforeEach(async () => {
+    setMediaFilter.mockClear();
+    mockState.mediaFilter = "both";
+    currentSlideIndex = [-1, IMAGE_ONLY_POINTS.length, null];
+    umapModule = await boot(IMAGE_ONLY_POINTS);
+  });
+
+  it("does not re-check radios the album has disabled", () => {
+    // The album disables the controls and pins them to Both; a late-arriving
+    // "videos" must not tick a radio the album cannot honour.
+    expect(document.getElementById("umapMediaFilterVideosRadio").disabled).toBe(true);
+
+    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+
+    expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(false);
+    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(true);
+  });
+
+  it("catches the radios up once an album that has videos re-enables them", async () => {
+    // The filter dropped above is still in force — it was never un-set, only
+    // left unshown. An album that can honour it must not go on reading "Both"
+    // while every view browses videos only.
+    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+    mockState.mediaFilter = "videos";
+
+    currentSlideIndex = [-1, MIXED_POINTS.length, null];
+    installFetchMock(MIXED_POINTS);
+    mockState.dataChanged = true;
+    await umapModule.fetchUmapData();
+    await settle();
+
+    expect(document.getElementById("umapMediaFilterVideosRadio").disabled).toBe(false);
+    expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(true);
+    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(false);
+  });
+});

@@ -20,8 +20,21 @@ export const SHOW_CLUSTER_LABELS_IN_BADGES = true;
 // getClusterLabelInfo() — they shouldn't import the umap module directly.
 let clusterLabels = {};
 
+// Announce a change to anything already on screen. Consumers that render a
+// label (the metadata drawer, in particular) listen rather than poll: labels
+// arrive asynchronously and the autotagging setting can be flipped while a
+// drawer is open, and neither has a slide change to hang a re-render off.
+// Guarded so importing this module outside a browser stays harmless.
+function dispatchLabelEvent(name, detail) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
 export function setClusterLabels(labels) {
   clusterLabels = labels || {};
+  dispatchLabelEvent("clusterLabelsUpdated", { count: Object.keys(clusterLabels).length });
 }
 
 export function getClusterLabelInfo(cluster) {
@@ -37,13 +50,38 @@ const imageLabelCache = new Map();
 const imageLabelInFlight = new Map();
 const IMAGE_LABEL_CACHE_MAX = 1024;
 
+// Bumped by clearImageLabelCache(). A request that was already in the air when
+// the cache was dropped must not write its answer into the fresh one: the
+// clear happens precisely because the old answers can no longer be trusted
+// (the album may have been reindexed, which shifts what an index refers to),
+// and a slow /image_label response outliving the clear would reinstate exactly
+// one stale entry — permanently, since a cache hit never refetches.
+let imageLabelGeneration = 0;
+
 // Module-local mirror of state.autotaggingEnabled — pushed in from state.js's
 // setAutotaggingEnabled() and on initial restore. Defaults to false to match
 // the state default, so any call before state restores is also safely gated.
 let autotaggingEnabled = false;
 
 export function setAutotaggingEnabledInLabels(enabled) {
-  autotaggingEnabled = !!enabled;
+  const next = !!enabled;
+  // Called on every restore path (localStorage, then the server reconcile)
+  // as well as from the settings checkbox, so most calls carry the value we
+  // already hold. Only an actual change may drop caches or fire the event —
+  // otherwise a boot that merely confirms the setting would throw away
+  // labels the map fetch just installed.
+  if (next === autotaggingEnabled) {
+    return;
+  }
+  autotaggingEnabled = next;
+  // Both caches describe the world as it was under the previous setting.
+  // Turning autotagging off must stop the labels being displayed at all;
+  // turning it back on cannot trust what was cached before, since the album
+  // may have been reindexed while it was off. umap.js refetches the cluster
+  // labels from its `autotaggingChanged` listener.
+  clearImageLabelCache();
+  setClusterLabels({});
+  dispatchLabelEvent("autotaggingChanged", { enabled: next });
 }
 
 export function getImageLabelInfo(album, index) {
@@ -64,11 +102,17 @@ export function getImageLabelInfo(album, index) {
   if (imageLabelInFlight.has(key)) {
     return imageLabelInFlight.get(key);
   }
+  const generation = imageLabelGeneration;
   const promise = trackVocabBuildRequest(
     (async () => {
       try {
         const body = await fetchJson(`image_label/${encodeURIComponent(album)}/${index}`).catch(() => null);
         const value = body && body.label ? body : null;
+        // Still the cache this request was issued against? If not, the answer
+        // is returned to whoever is awaiting it but never stored.
+        if (generation !== imageLabelGeneration) {
+          return value;
+        }
         imageLabelCache.set(key, value);
         while (imageLabelCache.size > IMAGE_LABEL_CACHE_MAX) {
           const firstKey = imageLabelCache.keys().next().value;
@@ -79,7 +123,13 @@ export function getImageLabelInfo(album, index) {
         console.warn("image_label fetch failed:", err);
         return null;
       } finally {
-        imageLabelInFlight.delete(key);
+        // Only if it is still ours: a clear drops the whole map, and a later
+        // request for the same key may already have registered itself. An
+        // unconditional delete would evict that one and let a third caller
+        // issue a duplicate request.
+        if (imageLabelInFlight.get(key) === promise) {
+          imageLabelInFlight.delete(key);
+        }
       }
     })()
   );
@@ -88,6 +138,7 @@ export function getImageLabelInfo(album, index) {
 }
 
 export function clearImageLabelCache() {
+  imageLabelGeneration += 1;
   imageLabelCache.clear();
   imageLabelInFlight.clear();
 }

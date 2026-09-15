@@ -131,6 +131,55 @@ export function updateMetadataOverlay(slide) {
   updateCurrentImageScore(slide.dataset);
 }
 
+// The metadata backing whatever the drawer is currently showing, or null when
+// nothing is showing yet (early boot) or the tile's metadata hasn't arrived.
+// The two views keep it in different places: the swiper reads it off the slide
+// element's dataset, grid view holds it in the manager. Both are reached
+// through `state` rather than by importing the view modules, which import this
+// one.
+function currentSlideMetadata() {
+  if (state.gridViewActive) {
+    return state.grid_swiper?.currentSlideMetadata?.() || null;
+  }
+  return state.single_swiper?.currentSlide()?.dataset || null;
+}
+
+// Re-render every surface that displays a label, in place.
+//
+// All of them are driven by state that changes without a slide change to hang
+// a re-render off: the autotagging setting (which decides whether they are
+// shown at all) and the cluster labels, which arrive asynchronously after the
+// map fetch. Without this, flipping the setting left the open drawer — and the
+// score pill, which splices the same cluster label in — showing what was true
+// a moment ago until the user navigated to another image.
+function refreshLabelRows() {
+  const metadata = currentSlideMetadata();
+  if (!metadata) {
+    // Nothing identifies what is on screen: early boot, a view mid-rebuild, or
+    // grid view having trimmed the selected tile's metadata away. Whatever the
+    // rows say describes an image we can no longer name, and a toggle-off has
+    // to clear it — so hide them rather than leave them standing. The next
+    // updateMetadataOverlay puts them back.
+    const clusterInfoContainer = document.getElementById("clusterInfoContainer");
+    const imageLabelContainer = document.getElementById("imageLabelContainer");
+    if (clusterInfoContainer) {
+      clusterInfoContainer.style.display = "none";
+    }
+    if (imageLabelContainer) {
+      imageLabelContainer.style.display = "none";
+    }
+    return;
+  }
+  updateClusterInfo(metadata);
+  updateImageLabel(metadata);
+  // The pill carries the cluster label too (score-display.js), from the same
+  // cache, and re-derives it from scratch on each call.
+  updateCurrentImageScore(metadata);
+}
+
+window.addEventListener("autotaggingChanged", refreshLabelRows);
+window.addEventListener("clusterLabelsUpdated", refreshLabelRows);
+
 // Update cluster information in the metadata window
 export function updateClusterInfo(metadata) {
   const clusterInfoContainer = document.getElementById("clusterInfoContainer");

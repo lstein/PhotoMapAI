@@ -12,7 +12,6 @@ import {
   setWrapNavigation,
   state,
 } from "./state.js";
-import { clearImageLabelCache, setClusterLabels } from "./cluster-utils.js";
 import { refreshInvokeCapabilities } from "./invoke-capabilities.js";
 import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
@@ -350,12 +349,12 @@ function setupAutotaggingControl() {
     return;
   }
   elements.autotaggingEnabledCheckbox.addEventListener("change", function () {
+    // Everything else follows from the state change: cluster-utils drops the
+    // cached labels and announces it, umap.js refetches them when the setting
+    // goes on, and the metadata drawer re-renders its rows. Doing any of that
+    // here instead would miss the other way the setting changes — the server
+    // preference arriving at boot, which never passes through this checkbox.
     setAutotaggingEnabled(this.checked);
-    // Drop any cluster/image labels currently in memory so the UI stops
-    // showing them immediately when toggled off. On toggle-on, the caches
-    // start fresh; new labels are fetched on the next album switch.
-    setClusterLabels({});
-    clearImageLabelCache();
   });
 }
 
