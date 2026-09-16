@@ -14,6 +14,7 @@ import {
 } from "./state.js";
 import { clearImageLabelCache, setClusterLabels } from "./cluster-utils.js";
 import { refreshInvokeCapabilities } from "./invoke-capabilities.js";
+import { visibleViewportBottom, visibleViewportSettled } from "./panel-anchor.js";
 import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 // Constants
@@ -174,9 +175,22 @@ function adjustDelay(direction) {
 }
 
 //  Model window management
-export function openSettingsModal() {
-  populateModalFields();
+export async function openSettingsModal() {
   elements.settingsOverlay.classList.add("visible");
+  try {
+    // Awaited, unlike the fire-and-forget call this replaced: populating the
+    // fields reaches the network, and a reachable InvokeAI backend reveals the
+    // username, password and board rows a round trip later. Measuring before
+    // they land reads a modal ~170px shorter than the one the user ends up
+    // with, and nothing would re-measure afterwards.
+    await populateModalFields();
+  } finally {
+    // The restored set of open sections need not fit this window: it was saved
+    // on a device or at a size that is no longer the current one. Nothing can
+    // be measured while the modal is display:none, so the check belongs here
+    // rather than where the state is restored.
+    fitAccordionsToViewport();
+  }
 }
 
 export function closeSettingsModal() {
@@ -721,26 +735,111 @@ function setupResetAllPreferencesButton() {
   });
 }
 
-// Accordion section toggle
-function setupAccordions() {
-  document.querySelectorAll(".settings-accordion .accordion-header").forEach((header) => {
-    const section = header.closest(".settings-accordion").dataset.section;
+// ===== Accordion sections =====
+//
+// The modal is centred in a full-height overlay and grows with its content, so
+// with enough sections expanded it becomes taller than the window and spills
+// off both ends — and the half above the top edge, title and close button
+// included, cannot be scrolled to. Opening a section therefore collapses the
+// sections opened before it, oldest first, until the dialog fits again.
+
+// Expanded sections, oldest first — the order they give up their space in.
+let accordionOpenOrder = [];
+
+// Breathing room kept around the dialog. The max-height in settings.css
+// subtracts this same figure in px (plus the padding max-height does not
+// cover), so the budget here and the CSS fallback that catches a single
+// over-tall section agree on what "fits" means at any root font size.
+const MODAL_VIEWPORT_MARGIN = 32;
+
+/** Expand or collapse one section, persisting the new state. */
+function setAccordionOpen(accordion, open) {
+  const header = accordion.querySelector(".accordion-header");
+  const body = header.nextElementSibling;
+
+  header.setAttribute("aria-expanded", String(open));
+  body.classList.toggle("open", open);
+  localStorage.setItem(`settings-accordion-${accordion.dataset.section}`, String(open));
+
+  accordionOpenOrder = accordionOpenOrder.filter((other) => other !== accordion);
+  if (open) {
+    accordionOpenOrder.push(accordion);
+  }
+}
+
+/**
+ * Collapse the oldest expanded sections until the modal fits on screen.
+ *
+ * The last section standing is never collapsed: a section too tall to fit on
+ * its own would otherwise be shut the instant the user opened it. That case
+ * falls through to the modal's own max-height and scrolls instead. `keep`
+ * belongs to the same rule rather than adding one — a section is pushed onto
+ * the queue as it opens, so the one just opened is last in line and is only
+ * reached once every other has gone, where the rule above already spares it.
+ * It is named anyway so re-ordering the queue cannot quietly shut the section
+ * the user is looking at.
+ *
+ * @param {HTMLElement} [keep] section to spare — the one just opened
+ */
+function fitAccordionsToViewport(keep) {
+  const modal = document.querySelector(".settings-modal");
+  if (!modal) {
+    return;
+  }
+  // A raised software keyboard shrinks the visible viewport exactly as a
+  // stranded layout viewport does. Collapsing on that reading would shut
+  // sections that fit perfectly well — and write it to localStorage, where it
+  // outlives the keyboard. Tapping a header blurs the field first, so this is
+  // the live path, not a corner: measure nothing until the keyboard has gone.
+  if (!visibleViewportSettled()) {
+    return;
+  }
+  // visibleViewportBottom(), not innerHeight: on a stranded iPadOS layout
+  // viewport the bottom of the window is well below the bottom of the screen.
+  const available = visibleViewportBottom() - MODAL_VIEWPORT_MARGIN;
+  // Re-measured each pass — collapsing one section is usually enough.
+  for (const accordion of [...accordionOpenOrder]) {
+    if (accordionOpenOrder.length <= 1 || modal.scrollHeight <= available) {
+      break;
+    }
+    if (accordion !== keep) {
+      setAccordionOpen(accordion, false);
+    }
+  }
+}
+
+export function setupAccordions() {
+  // Rebuilt from the DOM rather than carried over, so a second pass over the
+  // same dialog starts from what is actually on screen.
+  accordionOpenOrder = [];
+
+  document.querySelectorAll(".settings-accordion").forEach((accordion) => {
+    const section = accordion.dataset.section;
+    const header = accordion.querySelector(".accordion-header");
     const body = header.nextElementSibling;
-    const storageKey = `settings-accordion-${section}`;
 
     // Restore persisted open/closed state
-    const wasOpen = localStorage.getItem(storageKey) === "true";
+    const wasOpen = localStorage.getItem(`settings-accordion-${section}`) === "true";
+    header.setAttribute("aria-expanded", String(wasOpen));
+    body.classList.toggle("open", wasOpen);
     if (wasOpen) {
-      header.setAttribute("aria-expanded", "true");
-      body.classList.add("open");
+      accordionOpenOrder.push(accordion);
     }
 
-    header.addEventListener("click", () => {
-      const expanded = header.getAttribute("aria-expanded") === "true";
-      header.setAttribute("aria-expanded", String(!expanded));
-      body.classList.toggle("open");
-      localStorage.setItem(storageKey, String(!expanded));
-    });
+    // Property assignment rather than addEventListener, so running this twice
+    // over the same dialog is a no-op: stacked listeners would toggle the
+    // section once per pass, leaving a click with nothing to show. (The
+    // settingsUpdated re-init the rest of this file guards against cannot
+    // currently fire — state.js dispatches on window, the listener at the
+    // bottom of this file is on document — but setupAccordions is written to
+    // survive it either way.)
+    header.onclick = () => {
+      const open = header.getAttribute("aria-expanded") !== "true";
+      setAccordionOpen(accordion, open);
+      if (open) {
+        fitAccordionsToViewport(accordion);
+      }
+    };
   });
 }
 

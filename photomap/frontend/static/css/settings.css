@@ -4,6 +4,27 @@
   position: fixed;
   min-width: 320px;
   z-index: 11000;
+  /* Last resort for a single expanded section taller than the window:
+     settings.js collapses the other sections to make room, but never the only
+     one left open. 32px is that module's MODAL_VIEWPORT_MARGIN; the 4em is the
+     padding of .modal-content, which max-height does not cover (the dialog is
+     content-box — there is no global border-box reset) and which therefore has
+     to be handed back so the outer height matches the budget settings.js
+     measures against. Keeping the margin in px and the padding in em is what
+     makes the two agree at any root font size. */
+  max-height: calc(var(--visible-viewport-height, 100vh) - 32px - 4em);
+  overflow-y: auto;
+}
+
+/* The dialog is centred in this overlay, so a budget that only limits its
+   height is not enough: centred in a layout viewport taller than the visible
+   one, a dialog of exactly the allowed height still hangs off the bottom of
+   the screen by half the difference, and a fixed overlay does not scroll.
+   Centring within the visible height instead is what makes the height budget
+   in settings.js mean what it says. Unset (every desktop browser, and iPad
+   when it behaves) this is just 100vh, the .modal-overlay default. */
+#settingsOverlay {
+  height: var(--visible-viewport-height, 100vh);
 }
 
 .settings-header {
