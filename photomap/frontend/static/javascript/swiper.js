@@ -11,6 +11,31 @@ import { updateCurrentImageMarker } from "./umap.js";
 import { showToast } from "./utils.js";
 import { applyVideoOverlay } from "./video-badge.js";
 
+// How long to wait after an append/prepend before trimming the buffer. Long
+// enough for Swiper's default 300ms transition to finish, so the trim's
+// internal slideTo() never lands mid-animation.
+const TRIM_DELAY_MS = 500;
+
+// How many times a deferred trim will stand aside for an in-flight gesture
+// before trimming anyway. This is the backstop for an ``animating`` flag that
+// never clears — at which point a trim that is slightly visible beats a buffer
+// that grows without limit.
+const TRIM_MAX_RETRIES = 4;
+
+// How many times a trim will re-arm while something is blocking it outright (a
+// finger on the screen, a rebuild in flight). Generous, since these clear on
+// their own; bounded only so a flag that never clears cannot leave a timer
+// running for the life of the page.
+const TRIM_MAX_BLOCKED_RETRIES = 40;
+
+// How far over the high-water mark the buffer may drift while a trim waits for
+// a quiet moment. Sustained fast swiping keeps ``animating`` true almost
+// continuously — measured against the real app, waiting politely let a 20-slide
+// cap reach 39 before the retries ran out — so past this margin the trim stops
+// waiting. Clipping the tail of a transition the user is already swiping past
+// is cheaper than holding another dozen full-resolution bitmaps.
+const TRIM_HARD_MARGIN = 5;
+
 export const initializeSingleSwiper = async () => {
   const swiperManager = new SwiperManager();
   swiperManager.initializeSingleSwiper();
@@ -51,9 +76,17 @@ class SwiperManager {
     this._resetPending = false;
     this._resetPendingRandom = false; // random_nextslide requested by the queued reset
 
-    // Set while trimShuffleBacklog is restarting autoplay after a trim, so the
+    // Set while trimBuffer is restarting autoplay after a trim, so the
     // autoplay event handlers don't flicker the play/pause icon (see below).
     this._suppressAutoplayIcon = false;
+
+    // Deferred buffer trim. At most one is ever pending: trims are idempotent
+    // and a later one subsumes an earlier one, so a second advance arriving
+    // while a trim is queued just updates which end to drop from rather than
+    // pushing the deadline back — otherwise fast, continuous swiping would
+    // re-arm the timer forever and never actually trim.
+    this._trimTimer = null;
+    this._trimEnd = "front";
 
     // The slideshow's *logical* run state — what the user asked for — as
     // distinct from swiper.autoplay.running, which rebuilds and trims stop and
@@ -171,8 +204,8 @@ class SwiperManager {
       return;
     }
 
-    // trimShuffleBacklog stops+restarts autoplay internally (see its comment);
-    // that churn would otherwise flip the play/pause icon on nearly every shuffle
+    // trimBuffer stops+restarts autoplay internally (see its comment); that
+    // churn would otherwise flip the play/pause icon on nearly every shuffle
     // advance, so it sets _suppressAutoplayIcon to mute these handlers while it
     // works. The slideshow's true running state is unchanged across a trim.
     const refreshSlideshowIcon = () => {
@@ -231,6 +264,11 @@ class SwiperManager {
         const finishAppend = () => {
           this.isAppending = false;
           this.swiper.allowSlideNext = true;
+          // Every advance appends a slide, so every advance has to pay for one.
+          // This covers manual swiping and the linear slideshow as well as
+          // shuffle: the append above is the same code for all three, and the
+          // buffer grows just as fast whichever of them is driving it.
+          this._scheduleTrim("front");
         };
 
         // Shuffle mode has no "end of list": the next slide is a random pick,
@@ -241,14 +279,7 @@ class SwiperManager {
         // which would otherwise stop the shuffle slideshow prematurely.
         const isRandom = state.mode === "random" && slideShowRunning();
         if (isRandom) {
-          const finishRandomAppend = () => {
-            finishAppend();
-            // Re-dealing images across shuffle cycles would grow the DOM without
-            // bound, so drop the oldest slides once we exceed the high-water
-            // mark. Deferred so it runs after the in-progress transition settles.
-            setTimeout(() => this.trimShuffleBacklog(), 500);
-          };
-          this.addSlideByIndex(null, null).then(finishRandomAppend).catch(finishRandomAppend);
+          this.addSlideByIndex(null, null).then(finishAppend).catch(finishAppend);
           return;
         }
 
@@ -277,16 +308,19 @@ class SwiperManager {
         if (prevGlobal !== null) {
           this.isPrepending = true;
           this.swiper.allowSlidePrev = false;
+          const finishPrepend = () => {
+            this.isPrepending = false;
+            this.swiper.allowSlidePrev = true;
+            // Backing up grows the buffer at the head, so the stale slides are
+            // the ones at the tail — the far end of wherever the user came from.
+            this._scheduleTrim("back");
+          };
           this.addSlideByIndex(prevGlobal, prevSearch, true)
             .then(() => {
               this.swiper.slideTo(1, 0);
-              this.isPrepending = false;
-              this.swiper.allowSlidePrev = true;
+              finishPrepend();
             })
-            .catch(() => {
-              this.isPrepending = false;
-              this.swiper.allowSlidePrev = true;
-            });
+            .catch(finishPrepend);
         }
       }
     });
@@ -333,15 +367,16 @@ class SwiperManager {
     if (!this.swiper) {
       return;
     }
-    // Attach handlers to all current slides
+    // Slides added later get their handler at construction time, in
+    // addSlideByIndex — which covers every path that creates one. This only has
+    // to cover slides that already exist when the manager is initialized.
+    //
+    // There used to be a "slideChange" sweep here re-checking every slide on
+    // every advance. It was redundant, and its cost grew with the buffer: it
+    // ran the full list on each swipe, which is the wrong direction of travel
+    // for a view whose whole problem was per-swipe work piling up.
     this.swiper.slides.forEach((slideEl) => {
       this.attachDoubleTapHandler(slideEl);
-    });
-    // Attach handler to future slides (if slides are added dynamically)
-    this.swiper.on("slideChange", () => {
-      this.swiper.slides.forEach((slideEl) => {
-        this.attachDoubleTapHandler(slideEl);
-      });
     });
   }
 
@@ -444,7 +479,7 @@ class SwiperManager {
     }
     // stopOnLastSlide is a *linear-mode* backstop only (see the autoplay
     // config comment). Shuffle has no end of list: its look-ahead append
-    // keeps a slide past the active one, but once trimShuffleBacklog starts
+    // keeps a slide past the active one, but once trimBuffer starts
     // dropping front slides at the high-water mark the index churn can briefly
     // expose Swiper's isEnd, and a global stopOnLastSlide would then freeze
     // autoplay (the "pauses after the 18th shuffled image" regression). Keep
@@ -666,11 +701,15 @@ class SwiperManager {
     if (activeIndex === -1) {
       activeIndex = 0;
     }
+    // removeSlide takes an index or an ARRAY of them — there is no (start,
+    // count) overload. Passing a count as a second argument silently removed
+    // just the one slide at activeIndex + 1 and left the rest of the tail in
+    // place, holding slides from the album that was just deleted.
     const slidesToRemove = slideEls.length - activeIndex - 1;
     if (slidesToRemove > 0) {
-      this.swiper.removeSlide(activeIndex + 1, slidesToRemove);
+      this.swiper.removeSlide(Array.from({ length: slidesToRemove }, (_, i) => activeIndex + 1 + i));
     }
-    setTimeout(() => this.enforceHighWaterMark(), 500);
+    this._scheduleTrim("front");
   }
 
   currentSlide() {
@@ -799,35 +838,169 @@ class SwiperManager {
   }
 
   /**
-   * Keep the shuffle buffer bounded. The active slide and its single look-ahead
-   * live at the tail, so dropping the oldest (front) slides never disturbs what
-   * is on screen or about to be shown.
+   * Queue a buffer trim for once the current transition has settled.
+   *
+   * removeSlide() moves the buffer under Swiper's feet — it calls slideTo()
+   * internally — so running it during a swipe would produce exactly the stutter
+   * the trimming exists to prevent. We therefore stand aside while a gesture or
+   * transition is in flight and re-arm, rather than trimming on the spot.
+   *
+   * Only one trim is ever pending. A second advance arriving while one is
+   * queued updates which end to drop from but does NOT push the deadline back:
+   * re-arming on every advance would mean continuous swiping never reaches a
+   * quiet moment, and the buffer would grow unchecked for as long as the user
+   * kept going — the bug this is here to fix.
+   *
+   * @param {"front"|"back"} end - which end of the buffer to drop slides from.
+   */
+  /** Slides the buffer is allowed to hold. The 50 is a fallback for a
+   *  highWaterMark that was never set; state.js defaults it to 20. */
+  _maxSlides() {
+    return state.highWaterMark || 50;
+  }
+
+  _scheduleTrim(end) {
+    this._trimEnd = end;
+    if (this._trimTimer) {
+      return;
+    }
+    let retriesLeft = TRIM_MAX_RETRIES;
+    let blockedLeft = TRIM_MAX_BLOCKED_RETRIES;
+    const attempt = () => {
+      this._trimTimer = null;
+      if (!this.swiper || this.swiper.destroyed) {
+        return;
+      }
+
+      // Hard blocks. Neither may be overridden by the hard margin.
+      //
+      // A finger on the screen: Swiper's drag math caches startTranslate at
+      // touchstart and never re-reads swiper.translate, so a trim mid-gesture
+      // leaves the drag addressing a slide `count` positions further along and
+      // drops the user on the wrong photo when they release. Waiting costs
+      // nothing — no slide is appended while a finger is down.
+      //
+      // A rebuild in flight: it replaces the whole buffer and sizes it itself,
+      // so a trim underneath it would work on slides that are about to be
+      // thrown away, and could remove the one it is navigating to.
+      const blocked = this.swiper.touchEventsData?.isTouched || this._resetInFlight;
+      if (blocked) {
+        // Bounded, so a gesture or rebuild flag that never clears cannot leave
+        // a timer running forever. Giving up is safe: the next advance
+        // schedules another trim.
+        if (blockedLeft > 0) {
+          blockedLeft -= 1;
+          this._trimTimer = setTimeout(attempt, TRIM_DELAY_MS);
+        }
+        return;
+      }
+
+      // A transition in flight is a soft block: trimming would clip it, which
+      // is worth avoiding until the buffer has drifted far enough that the
+      // bitmaps it is holding cost more.
+      const busy = this.swiper.animating || this.isAppending || this.isPrepending;
+      const overshoot = this.swiper.slides.length - this._maxSlides();
+      const mustTrim = overshoot >= TRIM_HARD_MARGIN;
+      if (busy && !mustTrim && retriesLeft > 0) {
+        retriesLeft -= 1;
+        this._trimTimer = setTimeout(attempt, TRIM_DELAY_MS);
+        return;
+      }
+      this.trimBuffer(this._trimEnd);
+    };
+    this._trimTimer = setTimeout(attempt, TRIM_DELAY_MS);
+  }
+
+  /**
+   * Keep the slide buffer bounded at ``state.highWaterMark``.
+   *
+   * Every forward advance appends a full-resolution slide and every backward
+   * advance prepends one (see the slideNextTransitionStart and
+   * slidePrevTransitionEnd handlers), so without a trim the DOM grows for as
+   * long as the user keeps navigating. That is not a slow leak: each slide
+   * holds an original-size <img>, and on a tablet a few dozen decoded bitmaps
+   * are enough to push the browser into evicting and re-decoding them
+   * mid-transition. The swipe animation turns visibly jerky after roughly
+   * ``highWaterMark`` advances and stays that way until something rebuilds the
+   * buffer — which is why toggling to grid view and back used to "fix" it.
+   *
+   * Which end to drop from follows the direction of travel: after an append the
+   * active slide and its look-ahead sit at the tail, so the oldest front slides
+   * are dead weight; after a prepend they sit at the head. Either way we stop
+   * short of the active slide and one neighbour, so what is on screen — or one
+   * swipe away — is never removed.
    *
    * swiper.removeSlide() internally calls slideTo(), which emits
    * beforeTransitionStart; Swiper's autoplay treats that programmatic move like
-   * a user interaction and (with disableOnInteraction) *stops* autoplay. So the
-   * very first trim — when the buffer first exceeds the high-water mark, ~18
-   * slides into a shuffle run — would silently kill the slideshow. We therefore
-   * restart autoplay after trimming, mirroring enforceHighWaterMark. The
-   * stop+restart is muted via _suppressAutoplayIcon so it doesn't flicker the
-   * play/pause icon on every advance (shuffle trims on nearly every slide).
+   * a user interaction and (with disableOnInteraction) *stops* autoplay. So a
+   * trim would silently kill a running slideshow. We restart autoplay
+   * afterwards if it was running, muted via _suppressAutoplayIcon so the
+   * stop/start doesn't flicker the play/pause icon on every advance (shuffle
+   * trims on nearly every slide).
+   *
+   * A back trim hands removeSlide the whole range at once; a front trim cannot
+   * (see the loop below for why). In the steady state either way drops a single
+   * slide per advance.
+   *
+   * @param {"front"|"back"} end - which end of the buffer to drop slides from.
    */
-  trimShuffleBacklog() {
+  trimBuffer(end = "front") {
     if (!this.swiper) {
       return;
     }
-    const maxSlides = state.highWaterMark || 50;
-    if (this.swiper.slides.length <= maxSlides) {
+    const maxSlides = this._maxSlides();
+    const total = this.swiper.slides.length;
+    if (total <= maxSlides) {
       return;
     }
+
+    // ``excess`` is what we would like to drop; the budget is what we can drop
+    // from a given end without eating into the active slide and its neighbour.
+    const excess = total - maxSlides;
+    const budgetFor = (which) =>
+      which === "back" ? total - (this.swiper.activeIndex + 2) : this.swiper.activeIndex - 1;
+
+    // A seek can leave activeIndex hard against either edge of an oversized
+    // buffer, leaving the end we were asked for with no room. Take it off the
+    // other end rather than declining and waiting for some later advance to
+    // re-arm a trim.
+    let side = end;
+    if (budgetFor(side) <= 0) {
+      side = side === "back" ? "front" : "back";
+    }
+    const count = Math.min(excess, budgetFor(side));
+    if (count <= 0) {
+      return;
+    }
+
     const wasRunning = this.swiper.autoplay?.running;
-    // removeSlide's implicit autoplay stop is our doing, not the user's, so
-    // it must not clear the logical run state either.
+    // removeSlide's implicit autoplay stop is our doing, not the user's, so it
+    // must not clear the logical run state either.
     this._suppressAutoplayIcon = true;
     this._internalAutoplayStop = true;
+    // removeSlide emits slideChange as it re-seats activeIndex on the same
+    // slide. That is bookkeeping, not navigation — the user is still looking at
+    // the same photo — so the app-level handler stays muted for the whole trim.
+    // Letting it through would push junk entries onto the Back stack (see
+    // back-stack.js) and close an open video player, both of which key off the
+    // slideChanged event.
+    this.isInternalSlideChange = true;
     try {
-      while (this.swiper.slides.length > maxSlides) {
-        this.swiper.removeSlide(0);
+      if (side === "back") {
+        // Descending indexes all sit above activeIndex, so removeSlide's
+        // bookkeeping leaves it untouched and the whole range goes in one call.
+        this.swiper.removeSlide(Array.from({ length: count }, (_, i) => total - 1 - i));
+      } else {
+        // Front slides come off one at a time, NOT as a batch. removeSlide
+        // decrements its running index only while the index being removed is
+        // still below it (`r < n && (n -= 1)` in Swiper 11.2.10), so an
+        // ascending batch stops adjusting half way and re-seats activeIndex on
+        // the wrong slide once count exceeds ceil(activeIndex / 2) — the user
+        // jumps to an image they have not seen. One at a time, every call is
+        // the trivially correct single-index case.
+        for (let i = 0; i < count; i++) {
+          this.swiper.removeSlide(0);
+        }
       }
       if (wasRunning && this.swiper.autoplay && !this.swiper.autoplay.running) {
         this.swiper.autoplay.start();
@@ -835,32 +1008,7 @@ class SwiperManager {
     } finally {
       this._suppressAutoplayIcon = false;
       this._internalAutoplayStop = false;
-    }
-  }
-
-  enforceHighWaterMark(backward = false) {
-    const maxSlides = state.highWaterMark || 50;
-    const swiper = this.swiper;
-    const slides = swiper.slides.length;
-
-    if (slides > maxSlides) {
-      // Internal stop/start: trimming the buffer is not the user pausing.
-      const slideShowRunning = swiper.autoplay.running;
-      this._internalAutoplayStop = true;
-      try {
-        this._stopAutoplayInternal();
-        if (backward) {
-          swiper.removeSlide(swiper.slides.length - 1);
-        } else {
-          swiper.removeSlide(0);
-        }
-      } finally {
-        this._internalAutoplayStop = false;
-      }
-
-      if (slideShowRunning) {
-        this._startAutoplay();
-      }
+      this.isInternalSlideChange = false;
     }
   }
 

@@ -106,6 +106,31 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/slide-state.
   getCurrentSlideIndex: jest.fn(() => [mockSlideState.currentGlobalIndex, mockSlideState.totalAlbumImages, null]),
 }));
 
+// A window longer than swiper.js's TRIM_DELAY_MS, used only for NEGATIVE
+// assertions ("no trim happened"). A fixed sleep is the right tool there: a
+// timer running late can only make such an assertion more likely to hold.
+const TRIM_SETTLE_MS = 700;
+
+// Positive assertions ("the trim eventually ran") poll instead of sleeping. The
+// trims under test are driven by a 500ms timer, so a fixed sleep has only as
+// much margin as the slowest CI runner leaves it — on a loaded Windows or macOS
+// runner that margin is not a guarantee. Polling removes the timing dependency
+// altogether, and fails with a useful message rather than Jest's generic
+// timeout. The budget stays under Jest's 5s default, including a preceding
+// TRIM_SETTLE_MS window.
+async function waitFor(predicate, description, { timeout = 3000, interval = 20 } = {}) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    if (predicate()) {
+      return;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`waitFor timed out after ${timeout}ms waiting for: ${description}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+}
+
 describe("swiper.js shuffle mode", () => {
   let mockSwiper;
 
@@ -142,11 +167,35 @@ describe("swiper.js shuffle mode", () => {
       allowSlidePrev: true,
       appendSlide: jest.fn((slide) => mockSwiper.slides.push(slide)),
       prependSlide: jest.fn((slide) => mockSwiper.slides.unshift(slide)),
-      // Mirror Swiper: removeSlide() calls slideTo(), whose beforeTransitionStart
-      // (with disableOnInteraction) stops autoplay. The mock reproduces that side
-      // effect so the trim-restart logic is actually exercised.
-      removeSlide: jest.fn(() => {
-        mockSwiper.slides.shift();
+      // Mirrors Swiper 11.2.10's removeSlide (`pe` in swiper-bundle.min.js),
+      // INCLUDING its quirk. The real loop is:
+      //
+      //     for (s=0; s<e.length; s+=1)
+      //       r=e[s], t.slides[r] && t.slides[r].remove(), r<n && (n-=1)
+      //
+      // `n` starts at activeIndex and each index is compared against the
+      // RUNNING `n`, not the original. For an ascending batch that stops
+      // adjusting once 2*i >= activeIndex, so activeIndex ends up re-seated on
+      // the wrong slide whenever the batch is larger than ceil(activeIndex/2).
+      // Reproducing the quirk is the whole point: an idealised mock that
+      // decrements once per removed index certifies arithmetic Swiper does not
+      // do, and would pass a trim that visibly jumps the user to another photo.
+      // Verified against the vendored bundle under jsdom.
+      //
+      // It finishes with slideTo(n), whose beforeTransitionStart stops autoplay
+      // under disableOnInteraction — reproduced so the restart logic is
+      // exercised.
+      removeSlide: jest.fn((indexes) => {
+        const list = Array.isArray(indexes) ? indexes : [indexes];
+        const doomed = new Set(list);
+        let n = mockSwiper.activeIndex;
+        list.forEach((r) => {
+          if (r < n) {
+            n -= 1;
+          }
+        });
+        mockSwiper.slides = mockSwiper.slides.filter((_, i) => !doomed.has(i));
+        mockSwiper.activeIndex = Math.max(n, 0);
         mockSwiper.autoplay.running = false;
       }),
       removeAllSlides: jest.fn(() => {
@@ -465,8 +514,12 @@ describe("swiper.js shuffle mode", () => {
       const savedHighWaterMark = mockState.highWaterMark;
       mockState.highWaterMark = 3;
       mockSwiper.slides = [createMockSlide(1), createMockSlide(2), createMockSlide(3), createMockSlide(4)];
+      // Where a forward advance leaves it: active slide plus its look-ahead at
+      // the tail. trimBuffer budgets from activeIndex, so a buffer parked at 0
+      // would (correctly) refuse to trim anything.
+      mockSwiper.activeIndex = mockSwiper.slides.length - 2;
 
-      manager.trimShuffleBacklog();
+      manager.trimBuffer("front");
 
       expect(mockSwiper.slides.length).toBe(3);
       expect(manager.isSlideshowActive()).toBe(true);
@@ -523,18 +576,20 @@ describe("swiper.js shuffle mode", () => {
     // Regression (the real cause of the "freezes after ~18 shuffled slides"
     // report): swiper.removeSlide() stops autoplay as a side effect (its internal
     // slideTo fires beforeTransitionStart, which with disableOnInteraction halts
-    // autoplay). trimShuffleBacklog must restart autoplay or the slideshow dies
-    // the first time the buffer is trimmed past the high-water mark.
+    // autoplay). trimBuffer must restart autoplay or the slideshow dies the
+    // first time the buffer is trimmed past the high-water mark.
     it("restarts autoplay after trimming the shuffle backlog", async () => {
       const { initializeSingleSwiper } = await import("../../photomap/frontend/static/javascript/swiper.js");
       const manager = await initializeSingleSwiper();
 
-      // Buffer well over the high-water mark, autoplay running.
+      // Buffer well over the high-water mark, autoplay running, parked where a
+      // forward advance leaves it: active slide plus one look-ahead at the tail.
       const over = mockState.highWaterMark + 3;
       mockSwiper.slides = Array.from({ length: over }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = over - 2;
       mockSwiper.autoplay.running = true;
 
-      manager.trimShuffleBacklog();
+      manager.trimBuffer("front");
 
       // Buffer trimmed down to the cap and autoplay left running.
       expect(mockSwiper.slides.length).toBe(mockState.highWaterMark);
@@ -549,9 +604,10 @@ describe("swiper.js shuffle mode", () => {
 
       const over = mockState.highWaterMark + 3;
       mockSwiper.slides = Array.from({ length: over }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = over - 2;
       mockSwiper.autoplay.running = false; // paused before the trim
 
-      manager.trimShuffleBacklog();
+      manager.trimBuffer("front");
 
       expect(mockSwiper.slides.length).toBe(mockState.highWaterMark);
       expect(mockSwiper.autoplay.start).not.toHaveBeenCalled();
@@ -644,6 +700,332 @@ describe("swiper.js shuffle mode", () => {
       // A random slide was appended and autoplay kept running — no premature stop.
       expect(mockSwiper.slides.length).toBe(slidesBefore + 1);
       expect(mockSwiper.autoplay.stop).not.toHaveBeenCalled();
+    });
+  });
+  // Regression: the slide buffer grew without bound on manual navigation.
+  // Only the shuffle-slideshow append path trimmed it, and `enforceHighWaterMark`
+  // was reachable only from the album-deletion path — so a user swiping through
+  // an album accumulated one full-resolution <img> per swipe until something
+  // rebuilt the buffer. On a tablet that showed up as swipe animations turning
+  // jerky after roughly `highWaterMark` swipes, cured by toggling to grid view
+  // and back (which rebuilds to three slides).
+  describe("slide buffer bounding", () => {
+    let handlers;
+    let savedHighWaterMark;
+    let savedResolveOffset;
+
+    beforeEach(() => {
+      savedHighWaterMark = mockState.highWaterMark;
+      savedResolveOffset = mockSlideState.resolveOffset;
+    });
+
+    afterEach(() => {
+      mockState.highWaterMark = savedHighWaterMark;
+      mockSlideState.resolveOffset = savedResolveOffset;
+    });
+
+    async function managerWithHandlers() {
+      handlers = {};
+      mockSwiper.on = jest.fn((event, cb) => {
+        handlers[event] = cb;
+      });
+      const { initializeSingleSwiper } = await import("../../photomap/frontend/static/javascript/swiper.js");
+      const manager = await initializeSingleSwiper();
+      manager._resetInFlight = null;
+      manager._resetPending = false;
+      manager.isAppending = false;
+      manager.isPrepending = false;
+      clearTimeout(manager._trimTimer);
+      manager._trimTimer = null;
+      return manager;
+    }
+
+    // Advance forward the way a swipe does: land on the last slide, let the
+    // handler append the next one.
+    async function advance(manager) {
+      mockSwiper.activeIndex = mockSwiper.slides.length - 1;
+      await handlers.slideNextTransitionStart.call(manager);
+      await Promise.resolve();
+    }
+
+    it("stops growing after many manual swipes in linear mode", async () => {
+      // The reported bug, end to end: no slideshow, sequential mode, nothing
+      // but forward swipes. Before the fix this ended at 3 + 40 slides.
+      mockState.mode = "chronological";
+      mockSlideShowRunning.mockReturnValue(false);
+      mockState.highWaterMark = 10;
+      mockSlideState.resolveOffset = jest.fn((offset) => ({
+        globalIndex: mockSlideState.currentGlobalIndex + offset,
+        searchIndex: null,
+      }));
+
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = [createMockSlide(0), createMockSlide(1), createMockSlide(2)];
+
+      for (let i = 0; i < 40; i++) {
+        await advance(manager);
+      }
+      // Let the pending trim fire.
+      await waitFor(
+        () => mockSwiper.slides.length <= mockState.highWaterMark,
+        "the buffer to come back down to the high-water mark"
+      );
+
+      expect(mockSwiper.slides.length).toBeLessThanOrEqual(mockState.highWaterMark);
+      expect(mockSwiper.removeSlide).toHaveBeenCalled();
+    });
+
+    it("keeps the slide the user is looking at, and its look-ahead", async () => {
+      // A trim that drops the active slide would jump the view — worse than the
+      // jerkiness it is there to prevent.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 30 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 28; // active, with one look-ahead at 29
+      const activeSlide = mockSwiper.slides[28];
+      const lookAhead = mockSwiper.slides[29];
+
+      manager.trimBuffer("front");
+
+      expect(mockSwiper.slides.length).toBe(10);
+      expect(mockSwiper.slides).toContain(activeSlide);
+      expect(mockSwiper.slides).toContain(lookAhead);
+      // activeIndex tracked the removal rather than pointing at a stranger.
+      expect(mockSwiper.slides[mockSwiper.activeIndex]).toBe(activeSlide);
+    });
+
+    it("drops from the tail when the user is backing up", async () => {
+      // Backing up prepends at the head, so the stale slides are at the tail.
+      // Trimming the front here would delete the slides just fetched.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 30 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 1; // where slidePrevTransitionEnd's slideTo(1, 0) leaves it
+      const activeSlide = mockSwiper.slides[1];
+      const head = mockSwiper.slides[0];
+
+      manager.trimBuffer("back");
+
+      expect(mockSwiper.slides.length).toBe(10);
+      expect(mockSwiper.slides[0]).toBe(head);
+      expect(mockSwiper.slides[1]).toBe(activeSlide);
+      expect(mockSwiper.activeIndex).toBe(1);
+    });
+
+    it("trims nothing when the buffer is at or under the cap", async () => {
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 10 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 8;
+
+      manager.trimBuffer("front");
+
+      expect(mockSwiper.slides.length).toBe(10);
+      expect(mockSwiper.removeSlide).not.toHaveBeenCalled();
+    });
+
+    it("stands aside while a swipe is still animating", async () => {
+      // removeSlide() calls slideTo() internally; doing that mid-transition
+      // would produce the very stutter the trimming exists to prevent. A small
+      // overshoot is worth waiting out.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 12 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 10;
+      mockSwiper.animating = true;
+
+      manager._scheduleTrim("front");
+      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      expect(mockSwiper.removeSlide).not.toHaveBeenCalled();
+      expect(mockSwiper.slides.length).toBe(12);
+
+      // Once the transition ends, the re-armed trim goes through.
+      mockSwiper.animating = false;
+      await waitFor(() => mockSwiper.slides.length === 10, "the re-armed trim to run once idle");
+      expect(mockSwiper.slides.length).toBe(10);
+    });
+
+    it("stops waiting for a quiet moment once the buffer has drifted too far", async () => {
+      // Measured against the real app: swiping continuously keeps `animating`
+      // true almost the whole time, and a trim that only ever ran in the gaps
+      // let a 20-slide cap reach 39. Past TRIM_HARD_MARGIN the trim goes ahead
+      // regardless — the held bitmaps cost more than a clipped transition.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 20 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 18;
+      mockSwiper.animating = true; // still would-be busy
+
+      manager._scheduleTrim("front");
+      await waitFor(() => mockSwiper.slides.length === 10, "the trim to go ahead despite `animating`");
+
+      expect(mockSwiper.slides.length).toBe(10);
+    });
+
+    it("waits out a rebuild however far the buffer has drifted", async () => {
+      // A rebuild replaces the whole buffer and sizes it itself; trimming
+      // underneath one could remove the slide it is navigating to. This is the
+      // one case the hard margin does not override.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 40 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 38;
+      manager._resetInFlight = Promise.resolve();
+
+      manager._scheduleTrim("front");
+      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      expect(mockSwiper.removeSlide).not.toHaveBeenCalled();
+      expect(mockSwiper.slides.length).toBe(40);
+
+      manager._resetInFlight = null;
+      await waitFor(() => mockSwiper.slides.length === 10, "the trim to run once the rebuild finishes");
+      expect(mockSwiper.slides.length).toBe(10);
+    });
+
+    it("does not push the deadline back when advances keep arriving", async () => {
+      // A scheduler that re-armed on every advance would never fire under
+      // continuous swiping — exactly when the trim is needed most.
+      const manager = await managerWithHandlers();
+      manager._scheduleTrim("front");
+      const firstTimer = manager._trimTimer;
+
+      manager._scheduleTrim("front");
+      manager._scheduleTrim("front");
+
+      expect(manager._trimTimer).toBe(firstTimer);
+      clearTimeout(manager._trimTimer);
+    });
+
+    it("takes front slides off one at a time, never as a batch", async () => {
+      // Swiper's removeSlide compares each index against its RUNNING active
+      // index, so an ascending batch stops adjusting half way and re-seats
+      // activeIndex on the wrong slide. Batching the front is the bug; this
+      // pins the call shape so it cannot come back.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 30 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 28;
+
+      manager.trimBuffer("front");
+
+      expect(mockSwiper.removeSlide).toHaveBeenCalledTimes(20);
+      mockSwiper.removeSlide.mock.calls.forEach(([arg]) => expect(arg).toBe(0));
+    });
+
+    it("hands the whole range to removeSlide in one call when trimming the tail", async () => {
+      // The descending case is safe to batch: every index sits above the active
+      // one, so Swiper's bookkeeping leaves activeIndex alone.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 30 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 1;
+
+      manager.trimBuffer("back");
+
+      expect(mockSwiper.removeSlide).toHaveBeenCalledTimes(1);
+      const [arg] = mockSwiper.removeSlide.mock.calls[0];
+      expect(Array.isArray(arg)).toBe(true);
+      expect(arg).toHaveLength(20);
+      expect(Math.min(...arg)).toBeGreaterThan(mockSwiper.activeIndex + 1);
+    });
+
+    it("mutes the app's slideChange handler for the whole trim", async () => {
+      // removeSlide emits slideChange as it re-seats activeIndex on the same
+      // slide. Unmuted, that reaches slideState -> the slideChanged event, which
+      // truncates the Back stack and closes an open video player — for a photo
+      // the user never navigated to.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 14 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 12;
+      const mutedDuringRemoval = [];
+      const realRemove = mockSwiper.removeSlide;
+      mockSwiper.removeSlide = jest.fn((idx) => {
+        mutedDuringRemoval.push(manager.isInternalSlideChange);
+        return realRemove(idx);
+      });
+
+      manager.trimBuffer("front");
+
+      expect(mutedDuringRemoval.length).toBeGreaterThan(0);
+      expect(mutedDuringRemoval.every(Boolean)).toBe(true);
+      // ...and the flag is handed back afterwards, so real navigation still registers.
+      expect(manager.isInternalSlideChange).toBe(false);
+    });
+
+    it("never trims with a finger on the screen, however far the buffer has drifted", async () => {
+      // Swiper caches startTranslate at touchstart and never re-reads
+      // swiper.translate, so a trim mid-drag leaves the gesture addressing a
+      // slide further along and drops the user on the wrong photo. Nothing
+      // appends while a finger is down, so waiting costs no growth.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 40 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 38;
+      mockSwiper.touchEventsData = { isTouched: true };
+
+      manager._scheduleTrim("front");
+      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      expect(mockSwiper.removeSlide).not.toHaveBeenCalled();
+      expect(mockSwiper.slides.length).toBe(40);
+
+      // Released: the re-armed trim goes through.
+      mockSwiper.touchEventsData.isTouched = false;
+      await waitFor(() => mockSwiper.slides.length === 10, "the trim to run once the finger lifts");
+      expect(mockSwiper.slides.length).toBe(10);
+    });
+
+    it("trims the other end when the requested one has no room", async () => {
+      // A seek can leave activeIndex hard against an edge of an oversized
+      // buffer. Declining would leave it over the cap until some later advance
+      // happened to re-arm a trim.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 30 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 1; // no front budget at all
+      const activeSlide = mockSwiper.slides[1];
+
+      manager.trimBuffer("front");
+
+      expect(mockSwiper.slides.length).toBe(10);
+      expect(mockSwiper.slides[mockSwiper.activeIndex]).toBe(activeSlide);
+    });
+
+    it("removes the whole tail after the current slide, not just one of it", async () => {
+      // Regression: this passed a (start, count) pair to removeSlide, which has
+      // no such overload — it takes an index or an array. The count was
+      // silently dropped and a single slide was removed, leaving the rest of
+      // the tail holding images from the album that had just been deleted.
+      mockState.highWaterMark = 50; // keep the follow-up trim out of the way
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 10 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 3;
+      mockSlideState.getCurrentSlide = jest.fn(() => ({
+        globalIndex: 3,
+        searchIndex: null,
+        totalCount: 10,
+        isSearchMode: false,
+      }));
+      const keptHead = mockSwiper.slides[0];
+      const keptActive = mockSwiper.slides[3];
+
+      manager.removeSlidesAfterCurrent();
+
+      // Slides 0..3 survive; 4..9 are all gone.
+      expect(mockSwiper.slides.length).toBe(4);
+      expect(mockSwiper.slides[0]).toBe(keptHead);
+      expect(mockSwiper.slides[3]).toBe(keptActive);
+      expect(mockSwiper.slides.map((el) => el.dataset.globalIndex)).toEqual(["0", "1", "2", "3"]);
+      clearTimeout(manager._trimTimer);
+    });
+
+    it("follows the latest direction of travel when one is already queued", async () => {
+      const manager = await managerWithHandlers();
+      manager._scheduleTrim("front");
+      manager._scheduleTrim("back");
+
+      expect(manager._trimEnd).toBe("back");
+      clearTimeout(manager._trimTimer);
     });
   });
 });

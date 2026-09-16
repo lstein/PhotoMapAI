@@ -6,7 +6,7 @@
  *
  * The modal owns its own `<video>` element and never borrows one from a
  * slide. Swiper destroys slide DOM nodes as the user navigates
- * (`trimShuffleBacklog`, `enforceHighWaterMark`, `resetAllSlides`), and a
+ * (`trimBuffer`, `resetAllSlides`), and a
  * detached `<video>` goes on playing audio.
  *
  * A container the browser cannot decode is not a dead end: the player asks
