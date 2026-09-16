@@ -17,10 +17,18 @@ import { applyVideoOverlay } from "./video-badge.js";
 const TRIM_DELAY_MS = 500;
 
 // How many times a deferred trim will stand aside for an in-flight gesture
-// before trimming anyway. Each new advance re-arms the timer with a fresh
-// budget, so this only runs out if ``animating`` is stuck — at which point a
-// trim that is slightly visible beats a buffer that grows without limit.
+// before trimming anyway. This is the backstop for an ``animating`` flag that
+// never clears — at which point a trim that is slightly visible beats a buffer
+// that grows without limit.
 const TRIM_MAX_RETRIES = 4;
+
+// How far over the high-water mark the buffer may drift while a trim waits for
+// a quiet moment. Sustained fast swiping keeps ``animating`` true almost
+// continuously — measured against the real app, waiting politely let a 20-slide
+// cap reach 39 before the retries ran out — so past this margin the trim stops
+// waiting. Clipping the tail of a transition the user is already swiping past
+// is cheaper than holding another dozen full-resolution bitmaps.
+const TRIM_HARD_MARGIN = 5;
 
 export const initializeSingleSwiper = async () => {
   const swiperManager = new SwiperManager();
@@ -835,6 +843,12 @@ class SwiperManager {
    *
    * @param {"front"|"back"} end - which end of the buffer to drop slides from.
    */
+  /** Slides the buffer is allowed to hold. The 50 is a fallback for a
+   *  highWaterMark that was never set; state.js defaults it to 20. */
+  _maxSlides() {
+    return state.highWaterMark || 50;
+  }
+
   _scheduleTrim(end) {
     this._trimEnd = end;
     if (this._trimTimer) {
@@ -856,8 +870,17 @@ class SwiperManager {
         this.isAppending ||
         this.isPrepending ||
         this._resetInFlight;
-      if (busy && retriesLeft > 0) {
+      // A rebuild is the one thing worth waiting out however far the buffer has
+      // drifted: it is about to replace the whole buffer anyway, and trimming
+      // underneath it could remove the slide it is navigating to.
+      const overshoot = this.swiper.slides.length - this._maxSlides();
+      const mustTrim = overshoot >= TRIM_HARD_MARGIN && !this._resetInFlight;
+      if (busy && !mustTrim && retriesLeft > 0) {
         retriesLeft -= 1;
+        this._trimTimer = setTimeout(attempt, TRIM_DELAY_MS);
+        return;
+      }
+      if (this._resetInFlight) {
         this._trimTimer = setTimeout(attempt, TRIM_DELAY_MS);
         return;
       }
@@ -903,7 +926,7 @@ class SwiperManager {
     if (!this.swiper) {
       return;
     }
-    const maxSlides = state.highWaterMark || 50;
+    const maxSlides = this._maxSlides();
     const total = this.swiper.slides.length;
     if (total <= maxSlides) {
       return;

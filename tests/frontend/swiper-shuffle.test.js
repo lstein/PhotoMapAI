@@ -794,20 +794,58 @@ describe("swiper.js shuffle mode", () => {
 
     it("stands aside while a swipe is still animating", async () => {
       // removeSlide() calls slideTo() internally; doing that mid-transition
-      // would produce the very stutter the trimming exists to prevent.
+      // would produce the very stutter the trimming exists to prevent. A small
+      // overshoot is worth waiting out.
       mockState.highWaterMark = 10;
       const manager = await managerWithHandlers();
-      mockSwiper.slides = Array.from({ length: 30 }, (_, i) => createMockSlide(i));
-      mockSwiper.activeIndex = 28;
+      mockSwiper.slides = Array.from({ length: 12 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 10;
       mockSwiper.animating = true;
 
       manager._scheduleTrim("front");
       await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
       expect(mockSwiper.removeSlide).not.toHaveBeenCalled();
-      expect(mockSwiper.slides.length).toBe(30);
+      expect(mockSwiper.slides.length).toBe(12);
 
       // Once the transition ends, the re-armed trim goes through.
       mockSwiper.animating = false;
+      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      expect(mockSwiper.slides.length).toBe(10);
+    });
+
+    it("stops waiting for a quiet moment once the buffer has drifted too far", async () => {
+      // Measured against the real app: swiping continuously keeps `animating`
+      // true almost the whole time, and a trim that only ever ran in the gaps
+      // let a 20-slide cap reach 39. Past TRIM_HARD_MARGIN the trim goes ahead
+      // regardless — the held bitmaps cost more than a clipped transition.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 20 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 18;
+      mockSwiper.animating = true; // still would-be busy
+
+      manager._scheduleTrim("front");
+      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+
+      expect(mockSwiper.slides.length).toBe(10);
+    });
+
+    it("waits out a rebuild however far the buffer has drifted", async () => {
+      // A rebuild replaces the whole buffer and sizes it itself; trimming
+      // underneath one could remove the slide it is navigating to. This is the
+      // one case the hard margin does not override.
+      mockState.highWaterMark = 10;
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 40 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 38;
+      manager._resetInFlight = Promise.resolve();
+
+      manager._scheduleTrim("front");
+      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      expect(mockSwiper.removeSlide).not.toHaveBeenCalled();
+      expect(mockSwiper.slides.length).toBe(40);
+
+      manager._resetInFlight = null;
       await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
       expect(mockSwiper.slides.length).toBe(10);
     });
