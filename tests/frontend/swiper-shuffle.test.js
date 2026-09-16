@@ -106,9 +106,30 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/slide-state.
   getCurrentSlideIndex: jest.fn(() => [mockSlideState.currentGlobalIndex, mockSlideState.totalAlbumImages, null]),
 }));
 
-// Comfortably longer than swiper.js's TRIM_DELAY_MS, so a deferred trim has
-// definitely run by the time we assert on it.
+// A window longer than swiper.js's TRIM_DELAY_MS, used only for NEGATIVE
+// assertions ("no trim happened"). A fixed sleep is the right tool there: a
+// timer running late can only make such an assertion more likely to hold.
 const TRIM_SETTLE_MS = 700;
+
+// Positive assertions ("the trim eventually ran") poll instead of sleeping. The
+// trims under test are driven by a 500ms timer, so a fixed sleep has only as
+// much margin as the slowest CI runner leaves it — on a loaded Windows or macOS
+// runner that margin is not a guarantee. Polling removes the timing dependency
+// altogether, and fails with a useful message rather than Jest's generic
+// timeout. The budget stays under Jest's 5s default, including a preceding
+// TRIM_SETTLE_MS window.
+async function waitFor(predicate, description, { timeout = 3000, interval = 20 } = {}) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    if (predicate()) {
+      return;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`waitFor timed out after ${timeout}ms waiting for: ${description}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+}
 
 describe("swiper.js shuffle mode", () => {
   let mockSwiper;
@@ -745,7 +766,10 @@ describe("swiper.js shuffle mode", () => {
         await advance(manager);
       }
       // Let the pending trim fire.
-      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      await waitFor(
+        () => mockSwiper.slides.length <= mockState.highWaterMark,
+        "the buffer to come back down to the high-water mark"
+      );
 
       expect(mockSwiper.slides.length).toBeLessThanOrEqual(mockState.highWaterMark);
       expect(mockSwiper.removeSlide).toHaveBeenCalled();
@@ -817,7 +841,7 @@ describe("swiper.js shuffle mode", () => {
 
       // Once the transition ends, the re-armed trim goes through.
       mockSwiper.animating = false;
-      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      await waitFor(() => mockSwiper.slides.length === 10, "the re-armed trim to run once idle");
       expect(mockSwiper.slides.length).toBe(10);
     });
 
@@ -833,7 +857,7 @@ describe("swiper.js shuffle mode", () => {
       mockSwiper.animating = true; // still would-be busy
 
       manager._scheduleTrim("front");
-      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      await waitFor(() => mockSwiper.slides.length === 10, "the trim to go ahead despite `animating`");
 
       expect(mockSwiper.slides.length).toBe(10);
     });
@@ -854,7 +878,7 @@ describe("swiper.js shuffle mode", () => {
       expect(mockSwiper.slides.length).toBe(40);
 
       manager._resetInFlight = null;
-      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      await waitFor(() => mockSwiper.slides.length === 10, "the trim to run once the rebuild finishes");
       expect(mockSwiper.slides.length).toBe(10);
     });
 
@@ -947,7 +971,7 @@ describe("swiper.js shuffle mode", () => {
 
       // Released: the re-armed trim goes through.
       mockSwiper.touchEventsData.isTouched = false;
-      await new Promise((resolve) => setTimeout(resolve, TRIM_SETTLE_MS));
+      await waitFor(() => mockSwiper.slides.length === 10, "the trim to run once the finger lifts");
       expect(mockSwiper.slides.length).toBe(10);
     });
 
