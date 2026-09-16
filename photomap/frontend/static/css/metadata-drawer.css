@@ -324,7 +324,9 @@ body:not(.invoke-append-supported) .invoke-recall-btn[data-recall-mode="append_r
 .banner-drawer-container {
   position: fixed;
   left: 0;
-  top: 120px;
+  /* Pre-initialization default only: metadata-drawer.js measures the album
+     badge and sets `top` inline (DRAWER_TOP_FALLBACK matches this value). */
+  top: 78px;
   transform: translateX(-100%);
   width: auto;
   max-width: 50vw;
