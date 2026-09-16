@@ -48,6 +48,11 @@ export function getClusterLabelInfo(cluster) {
 // opens for the same image don't even do a network round trip.
 const imageLabelCache = new Map();
 const imageLabelInFlight = new Map();
+// key -> id of the request currently registered in imageLabelInFlight, so a
+// settling request can tell whether the entry under its key is still its own
+// without having to reference the promise it is itself being wrapped into.
+const imageLabelRequestIds = new Map();
+let imageLabelRequestSeq = 0;
 const IMAGE_LABEL_CACHE_MAX = 1024;
 
 // Bumped by clearImageLabelCache(). A request that was already in the air when
@@ -103,6 +108,10 @@ export function getImageLabelInfo(album, index) {
     return imageLabelInFlight.get(key);
   }
   const generation = imageLabelGeneration;
+  // Identity for this request, fixed before the request exists so the `finally`
+  // below has something certainly in scope to compare against.
+  const requestId = ++imageLabelRequestSeq;
+  imageLabelRequestIds.set(key, requestId);
   const promise = trackVocabBuildRequest(
     (async () => {
       try {
@@ -127,7 +136,15 @@ export function getImageLabelInfo(album, index) {
         // request for the same key may already have registered itself. An
         // unconditional delete would evict that one and let a third caller
         // issue a duplicate request.
-        if (imageLabelInFlight.get(key) === promise) {
+        //
+        // Compared by id rather than against the `promise` binding this IIFE is
+        // being wrapped into: were this body ever to reach `finally` before its
+        // first await -- which needs a synchronously-throwing `fetchJson`, so
+        // not today -- that binding would still be in its temporal dead zone,
+        // and the ReferenceError would leave a settled promise registered that
+        // could never delete itself, wedging this key for the life of the page.
+        if (imageLabelRequestIds.get(key) === requestId) {
+          imageLabelRequestIds.delete(key);
           imageLabelInFlight.delete(key);
         }
       }
@@ -137,10 +154,23 @@ export function getImageLabelInfo(album, index) {
   return promise;
 }
 
+// A re-index renumbers the album: the same global index now refers to a
+// different image, so every cached per-image label is a label for the wrong
+// picture. Nothing else drops this cache on that path — umap.js retires the
+// *cluster* labels there, and the settings checkbox only fires when the user
+// touches it — so without this the drawer's tag row would show a deleted
+// neighbour's tags permanently, since a cache hit never refetches.
+if (typeof window !== "undefined") {
+  window.addEventListener("albumIndexUpdated", () => {
+    clearImageLabelCache();
+  });
+}
+
 export function clearImageLabelCache() {
   imageLabelGeneration += 1;
   imageLabelCache.clear();
   imageLabelInFlight.clear();
+  imageLabelRequestIds.clear();
 }
 
 // ---------------------------------------------------------------------------

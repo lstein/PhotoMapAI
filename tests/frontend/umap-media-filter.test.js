@@ -60,8 +60,16 @@ const mockState = {
   searchResults: [],
 };
 
+// Mirrors the real setter (state.js `_makeSetter` + the mediaFilter spec's
+// onSet): no-op when unchanged, otherwise assign and announce. umap.js hangs
+// its redraw off that event, so a mock that only assigned would let the redraw
+// silently stop working with every test still green.
 const setMediaFilter = jest.fn((v) => {
+  if (mockState.mediaFilter === v) {
+    return;
+  }
   mockState.mediaFilter = v;
+  window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: v } }));
 });
 const setSearchResults = jest.fn();
 // Mutable so a test can put the swiper on a specific image.
@@ -336,9 +344,13 @@ describe("an album with no videos", () => {
     expect(firstPlot.data[0].x).toHaveLength(IMAGE_ONLY_POINTS.length);
   });
 
-  it("resets the stored filter to both", () => {
-    expect(setMediaFilter).toHaveBeenCalledWith("both");
-    expect(mockState.mediaFilter).toBe("both");
+  it("leaves the stored filter alone rather than writing 'both' over it", () => {
+    // The preference reaches the server now, so rewriting it here would travel:
+    // browsing one all-photo album would lose a deliberate "videos" everywhere,
+    // including on the mixed albums that can honour it. The map degrades what
+    // it draws instead (see the two cases above).
+    expect(setMediaFilter).not.toHaveBeenCalled();
+    expect(mockState.mediaFilter).toBe("videos");
   });
 
   it("disables the radios and checks Both", () => {
@@ -372,6 +384,22 @@ describe("a filter applied from outside the controls", () => {
 
     expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(true);
     expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(false);
+  });
+
+  it("redraws the map, not just the radio", async () => {
+    // Assigning `checked` fires no change event — that is what stops this
+    // looping back through the radios' own handler — so the redraw has to be
+    // driven from here too. Otherwise the radio reads Videos over a map still
+    // drawing all 13 points, and clicking the radio that is already checked
+    // fires nothing, so the user cannot even correct it.
+    expect(mainTrace().x).toHaveLength(MIXED_POINTS.length);
+
+    mockState.mediaFilter = "videos";
+    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+    await settle();
+
+    expect(mainTrace().x).toHaveLength(3);
+    expect(mainTrace().customdata).toEqual([100, 101, 102]);
   });
 });
 

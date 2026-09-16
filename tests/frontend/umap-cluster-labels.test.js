@@ -103,11 +103,22 @@ function answerLabels(pending, labels) {
   return new Promise((r) => setTimeout(r, 0));
 }
 
+// Set by a test to make the next umap_data request fail the way a server
+// restart or a dropped connection does.
+let failNextMapFetch = null;
+
 function installFetchMock() {
   global.fetch = (url) => {
     const target = String(url);
     requested.push(target);
     if (target.startsWith("umap_data/")) {
+      if (failNextMapFetch) {
+        const mode = failNextMapFetch;
+        failNextMapFetch = null;
+        return mode === "reject"
+          ? Promise.reject(new Error("network down"))
+          : Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ detail: "boom" }) });
+      }
       return Promise.resolve({ ok: true, json: () => Promise.resolve(POINTS) });
     }
     if (target.startsWith("cluster_labels/")) {
@@ -138,6 +149,7 @@ async function redrawAt(umap, eps) {
 beforeEach(() => {
   requested = [];
   pendingLabels = [];
+  failNextMapFetch = null;
   mockSetClusterLabels.mockClear();
   mockState.album = "test-album";
   mockState.dataChanged = true;
@@ -244,6 +256,82 @@ describe("labels never outlive the map they describe", () => {
   });
 });
 
+// The labels request goes out *before* the map fetch is awaited, on purpose —
+// the map is not held up for a build that takes tens of seconds. That is only
+// safe if a map fetch that never lands takes its labels down with it.
+describe("a redraw that never lands", () => {
+  for (const [mode, label] of [
+    ["reject", "the connection drops"],
+    ["error-status", "the server answers 500"],
+  ]) {
+    it(`does not install the new strength's labels when ${label}`, async () => {
+      const umap = await boot();
+      await redrawAt(umap, 0.6);
+      await answerLabels(pendingLabels[0], { 1: { label: "at-0.6" } });
+      expect(mockSetClusterLabels).toHaveBeenCalledWith({ 1: { label: "at-0.6" } });
+      mockSetClusterLabels.mockClear();
+
+      // The user moves the spinner to 0.9 and the map fetch dies.
+      failNextMapFetch = mode;
+      await expect(redrawAt(umap, 0.9)).rejects.toThrow();
+
+      // The 0.9 labels answer anyway — they were requested before the await.
+      await answerLabels(pendingLabels[1], { 1: { label: "at-0.9" } });
+
+      // The map on screen is still the 0.6 one, so its clusters are 0.6's.
+      // Installing 0.9's phrases would name them with another clustering's
+      // words and pick landmarks by another clustering's medoids.
+      expect(mockSetClusterLabels).not.toHaveBeenCalledWith({ 1: { label: "at-0.9" } });
+    });
+  }
+
+  it("goes back to asking for the strength that is actually drawn", async () => {
+    mockState.autotaggingEnabled = false;
+    const umap = await boot();
+    await redrawAt(umap, 0.6);
+
+    failNextMapFetch = "reject";
+    await expect(redrawAt(umap, 0.9)).rejects.toThrow();
+
+    // Turning autotagging on now must ask for 0.6 — what is on screen — not
+    // for the 0.9 that never drew. Without restoring the query, the failed
+    // strength would keep answering for the rest of the session.
+    requested = [];
+    mockState.autotaggingEnabled = true;
+    window.dispatchEvent(new CustomEvent("autotaggingChanged", { detail: { enabled: true } }));
+    await Promise.resolve();
+
+    expect(labelRequests()).toContain("cluster_labels/test-album?cluster_eps=0.6");
+    expect(labelRequests()).not.toContain("cluster_labels/test-album?cluster_eps=0.9");
+  });
+});
+
+// A re-index retires the drawn map. With the window open the redraw republishes
+// the query; with it closed nothing does, and the retired one must not be left
+// behind for a later toggle to fetch against.
+describe("a re-index while the map window is closed", () => {
+  it("stops answering for the map that was retired", async () => {
+    mockState.autotaggingEnabled = false;
+    const umap = await boot();
+    await redrawAt(umap, 0.6);
+    document.getElementById("umapFloatingWindow").style.display = "none";
+
+    window.dispatchEvent(new CustomEvent("albumIndexUpdated", { detail: { albumKey: "test-album" } }));
+    await Promise.resolve();
+
+    requested = [];
+    mockState.autotaggingEnabled = true;
+    window.dispatchEvent(new CustomEvent("autotaggingChanged", { detail: { enabled: true } }));
+    await Promise.resolve();
+
+    // 0.6 described the pre-re-index coordinates; its clusters no longer
+    // exist, and `points` is still the pre-re-index array, so installing
+    // labels built over the new index would mix the two.
+    expect(labelRequests()).not.toContain("cluster_labels/test-album?cluster_eps=0.6");
+    expect(umap).toBeDefined();
+  });
+});
+
 describe("turning autotagging on after the map is drawn", () => {
   it("asks for the strength the map was drawn at, not whatever the spinner now reads", async () => {
     mockState.autotaggingEnabled = false;
@@ -269,6 +357,16 @@ describe("turning autotagging on after the map is drawn", () => {
 
   it("fetches nothing before the first map fetch, which settles the strength itself", async () => {
     mockState.autotaggingEnabled = false;
+    // An album name unique to this test. Every umap.js imported earlier in
+    // this file still has a listener on this jsdom window and answers the
+    // dispatch below, but each of them captured its query while the album was
+    // "test-album" — so filtering on this name keeps the assertion about this
+    // module. Asserting an empty `labelRequests()` outright would pass for a
+    // reason that has nothing to do with the code under test: those modules
+    // each have a request parked in `labelsInFlight` from the previous test
+    // (its deferred is never resolved), so their own same-query dedupe
+    // suppresses them, and the assertion would survive this property breaking.
+    mockState.album = "boot-album";
     await boot();
 
     // At boot the spinner still holds the markup default; the album's real
@@ -278,7 +376,7 @@ describe("turning autotagging on after the map is drawn", () => {
     window.dispatchEvent(new CustomEvent("autotaggingChanged", { detail: { enabled: true } }));
     await Promise.resolve();
 
-    expect(labelRequests()).toEqual([]);
+    expect(labelRequests().filter((u) => u.includes("boot-album"))).toEqual([]);
   });
 
   it("discards a response that arrives after the setting went off again", async () => {

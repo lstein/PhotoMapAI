@@ -180,7 +180,30 @@ let colors = [];
 // Keeping the trace count fixed means moveTraces, the HighlightedPoints
 // add/delete, the landmark traces and `customdata` all keep working untouched.
 function visiblePoints() {
-  return filterPointsByMediaType(points, state.mediaFilter);
+  return filterPointsByMediaType(points, effectiveMapFilter());
+}
+
+// The filter that actually applies to the drawn map — the map's own copy of
+// media-filter.js's `effectiveMediaFilter`, derived from `points` rather than
+// from that module's /media_indices set so it cannot disagree with what is
+// plotted during an album switch.
+//
+// A filter this album cannot honour keeps everything rather than blanking the
+// map. The radios disable themselves for exactly this case, but the setting
+// can also arrive from the server *after* they were disabled (state.js
+// reconciles asynchronously, which is the whole reason this branch added the
+// mediaFilterSettingChanged listener), and a disabled radio is not a filter
+// that stopped applying.
+function effectiveMapFilter() {
+  const filter = state.mediaFilter;
+  if (filter !== "images" && filter !== "videos") {
+    return DEFAULT_MEDIA_FILTER;
+  }
+  const videos = points.filter((p) => p?.media === "video").length;
+  if (videos === 0 || videos === points.length) {
+    return DEFAULT_MEDIA_FILTER;
+  }
+  return filter;
 }
 let mapExists = false;
 let isShaded = false;
@@ -696,6 +719,8 @@ export async function fetchUmapData() {
     return;
   }
   showUmapSpinner();
+  // What is on screen right now, to go back to if this redraw never lands.
+  const drawnQuery = lastMapQuery;
   try {
     const epsQuery = clusterEpsQuery();
     const album = encodeURIComponent(state.album);
@@ -721,6 +746,12 @@ export async function fetchUmapData() {
       fetchClusterLabels(lastMapQuery);
     }
     const response = await fetch(`umap_data/${album}${epsQuery}`);
+    if (!response.ok) {
+      // Otherwise an error body (a JSON object, not an array) is assigned to
+      // `points` and the throw lands three lines down, past the assignment,
+      // with the map's own state already half-replaced.
+      throw new Error(`umap_data ${response.status}`);
+    }
     points = await response.json();
 
     // Compute clusters and colors
@@ -1044,6 +1075,20 @@ export async function fetchUmapData() {
     window.dispatchEvent(new CustomEvent("umapDataLoaded"));
 
     await setUmapColorMode();
+  } catch (err) {
+    // The redraw never landed, so the map on screen is still `drawnQuery`'s —
+    // but the labels for the query that failed were already requested (they go
+    // out before the await, deliberately). Letting them install would put
+    // phrases and medoids from one clustering onto another one's clusters,
+    // which is the exact divergence the keyed dedupe exists to prevent,
+    // reached from the other side. Retire them and restore the labels the
+    // drawn map should have.
+    lastMapQuery = drawnQuery;
+    invalidateClusterLabels();
+    if (state.autotaggingEnabled && lastMapQuery) {
+      fetchClusterLabels(lastMapQuery);
+    }
+    throw err;
   } finally {
     hideUmapSpinner();
   }
@@ -1292,20 +1337,14 @@ window.addEventListener("stateReady", () => {
     }
 
     mediaFilterRadios.forEach((radio) => {
-      radio.addEventListener("change", async (e) => {
+      radio.addEventListener("change", (e) => {
         if (!e.target.checked) {
           return;
         }
+        // Just record it. The redraw hangs off mediaFilterSettingChanged,
+        // which this setter dispatches, so the click and a value arriving from
+        // the server take the identical path — and take it once.
         setMediaFilter(e.target.value);
-        // Redraw through the normal colorize path so an active search
-        // highlight is re-derived from the new visible set rather than being
-        // left pointing at hidden points.
-        await colorizeUmap({
-          highlight: state.searchType === "search" || state.searchType === "cluster",
-          searchResults: state.searchResults || [],
-        });
-        await updateCurrentImageMarker();
-        debouncedUpdateLandmarkTrace();
       });
     });
   }
@@ -1361,10 +1400,13 @@ function updateMediaFilterAvailability() {
   }
   const albumHasVideos = hasVideoPoints(points);
 
-  if (!albumHasVideos && state.mediaFilter !== DEFAULT_MEDIA_FILTER) {
-    setMediaFilter(DEFAULT_MEDIA_FILTER);
-  }
-
+  // Deliberately NOT setMediaFilter(DEFAULT_MEDIA_FILTER) here. An album that
+  // cannot honour the filter is a fact about the album, not a choice by the
+  // user, and since this branch put mediaFilter in the server model that write
+  // would travel: browse an all-photo album once and "videos" is gone from
+  // state, localStorage and the server record, so switching back to a mixed
+  // album comes up "Both". `effectiveMapFilter` degrades the drawing instead,
+  // leaving the stored preference to mean what the user meant by it.
   MEDIA_FILTER_RADIO_IDS.forEach((id) => {
     const radio = document.getElementById(id);
     if (!radio) {
@@ -1395,7 +1437,12 @@ function syncMediaFilterRadios(value) {
   if (!radios.every(Boolean) || radios.some((radio) => radio.disabled)) {
     return;
   }
-  const match = radios.find((radio) => radio.value === value);
+  // Falls back the way the build-time init does: an unrecognized value (a
+  // hand-edited or corrupt localStorage entry — _parseStored does no
+  // validation) must not leave the previous album's radio checked over a map
+  // that is no longer filtered that way.
+  const match =
+    radios.find((radio) => radio.value === value) || radios.find((radio) => radio.value === DEFAULT_MEDIA_FILTER);
   if (match) {
     // Assigning `checked` fires no change event, so this cannot loop back
     // through the radios' own handler.
@@ -1412,8 +1459,25 @@ function syncMediaFilterRadios(value) {
 // leaves behind). Now that the filter is stored server-side at all, a device
 // restoring "videos" that way would filter every view to videos while the map's
 // own controls still read "Both".
-window.addEventListener("mediaFilterSettingChanged", (e) => {
+window.addEventListener("mediaFilterSettingChanged", async (e) => {
   syncMediaFilterRadios(e.detail?.value);
+  // And redraw. Moving the radio is not enough on its own: assigning `checked`
+  // fires no change event (which is what stops this looping), so before this
+  // the map kept drawing the old visible set under a radio that had already
+  // flipped — and the user could not fix it by clicking the radio that was
+  // already checked.
+  if (!mapExists) {
+    return;
+  }
+  // Through the normal colorize path so an active search highlight is
+  // re-derived from the new visible set rather than left pointing at hidden
+  // points.
+  await colorizeUmap({
+    highlight: state.searchType === "search" || state.searchType === "cluster",
+    searchResults: state.searchResults || [],
+  });
+  await updateCurrentImageMarker();
+  debouncedUpdateLandmarkTrace();
 });
 
 // Helper function to update the "Exit fullscreen on selection" checkbox state
@@ -1593,14 +1657,24 @@ async function initializeUmapWindow() {
   // settled on a strength: the spinner still holds the previous album's number
   // (or the markup default) until `get_umap_eps` answers.
   lastMapQuery = null;
-  const result = await fetch("get_umap_eps/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ album: state.album }),
-  });
-  const data = await result.json();
-  if (data.success) {
-    applyResolvedEps(data);
+  // Best-effort: a lock-protected album 403s here, and a restarting server
+  // rejects outright. Neither may abandon the rest of this function — the map
+  // fetch below is what republishes `lastMapQuery`, and without it the session
+  // is left unable to fetch labels at all (every autotaggingChanged would hit
+  // a null query and silently do nothing, which is the symptom this branch
+  // exists to fix). The spinner keeps whatever strength it holds.
+  try {
+    const result = await fetch("get_umap_eps/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ album: state.album }),
+    });
+    const data = await result.json();
+    if (data.success) {
+      applyResolvedEps(data);
+    }
+  } catch (err) {
+    console.warn("get_umap_eps failed; drawing with the strength the spinner holds:", err);
   }
   state.dataChanged = true;
   lastUnshadedSize = "medium"; // Reset to medium on album change
@@ -2636,6 +2710,13 @@ window.addEventListener("albumIndexUpdated", async (e) => {
   // labels for clusters that no longer exist.
   invalidateClusterLabels();
   if (!umapWindowIsOpen()) {
+    // The drawn map is retired too, and nothing will redraw it while the
+    // window is closed (the companion albumChanged{refresh} is deliberately
+    // skipped below, so initializeUmapWindow — the only other thing that
+    // clears this — never runs). Leaving the query behind would let a later
+    // autotagging toggle fetch labels for the pre-re-index clustering and
+    // install them over `points` from before it.
+    lastMapQuery = null;
     return;
   }
   // Re-resolve the strength before redrawing. New coordinates invalidate a

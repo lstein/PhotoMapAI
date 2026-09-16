@@ -88,6 +88,7 @@ const mockScoreDisplay = {
   showIndex: jest.fn(),
   showSearchScore: jest.fn(),
   showCluster: jest.fn(),
+  rerenderClusterLabel: jest.fn(),
 };
 
 jest.unstable_mockModule(`${JS}/score-display.js`, () => ({ scoreDisplay: mockScoreDisplay }));
@@ -124,6 +125,8 @@ describe("autotagging toggle", () => {
     mockFetchJson.mockReset();
     mockFetchJson.mockResolvedValue({ label: "seafood", alternates: ["shrimp", "meal"] });
     mockScoreDisplay.showCluster.mockClear();
+    mockScoreDisplay.rerenderClusterLabel.mockClear();
+    mockSlideState.getCurrentSlide.mockReturnValue({ globalIndex: 7 });
     mockSlideState.searchResults = [];
     mockState.searchResults = [];
     mockState.album = "demo";
@@ -142,6 +145,112 @@ describe("autotagging toggle", () => {
 
   afterEach(() => {
     delete window.umapPoints;
+  });
+
+  // The generation counter and the in-flight bookkeeping are the load-bearing
+  // state in this change: without them a response already in the air when the
+  // cache was dropped writes its stale answer into the fresh cache, where it
+  // stays forever, because a cache hit never refetches.
+  describe("image-label cache generations", () => {
+    // Turning the setting on makes the drawer render its rows, which issues an
+    // image_label fetch of its own. Get that out of the way first so each test
+    // below starts from a quiet cache and an unconsumed mock.
+    async function settleAutotaggingOn() {
+      clusterUtils.setAutotaggingEnabledInLabels(true);
+      await flush();
+      clusterUtils.clearImageLabelCache();
+      mockFetchJson.mockReset();
+      mockFetchJson.mockResolvedValue({ label: "default" });
+    }
+
+    /** A fetch whose resolution this test controls. */
+    function deferredFetch() {
+      let resolve;
+      const pending = new Promise((r) => {
+        resolve = r;
+      });
+      mockFetchJson.mockReturnValueOnce(pending);
+      return { resolve };
+    }
+
+    it("does not cache a response that was in the air when the cache was dropped", async () => {
+      await settleAutotaggingOn();
+      const first = deferredFetch();
+
+      const inFlight = clusterUtils.getImageLabelInfo("demo", 7);
+      clusterUtils.clearImageLabelCache(); // e.g. the album was re-indexed
+      first.resolve({ label: "stale" });
+      expect(await inFlight).toEqual({ label: "stale" }); // the awaiter still gets it
+
+      // ...but it must not have been stored: the next read refetches.
+      mockFetchJson.mockResolvedValueOnce({ label: "fresh" });
+      expect(await clusterUtils.getImageLabelInfo("demo", 7)).toEqual({ label: "fresh" });
+      expect(mockFetchJson).toHaveBeenCalledTimes(2);
+    });
+
+    it("caches a response that outlived no clear", async () => {
+      await settleAutotaggingOn();
+      mockFetchJson.mockResolvedValueOnce({ label: "seafood" });
+
+      expect(await clusterUtils.getImageLabelInfo("demo", 7)).toEqual({ label: "seafood" });
+      expect(await clusterUtils.getImageLabelInfo("demo", 7)).toEqual({ label: "seafood" });
+      expect(mockFetchJson).toHaveBeenCalledTimes(1); // second read was a cache hit
+    });
+
+    it("lets a request issued after a clear settle normally", async () => {
+      // The older request's `finally` must not evict the newer request's entry
+      // from the in-flight map: that would leave a third caller issuing a
+      // duplicate fetch for a key that is already being fetched.
+      await settleAutotaggingOn();
+      const first = deferredFetch();
+      const firstPromise = clusterUtils.getImageLabelInfo("demo", 7);
+
+      clusterUtils.clearImageLabelCache();
+      const second = deferredFetch();
+      const secondPromise = clusterUtils.getImageLabelInfo("demo", 7);
+      expect(mockFetchJson).toHaveBeenCalledTimes(2);
+
+      first.resolve({ label: "stale" }); // older one settles last-but-one
+      await firstPromise;
+
+      // The newer request is still deduped — no third fetch.
+      const thirdPromise = clusterUtils.getImageLabelInfo("demo", 7);
+      expect(mockFetchJson).toHaveBeenCalledTimes(2);
+
+      second.resolve({ label: "fresh" });
+      expect(await secondPromise).toEqual({ label: "fresh" });
+      expect(await thirdPromise).toEqual({ label: "fresh" });
+      expect(await clusterUtils.getImageLabelInfo("demo", 7)).toEqual({ label: "fresh" });
+      expect(mockFetchJson).toHaveBeenCalledTimes(2); // and it did get cached
+    });
+
+    it("drops cached labels when the album is re-indexed", async () => {
+      // A re-index renumbers the album, so index 7 is a different picture now.
+      // The cluster labels are retired on this path by umap.js; the per-image
+      // ones have to be too, or the tag row names the wrong image for good.
+      await settleAutotaggingOn();
+      mockFetchJson.mockResolvedValueOnce({ label: "before" });
+      expect(await clusterUtils.getImageLabelInfo("demo", 7)).toEqual({ label: "before" });
+
+      window.dispatchEvent(new CustomEvent("albumIndexUpdated", { detail: { albumKey: "demo" } }));
+
+      mockFetchJson.mockResolvedValueOnce({ label: "after" });
+      expect(await clusterUtils.getImageLabelInfo("demo", 7)).toEqual({ label: "after" });
+    });
+
+    it("returns a real promise from a deduped call", async () => {
+      // Callers chain .catch() on this; a bare thenable would break them.
+      await settleAutotaggingOn();
+      const gate = deferredFetch();
+
+      const a = clusterUtils.getImageLabelInfo("demo", 7);
+      const b = clusterUtils.getImageLabelInfo("demo", 7); // deduped
+      expect(typeof b.catch).toBe("function");
+
+      gate.resolve({ label: "seafood" });
+      expect(await a).toEqual({ label: "seafood" });
+      expect(await b).toEqual({ label: "seafood" });
+    });
   });
 
   describe("cluster-utils announces the change", () => {
@@ -237,7 +346,7 @@ describe("autotagging toggle", () => {
       expect(document.getElementById("imageLabelContainer").style.display).toBe("block");
     });
 
-    it("hides rows describing a slide whose metadata is gone", async () => {
+    it("clears both tag rows when the setting goes off and the metadata is gone", async () => {
       // Grid view trims the metadata of tiles it drops (enforceHighWaterMark),
       // and the current tile can be one of them — so the rows can outlive the
       // thing they describe. Toggling autotagging off still has to clear them.
@@ -245,23 +354,57 @@ describe("autotagging toggle", () => {
       clusterUtils.setAutotaggingEnabledInLabels(true);
       clusterUtils.setClusterLabels(LABELS);
       await flush();
-      expect(document.getElementById("clusterInfoContainer").style.display).toBe("block");
       expect(document.getElementById("imageLabelContainer").style.display).toBe("block");
 
       mockState.single_swiper = null; // the slide it was describing is gone
       clusterUtils.setAutotaggingEnabledInLabels(false);
       await flush();
 
-      expect(document.getElementById("clusterInfoContainer").style.display).toBe("none");
       expect(document.getElementById("imageLabelContainer").style.display).toBe("none");
     });
 
-    it("does not fetch a per-image label when no slide is showing yet", async () => {
+    it("still renders the rows when the metadata is gone but the index is known", async () => {
+      // The rows need nothing from the metadata but the index, and slide-state
+      // always has that. Hiding them here would strand them hidden until the
+      // next slide change — the reload-to-see-it bug this module exists to fix,
+      // reintroduced on the device the fix targets (grid view, tile metadata
+      // still in flight when the server's preference lands).
       mockState.single_swiper = null;
+      mockState.gridViewActive = true;
+      mockState.grid_swiper = { currentSlideMetadata: () => null };
+
       clusterUtils.setAutotaggingEnabledInLabels(true);
       clusterUtils.setClusterLabels(LABELS);
       await flush();
 
+      expect(document.getElementById("clusterInfoContainer").style.display).toBe("block");
+      expect(document.getElementById("clusterInfoBadge").textContent).toBe("Cluster 3 · food (size=2)");
+      expect(document.getElementById("imageLabelContainer").style.display).toBe("block");
+      expect(mockFetchJson).toHaveBeenCalledWith("image_label/demo/7");
+    });
+
+    it("re-splices the pill's label when it cannot rebuild the pill from metadata", async () => {
+      // updateCurrentImageScore needs the total, the search index and any
+      // score, so a synthesized {globalIndex} would turn a search score into a
+      // cluster. The pill re-derives its own label instead.
+      mockState.single_swiper = null;
+      clusterUtils.setAutotaggingEnabledInLabels(true);
+      await flush();
+
+      expect(mockScoreDisplay.rerenderClusterLabel).toHaveBeenCalled();
+      expect(mockScoreDisplay.showCluster).not.toHaveBeenCalled();
+    });
+
+    it("hides the rows when nothing identifies what is on screen", async () => {
+      mockState.single_swiper = null;
+      mockSlideState.getCurrentSlide.mockReturnValue({ globalIndex: null });
+
+      clusterUtils.setAutotaggingEnabledInLabels(true);
+      clusterUtils.setClusterLabels(LABELS);
+      await flush();
+
+      expect(document.getElementById("clusterInfoContainer").style.display).toBe("none");
+      expect(document.getElementById("imageLabelContainer").style.display).toBe("none");
       expect(mockFetchJson).not.toHaveBeenCalled();
     });
 
