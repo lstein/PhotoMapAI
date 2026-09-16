@@ -428,18 +428,29 @@ if (copyMetadataBtn && metadataTextArea) {
 // Helper to set/reset drawer position. ``setDrawerPosition`` is passed to
 // ``makeDraggable`` below as a custom writer so it can also clear the CSS
 // ``transform`` that originally centered the drawer.
+//
+// True once the user has dragged the drawer, so the automatic repositioning in
+// ``positionMetadataDrawer`` leaves their placement alone. Clicking the tab
+// (``resetDrawerPosition``) hands control back.
+let drawerManuallyPositioned = false;
+
 function setDrawerPosition(left, top) {
   const container = document.getElementById("bannerDrawerContainer");
   container.style.left = `${left}px`;
   container.style.top = `${top}px`;
   container.style.transform = "none";
+  drawerManuallyPositioned = true;
 }
 
 function resetDrawerPosition() {
   const container = document.getElementById("bannerDrawerContainer");
   container.style.left = "";
-  container.style.top = "";
   container.style.transform = ""; // Restore original transform
+  drawerManuallyPositioned = false;
+  // Re-apply the computed resting top rather than clearing it: the stylesheet's
+  // `top` is only a pre-initialization default, so clearing it here used to
+  // drop the drawer to a different height than it loaded at.
+  positionMetadataDrawer();
 }
 
 // Wire up the drawer's titlebar to the shared `makeDraggable` helper.
@@ -502,6 +513,11 @@ export function initializeMetadataDrawer() {
   setupOverlayButtons();
   registerReferenceThumbnailClickHandler();
 
+  // The album badge changes height as its contents change (album name, cluster
+  // label, score row), so re-measure when it does; otherwise the drawer's tab
+  // ends up overlapping a badge that grew after the drawer was placed.
+  window.addEventListener("scoreDisplayContentChanged", positionMetadataDrawer);
+
   // Metadata-fields accordion: mirrors the open/closed pattern used by the
   // Settings dialog accordions, with the open state persisted in
   // state.showMetadataFields (and therefore in localStorage).
@@ -541,15 +557,32 @@ export function initializeMetadataDrawer() {
   });
 }
 
-// Position metadata drawer (called from events.js during initialization and on window resize)
+/* Resting top edge of the drawer: clear of the album badge, which shares the
+   top-left corner with the drawer's pull-out tab. The badge's height is not a
+   constant -- it grew a second row (album pulldown above the slide position /
+   score text) and the cluster label wraps -- so measure it instead of assuming
+   a height. `DRAWER_TOP_FALLBACK` covers the cases where the badge is hidden
+   (fullscreen) and so has no box to measure. The seek slider shares the badge's
+   row and is never taller, so clearing the badge clears the slider too. */
+const DRAWER_TOP_FALLBACK = 78;
+const DRAWER_TOP_GAP = 12;
+
+function drawerRestingTop() {
+  const badge = document.getElementById("fixedScoreDisplay");
+  const rect = badge ? badge.getBoundingClientRect() : null;
+  if (!rect || rect.height === 0) {
+    return DRAWER_TOP_FALLBACK;
+  }
+  return Math.round(rect.bottom + DRAWER_TOP_GAP);
+}
+
+// Position metadata drawer (called from events.js during initialization and on
+// window resize, and whenever the album badge's contents change). A drawer the
+// user has dragged somewhere keeps that position until they click the tab to
+// snap it back.
 export function positionMetadataDrawer() {
   const drawer = document.getElementById("bannerDrawerContainer");
-  if (drawer) {
-    // Position drawer below where the slider would be when visible (top: 12px + slider height ~30px + 8px gap)
-    // This is independent of the slider's current visibility state
-    const sliderVisibleTop = 12; // The slider's top position when visible
-    const sliderHeight = 30; // Approximate slider height
-    const gap = 8;
-    drawer.style.top = `${sliderVisibleTop + sliderHeight + gap}px`;
+  if (drawer && !drawerManuallyPositioned) {
+    drawer.style.top = `${drawerRestingTop()}px`;
   }
 }
