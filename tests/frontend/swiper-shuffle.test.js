@@ -864,6 +864,34 @@ describe("swiper.js shuffle mode", () => {
       clearTimeout(manager._trimTimer);
     });
 
+    it("removes the whole tail after the current slide, not just one of it", async () => {
+      // Regression: this passed a (start, count) pair to removeSlide, which has
+      // no such overload — it takes an index or an array. The count was
+      // silently dropped and a single slide was removed, leaving the rest of
+      // the tail holding images from the album that had just been deleted.
+      mockState.highWaterMark = 50; // keep the follow-up trim out of the way
+      const manager = await managerWithHandlers();
+      mockSwiper.slides = Array.from({ length: 10 }, (_, i) => createMockSlide(i));
+      mockSwiper.activeIndex = 3;
+      mockSlideState.getCurrentSlide = jest.fn(() => ({
+        globalIndex: 3,
+        searchIndex: null,
+        totalCount: 10,
+        isSearchMode: false,
+      }));
+      const keptHead = mockSwiper.slides[0];
+      const keptActive = mockSwiper.slides[3];
+
+      manager.removeSlidesAfterCurrent();
+
+      // Slides 0..3 survive; 4..9 are all gone.
+      expect(mockSwiper.slides.length).toBe(4);
+      expect(mockSwiper.slides[0]).toBe(keptHead);
+      expect(mockSwiper.slides[3]).toBe(keptActive);
+      expect(mockSwiper.slides.map((el) => el.dataset.globalIndex)).toEqual(["0", "1", "2", "3"]);
+      clearTimeout(manager._trimTimer);
+    });
+
     it("follows the latest direction of travel when one is already queued", async () => {
       const manager = await managerWithHandlers();
       manager._scheduleTrim("front");

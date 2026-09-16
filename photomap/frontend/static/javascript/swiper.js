@@ -695,9 +695,13 @@ class SwiperManager {
     if (activeIndex === -1) {
       activeIndex = 0;
     }
+    // removeSlide takes an index or an ARRAY of them — there is no (start,
+    // count) overload. Passing a count as a second argument silently removed
+    // just the one slide at activeIndex + 1 and left the rest of the tail in
+    // place, holding slides from the album that was just deleted.
     const slidesToRemove = slideEls.length - activeIndex - 1;
     if (slidesToRemove > 0) {
-      this.swiper.removeSlide(activeIndex + 1, slidesToRemove);
+      this.swiper.removeSlide(Array.from({ length: slidesToRemove }, (_, i) => activeIndex + 1 + i));
     }
     this._scheduleTrim("front");
   }
