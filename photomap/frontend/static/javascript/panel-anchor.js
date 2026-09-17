@@ -101,6 +101,23 @@ export function visibleViewportBottom() {
   return document.documentElement.clientHeight - liveOvershoot();
 }
 
+/**
+ * Is what visibleViewportBottom() reports right now trustworthy?
+ *
+ * The software keyboard shrinks the visible viewport exactly as a stranded
+ * layout viewport does, and nothing in the geometry tells the two apart — see
+ * syncPanelAnchor(), which holds its correction rather than guess. Re-seating
+ * a panel on a bad sample is self-correcting; anything that acts on the
+ * measurement irreversibly (collapsing a section and persisting that, say)
+ * wants to know first, and to do nothing until this is true again.
+ *
+ * @returns {boolean} false while a text field is focused and until the
+ *   keyboard has finished collapsing after it blurs
+ */
+export function visibleViewportSettled() {
+  return !isTextEntryFocused() && !keyboardSettling;
+}
+
 /** Re-seat the registered panels against the current viewport. */
 export function syncPanelAnchor() {
   // The software keyboard shrinks the visual viewport exactly as a stranded
