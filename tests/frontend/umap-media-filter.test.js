@@ -60,8 +60,16 @@ const mockState = {
   searchResults: [],
 };
 
+// Mirrors the real setter (state.js `_makeSetter` + the mediaFilter spec's
+// onSet): no-op when unchanged, otherwise assign and announce. umap.js hangs
+// its redraw off that event, so a mock that only assigned would let the redraw
+// silently stop working with every test still green.
 const setMediaFilter = jest.fn((v) => {
+  if (mockState.mediaFilter === v) {
+    return;
+  }
   mockState.mediaFilter = v;
+  window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: v } }));
 });
 const setSearchResults = jest.fn();
 // Mutable so a test can put the swiper on a specific image.
@@ -336,9 +344,13 @@ describe("an album with no videos", () => {
     expect(firstPlot.data[0].x).toHaveLength(IMAGE_ONLY_POINTS.length);
   });
 
-  it("resets the stored filter to both", () => {
-    expect(setMediaFilter).toHaveBeenCalledWith("both");
-    expect(mockState.mediaFilter).toBe("both");
+  it("leaves the stored filter alone rather than writing 'both' over it", () => {
+    // The preference reaches the server now, so rewriting it here would travel:
+    // browsing one all-photo album would lose a deliberate "videos" everywhere,
+    // including on the mixed albums that can honour it. The map degrades what
+    // it draws instead (see the two cases above).
+    expect(setMediaFilter).not.toHaveBeenCalled();
+    expect(mockState.mediaFilter).toBe("videos");
   });
 
   it("disables the radios and checks Both", () => {
@@ -349,5 +361,87 @@ describe("an album with no videos", () => {
 
   it("explains why the control is unavailable", () => {
     expect(document.getElementById("umapMediaFilterContainer").title).toMatch(/no videos/i);
+  });
+});
+
+// The filter can also change without anyone touching the radios: state.js
+// applies the server's copy of the preference after boot, which is how a
+// device whose localStorage was evicted gets its settings back. That happens
+// after the controls were built from the value the radios currently show.
+describe("a filter applied from outside the controls", () => {
+  beforeEach(async () => {
+    setMediaFilter.mockClear();
+    mockState.mediaFilter = "both";
+    currentSlideIndex = [-1, MIXED_POINTS.length, null];
+    await boot(MIXED_POINTS);
+  });
+
+  it("moves the checked radio to match", () => {
+    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(true);
+
+    mockState.mediaFilter = "videos";
+    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+
+    expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(true);
+    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(false);
+  });
+
+  it("redraws the map, not just the radio", async () => {
+    // Assigning `checked` fires no change event — that is what stops this
+    // looping back through the radios' own handler — so the redraw has to be
+    // driven from here too. Otherwise the radio reads Videos over a map still
+    // drawing all 13 points, and clicking the radio that is already checked
+    // fires nothing, so the user cannot even correct it.
+    expect(mainTrace().x).toHaveLength(MIXED_POINTS.length);
+
+    mockState.mediaFilter = "videos";
+    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+    await settle();
+
+    expect(mainTrace().x).toHaveLength(3);
+    expect(mainTrace().customdata).toEqual([100, 101, 102]);
+  });
+});
+
+// Each case boots its own module: the radios are only disabled by a real
+// fetchUmapData, and a second boot() inside one test would reuse the cached
+// module, whose map is already current and skips the redraw.
+describe("a filter applied from outside the controls, on an album with no videos", () => {
+  let umapModule;
+
+  beforeEach(async () => {
+    setMediaFilter.mockClear();
+    mockState.mediaFilter = "both";
+    currentSlideIndex = [-1, IMAGE_ONLY_POINTS.length, null];
+    umapModule = await boot(IMAGE_ONLY_POINTS);
+  });
+
+  it("does not re-check radios the album has disabled", () => {
+    // The album disables the controls and pins them to Both; a late-arriving
+    // "videos" must not tick a radio the album cannot honour.
+    expect(document.getElementById("umapMediaFilterVideosRadio").disabled).toBe(true);
+
+    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+
+    expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(false);
+    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(true);
+  });
+
+  it("catches the radios up once an album that has videos re-enables them", async () => {
+    // The filter dropped above is still in force — it was never un-set, only
+    // left unshown. An album that can honour it must not go on reading "Both"
+    // while every view browses videos only.
+    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+    mockState.mediaFilter = "videos";
+
+    currentSlideIndex = [-1, MIXED_POINTS.length, null];
+    installFetchMock(MIXED_POINTS);
+    mockState.dataChanged = true;
+    await umapModule.fetchUmapData();
+    await settle();
+
+    expect(document.getElementById("umapMediaFilterVideosRadio").disabled).toBe(false);
+    expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(true);
+    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(false);
   });
 });

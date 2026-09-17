@@ -180,7 +180,30 @@ let colors = [];
 // Keeping the trace count fixed means moveTraces, the HighlightedPoints
 // add/delete, the landmark traces and `customdata` all keep working untouched.
 function visiblePoints() {
-  return filterPointsByMediaType(points, state.mediaFilter);
+  return filterPointsByMediaType(points, effectiveMapFilter());
+}
+
+// The filter that actually applies to the drawn map — the map's own copy of
+// media-filter.js's `effectiveMediaFilter`, derived from `points` rather than
+// from that module's /media_indices set so it cannot disagree with what is
+// plotted during an album switch.
+//
+// A filter this album cannot honour keeps everything rather than blanking the
+// map. The radios disable themselves for exactly this case, but the setting
+// can also arrive from the server *after* they were disabled (state.js
+// reconciles asynchronously, which is the whole reason this branch added the
+// mediaFilterSettingChanged listener), and a disabled radio is not a filter
+// that stopped applying.
+function effectiveMapFilter() {
+  const filter = state.mediaFilter;
+  if (filter !== "images" && filter !== "videos") {
+    return DEFAULT_MEDIA_FILTER;
+  }
+  const videos = points.filter((p) => p?.media === "video").length;
+  if (videos === 0 || videos === points.length) {
+    return DEFAULT_MEDIA_FILTER;
+  }
+  return filter;
 }
 let mapExists = false;
 let isShaded = false;
@@ -476,6 +499,168 @@ function readSpinnerEps() {
   return raw === "" ? null : parseFloat(raw);
 }
 
+// The `?cluster_eps=` both map-shaped endpoints should be asked for, or "" to
+// let the server derive the strength.
+//
+// Omitted from the query entirely when the field is empty, so the server
+// derives the strength. Substituting a number here would quietly cluster at
+// something the user never chose and the spinner never showed.
+//
+// A value the spinner refuses to save must not be sent either. The server
+// floors anything under MIN_CLUSTER_EPS, so sending one clusters the map at a
+// number that is neither what the album stores nor what the field shows — the
+// exact divergence refusing to save it is meant to prevent. Omitting it is the
+// honest request: the album's own strength applies.
+//
+// Shared by the map fetch and the cluster-labels fetch: asking the two
+// endpoints for different strengths returns two different sets of cluster IDs,
+// and the labels would then describe clusters the map never drew.
+function clusterEpsQuery() {
+  const eps = readSpinnerEps();
+  return eps !== null && epsIsUsable(eps) ? `?cluster_eps=${eps}` : "";
+}
+
+// ---------------------------------------------------------------------------
+// Cluster labels
+// ---------------------------------------------------------------------------
+//
+// One choke point for `/cluster_labels`, shared by the map fetch and by the
+// autotagging toggle. Not inlined at each call site for two reasons:
+//
+//   - It is the expensive endpoint. A first call builds the vocabulary
+//     embeddings and can refit UMAP, and `get_or_build_cluster_labels` is a
+//     read-or-compute over a file cache with no lock — two concurrent first
+//     calls both compute. `labelsInFlight` collapses the callers that ask for
+//     the same thing at the same time (the map fetch and the autotagging
+//     listener at boot) into one request. It cannot cancel one: a request
+//     retired by `invalidateClusterLabels` goes on computing server-side, its
+//     answer simply discarded, so an album switched back and forth during a
+//     cold build does pay for it twice.
+//   - A response that arrives after the album changed, or after autotagging
+//     was switched back off, must not be installed over the state that
+//     replaced it. `labelsSeq` invalidates any response whose request was
+//     issued before such a change.
+//
+// The in-flight request is keyed by the exact query it was issued with, and
+// reused only for that same query. Cluster IDs are a function of the strength
+// the album was clustered at, so labels fetched at one strength describe
+// clusters a map drawn at another never had: a dedupe that ignored the key
+// would answer a redraw at 0.9 with the labels of the 0.6 request still in
+// the air, and the map would carry someone else's phrases until the next
+// album switch.
+let labelsInFlight = null;
+let labelsInFlightQuery = null;
+let labelsSeq = 0;
+
+// The query the current map was fetched with — the one the labels must agree
+// with. Null until the first map fetch of this album, which matters at boot:
+// the strength spinner still holds its markup default until `get_umap_eps`
+// answers, so a labels request issued before that would be for a strength
+// nobody chose (and, on a cold cache, an expensive build at it).
+let lastMapQuery = null;
+
+// Retire the labels: drop the installed ones and discard whatever request is
+// in flight. Anything that changes which clusters exist — an album switch, a
+// re-index, autotagging off — must call this.
+//
+// Dropping the installed set matters as much as discarding the request. The
+// map is no longer held up for its labels, so between one album's map coming
+// down and the next one's labels arriving there is a window of whole seconds
+// (a cold vocabulary build is tens of them) in which the previous album's
+// phrases would otherwise still answer `getClusterLabelInfo` — naming the new
+// map's clusters in the drawer, the score pill and the hover popup, and
+// picking its landmark thumbnails by a medoid index that means nothing here.
+// Empty is the honest answer for that window: every one of those surfaces
+// already falls back to the bare "Cluster N (size=K)".
+function invalidateClusterLabels() {
+  labelsSeq += 1;
+  labelsInFlight = null;
+  labelsInFlightQuery = null;
+  setClusterLabels({});
+}
+
+// Fetch the cluster labels for `query` (an `<album><?cluster_eps=…>` string,
+// as built by the map fetch) and install them.
+//
+// Best-effort by design: a failure installs an empty set, and the hover popup
+// and drawer badge fall back to the bare "Cluster N (size=K)" string.
+// trackVocabBuildRequest surfaces a sticky toast if the build keeps us waiting
+// more than a few seconds, so the UI doesn't look frozen.
+function fetchClusterLabels(query) {
+  if (!query) {
+    return Promise.resolve(null);
+  }
+  if (labelsInFlight && labelsInFlightQuery === query) {
+    return labelsInFlight;
+  }
+  if (labelsInFlight) {
+    // In flight for a different strength or album. Its answer describes
+    // clusters nothing is drawing any more, so retire it rather than let it
+    // install itself when it lands.
+    invalidateClusterLabels();
+  }
+  const seq = labelsSeq;
+  const promise = trackVocabBuildRequest(
+    (async () => {
+      let labels = null;
+      try {
+        const response = await fetch(`cluster_labels/${query}`);
+        if (response.ok) {
+          labels = (await response.json()).labels || {};
+        }
+      } catch (err) {
+        console.warn("Cluster labels fetch failed:", err);
+      }
+      if (labelsInFlight === promise) {
+        labelsInFlight = null;
+        labelsInFlightQuery = null;
+      }
+      // Superseded while we were waiting: whoever bumped the sequence has
+      // already installed the labels that belong to the new state.
+      if (seq !== labelsSeq) {
+        return null;
+      }
+      setClusterLabels(labels || {});
+      // Landmarks name a cluster's medoid as their thumbnail when the labels
+      // supply one, and they were drawn before this landed (the map no longer
+      // waits for the labels). Re-render so they pick it up; the debounced
+      // form because a relayout may be drawing them at this moment too.
+      if (landmarksVisible) {
+        debouncedUpdateLandmarkTrace();
+      }
+      return labels;
+    })()
+  );
+  labelsInFlight = promise;
+  labelsInFlightQuery = query;
+  return promise;
+}
+
+// The autotagging setting decides whether the labels are fetched at all, and
+// it can be flipped long after the map was drawn — from the settings panel, or
+// at boot when the server's copy of the preference arrives after the map fetch
+// already decided to skip them (state.js reconciles asynchronously). Neither
+// case has anything else that would ask for labels: `fetchUmapData` no-ops
+// while the map is current, so without this the cluster tag stayed missing
+// until the next album switch or page reload.
+//
+// Deliberately not gated on `mapExists`: the reconcile case lands *during* the
+// first map fetch as often as after it, and gating on a map that isn't drawn
+// yet is what left the labels unfetched for the whole session. `lastMapQuery`
+// is the right gate instead — it is set as the map fetch issues its request,
+// so an in-flight fetch is covered (and deduped against, which is what keeps a
+// cold build from running twice), while a flip before any map fetch correctly
+// does nothing: the fetch that follows reads the setting itself.
+window.addEventListener("autotaggingChanged", (e) => {
+  if (!e.detail?.enabled) {
+    // cluster-utils has already dropped the labels; just make sure a request
+    // issued while it was on can't reinstate them.
+    invalidateClusterLabels();
+    return;
+  }
+  fetchClusterLabels(lastMapQuery);
+});
+
 // Whether the semantic map is on screen. Worth re-checking after any await:
 // rendering Plotly into a hidden container leaves a plot nobody asked for and
 // consumes the dataChanged flag the next open relies on to redraw.
@@ -534,48 +719,40 @@ export async function fetchUmapData() {
     return;
   }
   showUmapSpinner();
+  // What is on screen right now, to go back to if this redraw never lands.
+  const drawnQuery = lastMapQuery;
   try {
-    // Omitted from the query entirely when the field is empty, so the server
-    // derives the strength. Substituting a number here would quietly cluster
-    // at something the user never chose and the spinner never showed.
-    const eps = readSpinnerEps();
-    // A value the spinner refuses to save must not be sent either. The server
-    // floors anything under MIN_CLUSTER_EPS, so sending one clusters the map
-    // at a number that is neither what the album stores nor what the field
-    // shows — the exact divergence refusing to save it is meant to prevent.
-    // Omitting it is the honest request: the album's own strength applies.
-    const epsQuery = eps !== null && epsIsUsable(eps) ? `?cluster_eps=${eps}` : "";
+    const epsQuery = clusterEpsQuery();
     const album = encodeURIComponent(state.album);
-    // Fetch UMAP data and cluster labels in parallel. Labels are best-effort:
-    // a failure leaves clusterLabels empty and the hover popup falls back to
-    // the bare "Cluster N (size=K)" string. The endpoint compute itself can
-    // be slow on first call (vocab build), but it runs in a thread pool on
-    // the server side so the umap_data response isn't blocked.
+    // The query this map is being drawn from, published before the request so
+    // the autotagging listener can fetch labels that agree with it even while
+    // this fetch is still in the air.
+    lastMapQuery = `${album}${epsQuery}`;
+    // Fetch UMAP data and cluster labels in parallel — the labels request is
+    // started before the await below, not after it. The map is deliberately
+    // not held up for the labels: a first call builds the vocabulary
+    // embeddings, which is tens of seconds of CPU on a large album, and there
+    // is nothing to show for the wait — the labels install themselves when
+    // they land (`clusterLabelsUpdated`), and the drawer and landmarks
+    // re-render off that.
     // When autotagging is disabled in settings, skip the labels fetch entirely
     // so the server-side vocab embedding index is never built.
-    // trackVocabBuildRequest surfaces a sticky toast if the build keeps us
-    // waiting more than a few seconds, so the UI doesn't look frozen.
-    const labelsPromise = state.autotaggingEnabled
-      ? trackVocabBuildRequest(
-          fetch(`cluster_labels/${album}${epsQuery}`).catch((err) => {
-            console.warn("Cluster labels fetch failed:", err);
-            return null;
-          })
-        )
-      : Promise.resolve(null);
-    const [response, labelsResponse] = await Promise.all([fetch(`umap_data/${album}${epsQuery}`), labelsPromise]);
-    points = await response.json();
-    if (labelsResponse?.ok) {
-      try {
-        const body = await labelsResponse.json();
-        setClusterLabels(body.labels || {});
-      } catch (err) {
-        console.warn("Cluster labels parse failed:", err);
-        setClusterLabels({});
-      }
-    } else {
-      setClusterLabels({});
+    //
+    // Either way the installed labels go first: this redraw can renumber the
+    // clusters under them (a new strength, or the same one over re-indexed
+    // coordinates), and they are not replaced until the response lands.
+    setClusterLabels({});
+    if (state.autotaggingEnabled) {
+      fetchClusterLabels(lastMapQuery);
     }
+    const response = await fetch(`umap_data/${album}${epsQuery}`);
+    if (!response.ok) {
+      // Otherwise an error body (a JSON object, not an array) is assigned to
+      // `points` and the throw lands three lines down, past the assignment,
+      // with the map's own state already half-replaced.
+      throw new Error(`umap_data ${response.status}`);
+    }
+    points = await response.json();
 
     // Compute clusters and colors
     clusters = [...new Set(points.map((p) => p.cluster))];
@@ -898,6 +1075,20 @@ export async function fetchUmapData() {
     window.dispatchEvent(new CustomEvent("umapDataLoaded"));
 
     await setUmapColorMode();
+  } catch (err) {
+    // The redraw never landed, so the map on screen is still `drawnQuery`'s —
+    // but the labels for the query that failed were already requested (they go
+    // out before the await, deliberately). Letting them install would put
+    // phrases and medoids from one clustering onto another one's clusters,
+    // which is the exact divergence the keyed dedupe exists to prevent,
+    // reached from the other side. Retire them and restore the labels the
+    // drawn map should have.
+    lastMapQuery = drawnQuery;
+    invalidateClusterLabels();
+    if (state.autotaggingEnabled && lastMapQuery) {
+      fetchClusterLabels(lastMapQuery);
+    }
+    throw err;
   } finally {
     hideUmapSpinner();
   }
@@ -1146,20 +1337,14 @@ window.addEventListener("stateReady", () => {
     }
 
     mediaFilterRadios.forEach((radio) => {
-      radio.addEventListener("change", async (e) => {
+      radio.addEventListener("change", (e) => {
         if (!e.target.checked) {
           return;
         }
+        // Just record it. The redraw hangs off mediaFilterSettingChanged,
+        // which this setter dispatches, so the click and a value arriving from
+        // the server take the identical path — and take it once.
         setMediaFilter(e.target.value);
-        // Redraw through the normal colorize path so an active search
-        // highlight is re-derived from the new visible set rather than being
-        // left pointing at hidden points.
-        await colorizeUmap({
-          highlight: state.searchType === "search" || state.searchType === "cluster",
-          searchResults: state.searchResults || [],
-        });
-        await updateCurrentImageMarker();
-        debouncedUpdateLandmarkTrace();
       });
     });
   }
@@ -1215,10 +1400,13 @@ function updateMediaFilterAvailability() {
   }
   const albumHasVideos = hasVideoPoints(points);
 
-  if (!albumHasVideos && state.mediaFilter !== DEFAULT_MEDIA_FILTER) {
-    setMediaFilter(DEFAULT_MEDIA_FILTER);
-  }
-
+  // Deliberately NOT setMediaFilter(DEFAULT_MEDIA_FILTER) here. An album that
+  // cannot honour the filter is a fact about the album, not a choice by the
+  // user, and since this branch put mediaFilter in the server model that write
+  // would travel: browse an all-photo album once and "videos" is gone from
+  // state, localStorage and the server record, so switching back to a mixed
+  // album comes up "Both". `effectiveMapFilter` degrades the drawing instead,
+  // leaving the stored preference to mean what the user meant by it.
   MEDIA_FILTER_RADIO_IDS.forEach((id) => {
     const radio = document.getElementById(id);
     if (!radio) {
@@ -1229,9 +1417,68 @@ function updateMediaFilterAvailability() {
       radio.checked = radio.value === DEFAULT_MEDIA_FILTER;
     }
   });
+  if (albumHasVideos) {
+    // Re-enabling is the other half of the listener below: a filter that
+    // arrived while these were disabled was dropped rather than shown, since
+    // the album it arrived on could not honour it. This album can, so the
+    // radios have to catch up with the filter that is actually in force —
+    // otherwise they read "Both" while every view browses videos only.
+    syncMediaFilterRadios(state.mediaFilter);
+  }
   container.style.opacity = albumHasVideos ? "1" : "0.5";
   container.title = albumHasVideos ? "" : "This album contains no videos";
 }
+
+// Move the checked radio to `value`, unless this album has taken the controls
+// away — while they are disabled updateMediaFilterAvailability owns what they
+// read, and it calls this itself once they come back.
+function syncMediaFilterRadios(value) {
+  const radios = MEDIA_FILTER_RADIO_IDS.map((id) => document.getElementById(id));
+  if (!radios.every(Boolean) || radios.some((radio) => radio.disabled)) {
+    return;
+  }
+  // Falls back the way the build-time init does: an unrecognized value (a
+  // hand-edited or corrupt localStorage entry — _parseStored does no
+  // validation) must not leave the previous album's radio checked over a map
+  // that is no longer filtered that way.
+  const match =
+    radios.find((radio) => radio.value === value) || radios.find((radio) => radio.value === DEFAULT_MEDIA_FILTER);
+  if (match) {
+    // Assigning `checked` fires no change event, so this cannot loop back
+    // through the radios' own handler.
+    match.checked = true;
+  }
+}
+
+// Keep the radios reading what the filter actually is.
+//
+// They are checked from `state.mediaFilter` when the controls are built, which
+// is before the server's copy of the preference can arrive — state.js
+// reconciles asynchronously after boot, and the server is authoritative when
+// the localStorage cache is missing or stale (the case an iOS storage eviction
+// leaves behind). Now that the filter is stored server-side at all, a device
+// restoring "videos" that way would filter every view to videos while the map's
+// own controls still read "Both".
+window.addEventListener("mediaFilterSettingChanged", async (e) => {
+  syncMediaFilterRadios(e.detail?.value);
+  // And redraw. Moving the radio is not enough on its own: assigning `checked`
+  // fires no change event (which is what stops this looping), so before this
+  // the map kept drawing the old visible set under a radio that had already
+  // flipped — and the user could not fix it by clicking the radio that was
+  // already checked.
+  if (!mapExists) {
+    return;
+  }
+  // Through the normal colorize path so an active search highlight is
+  // re-derived from the new visible set rather than left pointing at hidden
+  // points.
+  await colorizeUmap({
+    highlight: state.searchType === "search" || state.searchType === "cluster",
+    searchResults: state.searchResults || [],
+  });
+  await updateCurrentImageMarker();
+  debouncedUpdateLandmarkTrace();
+});
 
 // Helper function to update the "Exit fullscreen on selection" checkbox state
 function updateExitFullscreenCheckboxState() {
@@ -1401,14 +1648,33 @@ async function initializeUmapWindow() {
   if (!state.album) {
     return;
   }
-  const result = await fetch("get_umap_eps/", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ album: state.album }),
-  });
-  const data = await result.json();
-  if (data.success) {
-    applyResolvedEps(data);
+  // Cluster IDs mean nothing across albums, so a labels request issued for the
+  // previous one must neither be installed nor reused as the deduped response
+  // for this one. Done before the round trip below, which is long enough for
+  // an in-flight request to land in the middle of it.
+  invalidateClusterLabels();
+  // And nothing may fetch labels for this album until the map fetch below has
+  // settled on a strength: the spinner still holds the previous album's number
+  // (or the markup default) until `get_umap_eps` answers.
+  lastMapQuery = null;
+  // Best-effort: a lock-protected album 403s here, and a restarting server
+  // rejects outright. Neither may abandon the rest of this function — the map
+  // fetch below is what republishes `lastMapQuery`, and without it the session
+  // is left unable to fetch labels at all (every autotaggingChanged would hit
+  // a null query and silently do nothing, which is the symptom this branch
+  // exists to fix). The spinner keeps whatever strength it holds.
+  try {
+    const result = await fetch("get_umap_eps/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ album: state.album }),
+    });
+    const data = await result.json();
+    if (data.success) {
+      applyResolvedEps(data);
+    }
+  } catch (err) {
+    console.warn("get_umap_eps failed; drawing with the strength the spinner holds:", err);
   }
   state.dataChanged = true;
   lastUnshadedSize = "medium"; // Reset to medium on album change
@@ -2437,7 +2703,20 @@ window.addEventListener("albumIndexUpdated", async (e) => {
     return;
   }
   state.dataChanged = true;
+  // New coordinates mean new clusters, under a query string that is very
+  // often the one already in flight — the album's stored strength doesn't
+  // change just because its images did. Without this, the redraw below would
+  // be handed the request issued *before* the re-index as its own, and install
+  // labels for clusters that no longer exist.
+  invalidateClusterLabels();
   if (!umapWindowIsOpen()) {
+    // The drawn map is retired too, and nothing will redraw it while the
+    // window is closed (the companion albumChanged{refresh} is deliberately
+    // skipped below, so initializeUmapWindow — the only other thing that
+    // clears this — never runs). Leaving the query behind would let a later
+    // autotagging toggle fetch labels for the pre-re-index clustering and
+    // install them over `points` from before it.
+    lastMapQuery = null;
     return;
   }
   // Re-resolve the strength before redrawing. New coordinates invalidate a

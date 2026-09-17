@@ -691,6 +691,18 @@ class GridViewManager {
     }
   }
 
+  // The metadata behind the tile the drawer is describing, or null while its
+  // metadata is still in flight (tiles paint as placeholders first). Read by
+  // metadata-drawer.js when it needs to re-render its label rows without a
+  // slide change; the same object this view passes to updateClusterInfo().
+  currentSlideMetadata() {
+    const globalIndex = slideState.getCurrentSlide()?.globalIndex;
+    if (globalIndex === undefined || globalIndex === null) {
+      return null;
+    }
+    return this.slideData[globalIndex] || null;
+  }
+
   updateMetadataOverlay() {
     // When grid view isn't the active mode, the swiper view owns the shared
     // descriptionText element. Touching it from here would wipe the details

@@ -62,6 +62,24 @@ class UserPreferences(_CamelModel):
     umap_click_selects_cluster: bool = True
     umap_controls_visible: bool = True
 
+    # Which media the whole app shows — swiper, grid view and search results,
+    # not just the map (see media-filter.js). Listed in state.js's
+    # PERSISTED_SETTINGS, so leaving it out here meant ``extra="ignore"``
+    # silently dropped it from every PATCH: it never survived a localStorage
+    # eviction, and reconciliation saw a field that could never match and
+    # queued a PATCH on every single boot.
+    #
+    # ``None`` rather than ``"both"`` for devices that have never sent one,
+    # because a concrete default here is indistinguishable from a deliberate
+    # choice: a device upgrading with "videos" in localStorage and a
+    # server-authoritative reconcile (its cached server timestamp lagging, as
+    # it does when the last PATCH's response never landed) would have "both"
+    # applied over it and silently lose the setting. A null is skipped by the
+    # same check in ``_applyServerPrefs`` that skips a field the server never
+    # sent, so that reconcile leaves the device's own value alone; the value
+    # reaches the server with the next PATCH any setter queues.
+    media_filter: Literal["both", "images", "videos"] | None = None
+
     # Metadata drawer / cluster labels
     show_metadata_fields: bool = True
     autotagging_enabled: bool = False

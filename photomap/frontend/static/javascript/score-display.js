@@ -17,6 +17,11 @@ export class ScoreDisplay {
     this.isBookmarked = false;
     this.onToggleBookmark = null; // Callback for toggling bookmark
     this.lastDisplayedText = ""; // Track the text portion for refresh
+    // The arguments the pill was last rendered from, when it is showing a
+    // cluster. `lastDisplayedText` has the vocabulary label already spliced
+    // in, so it cannot be re-rendered when the labels change underneath it;
+    // these can. Null whenever the pill is showing something else.
+    this.lastClusterArgs = null;
 
     // Set up click listener for the star icon (deferred until DOM is ready)
     if (document.readyState === "loading") {
@@ -86,6 +91,22 @@ export class ScoreDisplay {
   /**
    * Refresh the display with current bookmark status (call after bookmark toggle)
    */
+  /**
+   * Re-splice the vocabulary label into a pill that is currently showing a
+   * cluster. Used when the labels change with no slide change to hang a
+   * re-render off (autotagging toggled, labels arriving): the caller may have
+   * no slide metadata to rebuild the pill from, and `refreshDisplay` would
+   * only redraw the text that already has the old label baked into it.
+   * No-op when the pill is showing an index or a search score.
+   */
+  rerenderClusterLabel() {
+    if (!this.isVisible || !this.lastClusterArgs) {
+      return;
+    }
+    const { cluster, color, index, total } = this.lastClusterArgs;
+    this.showCluster(cluster, color, index, total);
+  }
+
   refreshDisplay() {
     if (this.scoreText && this.isVisible && this.lastDisplayedText) {
       // Update the entire content with current star state and stored text
@@ -108,6 +129,7 @@ export class ScoreDisplay {
         text = `score=${score.toFixed(4)}`;
       }
       this.lastDisplayedText = text;
+      this.lastClusterArgs = null;
       this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
       this.scoreElement.style.display = "flex";
       this.scoreElement.classList.add("visible");
@@ -128,6 +150,7 @@ export class ScoreDisplay {
     if (index !== null && total !== null) {
       const text = `${index + 1}/${total}`;
       this.lastDisplayedText = text;
+      this.lastClusterArgs = null;
       this.scoreText.innerHTML = `${this.getStarHtml()} ${text}`;
       this.scoreElement.style.display = "flex";
       this.scoreElement.classList.add("visible");
@@ -148,6 +171,7 @@ export class ScoreDisplay {
    */
   showCluster(cluster, color, index = null, total = null) {
     if (cluster !== undefined && cluster !== null) {
+      this.lastClusterArgs = { cluster, color, index, total };
       let clusterText = cluster === "unclustered" ? "unclustered" : `Cluster ${cluster}`;
       // Splice in the vocabulary label when available — gated by
       // SHOW_CLUSTER_LABELS_IN_BADGES so this whole addition can be backed out
