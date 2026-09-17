@@ -131,6 +131,79 @@ export function updateMetadataOverlay(slide) {
   updateCurrentImageScore(slide.dataset);
 }
 
+// The metadata backing whatever the drawer is currently showing, or null when
+// nothing is showing yet (early boot) or the tile's metadata hasn't arrived.
+// The two views keep it in different places: the swiper reads it off the slide
+// element's dataset, grid view holds it in the manager. Both are reached
+// through `state` rather than by importing the view modules, which import this
+// one.
+function currentSlideMetadata() {
+  if (state.gridViewActive) {
+    return state.grid_swiper?.currentSlideMetadata?.() || null;
+  }
+  return state.single_swiper?.currentSlide()?.dataset || null;
+}
+
+// Re-render every surface that displays a label, in place.
+//
+// All of them are driven by state that changes without a slide change to hang
+// a re-render off: the autotagging setting (which decides whether they are
+// shown at all) and the cluster labels, which arrive asynchronously after the
+// map fetch. Without this, flipping the setting left the open drawer — and the
+// score pill, which splices the same cluster label in — showing what was true
+// a moment ago until the user navigated to another image.
+function refreshLabelRows() {
+  const metadata = currentSlideMetadata();
+  if (metadata) {
+    updateClusterInfo(metadata);
+    updateImageLabel(metadata);
+    // The pill carries the cluster label too (score-display.js), from the same
+    // cache, and re-derives it from scratch on each call.
+    updateCurrentImageScore(metadata);
+    return;
+  }
+
+  // No metadata for what is on screen: early boot, a view mid-rebuild, or grid
+  // view having trimmed the selected tile's metadata away (it deletes
+  // slideData for trimmed tiles without regard for which one is selected, and
+  // fills it in fire-and-forget after a reset). Both rows need nothing from it
+  // but the index, though, and slide-state always knows that -- so synthesize
+  // the one field they read, the way the umapDataLoaded listener below has
+  // always done. Hiding the rows here instead would have stranded them hidden
+  // until the next slide change, which is precisely the reload-to-see-it bug
+  // this module is fixing.
+  const globalIndex = slideState.getCurrentSlide()?.globalIndex;
+  if (!Number.isFinite(parseInt(globalIndex, 10))) {
+    // Genuinely nothing on screen to describe. Clear the rows rather than
+    // leave them naming an image we cannot identify; the next
+    // updateMetadataOverlay puts them back.
+    hideLabelRows();
+    return;
+  }
+  updateClusterInfo({ globalIndex });
+  updateImageLabel({ globalIndex });
+  // The pill cannot be rebuilt from an index alone -- updateCurrentImageScore
+  // also needs the total, the search index and any score, and a synthesized
+  // object missing `score` would silently turn a search score into a cluster.
+  // Re-splice the label into whatever it is already showing instead; a no-op
+  // unless that is a cluster.
+  scoreDisplay.rerenderClusterLabel();
+}
+
+function hideLabelRows() {
+  const clusterInfoContainer = document.getElementById("clusterInfoContainer");
+  const imageLabelContainer = document.getElementById("imageLabelContainer");
+  if (clusterInfoContainer) {
+    clusterInfoContainer.style.display = "none";
+  }
+  if (imageLabelContainer) {
+    imageLabelContainer.style.display = "none";
+  }
+}
+
+window.addEventListener("autotaggingChanged", refreshLabelRows);
+window.addEventListener("clusterLabelsUpdated", refreshLabelRows);
+
 // Update cluster information in the metadata window
 export function updateClusterInfo(metadata) {
   const clusterInfoContainer = document.getElementById("clusterInfoContainer");

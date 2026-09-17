@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from photomap.backend.preferences import get_preferences_manager
+from photomap.backend.preferences import UserPreferences, get_preferences_manager
 from photomap.backend.routers.preferences import DEVICE_COOKIE
 
 
@@ -232,3 +232,57 @@ def test_malformed_cookie_is_replaced():
     new_cookie = _device_cookie(response)
     assert new_cookie is not None and len(new_cookie) == 32
     assert new_cookie != "not-a-uuid"
+
+
+def test_media_filter_round_trips(client: TestClient):
+    """The images/videos filter persists like any other preference.
+
+    It was missing from ``UserPreferences`` while being listed in state.js's
+    PERSISTED_SETTINGS, so ``extra="ignore"`` dropped it from every PATCH.
+    """
+    client.get("/preferences/")
+    response = client.patch("/preferences/", json={"mediaFilter": "videos"})
+    assert response.status_code == 200
+    assert response.json()["mediaFilter"] == "videos"
+
+    assert client.get("/preferences/").json()["mediaFilter"] == "videos"
+
+
+def test_media_filter_starts_null_and_rejects_junk(client: TestClient):
+    """Null, not "both", until the device has actually sent one.
+
+    A concrete default would be indistinguishable from a deliberate choice,
+    and a server-authoritative reconcile would apply it over the value the
+    device already had in localStorage.
+    """
+    client.get("/preferences/")
+    assert client.get("/preferences/").json()["mediaFilter"] is None
+
+    response = client.patch("/preferences/", json={"mediaFilter": "gifs"})
+    assert response.status_code == 422
+
+
+def test_model_covers_every_persisted_frontend_setting():
+    """Every key in state.js's PERSISTED_SETTINGS has a field here.
+
+    The two lists are hand-kept mirrors, and a field missing from this model
+    is silent: ``extra="ignore"`` drops it from the PATCH body, so the setting
+    never survives a localStorage eviction and reconciliation re-PATCHes it on
+    every boot. Parsing state.js is ugly, but it is the only thing that
+    actually fails when the mirror drifts.
+    """
+    import re
+    from pathlib import Path
+
+    from photomap.backend.constants import get_package_resource_path
+
+    state_js = (
+        Path(get_package_resource_path("static")) / "javascript" / "state.js"
+    ).read_text()
+    registry = state_js.split("const PERSISTED_SETTINGS = [", 1)[1].split("\n];", 1)[0]
+    keys = re.findall(r'key:\s*"([A-Za-z0-9_]+)"', registry)
+    assert len(keys) > 10, "PERSISTED_SETTINGS parse looks wrong"
+
+    snake = [re.sub(r"(?<!^)(?=[A-Z])", "_", key).lower() for key in keys]
+    missing = [key for key in snake if key not in UserPreferences.model_fields]
+    assert not missing, f"UserPreferences is missing persisted settings: {missing}"
