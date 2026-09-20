@@ -146,6 +146,15 @@
             <button class="create-index-btn btn-index">Update Index</button>
             <button class="cancel-index-btn btn-cancel">Cancel</button>
           </div>
+          <!-- A row of its own, so "Rebuild Index" sits under "Update Index"
+               rather than joining the status/Update/Cancel row above. Hidden
+               until the card learns an index exists, since there is nothing
+               to rebuild before that. -->
+          <div class="rebuild-controls">
+            <button class="rebuild-index-btn btn-rebuild" style="display: none">
+              Rebuild Index
+            </button>
+          </div>
           <!-- Progress Container -->
           <div class="progress-container">
             <div class="progress-bar-wrapper">

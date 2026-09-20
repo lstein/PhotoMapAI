@@ -50,6 +50,20 @@ When the indexing process is done, you will find the generated indexes stored in
 
 When you add or remove image files from an album's image directory, you will need to reindex the album. Navigate to the album in the Album Manager list and press the blue <span class="blue-button-text">Update Index</span> button. The update operation will only reindex the files that have been added or removed and will be much faster than the first comprehensive indexing operation.
 
+### Rebuilding an index from scratch
+
+Underneath it sits a red <span class="red-button-text">Rebuild Index</span> button, which throws the existing index away and builds a new one. It asks for confirmation first, and only appears for albums that already have an index.
+
+You need it because **Update Index cannot re-read a file it has already indexed**. An update compares the files on disk against the ones in the index and processes only what was added or removed; a file that is in both lists is left exactly as it was first recorded, whatever its modification time. So anything PhotoMapAI works out *while* indexing — an image's or video's embedded generation metadata, for instance — is fixed at that moment.
+
+Rebuild when:
+
+- an upgrade taught PhotoMapAI to read something it previously ignored, and you want existing files re-examined;
+- files changed in place, keeping their names;
+- an index looks wrong or incomplete and you would rather start clean.
+
+Rebuilding costs a full pass over the album, the same as the first index. Nothing else is lost: the semantic map, cluster labels and thumbnails are derived from the index and are regenerated automatically.
+
 ### Skipping Small Images
 
 During the traversal phase, PhotoMapAI inspects each candidate image and skips any whose width *or* height is below a minimum pixel threshold. The default is **256 pixels** in either dimension. This filter is meant to exclude thumbnails, favicons, contact-sheet previews, and other tiny images that don't carry enough visual content for semantic search to work well on them. A summary of how many images were skipped on the last scan is written to the server log.

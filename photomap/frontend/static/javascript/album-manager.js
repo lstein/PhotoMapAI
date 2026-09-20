@@ -1,6 +1,7 @@
 // album-management.js
 import { createSimpleDirectoryPicker } from "./filetree.js"; // Add this import
 import { getIndexMetadata, removeIndex, updateIndex } from "./index.js";
+import { showConfirmModal } from "./modal-utils.js";
 import {
   collectSelectedBoardIds,
   fetchInvokeAIBoards,
@@ -917,6 +918,8 @@ export class AlbumManager {
     progressContainer.style.display = "none";
     // Show the Update Index button
     updateBtn.style.display = "inline-block";
+    // An index exists now, by definition, so Rebuild comes back too.
+    this.setRebuildButtonVisible(cardElement, true);
   }
 
   createCompletionMessage() {
@@ -1056,18 +1059,21 @@ export class AlbumManager {
         status.textContent = `Index updated ${modDate} (${fileCount} images)`;
         status.style.color = "green";
         createBtn.textContent = "Update Index";
+        this.setRebuildButtonVisible(cardElement, true);
         this._appendIndexWarningNote(status, album.key);
       } else {
         status.className = "index-status";
         status.textContent = "No index present";
         status.style.color = "red";
         createBtn.textContent = "Create Index";
+        this.setRebuildButtonVisible(cardElement, false);
       }
     } catch {
       status.className = "index-status";
       status.textContent = "No index present";
       status.style.color = "red";
       createBtn.textContent = "Create Index";
+      this.setRebuildButtonVisible(cardElement, false);
     }
   }
 
@@ -1106,6 +1112,11 @@ export class AlbumManager {
     // Cancel index button
     card.querySelector(".cancel-index-btn").addEventListener("click", () => {
       this.cancelIndexing(album.key, cardElement);
+    });
+
+    // Rebuild index button
+    card.querySelector(".rebuild-index-btn").addEventListener("click", () => {
+      this.rebuildIndex(album.key, cardElement);
     });
   }
 
@@ -1608,8 +1619,43 @@ export class AlbumManager {
     }
   }
 
+  // Discard an album's index and build it again from scratch.
+  //
+  // Distinct from Update Index, which is a set difference on paths: it adds
+  // files that appeared and drops files that vanished, and never re-reads a
+  // file already in the index. So anything derived *while* indexing — a
+  // video's generation metadata, say — stays as it was first recorded until
+  // the index is thrown away. That is what this is for, and it is why the
+  // two cannot be the same button.
+  async rebuildIndex(albumKey, cardElement) {
+    const confirmed = await showConfirmModal(
+      "This will delete your previous index and rebuild it from scratch. Proceed?",
+      "Yes",
+      "Cancel"
+    );
+    if (!confirmed) {
+      return;
+    }
+    // Re-resolve the card. The confirmation above is an await of unbounded
+    // length — it sits there until the user decides — and loadAlbums()
+    // rebuilds the card list wholesale, so the element captured when the
+    // button was clicked may be detached by now. Painting progress onto a
+    // detached node leaves the on-screen card frozen while indexing runs.
+    await this.startIndexing(albumKey, this._liveCardFor(albumKey, cardElement), true);
+  }
+
+  // Whether this card offers Rebuild Index. There is nothing to rebuild
+  // before an index exists, and while one is being built the card shows
+  // Cancel instead.
+  setRebuildButtonVisible(cardElement, visible) {
+    const rebuildBtn = cardElement.querySelector(".rebuild-index-btn");
+    if (rebuildBtn) {
+      rebuildBtn.style.display = visible ? "inline-block" : "none";
+    }
+  }
+
   // Indexing functionality
-  async startIndexing(albumKey, cardElement, isCorrupted = false) {
+  async startIndexing(albumKey, cardElement, removeExistingIndex = false) {
     // Prevent duplicate indexing requests (local guard)
     if (this.progressPollers.has(albumKey)) {
       console.log(`Indexing already in progress for album: ${albumKey}`);
@@ -1639,14 +1685,17 @@ export class AlbumManager {
       console.debug(`Could not check backend indexing status for album: ${albumKey}`);
     }
 
-    if (isCorrupted) {
-      console.log(`Starting indexing for corrupted album: ${albumKey}`);
+    if (removeExistingIndex) {
+      // Two callers want this: automatic recovery from a corrupted index,
+      // and the user pressing Rebuild Index. Both mean "throw the existing
+      // index away first", so the wording here stays neutral between them.
+      console.log(`Removing the existing index before indexing: ${albumKey}`);
       const response = await removeIndex(albumKey);
       console.log(`Remove index response:`, response);
       if (!response.success) {
         const album = await this.getAlbum(albumKey);
         alert(
-          `Failed to remove corrupted index for album: ${albumKey}.` +
+          `Failed to remove the existing index for album: ${albumKey}.` +
             ` Please remove the index file manually and try again.` +
             ` The path for the index file is: ${album.index}`
         );
@@ -1776,6 +1825,9 @@ export class AlbumManager {
     progressContainer.style.display = "block";
     createBtn.style.display = "none";
     cancelBtn.style.display = "inline-block";
+    // Rebuild follows Update Index: a second rebuild mid-run would delete
+    // the index the running job is about to write.
+    this.setRebuildButtonVisible(cardElement, false);
 
     // Only set generic message if no progress data is provided
     if (!progress) {
