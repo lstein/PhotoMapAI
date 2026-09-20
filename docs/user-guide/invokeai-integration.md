@@ -195,11 +195,18 @@ panels together cover both the request and the result.
 Any keyframe or source clip that is also in the current album becomes a
 clickable thumbnail, exactly like an image's reference images.
 
-!!! note
-    Videos already in an album when you upgrade keep whatever metadata
-    they were indexed with. Press **Update Index** and then, if a video
-    still shows no generation parameters, re-index the album: an update
-    only re-reads files whose modification time has changed.
+!!! warning "Existing albums need a full re-index, not an update"
+    Generation metadata is read once, when a file is indexed, and stored in
+    the index — so videos that were already indexed keep whatever they were
+    indexed with, and show no parameters until the album is rebuilt.
+
+    <span class="blue-button-text">Update Index</span> will **not** do it.
+    An update compares the files on disk against the ones in the index and
+    processes only what was added or removed; a file already in the index is
+    never re-read, whatever its modification time. Press the red
+    <span class="red-button-text">Rebuild Index</span> button underneath it
+    instead — see [Rebuilding an index from
+    scratch](albums.md#rebuilding-an-index-from-scratch).
 
 Videos generated before InvokeAI 7 carry no record inside the file, but
 InvokeAI kept one in a JSON sidecar under `outputs/videos/sidecars/`, and
