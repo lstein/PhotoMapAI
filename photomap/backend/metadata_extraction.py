@@ -14,6 +14,7 @@ from typing import Any
 
 from PIL import ExifTags, Image
 
+from .invokeai_sidecar import read_sidecar_metadata
 from .mp4_metadata import INVOKEAI_METADATA_KEY, read_mp4_tags
 
 logger = logging.getLogger(__name__)
@@ -81,22 +82,36 @@ class MetadataExtractor:
 
     @staticmethod
     def extract_video_metadata(video_path: Path) -> dict[str, Any]:
-        """The InvokeAI generation record embedded in a video, or ``{}``.
+        """The InvokeAI generation record for a video, or ``{}``.
 
         The video counterpart of :meth:`extract_image_metadata`: InvokeAI 7
         writes the same ``invokeai_metadata`` JSON a generated PNG carries as
         a text chunk into a generated MP4 as keyed metadata, so both return
         the same flat record and everything downstream is media-agnostic.
 
-        Only the record is read, not the workflow or graph: PhotoMapAI
-        renders neither, and skipping them keeps the read to the few KiB of
-        the record rather than the few hundred KiB of a graph.
+        Two sources, in InvokeAI's own reading order: the MP4's keyed
+        metadata first, then the JSON sidecar. The sidecar covers videos
+        generated before InvokeAI 7 embedded anything, and also the modern
+        case where the embedding remux failed and InvokeAI fell back to
+        writing one. Looking in the file first means an InvokeAI 7 video
+        costs no sidecar lookup at all.
 
-        Returns ``{}`` for every failure — a video with no tags, a
-        non-InvokeAI video, an unreadable file, a tag that is not JSON, or
-        JSON that is not an object. The caller indexes the video either way;
-        metadata is never worth failing an index over.
+        Only the record is read, not the workflow or graph: PhotoMapAI
+        renders neither, and skipping them keeps the MP4 read to the few KiB
+        of the record rather than the few hundred KiB of a graph.
+
+        Returns ``{}`` for every failure — no tags and no sidecar, a
+        non-InvokeAI video, an unreadable file, a payload that is not JSON,
+        or JSON that is not an object. The caller indexes the video either
+        way; metadata is never worth failing an index over.
         """
+        return MetadataExtractor._embedded_video_metadata(
+            video_path
+        ) or read_sidecar_metadata(video_path)
+
+    @staticmethod
+    def _embedded_video_metadata(video_path: Path) -> dict[str, Any]:
+        """The record in the MP4's own keyed metadata, or ``{}``."""
         try:
             tags = read_mp4_tags(video_path, keys=(INVOKEAI_METADATA_KEY,))
         except OSError as e:
