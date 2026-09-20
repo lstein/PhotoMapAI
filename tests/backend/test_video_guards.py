@@ -456,17 +456,18 @@ def _skip_result(*names: str) -> IndexResult:
     )
 
 
-def _registered_warning(monkeypatch, result: IndexResult, exe: str | None) -> str:
-    """Run the notice builder with ffmpeg forced present/absent."""
-    monkeypatch.setattr("photomap.backend.embeddings.ffmpeg_exe", lambda: exe)
-    key = f"warning-test-{id(result)}"
+def _registered_warning(monkeypatch, result: IndexResult, missing: bool) -> str:
+    """Run the notice builder with ffmpeg observed present/absent."""
+    monkeypatch.setattr(
+        "photomap.backend.embeddings.ffmpeg_known_unavailable", lambda: missing
+    )
     captured: list[str] = []
     monkeypatch.setattr(
         progress_tracker,
         "add_completion_warning",
         lambda album_key, message: captured.append(message),
     )
-    Embeddings._register_unreadable_files_warning(key, result)
+    Embeddings._register_unreadable_files_warning("warning-test", result)
     assert len(captured) == 1
     return captured[0]
 
@@ -476,21 +477,21 @@ def test_missing_ffmpeg_is_named_when_only_videos_failed(monkeypatch):
     reports every video as unreadable and sends the user hunting for corrupt
     files that are perfectly fine."""
     warning = _registered_warning(
-        monkeypatch, _skip_result("a.mp4", "b.mov", "c.mkv"), exe=None
+        monkeypatch, _skip_result("a.mp4", "b.mov", "c.mkv"), missing=True
     )
 
     assert warning == (
-        "3 videos could not be indexed and were skipped: no ffmpeg binary is "
-        "available on this system."
+        "3 videos could not be indexed and were skipped: PhotoMapAI could "
+        "not find a working ffmpeg."
     )
 
 
 def test_missing_ffmpeg_notice_agrees_for_a_single_video(monkeypatch):
-    warning = _registered_warning(monkeypatch, _skip_result("only.mp4"), exe=None)
+    warning = _registered_warning(monkeypatch, _skip_result("only.mp4"), missing=True)
 
     assert warning == (
-        "1 video could not be indexed and was skipped: no ffmpeg binary is "
-        "available on this system."
+        "1 video could not be indexed and was skipped: PhotoMapAI could not "
+        "find a working ffmpeg."
     )
 
 
@@ -500,12 +501,28 @@ def test_a_mixed_failure_keeps_the_generic_count_and_adds_the_cause(monkeypatch)
     warning = _registered_warning(
         monkeypatch,
         _skip_result("a.mp4", "b.mov", "broken.jpg", "truncated.png"),
-        exe=None,
+        missing=True,
     )
 
     assert warning == (
         "4 files could not be read and were skipped, including 2 videos that "
-        "need ffmpeg, which is not available on this system."
+        "need ffmpeg, which PhotoMapAI could not find."
+    )
+
+
+def test_a_mixed_failure_with_one_video_still_agrees(monkeypatch):
+    """The mixed branch always has count >= 2, so ``verb`` is always plural
+    there — but ``videos`` can be 1, which needs its own verb. One video plus
+    some unreadable photos is the likeliest mixed shape in the wild, and
+    pinning only the videos == 2 case let "1 video that need ffmpeg" through.
+    """
+    warning = _registered_warning(
+        monkeypatch, _skip_result("a.mp4", "broken.jpg"), missing=True
+    )
+
+    assert warning == (
+        "2 files could not be read and were skipped, including 1 video that "
+        "needs ffmpeg, which PhotoMapAI could not find."
     )
 
 
@@ -513,21 +530,26 @@ def test_wording_is_unchanged_when_ffmpeg_is_present(monkeypatch):
     """A truncated clip on a working install is not an ffmpeg problem, and
     saying so would be actively misleading."""
     warning = _registered_warning(
-        monkeypatch, _skip_result("broken.mp4"), exe="/usr/bin/ffmpeg"
+        monkeypatch, _skip_result("broken.mp4"), missing=False
     )
 
     assert warning == "1 file could not be read and was skipped."
 
 
 def test_image_only_failures_never_mention_ffmpeg(monkeypatch):
-    """ffmpeg_exe() must not even be consulted: it re-probes on every call
-    when it has no binary to report, so a photo-only album would pay a
-    process spawn for nothing."""
+    """ffmpeg must not be consulted at all when no video failed.
+
+    The observation is process-wide, so a machine with no ffmpeg would
+    otherwise let an all-photos album inherit "could not find ffmpeg" as the
+    explanation for two corrupt JPEGs.
+    """
 
     def _fail():
-        raise AssertionError("ffmpeg must not be probed for an image-only skip")
+        raise AssertionError("ffmpeg must not be consulted for an image-only skip")
 
-    monkeypatch.setattr("photomap.backend.embeddings.ffmpeg_exe", _fail)
+    monkeypatch.setattr(
+        "photomap.backend.embeddings.ffmpeg_known_unavailable", _fail
+    )
     captured: list[str] = []
     monkeypatch.setattr(
         progress_tracker,

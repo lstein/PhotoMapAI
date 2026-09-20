@@ -50,7 +50,11 @@ from .progress import IndexingCancelled, progress_tracker
 from .thumbnail_cache import keep_hashes_for, thumbnail_dir
 from .thumbnail_cache import prune as prune_thumbnails
 from .util import atomic_savez
-from .video import VIDEO_METADATA_KEY, extract_video_frame, ffmpeg_exe
+from .video import (
+    VIDEO_METADATA_KEY,
+    extract_video_frame,
+    ffmpeg_known_unavailable,
+)
 from .video_cache import VideoFrameCache
 from .video_transcode import TranscodeCache
 
@@ -1356,22 +1360,33 @@ class Embeddings(BaseModel):
         # are in fact fine. Naming the cause is the difference between "my
         # videos are broken" and "this machine needs ffmpeg".
         #
-        # Probing here is cheap: a successful probe is memoized, so by the
-        # time a run has indexed anything this is a cached read. Only the
-        # None case re-probes, and only on a run that already had failures.
+        # ``ffmpeg_known_unavailable`` rather than ``ffmpeg_exe()``: this runs
+        # on the asyncio event loop (both callers are ``async def``), and
+        # ffmpeg_exe can stat a hung network mount or spawn an untimed
+        # ``ffmpeg -version``. It only reports the probe every video failure
+        # already performed on a worker thread.
+        #
+        # Worded as what this process observed, not as a claim about the
+        # machine: imageio memoizes its own negative, so a binary that exists
+        # but could not be executed once (an AV scanner holding a freshly
+        # unpacked ffmpeg.exe) stays unavailable for the process lifetime, and
+        # "there is no ffmpeg here" would be a lie to someone who can see it.
         videos = sum(1 for path in result.bad_files if is_video(path))
-        if videos and ffmpeg_exe() is None:
+        if videos and ffmpeg_known_unavailable():
             video_noun = "video" if videos == 1 else "videos"
             if videos == count:
                 message = (
                     f"{count} {video_noun} could not be indexed and {verb} "
-                    "skipped: no ffmpeg binary is available on this system."
+                    "skipped: PhotoMapAI could not find a working ffmpeg."
                 )
             else:
+                # Plural here is independent of ``verb``: the mixed branch
+                # always has count >= 2, but ``videos`` can still be 1.
+                needs = "needs" if videos == 1 else "need"
                 message = (
                     f"{count} {noun} could not be read and {verb} skipped, "
-                    f"including {videos} {video_noun} that need ffmpeg, which "
-                    "is not available on this system."
+                    f"including {videos} {video_noun} that {needs} ffmpeg, "
+                    "which PhotoMapAI could not find."
                 )
 
         progress_tracker.add_completion_warning(album_key, message)
