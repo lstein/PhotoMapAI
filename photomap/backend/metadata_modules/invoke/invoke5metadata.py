@@ -7,11 +7,14 @@ from photomap.backend.metadata_modules.invoke.canvas2metadata import CanvasV2Met
 from photomap.backend.metadata_modules.invoke.common_metadata_elements import (
     ClipEmbedModel,
     Image,
+    ImageRef,
     IPAdapter,
     Lora,
+    MiniMaxH3Reference,
     Model,
     RegionalGuidance,
     T5Encoder,
+    VideoRef,
     fixup_step_percentages,
     tag_reference_images,
 )
@@ -131,6 +134,44 @@ class GenerationMetadata5(BaseModel):
     tile_overlap: int | None = None
     clip_skip: int | None = None
     canvas_v2_metadata: CanvasV2Metadata | None = None
+    # InvokeAI 7's record version (``metadata_version`` at the source, moved
+    # aside by ``GenerationMetadataAdapter._with_discriminator`` because that
+    # name is already our schema tag). Declared so it neither trips the
+    # unknown-field warning below nor vanishes from a round trip.
+    invoke_record_version: str | None = None
+    # ── Video profile ────────────────────────────────────────────────
+    #
+    # A video record is the same record as an image's, discriminated by
+    # ``generation_mode`` rather than a separate format, so these live on the
+    # v5 model beside the image fields instead of in a schema of their own.
+    # Every one is optional and absent from an image record.
+    num_frames: int | None = None
+    fps: int | float | None = None
+    first_frame_image: ImageRef | None = None
+    last_frame_image: ImageRef | None = None
+    source_video: VideoRef | None = None
+    source_video_start_frame: int | None = None
+    source_video_end_frame: int | None = None
+    # Wan records the low-noise expert's CFG only when it differed from
+    # ``cfg_scale``. The pre-1.0 spelling is accepted as an alias, as
+    # InvokeAI's own readers do.
+    wan_guidance_scale_low_noise: float | None = Field(
+        default=None, alias="guidance_scale_low_noise"
+    )
+    wan_t5_encoder_model: Model | None = Field(default=None, alias="wan_t5_encoder")
+    wan_transformer_low_noise: Model | None = Field(
+        default=None, alias="transformer_low_noise"
+    )
+    wan_component_source: Model | None = None
+    minimax_h3_transformer_model: Model | None = None
+    minimax_h3_text_encoder_model: Model | None = None
+    minimax_h3_component_source: Model | None = None
+    minimax_h3_hybrid_base_model: Model | None = None
+    minimax_h3_hybrid_start_block: int | None = None
+    minimax_h3_references: list[MiniMaxH3Reference] | None = None
+    # Stamped by InvokeAI's upload route rather than by a graph: marks an
+    # audio file that was wrapped into a video container.
+    media_origin: str | None = None
     # These fields appear in some ZiT images
     seed_variance_strength: float | None = None
     seed_variance_enabled: bool | None = Field(

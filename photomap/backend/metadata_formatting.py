@@ -16,6 +16,7 @@ from .metadata_modules import (
     format_exif_metadata,
     format_invoke_metadata,
     format_video_metadata,
+    looks_like_invoke_metadata,
     use_ref_button_html,
 )
 from .video import VIDEO_METADATA_KEY
@@ -89,12 +90,27 @@ def format_metadata(
         result.video_info = video_info
         result = format_video_metadata(result, video_info)
 
-        # Phone videos routinely carry a creation date and GPS, so any
-        # non-video metadata still gets the normal EXIF panel underneath.
+        # Everything that is not the probe dict: for an InvokeAI-generated
+        # video that is the generation record the indexer lifted out of the
+        # MP4's keyed metadata, stored flat exactly as a generated PNG's is;
+        # for a phone video it is the EXIF the file carried. Both get a
+        # panel underneath the probe panel.
         remaining = {
             k: v for k, v in (metadata or {}).items() if k != VIDEO_METADATA_KEY
         }
-        if remaining:
+        if looks_like_invoke_metadata(remaining):
+            # No recall buttons on a video. Send/Append upload the file to
+            # InvokeAI as a *reference image*, which an .mp4 is not, and
+            # Recall/Remix post an image-generation payload — a video
+            # record's parameters would land in the wrong tab.
+            invoke_only = format_invoke_metadata(
+                SlideSummary(filename=result.filename, filepath=result.filepath),
+                remaining,
+                show_recall_buttons=False,
+            )
+            result.description += invoke_only.description
+            result.reference_images = invoke_only.reference_images
+        elif remaining:
             api_key = config_manager.get_locationiq_api_key()
             exif_only = format_exif_metadata(
                 SlideSummary(filename=result.filename, filepath=result.filepath),
@@ -108,11 +124,7 @@ def format_metadata(
     # for any file regardless of metadata. The full Recall/Remix group, on the
     # other hand, requires recallable Invoke generation parameters and is
     # rendered by ``format_invoke_metadata`` itself.
-    is_invoke_metadata = bool(metadata) and (
-        "app_version" in metadata
-        or "generation_mode" in metadata
-        or "canvas_v2_metadata" in metadata
-    )
+    is_invoke_metadata = looks_like_invoke_metadata(metadata)
 
     if not metadata:
         result.description = "<i>No metadata available.</i>"

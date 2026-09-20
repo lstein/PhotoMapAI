@@ -164,6 +164,44 @@ class RegionalGuidance(BaseModel):
     type: str
 
 
+class ImageRef(BaseModel):
+    """InvokeAI's ``ImageField`` — ``{"image_name": ...}``.
+
+    Distinct from the richer ``Image`` union above, which is discriminated on
+    a ``type`` this shape does not carry. Video records reference their
+    keyframes by bare name, so they get the bare model rather than having a
+    discriminator grafted on before validation.
+    """
+
+    model_config = ConfigDict(extra="allow")
+    image_name: str | None = None
+
+
+class VideoRef(BaseModel):
+    """InvokeAI's ``VideoField`` — ``{"video_name": ...}``."""
+
+    model_config = ConfigDict(extra="allow")
+    video_name: str | None = None
+
+
+class MiniMaxH3Reference(BaseModel):
+    """One recorded Ref2VA reference, in conditioning order.
+
+    ``kind`` says which of ``image_name`` / ``video_name`` is populated, and
+    which of the two option pairs applies: ``detail`` for an image,
+    ``conditioning`` plus the frame range for a video.
+    """
+
+    model_config = ConfigDict(extra="allow")
+    kind: str | None = None
+    image_name: str | None = None
+    video_name: str | None = None
+    conditioning: str | None = None
+    detail: str | None = None
+    start_frame: int | None = None
+    end_frame: int | None = None
+
+
 def tag_reference_images(image: dict[str, Any]) -> None:
     """Mutates the input image dict to add an "image_type" field based on whether it has a "dataURL" or "image_name" field."""
     if "dataURL" in image:

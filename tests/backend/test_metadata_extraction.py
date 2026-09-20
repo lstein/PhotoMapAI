@@ -1,6 +1,6 @@
 """Unit tests for :mod:`photomap.backend.metadata_extraction`.
 
-Focused on PNG text-chunk normalization. Pillow returns different shapes
+Covers PNG text-chunk normalization and the MP4 counterpart. Pillow returns different shapes
 for the three PNG text-chunk types (tEXt → str, zTXt → str/bytes, iTXt →
 tuple/str depending on Pillow version), so the extractor funnels every
 value through :func:`_normalize_text_chunk` before ``json.loads``.
@@ -9,8 +9,12 @@ value through :func:`_normalize_text_chunk` before ``json.loads``.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock
 
+from fixtures import media_fixture_path
+
+from photomap.backend import metadata_extraction
 from photomap.backend.metadata_extraction import (
     MetadataExtractor,
     _normalize_text_chunk,
@@ -87,3 +91,89 @@ class TestExtractImageMetadata:
 
     def test_no_metadata_returns_empty(self):
         assert MetadataExtractor.extract_image_metadata(_fake_image({})) == {}
+
+
+# ---------------------------------------------------------------------------
+# extract_video_metadata — the MP4 counterpart
+# ---------------------------------------------------------------------------
+
+
+class TestExtractVideoMetadata:
+    """A video's generation record, lifted out of the MP4's keyed metadata.
+
+    The contract that matters here is the failure contract: indexing calls
+    this once per video across a whole collection, and a collection contains
+    phone footage, screen recordings and half-copied files as well as
+    InvokeAI output. Not one of those may raise.
+    """
+
+    def test_returns_the_embedded_record(self):
+        record = MetadataExtractor.extract_video_metadata(
+            media_fixture_path("invoke_video.mp4")
+        )
+
+        assert record["generation_mode"] == "wan_i2v"
+        assert record["num_frames"] == 81
+        assert record["model"]["name"] == "Wan 2.2 I2V A14B"
+
+    def test_reads_only_the_record_not_the_workflow_or_graph(self):
+        """Both are present in the fixture; neither belongs in the drawer.
+
+        PhotoMapAI renders neither, and skipping them keeps the read to the
+        few KiB of the record instead of the few hundred KiB of a graph.
+        """
+        record = MetadataExtractor.extract_video_metadata(
+            media_fixture_path("invoke_video.mp4")
+        )
+
+        assert "nodes" not in record
+        assert "edges" not in record
+
+    def test_a_video_with_no_tags_yields_an_empty_dict(self):
+        assert MetadataExtractor.extract_video_metadata(
+            media_fixture_path("clip.mp4")
+        ) == {}
+
+    def test_a_non_mp4_container_yields_an_empty_dict(self):
+        assert MetadataExtractor.extract_video_metadata(
+            media_fixture_path("clip.webm")
+        ) == {}
+
+    def test_a_truncated_file_yields_an_empty_dict(self):
+        assert MetadataExtractor.extract_video_metadata(
+            media_fixture_path("broken.mp4")
+        ) == {}
+
+    def test_a_missing_file_yields_an_empty_dict(self, tmp_path):
+        """The OSError the reader raises is swallowed here, not upstream."""
+        assert MetadataExtractor.extract_video_metadata(tmp_path / "gone.mp4") == {}
+
+    def test_a_tag_that_is_not_json_yields_an_empty_dict(self, monkeypatch):
+        monkeypatch.setattr(
+            metadata_extraction,
+            "read_mp4_tags",
+            lambda path, keys=None: {"invokeai_metadata": "{not valid json"},
+        )
+
+        assert MetadataExtractor.extract_video_metadata(Path("any.mp4")) == {}
+
+    def test_a_tag_holding_json_that_is_not_an_object_yields_an_empty_dict(
+        self, monkeypatch
+    ):
+        """Everything downstream indexes the record by key."""
+        monkeypatch.setattr(
+            metadata_extraction,
+            "read_mp4_tags",
+            lambda path, keys=None: {"invokeai_metadata": "[1, 2, 3]"},
+        )
+
+        assert MetadataExtractor.extract_video_metadata(Path("any.mp4")) == {}
+
+    def test_an_empty_tag_yields_an_empty_dict(self, monkeypatch):
+        monkeypatch.setattr(
+            metadata_extraction,
+            "read_mp4_tags",
+            lambda path, keys=None: {"invokeai_metadata": ""},
+        )
+
+        assert MetadataExtractor.extract_video_metadata(Path("any.mp4")) == {}

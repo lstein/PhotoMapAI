@@ -92,12 +92,13 @@ export async function enhanceReferenceImageThumbnails(container, referenceImages
   }
 }
 
-// Find text nodes inside the InvokeAI metadata sub-tables (`.invoke-tuples`)
-// whose trimmed value exactly equals one of the wanted filenames. The full
-// trimmed-match constraint keeps us from rewriting prompt or note cells
-// that happen to mention the same string.
+// Find text nodes whose trimmed value exactly equals one of the wanted
+// filenames, in the InvokeAI metadata sub-tables (`.invoke-tuples`) and in
+// the video profile's media rows (`.invoke-media-name`, one cell per
+// keyframe or source clip). The full trimmed-match constraint keeps us from
+// rewriting prompt or note cells that happen to mention the same string.
 export function collectReferenceFilenameNodes(container, wanted) {
-  const cells = container.querySelectorAll(".invoke-tuples td");
+  const cells = container.querySelectorAll(".invoke-tuples td, .invoke-media-name");
   const results = [];
   cells.forEach((cell) => {
     if (cell.childNodes.length !== 1) {

@@ -45,6 +45,14 @@ ReferenceImageTuple = namedtuple(
 ControlLayerTuple = namedtuple(
     "ControlLayerTuple", ["model_name", "image_name", "weight"]
 )
+# The video profile of the record: a flat label/value list, the auxiliary
+# models that ``model`` alone does not identify, and the MiniMax H3 Ref2VA
+# references in conditioning order. Labels are chosen here rather than in the
+# formatter for the same reason the tuples above are: the formatter is a
+# renderer and stays ignorant of which version keeps what where.
+VideoFactTuple = namedtuple("VideoFactTuple", ["label", "value"])
+VideoModelTuple = namedtuple("VideoModelTuple", ["role", "model_name"])
+VideoReferenceTuple = namedtuple("VideoReferenceTuple", ["kind", "name", "options"])
 
 GenerationMetadataT = GenerationMetadata2 | GenerationMetadata3 | GenerationMetadata5
 
@@ -196,6 +204,159 @@ _RECALL_V5_REFINER: tuple[tuple[str, str], ...] = (
 )
 
 
+# Auxiliary models a video record names alongside ``model``. They exist
+# because a single-file main model is assembled from parts that live in
+# separate installs, so ``model`` on its own does not say what actually ran.
+# ``(attribute, role)``, rendered in this order.
+_VIDEO_MODEL_ROLES: tuple[tuple[str, str], ...] = (
+    ("wan_t5_encoder_model", "T5 Encoder"),
+    ("wan_transformer_low_noise", "Low-Noise Expert"),
+    ("wan_component_source", "Component Source"),
+    ("minimax_h3_transformer_model", "Transformer"),
+    ("minimax_h3_text_encoder_model", "Text Encoder"),
+    ("minimax_h3_component_source", "Component Source"),
+    ("minimax_h3_hybrid_base_model", "Hybrid Base"),
+)
+
+
+def _frame_range(start: int | None, end: int | None) -> str:
+    """``"frames 0-80"`` / ``"from frame 12"`` / ``"to frame 80"``, or ``""``."""
+    if start is not None and end is not None:
+        return f"frames {start}-{end}"
+    if start is not None:
+        return f"from frame {start}"
+    if end is not None:
+        return f"to frame {end}"
+    return ""
+
+
+# Every field that only a video record carries. ``generation_mode`` is
+# pointedly *not* among them: images carry it too, so it cannot be the thing
+# that decides whether to render a video block — it is only shown once
+# something else here has already proven this is a video.
+_VIDEO_PROFILE_ATTRS: tuple[str, ...] = (
+    "num_frames",
+    "fps",
+    "first_frame_image",
+    "last_frame_image",
+    "source_video",
+    "source_video_start_frame",
+    "source_video_end_frame",
+    "wan_guidance_scale_low_noise",
+    "minimax_h3_hybrid_start_block",
+    "minimax_h3_references",
+    "media_origin",
+    *(attribute for attribute, _role in _VIDEO_MODEL_ROLES),
+)
+
+
+def _has_video_profile(metadata: GenerationMetadata5) -> bool:
+    """Whether the record carries any video-only field.
+
+    Preferred over matching ``generation_mode`` against the known video
+    modes: that list grows with every video architecture InvokeAI adds, and
+    a record naming a mode we have never heard of still has frames and
+    keyframes worth showing.
+    """
+    return any(
+        getattr(metadata, attribute, None) is not None
+        for attribute in _VIDEO_PROFILE_ATTRS
+    )
+
+
+def _video_facts(metadata: GenerationMetadata5) -> list[VideoFactTuple]:
+    """The video profile's scalar fields, in display order.
+
+    Empty for an image record, and within a video record only fields that
+    are actually present produce a row — so a text-to-video clip renders no
+    empty keyframe rows.
+    """
+    if not _has_video_profile(metadata):
+        return []
+
+    facts: list[VideoFactTuple] = []
+
+    def add(label: str, value: object) -> None:
+        if value is not None and value != "":
+            facts.append(VideoFactTuple(label, str(value)))
+
+    add("Mode", metadata.generation_mode)
+    add("Frames", metadata.num_frames)
+    if metadata.fps is not None:
+        add("Frame Rate", f"{metadata.fps:g} fps")
+    if metadata.first_frame_image is not None:
+        add("First Frame", metadata.first_frame_image.image_name)
+    if metadata.last_frame_image is not None:
+        add("Last Frame", metadata.last_frame_image.image_name)
+    if metadata.source_video is not None:
+        add("Source Video", metadata.source_video.video_name)
+    # A row of its own rather than a parenthetical on the name above: the
+    # drawer turns a cell holding exactly a media name into a clickable
+    # thumbnail, and " (frames 0-80)" would stop that cell being one.
+    add(
+        "Source Range",
+        _frame_range(
+            metadata.source_video_start_frame, metadata.source_video_end_frame
+        ),
+    )
+    add("Low-Noise CFG", metadata.wan_guidance_scale_low_noise)
+    add("Hybrid From Block", metadata.minimax_h3_hybrid_start_block)
+    add("Media Origin", metadata.media_origin)
+    return facts
+
+
+def _video_models(metadata: GenerationMetadata5) -> list[VideoModelTuple]:
+    result: list[VideoModelTuple] = []
+    for attribute, role in _VIDEO_MODEL_ROLES:
+        model = getattr(metadata, attribute, None)
+        if model is not None and model.name:
+            result.append(VideoModelTuple(role, model.name))
+    return result
+
+
+def _video_references(metadata: GenerationMetadata5) -> list[VideoReferenceTuple]:
+    """MiniMax H3 Ref2VA references, in the order they were conditioned on."""
+    result: list[VideoReferenceTuple] = []
+    for ref in metadata.minimax_h3_references or []:
+        options = [
+            option
+            for option in (
+                ref.detail,
+                ref.conditioning,
+                _frame_range(ref.start_frame, ref.end_frame),
+            )
+            if option
+        ]
+        result.append(
+            VideoReferenceTuple(
+                kind=ref.kind or "",
+                name=ref.image_name or ref.video_name or "",
+                options=", ".join(options),
+            )
+        )
+    return result
+
+
+def _video_media_names(metadata: GenerationMetadata5) -> list[str]:
+    """Every gallery item the video record names, for thumbnail resolution.
+
+    Keyframes are image names and the source clip is a video name, but the
+    drawer resolves both the same way — by filename against the current
+    album — so they travel in one list.
+    """
+    names: list[str] = []
+    for ref in (metadata.first_frame_image, metadata.last_frame_image):
+        if ref is not None and ref.image_name:
+            names.append(ref.image_name)
+    if metadata.source_video is not None and metadata.source_video.video_name:
+        names.append(metadata.source_video.video_name)
+    for ref in metadata.minimax_h3_references or []:
+        name = ref.image_name or ref.video_name
+        if name:
+            names.append(name)
+    return names
+
+
 def _copy_scalars(
     metadata: object, payload: dict, fields: tuple[tuple[str, str], ...]
 ) -> None:
@@ -246,6 +407,26 @@ class _VersionStrategy(ABC):
 
     @abstractmethod
     def raster_images(self) -> list[str]: ...
+
+    def has_video_profile(self) -> bool:
+        """Whether this record describes a video. False before v5."""
+        return False
+
+    def video_facts(self) -> list[VideoFactTuple]:
+        """The video profile's scalar rows. Empty for versions predating video."""
+        return []
+
+    def video_models(self) -> list[VideoModelTuple]:
+        """Auxiliary models a video record names besides ``model``."""
+        return []
+
+    def video_references(self) -> list[VideoReferenceTuple]:
+        """MiniMax H3 Ref2VA references, in conditioning order."""
+        return []
+
+    def video_media_names(self) -> list[str]:
+        """Gallery names the video record references (keyframes, source clip)."""
+        return []
 
     def add_recall_scalars(self, payload: dict) -> None:
         """Add version-specific scalar fields to the recall payload.
@@ -376,6 +557,21 @@ class _V5Strategy(_V3Strategy):
                     result.append(name)
         return result
 
+    def has_video_profile(self) -> bool:
+        return _has_video_profile(self.m)
+
+    def video_facts(self) -> list[VideoFactTuple]:
+        return _video_facts(self.m)
+
+    def video_models(self) -> list[VideoModelTuple]:
+        return _video_models(self.m)
+
+    def video_references(self) -> list[VideoReferenceTuple]:
+        return _video_references(self.m)
+
+    def video_media_names(self) -> list[str]:
+        return _video_media_names(self.m)
+
     def add_recall_scalars(self, payload: dict) -> None:
         super().add_recall_scalars(payload)
         _copy_scalars(self.m, payload, _RECALL_V5_REFINER)
@@ -449,6 +645,29 @@ class InvokeMetadataView:
     @property
     def raster_images(self) -> list[str]:
         return self._strategy.raster_images()
+
+    # ---- video profile ---------------------------------------------------
+
+    @property
+    def video_facts(self) -> list[VideoFactTuple]:
+        return self._strategy.video_facts()
+
+    @property
+    def video_models(self) -> list[VideoModelTuple]:
+        return self._strategy.video_models()
+
+    @property
+    def video_references(self) -> list[VideoReferenceTuple]:
+        return self._strategy.video_references()
+
+    @property
+    def video_media_names(self) -> list[str]:
+        return self._strategy.video_media_names()
+
+    @property
+    def is_video_generation(self) -> bool:
+        """Whether this record describes a video generation."""
+        return self._strategy.has_video_profile()
 
     # ---- recall payload --------------------------------------------------
 

@@ -45,7 +45,10 @@ from ..invokeai_client import (  # noqa: F401  (re-exported for tests/backward c
 )
 from ..media_types import is_video
 from ..metadata_modules.invoke.invoke_metadata_view import InvokeMetadataView
-from ..metadata_modules.invokemetadata import GenerationMetadataAdapter
+from ..metadata_modules.invokemetadata import (
+    GenerationMetadataAdapter,
+    looks_like_invoke_metadata,
+)
 from .album import get_embeddings_for_album, require_no_lock
 
 logger = logging.getLogger(__name__)
@@ -109,18 +112,12 @@ def _looks_like_invoke_filename(name: str) -> bool:
 
 
 def _has_invoke_metadata(raw_metadata: dict) -> bool:
-    """Cheap structural check for InvokeAI-shaped PNG metadata.
+    """Cheap structural check for InvokeAI-shaped metadata.
 
-    Mirrors the detection used in ``metadata_formatting.py`` so the two code
-    paths agree on what "this looks like an Invoke image" means.
+    Thin alias kept for the existing call sites and tests; the detection
+    itself is shared with the drawer formatters so the paths cannot drift.
     """
-    if not raw_metadata:
-        return False
-    return (
-        "app_version" in raw_metadata
-        or "generation_mode" in raw_metadata
-        or "canvas_v2_metadata" in raw_metadata
-    )
+    return looks_like_invoke_metadata(raw_metadata)
 
 
 async def _invokeai_image_exists(

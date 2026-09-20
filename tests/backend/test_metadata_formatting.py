@@ -208,6 +208,107 @@ class TestVideoMetadata:
         assert "Not supported by most browsers" in result.description
 
 
+class TestGeneratedVideoMetadata:
+    """An InvokeAI-generated video gets the Invoke panel under the probe panel.
+
+    The indexer stores the record it lifted out of the MP4 flat in the same
+    metadata dict, exactly as a generated PNG's record is stored, so the
+    dispatcher's job here is to notice it and route to the Invoke renderer
+    instead of the EXIF one.
+    """
+
+    VIDEO_INFO = {
+        "duration": 5.0,
+        "fps": 16.0,
+        "width": 832,
+        "height": 480,
+        "codec": "h264",
+        "container": "mov,mp4,m4a,3gp,3g2,mj2",
+        "playable": True,
+    }
+
+    RECORD = {
+        "metadata_version": "1.0.0",
+        "app_version": "7.0.0",
+        "generation_mode": "wan_i2v",
+        "positive_prompt": "a paper boat crossing a puddle",
+        "seed": 99,
+        "num_frames": 81,
+        "fps": 16,
+        "first_frame_image": {"image_name": "first.png"},
+        "model": {"name": "Wan 2.2 I2V A14B", "base": "wan", "type": "main"},
+    }
+
+    def _metadata(self, **extra):
+        return {VIDEO_METADATA_KEY: dict(self.VIDEO_INFO), **self.RECORD, **extra}
+
+    def _video_path(self) -> Path:
+        return Path("/tmp/generated.mp4")
+
+    def test_both_panels_are_rendered(self, clear_invokeai_config):
+        """The probe panel describes the file; the Invoke panel describes the
+        generation. They are two sources and both are worth showing."""
+        result = format_metadata(self._video_path(), self._metadata(), 0, 1)
+
+        assert "🎬 Video" in result.description
+        assert "<th>Codec</th>" in result.description
+        assert "a paper boat crossing a puddle" in result.description
+        assert "<th>Mode</th><td>wan_i2v</td>" in result.description
+        assert "<th>Frames</th><td>81</td>" in result.description
+
+    def test_the_probe_dict_is_not_rendered_as_a_generation_field(
+        self, clear_invokeai_config
+    ):
+        """Our reserved key rides in the same dict and must stay out of it."""
+        result = format_metadata(self._video_path(), self._metadata(), 0, 1)
+
+        assert VIDEO_METADATA_KEY not in result.description
+
+    def test_the_record_is_not_also_dumped_through_the_exif_renderer(
+        self, clear_invokeai_config
+    ):
+        """The record *is* the non-probe metadata here, so the EXIF path
+        would render it a second time as raw ``key``/``value`` rows."""
+        result = format_metadata(self._video_path(), self._metadata(), 0, 1)
+
+        assert "<th>generation_mode</th>" not in result.description
+        assert "<th>num_frames</th>" not in result.description
+        assert result.description.count("a paper boat crossing a puddle") == 1
+
+    def test_keyframes_are_offered_for_thumbnailing(self, clear_invokeai_config):
+        result = format_metadata(self._video_path(), self._metadata(), 0, 1)
+
+        assert result.reference_images == ["first.png"]
+
+    def test_no_recall_buttons_even_with_invokeai_configured(self, with_invokeai_url):
+        """Send/Append upload the file as a reference *image*, which an .mp4
+        is not, and Recall/Remix post an image-generation payload — a video
+        record's parameters would land in the wrong tab."""
+        result = format_metadata(self._video_path(), self._metadata(), 0, 1)
+
+        assert "invoke-recall-controls" not in result.description
+        assert "data-recall-mode" not in result.description
+
+    def test_a_phone_video_still_gets_the_exif_panel(self, clear_invokeai_config):
+        """Routing to the Invoke renderer must be conditional, not the rule."""
+        result = format_metadata(
+            self._video_path(),
+            {VIDEO_METADATA_KEY: dict(self.VIDEO_INFO), "Make": "Pixel"},
+            0,
+            1,
+        )
+
+        assert "Pixel" in result.description
+        assert "<th>Mode</th>" not in result.description
+
+    def test_the_slide_is_still_marked_as_a_video(self, clear_invokeai_config):
+        """The Invoke branch must not cost the drawer its player."""
+        result = format_metadata(self._video_path(), self._metadata(), 0, 1)
+
+        assert result.media_type == "video"
+        assert result.video_info["codec"] == "h264"
+
+
 class TestVideoDurationAndFpsFormatting:
     @pytest.mark.parametrize(
         "seconds, expected",

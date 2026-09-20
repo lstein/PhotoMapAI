@@ -1,5 +1,6 @@
 from .exif_formatter import format_exif_metadata
 from .invoke_formatter import format_invoke_metadata, use_ref_button_html
+from .invokemetadata import looks_like_invoke_metadata
 from .slide_summary import SlideSummary
 from .video_formatter import (
     format_duration,
@@ -14,6 +15,7 @@ __all__ = [
     "format_invoke_metadata",
     "format_exif_metadata",
     "format_video_metadata",
+    "looks_like_invoke_metadata",
     "format_duration",
     "format_fps",
     "video_external_link_html",

@@ -1163,3 +1163,374 @@ class TestFormatInvokeRecallButtons:
         assert "Send Image" in html
         assert "Append Image" in html
         assert html.count('class="invoke-recall-btn"') == 2
+
+
+# ---------------------------------------------------------------------------
+# InvokeAI 7 records: the ``metadata_version`` collision
+# ---------------------------------------------------------------------------
+
+
+class TestRecordVersionCollision:
+    """``metadata_version`` means two different things, and they collided.
+
+    To PhotoMapAI it has always been the tag selecting v2 / v3 / v5, and it
+    is synthesised at parse time because InvokeAI never wrote it. InvokeAI 7
+    started writing it — as a semver string naming the *record's* version.
+    Left alone, every image and video that release produces reaches the
+    discriminated union tagged ``"1.0.0"``, matches no member and degrades
+    to the formatter's flat scalar table, which is a regression for images
+    quite apart from the video work that surfaced it.
+    """
+
+    def test_a_semver_record_version_still_parses(self):
+        parsed = GenerationMetadataAdapter().parse(
+            {
+                "metadata_version": "1.0.0",
+                "app_version": "7.0.0",
+                "positive_prompt": "a lighthouse",
+                "seed": 7,
+            }
+        )
+
+        assert parsed.metadata_version == 5
+        assert InvokeMetadataView(parsed).seed == 7
+
+    def test_the_record_version_is_preserved_not_discarded(self):
+        parsed = GenerationMetadataAdapter().parse(
+            {"metadata_version": "1.0.0", "app_version": "7.0.0"}
+        )
+
+        assert parsed.invoke_record_version == "1.0.0"
+
+    def test_a_record_version_does_not_trip_the_unknown_field_warning(self, caplog):
+        """It is a declared field, so schema-drift logging stays meaningful."""
+        with caplog.at_level("WARNING"):
+            GenerationMetadataAdapter().parse(
+                {"metadata_version": "9.9.9", "app_version": "9.0.0", "seed": 1}
+            )
+
+        assert "invoke_record_version" not in caplog.text
+
+    def test_our_own_integer_tag_is_still_honoured(self):
+        """A payload we already tagged must not be re-inferred."""
+        parsed = GenerationMetadataAdapter().parse(
+            {"metadata_version": 3, "app_version": "7.0.0", "seed": 1}
+        )
+
+        assert parsed.metadata_version == 3
+
+    def test_a_float_tag_is_not_mistaken_for_our_integer_one(self):
+        """``5.0 in (2, 3, 5)`` is True but the union rejects a float."""
+        parsed = GenerationMetadataAdapter().parse(
+            {"metadata_version": 5.0, "app_version": "7.0.0", "seed": 1}
+        )
+
+        assert parsed.metadata_version == 5
+        assert parsed.invoke_record_version == "5.0"
+
+    def test_an_unrecognised_integer_tag_is_re_inferred_rather_than_failing(self):
+        """A future InvokeAI record tag must not take the drawer down."""
+        parsed = GenerationMetadataAdapter().parse(
+            {"metadata_version": 11, "app_version": "8.1.0", "seed": 1}
+        )
+
+        assert parsed.metadata_version == 5
+
+    def test_a_record_version_is_dropped_when_the_payload_reads_as_v2_or_v3(self):
+        """v2 and v3 forbid extra fields, and no release read as one ever
+        stamped a record version — injecting the key there would turn a
+        parse that works today into a failure."""
+        parsed = GenerationMetadataAdapter().parse(
+            {"metadata_version": "1.0.0", "app_version": "3.4.0", "seed": 1}
+        )
+
+        assert parsed.metadata_version == 3
+
+
+# ---------------------------------------------------------------------------
+# The video profile
+# ---------------------------------------------------------------------------
+
+
+def _video_record(**overrides) -> dict:
+    """A Wan image-to-video record as InvokeAI 7 writes it."""
+    record = {
+        "metadata_version": "1.0.0",
+        "app_version": "7.0.0",
+        "generation_mode": "wan_i2v",
+        "positive_prompt": "a paper boat",
+        "seed": 99,
+        "steps": 30,
+        "width": 832,
+        "height": 480,
+        "num_frames": 81,
+        "fps": 16,
+        "first_frame_image": {"image_name": "first.png"},
+        "model": {"name": "Wan 2.2 I2V A14B", "base": "wan", "type": "main"},
+    }
+    record.update(overrides)
+    return record
+
+
+def _video_view(**overrides) -> InvokeMetadataView:
+    return InvokeMetadataView(GenerationMetadataAdapter().parse(_video_record(**overrides)))
+
+
+class TestVideoProfile:
+    def test_a_video_record_is_recognised_as_one(self):
+        assert _video_view().is_video_generation is True
+
+    def test_an_image_record_is_not(self):
+        view = InvokeMetadataView(
+            GenerationMetadataAdapter().parse(
+                {
+                    "metadata_version": "1.0.0",
+                    "app_version": "7.0.0",
+                    "generation_mode": "txt2img",
+                    "positive_prompt": "a lighthouse",
+                }
+            )
+        )
+
+        assert view.is_video_generation is False
+
+    def test_an_image_record_renders_no_mode_row(self):
+        """``generation_mode`` is shared with images, so it cannot be what
+        decides that a video block is due — otherwise every image grows a
+        row it never had."""
+        html = format_invoke_metadata(
+            _slide(), {"app_version": "7.0.0", "generation_mode": "txt2img"}
+        ).description
+
+        assert "<th>Mode</th>" not in html
+
+    def test_the_shared_fields_still_read_the_same_as_an_image(self):
+        view = _video_view()
+
+        assert view.positive_prompt == "a paper boat"
+        assert view.seed == 99
+        assert view.model_name == "Wan 2.2 I2V A14B"
+
+    def test_frames_and_frame_rate_are_reported(self):
+        facts = dict(_video_view().video_facts)
+
+        assert facts["Mode"] == "wan_i2v"
+        assert facts["Frames"] == "81"
+        assert facts["Frame Rate"] == "16 fps"
+
+    def test_a_fractional_frame_rate_keeps_its_fraction(self):
+        facts = dict(_video_view(fps=23.976).video_facts)
+
+        assert facts["Frame Rate"] == "23.976 fps"
+
+    def test_absent_fields_produce_no_rows(self):
+        """A text-to-video clip has no keyframes and must not show empty ones."""
+        record = _video_record()
+        del record["first_frame_image"]
+        record["generation_mode"] = "wan_t2v"
+        facts = dict(InvokeMetadataView(GenerationMetadataAdapter().parse(record)).video_facts)
+
+        assert "First Frame" not in facts
+        assert "Last Frame" not in facts
+        assert "Source Video" not in facts
+
+    def test_keyframes_are_reported_by_name(self):
+        facts = dict(_video_view(last_frame_image={"image_name": "last.png"}).video_facts)
+
+        assert facts["First Frame"] == "first.png"
+        assert facts["Last Frame"] == "last.png"
+
+    def test_a_source_clip_reports_its_trim_range(self):
+        """The range is its own row, not a parenthetical on the name: the
+        drawer only thumbnails a cell holding exactly a media name."""
+        facts = dict(
+            _video_view(
+                generation_mode="wan_extend_video",
+                source_video={"video_name": "clip.mp4"},
+                source_video_start_frame=0,
+                source_video_end_frame=80,
+            ).video_facts
+        )
+
+        assert facts["Source Video"] == "clip.mp4"
+        assert facts["Source Range"] == "frames 0-80"
+
+    def test_a_source_clip_with_no_trim_range_reports_no_range_row(self):
+        facts = dict(_video_view(source_video={"video_name": "clip.mp4"}).video_facts)
+
+        assert facts["Source Video"] == "clip.mp4"
+        assert "Source Range" not in facts
+
+    def test_a_half_open_trim_range_still_reads(self):
+        facts = dict(
+            _video_view(
+                source_video={"video_name": "clip.mp4"},
+                source_video_start_frame=12,
+            ).video_facts
+        )
+
+        assert facts["Source Range"] == "from frame 12"
+
+    def test_auxiliary_models_are_reported_with_their_roles(self):
+        """``model`` alone does not identify what ran when the main model is
+        a single file assembled from parts living in other installs."""
+        view = _video_view(
+            wan_t5_encoder_model={"name": "UMT5-XXL", "type": "t5_encoder"},
+            wan_transformer_low_noise={"name": "Wan Low Noise", "type": "main"},
+        )
+
+        assert view.video_models == [
+            ("T5 Encoder", "UMT5-XXL"),
+            ("Low-Noise Expert", "Wan Low Noise"),
+        ]
+
+    def test_pre_1_0_wan_key_spellings_are_read_as_aliases(self):
+        """InvokeAI's own readers accept both spellings; so must ours."""
+        view = _video_view(
+            wan_t5_encoder={"name": "UMT5-XXL", "type": "t5_encoder"},
+            transformer_low_noise={"name": "Wan Low Noise", "type": "main"},
+            guidance_scale_low_noise=3.5,
+        )
+
+        assert view.video_models == [
+            ("T5 Encoder", "UMT5-XXL"),
+            ("Low-Noise Expert", "Wan Low Noise"),
+        ]
+        assert dict(view.video_facts)["Low-Noise CFG"] == "3.5"
+
+    def test_minimax_references_are_reported_in_conditioning_order(self):
+        view = _video_view(
+            generation_mode="minimax_h3_ref2v",
+            minimax_h3_references=[
+                {"kind": "image", "image_name": "a.png", "detail": "max"},
+                {
+                    "kind": "video",
+                    "video_name": "b.mp4",
+                    "conditioning": "video_audio",
+                    "start_frame": 0,
+                    "end_frame": 48,
+                },
+            ],
+        )
+
+        assert view.video_references == [
+            ("image", "a.png", "max"),
+            ("video", "b.mp4", "video_audio, frames 0-48"),
+        ]
+
+    def test_referenced_media_is_offered_for_thumbnailing(self):
+        """Keyframes and the source clip resolve by the same album-filename
+        lookup as an image's reference images, so they join the same list."""
+        view = _video_view(
+            last_frame_image={"image_name": "last.png"},
+            source_video={"video_name": "clip.mp4"},
+            minimax_h3_references=[{"kind": "image", "image_name": "ref.png"}],
+        )
+
+        assert view.video_media_names == [
+            "first.png",
+            "last.png",
+            "clip.mp4",
+            "ref.png",
+        ]
+
+    def test_an_unknown_future_mode_still_renders_its_video_fields(self):
+        """Detection is "has a video-only field", not "matches a known mode":
+        that list grows with every architecture InvokeAI adds."""
+        view = _video_view(generation_mode="hypothetical_v9_t2v")
+
+        assert view.is_video_generation is True
+        assert dict(view.video_facts)["Frames"] == "81"
+
+    def test_the_whole_record_parses_without_unknown_field_warnings(self, caplog):
+        """Every field InvokeAI 7 documents for the video profile is declared.
+
+        ``extra="allow"`` means an undeclared field parses but is invisible
+        in the drawer, so the warning is the only signal that something is
+        being dropped — and it fires once per process, so a test that runs
+        after another parse of the same field would not see it. Clearing the
+        seen-set keeps this assertion about this payload.
+        """
+        from photomap.backend.metadata_modules.invoke import invoke5metadata
+
+        invoke5metadata._warned_extra_fields.clear()
+        with caplog.at_level("WARNING"):
+            GenerationMetadataAdapter().parse(
+                _video_record(
+                    last_frame_image={"image_name": "last.png"},
+                    source_video={"video_name": "clip.mp4"},
+                    source_video_start_frame=0,
+                    source_video_end_frame=80,
+                    wan_guidance_scale_low_noise=3.5,
+                    wan_t5_encoder_model={"name": "UMT5-XXL", "type": "t5_encoder"},
+                    wan_transformer_low_noise={"name": "Low", "type": "main"},
+                    wan_component_source={"name": "Wan Diffusers", "type": "main"},
+                    minimax_h3_transformer_model={"name": "H3", "type": "main"},
+                    minimax_h3_text_encoder_model={"name": "Qwen3-VL", "type": "main"},
+                    minimax_h3_component_source={"name": "H3 Diffusers", "type": "main"},
+                    minimax_h3_hybrid_base_model={"name": "FL2VA", "type": "main"},
+                    minimax_h3_hybrid_start_block=20,
+                    minimax_h3_references=[{"kind": "image", "image_name": "a.png"}],
+                    media_origin="audio_upload",
+                )
+            )
+
+        assert "not declared in GenerationMetadata5" not in caplog.text
+
+
+class TestFormatVideoInvokeMetadata:
+    def test_the_video_rows_are_rendered(self):
+        html = format_invoke_metadata(_slide(), _video_record()).description
+
+        assert "<th>Mode</th><td>wan_i2v</td>" in html
+        assert "<th>Frames</th><td>81</td>" in html
+        assert '<th>First Frame</th><td class="invoke-media-name">first.png' in html
+
+    def test_the_prompt_and_seed_are_still_rendered(self):
+        html = format_invoke_metadata(_slide(), _video_record()).description
+
+        assert "a paper boat" in html
+        assert ">99<" in html
+
+    def test_referenced_media_lands_on_the_slide_for_thumbnailing(self):
+        slide = format_invoke_metadata(
+            _slide(), _video_record(source_video={"video_name": "clip.mp4"})
+        )
+
+        assert slide.reference_images == ["first.png", "clip.mp4"]
+
+    def test_media_name_cells_are_marked_for_thumbnailing(self):
+        """``reference-thumbnails.js`` swaps these cells for a thumbnail when
+        the name resolves to something in the current album."""
+        html = format_invoke_metadata(
+            _slide(), _video_record(source_video={"video_name": "clip.mp4"})
+        ).description
+
+        assert '<td class="invoke-media-name">first.png</td>' in html
+        assert '<td class="invoke-media-name">clip.mp4</td>' in html
+
+    def test_non_media_cells_are_not_marked(self):
+        html = format_invoke_metadata(_slide(), _video_record()).description
+
+        assert '<th>Mode</th><td>wan_i2v</td>' in html
+        assert '<th>Frames</th><td>81</td>' in html
+
+    def test_auxiliary_models_render_as_a_role_and_name_table(self):
+        html = format_invoke_metadata(
+            _slide(),
+            _video_record(
+                wan_t5_encoder_model={"name": "UMT5-XXL", "type": "t5_encoder"}
+            ),
+        ).description
+
+        assert "<th>Video Models</th>" in html
+        assert "<td>T5 Encoder</td><td>UMT5-XXL</td>" in html
+
+    def test_a_prompt_from_the_record_is_escaped(self):
+        """Metadata travels inside files from anywhere; the drawer renders it."""
+        html = format_invoke_metadata(
+            _slide(), _video_record(generation_mode="<script>alert(1)</script>")
+        ).description
+
+        assert "<script>" not in html
+        assert "&lt;script&gt;" in html
