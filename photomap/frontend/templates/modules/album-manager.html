@@ -143,17 +143,19 @@
           <!-- Index Status and Button -->
           <div class="index-controls">
             <div class="index-status">Ready to index</div>
-            <button class="create-index-btn btn-index">Update Index</button>
-            <button class="cancel-index-btn btn-cancel">Cancel</button>
-          </div>
-          <!-- A row of its own, so "Rebuild Index" sits under "Update Index"
-               rather than joining the status/Update/Cancel row above. Hidden
-               until the card learns an index exists, since there is nothing
-               to rebuild before that. -->
-          <div class="rebuild-controls">
-            <button class="rebuild-index-btn btn-rebuild" style="display: none">
-              Rebuild Index
-            </button>
+            <!-- A column, so the index buttons stack on the same two rows
+                 as Edit and Delete in the next grid cell. Only one of
+                 Update/Cancel is ever shown, so this is two buttons deep in
+                 practice, matching that column exactly. Rebuild Index is
+                 hidden until the card learns an index exists, since there
+                 is nothing to rebuild before that. -->
+            <div class="index-buttons">
+              <button class="create-index-btn btn-index">Update Index</button>
+              <button class="cancel-index-btn btn-cancel">Cancel</button>
+              <button class="rebuild-index-btn btn-rebuild" style="display: none">
+                Rebuild Index
+              </button>
+            </div>
           </div>
           <!-- Progress Container -->
           <div class="progress-container">

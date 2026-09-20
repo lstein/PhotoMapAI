@@ -234,9 +234,25 @@
 
 .index-controls {
   display: flex;
-  align-items: center;
+  /* flex-start, not center: the status text wraps to two or three lines,
+     and centring the buttons against it floated them down out of line with
+     Edit/Delete in the next grid cell (which sits at the top, per
+     .album-details' align-items: start). */
+  align-items: flex-start;
   gap: 0.5em;
   margin-bottom: 0.5em;
+}
+
+/* Mirrors .action-buttons.vertical — same direction, same gap, same
+   right-alignment — so Update Index lines up with Edit and Rebuild Index
+   with Delete. stretch rather than flex-end so the two buttons share the
+   column's width instead of ragging by the couple of pixels their labels
+   differ by. */
+.index-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  align-items: stretch;
 }
 
 .index-status {
@@ -450,13 +466,7 @@
   white-space: nowrap;
 }
 
-/* Red, like .btn-delete: this discards work the user waited for. Sits in
-   its own row under .index-controls, indented to line up under the Update
-   Index button rather than under the status text. */
-.rebuild-controls {
-  margin-bottom: 0.5em;
-}
-
+/* Red, like .btn-delete: this discards work the user waited for. */
 .btn-rebuild {
   background: #f44336;
   border: none;
