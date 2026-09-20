@@ -13,7 +13,19 @@
 
 #confirmModal.modal {
   position: fixed;
-  z-index: 9999;
+  /* Above .modal-overlay (99999) and the file tree (100001), below the
+     spinner (110000) and toasts (120000).
+
+     A confirmation dialog has to outrank whatever opened it, and at 9999
+     this one did not: asked from inside Album Management it rendered
+     *behind* that overlay — the prompt was painted but its buttons were
+     not clickable, so the flow simply stopped. Raising it is safe for the
+     other callers, since a modal question should always be on top.
+
+     Note #deleteConfirmModal above still sits at 9999. It is only ever
+     opened from the main UI, never over an overlay, so it does not hit
+     this — but it is the same shape and would, if that changed. */
+  z-index: 100002;
   left: 0;
   top: 0;
   width: 100vw;

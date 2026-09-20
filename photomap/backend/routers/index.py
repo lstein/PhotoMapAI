@@ -20,7 +20,12 @@ from send2trash.exceptions import TrashPermissionError
 
 from .. import invokeai_client
 from ..config import get_config_manager
-from ..embeddings import LAST_UPDATED_FILENAME, Embeddings, peek_encoder_spec
+from ..embeddings import (
+    LAST_UPDATED_FILENAME,
+    Embeddings,
+    _open_npz_file,
+    peek_encoder_spec,
+)
 from ..media_types import is_video
 from ..progress import IndexingCancelled, progress_tracker
 from ..thumbnail_cache import discard as discard_tiles
@@ -174,6 +179,15 @@ async def remove_index(album_key: str) -> JSONResponse:
 
         # Remove the index file
         index_path.unlink()
+        # ``_open_npz_file`` is an lru_cache keyed on the path, so without
+        # this the just-deleted index stays live in memory and the app keeps
+        # serving an album whose index is no longer on disk. Every other
+        # clear sits in a *write* path in ``embeddings.py``, which was enough
+        # while this endpoint only ran as a prelude to re-indexing — the
+        # rebuild's own write cleared it. It is not enough now that a user
+        # can reach it from a button and the rebuild behind it can fail or
+        # be cancelled.
+        _open_npz_file.cache_clear()
         logger.info(f"Removed index file: {index_path}")
 
         return JSONResponse(
