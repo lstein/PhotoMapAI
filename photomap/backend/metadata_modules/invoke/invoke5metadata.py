@@ -7,11 +7,15 @@ from photomap.backend.metadata_modules.invoke.canvas2metadata import CanvasV2Met
 from photomap.backend.metadata_modules.invoke.common_metadata_elements import (
     ClipEmbedModel,
     Image,
+    ImageRef,
     IPAdapter,
     Lora,
+    MiniMaxH3Reference,
     Model,
     RegionalGuidance,
     T5Encoder,
+    VideoModel,
+    VideoRef,
     fixup_step_percentages,
     tag_reference_images,
 )
@@ -28,6 +32,15 @@ logger = logging.getLogger(__name__)
 # once per process so an operator notices "huh, InvokeAI added X — should I
 # capture it?" without log spam on every parsed image.
 _warned_extra_fields: set[str] = set()
+
+# Legacy spelling → canonical name, for the three Wan keys InvokeAI renamed
+# before its record format reached 1.0. Applied by
+# ``GenerationMetadata5.normalize_wan_aliases``.
+_WAN_KEY_ALIASES = {
+    "guidance_scale_low_noise": "wan_guidance_scale_low_noise",
+    "wan_t5_encoder": "wan_t5_encoder_model",
+    "transformer_low_noise": "wan_transformer_low_noise",
+}
 
 
 class ControlLayer(BaseModel):
@@ -131,6 +144,44 @@ class GenerationMetadata5(BaseModel):
     tile_overlap: int | None = None
     clip_skip: int | None = None
     canvas_v2_metadata: CanvasV2Metadata | None = None
+    # InvokeAI 7's record version (``metadata_version`` at the source, moved
+    # aside by ``GenerationMetadataAdapter._with_discriminator`` because that
+    # name is already our schema tag). Declared so it neither trips the
+    # unknown-field warning below nor vanishes from a round trip.
+    invoke_record_version: str | None = None
+    # ── Video profile ────────────────────────────────────────────────
+    #
+    # A video record is the same record as an image's, discriminated by
+    # ``generation_mode`` rather than a separate format, so these live on the
+    # v5 model beside the image fields instead of in a schema of their own.
+    # Every one is optional and absent from an image record.
+    num_frames: int | None = None
+    fps: int | float | None = None
+    first_frame_image: ImageRef | None = None
+    last_frame_image: ImageRef | None = None
+    source_video: VideoRef | None = None
+    source_video_start_frame: int | None = None
+    source_video_end_frame: int | None = None
+    # Three keys InvokeAI spelled differently before its record format
+    # reached 1.0. Both spellings are read, as InvokeAI's own readers do —
+    # but through ``_normalize_wan_aliases`` below rather than a pydantic
+    # ``alias``, because an alias makes the *legacy* spelling win when a
+    # record carries both and leaves the canonical one in ``model_extra``,
+    # where it trips the schema-drift warning by the name of a field that is
+    # right there in this class.
+    wan_guidance_scale_low_noise: float | None = None
+    wan_t5_encoder_model: VideoModel | None = None
+    wan_transformer_low_noise: VideoModel | None = None
+    wan_component_source: VideoModel | None = None
+    minimax_h3_transformer_model: VideoModel | None = None
+    minimax_h3_text_encoder_model: VideoModel | None = None
+    minimax_h3_component_source: VideoModel | None = None
+    minimax_h3_hybrid_base_model: VideoModel | None = None
+    minimax_h3_hybrid_start_block: int | None = None
+    minimax_h3_references: list[MiniMaxH3Reference] | None = None
+    # Stamped by InvokeAI's upload route rather than by a graph: marks an
+    # audio file that was wrapped into a video container.
+    media_origin: str | None = None
     # These fields appear in some ZiT images
     seed_variance_strength: float | None = None
     seed_variance_enabled: bool | None = Field(
@@ -154,6 +205,22 @@ class GenerationMetadata5(BaseModel):
     refiner_positive_aesthetic_score: float | None = None
     refiner_negative_aesthetic_score: float | None = None
     refiner_start: float | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_wan_aliases(cls, data):
+        """Fold the pre-1.0 Wan key spellings onto their canonical names.
+
+        The canonical name wins when a record carries both, and the legacy
+        key is removed either way so it cannot reach ``model_extra``.
+        """
+        if not isinstance(data, dict):
+            return data
+        for legacy, canonical in _WAN_KEY_ALIASES.items():
+            if legacy in data:
+                value = data.pop(legacy)
+                data.setdefault(canonical, value)
+        return data
 
     @model_validator(mode="before")
     @classmethod

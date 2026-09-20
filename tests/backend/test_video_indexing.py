@@ -136,6 +136,43 @@ def test_video_metadata_records_duration_fps_and_resolution(client, new_media_al
     assert info["playable"] is True
 
 
+def test_a_generated_video_carries_its_invokeai_record(client, new_media_album):
+    """``invoke_video.mp4`` is tagged the way InvokeAI 7 tags its output.
+
+    The record is stored flat, beside the probe dict rather than nested
+    under it, because that is exactly how a generated PNG's record is
+    stored — which is what lets the drawer render both with one renderer
+    that knows nothing about videos.
+    """
+    build_index(client, new_media_album)
+
+    data = Embeddings.open_cached_embeddings(new_media_album["index"])
+    by_name = {
+        str(f).rsplit("/", 1)[-1]: m
+        for f, m in zip(data["filenames"], data["metadata"], strict=True)
+    }
+
+    metadata = by_name["invoke_video.mp4"]
+    assert metadata["generation_mode"] == "wan_i2v"
+    assert metadata["num_frames"] == 81
+    assert metadata["model"]["name"] == "Wan 2.2 I2V A14B"
+    # The probe dict is still there, and still under the reserved key.
+    assert metadata[VIDEO_METADATA_KEY]["codec"] == "h264"
+
+
+def test_an_untagged_video_carries_only_the_probe_dict(client, new_media_album):
+    """Most videos in a real collection are not generated ones."""
+    build_index(client, new_media_album)
+
+    data = Embeddings.open_cached_embeddings(new_media_album["index"])
+    by_name = {
+        str(f).rsplit("/", 1)[-1]: m
+        for f, m in zip(data["filenames"], data["metadata"], strict=True)
+    }
+
+    assert list(by_name["clip.mp4"]) == [VIDEO_METADATA_KEY]
+
+
 def test_images_carry_no_video_metadata(client, new_media_album):
     build_index(client, new_media_album)
 

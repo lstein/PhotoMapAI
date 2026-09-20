@@ -11,6 +11,8 @@ Covers:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 
@@ -115,6 +117,11 @@ def test_recall_proxies_payload_to_invokeai_backend(
     monkeypatch.setattr(
         invoke_module, "_load_raw_metadata", lambda album_key, index: raw_metadata
     )
+    # /recall resolves the file as well as the metadata — that is where its
+    # "not for videos" guard lives — so the path lookup needs stubbing too.
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: Path("/tmp/x.png")
+    )
 
     captured = {}
 
@@ -177,6 +184,11 @@ def test_recall_remix_omits_seed(client, clear_invokeai_config, monkeypatch):
 
     monkeypatch.setattr(
         invoke_module, "_load_raw_metadata", lambda album_key, index: raw_metadata
+    )
+    # /recall resolves the file as well as the metadata — that is where its
+    # "not for videos" guard lives — so the path lookup needs stubbing too.
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: Path("/tmp/x.png")
     )
 
     captured = {}
@@ -454,6 +466,11 @@ def test_recall_upstream_unreachable_returns_502(
     monkeypatch.setattr(
         invoke_module, "_load_raw_metadata", lambda album_key, index: raw_metadata
     )
+    # /recall resolves the file as well as the metadata — that is where its
+    # "not for videos" guard lives — so the path lookup needs stubbing too.
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: Path("/tmp/x.png")
+    )
 
     class _StubClient:
         def __init__(self, *args, **kwargs):
@@ -493,6 +510,11 @@ def _install_recall_stub(monkeypatch):
     }
     monkeypatch.setattr(
         invoke_module, "_load_raw_metadata", lambda album_key, index: raw_metadata
+    )
+    # /recall resolves the file as well as the metadata — that is where its
+    # "not for videos" guard lives — so the path lookup needs stubbing too.
+    monkeypatch.setattr(
+        invoke_module, "_load_image_path", lambda album_key, index: Path("/tmp/x.png")
     )
 
 

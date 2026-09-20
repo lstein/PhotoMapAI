@@ -45,7 +45,10 @@ from ..invokeai_client import (  # noqa: F401  (re-exported for tests/backward c
 )
 from ..media_types import is_video
 from ..metadata_modules.invoke.invoke_metadata_view import InvokeMetadataView
-from ..metadata_modules.invokemetadata import GenerationMetadataAdapter
+from ..metadata_modules.invokemetadata import (
+    GenerationMetadataAdapter,
+    looks_like_invoke_metadata,
+)
 from .album import get_embeddings_for_album, require_no_lock
 
 logger = logging.getLogger(__name__)
@@ -109,18 +112,12 @@ def _looks_like_invoke_filename(name: str) -> bool:
 
 
 def _has_invoke_metadata(raw_metadata: dict) -> bool:
-    """Cheap structural check for InvokeAI-shaped PNG metadata.
+    """Cheap structural check for InvokeAI-shaped metadata.
 
-    Mirrors the detection used in ``metadata_formatting.py`` so the two code
-    paths agree on what "this looks like an Invoke image" means.
+    Thin alias kept for the existing call sites and tests; the detection
+    itself is shared with the drawer formatters so the paths cannot drift.
     """
-    if not raw_metadata:
-        return False
-    return (
-        "app_version" in raw_metadata
-        or "generation_mode" in raw_metadata
-        or "canvas_v2_metadata" in raw_metadata
-    )
+    return looks_like_invoke_metadata(raw_metadata)
 
 
 async def _invokeai_image_exists(
@@ -523,6 +520,15 @@ def _build_recall_payload(raw_metadata: dict, include_seed: bool) -> dict:
             status_code=400, detail="Image does not contain recognizable InvokeAI metadata"
         ) from exc
     view = InvokeMetadataView(parsed)
+    if view.is_video_generation:
+        # Belt to the path check's braces: a video record reaching here at
+        # all means the file did not look like a video (renamed extension,
+        # a container we do not classify), and recalling video parameters
+        # into the image tab is wrong however the record arrived.
+        raise HTTPException(
+            status_code=400,
+            detail="InvokeAI actions are not available for video generations.",
+        )
     return view.to_recall_payload(include_seed=include_seed)
 
 
@@ -545,6 +551,14 @@ async def recall_parameters(request: RecallRequest) -> dict:
             ),
         )
 
+    # For the 400 on videos. The result is unused — recall sends metadata,
+    # never the file — but this is the guard, and it has to run before the
+    # payload is built: a video's record parses as a v5 one (it *is* a v5
+    # one), so nothing downstream would stop a video generation's prompt,
+    # model, seed and cfg being posted to an endpoint that applies them to
+    # the image tab. The drawer withholds the buttons; this closes the API
+    # path behind them, as ``use_ref_image`` already does.
+    await asyncio.to_thread(_load_image_path, request.album_key, request.index)
     raw_metadata = await asyncio.to_thread(
         _load_raw_metadata, request.album_key, request.index
     )

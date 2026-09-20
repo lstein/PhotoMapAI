@@ -22,6 +22,8 @@ from .invoke.invoke_metadata_view import (
     InvokeMetadataView,
     LoraTuple,
     ReferenceImageTuple,
+    VideoModelTuple,
+    VideoReferenceTuple,
 )
 from .invokemetadata import GenerationMetadataAdapter
 from .slide_summary import SlideSummary
@@ -249,6 +251,30 @@ def format_invoke_metadata(
         rows.append(
             f'<tr><th>Seed</th><td class="copyme">{_esc(seed)}{_COPY_SVG}</td></tr>'
         )
+    # The video profile sits between the shared generation parameters and
+    # the image-shaped ones below it: a video's keyframes and source clip
+    # are the closest thing it has to reference images, so they read best
+    # immediately before them. Empty for every image record.
+    #
+    # Cells holding nothing but a media name are classed so
+    # ``reference-thumbnails.js`` can swap them for a thumbnail. Membership
+    # of ``video_media_names`` is the test rather than the label, so the
+    # class can never land on a cell whose text is not exactly a name.
+    video_media = set(view.video_media_names)
+    for fact in view.video_facts:
+        css_class = ' class="invoke-media-name"' if fact.value in video_media else ""
+        rows.append(
+            f"<tr><th>{_esc(fact.label)}</th>"
+            f"<td{css_class}>{_esc(fact.value)}</td></tr>"
+        )
+    if (video_models := view.video_models) and (
+        models_html := _tuple_table(video_models)
+    ):
+        rows.append(f"<tr><th>Video Models</th><td>{models_html}</td></tr>")
+    if (video_refs := view.video_references) and (
+        refs_html := _tuple_table(video_refs)
+    ):
+        rows.append(f"<tr><th>References</th><td>{refs_html}</td></tr>")
     if loras and (lora_html := _tuple_table(loras)):
         rows.append(f"<tr><th>Loras</th><td>{lora_html}</td></tr>")
     if raster_images:
@@ -267,11 +293,14 @@ def format_invoke_metadata(
         + "</table>"
         + (_recall_buttons_html() if show_recall_buttons else "")
     )
+    # Keyframes and the source clip are resolved and thumbnailed by exactly
+    # the same album-filename lookup as an image's reference images, so they
+    # join the same list rather than getting a mechanism of their own.
     slide_data.reference_images = [
         ri.image_name for ri in reference_images if ri.image_name
     ] + [
         cl.image_name for cl in control_layers if cl.image_name
-    ] + list(raster_images)
+    ] + list(raster_images) + view.video_media_names
     return slide_data
 
 
@@ -294,7 +323,13 @@ def _format_mtime(filepath: str | None) -> str | None:
 
 
 def _tuple_table(
-    tuples: Iterable[LoraTuple | ReferenceImageTuple | ControlLayerTuple],
+    tuples: Iterable[
+        LoraTuple
+        | ReferenceImageTuple
+        | ControlLayerTuple
+        | VideoModelTuple
+        | VideoReferenceTuple
+    ],
 ) -> str:
     """Render a list of named tuples as a compact HTML table.
 

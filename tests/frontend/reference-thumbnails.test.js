@@ -84,6 +84,23 @@ describe("collectReferenceFilenameNodes", () => {
     `;
     expect(collectReferenceFilenameNodes(container, new Set(["ref-1.png"]))).toEqual([]);
   });
+
+  // A video record names its keyframes and source clip as plain rows of the
+  // main table rather than in a sub-table, so the formatter classes those
+  // cells and they are collected too. A prompt cell in the same table is
+  // not classed and stays untouched.
+  it("matches the video profile's media-name cells", () => {
+    container.innerHTML = `
+      <table class="invoke-metadata">
+        <tr><th>Prompt</th><td class="copyme">clip.mp4</td></tr>
+        <tr><th>First Frame</th><td class="invoke-media-name">first.png</td></tr>
+        <tr><th>Source Video</th><td class="invoke-media-name">clip.mp4</td></tr>
+        <tr><th>Source Range</th><td>frames 0-80</td></tr>
+      </table>
+    `;
+    const matches = collectReferenceFilenameNodes(container, new Set(["first.png", "clip.mp4"]));
+    expect(matches.map((m) => m.filename)).toEqual(["first.png", "clip.mp4"]);
+  });
 });
 
 describe("buildReferenceThumbnail", () => {

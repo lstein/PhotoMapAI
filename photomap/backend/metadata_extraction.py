@@ -1,17 +1,20 @@
 """
 metadata_extraction.py
 
-Handles extraction of metadata from various image sources including:
-- InvokeAI metadata
+Handles extraction of metadata from various media sources including:
+- InvokeAI metadata (PNG text chunks, and MP4 keyed metadata for videos)
 - Stable Diffusion metadata
 - EXIF data (including GPS coordinates)
 """
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from PIL import ExifTags, Image
+
+from .mp4_metadata import INVOKEAI_METADATA_KEY, read_mp4_tags
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +78,46 @@ class MetadataExtractor:
                     continue
 
         return {}  # No metadata available
+
+    @staticmethod
+    def extract_video_metadata(video_path: Path) -> dict[str, Any]:
+        """The InvokeAI generation record embedded in a video, or ``{}``.
+
+        The video counterpart of :meth:`extract_image_metadata`: InvokeAI 7
+        writes the same ``invokeai_metadata`` JSON a generated PNG carries as
+        a text chunk into a generated MP4 as keyed metadata, so both return
+        the same flat record and everything downstream is media-agnostic.
+
+        Only the record is read, not the workflow or graph: PhotoMapAI
+        renders neither, and skipping them keeps the read to the few KiB of
+        the record rather than the few hundred KiB of a graph.
+
+        Returns ``{}`` for every failure — a video with no tags, a
+        non-InvokeAI video, an unreadable file, a tag that is not JSON, or
+        JSON that is not an object. The caller indexes the video either way;
+        metadata is never worth failing an index over.
+        """
+        try:
+            tags = read_mp4_tags(video_path, keys=(INVOKEAI_METADATA_KEY,))
+        except OSError as e:
+            logger.debug("Could not read embedded metadata from %s: %s", video_path, e)
+            return {}
+        raw = tags.get(INVOKEAI_METADATA_KEY)
+        if not raw:
+            return {}
+        try:
+            record = json.loads(raw)
+        except ValueError as e:
+            logger.warning("Embedded metadata in %s is not valid JSON: %s", video_path, e)
+            return {}
+        if not isinstance(record, dict):
+            logger.warning(
+                "Embedded metadata in %s is a %s, not an object",
+                video_path,
+                type(record).__name__,
+            )
+            return {}
+        return record
 
 
 class ExifExtractor:

@@ -15,6 +15,45 @@ GenerationMetadata = Annotated[
     Field(discriminator="metadata_version"),
 ]
 
+# The discriminator values the union above accepts. ``metadata_version`` is
+# PhotoMapAI's own schema tag, injected by :meth:`GenerationMetadataAdapter.parse`
+# — InvokeAI has never written an integer under that name. See
+# :meth:`GenerationMetadataAdapter._with_discriminator` for why that matters.
+SCHEMA_VERSIONS = (2, 3, 5)
+
+# The key InvokeAI 7 stamps its *record* version under — ``metadata_version``,
+# a semver string. Because that collides with the discriminator above, the
+# value is moved to this name before validation and declared on
+# ``GenerationMetadata5`` so it survives the round trip.
+RECORD_VERSION_FIELD = "invoke_record_version"
+
+
+# Keys whose presence marks a dict as an InvokeAI generation record. The
+# video-only ones are here for the same reason they are in
+# ``_infer_metadata_version``, and it is one list so the two cannot answer
+# differently: a record that the *routing* test rejects never reaches the
+# adapter, so a fingerprint the adapter knows about but the router does not
+# is a fingerprint that never fires.
+INVOKE_MARKER_KEYS = (
+    "app_version",
+    "generation_mode",
+    "canvas_v2_metadata",
+    "num_frames",
+    "source_video",
+)
+
+
+def looks_like_invoke_metadata(metadata: dict | None) -> bool:
+    """Cheap structural check for an InvokeAI generation record.
+
+    The single definition of "this looks like something InvokeAI produced",
+    shared by the drawer formatter, the video formatter and the recall
+    router so those paths cannot drift apart.
+    """
+    if not metadata:
+        return False
+    return any(key in metadata for key in INVOKE_MARKER_KEYS)
+
 
 class GenerationMetadataAdapter:
     def __init__(self):
@@ -30,23 +69,66 @@ class GenerationMetadataAdapter:
         :return: Parsed generation metadata
         :rtype: GenerationMetadata
         """
-        if "metadata_version" not in json_data:
-            inferred = self._infer_metadata_version(json_data)
-            json_data = {"metadata_version": inferred, **json_data}
-
-        self.metadata = self.adapter.validate_python(json_data)
+        self.metadata = self.adapter.validate_python(
+            self._with_discriminator(json_data)
+        )
         return self.metadata
+
+    @classmethod
+    def _with_discriminator(cls, json_data: dict[str, Any]) -> dict[str, Any]:
+        """Ensure ``metadata_version`` holds a value the union discriminates on.
+
+        ``metadata_version`` means two different things depending on who
+        wrote it, and the two collided in InvokeAI 7:
+
+        * To *us* it is the schema tag selecting ``GenerationMetadata2`` /
+          ``3`` / ``5``. It is synthesised here, from ``app_version`` and
+          structural fingerprints, because InvokeAI never wrote it.
+        * To InvokeAI 7 it is the version of the *record* — a semver string,
+          currently ``"1.0.0"``, stamped by the ``core_metadata`` node and
+          documented in its media-metadata reference.
+
+        Left alone, an InvokeAI 7 record reaches the discriminated union
+        tagged ``"1.0.0"``, matches no member, and every image and video that
+        release produced degrades to the formatter's flat scalar table. So
+        anything that is not one of our own tags is treated as InvokeAI's
+        record version: it is preserved under ``invoke_record_version`` (a
+        declared field, so it neither trips the unknown-field warning nor is
+        silently lost) and our own tag is inferred in its place.
+        """
+        version = json_data.get("metadata_version")
+        if isinstance(version, int) and version in SCHEMA_VERSIONS:
+            # The ``isinstance`` guard is not redundant: ``5.0 in (2, 3, 5)``
+            # is True, and the discriminated union does not accept a float.
+            return json_data
+
+        payload = dict(json_data)
+        record_version = payload.pop("metadata_version", None)
+        schema_version = cls._infer_metadata_version(payload)
+        if record_version is not None and schema_version == 5:
+            # Only v5 declares the field. v2 and v3 forbid extras, and no
+            # release old enough to be read as one ever stamped a record
+            # version, so there is nothing to preserve on those paths and
+            # injecting the key would turn a parse into a failure.
+            #
+            # Stringified because the whole point of moving the value aside
+            # is that a parse must not fail over it: the field is
+            # informational, never rendered, and a record carrying a number
+            # or anything else under this name would otherwise trade one
+            # validation error for another.
+            payload.setdefault(RECORD_VERSION_FIELD, str(record_version))
+        return {"metadata_version": schema_version, **payload}
 
     @staticmethod
     def _infer_metadata_version(json_data: dict[str, Any]) -> int:
         """Guess the metadata schema version for pre-discriminator payloads.
 
-        InvokeAI started stamping ``metadata_version`` only at v5, so older
-        images need a heuristic. ``app_version`` is the most authoritative
-        signal when present — check it first so a v3 image that happens to
-        carry a ``canvas_v2_metadata`` field isn't misclassified as v5.
-        Structural fingerprints (``model_weights``, ``canvas_v2_metadata``)
-        are the fallbacks for payloads without ``app_version``.
+        InvokeAI has never stamped our schema tag, so every payload needs
+        this. ``app_version`` is the most authoritative signal when present —
+        check it first so a v3 image that happens to carry a
+        ``canvas_v2_metadata`` field isn't misclassified as v5. Structural
+        fingerprints (``model_weights``, ``canvas_v2_metadata``) are the
+        fallbacks for payloads without ``app_version``.
         """
         app_version = json_data.get("app_version")
         if isinstance(app_version, str):
@@ -65,9 +147,18 @@ class GenerationMetadataAdapter:
             # Any other ``app_version`` (4.x, 5.x, future) → v5.
             return 5
 
-        # No ``app_version`` — fall back to structural fingerprints.
+        # No ``app_version`` — fall back to structural fingerprints. The
+        # video-only keys are among them because a video record is
+        # v5-shaped; they are a backstop only, since ``core_metadata`` always
+        # stamps ``app_version`` alongside them.
         if "canvas_v2_metadata" in json_data:
             return 5
         if "model_weights" in json_data:
             return 2
+        # A video record is v5-shaped. These are a backstop only, since
+        # ``core_metadata`` stamps ``app_version`` alongside them — but they
+        # are the same keys ``INVOKE_MARKER_KEYS`` routes on, so a record
+        # that gets this far on one of them is not then read as a v3.
+        if "num_frames" in json_data or "source_video" in json_data:
+            return 5
         return 3

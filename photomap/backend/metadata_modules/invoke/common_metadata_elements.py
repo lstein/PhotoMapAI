@@ -32,6 +32,23 @@ class ClipEmbedModel(Model):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
 
+class VideoModel(Model):
+    """A model identifier in a video record.
+
+    ``extra="allow"`` rather than ``Model``'s ``"forbid"`` because InvokeAI's
+    ``ModelIdentifierField`` carries a sixth field, ``submodel_type``, which
+    ``core_metadata``'s ``exclude_none`` dump omits only while it is None.
+    Under ``"forbid"`` a record that sets it fails validation — and because
+    the failure is on the discriminated union as a whole, the drawer loses
+    the prompt, model, LoRAs and reference images too, not just the one
+    field. Declaring these keys is what put them behind that check;
+    ``extra="allow"`` puts them back where ``extra="allow"`` on the record
+    already had them.
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
 class ImageData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     type: Literal["dataURL"] = Field(default="dataURL", alias="image_type")
@@ -162,6 +179,44 @@ class RegionalGuidance(BaseModel):
     position: Position
     reference_images: list[ReferenceImage] = Field(alias="referenceImages")
     type: str
+
+
+class ImageRef(BaseModel):
+    """InvokeAI's ``ImageField`` — ``{"image_name": ...}``.
+
+    Distinct from the richer ``Image`` union above, which is discriminated on
+    a ``type`` this shape does not carry. Video records reference their
+    keyframes by bare name, so they get the bare model rather than having a
+    discriminator grafted on before validation.
+    """
+
+    model_config = ConfigDict(extra="allow")
+    image_name: str | None = None
+
+
+class VideoRef(BaseModel):
+    """InvokeAI's ``VideoField`` — ``{"video_name": ...}``."""
+
+    model_config = ConfigDict(extra="allow")
+    video_name: str | None = None
+
+
+class MiniMaxH3Reference(BaseModel):
+    """One recorded Ref2VA reference, in conditioning order.
+
+    ``kind`` says which of ``image_name`` / ``video_name`` is populated, and
+    which of the two option pairs applies: ``detail`` for an image,
+    ``conditioning`` plus the frame range for a video.
+    """
+
+    model_config = ConfigDict(extra="allow")
+    kind: str | None = None
+    image_name: str | None = None
+    video_name: str | None = None
+    conditioning: str | None = None
+    detail: str | None = None
+    start_frame: int | None = None
+    end_frame: int | None = None
 
 
 def tag_reference_images(image: dict[str, Any]) -> None:

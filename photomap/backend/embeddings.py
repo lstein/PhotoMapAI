@@ -1083,10 +1083,22 @@ class Embeddings(BaseModel):
             if self.album_key:
                 VideoFrameCache(self.album_key).store(video_path, frame)
 
-            # Video facts ride inside the existing per-image metadata dict, so
-            # every .npz rewrite path carries them for free and indexes
-            # predating video support need no migration.
-            metadata = {VIDEO_METADATA_KEY: info.model_dump()}
+            # An InvokeAI-generated MP4 carries the same flat generation
+            # record a generated PNG carries in its text chunks, so it is
+            # stored at the top level of the metadata dict exactly as the
+            # image path stores it — the drawer's Invoke renderer then needs
+            # no video-specific knowledge of where the record lives.
+            #
+            # Videos indexed before this existed have no record and will not
+            # gain one until they are re-indexed; nothing re-reads metadata
+            # for a file whose mtime has not moved. In practice that costs
+            # nothing, because InvokeAI only began embedding the record in
+            # v7 and every video old enough to be affected never had one.
+            metadata = MetadataExtractor.extract_video_metadata(video_path)
+            # The reserved key wins: a generation record that happened to
+            # carry it must not displace the probe dict every downstream
+            # consumer keys off.
+            metadata[VIDEO_METADATA_KEY] = info.model_dump()
             # Videos carry no EXIF for _get_modification_time to read.
             return frame, video_path.stat().st_mtime, metadata
         except Exception as e:
@@ -2637,6 +2649,11 @@ class Embeddings(BaseModel):
     def extract_image_metadata(pil_image: Image.Image) -> dict:
         """Extract metadata from an image using the dedicated extractor."""
         return MetadataExtractor.extract_image_metadata(pil_image)
+
+    @staticmethod
+    def extract_video_metadata(video_path: Path) -> dict:
+        """Extract a video's embedded generation record, if it has one."""
+        return MetadataExtractor.extract_video_metadata(video_path)
 
 
 def tqdm_progress_callback(total_images):
