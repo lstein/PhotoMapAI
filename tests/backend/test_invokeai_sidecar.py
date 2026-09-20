@@ -28,7 +28,6 @@ from fixtures import media_fixture_path
 
 from photomap.backend import invokeai_sidecar
 from photomap.backend.invokeai_sidecar import (
-    MAX_SUBFOLDER_DEPTH,
     read_sidecar_metadata,
     sidecar_candidates,
 )
@@ -94,10 +93,33 @@ def test_a_videos_root_with_no_subfolder_is_the_first_candidate(tmp_path):
     )
 
 
-def test_the_walk_is_bounded(tmp_path):
+def test_the_walk_stops_above_the_videos_root(tmp_path):
+    """Pinned by value, not by ``MAX_SUBFOLDER_DEPTH``.
+
+    Asserting against the constant the loop uses proves only that the loop
+    uses it: the old form of this test passed with the bound set to 1 and
+    equally with it set to 9. What matters is the *reach* — every extra
+    level is a file opened outside the album the user configured, and at
+    depth 3 that is a path at the filesystem root.
+    """
     video = tmp_path / "a" / "b" / "c" / "d" / "e" / "clip.mp4"
 
-    assert len(list(sidecar_candidates(video))) == MAX_SUBFOLDER_DEPTH + 1
+    candidates = list(sidecar_candidates(video))
+
+    assert candidates == [
+        tmp_path / "a/b/c/d/e" / "sidecars" / "clip.json",
+        tmp_path / "a/b/c/d" / "sidecars" / "e" / "clip.json",
+    ]
+
+
+def test_a_sidecar_two_levels_up_is_out_of_reach(tmp_path):
+    """The bound is real, and this is the file it declines to open."""
+    video = tmp_path / "videos" / "general" / "clip.mp4"
+    video.parent.mkdir(parents=True)
+    video.touch()
+    write_sidecar(tmp_path / "sidecars" / "videos" / "general" / "clip.json")
+
+    assert read_sidecar_metadata(video) == {}
 
 
 def test_a_shallow_path_stops_at_the_filesystem_root():
@@ -174,6 +196,112 @@ def test_a_json_file_that_is_not_an_invokeai_sidecar_is_ignored(invoke_outputs):
     path.write_text(json.dumps({"camera": "Pixel", "iso": 400}), encoding="utf-8")
 
     assert read_sidecar_metadata(video) == {}
+
+
+def test_a_record_under_a_different_key_is_not_accepted(invoke_outputs):
+    """Pins the key gate itself.
+
+    The test above passes without any key check at all, because its payload
+    has no dict record under *any* key — it is rejected further down. This
+    one puts a perfectly good-looking record under the wrong key, so only
+    the gate can reject it.
+    """
+    root, video = invoke_outputs
+    path = root / "sidecars" / "general" / "clip.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"metadata": {"positive_prompt": "x", "app_version": "6.0.0"}}),
+        encoding="utf-8",
+    )
+
+    assert read_sidecar_metadata(video) == {}
+
+
+def test_a_record_that_does_not_look_like_invokeais_is_rejected(invoke_outputs):
+    """The key alone is a weak gate — it would hand back whatever object
+    another tool happened to store under that name."""
+    root, video = invoke_outputs
+    path = root / "sidecars" / "general" / "clip.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"invokeai_metadata": {"anything": "at all"}}), encoding="utf-8"
+    )
+
+    assert read_sidecar_metadata(video) == {}
+
+
+def test_every_shape_of_real_record_still_passes_the_gate(invoke_outputs):
+    """The gate must not reject the records it exists to admit. These are
+    the marker keys the sampled pre-7 records actually carry."""
+    root, video = invoke_outputs
+    path = root / "sidecars" / "general" / "clip.json"
+    for marker in ("app_version", "generation_mode", "num_frames"):
+        write_sidecar(path, record={marker: "6.14.0" if marker == "app_version" else 1})
+        assert read_sidecar_metadata(video), marker
+
+
+def test_deeply_nested_json_does_not_drop_the_video_from_the_index(invoke_outputs):
+    """``RecursionError`` is a ``RuntimeError``, so neither ``except OSError``
+    nor ``except ValueError`` catches it.
+
+    Escaping here is worse than losing the metadata: ``_load_video`` catches
+    it, returns None, and the video is recorded as a bad file and left out
+    of the album. ~120 KB of brackets, far under the size cap.
+    """
+    root, video = invoke_outputs
+    path = root / "sidecars" / "general" / "clip.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        '{"invokeai_metadata": ' + "[" * 60000 + "]" * 60000 + "}", encoding="utf-8"
+    )
+
+    assert read_sidecar_metadata(video) == {}
+    assert MetadataExtractor.extract_video_metadata(video) == {}
+
+
+def test_deep_nesting_inside_the_stringified_record_is_also_caught(invoke_outputs):
+    """The inner ``json.loads`` is a second, separate exposure."""
+    root, video = invoke_outputs
+    path = root / "sidecars" / "general" / "clip.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"invokeai_metadata": "[" * 60000 + "]" * 60000}), encoding="utf-8"
+    )
+
+    assert read_sidecar_metadata(video) == {}
+
+
+def test_candidates_inherit_a_dot_dot_from_an_unresolved_path(tmp_path):
+    """Pins the precondition ``sidecar_candidates`` documents.
+
+    It is pure and does no I/O, so a ``..`` in the input survives into the
+    candidate and the *kernel* resolves it at open time — which can land
+    outside any ``sidecars`` directory. That is why the reader resolves
+    before calling it, and this is the behaviour that makes it necessary.
+    """
+    candidates = list(sidecar_candidates(Path("/a/b/../c/clip.mp4")))
+
+    assert ".." in str(candidates[0])
+
+
+def test_the_reader_resolves_the_video_path_first(tmp_path):
+    """A symlinked video must find the sidecar next to its *target*.
+
+    Without resolution the lookup uses the link's own name and directory,
+    so a collection that symlinks InvokeAI output in finds nothing.
+    """
+    root = tmp_path / "videos"
+    real = root / "general" / "real.mp4"
+    real.parent.mkdir(parents=True)
+    shutil.copy(media_fixture_path("clip.mp4"), real)
+    write_sidecar(root / "sidecars" / "general" / "real.json")
+
+    album = tmp_path / "album"
+    album.mkdir()
+    link = album / "link.mp4"
+    link.symlink_to(real)
+
+    assert read_sidecar_metadata(link)["seed"] == 11
 
 
 @pytest.mark.parametrize(
@@ -273,3 +401,24 @@ def test_a_tagged_video_never_looks_for_a_sidecar(tmp_path, monkeypatch):
 
     assert MetadataExtractor.extract_video_metadata(video)
     assert called == []
+
+
+def test_an_empty_embedded_record_falls_through_to_the_sidecar(tmp_path, monkeypatch):
+    """Precedence is on the record, not the source.
+
+    "The MP4 has no tag" and "the MP4's tag is an empty object" are worth
+    the same, and the sidecar may still have something to show. Pinned
+    because the ``or`` that implements it cannot tell the two apart, so the
+    behaviour is easy to change by accident.
+    """
+    root = tmp_path / "videos"
+    video = root / "general" / "clip.mp4"
+    video.parent.mkdir(parents=True)
+    shutil.copy(media_fixture_path("clip.mp4"), video)
+    write_sidecar(root / "sidecars" / "general" / "clip.json")
+    monkeypatch.setattr(
+        "photomap.backend.metadata_extraction.read_mp4_tags",
+        lambda path, keys=None: {"invokeai_metadata": "{}"},
+    )
+
+    assert MetadataExtractor.extract_video_metadata(video)["seed"] == 11

@@ -203,10 +203,10 @@ clickable thumbnail, exactly like an image's reference images.
 
 Videos generated before InvokeAI 7 carry no record inside the file, but
 InvokeAI kept one in a JSON sidecar under `outputs/videos/sidecars/`, and
-PhotoMapAI reads that too — so an older clip shows the same panel. The file
-itself is always preferred; the sidecar is consulted only when the video
-carries nothing, which is also what happens on the rare occasion InvokeAI 7
-could not embed the record and fell back to writing one.
+PhotoMapAI reads that too — so an older clip shows the same panel. The
+sidecar is consulted only when the video itself carries no parameters, which
+is also what happens on the rare occasion InvokeAI 7 could not embed the
+record and fell back to writing one.
 
 !!! note
     Not every older video has recoverable parameters. A sidecar is written

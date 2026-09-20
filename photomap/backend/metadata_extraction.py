@@ -96,6 +96,11 @@ class MetadataExtractor:
         writing one. Looking in the file first means an InvokeAI 7 video
         costs no sidecar lookup at all.
 
+        Precedence is on the *record*, not on the source: a file carrying an
+        empty record falls through to the sidecar, because "the MP4 says
+        nothing" and "the MP4 has no tag" are worth the same and the sidecar
+        may still have something to show.
+
         Only the record is read, not the workflow or graph: PhotoMapAI
         renders neither, and skipping them keeps the MP4 read to the few KiB
         of the record rather than the few hundred KiB of a graph.
