@@ -1952,14 +1952,21 @@ export class AlbumManager {
 
   updateProgressStatus(status, progress, estimatedTime) {
     if (progress.status === "completed") {
-      status.className = AlbumManager.STATUS_CLASSES.COMPLETED;
-      if (progress.warning_message) {
-        status.textContent = `Indexing completed — ${progress.warning_message}`;
-        status.style.color = "#ff9800"; // Orange: completed, but with a caveat
-      } else {
-        status.textContent = "Indexing completed successfully";
-        status.style.color = "green";
-      }
+      // The colour has to come from the stylesheet, not from style.color:
+      // `.index-status.completed` carries an author !important, which outranks
+      // a *normal* inline declaration, so the orange set here was silently
+      // discarded and every warning rendered in success-green — the one state
+      // where the colour is carrying the message.
+      const hasWarning = Boolean(progress.warning_message);
+      status.className = hasWarning
+        ? `${AlbumManager.STATUS_CLASSES.COMPLETED} with-warning`
+        : AlbumManager.STATUS_CLASSES.COMPLETED;
+      status.textContent = hasWarning
+        ? `Indexing completed — ${progress.warning_message}`
+        : "Indexing completed successfully";
+      // Clear any inline colour a previous poll tick left behind (the branches
+      // below still set one), so the rule that applies is this state's.
+      status.style.color = "";
       estimatedTime.textContent = "";
     } else if (progress.status === "error") {
       status.className = AlbumManager.STATUS_CLASSES.ERROR;

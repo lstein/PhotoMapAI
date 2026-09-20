@@ -401,6 +401,82 @@ def test_ffmpeg_exe_points_at_a_real_binary():
     assert Path(ffmpeg_exe()).exists()
 
 
+def test_known_unavailable_tracks_the_last_probe(monkeypatch, tmp_path):
+    """The indexing completion notice reads this instead of calling
+    ``ffmpeg_exe`` — it runs on the asyncio event loop, where a stat of a hung
+    ``$IMAGEIO_FFMPEG_EXE`` mount or an untimed ``ffmpeg -version`` spawn would
+    freeze every request. So it has to follow the probe in both directions,
+    including back to False once a binary is found.
+    """
+    video_module._reset_ffmpeg_exe_cache()
+    try:
+        # Nothing probed yet: no evidence must not read as "ffmpeg is missing".
+        assert video_module.ffmpeg_known_unavailable() is False
+
+        stand_in = tmp_path / "ffmpeg"
+        stand_in.write_text("")
+        calls = []
+
+        def flaky():
+            calls.append(1)
+            if len(calls) == 1:
+                raise OSError("Cannot allocate memory")
+            return str(stand_in)
+
+        import imageio_ffmpeg
+
+        monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", flaky)
+
+        assert video_module.ffmpeg_exe() is None
+        assert video_module.ffmpeg_known_unavailable() is True
+
+        assert video_module.ffmpeg_exe() == str(stand_in)
+        assert video_module.ffmpeg_known_unavailable() is False
+    finally:
+        video_module._reset_ffmpeg_exe_cache()
+
+
+def test_known_unavailable_is_set_when_the_candidate_is_not_executable(
+    monkeypatch, tmp_path
+):
+    """The other ``return None`` path: imageio hands back a name that does not
+    resolve to anything runnable."""
+    video_module._reset_ffmpeg_exe_cache()
+    try:
+        import imageio_ffmpeg
+
+        monkeypatch.setattr(
+            imageio_ffmpeg,
+            "get_ffmpeg_exe",
+            lambda: str(tmp_path / "definitely-not-here"),
+        )
+
+        assert video_module.ffmpeg_exe() is None
+        assert video_module.ffmpeg_known_unavailable() is True
+    finally:
+        video_module._reset_ffmpeg_exe_cache()
+
+
+def test_resetting_the_cache_also_clears_the_unavailable_flag(monkeypatch):
+    """Otherwise the flag outlives the probe it describes, and the next test
+    (or a re-probe after the condition clears) inherits a stale verdict."""
+    video_module._reset_ffmpeg_exe_cache()
+    try:
+        import imageio_ffmpeg
+
+        monkeypatch.setattr(
+            imageio_ffmpeg,
+            "get_ffmpeg_exe",
+            lambda: (_ for _ in ()).throw(OSError("boom")),
+        )
+        assert video_module.ffmpeg_exe() is None
+        assert video_module.ffmpeg_known_unavailable() is True
+    finally:
+        video_module._reset_ffmpeg_exe_cache()
+
+    assert video_module.ffmpeg_known_unavailable() is False
+
+
 # --------------------------------------------------------------------------
 # Banner parsing against hostile input
 # --------------------------------------------------------------------------

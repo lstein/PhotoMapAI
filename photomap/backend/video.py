@@ -247,7 +247,26 @@ def _has_decodable_video_stream(report: str) -> bool:
 
 _ffmpeg_exe_cache: str | None = None
 _ffmpeg_exe_probed = False
+_ffmpeg_missing = False
 _ffmpeg_exe_lock = threading.Lock()
+
+
+def ffmpeg_known_unavailable() -> bool:
+    """Did the most recent probe in this process fail to find a binary?
+
+    Reports what already happened instead of asking again. Callers on the
+    asyncio event loop must not trigger :func:`ffmpeg_exe`'s work: it stats
+    whatever ``$IMAGEIO_FFMPEG_EXE`` names, which is accepted unchecked by
+    imageio and may be a hung network mount, and the underlying probe spawns
+    ``ffmpeg -version`` with no timeout. Every video failure has already
+    driven a real probe on a worker thread (``_load_video`` ->
+    ``extract_video_frame`` -> :func:`_run_ffmpeg`), so by the time a run
+    reports its skipped files this is an answer rather than a guess.
+
+    ``False`` until something has probed: absence of evidence has to read as
+    "do not blame ffmpeg", or a caller would invent a cause it never observed.
+    """
+    return _ffmpeg_missing
 
 
 def ffmpeg_exe() -> str | None:
@@ -270,7 +289,7 @@ def ffmpeg_exe() -> str | None:
       name ``"ffmpeg"`` for a PATH lookup, so a non-``None`` answer is not on
       its own evidence that anything is executable.
     """
-    global _ffmpeg_exe_cache, _ffmpeg_exe_probed
+    global _ffmpeg_exe_cache, _ffmpeg_exe_probed, _ffmpeg_missing
 
     if _ffmpeg_exe_probed:
         return _ffmpeg_exe_cache
@@ -286,6 +305,7 @@ def ffmpeg_exe() -> str | None:
             logger.warning(
                 f"No usable ffmpeg binary found ({e}); video files will be skipped."
             )
+            _ffmpeg_missing = True
             return None  # not memoized — the next call retries
 
         resolved = candidate if os.path.isabs(candidate) else shutil.which(candidate)
@@ -294,19 +314,22 @@ def ffmpeg_exe() -> str | None:
                 f"ffmpeg reported as {candidate!r} but is not executable; "
                 "video files will be skipped."
             )
+            _ffmpeg_missing = True
             return None
 
         _ffmpeg_exe_cache = resolved
         _ffmpeg_exe_probed = True
+        _ffmpeg_missing = False
         return _ffmpeg_exe_cache
 
 
 def _reset_ffmpeg_exe_cache() -> None:
     """Test seam: forget the probed binary so the next call re-resolves."""
-    global _ffmpeg_exe_cache, _ffmpeg_exe_probed
+    global _ffmpeg_exe_cache, _ffmpeg_exe_probed, _ffmpeg_missing
     with _ffmpeg_exe_lock:
         _ffmpeg_exe_cache = None
         _ffmpeg_exe_probed = False
+        _ffmpeg_missing = False
 
 
 def _parse_ffmpeg_banner(stderr: str) -> dict[str, object]:
