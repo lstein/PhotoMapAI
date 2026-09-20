@@ -28,21 +28,31 @@ SCHEMA_VERSIONS = (2, 3, 5)
 RECORD_VERSION_FIELD = "invoke_record_version"
 
 
+# Keys whose presence marks a dict as an InvokeAI generation record. The
+# video-only ones are here for the same reason they are in
+# ``_infer_metadata_version``, and it is one list so the two cannot answer
+# differently: a record that the *routing* test rejects never reaches the
+# adapter, so a fingerprint the adapter knows about but the router does not
+# is a fingerprint that never fires.
+INVOKE_MARKER_KEYS = (
+    "app_version",
+    "generation_mode",
+    "canvas_v2_metadata",
+    "num_frames",
+    "source_video",
+)
+
+
 def looks_like_invoke_metadata(metadata: dict | None) -> bool:
     """Cheap structural check for an InvokeAI generation record.
 
     The single definition of "this looks like something InvokeAI produced",
     shared by the drawer formatter, the video formatter and the recall
-    router so those paths cannot drift apart. ``generation_mode`` is what
-    catches a video record, whose other two markers are not guaranteed.
+    router so those paths cannot drift apart.
     """
     if not metadata:
         return False
-    return (
-        "app_version" in metadata
-        or "generation_mode" in metadata
-        or "canvas_v2_metadata" in metadata
-    )
+    return any(key in metadata for key in INVOKE_MARKER_KEYS)
 
 
 class GenerationMetadataAdapter:
@@ -145,6 +155,10 @@ class GenerationMetadataAdapter:
             return 5
         if "model_weights" in json_data:
             return 2
+        # A video record is v5-shaped. These are a backstop only, since
+        # ``core_metadata`` stamps ``app_version`` alongside them — but they
+        # are the same keys ``INVOKE_MARKER_KEYS`` routes on, so a record
+        # that gets this far on one of them is not then read as a v3.
         if "num_frames" in json_data or "source_video" in json_data:
             return 5
         return 3

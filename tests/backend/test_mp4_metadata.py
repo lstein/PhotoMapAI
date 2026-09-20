@@ -407,3 +407,47 @@ def test_an_unreadable_path_raises_rather_than_reporting_no_tags(tmp_path):
     """I/O errors are the one thing that propagates; the caller decides."""
     with pytest.raises(OSError):
         read_mp4_tags(tmp_path / "does-not-exist.mp4")
+
+
+def test_a_later_moov_is_read_when_the_first_carries_no_tags(write_mp4):
+    """A partial rewrite or a concatenation can leave two ``moov`` boxes.
+
+    Stopping at the first one and reporting "no tags" would miss tags that
+    are plainly in the file.
+    """
+    data = (
+        box(b"ftyp", b"isom")
+        + box(b"moov", box(b"free", b""))
+        + box(b"moov", box(b"udta", quicktime_meta(
+            keys_box([b"a"]) + ilst_box([(1, data_atom(b"1"))])
+        )))
+    )
+
+    assert read_mp4_tags(write_mp4(data)) == {"a": "1"}
+
+
+def test_the_first_moov_still_wins_when_it_has_tags(write_mp4):
+    tagged = box(b"udta", quicktime_meta(
+        keys_box([b"a"]) + ilst_box([(1, data_atom(b"first"))])
+    ))
+    other = box(b"udta", quicktime_meta(
+        keys_box([b"a"]) + ilst_box([(1, data_atom(b"second"))])
+    ))
+    data = box(b"ftyp", b"isom") + box(b"moov", tagged) + box(b"moov", other)
+
+    assert read_mp4_tags(write_mp4(data)) == {"a": "first"}
+
+
+def test_a_moov_packed_with_tiny_boxes_is_given_up_on(write_mp4):
+    """``moov``'s children are bounded by its size, but only in *bytes*.
+
+    A large ``moov`` full of 8-byte boxes is millions of seek-and-read
+    iterations — a minute of index time for one crafted file in a photo
+    directory — so the child walk is bounded by count as well.
+    """
+    padded = box(b"free", b"") * 2000 + box(b"udta", quicktime_meta(
+        keys_box([b"a"]) + ilst_box([(1, data_atom(b"1"))])
+    ))
+    data = box(b"ftyp", b"isom") + box(b"moov", padded)
+
+    assert read_mp4_tags(write_mp4(data)) == {}

@@ -32,6 +32,23 @@ class ClipEmbedModel(Model):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
 
+class VideoModel(Model):
+    """A model identifier in a video record.
+
+    ``extra="allow"`` rather than ``Model``'s ``"forbid"`` because InvokeAI's
+    ``ModelIdentifierField`` carries a sixth field, ``submodel_type``, which
+    ``core_metadata``'s ``exclude_none`` dump omits only while it is None.
+    Under ``"forbid"`` a record that sets it fails validation — and because
+    the failure is on the discriminated union as a whole, the drawer loses
+    the prompt, model, LoRAs and reference images too, not just the one
+    field. Declaring these keys is what put them behind that check;
+    ``extra="allow"`` puts them back where ``extra="allow"`` on the record
+    already had them.
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
 class ImageData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     type: Literal["dataURL"] = Field(default="dataURL", alias="image_type")

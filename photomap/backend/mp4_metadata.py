@@ -50,9 +50,14 @@ _MAX_KEYS = 4096
 _MAX_KEY_NAME_BYTES = 1024
 # A real file has at most a dozen top-level boxes, and ``moov`` precedes
 # every fragment in a fragmented file, so a file padded with tiny top-level
-# boxes is given up on rather than walked. Children of ``moov`` need no
-# separate bound: they are already bounded by ``moov``'s own size.
+# boxes is given up on rather than walked.
 _MAX_TOP_LEVEL_BOXES = 1024
+# The same bound inside ``moov``. Its children *are* bounded by its declared
+# size, but only in bytes: a 1 GB ``moov`` packed with 8-byte ``free`` boxes
+# is ~130 M iterations of seek-and-read, which is a minute of index time per
+# such file. A real ``moov`` has a handful of children, a real ``ilst`` one
+# item per tag, and a real ``meta`` three or four.
+_MAX_CHILD_BOXES = 1024
 
 # The ``data`` atom's type indicator for UTF-8 text. Other indicators mark
 # integers, JPEG payloads and so on; we want text and skip the rest.
@@ -181,30 +186,45 @@ def read_mp4_tags(path: Path, keys: Collection[str] | None = None) -> dict[str, 
     truncated yields ``{}``. Only I/O errors propagate.
     """
     wanted = set(keys) if keys is not None else None
-    result: dict[str, str] = {}
     with open(path, "rb") as fh:
         fh.seek(0, 2)
         file_size = fh.tell()
-        moov = _find_box(fh, 0, file_size, b"moov", max_boxes=_MAX_TOP_LEVEL_BOXES)
-        if moov is None:
-            return result
-        udta = _find_box(fh, *moov, b"udta")
-        if udta is None:
-            return result
-        meta = _find_box(fh, *udta, b"meta")
-        if meta is None:
-            return result
-        meta_start = _meta_payload_start(fh, *meta)
-        keys_box = _find_box(fh, meta_start, meta[1], b"keys")
-        ilst = _find_box(fh, meta_start, meta[1], b"ilst")
-        if keys_box is None or ilst is None:
-            return result
-        names = _read_keys(fh, *keys_box)
-        for item_type, item_start, item_end in _iter_boxes(fh, *ilst):
-            name = names.get(int.from_bytes(item_type, "big"))
-            if name is None or (wanted is not None and name not in wanted):
+        # Every ``moov``, not just the first: a file may carry a second one
+        # (a partial rewrite, a concatenation), and giving up because the
+        # first has no ``udta`` would miss tags that are plainly there.
+        for box_type, start, end in _iter_boxes(
+            fh, 0, file_size, _MAX_TOP_LEVEL_BOXES
+        ):
+            if box_type != b"moov":
                 continue
-            value = _read_utf8_data(fh, item_start, item_end)
-            if value is not None:
-                result[name] = value
+            result = _read_moov_tags(fh, start, end, wanted)
+            if result:
+                return result
+    return {}
+
+
+def _read_moov_tags(
+    fh: BinaryIO, start: int, end: int, wanted: set[str] | None
+) -> dict[str, str]:
+    """The keyed metadata under one ``moov`` box, or ``{}``."""
+    result: dict[str, str] = {}
+    udta = _find_box(fh, start, end, b"udta", max_boxes=_MAX_CHILD_BOXES)
+    if udta is None:
+        return result
+    meta = _find_box(fh, *udta, b"meta", max_boxes=_MAX_CHILD_BOXES)
+    if meta is None:
+        return result
+    meta_start = _meta_payload_start(fh, *meta)
+    keys_box = _find_box(fh, meta_start, meta[1], b"keys", max_boxes=_MAX_CHILD_BOXES)
+    ilst = _find_box(fh, meta_start, meta[1], b"ilst", max_boxes=_MAX_CHILD_BOXES)
+    if keys_box is None or ilst is None:
+        return result
+    names = _read_keys(fh, *keys_box)
+    for item_type, item_start, item_end in _iter_boxes(fh, *ilst, _MAX_CHILD_BOXES):
+        name = names.get(int.from_bytes(item_type, "big"))
+        if name is None or (wanted is not None and name not in wanted):
+            continue
+        value = _read_utf8_data(fh, item_start, item_end)
+        if value is not None:
+            result[name] = value
     return result

@@ -14,6 +14,7 @@ from photomap.backend.metadata_modules.invoke.common_metadata_elements import (
     Model,
     RegionalGuidance,
     T5Encoder,
+    VideoModel,
     VideoRef,
     fixup_step_percentages,
     tag_reference_images,
@@ -31,6 +32,15 @@ logger = logging.getLogger(__name__)
 # once per process so an operator notices "huh, InvokeAI added X — should I
 # capture it?" without log spam on every parsed image.
 _warned_extra_fields: set[str] = set()
+
+# Legacy spelling → canonical name, for the three Wan keys InvokeAI renamed
+# before its record format reached 1.0. Applied by
+# ``GenerationMetadata5.normalize_wan_aliases``.
+_WAN_KEY_ALIASES = {
+    "guidance_scale_low_noise": "wan_guidance_scale_low_noise",
+    "wan_t5_encoder": "wan_t5_encoder_model",
+    "transformer_low_noise": "wan_transformer_low_noise",
+}
 
 
 class ControlLayer(BaseModel):
@@ -152,21 +162,21 @@ class GenerationMetadata5(BaseModel):
     source_video: VideoRef | None = None
     source_video_start_frame: int | None = None
     source_video_end_frame: int | None = None
-    # Wan records the low-noise expert's CFG only when it differed from
-    # ``cfg_scale``. The pre-1.0 spelling is accepted as an alias, as
-    # InvokeAI's own readers do.
-    wan_guidance_scale_low_noise: float | None = Field(
-        default=None, alias="guidance_scale_low_noise"
-    )
-    wan_t5_encoder_model: Model | None = Field(default=None, alias="wan_t5_encoder")
-    wan_transformer_low_noise: Model | None = Field(
-        default=None, alias="transformer_low_noise"
-    )
-    wan_component_source: Model | None = None
-    minimax_h3_transformer_model: Model | None = None
-    minimax_h3_text_encoder_model: Model | None = None
-    minimax_h3_component_source: Model | None = None
-    minimax_h3_hybrid_base_model: Model | None = None
+    # Three keys InvokeAI spelled differently before its record format
+    # reached 1.0. Both spellings are read, as InvokeAI's own readers do —
+    # but through ``_normalize_wan_aliases`` below rather than a pydantic
+    # ``alias``, because an alias makes the *legacy* spelling win when a
+    # record carries both and leaves the canonical one in ``model_extra``,
+    # where it trips the schema-drift warning by the name of a field that is
+    # right there in this class.
+    wan_guidance_scale_low_noise: float | None = None
+    wan_t5_encoder_model: VideoModel | None = None
+    wan_transformer_low_noise: VideoModel | None = None
+    wan_component_source: VideoModel | None = None
+    minimax_h3_transformer_model: VideoModel | None = None
+    minimax_h3_text_encoder_model: VideoModel | None = None
+    minimax_h3_component_source: VideoModel | None = None
+    minimax_h3_hybrid_base_model: VideoModel | None = None
     minimax_h3_hybrid_start_block: int | None = None
     minimax_h3_references: list[MiniMaxH3Reference] | None = None
     # Stamped by InvokeAI's upload route rather than by a graph: marks an
@@ -195,6 +205,22 @@ class GenerationMetadata5(BaseModel):
     refiner_positive_aesthetic_score: float | None = None
     refiner_negative_aesthetic_score: float | None = None
     refiner_start: float | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_wan_aliases(cls, data):
+        """Fold the pre-1.0 Wan key spellings onto their canonical names.
+
+        The canonical name wins when a record carries both, and the legacy
+        key is removed either way so it cannot reach ``model_extra``.
+        """
+        if not isinstance(data, dict):
+            return data
+        for legacy, canonical in _WAN_KEY_ALIASES.items():
+            if legacy in data:
+                value = data.pop(legacy)
+                data.setdefault(canonical, value)
+        return data
 
     @model_validator(mode="before")
     @classmethod

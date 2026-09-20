@@ -219,6 +219,28 @@ _VIDEO_MODEL_ROLES: tuple[tuple[str, str], ...] = (
 )
 
 
+def _format_fps(fps: int | float) -> str:
+    """``"16 fps"`` / ``"23.976 fps"``, never raising.
+
+    ``:g`` is not total over what JSON can hand us. The record's ``fps`` is
+    whatever the file said, and ``format(10 ** 400, "g")`` raises
+    ``OverflowError`` — not a ``TypeError`` and not a ``ValueError``, so a
+    narrower except would miss it. Nothing between here and the response
+    catches it either, so an unguarded format is a 500 on
+    ``/retrieve_image``: a blank slide, not a missing row. (``json.loads``
+    caps an integer literal at CPython's 4300-digit limit, so the fallback's
+    ``str`` is bounded.)
+
+    The same hazard, and the same reasoning, as ``format_duration`` and
+    ``format_fps`` in ``video_formatter`` — those guard the probe panel's
+    numbers, this guards the record's.
+    """
+    try:
+        return f"{fps:g} fps"
+    except (TypeError, ValueError, OverflowError):
+        return f"{fps} fps"
+
+
 def _frame_range(start: int | None, end: int | None) -> str:
     """``"frames 0-80"`` / ``"from frame 12"`` / ``"to frame 80"``, or ``""``."""
     if start is not None and end is not None:
@@ -283,7 +305,7 @@ def _video_facts(metadata: GenerationMetadata5) -> list[VideoFactTuple]:
     add("Mode", metadata.generation_mode)
     add("Frames", metadata.num_frames)
     if metadata.fps is not None:
-        add("Frame Rate", f"{metadata.fps:g} fps")
+        add("Frame Rate", _format_fps(metadata.fps))
     if metadata.first_frame_image is not None:
         add("First Frame", metadata.first_frame_image.image_name)
     if metadata.last_frame_image is not None:

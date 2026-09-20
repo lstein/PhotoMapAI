@@ -27,7 +27,10 @@ from photomap.backend.metadata_modules.invoke_formatter import (
     format_invoke_metadata,
     use_ref_button_html,
 )
-from photomap.backend.metadata_modules.invokemetadata import GenerationMetadataAdapter
+from photomap.backend.metadata_modules.invokemetadata import (
+    GenerationMetadataAdapter,
+    looks_like_invoke_metadata,
+)
 from photomap.backend.metadata_modules.slide_summary import SlideSummary
 
 # ---------------------------------------------------------------------------
@@ -1534,3 +1537,105 @@ class TestFormatVideoInvokeMetadata:
 
         assert "<script>" not in html
         assert "&lt;script&gt;" in html
+
+
+class TestVideoRecordRobustness:
+    """Declaring a field turns "unknown extra, parses fine" into "the whole
+    record fails validation", and a failed record costs the drawer its
+    model, LoRAs and reference images too — not just the one field. These
+    pin the shapes that must keep parsing.
+    """
+
+    def test_a_model_identifier_with_a_submodel_type_still_parses(self):
+        """InvokeAI's ``ModelIdentifierField`` has a sixth field, dropped
+        from the record only while it is None."""
+        view = _video_view(
+            wan_t5_encoder_model={
+                "name": "UMT5-XXL",
+                "base": "wan",
+                "type": "t5_encoder",
+                "key": "k",
+                "hash": "h",
+                "submodel_type": "transformer",
+            }
+        )
+
+        assert view.video_models == [("T5 Encoder", "UMT5-XXL")]
+        # And the rest of the record survived rather than collapsing.
+        assert view.model_name == "Wan 2.2 I2V A14B"
+
+    def test_an_absurd_frame_rate_does_not_take_the_drawer_down(self):
+        """``format(10 ** 400, "g")`` raises ``OverflowError`` — not a
+        ``TypeError`` and not a ``ValueError`` — and nothing between here
+        and the response catches it, so it would be a 500 on
+        ``/retrieve_image``: a blank slide, not a missing row. Reachable
+        because the record is whatever the file said.
+        """
+        facts = dict(_video_view(fps=10**400).video_facts)
+
+        assert facts["Frame Rate"].endswith(" fps")
+
+    @pytest.mark.parametrize("fps", [float("inf"), float("nan"), "16", 0])
+    def test_other_unusable_frame_rates_do_not_raise(self, fps):
+        assert "Frame Rate" in dict(_video_view(fps=fps).video_facts)
+
+    def test_an_image_record_with_an_absurd_frame_rate_also_survives(self):
+        """``fps`` is a declared field now, so a *PNG* whose text chunk
+        carries one reaches the same formatter."""
+        html = format_invoke_metadata(
+            _slide(),
+            {
+                "app_version": "7.0.0",
+                "generation_mode": "txt2img",
+                "fps": 10**400,
+                "model": {"name": "SDXL", "base": "sdxl", "type": "main"},
+            },
+        ).description
+
+        assert "SDXL" in html
+
+    def test_the_canonical_wan_spelling_wins_over_the_legacy_alias(self):
+        """A pydantic ``alias`` would let the legacy key win and leave the
+        canonical one in ``model_extra``, where it trips the schema-drift
+        warning by the name of a field that is declared right there."""
+        view = _video_view(
+            wan_t5_encoder={"name": "legacy", "type": "t5_encoder"},
+            wan_t5_encoder_model={"name": "canonical", "type": "t5_encoder"},
+        )
+
+        assert view.video_models == [("T5 Encoder", "canonical")]
+
+    def test_a_legacy_spelling_never_reaches_the_drift_warning(self, caplog):
+        from photomap.backend.metadata_modules.invoke import invoke5metadata
+
+        invoke5metadata._warned_extra_fields.clear()
+        with caplog.at_level("WARNING"):
+            GenerationMetadataAdapter().parse(
+                _video_record(
+                    wan_t5_encoder={"name": "legacy", "type": "t5_encoder"},
+                    transformer_low_noise={"name": "low", "type": "main"},
+                    guidance_scale_low_noise=3.5,
+                )
+            )
+
+        assert "not declared in GenerationMetadata5" not in caplog.text
+
+
+class TestInvokeMarkerAgreement:
+    """``looks_like_invoke_metadata`` gates routing and
+    ``_infer_metadata_version`` picks the schema. A fingerprint the second
+    knows about but the first does not is a fingerprint that never fires:
+    the record is sent to the EXIF renderer and never reaches the adapter.
+    """
+
+    @pytest.mark.parametrize("marker", ["num_frames", "source_video"])
+    def test_a_video_fingerprint_is_also_a_routing_marker(self, marker):
+        payload = {marker: 1}
+
+        assert looks_like_invoke_metadata(payload) is True
+        assert GenerationMetadataAdapter._infer_metadata_version(payload) == 5
+
+    def test_a_marker_less_record_is_still_not_claimed(self):
+        assert looks_like_invoke_metadata({"Make": "Pixel"}) is False
+        assert looks_like_invoke_metadata({}) is False
+        assert looks_like_invoke_metadata(None) is False
