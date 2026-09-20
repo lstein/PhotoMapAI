@@ -256,6 +256,12 @@
 .index-status.completed {
   color: green !important;
 }
+/* Completed, but something was skipped. Needs both the !important and the
+   extra class: .index-status.completed is also !important, so only higher
+   specificity can beat it — an inline style cannot. */
+.index-status.completed.with-warning {
+  color: #ff9800 !important;
+}
 .index-status.error {
   color: #b00020 !important;
 }
