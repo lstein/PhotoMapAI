@@ -123,7 +123,7 @@ describe("AlbumManager completed status", () => {
 
     expect(status.textContent).toBe("Indexing completed successfully");
     expect(status.className).toBe(AlbumManager.STATUS_CLASSES.COMPLETED);
-    expect(status.style.color).toBe("green");
+    expect(status.classList.contains("with-warning")).toBe(false);
   });
 
   test("surfaces a non-fatal warning_message alongside completion", () => {
@@ -140,9 +140,35 @@ describe("AlbumManager completed status", () => {
 
     expect(status.textContent).toContain("Indexing completed");
     expect(status.textContent).toContain("not found on disk");
-    expect(status.className).toBe(AlbumManager.STATUS_CLASSES.COMPLETED);
     // Completion-with-a-caveat is coloured differently from a clean success.
-    expect(status.style.color).not.toBe("green");
+    // Asserted on the class, not style.color: `.index-status.completed` is an
+    // author !important rule, so an inline colour never reaches the screen.
+    // The old assertion passed in jsdom (which happily records the ignored
+    // inline value) while the real page painted the warning success-green.
+    expect(status.classList.contains("completed")).toBe(true);
+    expect(status.classList.contains("with-warning")).toBe(true);
+  });
+
+  test("drops the warning class when a later run completes cleanly", () => {
+    const { status, estimatedTime } = makeElements();
+
+    callUpdate(status, { status: "completed", warning_message: "1 file was skipped." }, estimatedTime);
+    callUpdate(status, { status: "completed" }, estimatedTime);
+
+    // className is reassigned wholesale, but pin it: a stale with-warning
+    // would paint a clean run orange for the rest of the session.
+    expect(status.classList.contains("with-warning")).toBe(false);
+  });
+
+  test("does not leave an inline colour that outlives the state that set it", () => {
+    const { status, estimatedTime } = makeElements();
+
+    // Scanning sets an inline orange; completing must not inherit it, since
+    // inline beats the non-!important base `.index-status` rule.
+    callUpdate(status, { status: "scanning" }, estimatedTime);
+    callUpdate(status, { status: "completed" }, estimatedTime);
+
+    expect(status.style.color).toBe("");
   });
 });
 
