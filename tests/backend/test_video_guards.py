@@ -20,8 +20,8 @@ import pytest
 from fixtures import media_fixture_path
 from PIL import Image
 
-from photomap.backend.embeddings import Embeddings, _open_npz_file
-from photomap.backend.progress import ProgressTracker
+from photomap.backend.embeddings import Embeddings, IndexResult, _open_npz_file
+from photomap.backend.progress import ProgressTracker, progress_tracker
 from photomap.backend.util import atomic_savez
 
 ENCODER_SPEC = "openai-clip:ViT-B/32"
@@ -438,6 +438,108 @@ def test_adding_an_empty_warning_is_a_noop():
     tracker.complete_operation("album")
 
     assert tracker.get_progress("album").warning_message == "kept"
+
+
+# --------------------------------------------------------------------------
+# Naming ffmpeg as the cause of a skip
+# --------------------------------------------------------------------------
+
+
+def _skip_result(*names: str) -> IndexResult:
+    """An IndexResult whose only content is a list of files that failed."""
+    return IndexResult(
+        embeddings=np.zeros((0, EMBEDDING_DIM), dtype=np.float32),
+        filenames=np.array([], dtype=object),
+        modification_times=np.array([], dtype=float),
+        metadata=np.array([], dtype=object),
+        bad_files=[Path(name) for name in names],
+    )
+
+
+def _registered_warning(monkeypatch, result: IndexResult, exe: str | None) -> str:
+    """Run the notice builder with ffmpeg forced present/absent."""
+    monkeypatch.setattr("photomap.backend.embeddings.ffmpeg_exe", lambda: exe)
+    key = f"warning-test-{id(result)}"
+    captured: list[str] = []
+    monkeypatch.setattr(
+        progress_tracker,
+        "add_completion_warning",
+        lambda album_key, message: captured.append(message),
+    )
+    Embeddings._register_unreadable_files_warning(key, result)
+    assert len(captured) == 1
+    return captured[0]
+
+
+def test_missing_ffmpeg_is_named_when_only_videos_failed(monkeypatch):
+    """Otherwise a platform with no ffmpeg wheel (win_arm64, musl, armv7)
+    reports every video as unreadable and sends the user hunting for corrupt
+    files that are perfectly fine."""
+    warning = _registered_warning(
+        monkeypatch, _skip_result("a.mp4", "b.mov", "c.mkv"), exe=None
+    )
+
+    assert warning == (
+        "3 videos could not be indexed and were skipped: no ffmpeg binary is "
+        "available on this system."
+    )
+
+
+def test_missing_ffmpeg_notice_agrees_for_a_single_video(monkeypatch):
+    warning = _registered_warning(monkeypatch, _skip_result("only.mp4"), exe=None)
+
+    assert warning == (
+        "1 video could not be indexed and was skipped: no ffmpeg binary is "
+        "available on this system."
+    )
+
+
+def test_a_mixed_failure_keeps_the_generic_count_and_adds_the_cause(monkeypatch):
+    """The images failed for their own reasons, so the notice must not claim
+    ffmpeg explains all four."""
+    warning = _registered_warning(
+        monkeypatch,
+        _skip_result("a.mp4", "b.mov", "broken.jpg", "truncated.png"),
+        exe=None,
+    )
+
+    assert warning == (
+        "4 files could not be read and were skipped, including 2 videos that "
+        "need ffmpeg, which is not available on this system."
+    )
+
+
+def test_wording_is_unchanged_when_ffmpeg_is_present(monkeypatch):
+    """A truncated clip on a working install is not an ffmpeg problem, and
+    saying so would be actively misleading."""
+    warning = _registered_warning(
+        monkeypatch, _skip_result("broken.mp4"), exe="/usr/bin/ffmpeg"
+    )
+
+    assert warning == "1 file could not be read and was skipped."
+
+
+def test_image_only_failures_never_mention_ffmpeg(monkeypatch):
+    """ffmpeg_exe() must not even be consulted: it re-probes on every call
+    when it has no binary to report, so a photo-only album would pay a
+    process spawn for nothing."""
+
+    def _fail():
+        raise AssertionError("ffmpeg must not be probed for an image-only skip")
+
+    monkeypatch.setattr("photomap.backend.embeddings.ffmpeg_exe", _fail)
+    captured: list[str] = []
+    monkeypatch.setattr(
+        progress_tracker,
+        "add_completion_warning",
+        lambda album_key, message: captured.append(message),
+    )
+
+    Embeddings._register_unreadable_files_warning(
+        "image-only", _skip_result("broken.jpg", "truncated.png")
+    )
+
+    assert captured == ["2 files could not be read and were skipped."]
 
 
 def test_set_completion_warning_still_replaces():

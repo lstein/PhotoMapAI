@@ -50,7 +50,7 @@ from .progress import IndexingCancelled, progress_tracker
 from .thumbnail_cache import keep_hashes_for, thumbnail_dir
 from .thumbnail_cache import prune as prune_thumbnails
 from .util import atomic_savez
-from .video import VIDEO_METADATA_KEY, extract_video_frame
+from .video import VIDEO_METADATA_KEY, extract_video_frame, ffmpeg_exe
 from .video_cache import VideoFrameCache
 from .video_transcode import TranscodeCache
 
@@ -1349,10 +1349,32 @@ class Embeddings(BaseModel):
             return
         count = len(result.bad_files)
         noun, verb = ("file", "was") if count == 1 else ("files", "were")
-        progress_tracker.add_completion_warning(
-            album_key,
-            f"{count} {noun} could not be read and {verb} skipped.",
-        )
+        message = f"{count} {noun} could not be read and {verb} skipped."
+
+        # On a platform with no ffmpeg binary *every* video fails, and the
+        # generic notice above sends the user hunting for corrupt files that
+        # are in fact fine. Naming the cause is the difference between "my
+        # videos are broken" and "this machine needs ffmpeg".
+        #
+        # Probing here is cheap: a successful probe is memoized, so by the
+        # time a run has indexed anything this is a cached read. Only the
+        # None case re-probes, and only on a run that already had failures.
+        videos = sum(1 for path in result.bad_files if is_video(path))
+        if videos and ffmpeg_exe() is None:
+            video_noun = "video" if videos == 1 else "videos"
+            if videos == count:
+                message = (
+                    f"{count} {video_noun} could not be indexed and {verb} "
+                    "skipped: no ffmpeg binary is available on this system."
+                )
+            else:
+                message = (
+                    f"{count} {noun} could not be read and {verb} skipped, "
+                    f"including {videos} {video_noun} that need ffmpeg, which "
+                    "is not available on this system."
+                )
+
+        progress_tracker.add_completion_warning(album_key, message)
         logger.warning(
             f"Skipped {count} unreadable {noun} in album '{album_key}': "
             + ", ".join(p.name for p in result.bad_files[:5])
