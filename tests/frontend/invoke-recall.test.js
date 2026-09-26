@@ -186,6 +186,20 @@ describe("invoke-recall.js", () => {
             <span class="invoke-recall-status"></span>
           </button>
         </div>
+        <div class="invoke-recall-controls invoke-video-controls">
+          <button type="button" class="invoke-recall-btn" data-recall-mode="video_initial">
+            <span class="invoke-recall-status"></span>
+          </button>
+          <button type="button" class="invoke-recall-btn" data-recall-mode="video_ref">
+            <span class="invoke-recall-status"></span>
+          </button>
+          <button type="button" class="invoke-recall-btn" data-recall-mode="video_remix">
+            <span class="invoke-recall-status"></span>
+          </button>
+          <button type="button" class="invoke-recall-btn" data-recall-mode="video_recall">
+            <span class="invoke-recall-status"></span>
+          </button>
+        </div>
       `;
     });
 
@@ -195,10 +209,9 @@ describe("invoke-recall.js", () => {
     });
 
     async function flushPromises() {
-      // Two ticks: one for the fetch Promise, one for the .then() chain.
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      // A macrotask boundary drains every queued microtask, however many
+      // awaits the click handler chains.
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     it("shows a success checkmark on successful recall and forwards album/index", async () => {
@@ -298,6 +311,82 @@ describe("invoke-recall.js", () => {
       const status = btn.querySelector(".invoke-recall-status");
       expect(status.classList.contains("error")).toBe(true);
       expect(status.querySelector("svg")).not.toBeNull();
+    });
+
+    function okFetch(body = { success: true }) {
+      const fetchMock = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(body) }));
+      global.fetch = fetchMock;
+      return fetchMock;
+    }
+
+    it.each([
+      ["video_initial", "invokeai/video/use_media", { target: "initial" }],
+      ["video_ref", "invokeai/video/use_media", { target: "reference" }],
+      ["video_recall", "invokeai/video/recall", { include_seed: true }],
+      ["video_remix", "invokeai/video/recall", { include_seed: false }],
+    ])("the %s button posts to %s", async (mode, endpoint, expected) => {
+      const fetchMock = okFetch();
+
+      const btn = document.querySelector(`[data-recall-mode="${mode}"]`);
+      btn.click();
+      await flushPromises();
+
+      const [url, opts] = fetchMock.mock.calls[0];
+      expect(url).toBe(endpoint);
+      expect(JSON.parse(opts.body)).toEqual({ album_key: "my-album", index: 5, ...expected });
+      expect(btn.querySelector(".invoke-recall-status").classList.contains("success")).toBe(true);
+    });
+
+    it("notes parameters InvokeAI skipped on a successful video recall", async () => {
+      okFetch({ success: true, skipped: ["vae", "source_video"] });
+
+      const btn = document.querySelector('[data-recall-mode="video_recall"]');
+      btn.click();
+      await flushPromises();
+
+      const banner = document.querySelector(".invoke-recall-note");
+      expect(banner).not.toBeNull();
+      expect(banner.textContent).toContain("vae, source_video");
+      expect(btn.querySelector(".invoke-recall-status").classList.contains("success")).toBe(true);
+    });
+
+    it("shows the backend's warning after a board fallback", async () => {
+      okFetch({ success: true, warning: "placed in Uncategorized" });
+
+      document.querySelector('[data-recall-mode="video_ref"]').click();
+      await flushPromises();
+
+      expect(document.querySelector(".invoke-recall-note").textContent).toContain("Uncategorized");
+    });
+
+    it("treats success: false as a failure with the backend's message", async () => {
+      okFetch({ success: false, message: "nothing was recalled" });
+
+      const btn = document.querySelector('[data-recall-mode="video_remix"]');
+      btn.click();
+      await flushPromises();
+
+      expect(btn.querySelector(".invoke-recall-status").classList.contains("error")).toBe(true);
+      const banner = document.querySelector(".invoke-recall-error");
+      expect(banner.textContent).toBe("nothing was recalled");
+      expect(banner.classList.contains("invoke-recall-note")).toBe(false);
+    });
+
+    it("shows the upstream detail when a video upload fails", async () => {
+      global.fetch = jest.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 502,
+          json: () => Promise.resolve({ detail: "The video is larger than InvokeAI's upload limit." }),
+        })
+      );
+
+      const btn = document.querySelector('[data-recall-mode="video_initial"]');
+      btn.click();
+      await flushPromises();
+
+      expect(btn.querySelector(".invoke-recall-status").classList.contains("error")).toBe(true);
+      expect(document.querySelector(".invoke-recall-error").textContent).toContain("upload limit");
     });
   });
 });

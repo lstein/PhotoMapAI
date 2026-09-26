@@ -69,15 +69,26 @@ describe("invoke-capabilities.js", () => {
     expect(document.body.classList.contains("invoke-append-supported")).toBe(false);
   });
 
+  it("sets the video class only when the video recall API is present", async () => {
+    mockCapabilities({ configured: true, reachable: true, recall: true, append: true, video_recall: true });
+    await refreshInvokeCapabilities();
+    expect(document.body.classList.contains("invoke-video-recall-supported")).toBe(true);
+
+    mockCapabilities({ configured: true, reachable: true, recall: true, append: true, video_recall: false });
+    await refreshInvokeCapabilities();
+    expect(document.body.classList.contains("invoke-video-recall-supported")).toBe(false);
+  });
+
   it("treats a failed capabilities fetch as unsupported", async () => {
-    document.body.classList.add("invoke-recall-supported", "invoke-append-supported");
+    document.body.classList.add("invoke-recall-supported", "invoke-append-supported", "invoke-video-recall-supported");
     global.fetch = jest.fn(() => Promise.resolve({ ok: false, status: 502 }));
 
     const caps = await refreshInvokeCapabilities();
 
-    expect(caps).toEqual({ recall: false, append: false });
+    expect(caps).toEqual({ recall: false, append: false, video_recall: false });
     expect(document.body.classList.contains("invoke-recall-supported")).toBe(false);
     expect(document.body.classList.contains("invoke-append-supported")).toBe(false);
+    expect(document.body.classList.contains("invoke-video-recall-supported")).toBe(false);
   });
 
   it("requests a forced re-probe with refresh: true", async () => {

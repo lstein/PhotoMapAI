@@ -2,7 +2,9 @@
 // Wires up the Recall / Remix buttons emitted by the InvokeAI metadata
 // formatter at the bottom of the metadata drawer. Pressing a button sends a
 // request to the PhotoMap backend which in turn proxies a recall payload to
-// the configured InvokeAI backend.
+// the configured InvokeAI backend. Videos get their own group (Initial Video,
+// Ref Video, and Recall / Remix for InvokeAI-generated videos), whose modes
+// are prefixed ``video_``.
 
 import { state } from "./state.js";
 import { fetchJson } from "./utils.js";
@@ -56,7 +58,7 @@ function showStatus(button, kind) {
   }
 }
 
-function showErrorMessage(button, message) {
+function showErrorMessage(button, message, { note = false } = {}) {
   const controls = button.closest(".invoke-recall-controls");
   if (!controls) {
     return;
@@ -70,7 +72,7 @@ function showErrorMessage(button, message) {
     return;
   }
   const banner = document.createElement("div");
-  banner.className = "invoke-recall-error";
+  banner.className = note ? "invoke-recall-error invoke-recall-note" : "invoke-recall-error";
   banner.textContent = message;
   controls.insertAdjacentElement("afterend", banner);
   setTimeout(() => banner.remove(), STATUS_RESET_MS * 3);
@@ -111,6 +113,69 @@ export async function sendUseRefImage({ albumKey, index, append = false }) {
   }
 }
 
+export async function sendVideoRecall({ albumKey, index, includeSeed }) {
+  try {
+    return await fetchJson("invokeai/video/recall", {
+      json: { album_key: albumKey, index, include_seed: includeSeed },
+    });
+  } catch (err) {
+    throw _withDetailMessage(err);
+  }
+}
+
+// ``target`` is "initial" (the Initial Video slot) or "reference" (appended
+// to the reference videos).
+export async function sendVideoMedia({ albumKey, index, target }) {
+  try {
+    return await fetchJson("invokeai/video/use_media", {
+      json: { album_key: albumKey, index, target },
+    });
+  } catch (err) {
+    throw _withDetailMessage(err);
+  }
+}
+
+const FAILURE_MESSAGES = {
+  use_ref: "Send to InvokeAI failed",
+  append_ref: "Append to InvokeAI failed",
+  video_initial: "Sending the initial video to InvokeAI failed",
+  video_ref: "Sending the reference video to InvokeAI failed",
+};
+
+async function dispatch(mode, albumKey, index) {
+  switch (mode) {
+    case "use_ref":
+    case "append_ref":
+      // append_ref adds the image to InvokeAI's existing reference-image
+      // list; use_ref replaces it.
+      return sendUseRefImage({ albumKey, index, append: mode === "append_ref" });
+    case "video_initial":
+      return sendVideoMedia({ albumKey, index, target: "initial" });
+    case "video_ref":
+      return sendVideoMedia({ albumKey, index, target: "reference" });
+    case "video_recall":
+    case "video_remix":
+      return sendVideoRecall({ albumKey, index, includeSeed: mode === "video_recall" });
+    default:
+      return sendRecall({ albumKey, index, includeSeed: mode !== "remix" });
+  }
+}
+
+// A caveat worth showing on an otherwise successful request, or null.
+function resultNote(result) {
+  if (!result) {
+    return null;
+  }
+  const notes = [];
+  if (Array.isArray(result.skipped) && result.skipped.length > 0) {
+    notes.push(`Not found on InvokeAI, so not recalled: ${result.skipped.join(", ")}`);
+  }
+  if (result.warning) {
+    notes.push(result.warning);
+  }
+  return notes.length > 0 ? notes.join(" ") : null;
+}
+
 function getMetadataUrlFromDrawer() {
   // Prefer the actual anchor element so we stay in sync with what the drawer
   // is currently displaying.
@@ -138,27 +203,20 @@ async function handleRecallClick(button) {
 
   button.disabled = true;
   try {
-    if (mode === "use_ref" || mode === "append_ref") {
-      // append_ref adds the image to InvokeAI's existing reference-image
-      // list; use_ref replaces it.
-      await sendUseRefImage({ albumKey, index: parsed.index, append: mode === "append_ref" });
-    } else {
-      await sendRecall({
-        albumKey,
-        index: parsed.index,
-        includeSeed: mode !== "remix",
-      });
+    const result = await dispatch(mode, albumKey, parsed.index);
+    if (result && result.success === false) {
+      // InvokeAI answered, but recalled nothing (e.g. no model installed).
+      showStatus(button, "error");
+      showErrorMessage(button, result.message || "InvokeAI recalled nothing");
+      return;
     }
     showStatus(button, "success");
+    const note = resultNote(result);
+    showErrorMessage(button, note, { note: true });
   } catch (err) {
     console.error("InvokeAI recall failed:", err);
     showStatus(button, "error");
-    let fallback = "Recall failed";
-    if (mode === "use_ref") {
-      fallback = "Send to InvokeAI failed";
-    } else if (mode === "append_ref") {
-      fallback = "Append to InvokeAI failed";
-    }
+    const fallback = FAILURE_MESSAGES[mode] || "Recall failed";
     showErrorMessage(button, err && err.message ? err.message : fallback);
   } finally {
     button.disabled = false;
