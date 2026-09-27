@@ -69,6 +69,12 @@ const POLL_INTERVAL_MS = 1000;
 const MAX_POLL_FAILURES = 4;
 let pollFailures = 0;
 
+// Starting volume for the first clip of a page load. A <video> starts at full
+// volume, which is jarring. Set once at init rather than on every open: the
+// element is permanent, so whatever the user picks afterwards carries over to
+// the next clip for the rest of the session.
+const DEFAULT_VOLUME = 0.5;
+
 export function isVideoPlayerOpen() {
   return Boolean(modal?.classList.contains("visible"));
 }
@@ -397,6 +403,10 @@ export function initializeVideoPlayer() {
   progressBarEl = document.getElementById("videoPlayerProgressBar");
   progressFillEl = document.getElementById("videoPlayerProgressFill");
   progressPercentEl = document.getElementById("videoPlayerProgressPercent");
+
+  if (videoEl) {
+    videoEl.volume = DEFAULT_VOLUME;
+  }
 
   closeBtn?.addEventListener("click", closeVideoPlayer);
 
