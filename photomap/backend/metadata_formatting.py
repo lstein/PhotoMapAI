@@ -16,8 +16,10 @@ from .metadata_modules import (
     format_exif_metadata,
     format_invoke_metadata,
     format_video_metadata,
+    is_recallable_video_record,
     looks_like_invoke_metadata,
     use_ref_button_html,
+    video_buttons_html,
 )
 from .video import VIDEO_METADATA_KEY
 
@@ -99,10 +101,10 @@ def format_metadata(
             k: v for k, v in (metadata or {}).items() if k != VIDEO_METADATA_KEY
         }
         if looks_like_invoke_metadata(remaining):
-            # No recall buttons on a video. Send/Append upload the file to
-            # InvokeAI as a *reference image*, which an .mp4 is not, and
-            # Recall/Remix post an image-generation payload — a video
-            # record's parameters would land in the wrong tab.
+            # The image recall buttons stay off: Send/Append upload the file
+            # as a *reference image*, which an .mp4 is not, and Recall/Remix
+            # post an image-generation payload. The video group below is the
+            # video counterpart.
             invoke_only = format_invoke_metadata(
                 SlideSummary(filename=result.filename, filepath=result.filepath),
                 remaining,
@@ -118,6 +120,10 @@ def format_metadata(
                 api_key,
             )
             result.description += exif_only.description
+        if invokeai_configured:
+            result.description += video_buttons_html(
+                show_recall=is_recallable_video_record(remaining)
+            )
         return result
 
     # The "Use as Ref Image" button only needs an image to upload — it works

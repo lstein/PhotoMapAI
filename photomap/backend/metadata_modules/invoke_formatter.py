@@ -158,6 +158,55 @@ def _recall_buttons_html() -> str:
     )
 
 
+def _button(mode: str, svg: str, label: str, title: str) -> str:
+    return (
+        f'<button type="button" class="invoke-recall-btn" data-recall-mode="{mode}" '
+        f'title="{title}">'
+        f'{svg}<span class="invoke-recall-label">{label}</span>'
+        '<span class="invoke-recall-status" aria-live="polite"></span>'
+        "</button>"
+    )
+
+
+def video_buttons_html(show_recall: bool) -> str:
+    """Render the InvokeAI 7 button group for a video.
+
+    "Initial Video" and "Ref Video" only need the file, so every video gets
+    them; Recall and Remix need an InvokeAI video generation record. The
+    extra ``invoke-video-controls`` class lets the capability gating hide
+    this group separately from the image one, since the video recall API is
+    newer than the image recall API.
+    """
+    buttons = _button(
+        "video_initial",
+        _USE_REF_SVG,
+        "Initial Video",
+        "Send this video to InvokeAI as the initial video to extend",
+    ) + _button(
+        "video_ref",
+        _APPEND_REF_SVG,
+        "Ref Video",
+        "Send this video to InvokeAI and append it to the reference videos",
+    )
+    if show_recall:
+        buttons += _button(
+            "video_remix",
+            _REMIX_SVG,
+            "Remix",
+            "Remix (recall video parameters without the seed) to InvokeAI",
+        ) + _button(
+            "video_recall",
+            _RECALL_SVG,
+            "Recall",
+            "Recall video parameters (including seed) to InvokeAI",
+        )
+    return _recall_controls_table(buttons).replace(
+        'class="invoke-recall-controls"',
+        'class="invoke-recall-controls invoke-video-controls"',
+        1,
+    )
+
+
 def use_ref_button_html() -> str:
     """Render the standalone "Use as Ref Image" button.
 

@@ -12,6 +12,12 @@ Provides:
   and then call the same recall endpoint with the uploaded image as a
   reference image parameter, so the next generation uses it for visual
   guidance.
+* ``POST /invokeai/video/recall`` — the video counterpart of ``/recall``:
+  send a video generation record to InvokeAI 7's
+  ``/api/v1/recall/video/{queue_id}``.
+* ``POST /invokeai/video/use_media`` — place a video in InvokeAI 7's Video
+  panel as the Initial Video, or append it to the reference videos,
+  uploading it first when InvokeAI does not already have it.
 
 When the configured InvokeAI backend runs in multi-user mode, the
 ``username`` / ``password`` fields are used to obtain a JWT bearer token
@@ -30,6 +36,7 @@ import mimetypes
 import re
 import time
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -45,10 +52,16 @@ from ..invokeai_client import (  # noqa: F401  (re-exported for tests/backward c
 )
 from ..media_types import is_video
 from ..metadata_modules.invoke.invoke_metadata_view import InvokeMetadataView
+from ..metadata_modules.invoke.video_recall import (
+    MEDIA_FIELDS,
+    build_video_recall_payload,
+    is_recallable_video_record,
+)
 from ..metadata_modules.invokemetadata import (
     GenerationMetadataAdapter,
     looks_like_invoke_metadata,
 )
+from ..video import VIDEO_METADATA_KEY
 from .album import get_embeddings_for_album, require_no_lock
 
 logger = logging.getLogger(__name__)
@@ -278,8 +291,11 @@ async def _probe_capabilities(
     a proxy may block it), fall back to version thresholds via
     ``/api/v1/app/version``: recall shipped in 6.13.0, append in 6.13.5.
 
+    The video recall router (``/api/v1/recall/video/{queue_id}``, InvokeAI 7)
+    is detected from the schema only.
+
     Returns ``{"reachable": bool, "recall": bool, "append": bool,
-    "source": "openapi" | "version" | "unreachable"}``.
+    "video_recall": bool, "source": "openapi" | "version" | "unreachable"}``.
     """
     openapi_url = f"{base_url.rstrip('/')}/openapi.json"
 
@@ -293,11 +309,18 @@ async def _probe_capabilities(
             recall_post = (
                 spec.get("paths", {}).get("/api/v1/recall/{queue_id}", {}).get("post")
             )
+            video_recall = (
+                spec.get("paths", {})
+                .get("/api/v1/recall/video/{queue_id}", {})
+                .get("post")
+                is not None
+            )
             if recall_post is None:
                 return {
                     "reachable": True,
                     "recall": False,
                     "append": False,
+                    "video_recall": video_recall,
                     "source": "openapi",
                 }
             params = {
@@ -307,6 +330,7 @@ async def _probe_capabilities(
                 "reachable": True,
                 "recall": True,
                 "append": "append" in params,
+                "video_recall": video_recall,
                 "source": "openapi",
             }
     except (httpx.RequestError, HTTPException, ValueError) as exc:
@@ -328,10 +352,19 @@ async def _probe_capabilities(
             "reachable": True,
             "recall": version_tuple >= _RECALL_MIN_VERSION,
             "append": version_tuple >= _APPEND_MIN_VERSION,
+            # No release ships the video recall router yet, so there is no
+            # version to infer it from: only the schema can advertise it.
+            "video_recall": False,
             "source": "version",
             "version": version,
         }
-    return {"reachable": False, "recall": False, "append": False, "source": "unreachable"}
+    return {
+        "reachable": False,
+        "recall": False,
+        "append": False,
+        "video_recall": False,
+        "source": "unreachable",
+    }
 
 
 @invoke_router.get("/capabilities")
@@ -359,6 +392,7 @@ async def invokeai_capabilities(refresh: bool = False) -> dict:
             "reachable": False,
             "recall": False,
             "append": False,
+            "video_recall": False,
         }
 
     now = time.monotonic()
@@ -806,6 +840,365 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
         "success": True,
         "sent": payload,
         "uploaded_image_name": image_name,
+        "reused_existing": reused_existing,
+        "response": remote,
+    }
+    if board_warning:
+        result["warning"] = board_warning
+    return result
+
+
+# ── Video recall (InvokeAI 7) ──────────────────────────────────────────
+
+# A video upload can take far longer than the 5 s used for everything else:
+# InvokeAI converts anything that is not a browser-safe H.264 MP4 before it
+# answers, and the file itself may be hundreds of megabytes.
+_VIDEO_UPLOAD_TIMEOUT = httpx.Timeout(_HTTP_TIMEOUT, read=1800.0, write=1800.0)
+
+_VIDEO_UPLOAD_ERRORS = {
+    413: "The video is larger than InvokeAI's upload limit.",
+    415: "InvokeAI could not read or convert this video.",
+    429: "InvokeAI is busy with other uploads; try again shortly.",
+}
+
+
+class VideoRecallRequest(BaseModel):
+    """Payload posted by the drawer's video Recall / Remix buttons."""
+
+    album_key: str = Field(..., description="Album containing the video")
+    index: int = Field(..., ge=0, description="Video index within the album")
+    include_seed: bool = Field(
+        True,
+        description="If False, ask InvokeAI to keep its own seed (remix mode)",
+    )
+    queue_id: str = Field(
+        "default",
+        description="InvokeAI queue id to target",
+        pattern=_QUEUE_ID_PATTERN,
+    )
+
+
+class VideoMediaRequest(BaseModel):
+    """Payload posted by the drawer's "Initial Video" / "Ref Video" buttons."""
+
+    album_key: str = Field(..., description="Album containing the video")
+    index: int = Field(..., ge=0, description="Video index within the album")
+    target: Literal["initial", "reference"] = Field(
+        ...,
+        description=(
+            "``initial`` places the video in the Initial Video slot; "
+            "``reference`` appends it to the reference videos"
+        ),
+    )
+    queue_id: str = Field(
+        "default",
+        description="InvokeAI queue id to target",
+        pattern=_QUEUE_ID_PATTERN,
+    )
+
+
+def _load_video_path(album_key: str, index: int) -> Path:
+    """The mirror of ``_load_image_path``: only videos get through."""
+    embeddings = get_embeddings_for_album(album_key)
+    if not embeddings:
+        raise HTTPException(status_code=404, detail="Album not found")
+    filenames = embeddings.indexes["sorted_filenames"]
+    if index < 0 or index >= len(filenames):
+        raise HTTPException(status_code=404, detail="Index out of range")
+    path = Path(str(filenames[index]))
+    if not is_video(path):
+        raise HTTPException(
+            status_code=400,
+            detail="This InvokeAI action is only available for video files.",
+        )
+    return path
+
+
+def _video_record(raw_metadata: dict) -> dict:
+    """The generation record alone, without PhotoMap's own probe results."""
+    return {k: v for k, v in raw_metadata.items() if k != VIDEO_METADATA_KEY}
+
+
+def _require_invokeai_url(settings: dict) -> str:
+    base_url = settings["url"]
+    if not base_url:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "InvokeAI backend URL is not configured. Set it in the "
+                "PhotoMap settings panel."
+            ),
+        )
+    return base_url
+
+
+def _json_or_raw(response: httpx.Response) -> dict:
+    try:
+        body = response.json()
+    except ValueError:
+        return {"raw": response.text}
+    return body if isinstance(body, dict) else {"raw": body}
+
+
+@invoke_router.post("/video/recall")
+async def recall_video_parameters(request: VideoRecallRequest) -> dict:
+    """Send a video's generation parameters to InvokeAI 7's Video panel.
+
+    Always ``strict``: the record is a whole generation, so InvokeAI resets
+    whatever the record does not set (LoRAs, media) instead of layering the
+    recall over the panel's current state. Remix is ``mode=remix``, which
+    InvokeAI implements by dropping the seed.
+    """
+    settings = config_manager.get_invokeai_settings()
+    base_url = _require_invokeai_url(settings)
+
+    await asyncio.to_thread(_load_video_path, request.album_key, request.index)
+    raw_metadata = await asyncio.to_thread(
+        _load_raw_metadata, request.album_key, request.index
+    )
+    record = _video_record(raw_metadata)
+    if not is_recallable_video_record(record):
+        raise HTTPException(
+            status_code=400,
+            detail="This video does not contain InvokeAI video generation metadata.",
+        )
+    payload = build_video_recall_payload(record)
+    if not payload:
+        raise HTTPException(
+            status_code=400,
+            detail="No recallable parameters were found in this video's metadata",
+        )
+
+    url = f"{base_url.rstrip('/')}/api/v1/recall/video/{request.queue_id}"
+    params = {
+        "mode": "recall" if request.include_seed else "remix",
+        "strict": "true",
+    }
+    withheld: list[str] = []
+    try:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+
+            async def _send(body: dict) -> httpx.Response:
+                async def _do(headers: dict[str, str]) -> httpx.Response:
+                    return await client.post(
+                        url, json=body, params=params, headers=headers
+                    )
+
+                return await _request_with_auth_fallback(
+                    base_url, settings["username"], settings["password"], _do
+                )
+
+            response = await _send(payload)
+            # InvokeAI refuses the whole recall with a 403 when the record
+            # names media the caller may not read (another user's clip on a
+            # shared multi-user install). The prompt, models and settings are
+            # still worth recalling, so try once more without the media.
+            withheld = [field for field in MEDIA_FIELDS if field in payload]
+            if response.status_code == 403 and withheld:
+                payload = {k: v for k, v in payload.items() if k not in MEDIA_FIELDS}
+                response = await _send(payload)
+            else:
+                withheld = []
+    except httpx.RequestError as exc:
+        logger.warning("InvokeAI video recall request failed: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach InvokeAI backend at {base_url}: {exc}",
+        ) from exc
+
+    if response.status_code >= 400:
+        logger.warning(
+            "InvokeAI video recall returned %s: %s",
+            response.status_code,
+            response.text,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"InvokeAI backend returned {response.status_code}: "
+                f"{response.text[:200]}"
+            ),
+        )
+
+    remote = _json_or_raw(response)
+    status = remote.get("status", "success")
+    skipped = remote.get("skipped") or []
+    skipped = (skipped if isinstance(skipped, list) else []) + withheld
+    result = {
+        "success": status == "success",
+        "status": status,
+        "sent": payload,
+        "skipped": skipped,
+        "overridden": remote.get("overridden") or {},
+        "response": remote,
+    }
+    if status == "nothing_resolved":
+        result["message"] = (
+            "None of this video's models or media were found on the linked "
+            "InvokeAI, so nothing was recalled."
+        )
+    elif status == "no_parameters_provided":
+        result["message"] = "InvokeAI found nothing to recall in this video's metadata."
+    return result
+
+
+async def _post_video_upload(
+    client: httpx.AsyncClient,
+    base_url: str,
+    upload_url: str,
+    video_path: Path,
+    username: str | None,
+    password: str | None,
+    board_id: str | None,
+) -> tuple[httpx.Response, str | None]:
+    """Upload ``video_path`` through a ``/…-video/upload`` route.
+
+    Like ``_upload_image_to_invokeai``, a failed upload to the configured
+    board is retried without it (Uncategorized) and reported as a warning.
+    Returns the final response and that warning.
+    """
+    mime_type = mimetypes.guess_type(video_path.name)[0] or "video/mp4"
+
+    async def _attempt(params: dict[str, str]) -> httpx.Response:
+        async def _do(headers: dict[str, str]) -> httpx.Response:
+            # Re-opened per attempt: a retry needs a fresh stream.
+            with video_path.open("rb") as fh:
+                files = {"file": (video_path.name, fh, mime_type)}
+                return await client.post(
+                    upload_url, files=files, params=params, headers=headers
+                )
+
+        return await _request_with_auth_fallback(base_url, username, password, _do)
+
+    response = await _attempt({"board_id": board_id} if board_id else {})
+    # 403 (no write access) and 404 (board gone) are the board's fault;
+    # a 413/415/429 would fail again without it.
+    if board_id and response.status_code in (403, 404):
+        logger.warning(
+            "InvokeAI video upload to board %s failed (%s); falling back to Uncategorized",
+            board_id,
+            response.status_code,
+        )
+        warning = (
+            f"Upload to the selected board failed (HTTP {response.status_code}); "
+            "the video was placed in Uncategorized."
+        )
+        return await _attempt({}), warning
+    return response, None
+
+
+@invoke_router.post("/video/use_media")
+async def use_video_media(request: VideoMediaRequest) -> dict:
+    """Place a video in InvokeAI 7's Video panel.
+
+    ``target="initial"`` makes it the Initial Video (the clip an extension
+    continues); ``target="reference"`` appends it to the reference videos of
+    whichever model takes them. Works for any video, generated or not.
+
+    A video that may already be in InvokeAI's gallery (an InvokeAI-shaped
+    filename or record) is first placed by name, which skips the upload; a
+    refusal there (401/403/404) falls through to uploading the file.
+    """
+    settings = config_manager.get_invokeai_settings()
+    base_url = _require_invokeai_url(settings)
+
+    video_path = await asyncio.to_thread(
+        _load_video_path, request.album_key, request.index
+    )
+    if not video_path.is_file():
+        raise HTTPException(
+            status_code=404, detail=f"Video file not found on disk: {video_path.name}"
+        )
+    raw_metadata = await asyncio.to_thread(
+        _load_raw_metadata, request.album_key, request.index
+    )
+    should_probe = _looks_like_invoke_filename(video_path.name) or _has_invoke_metadata(
+        _video_record(raw_metadata)
+    )
+
+    username = settings["username"]
+    password = settings["password"]
+    route = f"{base_url.rstrip('/')}/api/v1/recall/video/{request.queue_id}/{request.target}-video"
+
+    board_warning: str | None = None
+    reused_existing = False
+    try:
+        async with httpx.AsyncClient(timeout=_VIDEO_UPLOAD_TIMEOUT) as client:
+            response: httpx.Response | None = None
+            if should_probe:
+
+                async def _by_name(headers: dict[str, str]) -> httpx.Response:
+                    return await client.post(
+                        route, params={"video_name": video_path.name}, headers=headers
+                    )
+
+                by_name = await _request_with_auth_fallback(
+                    base_url, username, password, _by_name
+                )
+                # 404: not in the gallery. 403: not the caller's to read.
+                # 401: credentials the upload's own auth fallback may yet
+                # fix. Uploading gives the caller their own copy in each case.
+                if by_name.status_code in (401, 403, 404):
+                    logger.info(
+                        "InvokeAI does not have %s (%s); uploading it",
+                        video_path.name,
+                        by_name.status_code,
+                    )
+                else:
+                    response = by_name
+                    reused_existing = response.status_code < 400
+            if response is None:
+                response, board_warning = await _post_video_upload(
+                    client,
+                    base_url,
+                    f"{route}/upload",
+                    video_path,
+                    username,
+                    password,
+                    settings["board_id"],
+                )
+    except httpx.ReadTimeout as exc:
+        # The upload itself went through; InvokeAI was still converting it.
+        # It will most likely finish and place the video on its own, so say
+        # so rather than invite a retry that would add a second copy.
+        logger.warning("InvokeAI video %s timed out waiting for a reply: %s", request.target, exc)
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "InvokeAI is taking a long time to process this video. It may "
+                "still appear in InvokeAI shortly; check there before trying again."
+            ),
+        ) from exc
+    except httpx.RequestError as exc:
+        logger.warning("InvokeAI video %s request failed: %s", request.target, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not reach InvokeAI backend at {base_url}: {exc}",
+        ) from exc
+
+    if response.status_code >= 400:
+        logger.warning(
+            "InvokeAI video %s returned %s: %s",
+            request.target,
+            response.status_code,
+            response.text,
+        )
+        explanation = _VIDEO_UPLOAD_ERRORS.get(response.status_code)
+        raise HTTPException(
+            status_code=502,
+            detail=explanation
+            or (
+                f"InvokeAI backend returned {response.status_code}: "
+                f"{response.text[:200]}"
+            ),
+        )
+
+    remote = _json_or_raw(response)
+    video = remote.get("video")
+    result = {
+        "success": True,
+        "target": request.target,
+        "video_name": video.get("video_name") if isinstance(video, dict) else None,
         "reused_existing": reused_existing,
         "response": remote,
     }

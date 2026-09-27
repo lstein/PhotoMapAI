@@ -1,5 +1,10 @@
 from .exif_formatter import format_exif_metadata
-from .invoke_formatter import format_invoke_metadata, use_ref_button_html
+from .invoke.video_recall import is_recallable_video_record
+from .invoke_formatter import (
+    format_invoke_metadata,
+    use_ref_button_html,
+    video_buttons_html,
+)
 from .invokemetadata import looks_like_invoke_metadata
 from .slide_summary import SlideSummary
 from .video_formatter import (
@@ -20,4 +25,6 @@ __all__ = [
     "format_fps",
     "video_external_link_html",
     "use_ref_button_html",
+    "video_buttons_html",
+    "is_recallable_video_record",
 ]

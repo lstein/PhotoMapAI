@@ -173,15 +173,25 @@ class TestVideoMetadata:
         assert "Pixel" in result.description
         assert "Date Taken" in result.description
 
-    def test_never_offers_the_use_ref_button(self, with_invokeai_url):
-        """That button uploads the file to InvokeAI as a reference image.
+    def test_never_offers_the_image_use_ref_button(self, with_invokeai_url):
+        """Send Image uploads the file to InvokeAI as a reference *image*.
 
-        Handing it an .mkv is a live bug, so videos must not get it even when
-        an InvokeAI backend is configured.
+        Handing it an .mkv is a live bug, so videos get the video group
+        (Initial Video / Ref Video) instead — and no Recall/Remix, which need
+        an InvokeAI video generation record.
         """
         result = format_metadata(self._video_path(), self._metadata(), 0, 1)
-        assert "invoke-recall-controls" not in result.description
         assert 'data-recall-mode="use_ref"' not in result.description
+        assert 'data-recall-mode="append_ref"' not in result.description
+        assert "invoke-video-controls" in result.description
+        assert 'data-recall-mode="video_initial"' in result.description
+        assert 'data-recall-mode="video_ref"' in result.description
+        assert 'data-recall-mode="video_recall"' not in result.description
+        assert 'data-recall-mode="video_remix"' not in result.description
+
+    def test_no_video_buttons_without_invokeai(self, clear_invokeai_config):
+        result = format_metadata(self._video_path(), self._metadata(), 0, 1)
+        assert "invoke-recall-controls" not in result.description
 
     def test_renders_without_any_probe_details(self, clear_invokeai_config):
         """A video whose banner could not be parsed still renders sensibly."""
@@ -280,13 +290,21 @@ class TestGeneratedVideoMetadata:
 
         assert result.reference_images == ["first.png"]
 
-    def test_no_recall_buttons_even_with_invokeai_configured(self, with_invokeai_url):
-        """Send/Append upload the file as a reference *image*, which an .mp4
-        is not, and Recall/Remix post an image-generation payload — a video
-        record's parameters would land in the wrong tab."""
+    def test_video_recall_buttons_with_invokeai_configured(self, with_invokeai_url):
+        """A generated video gets the whole video group, and none of the
+        image buttons: those post an image-generation payload or upload the
+        file as a reference *image*."""
         result = format_metadata(self._video_path(), self._metadata(), 0, 1)
 
-        assert "invoke-recall-controls" not in result.description
+        for mode in ("video_initial", "video_ref", "video_remix", "video_recall"):
+            assert f'data-recall-mode="{mode}"' in result.description
+        for mode in ("use_ref", "append_ref", "remix", "recall"):
+            assert f'data-recall-mode="{mode}"' not in result.description
+        # Exactly one controls table: the Invoke panel must not add its own.
+        assert result.description.count("invoke-recall-controls") == 1
+
+    def test_no_buttons_without_invokeai(self, clear_invokeai_config):
+        result = format_metadata(self._video_path(), self._metadata(), 0, 1)
         assert "data-recall-mode" not in result.description
 
     def test_a_phone_video_still_gets_the_exif_panel(self, clear_invokeai_config):
