@@ -1867,6 +1867,7 @@ def test_capabilities_unconfigured(client, clear_invokeai_config, clear_caps_cac
         "reachable": False,
         "recall": False,
         "append": False,
+        "video_recall": False,
     }
 
 
@@ -1946,6 +1947,7 @@ def test_capabilities_unreachable_backend(
         "reachable": False,
         "recall": False,
         "append": False,
+        "video_recall": False,
         "source": "unreachable",
     }
 

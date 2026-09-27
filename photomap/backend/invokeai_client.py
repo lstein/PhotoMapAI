@@ -146,8 +146,11 @@ async def _request_with_auth_fallback(
        fresh token, and retry.
     3. If the first attempt was made *with* a token and returns **403**
        (most commonly "Multiuser mode is disabled. Authentication is not
-       required…"), the backend was reconfigured to single-user mode — we
-       invalidate the cached token and retry anonymously.
+       required…"), the backend may have been reconfigured to single-user
+       mode, so we retry anonymously. If that retry is itself refused with a
+       401, the backend is still multi-user and the 403 was a real
+       permission refusal: it is returned as-is and the token is kept.
+       Otherwise the token is invalidated and the anonymous answer stands.
     """
     auth_headers = _cached_auth_headers(base_url, username)
     response = await request_fn(auth_headers)
@@ -157,8 +160,15 @@ async def _request_with_auth_fallback(
         auth_headers = await _login(base_url, username, password)
         response = await request_fn(auth_headers)
     elif response.status_code == 403 and auth_headers:
+        anonymous = await request_fn({})
+        if anonymous.status_code == 401:
+            # The backend still demands authentication, so it has not become
+            # single-user: the 403 was a genuine permission refusal (a board
+            # the user may not write to, media they may not read). Surface it
+            # and keep the token, which is still good.
+            return response
         _invalidate_token_cache()
-        response = await request_fn({})
+        response = anonymous
 
     return response
 

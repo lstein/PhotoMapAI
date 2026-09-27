@@ -250,7 +250,13 @@
    hidden until the backend confirms the configured InvokeAI instance
    supports the recall API; the Append button additionally requires the
    append option, which older backends would silently treat as replace. */
-body:not(.invoke-recall-supported) .invoke-recall-controls {
+body:not(.invoke-recall-supported) .invoke-recall-controls:not(.invoke-video-controls) {
+  display: none;
+}
+
+/* The video group rides on InvokeAI 7's video recall API, which is newer
+   than (and independent of) the image recall API. */
+body:not(.invoke-video-recall-supported) .invoke-video-controls {
   display: none;
 }
 
@@ -318,6 +324,11 @@ body:not(.invoke-append-supported) .invoke-recall-btn[data-recall-mode="append_r
   font-size: 12px;
   margin-top: 4px;
   word-break: break-word;
+}
+
+/* A request that worked, with a caveat (e.g. parameters InvokeAI skipped). */
+.invoke-recall-error.invoke-recall-note {
+  color: #f0b429;
 }
 
 /* ===== BANNER DRAWER CONTAINER ===== */

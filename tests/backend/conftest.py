@@ -1,10 +1,39 @@
 import os
+import shutil
+import tempfile
+from pathlib import Path
 
 import pytest
 import yaml
 
+
+def _point_config_at_a_temp_file() -> Path:
+    """Aim PHOTOMAP_CONFIG at a throwaway file before anything imports photomap.
+
+    This has to happen at conftest import, not in a fixture. Several modules
+    (the routers among them) call the lru_cached ``get_config_manager()`` at
+    import time, and test modules are imported during collection, before any
+    fixture runs. A test file importing a router at module level would
+    otherwise bind the session's config singleton to the developer's real
+    config file, and every test that saves settings or adds an album would
+    write to it.
+    """
+    config_path = Path(tempfile.mkdtemp(prefix="photomap-test-config-")) / "test_config.yaml"
+    config_data = {
+        "config_version": "1.0.0",
+        "albums": {},
+        "locationiq_api_key": "dummy",
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+    os.environ["PHOTOMAP_CONFIG"] = str(config_path)
+    return config_path
+
+
+_SESSION_CONFIG_PATH = _point_config_at_a_temp_file()
+
 # Import fixtures so they're available to all tests
-from fixtures import client, mixed_album, new_album, new_media_album  # noqa: F401
+from fixtures import client, mixed_album, new_album, new_media_album  # noqa: E402, F401
 
 
 @pytest.fixture(autouse=True)
@@ -70,14 +99,15 @@ def isolate_user_data_dir(tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def set_temp_config_env(tmp_path_factory):
-    config_path = tmp_path_factory.mktemp("data") / "test_config.yaml"
-    # Create a temporary config file
-    config_data = {
-        "config_version": "1.0.0",
-        "albums": {},
-        "locationiq_api_key": "dummy",
-    }
-    with open(config_path, "w") as f:
-        yaml.dump(config_data, f)
-    os.environ["PHOTOMAP_CONFIG"] = str(config_path)
+def set_temp_config_env():
+    """Fail the session outright if the config singleton escaped the temp file,
+    and remove the temp file's directory when the session ends."""
+    from photomap.backend.config import get_config_manager
+
+    actual = Path(get_config_manager().config_path).resolve()
+    assert actual == _SESSION_CONFIG_PATH.resolve(), (
+        f"Tests would write to {actual}, not the temp config; something built "
+        "the config manager before conftest set PHOTOMAP_CONFIG."
+    )
+    yield
+    shutil.rmtree(_SESSION_CONFIG_PATH.parent, ignore_errors=True)

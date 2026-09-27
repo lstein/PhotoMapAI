@@ -4,12 +4,13 @@
 // metadata-drawer.css keeps every recall button hidden until support is
 // positively confirmed, so a backend without the recall router shows no
 // buttons at all, and one without the append option hides only
-// "Append to InvokeAI".
+// "Append to InvokeAI". The video group needs InvokeAI 7's video recall API
+// and is gated on its own flag.
 
 import { fetchJson } from "./utils.js";
 
 export async function refreshInvokeCapabilities({ refresh = false } = {}) {
-  let caps = { recall: false, append: false };
+  let caps = { recall: false, append: false, video_recall: false };
   try {
     caps = await fetchJson(refresh ? "invokeai/capabilities?refresh=true" : "invokeai/capabilities");
   } catch (err) {
@@ -19,5 +20,6 @@ export async function refreshInvokeCapabilities({ refresh = false } = {}) {
   }
   document.body.classList.toggle("invoke-recall-supported", caps.recall === true);
   document.body.classList.toggle("invoke-append-supported", caps.append === true);
+  document.body.classList.toggle("invoke-video-recall-supported", caps.video_recall === true);
   return caps;
 }
