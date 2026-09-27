@@ -124,6 +124,19 @@ describe("opening", () => {
     expect(isVideoPlayerOpen()).toBe(true);
   });
 
+  it("starts at half volume", () => {
+    openVideoPlayer(MP4);
+    expect(video().volume).toBe(0.5);
+  });
+
+  it("keeps the volume the user chose for the next clip", () => {
+    openVideoPlayer(MP4);
+    video().volume = 0.2;
+    closeVideoPlayer();
+    openVideoPlayer(MP4);
+    expect(video().volume).toBe(0.2);
+  });
+
   it("shows the filename", () => {
     openVideoPlayer(MP4);
     expect(document.getElementById("videoPlayerTitle").textContent).toBe("clip.mp4");
