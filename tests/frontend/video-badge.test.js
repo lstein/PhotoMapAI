@@ -227,6 +227,8 @@ describe("badge click", () => {
       // Where the player asks for a playable copy of an unplayable file.
       transcodeUrl: "prepare_video/album/clip.mp4",
       globalIndex: 3,
+      // So the player can pin itself over the still and play in place.
+      slide,
     });
     window.removeEventListener("videoPlayRequested", handler);
   });

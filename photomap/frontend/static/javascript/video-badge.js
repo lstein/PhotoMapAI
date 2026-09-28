@@ -197,6 +197,9 @@ export function applyVideoOverlay(slideEl, data) {
           // conversion support, which the player reads as "download only".
           transcodeUrl: data.video_transcode_url || "",
           globalIndex: Number(slideEl.dataset.globalIndex ?? -1),
+          // Where the still is on screen. The player pins itself over it and
+          // plays in place rather than opening a lightbox of another size.
+          slide: slideEl,
         },
       })
     );
