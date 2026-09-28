@@ -686,6 +686,27 @@ function rect(left, top, width, height) {
   return { left, top, width, height, right: left + width, bottom: top + height };
 }
 
+function makePoster() {
+  const img = document.createElement("img");
+  Object.defineProperty(img, "naturalWidth", { value: 1600 });
+  Object.defineProperty(img, "naturalHeight", { value: 900 });
+  img.getBoundingClientRect = () => rect(0, 0, 1000, 800);
+  return img;
+}
+
+/** What Swiper does to a rebuilt grid: the same image, in a brand-new slide. */
+function rebuildSlide(container, oldSlide) {
+  oldSlide.remove();
+  const slide = document.createElement("div");
+  slide.className = "swiper-slide";
+  slide.dataset.globalIndex = oldSlide.dataset.globalIndex;
+  const img = makePoster();
+  img.getBoundingClientRect = () => rect(100, 0, 1000, 800);
+  slide.appendChild(img);
+  container.appendChild(slide);
+  return slide;
+}
+
 /**
  * A swiper container holding one slide whose poster is a 1600x900 picture
  * letterboxed inside a 1000x800 box at (0, 0) — so the picture itself is
@@ -700,10 +721,8 @@ function makeSwiperSlide({ grid = false } = {}) {
   container.className = "swiper";
   const slide = document.createElement("div");
   slide.className = "swiper-slide";
-  const img = document.createElement("img");
-  Object.defineProperty(img, "naturalWidth", { value: 1600 });
-  Object.defineProperty(img, "naturalHeight", { value: 900 });
-  img.getBoundingClientRect = () => rect(0, 0, 1000, 800);
+  slide.dataset.globalIndex = "7";
+  const img = makePoster();
   container.getBoundingClientRect = () => rect(0, 0, 1000, 800);
   slide.appendChild(img);
   container.appendChild(slide);
@@ -798,13 +817,46 @@ describe("playing in place", () => {
     expect(isVideoPlayerOpen()).toBe(true);
   });
 
-  it("closes when the slide is removed from the DOM", () => {
+  it("closes when the slide is removed and does not come back", () => {
+    const now = jest.spyOn(performance, "now").mockReturnValue(1000);
     const { slide } = makeSwiperSlide();
     openVideoPlayer({ ...MP4, slide });
     slide.remove();
     runFrame();
+    // Waits a while for a rebuild to bring it back, hidden meanwhile.
+    expect(isVideoPlayerOpen()).toBe(true);
+    expect(frame().style.visibility).toBe("hidden");
+
+    now.mockReturnValue(1000 + 10000);
+    runFrame();
     expect(isVideoPlayerOpen()).toBe(false);
     expect(video().getAttribute("src")).toBeNull();
+    now.mockRestore();
+  });
+
+  it("re-pins to the same image when Swiper rebuilds its slide", () => {
+    const { slide, container } = makeSwiperSlide();
+    openVideoPlayer({ ...MP4, slide });
+    runFrame();
+    const rebuilt = rebuildSlide(container, slide);
+    // A rebuilt grid also comes with a new Swiper instance.
+    const fresh = {
+      el: container,
+      slideNext: jest.fn(),
+      slidePrev: jest.fn(),
+      keyboard: { disable: jest.fn(), enable: jest.fn() },
+    };
+    container.swiper = fresh;
+    runFrame();
+
+    expect(isVideoPlayerOpen()).toBe(true);
+    expect(frame().style.left).toBe("100px");
+    expect(frame().style.visibility).toBe("");
+    expect(rebuilt.classList.contains("video-playing-slide")).toBe(true);
+    expect(fresh.keyboard.disable).toHaveBeenCalled();
+
+    video().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+    expect(fresh.slideNext).toHaveBeenCalledTimes(1);
   });
 
   it("closes when the picture leaves the swiper's viewport", () => {
@@ -919,5 +971,87 @@ describe("playing in place", () => {
     // The grid still must not page behind the lightbox.
     expect(swiper.keyboard.disable).toHaveBeenCalledTimes(1);
     localStorage.removeItem(GRID_IN_TILE_KEY);
+  });
+});
+
+describe("fullscreen", () => {
+  let frames;
+  let fullscreenEl;
+
+  beforeEach(() => {
+    frames = [];
+    window.requestAnimationFrame = jest.fn((cb) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    window.cancelAnimationFrame = jest.fn();
+    fullscreenEl = null;
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => fullscreenEl });
+    document.exitFullscreen = jest.fn(() => {
+      fullscreenEl = null;
+      return Promise.resolve();
+    });
+  });
+
+  afterEach(() => {
+    delete document.fullscreenElement;
+    delete document.exitFullscreen;
+  });
+
+  function runFrame() {
+    const pending = frames;
+    frames = [];
+    pending.forEach((cb) => cb());
+  }
+
+  it("leaves fullscreen when the player closes, so the page is not left behind an invisible layer", () => {
+    const { slide } = makeSwiperSlide();
+    openVideoPlayer({ ...MP4, slide });
+    fullscreenEl = video();
+    closeVideoPlayer();
+    expect(document.exitFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not touch fullscreen it does not own", () => {
+    openVideoPlayer(MP4);
+    fullscreenEl = document.body;
+    closeVideoPlayer();
+    expect(document.exitFullscreen).not.toHaveBeenCalled();
+  });
+
+  it("ignores the page rebuilding underneath while fullscreen", () => {
+    const now = jest.spyOn(performance, "now").mockReturnValue(0);
+    const { slide, container } = makeSwiperSlide();
+    openVideoPlayer({ ...MP4, slide });
+    fullscreenEl = video();
+
+    // Entering fullscreen resizes the window; the grid throws its tiles away
+    // and reports a slide change while it reloads.
+    slide.remove();
+    window.dispatchEvent(new CustomEvent("slideChanged"));
+    now.mockReturnValue(60000);
+    runFrame();
+    runFrame();
+    expect(isVideoPlayerOpen()).toBe(true);
+    expect(document.exitFullscreen).not.toHaveBeenCalled();
+
+    // Back out of fullscreen, and the tile is back.
+    fullscreenEl = null;
+    const rebuilt = rebuildSlide(container, slide);
+    runFrame();
+    expect(isVideoPlayerOpen()).toBe(true);
+    expect(rebuilt.classList.contains("video-playing-slide")).toBe(true);
+    now.mockRestore();
+  });
+
+  it("lets the arrows seek rather than navigate while fullscreen", () => {
+    const { slide, swiper } = makeSwiperSlide();
+    openVideoPlayer({ ...MP4, slide });
+    fullscreenEl = video();
+    const event = new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true });
+    video().dispatchEvent(event);
+    expect(isVideoPlayerOpen()).toBe(true);
+    expect(swiper.slideNext).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
   });
 });
