@@ -280,14 +280,34 @@
 }
 
 /* The control and search panels float over the bottom corners of the photo,
-   which is exactly where the video's native control bar is drawn — the play
-   button and the start of the scrubber vanished under the Control panel.
-   While a video plays in place they drop beneath it: still usable anywhere
-   they do not overlap the picture, and the player's own controls win where
-   they do. */
+   which is exactly where the video's native control bar is drawn, and the
+   browser offers no way to move that bar. Dropping the panels beneath the
+   video instead looked broken wherever it covered only part of one, so they
+   fade out while a video plays in place and come back when it closes.
+
+   `visibility` goes with the opacity so a hidden button can be neither
+   clicked nor tabbed to; it flips only once the fade has finished. */
+#controlPanel,
+#searchPanel {
+  transition: opacity 0.25s ease;
+}
+
 body.video-playing-in-place #controlPanel,
 body.video-playing-in-place #searchPanel {
-  z-index: 150;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.25s ease,
+    visibility 0s linear 0.25s;
+}
+
+/* The playing slide's own furniture. Its favourites star sits in the corner
+   where the player puts its close button (half outside the picture on a
+   letterboxed grid tile, so the two overlapped), and its play badge would
+   show round the edges of a still that is now playing. */
+.video-playing-slide > .bookmark-icon,
+.video-playing-slide > .video-badge {
+  visibility: hidden;
 }
 
 .video-player-overlay--anchored .video-player-frame {

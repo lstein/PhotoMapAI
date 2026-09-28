@@ -763,6 +763,32 @@ describe("playing in place", () => {
     expect(frame().contains(document.getElementById("videoPlayerCloseBtn"))).toBe(true);
   });
 
+  it("marks the page and the slide while playing, and clears both on close", () => {
+    const { slide } = makeSwiperSlide();
+    openVideoPlayer({ ...MP4, slide });
+    // The bottom panels fade out; the slide's star and badge are hidden.
+    expect(document.body.classList.contains("video-playing-in-place")).toBe(true);
+    expect(slide.classList.contains("video-playing-slide")).toBe(true);
+
+    closeVideoPlayer();
+    expect(document.body.classList.contains("video-playing-in-place")).toBe(false);
+    expect(slide.classList.contains("video-playing-slide")).toBe(false);
+  });
+
+  it("moves the slide mark when another video opens over the first", () => {
+    const first = makeSwiperSlide().slide;
+    const second = makeSwiperSlide().slide;
+    openVideoPlayer({ ...MP4, slide: first });
+    openVideoPlayer({ ...MP4, slide: second });
+    expect(first.classList.contains("video-playing-slide")).toBe(false);
+    expect(second.classList.contains("video-playing-slide")).toBe(true);
+  });
+
+  it("does not mark the page in the lightbox", () => {
+    openVideoPlayer(MP4);
+    expect(document.body.classList.contains("video-playing-in-place")).toBe(false);
+  });
+
   it("follows the picture when it moves", () => {
     const { slide, img } = makeSwiperSlide();
     openVideoPlayer({ ...MP4, slide });

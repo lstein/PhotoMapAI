@@ -47,6 +47,7 @@ let initialized = false;
 // the swiper that owns it (for navigation, and as the viewport the picture
 // has to stay inside).
 let anchorImg = null;
+let anchorSlide = null;
 let anchorSwiper = null;
 let followFrame = null;
 
@@ -419,8 +420,11 @@ function setAnchor(img) {
   window.cancelAnimationFrame(followFrame);
   followFrame = null;
   modal.classList.toggle("video-player-overlay--anchored", Boolean(img));
-  // Lets the bottom panels drop below the video; see video-player.css.
+  // Fades the bottom panels and hides the slide's star; see video-player.css.
   document.body.classList.toggle("video-playing-in-place", Boolean(img));
+  anchorSlide?.classList.remove("video-playing-slide");
+  anchorSlide = img?.closest?.(".swiper-slide") || null;
+  anchorSlide?.classList.add("video-playing-slide");
   if (img) {
     // Inside the frame, so it rides along in its corner.
     frameEl.appendChild(closeBtn);
@@ -692,6 +696,7 @@ export function _resetVideoPlayerForTests() {
   window.cancelAnimationFrame(followFrame);
   followFrame = null;
   anchorImg = null;
+  anchorSlide = null;
   anchorSwiper = null;
   keyboardSwiper = null;
   swipeStart = null;
