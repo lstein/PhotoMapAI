@@ -26,6 +26,35 @@ The additional `-v` option maps a folder on your desktop machine to the `/Pictur
 
 You may find earlier versions of PhotoMapAI on DockerHub. Just do `docker search photomapai` to see all the available versions.
 
+## Video Support
+
+The PhotoMapAI Docker images do **not** include [ffmpeg](https://ffmpeg.org), the program PhotoMapAI uses to index videos and to convert videos that your browser can't play. (The ffmpeg build that comes with a normal PhotoMapAI installation is GPL-licensed, so it's removed from the published images rather than redistributed with them.) Photos work exactly as usual, but video files in your albums are skipped during indexing, and PhotoMapAI shows a message saying that it could not find a working ffmpeg.
+
+Earlier PhotoMapAI images did include ffmpeg. If you indexed videos with one of those and then upgrade, the videos stay in your album, but ones your browser can't play natively will no longer play, and their thumbnails may go blank. Adding ffmpeg as described below restores them. Don't use **Rebuild Index** on such an album without ffmpeg, because that removes the videos from the index.
+
+!!! note "Installing ffmpeg on your computer won't help the container"
+    A Docker container only sees programs inside its own image. An ffmpeg installed on your Linux, macOS or Windows desktop is invisible to it, so installing one there won't enable video in the container. The system ffmpeg instructions in [Video support and ffmpeg](installation.md#video-support-and-ffmpeg) apply when you run PhotoMapAI directly on your computer, not in Docker.
+
+To handle videos in Docker, build your own image on top of the published one and add ffmpeg inside it. Create an empty folder, and in it a file named `Dockerfile` containing:
+
+```dockerfile
+FROM lstein/photomapai:latest
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+Then build and run it from that folder:
+
+```
+docker build -t photomapai-video .
+docker run -p 8050:8050 -v /path/to/my/pictures:/Pictures photomapai-video
+```
+
+The image is based on Debian, and this installs Debian's ffmpeg package, which PhotoMapAI finds automatically. Videos that were skipped earlier are picked up the next time you run **Update Index** on the album. Debian's ffmpeg is itself GPL-licensed. That doesn't matter for your own use, but if you publish the resulting image you take on the GPL's obligations for it.
+
+Alternatively, skip Docker for video-heavy albums: the [desktop installer](installation.md#recommended-the-desktop-installer) and the [PyPI install](installation.md#alternative-install-from-pypi) both include a working ffmpeg automatically.
+
 ## Building a Customized Docker Image
 
 To build a customized image, you will need the PhotoMapAI source code. Download the zip or tar source code file from [GitHub](https://github.com/lstein/PhotoMapAI) and unpack it. You will find two Docker build files in the `docker` folder, `Dockerfile` and `Dockerfile.demo`. The first builds the full application, and the second builds the demo version.
@@ -33,15 +62,15 @@ To build a customized image, you will need the PhotoMapAI source code. Download 
 To build the full application, run this command from inside the root of the source code repository (the one with README.md):
 
 ```
-docker build -f docker/Dockerfile -t photomapai
+docker build -f docker/Dockerfile -t photomapai .
 ```
 
-This will build the image and register it locally. You can then run it with `docker -p 8050:8050 photomapai`.
+This will build the image and register it locally. You can then run it with `docker run -p 8050:8050 photomapai`.
 
 Building the demo version is almost the same, except that you have the option of preloading a collection of images for the demo. To do this, locate the (empty) `demo_images` folder in the source code repository, and copy a series of images into it. Then build the demo image with this command:
 
 ```
-docker build -f docker/Dockerfile.demo -t photomapai-demo
+docker build -f docker/Dockerfile.demo -t photomapai-demo .
 ```
 
 The image will be built as before, but now you should see messages about loading and indexing the demo images.
