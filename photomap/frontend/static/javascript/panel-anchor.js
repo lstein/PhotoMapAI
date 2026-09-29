@@ -51,9 +51,43 @@ function isTextEntry(element) {
   return element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName);
 }
 
-/** Is the software keyboard likely to be the reason the viewport shrank? */
+/** Is this element actually laid out, rather than inside a display: none subtree? */
+function isRendered(element) {
+  if (!element.isConnected) {
+    return false;
+  }
+  for (let node = element; node instanceof Element; node = node.parentElement) {
+    if (getComputedStyle(node).display === "none") {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Is the software keyboard likely to be the reason the viewport shrank?
+ *
+ * A field that is still focused but no longer rendered does not count. Hiding
+ * a dialog with display: none while one of its inputs has focus — the text
+ * search does exactly that when Return runs the search — makes WebKit put the
+ * keyboard away without firing blur or focusout, and document.activeElement
+ * keeps pointing at the hidden input. Treating that as focus would hold the
+ * correction forever with the layout still sized around the vanished keyboard,
+ * and no rotation or fullscreen round trip would ever clear it. Blurring it
+ * here delivers the focusout that never came, so the keyboard's hide animation
+ * is waited out like any other and the layout resyncs after it.
+ */
 function isTextEntryFocused() {
-  return isTextEntry(document.activeElement);
+  const element = document.activeElement;
+  if (!isTextEntry(element)) {
+    return false;
+  }
+  if (!isRendered(element)) {
+    noteTextEntryBlur(element);
+    element.blur();
+    return false;
+  }
+  return true;
 }
 
 /** Keep the correction held across the keyboard's hide animation. */
