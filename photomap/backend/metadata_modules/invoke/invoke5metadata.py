@@ -123,7 +123,9 @@ class GenerationMetadata5(BaseModel):
     loras: list[Lora] | None = None
     regions: list[RegionalGuidance] | None = None
     t5_encoder: T5Encoder | None = None
-    qwen3_encoder: Model | None = None
+    qwen3_encoder: ParameterModel | None = None
+    # FLUX.2 [dev]'s text encoder, the counterpart of Klein's qwen3_encoder.
+    mistral_encoder: ParameterModel | None = None
     qwen3_source: ParameterModel | None = None
     qwen_image_component_source: ParameterModel | None = None
     # Standalone component models. ``ParameterModel`` rather than ``Model``:
@@ -136,7 +138,7 @@ class GenerationMetadata5(BaseModel):
     qwen_image_shift: int | float | None = None
     # A number, or "auto" when InvokeAI picks the shift itself.
     z_image_shift: int | float | str | None = None
-    vae: Model | None = None
+    vae: ParameterModel | None = None
     clip_embed_model: ClipEmbedModel | None = None
     dype_preset: str | None = None
     rand_device: str | None = None

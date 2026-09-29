@@ -1708,6 +1708,110 @@ class TestComponentModelFields:
         assert _view(self._record(z_image_shift=shift)).positive_prompt == "a gorgon"
 
 
+class TestComponentModelsInDrawer:
+    """The VAE, encoders and component sources render under the model."""
+
+    def _record(self, **fields) -> dict:
+        return {
+            "metadata_version": 5,
+            "app_version": "6.12.0",
+            "model": {"name": "Z-Image Turbo", "base": "z-image", "type": "main"},
+            "positive_prompt": "a gorgon",
+            **fields,
+        }
+
+    def test_the_view_lists_them_in_role_order(self):
+        view = _view(
+            self._record(
+                qwen3_source=_full_model_config(name="Klein Diffusers"),
+                qwen3_encoder={"name": "Qwen3 4B", "type": "qwen3_encoder"},
+                vae={"name": "FLUX VAE", "type": "vae"},
+            )
+        )
+
+        assert view.component_models == [
+            ("VAE", "FLUX VAE"),
+            ("Qwen3 Encoder", "Qwen3 4B"),
+            ("Qwen3 Source", "Klein Diffusers"),
+        ]
+
+    def test_qwen_image_and_krea2_fields_are_listed(self):
+        view = _view(
+            self._record(
+                qwen_image_vae={"name": "Qwen VAE", "type": "vae"},
+                qwen_image_qwen_vl_encoder={"name": "Qwen2.5-VL 7B", "type": "qwen_vl_encoder"},
+                qwen_image_component_source={"name": "Qwen Image Diffusers", "type": "main"},
+                qwen3_vl_encoder={"name": "Qwen3-VL", "type": "qwen3_vl_encoder"},
+            )
+        )
+
+        assert view.component_models == [
+            ("VAE", "Qwen VAE"),
+            ("Qwen2.5-VL Encoder", "Qwen2.5-VL 7B"),
+            ("Qwen3-VL Encoder", "Qwen3-VL"),
+            ("Component Source", "Qwen Image Diffusers"),
+        ]
+
+    def test_the_drawer_renders_a_component_models_row(self):
+        html = format_invoke_metadata(
+            _slide(), self._record(vae={"name": "<b>VAE</b>", "type": "vae"})
+        ).description
+
+        assert "<th>Component Models</th>" in html
+        assert "<td>VAE</td><td>&lt;b&gt;VAE&lt;/b&gt;</td>" in html
+
+    def test_no_row_when_the_record_names_none(self):
+        html = format_invoke_metadata(_slide(), self._record()).description
+
+        assert "Component Models" not in html
+
+    def test_t5_clip_and_mistral_encoders_are_listed(self):
+        view = _view(
+            self._record(
+                t5_encoder={"name": "T5-XXL", "type": "t5_encoder"},
+                clip_embed_model={"name": "CLIP-L", "type": "clip_embed"},
+                mistral_encoder={"name": "Mistral 24B", "type": "mistral_encoder"},
+            )
+        )
+
+        assert view.component_models == [
+            ("T5 Encoder", "T5-XXL"),
+            ("CLIP Embed", "CLIP-L"),
+            ("Mistral Encoder", "Mistral 24B"),
+        ]
+
+    def test_a_v3_vae_is_listed(self, v3_metadata):
+        v3_metadata["vae"] = {"model_name": "sd-vae-ft-mse", "base_model": "sd-1"}
+
+        assert _view(v3_metadata).component_models == [("VAE", "sd-vae-ft-mse")]
+
+    def test_v2_has_none(self, v2_scalar_prompt_metadata):
+        assert _view(v2_scalar_prompt_metadata).component_models == []
+
+    def test_a_video_vae_goes_with_the_other_video_models(self):
+        """InvokeAI 7 writes ``vae`` into Wan records next to its T5 encoder."""
+        view = _video_view(
+            vae={"name": "Wan VAE", "type": "vae"},
+            wan_t5_encoder_model={"name": "UMT5-XXL", "type": "t5_encoder"},
+        )
+
+        assert view.component_models == []
+        assert view.video_models[:2] == [("VAE", "Wan VAE"), ("T5 Encoder", "UMT5-XXL")]
+
+    def test_an_image_vae_does_not_make_it_a_video(self):
+        view = _view(self._record(vae={"name": "FLUX VAE", "type": "vae"}))
+
+        assert view.is_video_generation is False
+        assert view.video_models == []
+
+    @pytest.mark.parametrize("field", ["vae", "qwen3_encoder", "mistral_encoder"])
+    def test_extra_keys_on_an_encoder_or_vae_do_not_fail_the_record(self, field):
+        """A ``submodel_type`` or a full config used to fail the whole union."""
+        view = _view(self._record(**{field: {**_full_model_config(), "submodel_type": "vae"}}))
+
+        assert view.positive_prompt == "a gorgon"
+
+
 class TestInvokeMarkerAgreement:
     """``looks_like_invoke_metadata`` gates routing and
     ``_infer_metadata_version`` picks the schema. A fingerprint the second

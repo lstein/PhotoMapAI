@@ -52,6 +52,7 @@ ControlLayerTuple = namedtuple(
 # renderer and stays ignorant of which version keeps what where.
 VideoFactTuple = namedtuple("VideoFactTuple", ["label", "value"])
 VideoModelTuple = namedtuple("VideoModelTuple", ["role", "model_name"])
+ComponentModelTuple = namedtuple("ComponentModelTuple", ["role", "model_name"])
 VideoReferenceTuple = namedtuple("VideoReferenceTuple", ["kind", "name", "options"])
 
 GenerationMetadataT = GenerationMetadata2 | GenerationMetadata3 | GenerationMetadata5
@@ -219,6 +220,26 @@ _VIDEO_MODEL_ROLES: tuple[tuple[str, str], ...] = (
 )
 
 
+# Auxiliary models an image record names alongside ``model``: the separately
+# installed VAE, text encoders and component sources a single-file main
+# model is assembled from. ``(attribute, role)``, rendered in this order. The
+# Qwen-Image and Krea2 fields share roles with the others because a record
+# only ever carries one architecture's set. A video record's ``vae`` goes
+# with its other parts under Video Models instead (see ``_video_models``).
+_COMPONENT_MODEL_ROLES: tuple[tuple[str, str], ...] = (
+    ("vae", "VAE"),
+    ("qwen_image_vae", "VAE"),
+    ("t5_encoder", "T5 Encoder"),
+    ("clip_embed_model", "CLIP Embed"),
+    ("qwen3_encoder", "Qwen3 Encoder"),
+    ("mistral_encoder", "Mistral Encoder"),
+    ("qwen_image_qwen_vl_encoder", "Qwen2.5-VL Encoder"),
+    ("qwen3_vl_encoder", "Qwen3-VL Encoder"),
+    ("qwen3_source", "Qwen3 Source"),
+    ("qwen_image_component_source", "Component Source"),
+)
+
+
 def _format_fps(fps: int | float) -> str:
     """``"16 fps"`` / ``"23.976 fps"``, never raising.
 
@@ -329,10 +350,27 @@ def _video_facts(metadata: GenerationMetadata5) -> list[VideoFactTuple]:
 
 def _video_models(metadata: GenerationMetadata5) -> list[VideoModelTuple]:
     result: list[VideoModelTuple] = []
+    # ``vae`` is shared with image records, so it cannot sit in
+    # ``_VIDEO_MODEL_ROLES`` (every entry there marks a record as a video).
+    # In a video it is one of the parts the clip was assembled from, and
+    # belongs beside the T5 encoder and component source.
+    if _has_video_profile(metadata) and metadata.vae is not None and metadata.vae.name:
+        result.append(VideoModelTuple("VAE", metadata.vae.name))
     for attribute, role in _VIDEO_MODEL_ROLES:
         model = getattr(metadata, attribute, None)
         if model is not None and model.name:
             result.append(VideoModelTuple(role, model.name))
+    return result
+
+
+def _component_models(metadata: GenerationMetadata5) -> list[ComponentModelTuple]:
+    if _has_video_profile(metadata):
+        return []
+    result: list[ComponentModelTuple] = []
+    for attribute, role in _COMPONENT_MODEL_ROLES:
+        model = getattr(metadata, attribute, None)
+        if model is not None and model.name:
+            result.append(ComponentModelTuple(role, model.name))
     return result
 
 
@@ -430,6 +468,13 @@ class _VersionStrategy(ABC):
     @abstractmethod
     def raster_images(self) -> list[str]: ...
 
+    def component_models(self) -> list[ComponentModelTuple]:
+        """Auxiliary models (VAE, encoders, sources) named besides ``model``.
+
+        Empty for v2, whose records never name them.
+        """
+        return []
+
     def has_video_profile(self) -> bool:
         """Whether this record describes a video. False before v5."""
         return False
@@ -498,6 +543,10 @@ class _V2Strategy(_VersionStrategy):
 
 class _V3Strategy(_VersionStrategy):
     """InvokeAI v3 — top-level prompts, ip_adapters, controlnets."""
+
+    def component_models(self) -> list[ComponentModelTuple]:
+        vae = self.m.vae
+        return [ComponentModelTuple("VAE", vae.name)] if vae is not None and vae.name else []
 
     def positive_prompt(self) -> str:
         return self.m.positive_prompt or ""
@@ -578,6 +627,9 @@ class _V5Strategy(_V3Strategy):
                 if name:
                     result.append(name)
         return result
+
+    def component_models(self) -> list[ComponentModelTuple]:
+        return _component_models(self.m)
 
     def has_video_profile(self) -> bool:
         return _has_video_profile(self.m)
@@ -667,6 +719,10 @@ class InvokeMetadataView:
     @property
     def raster_images(self) -> list[str]:
         return self._strategy.raster_images()
+
+    @property
+    def component_models(self) -> list[ComponentModelTuple]:
+        return self._strategy.component_models()
 
     # ---- video profile ---------------------------------------------------
 
