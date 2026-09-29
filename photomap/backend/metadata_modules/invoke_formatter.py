@@ -18,6 +18,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from .invoke.invoke_metadata_view import (
+    ComponentModelTuple,
     ControlLayerTuple,
     InvokeMetadataView,
     LoraTuple,
@@ -296,6 +297,12 @@ def format_invoke_metadata(
         )
     if model:
         rows.append(f"<tr><th>Model</th><td>{_esc(model)}</td></tr>")
+    if (component_models := view.component_models) and (
+        components_html := _tuple_table(component_models)
+    ):
+        rows.append(
+            f"<tr><th>Component Models</th><td>{components_html}</td></tr>"
+        )
     if seed is not None:
         rows.append(
             f'<tr><th>Seed</th><td class="copyme">{_esc(seed)}{_COPY_SVG}</td></tr>'
@@ -374,6 +381,7 @@ def _format_mtime(filepath: str | None) -> str | None:
 def _tuple_table(
     tuples: Iterable[
         LoraTuple
+        | ComponentModelTuple
         | ReferenceImageTuple
         | ControlLayerTuple
         | VideoModelTuple

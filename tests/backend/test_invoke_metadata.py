@@ -1621,6 +1621,197 @@ class TestVideoRecordRobustness:
         assert "not declared in GenerationMetadata5" not in caplog.text
 
 
+def _full_model_config(**overrides) -> dict:
+    """A model as InvokeAI's ``zParameterModel`` records it: the whole config."""
+    config = {
+        "key": "f3645ae0-3ddf-43f1-b45f-f7f5ca303e30",
+        "hash": "blake3:abc",
+        "path": "f3645ae0-3ddf-43f1-b45f-f7f5ca303e30",
+        "file_size": 34722773704,
+        "name": "FLUX.2 Klein 9B (Diffusers)",
+        "description": "FLUX.2 Klein 9B in Diffusers format with VAE and Qwen3 encoder. ~35GB",
+        "source": "black-forest-labs/FLUX.2-klein-9B",
+        "source_type": "hf_repo_id",
+        "source_api_response": None,
+        "source_url": None,
+        "cover_image": None,
+        "trigger_phrases": None,
+        "default_settings": {"vae": None, "vae_precision": None, "fp8_storage": None},
+        "base": "flux2",
+        "type": "main",
+        "format": "diffusers",
+        "repo_variant": "",
+        "variant": "klein_9b",
+    }
+    config.update(overrides)
+    return config
+
+
+class TestParameterModelFields:
+    """``qwen3_source`` and ``qwen_image_component_source`` carry the full
+    model config, not a model identifier. Rejecting its extra keys failed the
+    whole discriminated union, so the drawer showed no metadata at all."""
+
+    @pytest.mark.parametrize("field", ["qwen3_source", "qwen_image_component_source"])
+    def test_a_full_model_config_does_not_fail_the_record(self, field):
+        view = _view(
+            {
+                "metadata_version": 5,
+                "app_version": "6.12.0",
+                "model": {"name": "Z-Image Turbo", "base": "z-image", "type": "main"},
+                "positive_prompt": "a gorgon",
+                field: _full_model_config(),
+            }
+        )
+
+        assert view.model_name == "Z-Image Turbo"
+        assert view.positive_prompt == "a gorgon"
+
+
+class TestComponentModelFields:
+    """Fields InvokeAI's Z-Image, Qwen-Image and Krea2 graphs write."""
+
+    def _record(self, **fields) -> dict:
+        return {
+            "metadata_version": 5,
+            "app_version": "6.12.0",
+            "model": {"name": "Qwen Image", "base": "qwen-image", "type": "main"},
+            "positive_prompt": "a gorgon",
+            **fields,
+        }
+
+    def test_they_parse_without_unknown_field_warnings(self, caplog):
+        from photomap.backend.metadata_modules.invoke import invoke5metadata
+
+        invoke5metadata._warned_extra_fields.clear()
+        with caplog.at_level("WARNING"):
+            view = _view(
+                self._record(
+                    qwen_image_vae={"name": "Qwen VAE", "base": "qwen-image", "type": "vae"},
+                    qwen_image_qwen_vl_encoder={"name": "Qwen2.5-VL", "type": "qwen_vl_encoder"},
+                    qwen3_vl_encoder={"name": "Qwen3-VL", "type": "qwen3_vl_encoder"},
+                    z_image_shift="auto",
+                )
+            )
+
+        assert "not declared in GenerationMetadata5" not in caplog.text
+        assert view.positive_prompt == "a gorgon"
+
+    @pytest.mark.parametrize("field", ["qwen_image_vae", "qwen_image_qwen_vl_encoder", "qwen3_vl_encoder"])
+    def test_a_full_model_config_does_not_fail_the_record(self, field):
+        view = _view(self._record(**{field: _full_model_config()}))
+
+        assert view.model_name == "Qwen Image"
+
+    @pytest.mark.parametrize("shift", [1.5, 3, "auto", None])
+    def test_z_image_shift_accepts_a_number_or_auto(self, shift):
+        assert _view(self._record(z_image_shift=shift)).positive_prompt == "a gorgon"
+
+
+class TestComponentModelsInDrawer:
+    """The VAE, encoders and component sources render under the model."""
+
+    def _record(self, **fields) -> dict:
+        return {
+            "metadata_version": 5,
+            "app_version": "6.12.0",
+            "model": {"name": "Z-Image Turbo", "base": "z-image", "type": "main"},
+            "positive_prompt": "a gorgon",
+            **fields,
+        }
+
+    def test_the_view_lists_them_in_role_order(self):
+        view = _view(
+            self._record(
+                qwen3_source=_full_model_config(name="Klein Diffusers"),
+                qwen3_encoder={"name": "Qwen3 4B", "type": "qwen3_encoder"},
+                vae={"name": "FLUX VAE", "type": "vae"},
+            )
+        )
+
+        assert view.component_models == [
+            ("VAE", "FLUX VAE"),
+            ("Qwen3 Encoder", "Qwen3 4B"),
+            ("Qwen3 Source", "Klein Diffusers"),
+        ]
+
+    def test_qwen_image_and_krea2_fields_are_listed(self):
+        view = _view(
+            self._record(
+                qwen_image_vae={"name": "Qwen VAE", "type": "vae"},
+                qwen_image_qwen_vl_encoder={"name": "Qwen2.5-VL 7B", "type": "qwen_vl_encoder"},
+                qwen_image_component_source={"name": "Qwen Image Diffusers", "type": "main"},
+                qwen3_vl_encoder={"name": "Qwen3-VL", "type": "qwen3_vl_encoder"},
+            )
+        )
+
+        assert view.component_models == [
+            ("VAE", "Qwen VAE"),
+            ("Qwen2.5-VL Encoder", "Qwen2.5-VL 7B"),
+            ("Qwen3-VL Encoder", "Qwen3-VL"),
+            ("Component Source", "Qwen Image Diffusers"),
+        ]
+
+    def test_the_drawer_renders_a_component_models_row(self):
+        html = format_invoke_metadata(
+            _slide(), self._record(vae={"name": "<b>VAE</b>", "type": "vae"})
+        ).description
+
+        assert "<th>Component Models</th>" in html
+        assert "<td>VAE</td><td>&lt;b&gt;VAE&lt;/b&gt;</td>" in html
+
+    def test_no_row_when_the_record_names_none(self):
+        html = format_invoke_metadata(_slide(), self._record()).description
+
+        assert "Component Models" not in html
+
+    def test_t5_clip_and_mistral_encoders_are_listed(self):
+        view = _view(
+            self._record(
+                t5_encoder={"name": "T5-XXL", "type": "t5_encoder"},
+                clip_embed_model={"name": "CLIP-L", "type": "clip_embed"},
+                mistral_encoder={"name": "Mistral 24B", "type": "mistral_encoder"},
+            )
+        )
+
+        assert view.component_models == [
+            ("T5 Encoder", "T5-XXL"),
+            ("CLIP Embed", "CLIP-L"),
+            ("Mistral Encoder", "Mistral 24B"),
+        ]
+
+    def test_a_v3_vae_is_listed(self, v3_metadata):
+        v3_metadata["vae"] = {"model_name": "sd-vae-ft-mse", "base_model": "sd-1"}
+
+        assert _view(v3_metadata).component_models == [("VAE", "sd-vae-ft-mse")]
+
+    def test_v2_has_none(self, v2_scalar_prompt_metadata):
+        assert _view(v2_scalar_prompt_metadata).component_models == []
+
+    def test_a_video_vae_goes_with_the_other_video_models(self):
+        """InvokeAI 7 writes ``vae`` into Wan records next to its T5 encoder."""
+        view = _video_view(
+            vae={"name": "Wan VAE", "type": "vae"},
+            wan_t5_encoder_model={"name": "UMT5-XXL", "type": "t5_encoder"},
+        )
+
+        assert view.component_models == []
+        assert view.video_models[:2] == [("VAE", "Wan VAE"), ("T5 Encoder", "UMT5-XXL")]
+
+    def test_an_image_vae_does_not_make_it_a_video(self):
+        view = _view(self._record(vae={"name": "FLUX VAE", "type": "vae"}))
+
+        assert view.is_video_generation is False
+        assert view.video_models == []
+
+    @pytest.mark.parametrize("field", ["vae", "qwen3_encoder", "mistral_encoder"])
+    def test_extra_keys_on_an_encoder_or_vae_do_not_fail_the_record(self, field):
+        """A ``submodel_type`` or a full config used to fail the whole union."""
+        view = _view(self._record(**{field: {**_full_model_config(), "submodel_type": "vae"}}))
+
+        assert view.positive_prompt == "a gorgon"
+
+
 class TestInvokeMarkerAgreement:
     """``looks_like_invoke_metadata`` gates routing and
     ``_infer_metadata_version`` picks the schema. A fingerprint the second
