@@ -39,7 +39,20 @@ def test_image_and_video_sets_are_disjoint():
 # `assert SUPPORTED_EXTENSIONS == IMAGE_EXTENSIONS` can never fail and would
 # not notice `.svg` or `.pdf` being added to the serving allowlist.
 EXPECTED_IMAGE_EXTENSIONS = frozenset(
-    {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff", ".heif", ".heic"}
+    {
+        ".jpg",
+        ".jpeg",
+        ".jfif",
+        ".png",
+        ".bmp",
+        ".gif",
+        ".webp",
+        ".avif",
+        ".tif",
+        ".tiff",
+        ".heif",
+        ".heic",
+    }
 )
 
 
