@@ -92,8 +92,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   setupAlbumSearchTuningControls();
 
+  // Give up focus before the panel goes away. Hiding it with display: none
+  // while one of its inputs is focused makes iPad WebKit dismiss the keyboard
+  // without firing blur, leaving document.activeElement on the hidden input —
+  // and panel-anchor.js holds the layout for as long as a field is focused.
+  const releaseSearchFocus = () => {
+    if (textSearchPanel.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  };
+
   if (closeTextSearchBtn) {
     closeTextSearchBtn.onclick = function () {
+      releaseSearchFocus();
       textSearchPanel.style.display = "none";
     };
   }
@@ -111,6 +122,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }, 20);
     } else {
+      releaseSearchFocus();
       textSearchPanel.style.display = "none";
       textSearchPanel.style.opacity = 0;
       const noResultsMsg = document.getElementById("noResultsMsg");
@@ -128,6 +140,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
+          releaseSearchFocus();
           textSearchPanel.style.opacity = 0;
           setTimeout(() => {
             textSearchPanel.style.display = "none";
@@ -187,6 +200,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       setSearchResults(new_results, searchType);
       if (new_results.length > 0) {
         setTimeout(() => {
+          releaseSearchFocus();
           textSearchPanel.style.opacity = 0;
           textSearchPanel.style.display = "none";
         }, 200);

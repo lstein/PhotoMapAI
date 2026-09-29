@@ -201,6 +201,32 @@ describe("the software keyboard", () => {
     jest.useRealTimers();
   });
 
+  it("recomputes when the focused field is hidden without a blur", () => {
+    // Return in the text search hides the dialog with display: none while its
+    // input still has focus. iPad WebKit puts the keyboard away but fires no
+    // blur, and activeElement stays on the hidden input — which used to hold
+    // the correction forever, rotation and fullscreen notwithstanding.
+    jest.useFakeTimers();
+    document.body.innerHTML = `<div id="controlPanel"></div><div id="dialog"><input id="searchInput" /></div>`;
+    initializePanelAnchor([panel()]);
+    document.getElementById("searchInput").focus();
+    setVisualViewport({ height: 600 });
+    syncPanelAnchor();
+    expect(panel().style.transform).toBe("");
+
+    document.getElementById("dialog").style.display = "none";
+    setVisualViewport({ height: 870 });
+    listeners.get("vv:resize")();
+    // Still held across the keyboard's hide animation...
+    expect(panel().style.transform).toBe("");
+    expect(document.activeElement).not.toBe(document.getElementById("searchInput"));
+
+    // ...then recomputed from the settled viewport.
+    jest.advanceTimersByTime(1000);
+    expect(panel().style.transform).toBe("translateY(-130px)");
+    jest.useRealTimers();
+  });
+
   it("does not treat the still-raised keyboard as chrome on the blur edge", () => {
     // Hiding the search panel blurs its input while the keyboard is still
     // fully on screen — the keyboard only collapses afterwards. Sampling at

@@ -85,6 +85,11 @@ function handleTouchEnd(e) {
       e.stopPropagation();
       e.stopImmediatePropagation();
 
+      // Blur before hiding: WebKit fires no blur for a focused input that goes
+      // display: none, and panel-anchor.js holds the layout while one is focused.
+      if (textSearchPanel.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
       textSearchPanel.style.opacity = 0;
       setTimeout(() => {
         textSearchPanel.style.display = "none";
