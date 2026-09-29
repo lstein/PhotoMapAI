@@ -30,6 +30,8 @@ You may find earlier versions of PhotoMapAI on DockerHub. Just do `docker search
 
 The PhotoMapAI Docker images do **not** include [ffmpeg](https://ffmpeg.org), the program PhotoMapAI uses to index videos and to convert videos that your browser can't play. (The ffmpeg build that comes with a normal PhotoMapAI installation is GPL-licensed, so it's removed from the published images rather than redistributed with them.) Photos work exactly as usual, but video files in your albums are skipped during indexing, and PhotoMapAI shows a message saying that it could not find a working ffmpeg.
 
+Earlier PhotoMapAI images did include ffmpeg. If you indexed videos with one of those and then upgrade, the videos stay in your album, but ones your browser can't play natively will no longer play, and their thumbnails may go blank. Adding ffmpeg as described below restores them. Don't use **Rebuild Index** on such an album without ffmpeg, because that removes the videos from the index.
+
 !!! note "Installing ffmpeg on your computer won't help the container"
     A Docker container only sees programs inside its own image. An ffmpeg installed on your Linux, macOS or Windows desktop is invisible to it, so installing one there won't enable video in the container. The system ffmpeg instructions in [Video support and ffmpeg](installation.md#video-support-and-ffmpeg) apply when you run PhotoMapAI directly on your computer, not in Docker.
 
@@ -60,15 +62,15 @@ To build a customized image, you will need the PhotoMapAI source code. Download 
 To build the full application, run this command from inside the root of the source code repository (the one with README.md):
 
 ```
-docker build -f docker/Dockerfile -t photomapai
+docker build -f docker/Dockerfile -t photomapai .
 ```
 
-This will build the image and register it locally. You can then run it with `docker -p 8050:8050 photomapai`.
+This will build the image and register it locally. You can then run it with `docker run -p 8050:8050 photomapai`.
 
 Building the demo version is almost the same, except that you have the option of preloading a collection of images for the demo. To do this, locate the (empty) `demo_images` folder in the source code repository, and copy a series of images into it. Then build the demo image with this command:
 
 ```
-docker build -f docker/Dockerfile.demo -t photomapai-demo
+docker build -f docker/Dockerfile.demo -t photomapai-demo .
 ```
 
 The image will be built as before, but now you should see messages about loading and indexing the demo images.

@@ -108,7 +108,7 @@ The Docker image doesn't include ffmpeg, so videos are skipped unless you add it
 
 ## Video support and ffmpeg
 
-PhotoMapAI uses [ffmpeg](https://ffmpeg.org) to index videos and to convert videos your browser can't play. The desktop installer and the PyPI and source installs above include a ready-to-use ffmpeg on most computers (Windows and macOS, and Linux on x86-64 and ARM64), so usually there's nothing to do.
+PhotoMapAI uses [ffmpeg](https://ffmpeg.org) to index videos and to convert videos your browser can't play. The desktop installer, the PyPI install and the source install all include a ready-to-use ffmpeg on most computers (Windows and macOS, and Linux on x86-64 and ARM64), so usually there's nothing to do.
 
 You need a separate, system-wide ffmpeg only if:
 
@@ -188,7 +188,7 @@ $env:IMAGEIO_FFMPEG_EXE = (Get-Command ffmpeg).Source
 start_photomap
 ```
 
-To make the setting permanent, add the `export` line to your shell profile (for example `~/.bashrc` or `~/.zshrc`). On Windows, run `setx IMAGEIO_FFMPEG_EXE "C:\path\to\ffmpeg.exe"` once, and then open a new window.
+To make the setting permanent, add the `export` line to your shell profile (for example `~/.bashrc` or `~/.zshrc`). This works when you start PhotoMapAI with `start_photomap` from a terminal; the desktop app started from the Dock, Finder or an application menu doesn't read your shell profile, and keeps using its bundled ffmpeg. On Windows, run `setx IMAGEIO_FFMPEG_EXE "C:\path\to\ffmpeg.exe"` once, and then open a new window.
 
 Videos that were skipped before ffmpeg was available are picked up the next time you run **Update Index** on the album (see [Managing Albums](user-guide/albums.md)).
 
