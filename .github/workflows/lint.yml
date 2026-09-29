@@ -35,6 +35,23 @@ jobs:
         run: |
           ruff check photomap tests
 
+  lockfile-check:
+    name: uv.lock Up To Date
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      # Fails when pyproject.toml changed (e.g. a version bump) without
+      # re-running `uv lock`, which otherwise leaves uv.lock modified in
+      # every checkout after the next `uv run` / `uv sync`.
+      - name: Check uv.lock matches pyproject.toml
+        run: uv lock --check
+
   frontend-lint:
     name: Frontend Linting (ESLint & Prettier)
     runs-on: ubuntu-latest
