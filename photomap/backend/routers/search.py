@@ -17,14 +17,15 @@ from logging import getLogger
 from pathlib import Path
 from urllib.parse import quote
 
+import numpy as np
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageCms, ImageDraw, ImageOps
 from pydantic import BaseModel
 
 from ..config import get_config_manager
 from ..embeddings import SUPPORTED_EXTENSIONS, MediaFilter
-from ..media_types import is_video, video_media_type
+from ..media_types import is_video, needs_browser_conversion, video_media_type
 from ..metadata_modules import SlideSummary, video_external_link_html
 from ..thumbnail_cache import thumbnail_dir, tile_hash
 from ..util import is_cuda_oom
@@ -571,8 +572,13 @@ async def serve_video_frame(
 # or a converted stream and FastAPI refuses to work with Union types
 # in response_model.
 @search_router.get("/images/{album_key}/{path:path}", tags=["Search"])
-async def serve_image(album_key: str, path: str, album_config: AlbumDep):
-    """Serve images from diffe rent albums dynamically."""
+async def serve_image(album_key: str, path: str, album_config: AlbumDep, original: bool = False):
+    """Serve images from different albums dynamically.
+
+    Formats browsers cannot render are converted to PNG unless ``original`` is
+    set, which the download button uses so a saved ``.tif`` is the user's file
+    rather than a flattened, first-page-only PNG under the same name.
+    """
     image_path = config_manager.find_image_in_album(album_key, path)
     if not image_path:
         raise HTTPException(status_code=404, detail="Image not found")
@@ -591,10 +597,11 @@ async def serve_image(album_key: str, path: str, album_config: AlbumDep):
     if not image_path.exists() or not image_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
-    if image_path.suffix.lower() in {".heic", ".heif"}:
-        return serve_image_with_conversion(image_path)
-    else:
-        return FileResponse(image_path)
+    if needs_browser_conversion(image_path) and not original:
+        # Decoding a large scanned TIFF takes long enough to stall every other
+        # request if done on the loop, so it runs in a worker thread.
+        return await asyncio.to_thread(serve_image_with_conversion, image_path)
+    return FileResponse(image_path)
 
 
 def _resolve_album_video(album_key: str, path: str, album_config) -> Path:
@@ -947,18 +954,68 @@ def create_slide_url(slide_metadata: SlideSummary, album_key: str) -> None:
         slide_metadata.image_url = f"images/{quoted_album}/{quoted_path}"
 
 
-# This is not currently used. It can be applied to the end of the image serving
-# function to return a StreamingResponse with EXIF rotation applied.
-# In practice, I'm seeing pauses during image serving when using this.
+# Modes PNG can store as-is. Anything else — CMYK and LAB scans, big-endian
+# 16-bit and 32-bit TIFFs — makes ``Image.save(format="PNG")`` raise or, via a
+# naive ``convert``, clip to solid white, so :func:`_png_safe` handles it first.
+_PNG_SAFE_MODES = frozenset({"1", "L", "LA", "P", "RGB", "RGBA", "I;16"})
+
+
+def _png_safe(im: Image.Image) -> Image.Image:
+    """Return ``im`` in a mode PNG can store, preserving what it depicts."""
+    if im.mode in _PNG_SAFE_MODES:
+        return im
+    if im.mode.startswith("I") or im.mode == "F":
+        # Pillow's own conversions clip anything above 255 (or 65535), which
+        # turns a 16-bit big-endian or 32-bit scan into a blank white page.
+        # Rescale into 16-bit greyscale instead. Integer data already inside
+        # the 16-bit range and floats in [0, 1] keep their absolute levels;
+        # anything else is stretched over its own range.
+        arr = np.asarray(im).astype(np.float64)
+        lo, hi = float(arr.min()), float(arr.max())
+        if im.mode == "F" and lo >= 0.0 and hi <= 1.0:
+            arr = arr * 65535.0
+        elif im.mode == "F" or lo < 0 or hi > 65535:
+            arr = (arr - lo) * (65535.0 / (hi - lo)) if hi > lo else np.zeros_like(arr)
+        return Image.fromarray(np.rint(arr).astype(np.uint16))
+    source_mode = im.mode
+    icc = im.info.get("icc_profile")
+    target = "RGBA" if "A" in im.getbands() else "RGB"
+    converted = None
+    if icc and target == "RGB":
+        # A print scan's embedded CMYK profile gives far truer colors than
+        # Pillow's naive CMYK->RGB arithmetic.
+        try:
+            converted = ImageCms.profileToProfile(
+                im,
+                ImageCms.ImageCmsProfile(BytesIO(icc)),
+                ImageCms.createProfile("sRGB"),
+                outputMode="RGB",
+            )
+        except (ImageCms.PyCMSError, OSError, ValueError):
+            converted = None
+    if converted is None:
+        converted = im.convert(target)
+    if source_mode != converted.mode:
+        # The source's profile describes the old color space; carried into
+        # the PNG it would make browsers misinterpret the new pixels.
+        converted.info.pop("icc_profile", None)
+    return converted
+
+
 def serve_image_with_conversion(image_path: Path) -> StreamingResponse:
+    """Serve an image browsers cannot render (HEIC, TIFF) re-encoded as PNG,
+    with EXIF rotation applied. Blocking: call it off the event loop."""
     try:
         with Image.open(image_path) as im:
             im = ImageOps.exif_transpose(im)
+            im = _png_safe(im)
             buf = BytesIO()
             format = "PNG"
-            im.save(buf, format=format)
+            # Fast compression: a 24 MP scan takes several seconds to encode
+            # at the default level, and these bytes only cross localhost.
+            im.save(buf, format=format, compress_level=1)
             buf.seek(0)
             return StreamingResponse(buf, media_type=f"image/{format.lower()}")
     except Exception as e:
-        print(f"Error processing image {image_path}: {e}")
+        logger.warning(f"Error converting image {image_path} for display: {e}")
         raise HTTPException(status_code=500, detail=f"Image processing error: {e}") from e

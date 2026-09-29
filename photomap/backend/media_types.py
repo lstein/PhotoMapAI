@@ -8,9 +8,14 @@ are indexable — a video must be walked but must not be servable through the
 image routes — so the sets are named separately here:
 
 ``IMAGE_EXTENSIONS``
-    Still images.  PIL can open every one of these.  This is what the
-    image-serving guard allows, and it is what ``SUPPORTED_EXTENSIONS``
-    remains an alias of, so no existing behavior moves.
+    Still images.  PIL can open every one of these — importing this module
+    registers the HEIF opener so that stays true for any caller (see below).
+    This is what the image-serving guard allows, and it is what
+    ``SUPPORTED_EXTENSIONS`` remains an alias of.
+
+``BROWSER_CONVERTED_EXTENSIONS``
+    The subset of images browsers cannot render in an ``<img>``, which the
+    image route converts to PNG before serving.
 
 ``VIDEO_EXTENSIONS``
     Containers ffmpeg can decode a frame from.  ``imageio-ffmpeg`` exposes no
@@ -31,21 +36,41 @@ image routes — so the sets are named separately here:
 from pathlib import Path
 from typing import Literal
 
+from pillow_heif import register_heif_opener
+
+# PIL opens HEIF/HEIC only once this plugin is registered. It lives here, next
+# to the set that promises PIL can open ``.heic``, rather than as a side effect
+# of importing ``embeddings``: a caller that imports only this module would
+# otherwise get ``is_image("x.heic") is True`` and then UnidentifiedImageError.
+# Registering twice is harmless.
+register_heif_opener()
+
 MediaType = Literal["image", "video"]
 
+# ``.tif`` is the spelling scanners, Photoshop and Windows tools produce;
+# ``.jfif`` is a JPEG under another name. ``.avif`` relies on Pillow's own
+# plugin, which the published wheels bundle from Pillow 11.3 on — hence the
+# floor in pyproject.toml.
 IMAGE_EXTENSIONS: frozenset[str] = frozenset(
     {
         ".jpg",
         ".jpeg",
+        ".jfif",
         ".png",
         ".bmp",
         ".gif",
         ".webp",
+        ".avif",
+        ".tif",
         ".tiff",
         ".heif",
         ".heic",
     }
 )
+
+# Images only Safari (TIFF) or nothing (HEIC in Chrome/Firefox) renders
+# natively, so ``/images/`` serves them converted to PNG instead of raw.
+BROWSER_CONVERTED_EXTENSIONS: frozenset[str] = frozenset({".tif", ".tiff", ".heif", ".heic"})
 
 # Container -> MIME map, and the single source of truth for which containers
 # are video at all: ``VIDEO_EXTENSIONS`` is derived from its keys below. Listing
@@ -129,6 +154,12 @@ def is_video(path: Path | str) -> bool:
 def is_image(path: Path | str) -> bool:
     """True if ``path``'s suffix names a still-image format PIL can open."""
     return Path(path).suffix.lower() in IMAGE_EXTENSIONS
+
+
+def needs_browser_conversion(path: Path | str) -> bool:
+    """True if ``path`` is an image browsers cannot display as-is. See
+    :data:`BROWSER_CONVERTED_EXTENSIONS`."""
+    return Path(path).suffix.lower() in BROWSER_CONVERTED_EXTENSIONS
 
 
 def media_type_for(path: Path | str) -> MediaType:

@@ -75,6 +75,22 @@ function populateEncoderSelect(selectEl, currentValue) {
   }
 }
 
+const plural = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+
+// The album card's file count. Image-only albums read "N images" as before;
+// once videos are indexed the split is spelled out, so a total that jumped
+// because videos were picked up explains itself. A zero side is omitted
+// ("4 videos", not "0 images, 4 videos").
+export function formatIndexCount(metadata) {
+  const total = metadata.filename_count ?? 0;
+  const videos = metadata.video_count ?? 0;
+  if (videos === 0) {
+    return plural(total, "image");
+  }
+  const images = metadata.image_count ?? total - videos;
+  return images === 0 ? plural(videos, "video") : `${plural(images, "image")}, ${plural(videos, "video")}`;
+}
+
 export class AlbumManager {
   // Constants
   static POLL_INTERVAL = 1000;
@@ -1051,12 +1067,11 @@ export class AlbumManager {
           dateStyle: "medium",
           timeStyle: "short",
         });
-        const fileCount = metadata.filename_count;
         // Reset the className so any leftover ``.indexing`` (orange,
         // !important in CSS) from a prior showProgressUI doesn't override
         // the inline color set below.
         status.className = "index-status";
-        status.textContent = `Index updated ${modDate} (${fileCount} images)`;
+        status.textContent = `Index updated ${modDate} (${formatIndexCount(metadata)})`;
         status.style.color = "green";
         createBtn.textContent = "Update Index";
         this.setRebuildButtonVisible(cardElement, true);

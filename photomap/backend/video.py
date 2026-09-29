@@ -315,6 +315,10 @@ def ffmpeg_exe() -> str | None:
       returns ``$IMAGEIO_FFMPEG_EXE`` unchecked and can fall back to the bare
       name ``"ffmpeg"`` for a PATH lookup, so a non-``None`` answer is not on
       its own evidence that anything is executable.
+
+    Because the negative result is re-probed, a machine with no ffmpeg at all
+    (the Docker images ship without one) fails once per video. The warning is
+    therefore logged only on the first failed probe; repeats go to debug.
     """
     global _ffmpeg_exe_cache, _ffmpeg_exe_probed, _ffmpeg_missing
 
@@ -329,25 +333,35 @@ def ffmpeg_exe() -> str | None:
 
             candidate = imageio_ffmpeg.get_ffmpeg_exe()
         except Exception as e:
-            logger.warning(
-                f"No usable ffmpeg binary found ({e}); video files will be skipped."
-            )
-            _ffmpeg_missing = True
+            _report_missing(f"No usable ffmpeg binary found ({e}); video files will be skipped.")
             return None  # not memoized — the next call retries
 
         resolved = candidate if os.path.isabs(candidate) else shutil.which(candidate)
         if not resolved or not Path(resolved).exists():
-            logger.warning(
+            _report_missing(
                 f"ffmpeg reported as {candidate!r} but is not executable; "
                 "video files will be skipped."
             )
-            _ffmpeg_missing = True
             return None
 
         _ffmpeg_exe_cache = resolved
         _ffmpeg_exe_probed = True
         _ffmpeg_missing = False
         return _ffmpeg_exe_cache
+
+
+def _report_missing(message: str) -> None:
+    """Record a failed probe, warning only if ffmpeg was not already missing.
+
+    Called with ``_ffmpeg_exe_lock`` held, so the check and the flip are one
+    step and concurrent indexing workers produce a single warning.
+    """
+    global _ffmpeg_missing
+    if _ffmpeg_missing:
+        logger.debug(message)
+    else:
+        logger.warning(message)
+    _ffmpeg_missing = True
 
 
 def _reset_ffmpeg_exe_cache() -> None:
@@ -753,6 +767,10 @@ def extract_video_frame(
 
         result = _run_ffmpeg(_frame_command(path, attempt_seek), min(timeout, remaining))
         if isinstance(result, _FfmpegUnavailable):
+            if best is None:
+                # ffmpeg_exe() has already warned once; the generic "could not
+                # extract" line below would repeat it for every video.
+                return None
             break  # nothing to run — retrying cannot help
         if result is None:
             # Timed out. Seeking is precisely what stalls on a fragmented

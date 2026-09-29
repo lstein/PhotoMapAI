@@ -22,26 +22,29 @@ SOFTWARE.
 
 ================================================================================
 
-FFmpeg (bundled via the imageio-ffmpeg package)
+FFmpeg (installed via the imageio-ffmpeg package)
 ================================================================================
 
 PhotoMapAI depends on `imageio-ffmpeg`, which ships a pre-built static FFmpeg
-executable inside its platform wheels. That executable is used to extract a
-still frame from video files during indexing. Installing PhotoMapAI therefore
-installs FFmpeg, and any distribution that bundles the installed environment —
-notably the `photomapai` Docker images — redistributes it.
+executable inside its platform wheels. PhotoMapAI runs that executable to
+extract a still frame from each video during indexing, and to convert videos
+that a browser cannot play into a playable format.
 
-The bundled builds (from https://johnvansickle.com/ffmpeg/) are configured with
-`--enable-gpl --enable-version3`, and are therefore licensed under the
-GNU General Public License version 3 or later, not FFmpeg's default LGPL.
+PhotoMapAI does not itself distribute FFmpeg. When you install PhotoMapAI with
+pip, uv or the desktop launcher, the `imageio-ffmpeg` wheel, including its
+FFmpeg binary, is downloaded from PyPI and is distributed to you by the
+imageio-ffmpeg project under the terms stated in that package.
+
+The Linux builds bundled in those wheels (from https://johnvansickle.com/ffmpeg/)
+are configured with `--enable-gpl --enable-version3`, and are therefore licensed
+under the GNU General Public License version 3 or later rather than FFmpeg's
+default LGPL. The macOS and Windows wheels carry builds from other sources;
+consult the imageio-ffmpeg project for their exact configuration.
 
   FFmpeg
   Copyright (c) 2000-2024 the FFmpeg developers
-  Licensed under the GNU General Public License v3 or later (GPLv3+).
-
   Full license text:   https://www.gnu.org/licenses/gpl-3.0.html
   FFmpeg source code:  https://ffmpeg.org/download.html
-  Build scripts:       https://johnvansickle.com/ffmpeg/
 
 FFmpeg is a separate work, invoked by PhotoMapAI as an external program via
 subprocess; it is not linked into PhotoMapAI, and PhotoMapAI's own source
@@ -50,6 +53,6 @@ remains under the MIT license stated in pyproject.toml.
 The `imageio-ffmpeg` Python package itself is licensed under the BSD 2-Clause
 license, Copyright (c) 2018-, imageio contributors.
 
-To obtain the corresponding source for the bundled FFmpeg binary, or to ask
-about a build without the GPL-only components, please open an issue at
-https://github.com/lstein/PhotoMapAI/issues.
+The PhotoMapAI Docker images (`photomapai` and `photomapai-demo`) do not
+contain FFmpeg: the bundled binary is deleted while the image is built. See
+docs/docker.md for how to add one to a derived image if you need video support.
