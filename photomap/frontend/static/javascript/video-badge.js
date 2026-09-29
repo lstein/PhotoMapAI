@@ -182,6 +182,17 @@ export function applyVideoOverlay(slideEl, data) {
     // badge would silently toggle the slideshow instead. The radio controls
     // in events.js blur for the same reason.
     e.currentTarget.blur();
+    // Playing a grid tile selects it, as clicking the tile would. The drawer
+    // then describes the clip that is playing, and a grid rebuild (a resize,
+    // or entering fullscreen) reopens on the page holding it rather than on
+    // the page of some other selected tile. Before the dispatch: selecting
+    // fires slideChanged, which would close the player it is about to open.
+    if (slideEl.closest("#gridViewContainer")) {
+      const index = Number(slideEl.dataset.globalIndex);
+      if (Number.isFinite(index)) {
+        window.handleGridSlideClick?.(index);
+      }
+    }
     window.dispatchEvent(
       new CustomEvent("videoPlayRequested", {
         detail: {
@@ -197,6 +208,9 @@ export function applyVideoOverlay(slideEl, data) {
           // conversion support, which the player reads as "download only".
           transcodeUrl: data.video_transcode_url || "",
           globalIndex: Number(slideEl.dataset.globalIndex ?? -1),
+          // Where the still is on screen. The player pins itself over it and
+          // plays in place rather than opening a lightbox of another size.
+          slide: slideEl,
         },
       })
     );

@@ -1,8 +1,17 @@
 /**
- * Modal video player.
+ * Video player.
  *
- * Opens on the `videoPlayRequested` event dispatched by the play badge, over
- * a dimmed backdrop, reusing the shared `.modal-overlay` machinery.
+ * Opens on the `videoPlayRequested` event dispatched by the play badge, in one
+ * of two presentations:
+ *
+ *   - **In place** (the single-image swiper, and grid tiles unless turned off
+ *     with GRID_IN_TILE_KEY): the frame is pinned over the exact rectangle the
+ *     poster occupies on screen, with no backdrop, so pressing play swaps the
+ *     still for the moving picture without anything changing size. The
+ *     surrounding UI stays live: the swiper's own arrows, the arrow keys and a
+ *     swipe across the video all dismiss the player and move on.
+ *   - **Lightbox**: a centred card over a dimmed backdrop, reusing the shared
+ *     `.modal-overlay` machinery. Used when there is no slide to pin to.
  *
  * The modal owns its own `<video>` element and never borrows one from a
  * slide. Swiper destroys slide DOM nodes as the user navigates
@@ -22,6 +31,7 @@ import { state } from "./state.js";
 let modal = null;
 let videoEl = null;
 let titleEl = null;
+let frameEl = null;
 let closeBtn = null;
 let fallbackEl = null;
 let fallbackMessageEl = null;
@@ -32,6 +42,45 @@ let progressBarEl = null;
 let progressFillEl = null;
 let progressPercentEl = null;
 let initialized = false;
+
+// Set while playing in place: the poster <img> the frame is pinned over, and
+// the swiper that owns it (for navigation, and as the viewport the picture
+// has to stay inside).
+let anchorImg = null;
+let anchorSlide = null;
+let anchorSwiper = null;
+let followFrame = null;
+
+// How to find the poster again after Swiper rebuilds its slides: the image's
+// index, and the swiper's container element, which outlives the instance.
+// The grid discards every tile — and its Swiper instance — whenever the
+// window changes shape, and entering fullscreen is exactly such a change.
+let anchorIndex = null;
+let anchorHost = null;
+// When the poster went missing. A rebuild takes a debounce plus a fetch, so
+// the player waits this long for the tile to come back before giving up.
+let anchorLostAt = null;
+const ANCHOR_GRACE_MS = 4000;
+
+// The owning swiper's keyboard module, when opening disabled it. Kept apart
+// from state.swiper because in the grid the owner is a different instance.
+let keyboardSwiper = null;
+
+// localStorage switch for playing grid videos in their tile. Anything but
+// "false" means yes; set it to "false" to get the lightbox back in the grid.
+export const GRID_IN_TILE_KEY = "photomap.gridVideoInTile";
+
+// Keys that leave the video for the neighbouring slide while playing in
+// place. Deliberately taken from the native controls, which would otherwise
+// seek with the arrows: the user asked the arrows to navigate.
+const NAV_KEYS = { ArrowLeft: -1, ArrowRight: 1, PageUp: -1, PageDown: 1 };
+
+// A horizontal drag this long across the video is a swipe to the next slide.
+const SWIPE_MIN_PX = 50;
+// Drags starting this close to the bottom are the native control bar's —
+// scrubbing — and never navigate.
+const CONTROL_BAR_PX = 56;
+let swipeStart = null;
 
 // Whether the slideshow was running when the player opened. Restored rather
 // than force-started on close, so opening a video from a paused slideshow
@@ -297,7 +346,289 @@ function beginConversion(mySession) {
   pollConversion(mySession, endpoint);
 }
 
-export function openVideoPlayer({ url, filename, playable = true, poster = "", transcodeUrl = "" } = {}) {
+/** The Swiper instance a slide belongs to; Swiper stores it on its container. */
+function owningSwiper(el) {
+  for (let node = el; node; node = node.parentElement) {
+    if (node.swiper) {
+      return node.swiper;
+    }
+  }
+  return null;
+}
+
+function gridPlaysInTile() {
+  try {
+    return localStorage.getItem(GRID_IN_TILE_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * The on-screen rectangle of the picture inside a poster <img>.
+ *
+ * The slide images are `object-fit: contain` boxes the size of the slide, so
+ * the element's own box includes the letterbox bars. Pinning the frame to
+ * that box would make the video jump to a different size on play — the very
+ * thing this mode exists to avoid.
+ */
+export function pictureRect(img) {
+  const box = img.getBoundingClientRect();
+  const nw = img.naturalWidth;
+  const nh = img.naturalHeight;
+  if (!nw || !nh || !box.width || !box.height) {
+    return box;
+  }
+  const scale = Math.min(box.width / nw, box.height / nh);
+  const width = nw * scale;
+  const height = nh * scale;
+  const left = box.left + (box.width - width) / 2;
+  const top = box.top + (box.height - height) / 2;
+  return { left, top, width, height, right: left + width, bottom: top + height };
+}
+
+/** The element the browser is showing fullscreen, if it is part of the player. */
+function playerFullscreenElement() {
+  const el = document.fullscreenElement || document.webkitFullscreenElement || null;
+  if (el && modal?.contains(el)) {
+    return el;
+  }
+  // iOS Safari fullscreens a <video> natively, without the Fullscreen API.
+  return videoEl?.webkitDisplayingFullscreen ? videoEl : null;
+}
+
+/**
+ * Leave fullscreen before the player goes away.
+ *
+ * Hiding a fullscreen element does not end fullscreen: the document keeps an
+ * invisible top-layer element over the whole page, and every click lands on
+ * it — the page looks normal and responds to nothing.
+ */
+function exitPlayerFullscreen() {
+  const el = playerFullscreenElement();
+  if (!el) {
+    return;
+  }
+  if (el === videoEl && videoEl.webkitDisplayingFullscreen && !document.fullscreenElement) {
+    videoEl.webkitExitFullscreen?.();
+    return;
+  }
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  const result = exit?.call(document);
+  result?.catch?.(() => {});
+}
+
+/** Find the poster again after its slide was rebuilt; null if it is not back. */
+function relocateAnchor() {
+  if (anchorIndex === null || !anchorHost?.isConnected) {
+    return null;
+  }
+  const slide = anchorHost.querySelector(`.swiper-slide[data-global-index="${anchorIndex}"]`);
+  return slide?.querySelector("img") || null;
+}
+
+/** Pin to a (possibly rebuilt) slide's poster and adopt its swiper. */
+function adoptAnchor(img) {
+  anchorImg = img;
+  anchorSlide?.classList.remove("video-playing-slide");
+  anchorSlide = img.closest(".swiper-slide");
+  anchorSlide?.classList.add("video-playing-slide");
+  anchorSwiper = owningSwiper(img) || anchorSwiper;
+}
+
+/**
+ * Keep the arrows of whatever Swiper instance now owns the container off.
+ *
+ * The grid replaces its instance on every resize that changes its shape —
+ * entering fullscreen is one — and each new instance comes up with its
+ * keyboard enabled. Left alone, the arrows meant to seek a fullscreen clip
+ * page the grid behind it instead (Swiper preventDefaults them, so the seek
+ * is lost too), and the same happens behind the lightbox.
+ */
+function syncKeyboard() {
+  const live = anchorHost?.swiper;
+  if (live && live !== state.swiper && live !== keyboardSwiper) {
+    keyboardSwiper = live;
+    live.keyboard?.disable?.();
+  }
+}
+
+/** True when `rect` has a size and overlaps the swiper's own box. */
+function isOnScreen(rect) {
+  if (!rect || !(rect.width > 0) || !(rect.height > 0)) {
+    return false;
+  }
+  const view = anchorSwiper?.el?.getBoundingClientRect?.();
+  return (
+    !view || (rect.right > view.left && rect.left < view.right && rect.bottom > view.top && rect.top < view.bottom)
+  );
+}
+
+/**
+ * Keep the frame over the poster; runs every animation frame while open.
+ *
+ * Polling covers every way the picture can move without an event this module
+ * would otherwise need to hear about: window resize, fullscreen, the drawer, a
+ * partial drag of the slide (the video follows it).
+ *
+ * A poster that is missing or off screen is waited for rather than closed on.
+ * Swiper rebuilds put it back in a different place (a new instance, briefly
+ * at slide 0, over the old slides) and the page it ends up on is only settled
+ * once the rebuild finishes. Real navigation needs no help from here: paging
+ * the grid or changing slide moves the selection, whose slideChanged closes
+ * the player at once.
+ */
+function followAnchor() {
+  followFrame = null;
+  if (!isVideoPlayerOpen()) {
+    return;
+  }
+  syncKeyboard();
+  if (!anchorImg) {
+    // The lightbox has nothing to follow; it only needs the keyboard kept off.
+    if (anchorHost) {
+      followFrame = window.requestAnimationFrame(followAnchor);
+    }
+    return;
+  }
+  // While fullscreen the page underneath is laid out for the new window size
+  // and may be rebuilding; none of that concerns the player until it returns,
+  // and the wait for the poster starts over from then.
+  if (playerFullscreenElement()) {
+    anchorLostAt = null;
+    followFrame = window.requestAnimationFrame(followAnchor);
+    return;
+  }
+  if (!anchorImg.isConnected) {
+    const found = relocateAnchor();
+    if (found) {
+      adoptAnchor(found);
+    }
+  }
+  const rect = anchorImg.isConnected ? pictureRect(anchorImg) : null;
+  if (!isOnScreen(rect)) {
+    anchorLostAt ??= performance.now();
+    if (performance.now() - anchorLostAt > ANCHOR_GRACE_MS) {
+      closeVideoPlayer();
+      return;
+    }
+    // Nothing to sit over meanwhile. Hidden rather than closed, so the clip
+    // carries on where it was when its tile reappears.
+    frameEl.style.visibility = "hidden";
+    followFrame = window.requestAnimationFrame(followAnchor);
+    return;
+  }
+  anchorLostAt = null;
+  const style = frameEl.style;
+  style.visibility = "";
+  style.left = `${rect.left}px`;
+  style.top = `${rect.top}px`;
+  style.width = `${rect.width}px`;
+  style.height = `${rect.height}px`;
+  followFrame = window.requestAnimationFrame(followAnchor);
+}
+
+/** Switch between the in-place and lightbox presentations. */
+function setAnchor(img) {
+  if (!frameEl || !closeBtn) {
+    img = null;
+  }
+  anchorImg = img;
+  anchorLostAt = null;
+  anchorIndex = img?.closest?.(".swiper-slide")?.dataset.globalIndex ?? null;
+  anchorHost = anchorSwiper?.el || null;
+  window.cancelAnimationFrame(followFrame);
+  followFrame = null;
+  modal.classList.toggle("video-player-overlay--anchored", Boolean(img));
+  // Fades the bottom panels and hides the slide's star; see video-player.css.
+  document.body.classList.toggle("video-playing-in-place", Boolean(img));
+  anchorSlide?.classList.remove("video-playing-slide");
+  anchorSlide = img?.closest?.(".swiper-slide") || null;
+  anchorSlide?.classList.add("video-playing-slide");
+  if (img) {
+    // Inside the frame, so it rides along in its corner.
+    frameEl.appendChild(closeBtn);
+    frameEl.style.borderRadius = getComputedStyle(img).borderRadius;
+  } else if (frameEl && closeBtn) {
+    modal.insertBefore(closeBtn, modal.firstChild);
+    frameEl.removeAttribute("style");
+  }
+}
+
+/** Leave the video for the neighbouring slide. */
+function navigateFromPlayer(direction) {
+  // Looked up now rather than remembered: the grid may have replaced its
+  // instance since the player opened.
+  const swiper = (anchorImg && owningSwiper(anchorImg)) || anchorSwiper;
+  close(false);
+  if (direction > 0) {
+    swiper?.slideNext?.();
+  } else {
+    swiper?.slidePrev?.();
+  }
+}
+
+function onNavKey(e) {
+  const direction = NAV_KEYS[e.key];
+  if (!direction || !anchorImg || !isVideoPlayerOpen() || e.altKey || e.ctrlKey || e.metaKey) {
+    return;
+  }
+  // Fullscreen, the video is all there is: the arrows seek, as they should.
+  if (playerFullscreenElement()) {
+    return;
+  }
+  // The search box and the other panels stay usable while a video plays in
+  // place, and their caret keys are their own.
+  const tag = e.target?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target?.isContentEditable) {
+    return;
+  }
+  e.preventDefault();
+  e.stopPropagation();
+  navigateFromPlayer(direction);
+}
+
+function onFramePointerDown(e) {
+  if (!anchorImg || e.isPrimary === false || playerFullscreenElement()) {
+    swipeStart = null;
+    return;
+  }
+  const box = frameEl.getBoundingClientRect();
+  // On a small grid tile a fixed strip would be most of the tile.
+  const controls = Math.min(CONTROL_BAR_PX, box.height / 3);
+  swipeStart = e.clientY > box.bottom - controls ? null : { x: e.clientX, y: e.clientY, id: e.pointerId };
+}
+
+/**
+ * Keep a mouse drag that has started moving, so its pointerup arrives here
+ * even when it ends outside the frame — which, across a 100px grid tile, is
+ * where a 50px drag usually ends. Touch needs nothing: the browser already
+ * captures a touch to the element it started on. Not taken on pointerdown,
+ * so a plain click still lands on the <video> itself.
+ */
+function onFramePointerMove(e) {
+  if (!swipeStart || e.pointerId !== swipeStart.id || e.pointerType !== "mouse") {
+    return;
+  }
+  if (Math.abs(e.clientX - swipeStart.x) > 10 && !frameEl.hasPointerCapture?.(e.pointerId)) {
+    frameEl.setPointerCapture?.(e.pointerId);
+  }
+}
+
+function onFramePointerUp(e) {
+  const start = swipeStart;
+  swipeStart = null;
+  if (!start || !anchorImg) {
+    return;
+  }
+  const dx = e.clientX - start.x;
+  const dy = e.clientY - start.y;
+  if (Math.abs(dx) >= SWIPE_MIN_PX && Math.abs(dx) > 1.5 * Math.abs(dy)) {
+    navigateFromPlayer(dx < 0 ? 1 : -1);
+  }
+}
+
+export function openVideoPlayer({ url, filename, playable = true, poster = "", transcodeUrl = "", slide = null } = {}) {
   if (!modal) {
     return;
   }
@@ -334,6 +665,16 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   // video playing — audible — behind a modal the user never saw.
   modal.classList.add("visible");
 
+  // Play in place over the slide's poster when there is one to pin to.
+  anchorSwiper = slide ? owningSwiper(slide) : null;
+  const inGrid = Boolean(slide?.closest?.("#gridViewContainer"));
+  const still = slide?.isConnected && (!inGrid || gridPlaysInTile()) ? slide.querySelector("img") : null;
+  // A poster with no size or off screen has nowhere to be played over; the
+  // lightbox is better than a player that is invisible from the start.
+  setAnchor(still && isOnScreen(pictureRect(still)) ? still : null);
+  // Positions the frame now, before anything is drawn, and keeps it there.
+  followAnchor();
+
   if (!url) {
     // The only open path with nothing to play. Without the teardown the
     // previous clip keeps streaming — audibly — behind the panel, and with
@@ -357,9 +698,23 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   // Otherwise the arrow keys change slides behind the modal while the user is
   // trying to scrub.
   state.swiper?.keyboard?.disable?.();
+  // The grid has its own instance, whose arrows would page behind the player;
+  // followAnchor has just switched it off, and keeps doing so for any instance
+  // the grid replaces it with.
 }
 
 export function closeVideoPlayer() {
+  close(true);
+}
+
+/**
+ * Close the player.
+ *
+ * @param {boolean} resumeSlideshow restart a slideshow the open paused. Only
+ *   for an explicit dismissal: leaving the video by navigating is a manual
+ *   move, and a manual move stops a slideshow everywhere else in the app.
+ */
+function close(resumeSlideshow) {
   if (!modal || !isVideoPlayerOpen()) {
     return;
   }
@@ -370,15 +725,23 @@ export function closeVideoPlayer() {
   clearTimeout(pollTimer);
   pollTimer = null;
 
+  exitPlayerFullscreen();
   teardownVideo();
   videoEl?.removeAttribute("poster");
   modal.classList.remove("visible");
+  setAnchor(null);
+  anchorSwiper = null;
+  anchorHost = null;
+  anchorIndex = null;
+  swipeStart = null;
   hidePanels();
   current = null;
   usingConversion = false;
 
   state.swiper?.keyboard?.enable?.();
-  if (slideshowWasRunning) {
+  keyboardSwiper?.keyboard?.enable?.();
+  keyboardSwiper = null;
+  if (slideshowWasRunning && resumeSlideshow) {
     state.single_swiper?.resumeSlideshow?.();
   }
   slideshowWasRunning = false;
@@ -394,6 +757,7 @@ export function initializeVideoPlayer() {
   }
   videoEl = document.getElementById("videoPlayerElement");
   titleEl = document.getElementById("videoPlayerTitle");
+  frameEl = document.getElementById("videoPlayerFrame");
   closeBtn = document.getElementById("videoPlayerCloseBtn");
   fallbackEl = document.getElementById("videoPlayerFallback");
   fallbackMessageEl = document.getElementById("videoPlayerFallbackMessage");
@@ -452,8 +816,25 @@ export function initializeVideoPlayer() {
   // A playing video must not be left behind by navigation: the modal would
   // then describe a different slide than the drawer and the UMAP marker, and
   // on an album change the indices are about to be re-based entirely.
-  window.addEventListener("slideChanged", closeVideoPlayer);
+  //
+  // Except while fullscreen: the user cannot navigate from there, so a
+  // slideChanged then is a rebuild of the page underneath, not a move away.
+  window.addEventListener("slideChanged", () => {
+    if (!playerFullscreenElement()) {
+      close(false);
+    }
+  });
   window.addEventListener("albumChanged", closeVideoPlayer);
+
+  // Capture phase, so the arrows reach this before the native controls seek
+  // with them or the global shortcuts see them.
+  window.addEventListener("keydown", onNavKey, true);
+  frameEl?.addEventListener("pointerdown", onFramePointerDown);
+  frameEl?.addEventListener("pointermove", onFramePointerMove);
+  frameEl?.addEventListener("pointerup", onFramePointerUp);
+  frameEl?.addEventListener("pointercancel", () => {
+    swipeStart = null;
+  });
 
   window.addEventListener("videoPlayRequested", (e) => {
     openVideoPlayer(e.detail || {});
@@ -464,10 +845,17 @@ export function initializeVideoPlayer() {
 
 /** Test seam: drop cached element references so a fresh DOM can be wired. */
 export function _resetVideoPlayerForTests() {
+  // jsdom keeps <body> — and its classes — across innerHTML resets.
+  document.body.classList.remove("video-playing-in-place");
+  anchorSlide?.classList.remove("video-playing-slide");
+  if (modal && closeBtn && closeBtn.parentElement !== modal) {
+    modal.insertBefore(closeBtn, modal.firstChild);
+  }
   initialized = false;
   modal = null;
   videoEl = null;
   titleEl = null;
+  frameEl = null;
   closeBtn = null;
   fallbackEl = null;
   fallbackMessageEl = null;
@@ -480,6 +868,16 @@ export function _resetVideoPlayerForTests() {
   slideshowWasRunning = false;
   clearTimeout(pollTimer);
   pollTimer = null;
+  window.cancelAnimationFrame(followFrame);
+  followFrame = null;
+  anchorImg = null;
+  anchorSlide = null;
+  anchorSwiper = null;
+  anchorHost = null;
+  anchorIndex = null;
+  anchorLostAt = null;
+  keyboardSwiper = null;
+  swipeStart = null;
   // Advanced, never reset to a fixed value: session numbers are only a valid
   // staleness guard while they are monotonic. Restarting at 0 lets a poll
   // chain left pending by a previous test capture a number the next test

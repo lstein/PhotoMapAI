@@ -208,6 +208,36 @@ describe("applyVideoOverlay", () => {
 });
 
 describe("badge click", () => {
+  it("selects a grid tile before asking for playback", () => {
+    const grid = document.createElement("div");
+    grid.id = "gridViewContainer";
+    document.body.appendChild(grid);
+    const slide = makeSlide();
+    grid.appendChild(slide);
+    applyVideoOverlay(slide, VIDEO_DATA);
+    const order = [];
+    window.handleGridSlideClick = jest.fn(() => order.push("select"));
+    const handler = () => order.push("play");
+    window.addEventListener("videoPlayRequested", handler);
+
+    slide.querySelector(".video-badge").click();
+
+    expect(window.handleGridSlideClick).toHaveBeenCalledWith(3);
+    // Selecting fires slideChanged, which closes the player; it must come first.
+    expect(order).toEqual(["select", "play"]);
+    window.removeEventListener("videoPlayRequested", handler);
+    delete window.handleGridSlideClick;
+  });
+
+  it("does not select anything for a swiper slide", () => {
+    const slide = makeSlide();
+    applyVideoOverlay(slide, VIDEO_DATA);
+    window.handleGridSlideClick = jest.fn();
+    slide.querySelector(".video-badge").click();
+    expect(window.handleGridSlideClick).not.toHaveBeenCalled();
+    delete window.handleGridSlideClick;
+  });
+
   it("dispatches videoPlayRequested with the payload details", () => {
     const slide = makeSlide();
     applyVideoOverlay(slide, VIDEO_DATA);
@@ -227,6 +257,8 @@ describe("badge click", () => {
       // Where the player asks for a playable copy of an unplayable file.
       transcodeUrl: "prepare_video/album/clip.mp4",
       globalIndex: 3,
+      // So the player can pin itself over the still and play in place.
+      slide,
     });
     window.removeEventListener("videoPlayRequested", handler);
   });

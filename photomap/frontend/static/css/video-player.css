@@ -260,3 +260,108 @@
     opacity: 0.45;
   }
 }
+
+/* ===== Playing in place =====
+
+   The frame is pinned by video-player.js over the rectangle the poster's
+   picture occupies, so pressing play swaps the still for the moving picture
+   without anything changing size. No backdrop, and the overlay itself lets
+   every pointer event through: the swiper's arrows, the panels and the rest of
+   the page stay usable, and using them to move on is what closes the player.
+
+   The z-index puts it above the slide (and its play badge, at 100) but below
+   the UMAP window, the swiper's arrows and the side panels, which all sit over
+   the photo too. */
+#videoPlayerModal.video-player-overlay--anchored {
+  background: transparent;
+  padding: 0;
+  pointer-events: none;
+  z-index: 200;
+}
+
+/* The control and search panels float over the bottom corners of the photo,
+   which is exactly where the video's native control bar is drawn, and the
+   browser offers no way to move that bar. Dropping the panels beneath the
+   video instead looked broken wherever it covered only part of one, so they
+   fade out while a video plays in place and come back when it closes.
+
+   `visibility` goes with the opacity so a hidden button can be neither
+   clicked nor tabbed to; it flips only once the fade has finished. */
+/* :where() keeps this at zero specificity. As a plain ID rule it outranked
+   .hidden-fullscreen's own transition, and the panels stopped fading when
+   the page went fullscreen. */
+:where(#controlPanel, #searchPanel) {
+  transition: opacity 0.25s ease;
+}
+
+body.video-playing-in-place #controlPanel,
+body.video-playing-in-place #searchPanel {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.25s ease,
+    visibility 0s linear 0.25s;
+}
+
+/* The playing slide's own furniture. Its favourites star sits in the corner
+   where the player puts its close button (half outside the picture on a
+   letterboxed grid tile, so the two overlapped), and its play badge would
+   show round the edges of a still that is now playing. */
+.video-playing-slide > .bookmark-icon,
+.video-playing-slide > .video-badge {
+  visibility: hidden;
+}
+
+.video-player-overlay--anchored .video-player-frame {
+  position: fixed;
+  max-width: none;
+  pointer-events: auto;
+  /* Transparent rather than black: until the poster decodes, the identical
+     still in the slide underneath shows through instead of a black flash. */
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  /* The browser must not claim a horizontal drag for panning: it is how the
+     user swipes to the next slide. */
+  touch-action: pinch-zoom;
+}
+
+/* Sized by the frame, which has the picture's exact dimensions; `contain`
+   only matters if the stream's aspect ratio differs from the still's. */
+.video-player-overlay--anchored .video-player-element {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+  background: transparent;
+  border-radius: inherit;
+}
+
+/* The slide already names the file; a caption floating under the picture
+   would sit on top of whatever is below it. */
+.video-player-overlay--anchored .video-player-title {
+  display: none;
+}
+
+.video-player-overlay--anchored .video-player-close {
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  font-size: 1.3rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.video-player-overlay--anchored .video-player-close:hover,
+.video-player-overlay--anchored .video-player-close:focus-visible {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* A grid tile can be 75px across. Clip the panel's text rather than let it
+   spill over the neighbouring tiles. */
+.video-player-overlay--anchored .video-player-panel {
+  padding: 8px;
+  border-radius: inherit;
+  overflow: hidden;
+}

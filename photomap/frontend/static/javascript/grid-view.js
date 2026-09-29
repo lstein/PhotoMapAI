@@ -575,17 +575,17 @@ class GridViewManager {
         const newGeometry = this.calculateGridGeometry();
 
         if (this.gridGeometryChanged(newGeometry)) {
-          const currentGlobalIndex = slideState.getCurrentSlide().globalIndex;
-
-          // ``resetAllSlides`` is async — without awaiting, the next line's
-          // ``initializeGridSwiper`` would destroy the swiper while the reset
-          // was still mid-await, leading to flickers and stale slide DOM.
-          await this.resetAllSlides();
+          // New instance first, then the reset — the order the thumbnail-size
+          // handler uses. The other way round, the reset built the pages at the
+          // old geometry and scrolled past the page it prepends; the instance
+          // created afterwards then started at slide 0, which is that
+          // previous page, and — since creating it forgets which images are
+          // loaded but keeps their slides — the batch loads that followed
+          // appended a second copy of every tile. Visible on every resize that
+          // changes the grid's shape, including entering and leaving
+          // fullscreen, as the grid coming back one page early.
           this.initializeGridSwiper();
-          this.setBatchLoading(true);
-          await this.loadBatch(currentGlobalIndex);
-          await this.loadBatch(currentGlobalIndex + this.slidesPerBatch);
-          this.setBatchLoading(false);
+          await this.resetAllSlides();
         }
       }, 300);
     };
