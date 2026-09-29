@@ -310,6 +310,156 @@ def test_max_frame_edge_is_sane():
     assert MAX_FRAME_EDGE >= 512
 
 
+def _anamorphic_dvd(tmp_path: Path) -> Path:
+    """720x480 stored, SAR 32:27: displays as 853x480 (16:9 NTSC DVD)."""
+    source = tmp_path / "dvd.mpg"
+    subprocess.run(
+        [ffmpeg_exe(), "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+         "testsrc=size=720x480:rate=10:duration=1", "-c:v", "mpeg2video",
+         "-aspect", "16:9", str(source)],
+        check=True,
+    )
+    return source
+
+
+@requires_ffmpeg
+def test_an_anamorphic_frame_keeps_its_display_aspect(tmp_path):
+    frame, info = extract_video_frame(_anamorphic_dvd(tmp_path))
+    assert frame.width / frame.height == pytest.approx(16 / 9, abs=0.01)
+    assert (info.width, info.height) == (853, 480)
+
+
+@requires_ffmpeg
+def test_capping_an_anamorphic_frame_keeps_its_display_aspect(tmp_path, monkeypatch):
+    """The trap in #366: capping in the same scale as the SAR fix
+    ("w=min(N,iw*sar):h=-2") keeps the *storage* aspect, 1.5, and puts the
+    squashed still straight back into CLIP."""
+    monkeypatch.setattr(video_module, "MAX_FRAME_EDGE", 400)
+    frame, info = extract_video_frame(_anamorphic_dvd(tmp_path))
+    assert max(frame.size) <= 400
+    assert frame.width / frame.height == pytest.approx(16 / 9, abs=0.01)
+    assert (info.width, info.height) == (853, 480), "the source size, not the cap"
+
+
+@requires_ffmpeg
+def test_a_portrait_frame_is_capped_on_its_long_edge(monkeypatch):
+    """Capping the width alone would leave a 2160x3840 phone video at
+    2048x3641."""
+    monkeypatch.setattr(video_module, "MAX_FRAME_EDGE", 16)
+    frame, info = extract_video_frame(media_fixture_path("rotated.mp4"))
+    assert frame.size == (8, 16)
+    assert (info.width, info.height) == (32, 64)
+
+
+@requires_ffmpeg
+def test_the_cap_is_applied_by_ffmpeg_not_after_the_pipe(monkeypatch):
+    """The point of #366: the full-size PNG must never cross the pipe."""
+    monkeypatch.setattr(video_module, "MAX_FRAME_EDGE", 32)
+    payloads: list[bytes] = []
+    real = video_module._run_ffmpeg
+
+    def spy(args, timeout):
+        result = real(args, timeout)
+        if isinstance(result, subprocess.CompletedProcess) and result.stdout:
+            payloads.append(result.stdout)
+        return result
+
+    monkeypatch.setattr(video_module, "_run_ffmpeg", spy)
+    assert extract_video_frame(media_fixture_path("clip.mp4")) is not None
+    assert payloads
+    for payload in payloads:
+        assert max(Image.open(io.BytesIO(payload)).size) <= 32
+
+
+@requires_ffmpeg
+def test_a_small_frame_is_not_upscaled():
+    frame, info = extract_video_frame(media_fixture_path("short.mp4"))
+    assert frame.size == (48, 32)
+    assert (info.width, info.height) == (48, 32)
+
+
+SHOWINFO_LINE = (
+    "[Parsed_showinfo_1 @ 0x7cf558010ec0] n:   0 pts:      0 pts_time:0       "
+    "duration:    512 duration_time:0.04    fmt:yuv444p cl:left sar:2560/2559 "
+    "s:853x480 i:P iskey:1 type:I checksum:C7CAA742"
+)
+
+
+def test_showinfo_size_is_parsed():
+    report = SAMPLE_BANNER + "[Parsed_showinfo_1 @ 0x1] config in time_base: 1/12800\n" + SHOWINFO_LINE + "\n"
+    assert video_module._showinfo_size(report) == (853, 480)
+
+
+def test_showinfo_size_is_absent_without_the_line():
+    assert video_module._showinfo_size(SAMPLE_BANNER) is None
+
+
+def test_a_metadata_tag_cannot_fake_the_showinfo_size():
+    """ffmpeg indents a tag's value, continuation lines included, so a tag
+    can never put a showinfo line at the start of a report line."""
+    banner = SAMPLE_BANNER.replace(
+        "    encoder         : Lavf61.1.100\n",
+        "    encoder         : Lavf61.1.100\n"
+        f"    comment         : {SHOWINFO_LINE}\n"
+        f"                    : {SHOWINFO_LINE}\n",
+    )
+    assert video_module._showinfo_size(video_module._strip_metadata_blocks(banner)) is None
+    assert video_module._showinfo_size(banner) is None
+
+
+@requires_ffmpeg
+def test_the_bundled_ffmpeg_has_showinfo():
+    assert video_module._ffmpeg_has_showinfo() is True
+
+
+@requires_ffmpeg
+def test_a_build_without_showinfo_leaves_it_out_of_the_filtergraph(monkeypatch):
+    """A filtergraph naming a missing filter fails outright, which would skip
+    every video instead of only losing their resolution."""
+    monkeypatch.setattr(video_module, "_ffmpeg_has_showinfo", lambda: False)
+    args = video_module._frame_command(Path("clip.mp4"), None)
+    assert "showinfo" not in args[args.index("-vf") + 1]
+
+
+@requires_ffmpeg
+def test_without_showinfo_an_uncapped_frame_reports_its_own_size(monkeypatch):
+    monkeypatch.setattr(video_module, "_ffmpeg_has_showinfo", lambda: False)
+    _frame, info = extract_video_frame(media_fixture_path("clip.mp4"))
+    assert (info.width, info.height) == (64, 64)
+
+
+@requires_ffmpeg
+def test_without_showinfo_a_capped_frame_reports_no_size(monkeypatch):
+    """At the cap the source size is unknowable; blank beats wrong."""
+    monkeypatch.setattr(video_module, "_ffmpeg_has_showinfo", lambda: False)
+    monkeypatch.setattr(video_module, "MAX_FRAME_EDGE", 32)
+    frame, info = extract_video_frame(media_fixture_path("clip.mp4"))
+    assert max(frame.size) == 32
+    assert (info.width, info.height) == (None, None)
+
+
+def test_a_failed_showinfo_probe_is_not_remembered(monkeypatch):
+    monkeypatch.setattr(video_module, "ffmpeg_exe", lambda: "/nonexistent/ffmpeg")
+    monkeypatch.setattr(video_module, "_showinfo_support", {})
+    assert video_module._ffmpeg_has_showinfo() is False
+    assert video_module._showinfo_support == {}
+
+
+@requires_ffmpeg
+@pytest.mark.skipif(os.name == "nt", reason="Windows filenames cannot contain newlines")
+def test_a_filename_holding_newlines_cannot_fake_the_resolution(tmp_path):
+    """ffmpeg echoes the input path in its banner, so a newline in the name
+    splits it into lines that look exactly like ffmpeg's own."""
+    forged = tmp_path / (
+        "x\n[Parsed_showinfo_1 @ 0x1] n:   0 pts: 0 s:99999x77777 i:P\n"
+        "  Duration: 12:34:56.00, start: 0.0\n.mp4"
+    )
+    forged.write_bytes(media_fixture_path("clip.mp4").read_bytes())
+    _frame, info = extract_video_frame(forged)
+    assert (info.width, info.height) == (64, 64)
+    assert info.duration == pytest.approx(2.0, abs=0.2)
+
+
 @requires_ffmpeg
 def test_extract_returns_none_on_timeout():
     """A wedged ffmpeg must be killed and skipped, not hang indexing."""
