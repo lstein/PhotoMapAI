@@ -287,8 +287,10 @@
 
    `visibility` goes with the opacity so a hidden button can be neither
    clicked nor tabbed to; it flips only once the fade has finished. */
-#controlPanel,
-#searchPanel {
+/* :where() keeps this at zero specificity. As a plain ID rule it outranked
+   .hidden-fullscreen's own transition, and the panels stopped fading when
+   the page went fullscreen. */
+:where(#controlPanel, #searchPanel) {
   transition: opacity 0.25s ease;
 }
 

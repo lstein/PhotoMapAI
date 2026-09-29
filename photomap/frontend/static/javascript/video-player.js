@@ -433,33 +433,69 @@ function adoptAnchor(img) {
   anchorSlide?.classList.remove("video-playing-slide");
   anchorSlide = img.closest(".swiper-slide");
   anchorSlide?.classList.add("video-playing-slide");
-  const swiper = owningSwiper(img);
-  if (swiper && swiper !== anchorSwiper) {
-    anchorSwiper = swiper;
-    // A recreated grid instance comes back with its arrows enabled.
-    if (swiper !== state.swiper) {
-      keyboardSwiper = swiper;
-      swiper.keyboard?.disable?.();
-    }
-  }
+  anchorSwiper = owningSwiper(img) || anchorSwiper;
 }
 
 /**
- * Keep the frame over the poster, or close if the poster has gone.
+ * Keep the arrows of whatever Swiper instance now owns the container off.
  *
- * Called every animation frame while playing in place, which covers every way
- * the picture can move without an event this module would otherwise need to
- * hear about: window resize, fullscreen, the drawer, a partial drag of the
- * slide (the video follows it), and a grid page sliding away.
+ * The grid replaces its instance on every resize that changes its shape —
+ * entering fullscreen is one — and each new instance comes up with its
+ * keyboard enabled. Left alone, the arrows meant to seek a fullscreen clip
+ * page the grid behind it instead (Swiper preventDefaults them, so the seek
+ * is lost too), and the same happens behind the lightbox.
+ */
+function syncKeyboard() {
+  const live = anchorHost?.swiper;
+  if (live && live !== state.swiper && live !== keyboardSwiper) {
+    keyboardSwiper = live;
+    live.keyboard?.disable?.();
+  }
+}
+
+/** True when `rect` has a size and overlaps the swiper's own box. */
+function isOnScreen(rect) {
+  if (!rect || !(rect.width > 0) || !(rect.height > 0)) {
+    return false;
+  }
+  const view = anchorSwiper?.el?.getBoundingClientRect?.();
+  return (
+    !view || (rect.right > view.left && rect.left < view.right && rect.bottom > view.top && rect.top < view.bottom)
+  );
+}
+
+/**
+ * Keep the frame over the poster; runs every animation frame while open.
+ *
+ * Polling covers every way the picture can move without an event this module
+ * would otherwise need to hear about: window resize, fullscreen, the drawer, a
+ * partial drag of the slide (the video follows it).
+ *
+ * A poster that is missing or off screen is waited for rather than closed on.
+ * Swiper rebuilds put it back in a different place (a new instance, briefly
+ * at slide 0, over the old slides) and the page it ends up on is only settled
+ * once the rebuild finishes. Real navigation needs no help from here: paging
+ * the grid or changing slide moves the selection, whose slideChanged closes
+ * the player at once.
  */
 function followAnchor() {
   followFrame = null;
-  if (!anchorImg || !isVideoPlayerOpen()) {
+  if (!isVideoPlayerOpen()) {
+    return;
+  }
+  syncKeyboard();
+  if (!anchorImg) {
+    // The lightbox has nothing to follow; it only needs the keyboard kept off.
+    if (anchorHost) {
+      followFrame = window.requestAnimationFrame(followAnchor);
+    }
     return;
   }
   // While fullscreen the page underneath is laid out for the new window size
-  // and may be rebuilding; none of that concerns the player until it returns.
+  // and may be rebuilding; none of that concerns the player until it returns,
+  // and the wait for the poster starts over from then.
   if (playerFullscreenElement()) {
+    anchorLostAt = null;
     followFrame = window.requestAnimationFrame(followAnchor);
     return;
   }
@@ -467,33 +503,22 @@ function followAnchor() {
     const found = relocateAnchor();
     if (found) {
       adoptAnchor(found);
-    } else {
-      anchorLostAt ??= performance.now();
-      if (performance.now() - anchorLostAt > ANCHOR_GRACE_MS) {
-        closeVideoPlayer();
-        return;
-      }
-      // Nothing to sit over meanwhile. Hidden rather than closed, so the clip
-      // carries on where it was when its tile reappears.
-      frameEl.style.visibility = "hidden";
-      followFrame = window.requestAnimationFrame(followAnchor);
-      return;
     }
   }
-  anchorLostAt = null;
-  const rect = pictureRect(anchorImg);
-  const view = anchorSwiper?.el?.getBoundingClientRect?.();
-  const visible =
-    rect &&
-    rect.width > 0 &&
-    rect.height > 0 &&
-    (!view || (rect.right > view.left && rect.left < view.right && rect.bottom > view.top && rect.top < view.bottom));
-  if (!visible) {
-    // The view was switched or the page slid away. Leaving the video floating
-    // over whatever is there now would be worse than stopping it.
-    closeVideoPlayer();
+  const rect = anchorImg.isConnected ? pictureRect(anchorImg) : null;
+  if (!isOnScreen(rect)) {
+    anchorLostAt ??= performance.now();
+    if (performance.now() - anchorLostAt > ANCHOR_GRACE_MS) {
+      closeVideoPlayer();
+      return;
+    }
+    // Nothing to sit over meanwhile. Hidden rather than closed, so the clip
+    // carries on where it was when its tile reappears.
+    frameEl.style.visibility = "hidden";
+    followFrame = window.requestAnimationFrame(followAnchor);
     return;
   }
+  anchorLostAt = null;
   const style = frameEl.style;
   style.visibility = "";
   style.left = `${rect.left}px`;
@@ -524,7 +549,6 @@ function setAnchor(img) {
     // Inside the frame, so it rides along in its corner.
     frameEl.appendChild(closeBtn);
     frameEl.style.borderRadius = getComputedStyle(img).borderRadius;
-    followAnchor();
   } else if (frameEl && closeBtn) {
     modal.insertBefore(closeBtn, modal.firstChild);
     frameEl.removeAttribute("style");
@@ -536,7 +560,7 @@ function navigateFromPlayer(direction) {
   // Looked up now rather than remembered: the grid may have replaced its
   // instance since the player opened.
   const swiper = (anchorImg && owningSwiper(anchorImg)) || anchorSwiper;
-  closeVideoPlayer();
+  close(false);
   if (direction > 0) {
     swiper?.slideNext?.();
   } else {
@@ -569,8 +593,26 @@ function onFramePointerDown(e) {
     swipeStart = null;
     return;
   }
-  const bottom = frameEl.getBoundingClientRect().bottom;
-  swipeStart = e.clientY > bottom - CONTROL_BAR_PX ? null : { x: e.clientX, y: e.clientY };
+  const box = frameEl.getBoundingClientRect();
+  // On a small grid tile a fixed strip would be most of the tile.
+  const controls = Math.min(CONTROL_BAR_PX, box.height / 3);
+  swipeStart = e.clientY > box.bottom - controls ? null : { x: e.clientX, y: e.clientY, id: e.pointerId };
+}
+
+/**
+ * Keep a mouse drag that has started moving, so its pointerup arrives here
+ * even when it ends outside the frame — which, across a 100px grid tile, is
+ * where a 50px drag usually ends. Touch needs nothing: the browser already
+ * captures a touch to the element it started on. Not taken on pointerdown,
+ * so a plain click still lands on the <video> itself.
+ */
+function onFramePointerMove(e) {
+  if (!swipeStart || e.pointerId !== swipeStart.id || e.pointerType !== "mouse") {
+    return;
+  }
+  if (Math.abs(e.clientX - swipeStart.x) > 10 && !frameEl.hasPointerCapture?.(e.pointerId)) {
+    frameEl.setPointerCapture?.(e.pointerId);
+  }
 }
 
 function onFramePointerUp(e) {
@@ -626,8 +668,12 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   // Play in place over the slide's poster when there is one to pin to.
   anchorSwiper = slide ? owningSwiper(slide) : null;
   const inGrid = Boolean(slide?.closest?.("#gridViewContainer"));
-  const img = slide?.isConnected && (!inGrid || gridPlaysInTile()) ? slide.querySelector("img") : null;
-  setAnchor(img || null);
+  const still = slide?.isConnected && (!inGrid || gridPlaysInTile()) ? slide.querySelector("img") : null;
+  // A poster with no size or off screen has nowhere to be played over; the
+  // lightbox is better than a player that is invisible from the start.
+  setAnchor(still && isOnScreen(pictureRect(still)) ? still : null);
+  // Positions the frame now, before anything is drawn, and keeps it there.
+  followAnchor();
 
   if (!url) {
     // The only open path with nothing to play. Without the teardown the
@@ -652,12 +698,23 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   // Otherwise the arrow keys change slides behind the modal while the user is
   // trying to scrub.
   state.swiper?.keyboard?.disable?.();
-  // The grid has its own instance, whose arrows would page behind the player.
-  keyboardSwiper = anchorSwiper && anchorSwiper !== state.swiper ? anchorSwiper : null;
-  keyboardSwiper?.keyboard?.disable?.();
+  // The grid has its own instance, whose arrows would page behind the player;
+  // followAnchor has just switched it off, and keeps doing so for any instance
+  // the grid replaces it with.
 }
 
 export function closeVideoPlayer() {
+  close(true);
+}
+
+/**
+ * Close the player.
+ *
+ * @param {boolean} resumeSlideshow restart a slideshow the open paused. Only
+ *   for an explicit dismissal: leaving the video by navigating is a manual
+ *   move, and a manual move stops a slideshow everywhere else in the app.
+ */
+function close(resumeSlideshow) {
   if (!modal || !isVideoPlayerOpen()) {
     return;
   }
@@ -684,7 +741,7 @@ export function closeVideoPlayer() {
   state.swiper?.keyboard?.enable?.();
   keyboardSwiper?.keyboard?.enable?.();
   keyboardSwiper = null;
-  if (slideshowWasRunning) {
+  if (slideshowWasRunning && resumeSlideshow) {
     state.single_swiper?.resumeSlideshow?.();
   }
   slideshowWasRunning = false;
@@ -764,7 +821,7 @@ export function initializeVideoPlayer() {
   // slideChanged then is a rebuild of the page underneath, not a move away.
   window.addEventListener("slideChanged", () => {
     if (!playerFullscreenElement()) {
-      closeVideoPlayer();
+      close(false);
     }
   });
   window.addEventListener("albumChanged", closeVideoPlayer);
@@ -773,6 +830,7 @@ export function initializeVideoPlayer() {
   // with them or the global shortcuts see them.
   window.addEventListener("keydown", onNavKey, true);
   frameEl?.addEventListener("pointerdown", onFramePointerDown);
+  frameEl?.addEventListener("pointermove", onFramePointerMove);
   frameEl?.addEventListener("pointerup", onFramePointerUp);
   frameEl?.addEventListener("pointercancel", () => {
     swipeStart = null;
@@ -787,6 +845,12 @@ export function initializeVideoPlayer() {
 
 /** Test seam: drop cached element references so a fresh DOM can be wired. */
 export function _resetVideoPlayerForTests() {
+  // jsdom keeps <body> — and its classes — across innerHTML resets.
+  document.body.classList.remove("video-playing-in-place");
+  anchorSlide?.classList.remove("video-playing-slide");
+  if (modal && closeBtn && closeBtn.parentElement !== modal) {
+    modal.insertBefore(closeBtn, modal.firstChild);
+  }
   initialized = false;
   modal = null;
   videoEl = null;

@@ -859,12 +859,100 @@ describe("playing in place", () => {
     expect(fresh.slideNext).toHaveBeenCalledTimes(1);
   });
 
-  it("closes when the picture leaves the swiper's viewport", () => {
+  it("waits for a picture that left the viewport, then closes", () => {
+    // A rebuilt grid starts its new instance at slide 0, over the old slides,
+    // before the reset settles on the right page: the tile is briefly off
+    // screen without anything having navigated.
+    const now = jest.spyOn(performance, "now").mockReturnValue(0);
     const { slide, img } = makeSwiperSlide();
     openVideoPlayer({ ...MP4, slide });
     img.getBoundingClientRect = () => rect(1000, 0, 1000, 800);
     runFrame();
+    expect(isVideoPlayerOpen()).toBe(true);
+    expect(frame().style.visibility).toBe("hidden");
+
+    now.mockReturnValue(10000);
+    runFrame();
     expect(isVideoPlayerOpen()).toBe(false);
+    now.mockRestore();
+  });
+
+  it("comes back when the picture returns to the viewport in time", () => {
+    const now = jest.spyOn(performance, "now").mockReturnValue(0);
+    const { slide, img } = makeSwiperSlide();
+    openVideoPlayer({ ...MP4, slide });
+    img.getBoundingClientRect = () => rect(1000, 0, 1000, 800);
+    runFrame();
+    now.mockReturnValue(1000);
+    img.getBoundingClientRect = () => rect(0, 0, 1000, 800);
+    runFrame();
+    expect(isVideoPlayerOpen()).toBe(true);
+    expect(frame().style.visibility).toBe("");
+    now.mockRestore();
+  });
+
+  it("opens as a lightbox when the poster is not on screen, rather than closing itself", () => {
+    const { slide, img } = makeSwiperSlide();
+    img.getBoundingClientRect = () => rect(0, 0, 0, 0);
+    openVideoPlayer({ ...MP4, slide });
+    expect(isVideoPlayerOpen()).toBe(true);
+    expect(modal().classList.contains("video-player-overlay--anchored")).toBe(false);
+  });
+
+  it("keeps the arrows off on an instance the grid replaced its own with", () => {
+    const { slide, container } = makeSwiperSlide({ grid: true });
+    openVideoPlayer({ ...MP4, slide });
+    const fresh = { el: container, keyboard: { disable: jest.fn(), enable: jest.fn() } };
+    container.swiper = fresh;
+    runFrame();
+    expect(fresh.keyboard.disable).toHaveBeenCalledTimes(1);
+    closeVideoPlayer();
+    expect(fresh.keyboard.enable).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the arrows off on a replaced instance behind the lightbox too", () => {
+    localStorage.setItem(GRID_IN_TILE_KEY, "false");
+    const { slide, container } = makeSwiperSlide({ grid: true });
+    openVideoPlayer({ ...MP4, slide });
+    const fresh = { el: container, keyboard: { disable: jest.fn(), enable: jest.fn() } };
+    container.swiper = fresh;
+    runFrame();
+    expect(fresh.keyboard.disable).toHaveBeenCalledTimes(1);
+    localStorage.removeItem(GRID_IN_TILE_KEY);
+  });
+
+  it("leaves a paused slideshow paused when the user navigates away", () => {
+    mockState.swiper.autoplay.running = true;
+    const { slide } = makeSwiperSlide();
+    openVideoPlayer({ ...MP4, slide });
+    window.dispatchEvent(new CustomEvent("slideChanged"));
+    expect(isVideoPlayerOpen()).toBe(false);
+    expect(mockStartSlideshow).not.toHaveBeenCalled();
+  });
+
+  it("leaves it paused on the arrow keys as well", () => {
+    mockState.swiper.autoplay.running = true;
+    const { slide } = makeSwiperSlide();
+    openVideoPlayer({ ...MP4, slide });
+    video().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+    expect(mockStartSlideshow).not.toHaveBeenCalled();
+  });
+
+  it("captures a mouse drag once it moves, so it can end outside the frame", () => {
+    const { slide } = makeSwiperSlide();
+    openVideoPlayer({ ...MP4, slide });
+    frame().setPointerCapture = jest.fn();
+    frame().hasPointerCapture = jest.fn(() => false);
+    const at = (type, x) => {
+      const e = new MouseEvent(type, { clientX: x, clientY: 300, bubbles: true });
+      Object.assign(e, { pointerId: 1, pointerType: "mouse" });
+      frame().dispatchEvent(e);
+    };
+    at("pointerdown", 600);
+    at("pointermove", 605);
+    expect(frame().setPointerCapture).not.toHaveBeenCalled();
+    at("pointermove", 580);
+    expect(frame().setPointerCapture).toHaveBeenCalledWith(1);
   });
 
   it("goes back to the lightbox on close", () => {
