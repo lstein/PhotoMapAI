@@ -126,8 +126,16 @@ class GenerationMetadata5(BaseModel):
     qwen3_encoder: Model | None = None
     qwen3_source: ParameterModel | None = None
     qwen_image_component_source: ParameterModel | None = None
+    # Standalone component models. ``ParameterModel`` rather than ``Model``:
+    # declaring a field turns an unknown extra into a validated one, and a
+    # strict model here would fail the whole record over one extra key.
+    qwen_image_vae: ParameterModel | None = None
+    qwen_image_qwen_vl_encoder: ParameterModel | None = None
+    qwen3_vl_encoder: ParameterModel | None = None
     qwen_image_quantization: str | None = None
     qwen_image_shift: int | float | None = None
+    # A number, or "auto" when InvokeAI picks the shift itself.
+    z_image_shift: int | float | str | None = None
     vae: Model | None = None
     clip_embed_model: ClipEmbedModel | None = None
     dype_preset: str | None = None
