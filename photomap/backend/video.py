@@ -291,8 +291,7 @@ def ffmpeg_exe() -> str | None:
 
     Because the negative result is re-probed, a machine with no ffmpeg at all
     (the Docker images ship without one) fails once per video. The warning is
-    therefore logged only on the transition into "missing"; repeats while it
-    stays missing go to debug, and finding a binary re-arms the warning.
+    therefore logged only on the first failed probe; repeats go to debug.
     """
     global _ffmpeg_exe_cache, _ffmpeg_exe_probed, _ffmpeg_missing
 
@@ -669,6 +668,10 @@ def extract_video_frame(
 
         result = _run_ffmpeg(_frame_command(path, attempt_seek), min(timeout, remaining))
         if isinstance(result, _FfmpegUnavailable):
+            if best is None:
+                # ffmpeg_exe() has already warned once; the generic "could not
+                # extract" line below would repeat it for every video.
+                return None
             break  # nothing to run — retrying cannot help
         if result is None:
             # Timed out. Seeking is precisely what stalls on a fragmented

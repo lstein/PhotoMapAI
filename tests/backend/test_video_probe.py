@@ -510,39 +510,28 @@ def test_the_not_executable_path_is_also_warned_about_once(monkeypatch, tmp_path
         video_module._reset_ffmpeg_exe_cache()
 
 
-def test_finding_ffmpeg_rearms_the_missing_warning(monkeypatch, tmp_path, caplog):
-    """A binary that disappears, reappears and disappears again is two separate
-    outages, and each deserves its own warning. Found binaries are memoized, so
-    the reset stands in for whatever would drive a fresh probe."""
+def test_frame_extraction_does_not_repeat_the_missing_warning_per_video(monkeypatch, tmp_path, caplog):
+    """``extract_video_frame`` used to fall through to its generic "could not
+    extract a frame" warning when ffmpeg was absent, so indexing still logged
+    one line per video even with the probe warning deduplicated."""
     video_module._reset_ffmpeg_exe_cache()
     try:
         import imageio_ffmpeg
 
-        stand_in = tmp_path / "ffmpeg"
-        stand_in.write_text("")
-        present = {"value": False}
-
-        def probe():
-            if present["value"]:
-                return str(stand_in)
+        def missing():
             raise RuntimeError("No ffmpeg exe could be found.")
 
-        monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", probe)
+        monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", missing)
 
         with caplog.at_level(logging.WARNING, logger=video_module.logger.name):
-            assert video_module.ffmpeg_exe() is None
-            assert video_module.ffmpeg_exe() is None
-            present["value"] = True
-            assert video_module.ffmpeg_exe() == str(stand_in)
-            assert video_module.ffmpeg_known_unavailable() is False
+            for i in range(5):
+                assert video_module.extract_video_frame(tmp_path / f"clip{i}.mp4") is None
 
-            # Drop the memoized positive result without touching the flag
-            # history a reset would also wipe: the flag is already False here.
-            video_module._ffmpeg_exe_probed = False
-            present["value"] = False
-            assert video_module.ffmpeg_exe() is None
-
-        assert len(_missing_warnings(caplog)) == 2
+        warnings = [
+            r for r in caplog.records if r.name == video_module.logger.name and r.levelno >= logging.WARNING
+        ]
+        assert len(warnings) == 1, [r.getMessage() for r in warnings]
+        assert "ffmpeg" in warnings[0].getMessage()
     finally:
         video_module._reset_ffmpeg_exe_cache()
 
