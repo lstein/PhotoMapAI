@@ -1815,7 +1815,7 @@ requires-dist = [
     { name = "open-clip-torch" },
     { name = "packaging" },
     { name = "pandas" },
-    { name = "pillow" },
+    { name = "pillow", specifier = ">=11.3.0" },
     { name = "pillow-heif" },
     { name = "platformdirs" },
     { name = "psutil" },

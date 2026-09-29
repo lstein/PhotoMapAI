@@ -13,10 +13,11 @@ import { fetchJson } from "./utils.js";
 /**
  * Download the album item at `globalIndex` under its own filename.
  *
- * Videos are saved as the **original** file, never a converted copy. The
- * conversion exists so the browser can play a container it cannot decode; it
- * is a lossy re-encode in the general case, and it is not what is in the
- * user's library. `video_url` is the source bytes — see `create_slide_url`.
+ * Items are saved as the **original** file, never a converted copy. The
+ * conversions exist so the browser can play a container, or show a TIFF or
+ * HEIC, it cannot decode; they are lossy in the general case, and not what is
+ * in the user's library. `video_url` is the source bytes — see
+ * `create_slide_url` — and photos ask the image route for theirs.
  */
 export async function downloadItem(globalIndex) {
   const data = await fetchJson(`retrieve_image/${encodeURIComponent(state.album)}/${globalIndex}`);
@@ -37,7 +38,9 @@ export async function downloadItem(globalIndex) {
   }
 
   // Photos go through a blob so the object URL can carry the chosen filename.
-  const response = await fetch(itemUrl);
+  // `original=1` because the image route converts TIFF and HEIC to PNG for
+  // display; a download must be the user's own file, not that converted copy.
+  const response = await fetch(`${itemUrl}?original=1`);
   if (!response.ok) {
     throw new Error("Failed to fetch image");
   }

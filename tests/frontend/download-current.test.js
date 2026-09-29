@@ -112,7 +112,7 @@ describe("downloadItem", () => {
 
     await downloadItem(3);
 
-    expect(global.fetch).toHaveBeenCalledWith("images/my%20album/beach.jpg");
+    expect(global.fetch).toHaveBeenCalledWith("images/my%20album/beach.jpg?original=1");
     expect(anchors[0].getAttribute("href")).toBe("blob:fake");
     expect(anchors[0].download).toBe("beach.jpg");
     expect(global.URL.revokeObjectURL).toHaveBeenCalledWith("blob:fake");
