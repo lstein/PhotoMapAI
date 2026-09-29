@@ -32,9 +32,11 @@ piping them to the bundled ffmpeg as image2pipe PNGs (``-c:v libx264
 from __future__ import annotations
 
 import io
+import logging
 import os
 import random
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -453,6 +455,124 @@ def test_known_unavailable_is_set_when_the_candidate_is_not_executable(
 
         assert video_module.ffmpeg_exe() is None
         assert video_module.ffmpeg_known_unavailable() is True
+    finally:
+        video_module._reset_ffmpeg_exe_cache()
+
+
+def _missing_warnings(caplog) -> list[logging.LogRecord]:
+    return [
+        r
+        for r in caplog.records
+        if r.name == video_module.logger.name and r.levelno == logging.WARNING and "ffmpeg" in r.getMessage()
+    ]
+
+
+def test_a_missing_ffmpeg_is_warned_about_once_not_per_video(monkeypatch, caplog):
+    """The probe is retried on every call, so without ffmpeg every video in an
+    index run fails it. That used to log one identical warning per video — the
+    default in the Docker images, which ship without ffmpeg."""
+    video_module._reset_ffmpeg_exe_cache()
+    try:
+        import imageio_ffmpeg
+
+        calls = []
+
+        def missing():
+            calls.append(1)
+            raise RuntimeError("No ffmpeg exe could be found.")
+
+        monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", missing)
+
+        with caplog.at_level(logging.DEBUG, logger=video_module.logger.name):
+            for _ in range(50):
+                assert video_module.ffmpeg_exe() is None
+
+        assert len(calls) == 50  # still re-probed every time
+        assert len(_missing_warnings(caplog)) == 1
+        assert video_module.ffmpeg_known_unavailable() is True
+    finally:
+        video_module._reset_ffmpeg_exe_cache()
+
+
+def test_the_not_executable_path_is_also_warned_about_once(monkeypatch, tmp_path, caplog):
+    video_module._reset_ffmpeg_exe_cache()
+    try:
+        import imageio_ffmpeg
+
+        monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", lambda: str(tmp_path / "definitely-not-here"))
+
+        with caplog.at_level(logging.WARNING, logger=video_module.logger.name):
+            for _ in range(10):
+                assert video_module.ffmpeg_exe() is None
+
+        assert len(_missing_warnings(caplog)) == 1
+    finally:
+        video_module._reset_ffmpeg_exe_cache()
+
+
+def test_finding_ffmpeg_rearms_the_missing_warning(monkeypatch, tmp_path, caplog):
+    """A binary that disappears, reappears and disappears again is two separate
+    outages, and each deserves its own warning. Found binaries are memoized, so
+    the reset stands in for whatever would drive a fresh probe."""
+    video_module._reset_ffmpeg_exe_cache()
+    try:
+        import imageio_ffmpeg
+
+        stand_in = tmp_path / "ffmpeg"
+        stand_in.write_text("")
+        present = {"value": False}
+
+        def probe():
+            if present["value"]:
+                return str(stand_in)
+            raise RuntimeError("No ffmpeg exe could be found.")
+
+        monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", probe)
+
+        with caplog.at_level(logging.WARNING, logger=video_module.logger.name):
+            assert video_module.ffmpeg_exe() is None
+            assert video_module.ffmpeg_exe() is None
+            present["value"] = True
+            assert video_module.ffmpeg_exe() == str(stand_in)
+            assert video_module.ffmpeg_known_unavailable() is False
+
+            # Drop the memoized positive result without touching the flag
+            # history a reset would also wipe: the flag is already False here.
+            video_module._ffmpeg_exe_probed = False
+            present["value"] = False
+            assert video_module.ffmpeg_exe() is None
+
+        assert len(_missing_warnings(caplog)) == 2
+    finally:
+        video_module._reset_ffmpeg_exe_cache()
+
+
+def test_concurrent_workers_produce_a_single_missing_warning(monkeypatch, caplog):
+    """Indexing extracts frames on a thread pool; the check-and-flip has to be
+    atomic or every worker racing through the first probe warns."""
+    video_module._reset_ffmpeg_exe_cache()
+    try:
+        import imageio_ffmpeg
+
+        def missing():
+            raise RuntimeError("No ffmpeg exe could be found.")
+
+        monkeypatch.setattr(imageio_ffmpeg, "get_ffmpeg_exe", missing)
+        start = threading.Barrier(8)
+
+        def worker():
+            start.wait()
+            for _ in range(20):
+                video_module.ffmpeg_exe()
+
+        with caplog.at_level(logging.WARNING, logger=video_module.logger.name):
+            threads = [threading.Thread(target=worker) for _ in range(8)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        assert len(_missing_warnings(caplog)) == 1
     finally:
         video_module._reset_ffmpeg_exe_cache()
 
