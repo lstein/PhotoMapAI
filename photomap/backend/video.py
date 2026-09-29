@@ -139,9 +139,11 @@ FRAME_LUMA_FLOOR = 10.0
 # as it did before the search learned to look for a better frame.
 FRAME_EXTRACT_TIMEOUT_SECONDS = 60.0
 
-# Long-edge cap for the stored still. The CLIP encode uses the in-memory
-# frame, so this only bounds what the cache writes to disk and what the
-# browser downloads for a full-screen poster.
+# Long-edge cap for the stored still. It bounds what the cache writes to
+# disk, what the browser downloads for a full-screen poster, and — because
+# ffmpeg applies it before encoding (see _frame_command) — what comes back
+# through the pipe: ~3 MB for a 4K frame rather than ~11 MB, and 10-bit HEVC
+# roughly doubles the uncapped figure again.
 MAX_FRAME_EDGE = 2048
 
 # Bumped whenever a change here would pick a different frame out of the same
@@ -194,6 +196,14 @@ _DURATION_RE = re.compile(r"Duration:\s*(?P<h>\d+):(?P<m>\d{2}):(?P<s>\d{2}(?:\.
 # "    Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x61766331), ..., 30 fps, ..."
 _STREAM_VIDEO_RE = re.compile(r"^\s*Stream #\d+:\d+.*?: Video:\s*(?P<codec>[A-Za-z0-9_.\-]+)")
 _FPS_RE = re.compile(r"(?P<fps>\d+(?:\.\d+)?)\s+fps\b")
+# "[Parsed_showinfo_1 @ 0x...] n:   0 pts: ... sar:1/1 s:853x480 i:P ..."
+# The frame's geometry after autorotation and SAR correction but before the
+# size cap — i.e. the video's true display resolution. Only the "n:" line is
+# matched: showinfo's other lines dump side data, and only this one is ffmpeg
+# describing the frame itself.
+_SHOWINFO_SIZE_RE = re.compile(
+    r"^\[Parsed_showinfo_\d+ @ [^\]]*\] n:\s*\d+\s.*?\ss:(?P<w>\d+)x(?P<h>\d+)\s", re.MULTILINE
+)
 # Cover art embedded in an audio file is reported as a video stream marked
 # "(attached pic)". See _has_decodable_video_stream.
 _ATTACHED_PIC = "attached pic"
@@ -227,6 +237,23 @@ def _strip_metadata_blocks(stderr: str) -> str:
             continue
         kept.append(line)
     return "\n".join(kept)
+
+
+def _showinfo_size(report: str) -> tuple[int, int] | None:
+    """The pre-cap frame size that _frame_command's showinfo filter logged.
+
+    Takes the metadata-stripped report with the input path already removed
+    (see extract_video_frame), so neither a file's own tags nor a filename
+    containing newlines can supply it. ``None`` if the line is missing or
+    unparseable.
+    """
+    if not (m := _SHOWINFO_SIZE_RE.search(report)):
+        return None
+    try:
+        width, height = int(m.group("w")), int(m.group("h"))
+    except ValueError:
+        return None
+    return (width, height) if width > 0 and height > 0 else None
 
 
 def _has_decodable_video_stream(report: str) -> bool:
@@ -355,7 +382,8 @@ def _parse_ffmpeg_banner(stderr: str) -> dict[str, object]:
     Deliberately does **not** parse width/height.  ffmpeg autorotates on
     decode, so a portrait phone video's banner reports the *pre-rotation*
     dimensions (e.g. 1920x1080) while the decoded frame is 1080x1920.
-    Dimensions therefore come only from the decoded frame, and there is no
+    Dimensions therefore come only from the decoded frame, as the showinfo
+    filter in _frame_command reports it (see _showinfo_size), and there is no
     code path here that could reintroduce the banner's answer.
 
     All values are plain Python scalars: ``/get_metadata`` runs ``json.dumps``
@@ -461,6 +489,55 @@ def _run_ffmpeg(
         return None
 
 
+# ffmpeg binary path -> whether it has the showinfo filter. Keyed on the path
+# so a re-resolved binary (see _reset_ffmpeg_exe_cache) is probed afresh.
+_showinfo_support: dict[str, bool] = {}
+_SHOWINFO_LISTED_RE = re.compile(r"^\s*\S+\s+showinfo\s", re.MULTILINE)
+
+
+def _ffmpeg_has_showinfo() -> bool:
+    """Whether the ffmpeg in use can run the showinfo filter.
+
+    Every standard build has it, but a filtergraph naming a filter the binary
+    lacks fails outright ("Filter not found"), so a minimal build reached via
+    IMAGEIO_FFMPEG_EXE would otherwise lose every video rather than just their
+    resolution. Probed once per binary; a probe that could not run is not
+    remembered, so a transient failure costs only that one extraction's
+    resolution.
+
+    Blocking: call only from a worker thread, as extraction already is.
+    """
+    exe = ffmpeg_exe()
+    if exe is None:
+        return False
+    if exe in _showinfo_support:
+        return _showinfo_support[exe]
+    kwargs = {}
+    if hasattr(subprocess, "CREATE_NO_WINDOW"):  # Windows only
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    try:
+        result = subprocess.run(
+            [exe, "-hide_banner", "-filters"],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            timeout=PROBE_TIMEOUT_SECONDS,
+            check=False,
+            **kwargs,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        logger.warning(f"Could not list ffmpeg's filters: {e}")
+        return False
+    listing = result.stdout.decode("utf-8", errors="replace")
+    has_it = bool(_SHOWINFO_LISTED_RE.search(listing))
+    if not has_it:
+        logger.warning(
+            "This ffmpeg lacks the showinfo filter; the resolution of videos larger "
+            f"than {MAX_FRAME_EDGE}px will not be reported."
+        )
+    _showinfo_support[exe] = has_it
+    return has_it
+
+
 def _frame_command(path: Path, seek_seconds: float | None) -> list[str]:
     args = ["-nostdin", "-hide_banner"]
     if seek_seconds is not None:
@@ -488,11 +565,33 @@ def _frame_command(path: Path, seek_seconds: float | None) -> list[str]:
         # both what CLIP embeds (degrading search across that whole class of
         # file) and what is cached as the poster.
         #
-        # Note the expression contains no commas: inside a filtergraph a comma
-        # separates filters, so anything needing one would have to be escaped
-        # as "\," — a well-known footgun this deliberately avoids.
+        # Then cap the long edge at MAX_FRAME_EDGE *before* PNG encoding, so a
+        # 4K frame is not piped and decoded at full size only for PIL to
+        # shrink it. The order is load-bearing: capping in the same scale as
+        # the SAR fix ("w=min(2048,iw*sar):h=-2") keeps the *storage* aspect
+        # and re-squashes anamorphic sources. Squaring first means the cap
+        # only ever sees square pixels. Both bounds with
+        # force_original_aspect_ratio=decrease fit the frame inside the box,
+        # so portrait video is capped on its height too, and min(…, iw)
+        # never upscales a small source.
+        #
+        # showinfo between the two logs the frame's geometry after rotation
+        # and SAR correction but before the cap: the video's real display
+        # resolution, which the decoded frame no longer carries.
+        #
+        # "\," escapes the commas inside min(): a bare comma separates
+        # filters. This is one argv element (no shell), so ffmpeg's own
+        # filtergraph parser consumes the backslash.
+        #
+        # A build without showinfo just drops it (see _ffmpeg_has_showinfo);
+        # extract_video_frame then falls back to the frame's own size.
         "-vf",
-        "scale=iw*sar:ih",
+        (
+            "scale=iw*sar:ih,"
+            + ("showinfo," if _ffmpeg_has_showinfo() else "")
+            + f"scale=w=min({MAX_FRAME_EDGE}\\,iw):h=min({MAX_FRAME_EDGE}\\,ih)"
+            ":force_original_aspect_ratio=decrease"
+        ),
         "-c:v",
         "png",
         "-f",
@@ -681,7 +780,12 @@ def extract_video_frame(
             queue, shallow, deeper_attempts_left = [], [None], 0
             continue
 
-        stderr = result.stderr.decode("utf-8", errors="replace")
+        # ffmpeg echoes the input path in its "Input #0, ... from '...':"
+        # header, and a filename may contain newlines — which would split it
+        # into lines indistinguishable from ffmpeg's own report, forging the
+        # duration, codec or showinfo size. The path is known exactly, so
+        # remove it before anything reads the text.
+        stderr = result.stderr.replace(os.fsencode(path), b"<input>").decode("utf-8", errors="replace")
         if duration is None:
             duration = _banner_duration(stderr)
 
@@ -702,7 +806,8 @@ def extract_video_frame(
         # skipped: the caller hands the frame straight to encoder.encode_images
         # and an exception takes the whole batch of unrelated photos with it.
         try:
-            if not _has_decodable_video_stream(_strip_metadata_blocks(stderr)):
+            report = _strip_metadata_blocks(stderr)
+            if not _has_decodable_video_stream(report):
                 # Cover art in an audio file, presented as an "(attached pic)"
                 # video stream. Extraction would have succeeded, and the album
                 # art would have become a phantom video slide.
@@ -717,12 +822,19 @@ def extract_video_frame(
             # of its batch-mates down with it.
             frame = frame.convert("RGB")
 
-            # Captured *before* the downscale below: thumbnail() resizes in
-            # place, so reading frame.width afterwards would record the
-            # thumbnail's size as the video's resolution and label every 4K
-            # video 2048-wide.
-            source_width, source_height = frame.size
+            # The source resolution, not the frame's: ffmpeg has already
+            # capped the frame, so reading its size would label every 4K
+            # video 2048-wide. showinfo logged the size before the cap. If
+            # that line is missing, the frame's own size is still right when
+            # it is under the cap, since no downscale can have happened;
+            # at the cap it is unknowable, and blank beats wrong.
+            source_size = _showinfo_size(report)
+            if source_size is None and max(frame.size) < MAX_FRAME_EDGE:
+                source_size = frame.size
+            source_width, source_height = source_size or (None, None)
 
+            # Backstop only. The filter normally caps the frame already, but
+            # the stored still must stay bounded even if it did not.
             if max(frame.size) > MAX_FRAME_EDGE:
                 frame.thumbnail((MAX_FRAME_EDGE, MAX_FRAME_EDGE))
 
@@ -734,9 +846,9 @@ def extract_video_frame(
         info = VideoInfo(
             duration=parsed.get("duration"),
             fps=parsed.get("fps"),
-            # The decoded frame's own dimensions, never the banner's: ffmpeg
-            # autorotates on decode and the scale filter corrects non-square
-            # pixels, so only the pixels know the true display geometry.
+            # From showinfo, never the banner: ffmpeg autorotates on decode
+            # and the scale filter corrects non-square pixels, so only the
+            # decoded frame knows the true display geometry.
             width=source_width,
             height=source_height,
             codec=parsed.get("codec"),
