@@ -1621,6 +1621,53 @@ class TestVideoRecordRobustness:
         assert "not declared in GenerationMetadata5" not in caplog.text
 
 
+def _full_model_config(**overrides) -> dict:
+    """A model as InvokeAI's ``zParameterModel`` records it: the whole config."""
+    config = {
+        "key": "f3645ae0-3ddf-43f1-b45f-f7f5ca303e30",
+        "hash": "blake3:abc",
+        "path": "f3645ae0-3ddf-43f1-b45f-f7f5ca303e30",
+        "file_size": 34722773704,
+        "name": "FLUX.2 Klein 9B (Diffusers)",
+        "description": "FLUX.2 Klein 9B in Diffusers format with VAE and Qwen3 encoder. ~35GB",
+        "source": "black-forest-labs/FLUX.2-klein-9B",
+        "source_type": "hf_repo_id",
+        "source_api_response": None,
+        "source_url": None,
+        "cover_image": None,
+        "trigger_phrases": None,
+        "default_settings": {"vae": None, "vae_precision": None, "fp8_storage": None},
+        "base": "flux2",
+        "type": "main",
+        "format": "diffusers",
+        "repo_variant": "",
+        "variant": "klein_9b",
+    }
+    config.update(overrides)
+    return config
+
+
+class TestParameterModelFields:
+    """``qwen3_source`` and ``qwen_image_component_source`` carry the full
+    model config, not a model identifier. Rejecting its extra keys failed the
+    whole discriminated union, so the drawer showed no metadata at all."""
+
+    @pytest.mark.parametrize("field", ["qwen3_source", "qwen_image_component_source"])
+    def test_a_full_model_config_does_not_fail_the_record(self, field):
+        view = _view(
+            {
+                "metadata_version": 5,
+                "app_version": "6.12.0",
+                "model": {"name": "Z-Image Turbo", "base": "z-image", "type": "main"},
+                "positive_prompt": "a gorgon",
+                field: _full_model_config(),
+            }
+        )
+
+        assert view.model_name == "Z-Image Turbo"
+        assert view.positive_prompt == "a gorgon"
+
+
 class TestInvokeMarkerAgreement:
     """``looks_like_invoke_metadata`` gates routing and
     ``_infer_metadata_version`` picks the schema. A fingerprint the second

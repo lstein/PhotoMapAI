@@ -49,6 +49,24 @@ class VideoModel(Model):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
 
+class ParameterModel(Model):
+    """A model recorded as InvokeAI's full model config, not an identifier.
+
+    Some v5 fields (``qwen3_source``, ``qwen_image_component_source``) are
+    written straight from InvokeAI's params state, and images in the wild
+    carry the whole installed-model config there: ``path``, ``file_size``,
+    ``description``, ``source``, ``default_settings``, ``variant`` and more,
+    beside the identifier keys. (Current InvokeAI strips these when a model
+    is selected, but its persisted-state migration copies older state
+    through unparsed.) Under ``Model``'s ``"forbid"`` those fail
+    validation, and — as with ``VideoModel`` — the failure is on the
+    discriminated union as a whole, so the drawer loses everything else in
+    the record too. Only the identifier keys are read.
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
 class ImageData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     type: Literal["dataURL"] = Field(default="dataURL", alias="image_type")

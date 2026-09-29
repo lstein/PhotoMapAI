@@ -12,6 +12,7 @@ from photomap.backend.metadata_modules.invoke.common_metadata_elements import (
     Lora,
     MiniMaxH3Reference,
     Model,
+    ParameterModel,
     RegionalGuidance,
     T5Encoder,
     VideoModel,
@@ -123,8 +124,8 @@ class GenerationMetadata5(BaseModel):
     regions: list[RegionalGuidance] | None = None
     t5_encoder: T5Encoder | None = None
     qwen3_encoder: Model | None = None
-    qwen3_source: Model | None = None
-    qwen_image_component_source: Model | None = None
+    qwen3_source: ParameterModel | None = None
+    qwen_image_component_source: ParameterModel | None = None
     qwen_image_quantization: str | None = None
     qwen_image_shift: int | float | None = None
     vae: Model | None = None
