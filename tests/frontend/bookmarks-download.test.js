@@ -140,7 +140,7 @@ describe("downloading a still image", () => {
 
     await bookmarkManager.downloadSingleImage(1);
 
-    expect(global.fetch).toHaveBeenCalledWith("images/album/shot.jpg");
+    expect(global.fetch).toHaveBeenCalledWith("images/album/shot.jpg?original=1");
     expect(global.URL.createObjectURL).toHaveBeenCalled();
     expect(anchors[0].getAttribute("href")).toBe("blob:mock");
     expect(anchors[0].download).toBe("shot.jpg");

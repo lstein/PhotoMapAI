@@ -26,7 +26,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image, ImageOps
-from pillow_heif import register_heif_opener
 from pydantic import BaseModel
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.neighbors import NearestNeighbors
@@ -206,8 +205,6 @@ def _normalized_filtered_embeddings(
 
     return _l2_normalize(filtered, axis=1), valid_global_indices, filenames
 
-
-register_heif_opener()  # Register HEIF opener for PIL
 
 # The image-suffix allowlist. Canonically defined in ``media_types`` now that
 # videos are also a media type; re-exported here because this name is what the
