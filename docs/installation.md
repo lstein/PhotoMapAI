@@ -102,6 +102,96 @@ docker run -p 8050:8050 -v /path/to/a/picture_folder:/Pictures lstein/photomapai
 
 Change `/path/to/a/picture_folder` to a folder of images you want to browse, then point your browser to `http://localhost:8050`. Your images appear in the container directory `/Pictures`.
 
+The Docker image doesn't include ffmpeg, so videos are skipped unless you add it; see [Video Support](docker.md#video-support) in the Docker guide.
+
+---
+
+## Video support and ffmpeg
+
+PhotoMapAI uses [ffmpeg](https://ffmpeg.org) to index videos and to convert videos your browser can't play. The desktop installer and the PyPI and source installs above include a ready-to-use ffmpeg on most computers (Windows and macOS, and Linux on x86-64 and ARM64), so usually there's nothing to do.
+
+You need a separate, system-wide ffmpeg only if:
+
+- PhotoMapAI reports that it **could not find a working ffmpeg** when you index an album containing videos. This happens on platforms the bundled ffmpeg doesn't cover, such as Alpine Linux, 32-bit ARM or Windows on ARM.
+- You prefer to use your own ffmpeg build instead of the bundled one.
+
+!!! note "Using Docker?"
+    These steps don't apply inside a Docker container, which can't see programs installed on your computer. See [Video Support](docker.md#video-support) in the Docker guide instead.
+
+### Installing ffmpeg
+
+Pick the instructions for your system. Whichever you use, make sure the build includes the **libx264** encoder, which PhotoMapAI needs to convert videos for playback. The packages below all do.
+
+**Linux**
+
+```bash
+# Debian, Ubuntu, Linux Mint
+sudo apt install ffmpeg
+
+# Arch, Manjaro
+sudo pacman -S ffmpeg
+
+# Alpine
+sudo apk add ffmpeg
+```
+
+On **Fedora**, the stock `ffmpeg-free` package leaves out libx264. Enable [RPM Fusion](https://rpmfusion.org/Configuration) and replace it with the full build:
+
+```bash
+sudo dnf swap ffmpeg-free ffmpeg --allowerasing
+```
+
+**macOS**
+
+Install [Homebrew](https://brew.sh) if you don't have it, then:
+
+```bash
+brew install ffmpeg
+```
+
+**Windows**
+
+In a PowerShell or Command Prompt window:
+
+```powershell
+winget install Gyan.FFmpeg
+```
+
+Then close that window and open a new one, so that the updated `PATH` takes effect. (If you use [Chocolatey](https://chocolatey.org) or [Scoop](https://scoop.sh) instead, `choco install ffmpeg` or `scoop install ffmpeg` work too.)
+
+**Check the installation**
+
+Open a new terminal and run:
+
+```bash
+ffmpeg -hide_banner -encoders | grep libx264          # Linux and macOS
+ffmpeg -hide_banner -encoders | findstr libx264       # Windows
+```
+
+You should see a line mentioning `libx264`. If you get "command not found" instead, ffmpeg isn't on your `PATH`.
+
+### Telling PhotoMapAI to use it
+
+If PhotoMapAI has no bundled ffmpeg, it finds the system one on your `PATH` automatically. Just restart the server.
+
+If PhotoMapAI does have a bundled ffmpeg and you want it to use yours instead, set the `IMAGEIO_FFMPEG_EXE` environment variable to your ffmpeg's full path before starting the server:
+
+```bash
+# Linux and macOS
+export IMAGEIO_FFMPEG_EXE="$(command -v ffmpeg)"
+start_photomap
+```
+
+```powershell
+# Windows (PowerShell)
+$env:IMAGEIO_FFMPEG_EXE = (Get-Command ffmpeg).Source
+start_photomap
+```
+
+To make the setting permanent, add the `export` line to your shell profile (for example `~/.bashrc` or `~/.zshrc`). On Windows, run `setx IMAGEIO_FFMPEG_EXE "C:\path\to\ffmpeg.exe"` once, and then open a new window.
+
+Videos that were skipped before ffmpeg was available are picked up the next time you run **Update Index** on the album (see [Managing Albums](user-guide/albums.md)).
+
 ---
 
 ## Manual installation from source

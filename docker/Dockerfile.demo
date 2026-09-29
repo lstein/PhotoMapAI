@@ -6,13 +6,20 @@ WORKDIR /app
 # Copy requirements and install Python dependencies
 COPY pyproject.toml .
 COPY photomap ./photomap
-RUN pip install --upgrade pip && pip install --extra-index-url https://download.pytorch.org/whl/cpu .
+COPY docker/scripts/remove_bundled_ffmpeg.py /tmp/
+# The image deliberately ships without ffmpeg: imageio-ffmpeg bundles a GPLv3
+# build, so it is deleted in this same layer (a later RUN would leave it in
+# this one), and --no-cache-dir keeps the wheel out of pip's cache. See
+# docs/docker.md for adding a distribution ffmpeg to restore video support.
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu . \
+    && python /tmp/remove_bundled_ffmpeg.py \
+    && rm /tmp/remove_bundled_ffmpeg.py
 RUN python -c "import clip; clip.load('ViT-B/32')"
 
 # Copy contents of demo_images and its config file
 COPY ./demo_images ./demo_images
 COPY ./docker/demo_config.yaml /root/.config/photomap/config.yaml
-RUN pip cache purge
 RUN rm -rf ./photomap ./build ./dist ./demo_images/photomap_index/
 RUN index_images --embeddings ./demo_images/photomap_index/embeddings.npz ./demo_images
 
