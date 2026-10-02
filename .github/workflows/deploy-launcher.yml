@@ -35,7 +35,9 @@ env:
   # Pin the uv we have tested the launcher against (must support
   # `--torch-backend` on `uv tool install`).
   UV_VERSION: "0.11.19"
-  GO_VERSION: "1.22"
+  # Go >= 1.24 is required: older linkers omit the Mach-O LC_UUID load command,
+  # and macOS 26 dyld refuses to run binaries without it (issue #416).
+  GO_VERSION: "1.24"
 
 jobs:
   version:
