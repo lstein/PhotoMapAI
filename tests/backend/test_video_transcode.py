@@ -1447,7 +1447,8 @@ def _fake_hls(monkeypatch, tmp_path):
 
     hls_dir = tmp_path / "x.hls.tmp"
     hls_dir.mkdir()
-    (hls_dir / "index.m3u8").write_text("#EXTM3U\n#EXTINF:2.0,\nindex0.m4s\n")
+    # Bytes, not text: write_text would turn these into CRLF on Windows.
+    (hls_dir / "index.m3u8").write_bytes(b"#EXTM3U\n#EXTINF:2.0,\nindex0.m4s\n")
     (hls_dir / "index0.m4s").write_bytes(b"segment")
     (hls_dir / "init.m4s").write_bytes(b"init")
     (hls_dir / "index.m3u8.tmp").write_text("half-written")
@@ -1657,3 +1658,18 @@ def test_a_dead_playlist_is_given_up_on_once_the_mp4_moves_on(tmp_path, monkeypa
     )
     assert gave_up
     assert not offered
+
+
+def test_the_start_tag_keeps_the_playlists_line_endings():
+    from photomap.backend.routers.search import _start_at_the_beginning
+
+    tag = b"#EXT-X-START:TIME-OFFSET=0,PRECISE=YES"
+    assert _start_at_the_beginning(b"#EXTM3U\n#EXTINF:2.0,\nindex0.m4s\n") == (
+        b"#EXTM3U\n" + tag + b"\n#EXTINF:2.0,\nindex0.m4s\n"
+    )
+    assert _start_at_the_beginning(b"#EXTM3U\r\n#EXTINF:2.0,\r\nindex0.m4s\r\n") == (
+        b"#EXTM3U\r\n" + tag + b"\r\n#EXTINF:2.0,\r\nindex0.m4s\r\n"
+    )
+    # Already there, or not a playlist: untouched.
+    assert _start_at_the_beginning(b"#EXTM3U\n" + tag + b"\n") == b"#EXTM3U\n" + tag + b"\n"
+    assert _start_at_the_beginning(b"garbage") == b"garbage"

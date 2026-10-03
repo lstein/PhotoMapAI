@@ -729,7 +729,11 @@ def _start_at_the_beginning(playlist: bytes) -> bytes:
     header = b"#EXTM3U"
     if not playlist.startswith(header) or b"#EXT-X-START:" in playlist:
         return playlist
-    return header + b"\n#EXT-X-START:TIME-OFFSET=0,PRECISE=YES" + playlist[len(header) :]
+    # In the playlist's own line ending, so a CRLF playlist does not come out
+    # with one LF line in it.
+    rest = playlist[len(header) :]
+    eol = b"\r\n" if rest.startswith(b"\r\n") else b"\n"
+    return header + eol + b"#EXT-X-START:TIME-OFFSET=0,PRECISE=YES" + rest
 
 
 @search_router.get("/streaming_hls/{album_key}/{path:path}/hls/{token}/{name}", tags=["Search"])
