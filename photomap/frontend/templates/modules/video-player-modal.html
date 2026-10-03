@@ -57,6 +57,11 @@
       <p class="video-player-panel-note" id="videoPlayerProgressPercent"></p>
     </div>
 
+    <!-- Over a conversion that is playing while it is still being written.
+         A strip at the top rather than a panel: the picture and the native
+         controls stay usable, and it says why the scrubber is not. -->
+    <div class="video-player-stream-badge" id="videoPlayerStreamBadge" role="status" hidden></div>
+
     <!-- Shown when the video cannot be played and cannot be converted either. -->
     <div class="video-player-panel video-player-fallback" id="videoPlayerFallback" hidden>
       <p class="video-player-panel-message" id="videoPlayerFallbackMessage"></p>

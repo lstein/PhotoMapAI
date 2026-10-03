@@ -18,8 +18,21 @@ reverse.
 **Why a cache file and not a pipe.**  Piping ffmpeg's stdout into a
 ``StreamingResponse`` starts faster but has no Range support, so the scrubber
 cannot seek and the duration is unknown; and every replay pays for the
-conversion again.  Writing the file first costs a wait on the first play,
-which is what the player's progress readout is for.
+conversion again.  The cache file is what gets served for real.
+
+**Watching while it converts.**  A re-encode can take minutes, so the same
+ffmpeg run writes a second copy alongside the cache file: a *fragmented* MP4
+(``empty_moov`` + short fragments) that is playable from its first few
+kilobytes.  The ``tee`` muxer makes that one encode with two outputs, not two
+encodes competing for the CPU.  The router streams that growing file to the
+player while the job runs (see :func:`stream_source`); when the cache file
+lands, the player swaps to it at the same timestamp and the scrubber starts
+working.  Remuxes skip all this — they finish in seconds.
+
+Apple's player (every browser on iOS and iPadOS, and Safari) will not play a
+plain MP4 whose length is unknown, so the same run also writes an HLS
+playlist and segments — the one format Apple supports for video that is
+still being produced.  See :func:`hls_source`.
 
 **Abandonment.**  Conversions run one at a time on a single worker thread, so
 a user opening several unplayable clips in a row would otherwise queue every
@@ -41,6 +54,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -117,6 +131,46 @@ ABANDON_AFTER_SECONDS = 45.0
 # whole viewing session, would otherwise 404 mid-playback.
 EVICTION_GRACE_SECONDS = 900.0
 
+# Keyframe interval, in seconds, when a conversion is also being streamed.
+# The streamed copy is cut into fragments at keyframes, and the player cannot
+# start until the first fragment is complete — x264's default of one keyframe
+# every 250 frames would make that a ten-second wait at 25 fps.
+STREAM_KEYFRAME_SECONDS = 2
+
+# The playlist's name inside a conversion's HLS directory. Segments are named
+# after it by ffmpeg ("index0.m4s", ...), next to it, and the init segment is
+# "init.m4s" — deliberately not ".mp4", which the byte-budget sweep counts.
+HLS_PLAYLIST_NAME = "index.m3u8"
+HLS_INIT_NAME = "init.m4s"
+
+# How long an HLS directory outlives its conversion. The player swaps to the
+# finished file on its next poll, about a second later, but until it does it
+# is still fetching segments — deleting them the moment ffmpeg exits would
+# turn the end of every conversion into a playback error.
+HLS_LINGER_SECONDS = 120.0
+
+# Segments a playlist must list before it is offered. The HLS spec has a
+# player stay three target durations back from the end of a live playlist,
+# so one listing fewer has nowhere to start: measured, Chrome's native HLS
+# player fails a one- or two-segment playlist with a demuxer error and plays
+# a three-segment one. Six seconds of video, at STREAM_KEYFRAME_SECONDS each.
+HLS_MIN_SEGMENTS = 3
+
+# Completed fragments of the streamed MP4 after which a playlist that is still
+# not playable is declared dead (its tee output failed — onfail=ignore makes
+# that silent). Counted in the MP4's fragments rather than in time: both
+# outputs are fed the same packets and both cut at the same keyframes (one
+# every STREAM_KEYFRAME_SECONDS, scene cuts off), so fragment N closes when
+# segment N does. Neither wall time — a slow encode is not a dead one — nor
+# ffmpeg's out_time will do: out_time follows the audio, which the video
+# encoder's lookahead leaves seconds behind at a low frame rate.
+HLS_GIVE_UP_FRAGMENTS = HLS_MIN_SEGMENTS + 2
+
+# Characters the ``tee`` muxer treats as syntax in an output name.  The names
+# are escaped rather than trusted: the cache directory sits under the user's
+# home, and nothing stops that from containing a quote or a bracket.
+_TEE_SPECIAL = "\\'|[]"
+
 # How long a failure is remembered.  Without this a permanently unconvertible
 # file re-runs ffmpeg on every poll — several times a second.  It expires
 # because failure is also transient (a full disk, a mount that came back), and
@@ -157,6 +211,17 @@ class TranscodeStatus(BaseModel):
     progress: float = 0.0
     detail: str | None = None
     url: str | None = None
+    #: A running conversion whose output can be watched while it is produced.
+    streamable: bool = False
+    #: Filled in by the router when ``streamable``, like ``url``.
+    stream_url: str | None = None
+    #: The same, as an HLS playlist — for Apple's player. See hls_source.
+    hls_streamable: bool = False
+    #: Identifies the conversion run the playlist belongs to; see _hls_streams.
+    hls_token: str | None = None
+    #: An HLS copy is still on its way. False with no hls_url means none is.
+    hls_pending: bool = False
+    hls_url: str | None = None
 
 
 def plan_for(probe: StreamProbe | None) -> TranscodePlan:
@@ -190,8 +255,32 @@ def plan_for(probe: StreamProbe | None) -> TranscodePlan:
     )
 
 
-def ffmpeg_args(source: Path, target: Path, plan: TranscodePlan) -> list[str]:
-    """The ffmpeg argument list for ``plan``, writing ``target``."""
+def _tee_escape(path: Path) -> str:
+    """``path`` as a ``tee`` output name.
+
+    Forward slashes first: the tee muxer reads a backslash as an escape, so a
+    Windows path would otherwise lose every separator.  Windows ffmpeg accepts
+    forward slashes.
+    """
+    text = path.as_posix()
+    return "".join(f"\\{ch}" if ch in _TEE_SPECIAL else ch for ch in text)
+
+
+def ffmpeg_args(
+    source: Path,
+    target: Path,
+    plan: TranscodePlan,
+    stream_target: Path | None = None,
+    hls_dir: Path | None = None,
+) -> list[str]:
+    """The ffmpeg argument list for ``plan``, writing ``target``.
+
+    With ``stream_target``, the same encode also writes a fragmented MP4 there
+    that can be played while it grows — see the module docstring — and with
+    ``hls_dir`` as well, an HLS playlist and segments into that directory.
+    Only meaningful for a video re-encode; a remux finishes too fast to be
+    worth watching.
+    """
     args = [
         "-nostdin",
         "-hide_banner",
@@ -250,13 +339,31 @@ def ffmpeg_args(source: Path, target: Path, plan: TranscodePlan) -> list[str]:
             "-vf",
             "scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1",
         ]
+        if stream_target is not None:
+            args += [
+                "-force_key_frames",
+                f"expr:gte(t,n_forced*{STREAM_KEYFRAME_SECONDS})",
+                # No extra keyframes at scene cuts, so every fragment of the
+                # streamed MP4 and every HLS segment is exactly the forced
+                # interval long — which is what lets one count stand in for
+                # the other (see HLS_GIVE_UP_FRAGMENTS).
+                "-sc_threshold",
+                "0",
+            ]
 
     if not plan.has_audio:
         args += ["-an"]
-    elif plan.copy_audio:
+    # Not on the streamed path: the ``tee`` muxer has no codec-tag table, so a
+    # copied AAC stream keeps its source container's tag (0xFF in an .avi,
+    # 0x0F in a .ts), which both MP4 outputs then reject — failing a file the
+    # unstreamed path converts fine. Re-encoding audio costs next to nothing.
+    elif plan.copy_audio and stream_target is None:
         args += ["-c:a", "copy"]
     else:
         args += ["-c:a", "aac", "-b:a", AAC_BITRATE, "-ac", "2"]
+
+    if stream_target is not None:
+        return args + _tee_output_args(target, stream_target, plan, hls_dir)
 
     args += [
         # Put the moov atom at the front.  Without it the browser has to fetch
@@ -281,6 +388,67 @@ def ffmpeg_args(source: Path, target: Path, plan: TranscodePlan) -> list[str]:
         str(target),
     ]
     return args
+
+
+def _tee_output_args(
+    target: Path, stream_target: Path, plan: TranscodePlan, hls_dir: Path | None = None
+) -> list[str]:
+    """Output half of the argument list when the encode is also streamed.
+
+    Two MP4s from one encode: ``target`` exactly as the unstreamed path writes
+    it, and ``stream_target`` fragmented so it plays while it grows.
+    ``onfail=ignore`` on the streamed copy only — a problem with the copy
+    being watched must never cost the one being kept.
+    """
+    # The tee muxer does not tell the encoders their output needs global
+    # headers, which MP4 does; without these the codec parameters are missing
+    # from the moov and the result does not play.
+    args = ["-flags:v", "+global_header"]
+    if plan.has_audio:
+        args += ["-flags:a", "+global_header"]
+    return args + [
+        "-max_muxing_queue_size",
+        "4096",
+        "-progress",
+        "pipe:1",
+        "-nostats",
+        "-f",
+        "tee",
+        f"[f=mp4:movflags=+faststart]{_tee_escape(target)}"
+        "|"
+        # flush_packets: without it ffmpeg holds the fragments back in a
+        # 256 KB write buffer, and a low-bitrate clip would reach the player
+        # in bursts many seconds apart — or not in time to start at all.
+        "[f=mp4:movflags=frag_keyframe+empty_moov+default_base_moof"
+        ":flush_packets=1:onfail=ignore]"
+        f"{_tee_escape(stream_target)}"
+        + (_tee_hls_output(hls_dir) if hls_dir is not None else ""),
+    ]
+
+
+def _tee_hls_output(hls_dir: Path) -> str:
+    """The HLS output of a streamed encode, as a ``tee`` slave.
+
+    An EVENT playlist: segments are only ever appended, and the finished
+    playlist gains ``#EXT-X-ENDLIST``. Segments are fMP4, cut at the forced
+    keyframes, so each is exactly ``STREAM_KEYFRAME_SECONDS`` long. ffmpeg
+    names the segments after the playlist and puts them, and the init
+    segment, beside it.
+
+    The playlist is named **relative** to ``hls_dir``'s parent, which is
+    where :func:`_drive_ffmpeg` runs ffmpeg. The hls muxer reads its segment
+    names as printf patterns, and an absolute path would carry whatever is in
+    the user's cache directory into one — a ``%d`` anywhere in it fails the
+    output outright. The directory's own name is a mkdtemp name, which has
+    no ``%`` in it.
+    """
+    return (
+        "|"
+        f"[f=hls:hls_time={STREAM_KEYFRAME_SECONDS}:hls_playlist_type=event"
+        f":hls_segment_type=fmp4:hls_fmp4_init_filename={HLS_INIT_NAME}"
+        ":onfail=ignore]"
+        f"{_tee_escape(Path(hls_dir.name) / HLS_PLAYLIST_NAME)}"
+    )
 
 
 def transcode_cache_root() -> Path:
@@ -455,11 +623,16 @@ def sweep_transcode_cache(
 
     now = time.time()
     removed = 0
-    for stale in base.rglob("*.tmp"):
+    # Listed up front: an HLS directory is itself a ".tmp", and removing it
+    # mid-walk would pull its contents out from under the generator.
+    for stale in list(base.rglob("*.tmp")):
         try:
             if now - stale.stat().st_mtime <= EVICTION_GRACE_SECONDS:
                 continue  # very likely the conversion running right now
-            stale.unlink()
+            if stale.is_dir():
+                shutil.rmtree(stale)
+            else:
+                stale.unlink()
             removed += 1
         except OSError as e:
             logger.debug(f"Could not remove abandoned conversion temp {stale}: {e}")
@@ -510,10 +683,36 @@ class _Job:
     #: apart from the polling clock because the two want opposite treatment of
     #: a conversion that finishes anyway — see :func:`_drive_ffmpeg`.
     cancelled: bool = False
+    #: The growing, watchable copy of a re-encode in progress. Set once it has
+    #: something in it, and cleared the moment ffmpeg exits — which is what
+    #: tells a reader streaming it that what is on disk is now all there is.
+    stream_path: Path | None = None
+    #: The HLS directory of the same, offered once its playlist lists
+    #: HLS_MIN_SEGMENTS segments. Cleared when ffmpeg exits, like
+    #: stream_path; the directory itself stays servable a while longer — see
+    #: _hls_streams.
+    hls_dir: Path | None = None
+    #: True while an HLS copy is being written but not yet offered. A player
+    #: that prefers HLS waits for it only while this holds; once it is false
+    #: with no hls_dir, HLS is not coming and the MP4 stream is the one to use.
+    hls_pending: bool = False
 
 
 _jobs: dict[str, _Job] = {}
 _jobs_lock = threading.Lock()
+
+# HLS directories that can be served: directory name -> (scoped key, path).
+#
+# Keyed by the directory's own mkdtemp name, which is also in every URL the
+# player is given, so a URL names one conversion run and never another:
+# segment names restart at index0 for every run, and are cached by the
+# browser, so a URL that named only the video would splice an earlier
+# conversion's segments into a later one's. Kept apart from the job registry
+# because entries must outlive their job: an abandoned job is dropped at
+# once, and a finished one before its player has necessarily swapped away.
+# Each entry is removed, and its directory deleted, HLS_LINGER_SECONDS after
+# its conversion ends. Guarded by _jobs_lock.
+_hls_streams: dict[str, tuple[str, Path]] = {}
 _executor: ThreadPoolExecutor | None = None
 _executor_lock = threading.Lock()
 
@@ -665,7 +864,14 @@ def request_transcode(
         if job is not None:
             job.last_polled = now
             if job.state in ("queued", "running"):
-                return TranscodeStatus(state=job.state, progress=job.progress)
+                return TranscodeStatus(
+                    state=job.state,
+                    progress=job.progress,
+                    streamable=job.stream_path is not None,
+                    hls_streamable=job.hls_dir is not None,
+                    hls_pending=job.hls_pending,
+                    hls_token=job.hls_dir.name if job.hls_dir is not None else None,
+                )
             if job.state == "failed":
                 return TranscodeStatus(state="failed", detail=job.detail)
             # "ready" with no file on disk means the cache was swept or wiped
@@ -674,6 +880,129 @@ def request_transcode(
 
     _worker_pool().submit(_run_job, scoped, video_path, target)
     return TranscodeStatus(state="queued")
+
+
+def stream_source(
+    album_key: str, video_path: Path, root: Path | None = None
+) -> tuple[Path, Callable[[], bool]] | None:
+    """The watchable copy of a conversion in progress, if there is one.
+
+    Returns the growing file and a predicate that is true for as long as
+    ffmpeg may still append to it. A reader that reaches the end of the file
+    while the predicate holds should wait and try again; once it is false,
+    whatever is on disk is the whole stream.
+    """
+    try:
+        mtime = video_path.stat().st_mtime
+    except OSError:
+        return None
+    key = TranscodeCache(album_key, root=root).key_for(video_path, mtime)
+    scoped = _scoped_key(album_key, key)
+    with _jobs_lock:
+        job = _jobs.get(scoped)
+        path = job.stream_path if job is not None else None
+    if path is None:
+        return None
+
+    def still_writing() -> bool:
+        with _jobs_lock:
+            current = _jobs.get(scoped)
+            return current is not None and current.stream_path == path
+
+    return path, still_writing
+
+
+def hls_source(
+    album_key: str, video_path: Path, token: str, root: Path | None = None
+) -> Path | None:
+    """The HLS directory ``token`` names, if it belongs to this video.
+
+    Checked against the video's *current* key, so a token cannot be used to
+    read another album's conversion through this one's access check, and a
+    file edited since the conversion started no longer serves it.
+
+    Nothing has to follow a growing file here: ffmpeg rewrites the playlist
+    as segments complete (via a temp file and a rename), and only lists a
+    segment once it is written. So serving these is serving ordinary files.
+    """
+    try:
+        mtime = video_path.stat().st_mtime
+    except OSError:
+        return None
+    key = TranscodeCache(album_key, root=root).key_for(video_path, mtime)
+    with _jobs_lock:
+        entry = _hls_streams.get(token)
+    if entry is None or entry[0] != _scoped_key(album_key, key):
+        return None
+    return entry[1]
+
+
+def _hls_is_playable(hls_dir: Path) -> bool:
+    """True once the playlist is long enough for a player to start it."""
+    try:
+        playlist = (hls_dir / HLS_PLAYLIST_NAME).read_text(errors="replace")
+    except OSError:
+        return False
+    return playlist.count("#EXTINF") >= HLS_MIN_SEGMENTS
+
+
+def _offer_hls(scoped: str, hls_dir: Path) -> None:
+    with _jobs_lock:
+        job = _jobs.get(scoped)
+        if job is not None:
+            job.hls_dir = hls_dir
+            job.hls_pending = False
+        _hls_streams[hls_dir.name] = (scoped, hls_dir)
+
+
+def _end_hls(scoped: str, hls_dir: Path) -> None:
+    """Stop offering the HLS copy, and delete it once nobody can still want it.
+
+    Never raises: it runs in the ``finally`` of a conversion that may have
+    just published its result, and an exception here would turn that success
+    into a reported failure.
+    """
+    with _jobs_lock:
+        job = _jobs.get(scoped)
+        if job is not None:
+            job.hls_pending = False
+            if job.hls_dir == hls_dir:
+                job.hls_dir = None
+        offered = hls_dir.name in _hls_streams
+    if offered and not _shutting_down.is_set():
+        timer = threading.Timer(HLS_LINGER_SECONDS, _expire_hls, (hls_dir,))
+        # Daemon, so a pending deletion never holds the process open. One
+        # lost at exit leaves a ".tmp" directory the sweep reaps later.
+        timer.daemon = True
+        try:
+            timer.start()
+            return
+        except RuntimeError as e:  # no thread to be had
+            logger.debug(f"Could not schedule removal of {hls_dir}: {e}")
+    _expire_hls(hls_dir)
+
+
+def _expire_hls(hls_dir: Path) -> None:
+    with _jobs_lock:
+        _hls_streams.pop(hls_dir.name, None)
+    shutil.rmtree(hls_dir, ignore_errors=True)
+
+
+def release_stream(album_key: str, video_path: Path, path: Path) -> None:
+    """Delete a streamed copy that its job has finished with.
+
+    Called by a reader once it is done. The job deletes its own copy when
+    ffmpeg exits, but on Windows that fails while a reader still holds the
+    file open, and this is the second chance. Never deletes a copy its job is
+    still writing.
+    """
+    with _jobs_lock:
+        if any(job.stream_path == path for job in _jobs.values()):
+            return
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass  # somebody else still has it open; the sweeper reaps it later
 
 
 def _update(scoped: str, **fields: object) -> _Job | None:
@@ -793,6 +1122,11 @@ def _run_ffmpeg_transcode(
     if exe is None:
         return "Video conversion needs ffmpeg, which is not available on this system."
 
+    # Absolute, because when the conversion is streamed ffmpeg runs from the
+    # cache directory (see _drive_ffmpeg) and relative paths would resolve
+    # there; every temp path below is derived from these two.
+    source, target = source.absolute(), target.absolute()
+
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         # mkstemp, not a name derived from the key: two threads converting the
@@ -807,6 +1141,36 @@ def _run_ffmpeg_transcode(
         return f"Could not write to the conversion cache: {e}"
     tmp_path = Path(tmp_name)
 
+    # The watchable copy, for a re-encode only. Its name must end ".tmp" and
+    # never ".mp4": ``TranscodeCache.prune`` deletes any ".mp4" whose stem is
+    # not a cache key, and the byte budget counts ".mp4"s — while a stray
+    # ".tmp" is what ``sweep_transcode_cache`` already knows how to reap, and
+    # a file being written keeps its mtime fresh enough to be spared.
+    stream_path: Path | None = None
+    if not plan.copy_video:
+        try:
+            fd, stream_name = tempfile.mkstemp(
+                dir=target.parent, prefix=f"{target.stem}.", suffix=".stream.tmp"
+            )
+            os.close(fd)
+            stream_path = Path(stream_name)
+        except OSError as e:
+            # Watching early is a nicety; the conversion itself can go ahead.
+            logger.debug(f"Could not create a streamable copy for {source.name}: {e}")
+
+    # And its HLS twin, for Apple's player. A directory, ending ".tmp" for
+    # the same reasons as the file above.
+    hls_dir: Path | None = None
+    if stream_path is not None:
+        try:
+            hls_dir = Path(
+                tempfile.mkdtemp(dir=target.parent, prefix=f"{target.stem}.", suffix=".hls.tmp")
+            )
+        except OSError as e:
+            logger.debug(f"Could not create an HLS copy for {source.name}: {e}")
+        else:
+            _update(scoped, hls_pending=True)
+
     # stderr goes to a file rather than a pipe.  Nothing drains it while the
     # progress stream on stdout is being read, and a pipe that fills blocks
     # ffmpeg forever — the deadlock ``video._run_ffmpeg`` avoids by using
@@ -817,8 +1181,35 @@ def _run_ffmpeg_transcode(
     # a conversion that escaped through an unexpected exception would
     # otherwise leak the handle, and on Windows leave the temp file itself
     # behind for as long as the process lives.
-    with tempfile.TemporaryFile() as stderr_file:
-        return _drive_ffmpeg(scoped, exe, source, tmp_path, target, plan, stderr_file)
+    try:
+        with tempfile.TemporaryFile() as stderr_file:
+            return _drive_ffmpeg(
+                scoped, exe, source, tmp_path, target, plan, stderr_file, stream_path, hls_dir
+            )
+    finally:
+        if stream_path is not None:
+            _end_stream(scoped, stream_path)
+        if hls_dir is not None:
+            _end_hls(scoped, hls_dir)
+
+
+def _end_stream(scoped: str, stream_path: Path) -> None:
+    """Stop offering the watchable copy, and delete it if nobody has it open.
+
+    Cleared first, deleted second: a reader parked at the end of the file
+    checks the job before giving up, so it must see "finished" only once
+    ffmpeg has exited and everything it wrote is on disk. On POSIX a reader
+    mid-stream keeps its open handle across the unlink; on Windows the unlink
+    fails and the reader's own :func:`release_stream` retries it.
+    """
+    with _jobs_lock:
+        job = _jobs.get(scoped)
+        if job is not None and job.stream_path == stream_path:
+            job.stream_path = None
+    try:
+        stream_path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _drive_ffmpeg(
@@ -829,15 +1220,27 @@ def _drive_ffmpeg(
     target: Path,
     plan: TranscodePlan,
     stderr_file: IO[bytes],
+    stream_path: Path | None = None,
+    hls_dir: Path | None = None,
 ) -> str | None:
     """Spawn ffmpeg, follow its progress, and publish the result."""
     kwargs: dict[str, object] = {}
     if hasattr(subprocess, "CREATE_NO_WINDOW"):  # Windows only
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
+    if hls_dir is not None:
+        # The HLS playlist is named relative to its parent (see
+        # _tee_hls_output), so ffmpeg runs there. Every other path it is
+        # given is absolute; _run_ffmpeg_transcode sees to that.
+        kwargs["cwd"] = str(hls_dir.parent)
+        # Including the executable itself: a relative one with a slash in it
+        # (IMAGEIO_FFMPEG_EXE=./tools/ffmpeg, or a relative PATH entry) is
+        # resolved against the new working directory on POSIX.
+        exe = os.path.abspath(exe)
+
     try:
         proc = subprocess.Popen(
-            [exe, *ffmpeg_args(source, tmp_path, plan)],
+            [exe, *ffmpeg_args(source, tmp_path, plan, stream_path, hls_dir)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=stderr_file,
@@ -850,7 +1253,9 @@ def _drive_ffmpeg(
     with _live_lock:
         _live_processes.add(proc)
     try:
-        return _follow_ffmpeg(scoped, proc, source, tmp_path, target, plan, stderr_file)
+        return _follow_ffmpeg(
+            scoped, proc, source, tmp_path, target, plan, stderr_file, stream_path, hls_dir
+        )
     except BaseException:
         # Everything from here to the read loop's own try/finally used to be
         # unprotected, so anything raising in between — thread exhaustion at
@@ -878,6 +1283,8 @@ def _follow_ffmpeg(
     target: Path,
     plan: TranscodePlan,
     stderr_file: IO[bytes],
+    stream_path: Path | None = None,
+    hls_dir: Path | None = None,
 ) -> str | None:
     """Watch a running ffmpeg to completion and publish what it produced."""
     stop = threading.Event()
@@ -904,6 +1311,8 @@ def _follow_ffmpeg(
     watcher.start()
 
     total_us = (plan.duration or 0.0) * 1_000_000
+    # How far the streamed MP4 has got, for the HLS give-up rule.
+    fragments = _FragmentCounter(stream_path) if stream_path is not None else None
     try:
         # readline, not iteration: a buffered iterator holds lines back, which
         # would both stall the progress readout and make the stall detector
@@ -911,6 +1320,23 @@ def _follow_ffmpeg(
         for raw in iter(proc.stdout.readline, b""):
             last_beat[0] = time.monotonic()
             line = raw.decode("utf-8", errors="replace").strip()
+            if stream_path is not None and line.startswith("progress="):
+                # Offered once the first block has been written, which is the
+                # earliest a player could make anything of it. Checked at
+                # each progress block (twice a second) until then.
+                if _stream_has_data(stream_path):
+                    _update(scoped, stream_path=stream_path)
+                    stream_path = None
+            if hls_dir is not None and line.startswith("progress="):
+                if _hls_is_playable(hls_dir):
+                    _offer_hls(scoped, hls_dir)
+                    hls_dir = None
+                elif fragments is not None and fragments.count() >= HLS_GIVE_UP_FRAGMENTS:
+                    # Tell a player waiting for HLS to stop waiting. The
+                    # directory itself is still removed by _end_hls.
+                    logger.debug(f"The HLS copy of {source.name} never became playable")
+                    _update(scoped, hls_pending=False)
+                    hls_dir = None
             if not line.startswith("out_time_us=") or total_us <= 0:
                 continue
             try:
@@ -976,6 +1402,59 @@ def _follow_ffmpeg(
     return detail or "This video could not be converted for playback."
 
 
+class _FragmentCounter:
+    """Counts the completed fragments of a growing fragmented MP4.
+
+    Walks top-level box headers only, resuming where it left off, so each
+    call reads a few bytes per new fragment however large the file has grown.
+    A fragment is complete when its ``mdat`` is: ffmpeg writes ``moof`` then
+    ``mdat`` per fragment, and a box is counted only once all of it is on
+    disk.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._offset = 0
+        self._count = 0
+
+    def count(self) -> int:
+        try:
+            with open(self._path, "rb") as handle:
+                size = os.fstat(handle.fileno()).st_size
+                while self._offset + 8 <= size:
+                    handle.seek(self._offset)
+                    header = handle.read(16)
+                    box_size = int.from_bytes(header[:4], "big")
+                    if box_size == 1 and len(header) == 16:
+                        box_size = int.from_bytes(header[8:16], "big")
+                    if box_size < 8 or self._offset + box_size > size:
+                        break  # incomplete — or the file's last, open-ended box
+                    if header[4:8] == b"mdat":
+                        self._count += 1
+                    self._offset += box_size
+        except OSError:
+            pass
+        return self._count
+
+
+# How far into the streamed copy to look for its first fragment. The header
+# before it (ftyp + an empty moov) is a kilobyte or two.
+_FIRST_FRAGMENT_SCAN_BYTES = 64 * 1024
+
+
+def _stream_has_data(path: Path) -> bool:
+    """True once the streamed copy holds a first fragment — something to play.
+
+    Not merely "non-empty": the ``ftyp`` lands at once, and a player handed a
+    stream with nothing after it sits there showing no picture.
+    """
+    try:
+        with open(path, "rb") as handle:
+            return b"moof" in handle.read(_FIRST_FRAGMENT_SCAN_BYTES)
+    except OSError:
+        return False
+
+
 # Cap on how much of ffmpeg's complaint is shown to the user.  It goes into a
 # panel in the player, not a log.
 _MAX_DETAIL_CHARS = 200
@@ -1007,3 +1486,4 @@ def _reset_jobs_for_tests() -> None:
     """Test seam: forget every job so a fresh registry can be exercised."""
     with _jobs_lock:
         _jobs.clear()
+        _hls_streams.clear()
