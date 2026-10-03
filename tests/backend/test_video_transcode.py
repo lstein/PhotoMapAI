@@ -531,11 +531,19 @@ def test_request_fails_cleanly_when_the_source_is_gone(monkeypatch, tmp_path):
 
 
 def _await_conversion(album_key: str, video: Path, root: Path, timeout: float = 180.0):
-    """Poll the way the player does, until the job reaches a terminal state."""
+    """Poll the way the player does, until the job reaches a terminal state.
+
+    Then wait for the worker to finish the job outright. "ready" is reported
+    the moment the converted file is published, and the worker still has its
+    clean-up to do after that (the streamed copies, the cache sweep) — so a
+    test inspecting that clean-up would otherwise race it. Conversions run on
+    a single worker, so an empty task queued behind the job finishes after it.
+    """
     deadline = time.monotonic() + timeout
     while True:
         status = request_transcode(album_key, video, root=root)
         if status.state in ("ready", "failed", "unavailable"):
+            video_transcode._worker_pool().submit(lambda: None).result(timeout=timeout)
             return status
         assert time.monotonic() < deadline, f"conversion never finished: {status}"
         time.sleep(0.05)
