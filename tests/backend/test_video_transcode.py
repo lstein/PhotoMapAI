@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -1111,7 +1112,9 @@ def test_a_re_encode_offers_a_playable_stream_and_cleans_it_up(tmp_path, monkeyp
     every character tee treats as syntax."""
     source = tmp_path / "old.avi"
     _make_old_avi(source)
-    root = tmp_path / "it's [a]|cache"
+    # "|" is not a legal filename character on Windows; its escaping is
+    # covered there by test_tee_output_names_are_escaped instead.
+    root = tmp_path / ("it's [a] cache" if sys.platform == "win32" else "it's [a]|cache")
 
     captured: dict[str, object] = {}
     real_end = video_transcode._end_stream
