@@ -10,6 +10,7 @@ import base64
 import functools
 import hashlib
 import json
+import os
 import re
 import zipfile
 from io import BytesIO
@@ -30,7 +31,13 @@ from ..metadata_modules import SlideSummary, video_external_link_html
 from ..thumbnail_cache import thumbnail_dir, tile_hash
 from ..util import is_cuda_oom
 from ..video_cache import VideoFrameCache
-from ..video_transcode import TranscodeCache, TranscodeStatus, request_transcode
+from ..video_transcode import (
+    TranscodeCache,
+    TranscodeStatus,
+    release_stream,
+    request_transcode,
+    stream_source,
+)
 from .album import (
     AlbumDep,
     EmbeddingsDep,
@@ -686,11 +693,141 @@ async def prepare_video(
     """
     video_path = _resolve_album_video(album_key, path, album_config)
     status = await asyncio.to_thread(request_transcode, album_key, video_path)
+    quoted_album = quote(album_key, safe="")
+    quoted_path = quote(path, safe="/")
     if status.state == "ready":
-        quoted_album = quote(album_key, safe="")
-        quoted_path = quote(path, safe="/")
         status.url = f"transcoded_video/{quoted_album}/{quoted_path}"
+    elif status.streamable:
+        status.stream_url = f"streaming_video/{quoted_album}/{quoted_path}"
     return status
+
+
+# Read size for tailing a conversion in progress, and how long to wait at the
+# end of what has been written before looking again. ffmpeg appends a
+# fragment every couple of seconds, so a quarter second is plenty responsive.
+_STREAM_CHUNK_BYTES = 256 * 1024
+_STREAM_POLL_SECONDS = 0.25
+
+# Longest a closed-range request waits for its first byte to be written.
+_STREAM_RANGE_WAIT_SECONDS = 10.0
+# Most a closed-range request is answered with at once. A 206 may be shorter
+# than asked for, and the client asks again for the rest.
+_STREAM_RANGE_MAX_BYTES = 8 * 1024 * 1024
+
+_RANGE_RE = re.compile(r"^bytes=(\d+)-(\d*)$")
+
+
+@search_router.get("/streaming_video/{album_key}/{path:path}", tags=["Search"])
+async def stream_video_conversion(
+    album_key: str, path: str, request: Request, album_config: AlbumDep
+) -> Response:
+    """Stream a conversion while it is still being produced.
+
+    Tails the growing fragmented MP4 that ``video_transcode`` writes next to
+    the cache file during a re-encode, so the player can start within seconds
+    instead of waiting minutes for the finished file. It has no length and no
+    seeking — the player swaps to ``/transcoded_video/`` for that as soon as
+    the conversion is done.
+
+    Range handling is deliberately narrow, and measured rather than guessed:
+
+    * no Range, or ``bytes=0-`` (what Chrome and Firefox send): a plain 200
+      that follows the file as it grows. Answering those with a 206 of what
+      exists so far makes both browsers fail outright.
+    * a closed range such as Safari's ``bytes=0-1`` probe: exactly those
+      bytes, with an unknown total (``/*``).
+    * an open range from anywhere else — a browser trying to resume mid-file:
+      416. The stream cannot honour it, and the player treats the resulting
+      error as "wait for the finished file".
+
+    Guarded by the album resolution like the other two video routes.
+    """
+    video_path = _resolve_album_video(album_key, path, album_config)
+    source = await asyncio.to_thread(stream_source, album_key, video_path)
+    if source is None:
+        raise HTTPException(status_code=404, detail="This video is not being converted")
+    stream_path, still_writing = source
+
+    start, end = 0, None
+    range_header = request.headers.get("range")
+    if range_header:
+        match = _RANGE_RE.match(range_header.strip())
+        if match is None:
+            raise HTTPException(status_code=416, detail="Unsupported range")
+        start = int(match.group(1))
+        end = int(match.group(2)) if match.group(2) else None
+        if end is None and start != 0:
+            raise HTTPException(status_code=416, detail="A conversion in progress cannot be resumed")
+        if end is not None and end < start:
+            raise HTTPException(status_code=416, detail="Unsupported range")
+
+    # Opened here, before any response starts: the job deletes the file the
+    # moment ffmpeg exits, and an open handle is what keeps it readable (on
+    # POSIX) for a reader that is still behind.
+    try:
+        handle = await asyncio.to_thread(open, stream_path, "rb")
+    except OSError:
+        raise HTTPException(status_code=404, detail="This video is not being converted") from None
+
+    headers = {"Cache-Control": "no-store"}
+
+    if end is not None:
+        try:
+            data = await _read_range(handle, start, end, still_writing)
+        finally:
+            handle.close()
+            release_stream(album_key, video_path, stream_path)
+        if not data:
+            raise HTTPException(status_code=416, detail="Range not yet available")
+        headers["Content-Range"] = f"bytes {start}-{start + len(data) - 1}/*"
+        return Response(data, status_code=206, media_type="video/mp4", headers=headers)
+
+    async def follow():
+        try:
+            while True:
+                chunk = await asyncio.to_thread(handle.read, _STREAM_CHUNK_BYTES)
+                if chunk:
+                    yield chunk
+                    continue
+                if not still_writing():
+                    # ffmpeg has exited; whatever it wrote after our last read
+                    # is already on disk.
+                    while chunk := await asyncio.to_thread(handle.read, _STREAM_CHUNK_BYTES):
+                        yield chunk
+                    return
+                await asyncio.sleep(_STREAM_POLL_SECONDS)
+        finally:
+            # Synchronous, both of them: this runs when the client disconnects,
+            # inside an already-cancelled scope where any await is cancelled
+            # again before it can do anything. Both are quick.
+            handle.close()
+            release_stream(album_key, video_path, stream_path)
+
+    return StreamingResponse(follow(), media_type="video/mp4", headers=headers)
+
+
+async def _read_range(handle, start: int, end: int, still_writing) -> bytes:
+    """Up to ``start``..``end`` of a growing file.
+
+    Waits only for ``start`` itself to exist, then answers with what is there
+    — capped, so a request naming the whole film cannot pull a partial copy
+    of it into memory at once. Empty when not even ``start`` exists.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _STREAM_RANGE_WAIT_SECONDS
+    wanted = min(end - start + 1, _STREAM_RANGE_MAX_BYTES)
+    while True:
+        # fstat, not stat: the job may already have unlinked the name.
+        size = (await asyncio.to_thread(os.fstat, handle.fileno())).st_size
+        if size > start or not still_writing() or loop.time() >= deadline:
+            break
+        await asyncio.sleep(_STREAM_POLL_SECONDS)
+
+    def read() -> bytes:
+        handle.seek(start)
+        return handle.read(wanted)
+
+    return await asyncio.to_thread(read)
 
 
 @search_router.get("/transcoded_video/{album_key}/{path:path}", tags=["Search"])

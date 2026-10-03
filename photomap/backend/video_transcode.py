@@ -18,8 +18,16 @@ reverse.
 **Why a cache file and not a pipe.**  Piping ffmpeg's stdout into a
 ``StreamingResponse`` starts faster but has no Range support, so the scrubber
 cannot seek and the duration is unknown; and every replay pays for the
-conversion again.  Writing the file first costs a wait on the first play,
-which is what the player's progress readout is for.
+conversion again.  The cache file is what gets served for real.
+
+**Watching while it converts.**  A re-encode can take minutes, so the same
+ffmpeg run writes a second copy alongside the cache file: a *fragmented* MP4
+(``empty_moov`` + short fragments) that is playable from its first few
+kilobytes.  The ``tee`` muxer makes that one encode with two outputs, not two
+encodes competing for the CPU.  The router streams that growing file to the
+player while the job runs (see :func:`stream_source`); when the cache file
+lands, the player swaps to it at the same timestamp and the scrubber starts
+working.  Remuxes skip all this — they finish in seconds.
 
 **Abandonment.**  Conversions run one at a time on a single worker thread, so
 a user opening several unplayable clips in a row would otherwise queue every
@@ -41,6 +49,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -117,6 +126,17 @@ ABANDON_AFTER_SECONDS = 45.0
 # whole viewing session, would otherwise 404 mid-playback.
 EVICTION_GRACE_SECONDS = 900.0
 
+# Keyframe interval, in seconds, when a conversion is also being streamed.
+# The streamed copy is cut into fragments at keyframes, and the player cannot
+# start until the first fragment is complete — x264's default of one keyframe
+# every 250 frames would make that a ten-second wait at 25 fps.
+STREAM_KEYFRAME_SECONDS = 2
+
+# Characters the ``tee`` muxer treats as syntax in an output name.  The names
+# are escaped rather than trusted: the cache directory sits under the user's
+# home, and nothing stops that from containing a quote or a bracket.
+_TEE_SPECIAL = "\\'|[]"
+
 # How long a failure is remembered.  Without this a permanently unconvertible
 # file re-runs ffmpeg on every poll — several times a second.  It expires
 # because failure is also transient (a full disk, a mount that came back), and
@@ -157,6 +177,10 @@ class TranscodeStatus(BaseModel):
     progress: float = 0.0
     detail: str | None = None
     url: str | None = None
+    #: A running conversion whose output can be watched while it is produced.
+    streamable: bool = False
+    #: Filled in by the router when ``streamable``, like ``url``.
+    stream_url: str | None = None
 
 
 def plan_for(probe: StreamProbe | None) -> TranscodePlan:
@@ -190,8 +214,27 @@ def plan_for(probe: StreamProbe | None) -> TranscodePlan:
     )
 
 
-def ffmpeg_args(source: Path, target: Path, plan: TranscodePlan) -> list[str]:
-    """The ffmpeg argument list for ``plan``, writing ``target``."""
+def _tee_escape(path: Path) -> str:
+    """``path`` as a ``tee`` output name.
+
+    Forward slashes first: the tee muxer reads a backslash as an escape, so a
+    Windows path would otherwise lose every separator.  Windows ffmpeg accepts
+    forward slashes.
+    """
+    text = path.as_posix()
+    return "".join(f"\\{ch}" if ch in _TEE_SPECIAL else ch for ch in text)
+
+
+def ffmpeg_args(
+    source: Path, target: Path, plan: TranscodePlan, stream_target: Path | None = None
+) -> list[str]:
+    """The ffmpeg argument list for ``plan``, writing ``target``.
+
+    With ``stream_target``, the same encode also writes a fragmented MP4 there
+    that can be played while it grows — see the module docstring.  Only
+    meaningful for a video re-encode; a remux finishes too fast to be worth
+    watching.
+    """
     args = [
         "-nostdin",
         "-hide_banner",
@@ -250,13 +293,25 @@ def ffmpeg_args(source: Path, target: Path, plan: TranscodePlan) -> list[str]:
             "-vf",
             "scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1",
         ]
+        if stream_target is not None:
+            args += [
+                "-force_key_frames",
+                f"expr:gte(t,n_forced*{STREAM_KEYFRAME_SECONDS})",
+            ]
 
     if not plan.has_audio:
         args += ["-an"]
-    elif plan.copy_audio:
+    # Not on the streamed path: the ``tee`` muxer has no codec-tag table, so a
+    # copied AAC stream keeps its source container's tag (0xFF in an .avi,
+    # 0x0F in a .ts), which both MP4 outputs then reject — failing a file the
+    # unstreamed path converts fine. Re-encoding audio costs next to nothing.
+    elif plan.copy_audio and stream_target is None:
         args += ["-c:a", "copy"]
     else:
         args += ["-c:a", "aac", "-b:a", AAC_BITRATE, "-ac", "2"]
+
+    if stream_target is not None:
+        return args + _tee_output_args(target, stream_target, plan)
 
     args += [
         # Put the moov atom at the front.  Without it the browser has to fetch
@@ -281,6 +336,39 @@ def ffmpeg_args(source: Path, target: Path, plan: TranscodePlan) -> list[str]:
         str(target),
     ]
     return args
+
+
+def _tee_output_args(target: Path, stream_target: Path, plan: TranscodePlan) -> list[str]:
+    """Output half of the argument list when the encode is also streamed.
+
+    Two MP4s from one encode: ``target`` exactly as the unstreamed path writes
+    it, and ``stream_target`` fragmented so it plays while it grows.
+    ``onfail=ignore`` on the streamed copy only — a problem with the copy
+    being watched must never cost the one being kept.
+    """
+    # The tee muxer does not tell the encoders their output needs global
+    # headers, which MP4 does; without these the codec parameters are missing
+    # from the moov and the result does not play.
+    args = ["-flags:v", "+global_header"]
+    if plan.has_audio:
+        args += ["-flags:a", "+global_header"]
+    return args + [
+        "-max_muxing_queue_size",
+        "4096",
+        "-progress",
+        "pipe:1",
+        "-nostats",
+        "-f",
+        "tee",
+        f"[f=mp4:movflags=+faststart]{_tee_escape(target)}"
+        "|"
+        # flush_packets: without it ffmpeg holds the fragments back in a
+        # 256 KB write buffer, and a low-bitrate clip would reach the player
+        # in bursts many seconds apart — or not in time to start at all.
+        "[f=mp4:movflags=frag_keyframe+empty_moov+default_base_moof"
+        ":flush_packets=1:onfail=ignore]"
+        f"{_tee_escape(stream_target)}",
+    ]
 
 
 def transcode_cache_root() -> Path:
@@ -510,6 +598,10 @@ class _Job:
     #: apart from the polling clock because the two want opposite treatment of
     #: a conversion that finishes anyway — see :func:`_drive_ffmpeg`.
     cancelled: bool = False
+    #: The growing, watchable copy of a re-encode in progress. Set once it has
+    #: something in it, and cleared the moment ffmpeg exits — which is what
+    #: tells a reader streaming it that what is on disk is now all there is.
+    stream_path: Path | None = None
 
 
 _jobs: dict[str, _Job] = {}
@@ -665,7 +757,11 @@ def request_transcode(
         if job is not None:
             job.last_polled = now
             if job.state in ("queued", "running"):
-                return TranscodeStatus(state=job.state, progress=job.progress)
+                return TranscodeStatus(
+                    state=job.state,
+                    progress=job.progress,
+                    streamable=job.stream_path is not None,
+                )
             if job.state == "failed":
                 return TranscodeStatus(state="failed", detail=job.detail)
             # "ready" with no file on disk means the cache was swept or wiped
@@ -674,6 +770,53 @@ def request_transcode(
 
     _worker_pool().submit(_run_job, scoped, video_path, target)
     return TranscodeStatus(state="queued")
+
+
+def stream_source(
+    album_key: str, video_path: Path, root: Path | None = None
+) -> tuple[Path, Callable[[], bool]] | None:
+    """The watchable copy of a conversion in progress, if there is one.
+
+    Returns the growing file and a predicate that is true for as long as
+    ffmpeg may still append to it. A reader that reaches the end of the file
+    while the predicate holds should wait and try again; once it is false,
+    whatever is on disk is the whole stream.
+    """
+    try:
+        mtime = video_path.stat().st_mtime
+    except OSError:
+        return None
+    key = TranscodeCache(album_key, root=root).key_for(video_path, mtime)
+    scoped = _scoped_key(album_key, key)
+    with _jobs_lock:
+        job = _jobs.get(scoped)
+        path = job.stream_path if job is not None else None
+    if path is None:
+        return None
+
+    def still_writing() -> bool:
+        with _jobs_lock:
+            current = _jobs.get(scoped)
+            return current is not None and current.stream_path == path
+
+    return path, still_writing
+
+
+def release_stream(album_key: str, video_path: Path, path: Path) -> None:
+    """Delete a streamed copy that its job has finished with.
+
+    Called by a reader once it is done. The job deletes its own copy when
+    ffmpeg exits, but on Windows that fails while a reader still holds the
+    file open, and this is the second chance. Never deletes a copy its job is
+    still writing.
+    """
+    with _jobs_lock:
+        if any(job.stream_path == path for job in _jobs.values()):
+            return
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass  # somebody else still has it open; the sweeper reaps it later
 
 
 def _update(scoped: str, **fields: object) -> _Job | None:
@@ -807,6 +950,23 @@ def _run_ffmpeg_transcode(
         return f"Could not write to the conversion cache: {e}"
     tmp_path = Path(tmp_name)
 
+    # The watchable copy, for a re-encode only. Its name must end ".tmp" and
+    # never ".mp4": ``TranscodeCache.prune`` deletes any ".mp4" whose stem is
+    # not a cache key, and the byte budget counts ".mp4"s — while a stray
+    # ".tmp" is what ``sweep_transcode_cache`` already knows how to reap, and
+    # a file being written keeps its mtime fresh enough to be spared.
+    stream_path: Path | None = None
+    if not plan.copy_video:
+        try:
+            fd, stream_name = tempfile.mkstemp(
+                dir=target.parent, prefix=f"{target.stem}.", suffix=".stream.tmp"
+            )
+            os.close(fd)
+            stream_path = Path(stream_name)
+        except OSError as e:
+            # Watching early is a nicety; the conversion itself can go ahead.
+            logger.debug(f"Could not create a streamable copy for {source.name}: {e}")
+
     # stderr goes to a file rather than a pipe.  Nothing drains it while the
     # progress stream on stdout is being read, and a pipe that fills blocks
     # ffmpeg forever — the deadlock ``video._run_ffmpeg`` avoids by using
@@ -817,8 +977,33 @@ def _run_ffmpeg_transcode(
     # a conversion that escaped through an unexpected exception would
     # otherwise leak the handle, and on Windows leave the temp file itself
     # behind for as long as the process lives.
-    with tempfile.TemporaryFile() as stderr_file:
-        return _drive_ffmpeg(scoped, exe, source, tmp_path, target, plan, stderr_file)
+    try:
+        with tempfile.TemporaryFile() as stderr_file:
+            return _drive_ffmpeg(
+                scoped, exe, source, tmp_path, target, plan, stderr_file, stream_path
+            )
+    finally:
+        if stream_path is not None:
+            _end_stream(scoped, stream_path)
+
+
+def _end_stream(scoped: str, stream_path: Path) -> None:
+    """Stop offering the watchable copy, and delete it if nobody has it open.
+
+    Cleared first, deleted second: a reader parked at the end of the file
+    checks the job before giving up, so it must see "finished" only once
+    ffmpeg has exited and everything it wrote is on disk. On POSIX a reader
+    mid-stream keeps its open handle across the unlink; on Windows the unlink
+    fails and the reader's own :func:`release_stream` retries it.
+    """
+    with _jobs_lock:
+        job = _jobs.get(scoped)
+        if job is not None and job.stream_path == stream_path:
+            job.stream_path = None
+    try:
+        stream_path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _drive_ffmpeg(
@@ -829,6 +1014,7 @@ def _drive_ffmpeg(
     target: Path,
     plan: TranscodePlan,
     stderr_file: IO[bytes],
+    stream_path: Path | None = None,
 ) -> str | None:
     """Spawn ffmpeg, follow its progress, and publish the result."""
     kwargs: dict[str, object] = {}
@@ -837,7 +1023,7 @@ def _drive_ffmpeg(
 
     try:
         proc = subprocess.Popen(
-            [exe, *ffmpeg_args(source, tmp_path, plan)],
+            [exe, *ffmpeg_args(source, tmp_path, plan, stream_path)],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=stderr_file,
@@ -850,7 +1036,9 @@ def _drive_ffmpeg(
     with _live_lock:
         _live_processes.add(proc)
     try:
-        return _follow_ffmpeg(scoped, proc, source, tmp_path, target, plan, stderr_file)
+        return _follow_ffmpeg(
+            scoped, proc, source, tmp_path, target, plan, stderr_file, stream_path
+        )
     except BaseException:
         # Everything from here to the read loop's own try/finally used to be
         # unprotected, so anything raising in between — thread exhaustion at
@@ -878,6 +1066,7 @@ def _follow_ffmpeg(
     target: Path,
     plan: TranscodePlan,
     stderr_file: IO[bytes],
+    stream_path: Path | None = None,
 ) -> str | None:
     """Watch a running ffmpeg to completion and publish what it produced."""
     stop = threading.Event()
@@ -911,6 +1100,13 @@ def _follow_ffmpeg(
         for raw in iter(proc.stdout.readline, b""):
             last_beat[0] = time.monotonic()
             line = raw.decode("utf-8", errors="replace").strip()
+            if stream_path is not None and line.startswith("progress="):
+                # Offered once the first block has been written, which is the
+                # earliest a player could make anything of it. Checked at
+                # each progress block (twice a second) until then.
+                if _stream_has_data(stream_path):
+                    _update(scoped, stream_path=stream_path)
+                    stream_path = None
             if not line.startswith("out_time_us=") or total_us <= 0:
                 continue
             try:
@@ -974,6 +1170,24 @@ def _follow_ffmpeg(
     detail = _stderr_tail(stderr_file)
     logger.warning(f"ffmpeg could not convert {source}: {detail or returncode}")
     return detail or "This video could not be converted for playback."
+
+
+# How far into the streamed copy to look for its first fragment. The header
+# before it (ftyp + an empty moov) is a kilobyte or two.
+_FIRST_FRAGMENT_SCAN_BYTES = 64 * 1024
+
+
+def _stream_has_data(path: Path) -> bool:
+    """True once the streamed copy holds a first fragment — something to play.
+
+    Not merely "non-empty": the ``ftyp`` lands at once, and a player handed a
+    stream with nothing after it sits there showing no picture.
+    """
+    try:
+        with open(path, "rb") as handle:
+            return b"moof" in handle.read(_FIRST_FRAGMENT_SCAN_BYTES)
+    except OSError:
+        return False
 
 
 # Cap on how much of ffmpeg's complaint is shown to the user.  It goes into a

@@ -335,6 +335,10 @@ def main():
         ssl_certfile=str(args.cert) if args.cert else None,
         log_level="info",
         log_config=uvicorn_logging(),
+        # A conversion being streamed is a response that lasts as long as the
+        # conversion, and uvicorn waits for open responses before it exits.
+        # Without a limit, stopping the server mid-stream waited for ffmpeg.
+        timeout_graceful_shutdown=5,
     )
 
 

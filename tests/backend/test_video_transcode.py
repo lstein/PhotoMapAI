@@ -963,3 +963,316 @@ def test_deleting_an_album_reclaims_its_conversions(client, tmp_path):
         VideoFrameCache("solo_album").clear()
 
     assert not directory.exists()
+
+
+# --------------------------------------------------------------------------
+# Watching a re-encode while it runs
+# --------------------------------------------------------------------------
+
+
+def _stream_args(**kwargs) -> list[str]:
+    plan = video_transcode.TranscodePlan(**kwargs)
+    return ffmpeg_args(
+        Path("/out/clip.tmp"), Path("/out/clip.tmp"), plan, Path("/out/clip.stream.tmp")
+    )
+
+
+def test_a_streamed_encode_writes_both_copies_from_one_run():
+    args = _stream_args(copy_video=False, has_audio=True, copy_audio=False)
+    assert args[args.index("-f") + 1] == "tee"
+    kept, watched = args[-1].split("|")
+    # The kept copy is exactly what the unstreamed path writes.
+    assert kept == "[f=mp4:movflags=+faststart]/out/clip.tmp"
+    # The watched copy plays from its first fragment, and a failure writing
+    # it must never cost the copy being kept.
+    assert watched.startswith("[f=mp4:movflags=frag_keyframe+empty_moov+default_base_moof:")
+    assert "onfail=ignore" in watched
+    # Without it the fragments sit in a 256 KB buffer, not on disk.
+    assert "flush_packets=1" in watched
+    assert watched.endswith("/out/clip.stream.tmp")
+    # tee does not ask the encoders for global headers, which MP4 needs.
+    assert args[args.index("-flags:v") + 1] == "+global_header"
+    assert args[args.index("-flags:a") + 1] == "+global_header"
+    # Short fragments, so the player can start within seconds.
+    assert args[args.index("-force_key_frames") + 1].startswith("expr:gte(t,n_forced*")
+    assert "-progress" in args
+
+
+def test_a_streamed_encode_never_copies_audio():
+    """tee keeps the source container's audio tag, which MP4 rejects."""
+    args = _stream_args(copy_video=False, has_audio=True, copy_audio=True)
+    assert args[args.index("-c:a") + 1] == "aac"
+    # The unstreamed path still copies it.
+    args = _args(copy_video=False, has_audio=True, copy_audio=True)
+    assert args[args.index("-c:a") + 1] == "copy"
+
+
+def test_a_stream_is_offered_only_once_it_holds_a_fragment(tmp_path):
+    stream = tmp_path / "clip.stream.tmp"
+    stream.write_bytes(b"\x00\x00\x00\x1cftypisom" + b"\x00" * 16)
+    assert video_transcode._stream_has_data(stream) is False
+    stream.write_bytes(stream.read_bytes() + b"\x00\x00\x01\x00moof")
+    assert video_transcode._stream_has_data(stream) is True
+    assert video_transcode._stream_has_data(tmp_path / "missing") is False
+
+
+def test_a_silent_streamed_encode_asks_no_audio_encoder_for_headers():
+    args = _stream_args(copy_video=False, has_audio=False, copy_audio=False)
+    assert "-flags:a" not in args
+
+
+def test_an_unstreamed_encode_is_unchanged():
+    args = _args(copy_video=False, has_audio=True, copy_audio=False)
+    assert "tee" not in args
+    assert "-force_key_frames" not in args
+
+
+def test_tee_output_names_are_escaped():
+    """The cache directory lives under the user's home, which can contain any
+    of the characters tee treats as syntax."""
+    escaped = video_transcode._tee_escape(Path("/home/o'neil/[cache]|x/clip.tmp"))
+    assert escaped == "/home/o\\'neil/\\[cache\\]\\|x/clip.tmp"
+
+
+def _running_job_with_stream(tmp_path: Path) -> tuple[Path, Path, str]:
+    source = tmp_path / "old.avi"
+    source.write_bytes(b"x")
+    cache = TranscodeCache("album")
+    scoped = video_transcode._scoped_key("album", cache.key_for(source))
+    stream = tmp_path / "clip.stream.tmp"
+    stream.write_bytes(b"moov")
+    video_transcode._jobs[scoped] = video_transcode._Job(state="running", stream_path=stream)
+    return source, stream, scoped
+
+
+def test_a_running_job_with_a_stream_reports_itself_streamable(monkeypatch, tmp_path):
+    monkeypatch.setattr(video_transcode, "ffmpeg_exe", lambda: "/bin/true")
+    source, _stream, scoped = _running_job_with_stream(tmp_path)
+    assert request_transcode("album", source).streamable is True
+
+    video_transcode._jobs[scoped].stream_path = None
+    assert request_transcode("album", source).streamable is False
+
+
+def test_stream_source_follows_the_job(tmp_path):
+    source, stream, scoped = _running_job_with_stream(tmp_path)
+    found = video_transcode.stream_source("album", source)
+    assert found is not None
+    path, still_writing = found
+    assert path == stream
+    assert still_writing() is True
+
+    # ffmpeg exited: the reader drains what is on disk and stops.
+    video_transcode._end_stream(scoped, stream)
+    assert still_writing() is False
+    assert video_transcode.stream_source("album", source) is None
+    assert not stream.exists()
+
+
+def test_stream_source_is_none_without_a_job(tmp_path):
+    source = tmp_path / "old.avi"
+    source.write_bytes(b"x")
+    assert video_transcode.stream_source("album", source) is None
+
+
+def test_a_reader_never_deletes_a_stream_still_being_written(tmp_path):
+    source, stream, scoped = _running_job_with_stream(tmp_path)
+    video_transcode.release_stream("album", source, stream)
+    assert stream.exists()
+
+    video_transcode._jobs[scoped].stream_path = None
+    video_transcode.release_stream("album", source, stream)
+    assert not stream.exists()
+
+
+def test_prune_spares_a_stream_in_progress(tmp_path):
+    """The watched copy must never look like a stale ".mp4" to the index sweep."""
+    cache = TranscodeCache("album", root=tmp_path)
+    cache.directory.mkdir(parents=True)
+    stream = cache.directory / "abc-def.x1y2.stream.tmp"
+    stream.write_bytes(b"growing")
+    cache.prune(set())
+    assert stream.exists()
+
+
+def _make_old_avi(path: Path, duration: int = 3) -> None:
+    subprocess.run(
+        [ffmpeg_exe(), "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", f"testsrc=size=160x120:rate=10:duration={duration}",
+         "-f", "lavfi", "-i", f"sine=frequency=440:duration={duration}",
+         "-c:v", "mpeg4", "-vtag", "xvid", "-c:a", "libmp3lame", str(path)],
+        check=True,
+    )
+
+
+@requires_ffmpeg
+def test_a_re_encode_offers_a_playable_stream_and_cleans_it_up(tmp_path, monkeypatch):
+    """End to end through the tee muxer, in a cache directory whose name uses
+    every character tee treats as syntax."""
+    source = tmp_path / "old.avi"
+    _make_old_avi(source)
+    root = tmp_path / "it's [a]|cache"
+
+    captured: dict[str, object] = {}
+    real_end = video_transcode._end_stream
+
+    def spy_end(scoped, stream_path):
+        with video_transcode._jobs_lock:
+            captured["offered"] = video_transcode._jobs[scoped].stream_path == stream_path
+        copy = tmp_path / "watched.mp4"
+        shutil.copy(stream_path, copy)
+        captured["copy"] = copy
+        real_end(scoped, stream_path)
+
+    monkeypatch.setattr(video_transcode, "_end_stream", spy_end)
+    status = _await_conversion("album", source, root)
+    assert status.state == "ready", status.detail
+
+    assert captured["offered"] is True
+    watched = probe_streams(captured["copy"])
+    assert watched is not None and watched.video_codec == "h264"
+    assert watched.audio_codec == "aac"
+    # The kept copy is untouched by the second output.
+    kept = probe_streams(TranscodeCache("album", root=root).get(source))
+    assert kept.video_codec == "h264" and kept.duration and kept.duration > 2
+    # And the watched copy is gone once the job is over.
+    assert not list(TranscodeCache("album", root=root).directory.glob("*.tmp"))
+
+
+@requires_ffmpeg
+def test_a_re_encode_with_aac_from_an_avi_still_converts(tmp_path):
+    """Copyable AAC in a non-MP4 container, under a video that needs
+    re-encoding — the case where tee used to fail the whole job."""
+    source = tmp_path / "aac.avi"
+    subprocess.run(
+        [ffmpeg_exe(), "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", "testsrc=size=160x120:rate=10:duration=2",
+         "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+         "-c:v", "mpeg4", "-c:a", "aac", str(source)],
+        check=True,
+    )
+    status = _await_conversion("album", source, tmp_path / "cache")
+    assert status.state == "ready", status.detail
+    kept = probe_streams(TranscodeCache("album", root=tmp_path / "cache").get(source))
+    assert kept.video_codec == "h264" and kept.audio_codec == "aac"
+
+
+@requires_ffmpeg
+def test_a_remux_is_never_streamed(tmp_path, monkeypatch):
+    """A remux finishes in seconds; a second output would only slow it."""
+    source = tmp_path / "modern.mkv"
+    subprocess.run(
+        [ffmpeg_exe(), "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", "testsrc=size=160x120:rate=10:duration=2",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source)],
+        check=True,
+    )
+    targets: list[object] = []
+    real_args = video_transcode.ffmpeg_args
+
+    def spy_args(source, target, plan, stream_target=None):
+        targets.append(stream_target)
+        return real_args(source, target, plan, stream_target)
+
+    monkeypatch.setattr(video_transcode, "ffmpeg_args", spy_args)
+    status = _await_conversion("album", source, tmp_path / "cache")
+    assert status.state == "ready", status.detail
+    assert targets == [None]
+
+
+# --------------------------------------------------------------------------
+# /streaming_video
+# --------------------------------------------------------------------------
+
+
+def test_streaming_video_404s_when_nothing_is_converting(client, mixed_album):
+    assert client.get("/streaming_video/mixed_album/clip.mp4").status_code == 404
+
+
+def test_streaming_video_rejects_a_still_image(client, mixed_album):
+    assert client.get("/streaming_video/mixed_album/building1.jpeg").status_code == 403
+
+
+def _fake_stream(monkeypatch, tmp_path, content: bytes, writing):
+    from photomap.backend.routers import search as search_router
+
+    stream = tmp_path / "live.stream.tmp"
+    stream.write_bytes(content)
+    monkeypatch.setattr(search_router, "stream_source", lambda album, video: (stream, writing))
+    monkeypatch.setattr(search_router, "_STREAM_POLL_SECONDS", 0.01)
+    return stream
+
+
+def test_streaming_video_follows_the_file_until_the_job_ends(client, mixed_album, monkeypatch, tmp_path):
+    polls = {"n": 0}
+    stream = None
+
+    def writing():
+        # Append once while "ffmpeg" is running, then finish.
+        polls["n"] += 1
+        if polls["n"] == 1:
+            with open(stream, "ab") as f:
+                f.write(b"-more")
+            return True
+        return False
+
+    stream = _fake_stream(monkeypatch, tmp_path, b"head", writing)
+    response = client.get("/streaming_video/mixed_album/clip.mp4")
+    assert response.status_code == 200
+    assert response.content == b"head-more"
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.headers["cache-control"] == "no-store"
+    # A growing file has no length to promise.
+    assert "content-length" not in response.headers
+
+
+def test_streaming_video_answers_a_closed_range_probe(client, mixed_album, monkeypatch, tmp_path):
+    """Safari opens every video with ``bytes=0-1`` and will not play one that
+    ignores it."""
+    _fake_stream(monkeypatch, tmp_path, b"abcdef", lambda: True)
+    response = client.get("/streaming_video/mixed_album/clip.mp4", headers={"Range": "bytes=0-1"})
+    assert response.status_code == 206
+    assert response.content == b"ab"
+    assert response.headers["content-range"] == "bytes 0-1/*"
+
+
+def test_streaming_video_treats_bytes_zero_open_as_a_plain_stream(client, mixed_album, monkeypatch, tmp_path):
+    """What Chrome and Firefox send; a 206 of what exists so far breaks both."""
+    _fake_stream(monkeypatch, tmp_path, b"abcdef", lambda: False)
+    response = client.get("/streaming_video/mixed_album/clip.mp4", headers={"Range": "bytes=0-"})
+    assert response.status_code == 200
+    assert response.content == b"abcdef"
+
+
+def test_streaming_video_refuses_to_resume_mid_file(client, mixed_album, monkeypatch, tmp_path):
+    _fake_stream(monkeypatch, tmp_path, b"abcdef", lambda: True)
+    response = client.get("/streaming_video/mixed_album/clip.mp4", headers={"Range": "bytes=3-"})
+    assert response.status_code == 416
+
+
+def test_prepare_video_offers_the_stream_url_while_streamable(client, mixed_album, monkeypatch):
+    from photomap.backend.routers import search as search_router
+
+    monkeypatch.setattr(
+        search_router,
+        "request_transcode",
+        lambda album, video: video_transcode.TranscodeStatus(state="running", progress=0.2, streamable=True),
+    )
+    body = client.post("/prepare_video/mixed_album/clip.mp4").json()
+    assert body["stream_url"] == "streaming_video/mixed_album/clip.mp4"
+    assert body["url"] is None
+
+
+def test_streaming_video_caps_a_closed_range_at_what_exists(client, mixed_album, monkeypatch, tmp_path):
+    """A range naming the whole film is answered with what is on disk, now —
+    not after a long wait, and never all of it in one read."""
+    from photomap.backend.routers import search as search_router
+
+    _fake_stream(monkeypatch, tmp_path, b"abcdef", lambda: True)
+    monkeypatch.setattr(search_router, "_STREAM_RANGE_MAX_BYTES", 4)
+    started = time.monotonic()
+    response = client.get("/streaming_video/mixed_album/clip.mp4", headers={"Range": "bytes=1-99999999"})
+    assert time.monotonic() - started < 2
+    assert response.status_code == 206
+    assert response.content == b"bcde"
+    assert response.headers["content-range"] == "bytes 1-4/*"

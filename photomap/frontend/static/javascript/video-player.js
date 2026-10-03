@@ -24,6 +24,14 @@
  * also the backend's liveness signal — it drops a job nobody is asking about
  * — so closing the player has to stop the polling, which is what the
  * `session` counter below is for.
+ *
+ * A long re-encode does not have to be waited out. While it runs the backend
+ * offers a `stream_url` that follows the conversion as it is written; the
+ * player plays that at once, with a badge saying seeking comes later, and
+ * keeps polling. When the finished file is ready it swaps to it at the same
+ * timestamp, which is when the scrubber starts working. A stream that fails
+ * or never starts (Safari is the doubtful one) drops back to the progress
+ * panel for the rest of that open.
  */
 
 import { state } from "./state.js";
@@ -41,6 +49,7 @@ let progressMessageEl = null;
 let progressBarEl = null;
 let progressFillEl = null;
 let progressPercentEl = null;
+let streamBadgeEl = null;
 let initialized = false;
 
 // Set while playing in place: the poster <img> the frame is pinned over, and
@@ -107,6 +116,24 @@ let current = null;
 // conversion itself) is a real dead end and must not loop.
 let usingConversion = false;
 
+// Whether the element is playing the conversion *while it is still being
+// written*. Set when the stream starts and cleared when it is swapped for the
+// finished file, abandoned, or fails.
+let streaming = false;
+// When the current stream was started, for the nothing-arrived timeout;
+// null once the stream has shown it is alive, which disarms it for good — a
+// paused stream, or one whose autoplay was declined, is not a failed one.
+let streamStartedAt = null;
+// Set when a stream failed during this open. Without it a browser that cannot
+// play the stream would be handed it again by the very next poll, fail again,
+// and flicker between the stream and the progress panel until the end.
+let streamFailed = false;
+
+// A stream that has not even produced metadata after this long is treated as
+// failed. Some browsers stall on a response with no length rather than
+// erroring.
+const STREAM_START_TIMEOUT_MS = 15000;
+
 // How often to ask the backend how the conversion is going. Comfortably
 // inside its abandonment window, which is measured in tens of seconds.
 const POLL_INTERVAL_MS = 1000;
@@ -137,6 +164,7 @@ function showFallback(message, url) {
   if (!fallbackEl) {
     return;
   }
+  hideStreamBadge();
   if (progressEl) {
     progressEl.hidden = true;
   }
@@ -168,6 +196,7 @@ function showProgress(message, progress) {
   if (fallbackEl) {
     fallbackEl.hidden = true;
   }
+  hideStreamBadge();
   const known = typeof progress === "number" && Number.isFinite(progress) && progress > 0;
   const percent = known ? Math.round(progress * 100) : 0;
 
@@ -196,6 +225,7 @@ function showProgress(message, progress) {
 }
 
 function hidePanels() {
+  hideStreamBadge();
   if (fallbackEl) {
     fallbackEl.hidden = true;
   }
@@ -205,6 +235,69 @@ function hidePanels() {
   if (videoEl) {
     videoEl.controls = true;
   }
+}
+
+/**
+ * The small note over a stream in progress. Unlike the progress panel it
+ * leaves the picture and the native controls uncovered: the clip is playing,
+ * and only the scrubber is not yet any use.
+ */
+function showStreamBadge(progress) {
+  if (!streamBadgeEl) {
+    return;
+  }
+  const known = typeof progress === "number" && Number.isFinite(progress) && progress > 0;
+  const done = known ? ` ${Math.round(progress * 100)}%` : "";
+  streamBadgeEl.textContent = `Converting…${done} — seeking works once it finishes`;
+  streamBadgeEl.hidden = false;
+}
+
+function hideStreamBadge() {
+  if (streamBadgeEl) {
+    streamBadgeEl.hidden = true;
+  }
+}
+
+/**
+ * Give up on the stream for this open and wait for the finished file.
+ *
+ * Polling carries on untouched — it is already scheduled — so the next
+ * `ready` plays the converted copy exactly as if no stream had been offered.
+ */
+function abandonStream() {
+  streaming = false;
+  streamFailed = true;
+  teardownVideo();
+  showProgress("Converting this video for playback…", null);
+  focusPlayer();
+}
+
+/**
+ * Swap a stream in progress for the finished file, where the viewer was.
+ *
+ * The position is restored after `loadedmetadata`: before that the element
+ * has no duration and a seek is dropped. Playback resumes only if it was
+ * playing, so a clip the viewer paused stays paused.
+ */
+function swapToConverted(mySession, url) {
+  const resumeAt = videoEl.currentTime || 0;
+  const resume = !videoEl.paused && !videoEl.ended;
+  streaming = false;
+  hidePanels();
+  const onReady = () => {
+    videoEl.removeEventListener("loadedmetadata", onReady);
+    if (mySession !== session) {
+      return;
+    }
+    if (resumeAt > 0) {
+      videoEl.currentTime = resumeAt;
+    }
+    if (resume) {
+      startPlayback();
+    }
+  };
+  videoEl.addEventListener("loadedmetadata", onReady);
+  videoEl.src = url;
 }
 
 /**
@@ -296,6 +389,10 @@ async function pollConversion(mySession, endpoint) {
       pollTimer = setTimeout(() => pollConversion(mySession, endpoint), POLL_INTERVAL_MS * pollFailures);
       return;
     }
+    if (streaming) {
+      streaming = false;
+      teardownVideo();
+    }
     showFallback(`${subject()} could not be prepared for playback.`, current?.url || "");
     return;
   }
@@ -307,15 +404,35 @@ async function pollConversion(mySession, endpoint) {
 
   if (status.state === "ready" && status.url) {
     usingConversion = true;
-    playFrom(status.url);
+    if (streaming) {
+      swapToConverted(mySession, status.url);
+    } else {
+      playFrom(status.url);
+    }
     return;
   }
 
   if (status.state === "queued" || status.state === "running") {
-    showProgress(
-      status.state === "queued" ? "Waiting to convert this video…" : "Converting this video for playback…",
-      status.progress
-    );
+    if (status.stream_url && !streaming && !streamFailed) {
+      streaming = true;
+      streamStartedAt = Date.now();
+      usingConversion = true;
+      playFrom(status.stream_url);
+    } else if (streaming && streamStartedAt !== null) {
+      if (videoEl.readyState >= 1 /* HAVE_METADATA */) {
+        streamStartedAt = null;
+      } else if (Date.now() - streamStartedAt > STREAM_START_TIMEOUT_MS) {
+        abandonStream();
+      }
+    }
+    if (streaming) {
+      showStreamBadge(status.progress);
+    } else {
+      showProgress(
+        status.state === "queued" ? "Waiting to convert this video…" : "Converting this video for playback…",
+        status.progress
+      );
+    }
     pollTimer = setTimeout(() => pollConversion(mySession, endpoint), POLL_INTERVAL_MS);
     return;
   }
@@ -323,6 +440,11 @@ async function pollConversion(mySession, endpoint) {
   // "failed", "unavailable", and the should-not-happen "ready" with no URL.
   // The original file is still offered: it may well play in another
   // application even though no browser will touch it.
+  if (streaming) {
+    // The partial stream would otherwise play on, audibly, behind the panel.
+    streaming = false;
+    teardownVideo();
+  }
   showFallback(status.detail || `${subject()} could not be converted for playback.`, current?.url || "");
 }
 
@@ -640,6 +762,8 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   pollTimer = null;
   current = { url, filename, transcodeUrl };
   usingConversion = false;
+  streaming = false;
+  streamFailed = false;
   pollFailures = 0;
 
   if (titleEl) {
@@ -737,6 +861,8 @@ function close(resumeSlideshow) {
   hidePanels();
   current = null;
   usingConversion = false;
+  streaming = false;
+  streamFailed = false;
 
   state.swiper?.keyboard?.enable?.();
   keyboardSwiper?.keyboard?.enable?.();
@@ -767,6 +893,7 @@ export function initializeVideoPlayer() {
   progressBarEl = document.getElementById("videoPlayerProgressBar");
   progressFillEl = document.getElementById("videoPlayerProgressFill");
   progressPercentEl = document.getElementById("videoPlayerProgressPercent");
+  streamBadgeEl = document.getElementById("videoPlayerStreamBadge");
 
   if (videoEl) {
     videoEl.volume = DEFAULT_VOLUME;
@@ -788,6 +915,12 @@ export function initializeVideoPlayer() {
     const url = videoEl.getAttribute("src");
     if (!url) {
       return; // teardown clears src, which fires error; not a real failure
+    }
+    if (streaming) {
+      // Not a dead end: the finished file may well play where the stream of
+      // it would not. Wait for it instead.
+      abandonStream();
+      return;
     }
     if (usingConversion) {
       // The converted copy is H.264/AAC in an MP4. If *that* will not play,
@@ -865,6 +998,7 @@ export function _resetVideoPlayerForTests() {
   progressBarEl = null;
   progressFillEl = null;
   progressPercentEl = null;
+  streamBadgeEl = null;
   slideshowWasRunning = false;
   clearTimeout(pollTimer);
   pollTimer = null;
@@ -885,5 +1019,7 @@ export function _resetVideoPlayerForTests() {
   session += 1;
   current = null;
   usingConversion = false;
+  streaming = false;
+  streamFailed = false;
   pollFailures = 0;
 }
