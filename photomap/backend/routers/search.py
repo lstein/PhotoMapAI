@@ -32,8 +32,10 @@ from ..thumbnail_cache import thumbnail_dir, tile_hash
 from ..util import is_cuda_oom
 from ..video_cache import VideoFrameCache
 from ..video_transcode import (
+    HLS_PLAYLIST_NAME,
     TranscodeCache,
     TranscodeStatus,
+    hls_source,
     release_stream,
     request_transcode,
     stream_source,
@@ -697,9 +699,93 @@ async def prepare_video(
     quoted_path = quote(path, safe="/")
     if status.state == "ready":
         status.url = f"transcoded_video/{quoted_album}/{quoted_path}"
-    elif status.streamable:
-        status.stream_url = f"streaming_video/{quoted_album}/{quoted_path}"
+    else:
+        if status.streamable:
+            status.stream_url = f"streaming_video/{quoted_album}/{quoted_path}"
+        if status.hls_streamable and status.hls_token:
+            status.hls_url = (
+                f"streaming_hls/{quoted_album}/{quoted_path}/hls/"
+                f"{quote(status.hls_token, safe='')}/{HLS_PLAYLIST_NAME}"
+            )
     return status
+
+
+# The only names an HLS directory serves: the playlist, the init segment, and
+# the numbered media segments ffmpeg names after the playlist. Anything else
+# — a "..", the playlist's ".tmp" mid-rewrite — is refused.
+_HLS_NAME_RE = re.compile(r"^(index\.m3u8|init\.m4s|index\d+\.m4s)$")
+
+
+def _start_at_the_beginning(playlist: bytes) -> bytes:
+    """Tell the player to start this playlist at 0:00.
+
+    A playlist with no ``#EXT-X-ENDLIST`` yet is a live one to a player, and
+    a live stream starts a few segments back from the newest — so the viewer
+    would join a conversion somewhere in the middle, and Chrome's player,
+    given a playlist shorter than that offset, fails outright. ffmpeg has no
+    option for the ``EXT-X-START`` tag that says otherwise, so it is added
+    here, right after the header.
+    """
+    header = b"#EXTM3U"
+    if not playlist.startswith(header) or b"#EXT-X-START:" in playlist:
+        return playlist
+    return header + b"\n#EXT-X-START:TIME-OFFSET=0,PRECISE=YES" + playlist[len(header) :]
+
+
+@search_router.get("/streaming_hls/{album_key}/{path:path}/hls/{token}/{name}", tags=["Search"])
+async def stream_video_conversion_hls(
+    album_key: str, path: str, token: str, name: str, album_config: AlbumDep
+) -> Response:
+    """The HLS form of a conversion in progress, for Apple's player.
+
+    Every browser on iOS and iPadOS, and Safari, refuses the growing MP4 that
+    ``/streaming_video/`` serves — it insists on knowing a file's length — but
+    plays an HLS playlist that is still being appended to. The file name is
+    last in the URL so the playlist's relative segment names resolve back to
+    this route.
+
+    ``token`` names one conversion run (see ``video_transcode._hls_streams``).
+    That is what makes caching segments safe: every run numbers its segments
+    from index0, so without it a re-converted video would be spliced together
+    from the old run's cached segments and the new run's.
+
+    The playlist is never cached (it grows); segments are immutable once
+    listed. Guarded by the album resolution like the other video routes.
+    """
+    if not _HLS_NAME_RE.match(name):
+        raise HTTPException(status_code=404, detail="Not part of a conversion")
+    video_path = _resolve_album_video(album_key, path, album_config)
+    hls_dir = await asyncio.to_thread(hls_source, album_key, video_path, token)
+    if hls_dir is None:
+        raise HTTPException(status_code=404, detail="This video is not being converted")
+    file = hls_dir / name
+    if name == HLS_PLAYLIST_NAME:
+        try:
+            playlist = await asyncio.to_thread(file.read_bytes)
+        except OSError:
+            raise HTTPException(status_code=404, detail="This video is not being converted") from None
+        return Response(
+            _start_at_the_beginning(playlist),
+            media_type="application/vnd.apple.mpegurl",
+            headers={"Cache-Control": "no-store"},
+        )
+    # Read whole rather than handed to FileResponse: a segment is two seconds
+    # of video, and the directory can be deleted between a FileResponse's
+    # existence check and its open — a 500 instead of a 404. A short read
+    # also holds the file open only briefly, which is what lets ffmpeg's
+    # playlist rename and the lingering directory's removal succeed on
+    # Windows.
+    try:
+        segment = await asyncio.to_thread(file.read_bytes)
+    except OSError:
+        raise HTTPException(status_code=404, detail="No such segment") from None
+    # video/iso.segment, the registered type for an fMP4 segment, and not
+    # video/mp4: Chrome's native HLS player takes video/mp4 at its word, tries
+    # to parse a bare fragment as a whole MP4, and fails the stream outright
+    # (DEMUXER_ERROR_COULD_NOT_PARSE). Measured; Apple's player accepts both.
+    return Response(
+        segment, media_type="video/iso.segment", headers={"Cache-Control": "private, max-age=3600"}
+    )
 
 
 # Read size for tailing a conversion in progress, and how long to wait at the

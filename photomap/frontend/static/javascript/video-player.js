@@ -29,9 +29,13 @@
  * offers a `stream_url` that follows the conversion as it is written; the
  * player plays that at once, with a badge saying seeking comes later, and
  * keeps polling. When the finished file is ready it swaps to it at the same
- * timestamp, which is when the scrubber starts working. A stream that fails
- * or never starts (Safari is the doubtful one) drops back to the progress
- * panel for the rest of that open.
+ * timestamp, which is when the scrubber starts working.
+ *
+ * The stream comes in two forms. Apple's player — every browser on iOS and
+ * iPadOS, and Safari — refuses a growing MP4 of unknown length, so the
+ * backend also offers an HLS playlist (`hls_url`). A browser that says it
+ * plays HLS natively gets that first, the growing MP4 (`stream_url`) if HLS
+ * fails, and the progress panel if both do.
  */
 
 import { state } from "./state.js";
@@ -124,10 +128,14 @@ let streaming = false;
 // null once the stream has shown it is alive, which disarms it for good — a
 // paused stream, or one whose autoplay was declined, is not a failed one.
 let streamStartedAt = null;
-// Set when a stream failed during this open. Without it a browser that cannot
-// play the stream would be handed it again by the very next poll, fail again,
-// and flicker between the stream and the progress panel until the end.
-let streamFailed = false;
+// How many stream forms have failed during this open — an index into
+// streamForms(). Without it a browser that cannot play a stream would be
+// handed it again by the very next poll, fail again, and flicker between the
+// stream and the progress panel until the end.
+let streamsFailed = 0;
+// Where a stream that failed after playing had got to, so the finished file
+// picks up there rather than at 0:00: { at, play }.
+let resumeAfterFailure = null;
 
 // A stream that has not even produced metadata after this long is treated as
 // failed. Some browsers stall on a response with no length rather than
@@ -265,11 +273,53 @@ function hideStreamBadge() {
  * `ready` plays the converted copy exactly as if no stream had been offered.
  */
 function abandonStream() {
+  if (streamStartedAt === null) {
+    // It had been playing. Something went wrong mid-stream rather than with
+    // the form itself, and the other form would start again from 0:00 — on
+    // Apple's player, in the form it refuses. Wait for the finished file and
+    // resume it where this left off.
+    resumeAfterFailure = { at: videoEl.currentTime || 0, play: !videoEl.paused };
+    streamsFailed = streamForms().length;
+  } else {
+    streamsFailed += 1;
+  }
   streaming = false;
-  streamFailed = true;
   teardownVideo();
   showProgress("Converting this video for playback…", null);
   focusPlayer();
+}
+
+/**
+ * The status fields naming each stream form this browser should try, best
+ * first.
+ *
+ * HLS only where the browser claims to play it natively: Apple's player,
+ * which needs it, and recent Chrome. Firefox says no, and would need hls.js.
+ */
+function streamForms() {
+  let nativeHls = false;
+  try {
+    nativeHls = Boolean(videoEl?.canPlayType?.("application/vnd.apple.mpegurl"));
+  } catch {
+    nativeHls = false;
+  }
+  return nativeHls ? ["hls_url", "stream_url"] : ["stream_url"];
+}
+
+/**
+ * Pass over the HLS form when it is not going to arrive.
+ *
+ * A browser that prefers HLS waits for the playlist even with the MP4 stream
+ * on offer, because Apple's player refuses the MP4. But the playlist may
+ * never come — the server could not create it, or its output died — and the
+ * MP4 stream is then far better than the progress panel. The server says
+ * which (`hls_pending`); no timer here, because a slow but healthy encode
+ * would trip one and strand an iPad on the panel.
+ */
+function skipFormsThatWillNotCome(status) {
+  if (streamForms()[streamsFailed] === "hls_url" && !status.hls_url && !status.hls_pending && status.stream_url) {
+    streamsFailed += 1;
+  }
 }
 
 /**
@@ -279,9 +329,11 @@ function abandonStream() {
  * has no duration and a seek is dropped. Playback resumes only if it was
  * playing, so a clip the viewer paused stays paused.
  */
-function swapToConverted(mySession, url) {
-  const resumeAt = videoEl.currentTime || 0;
-  const resume = !videoEl.paused && !videoEl.ended;
+function swapToConverted(
+  mySession,
+  url,
+  { at: resumeAt, play: resume } = { at: videoEl.currentTime || 0, play: !videoEl.paused && !videoEl.ended }
+) {
   streaming = false;
   hidePanels();
   const onReady = () => {
@@ -406,6 +458,12 @@ async function pollConversion(mySession, endpoint) {
     usingConversion = true;
     if (streaming) {
       swapToConverted(mySession, status.url);
+    } else if (resumeAfterFailure) {
+      swapToConverted(mySession, status.url, resumeAfterFailure);
+      resumeAfterFailure = null;
+      // abandonStream left focus on the close button, where Space would
+      // dismiss the player instead of pausing the clip now playing.
+      focusPlayer();
     } else {
       playFrom(status.url);
     }
@@ -413,11 +471,18 @@ async function pollConversion(mySession, endpoint) {
   }
 
   if (status.state === "queued" || status.state === "running") {
-    if (status.stream_url && !streaming && !streamFailed) {
+    // The next form to try, if it is on offer yet. Not the first one that
+    // is: on an iPad the MP4 form can be ready a moment before the HLS one,
+    // and starting it would only fail.
+    if (!streaming) {
+      skipFormsThatWillNotCome(status);
+    }
+    const streamUrl = streaming ? null : status[streamForms()[streamsFailed]];
+    if (streamUrl) {
       streaming = true;
       streamStartedAt = Date.now();
       usingConversion = true;
-      playFrom(status.stream_url);
+      playFrom(streamUrl);
     } else if (streaming && streamStartedAt !== null) {
       if (videoEl.readyState >= 1 /* HAVE_METADATA */) {
         streamStartedAt = null;
@@ -763,7 +828,8 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   current = { url, filename, transcodeUrl };
   usingConversion = false;
   streaming = false;
-  streamFailed = false;
+  streamsFailed = 0;
+  resumeAfterFailure = null;
   pollFailures = 0;
 
   if (titleEl) {
@@ -862,7 +928,8 @@ function close(resumeSlideshow) {
   current = null;
   usingConversion = false;
   streaming = false;
-  streamFailed = false;
+  streamsFailed = 0;
+  resumeAfterFailure = null;
 
   state.swiper?.keyboard?.enable?.();
   keyboardSwiper?.keyboard?.enable?.();
@@ -1020,6 +1087,7 @@ export function _resetVideoPlayerForTests() {
   current = null;
   usingConversion = false;
   streaming = false;
-  streamFailed = false;
+  streamsFailed = 0;
+  resumeAfterFailure = null;
   pollFailures = 0;
 }

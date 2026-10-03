@@ -1314,3 +1314,126 @@ describe("streaming a conversion in progress", () => {
     expect(video().getAttribute("src")).toBe("streaming_video/album/clip.avi");
   });
 });
+
+describe("streaming to a browser that plays HLS natively", () => {
+  const BOTH = {
+    state: "running",
+    progress: 0.3,
+    streamable: true,
+    stream_url: "streaming_video/album/clip.avi",
+    hls_streamable: true,
+    hls_url: "streaming_hls/album/clip.avi/hls/index.m3u8",
+  };
+  // The MP4 stream is ready; the playlist is still on its way.
+  const MP4_ONLY = {
+    state: "running",
+    progress: 0.1,
+    streamable: true,
+    stream_url: "streaming_video/album/clip.avi",
+    hls_pending: true,
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    window.HTMLMediaElement.prototype.canPlayType = jest.fn((type) =>
+      type === "application/vnd.apple.mpegurl" ? "maybe" : ""
+    );
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    delete window.HTMLMediaElement.prototype.canPlayType;
+  });
+
+  it("plays the HLS playlist rather than the growing MP4", async () => {
+    mockConversion(BOTH);
+    openVideoPlayer(AVI);
+    await flush();
+    expect(video().getAttribute("src")).toBe("streaming_hls/album/clip.avi/hls/index.m3u8");
+  });
+
+  it("waits for the playlist instead of starting an MP4 Apple's player would refuse", async () => {
+    mockConversion(MP4_ONLY, BOTH);
+    openVideoPlayer(AVI);
+    await flush();
+    expect(video().getAttribute("src")).toBeNull();
+
+    jest.advanceTimersByTime(1000);
+    await flush();
+    expect(video().getAttribute("src")).toBe("streaming_hls/album/clip.avi/hls/index.m3u8");
+  });
+
+  it("uses the MP4 stream at once when the server says no playlist is coming", async () => {
+    mockConversion({ ...MP4_ONLY, hls_pending: false });
+    openVideoPlayer(AVI);
+    await flush();
+    expect(video().getAttribute("src")).toBe("streaming_video/album/clip.avi");
+  });
+
+  it("keeps waiting for a slow playlist the server says is coming", async () => {
+    mockConversion(MP4_ONLY);
+    openVideoPlayer(AVI);
+    await flush();
+    for (let i = 0; i < 60; i += 1) {
+      jest.advanceTimersByTime(1000);
+      await flush();
+    }
+    // A slow encode is not a dead one: an iPad must not be handed the MP4.
+    expect(video().getAttribute("src")).toBeNull();
+  });
+
+  it("stops waiting once the server gives up on the playlist", async () => {
+    mockConversion(MP4_ONLY, { ...MP4_ONLY, hls_pending: false });
+    openVideoPlayer(AVI);
+    await flush();
+    expect(video().getAttribute("src")).toBeNull();
+    jest.advanceTimersByTime(1000);
+    await flush();
+    expect(video().getAttribute("src")).toBe("streaming_video/album/clip.avi");
+  });
+
+  it("resumes the finished file where a stream that died mid-play left off", async () => {
+    mockConversion(BOTH, BOTH, { state: "ready", progress: 1, url: "transcoded_video/album/clip.avi" });
+    openVideoPlayer(AVI);
+    await flush();
+    Object.defineProperty(video(), "readyState", { value: 4, configurable: true });
+    jest.advanceTimersByTime(1000); // the poll that sees it alive
+    await flush();
+    Object.defineProperty(video(), "currentTime", { value: 42, writable: true, configurable: true });
+    Object.defineProperty(video(), "paused", { value: false, configurable: true });
+    Object.defineProperty(video(), "error", { value: { code: 2 }, configurable: true });
+    video().dispatchEvent(new Event("error"));
+    expect(progress().hidden).toBe(false);
+    video().play.mockClear();
+
+    jest.advanceTimersByTime(1000);
+    await flush();
+    // Not restarted from 0:00 in the other form: straight to the finished file.
+    expect(video().getAttribute("src")).toBe("transcoded_video/album/clip.avi");
+    video().dispatchEvent(new Event("loadedmetadata"));
+    expect(video().currentTime).toBe(42);
+    expect(video().play).toHaveBeenCalled();
+    // Space must reach the clip, not the close button.
+    expect(document.activeElement).toBe(video());
+  });
+
+  it("falls back to the growing MP4 when HLS fails, then to the panel", async () => {
+    mockConversion(BOTH);
+    openVideoPlayer(AVI);
+    await flush();
+
+    Object.defineProperty(video(), "error", { value: { code: 4 }, configurable: true });
+    video().dispatchEvent(new Event("error"));
+    jest.advanceTimersByTime(1000);
+    await flush();
+    expect(video().getAttribute("src")).toBe("streaming_video/album/clip.avi");
+
+    video().dispatchEvent(new Event("error"));
+    expect(progress().hidden).toBe(false);
+    jest.advanceTimersByTime(1000);
+    await flush();
+    // Both forms failed: no third attempt, the panel stays.
+    expect(video().getAttribute("src")).toBeNull();
+    expect(progress().hidden).toBe(false);
+  });
+});
