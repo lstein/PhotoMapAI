@@ -156,12 +156,15 @@ HLS_LINGER_SECONDS = 120.0
 # a three-segment one. Six seconds of video, at STREAM_KEYFRAME_SECONDS each.
 HLS_MIN_SEGMENTS = 3
 
-# Seconds of *output* after which a playlist that is still not playable is
-# declared dead (its tee output failed — onfail=ignore makes that silent).
-# Measured in media time, not wall time, so a slow encode is never mistaken
-# for a dead one: by now the playlist should have had HLS_MIN_SEGMENTS
-# segments for several seconds.
-HLS_GIVE_UP_SECONDS = HLS_MIN_SEGMENTS * STREAM_KEYFRAME_SECONDS + 4
+# Completed fragments of the streamed MP4 after which a playlist that is still
+# not playable is declared dead (its tee output failed — onfail=ignore makes
+# that silent). Counted in the MP4's fragments rather than in time: both
+# outputs are fed the same packets and both cut at the same keyframes (one
+# every STREAM_KEYFRAME_SECONDS, scene cuts off), so fragment N closes when
+# segment N does. Neither wall time — a slow encode is not a dead one — nor
+# ffmpeg's out_time will do: out_time follows the audio, which the video
+# encoder's lookahead leaves seconds behind at a low frame rate.
+HLS_GIVE_UP_FRAGMENTS = HLS_MIN_SEGMENTS + 2
 
 # Characters the ``tee`` muxer treats as syntax in an output name.  The names
 # are escaped rather than trusted: the cache directory sits under the user's
@@ -340,6 +343,12 @@ def ffmpeg_args(
             args += [
                 "-force_key_frames",
                 f"expr:gte(t,n_forced*{STREAM_KEYFRAME_SECONDS})",
+                # No extra keyframes at scene cuts, so every fragment of the
+                # streamed MP4 and every HLS segment is exactly the forced
+                # interval long — which is what lets one count stand in for
+                # the other (see HLS_GIVE_UP_FRAGMENTS).
+                "-sc_threshold",
+                "0",
             ]
 
     if not plan.has_audio:
@@ -1302,9 +1311,8 @@ def _follow_ffmpeg(
     watcher.start()
 
     total_us = (plan.duration or 0.0) * 1_000_000
-    # How much output ffmpeg has produced so far. Read for the HLS give-up
-    # rule even when the duration — and so the progress fraction — is unknown.
-    done_us = [0.0]
+    # How far the streamed MP4 has got, for the HLS give-up rule.
+    fragments = _FragmentCounter(stream_path) if stream_path is not None else None
     try:
         # readline, not iteration: a buffered iterator holds lines back, which
         # would both stall the progress readout and make the stall detector
@@ -1323,20 +1331,17 @@ def _follow_ffmpeg(
                 if _hls_is_playable(hls_dir):
                     _offer_hls(scoped, hls_dir)
                     hls_dir = None
-                elif done_us[0] > HLS_GIVE_UP_SECONDS * 1_000_000:
+                elif fragments is not None and fragments.count() >= HLS_GIVE_UP_FRAGMENTS:
                     # Tell a player waiting for HLS to stop waiting. The
                     # directory itself is still removed by _end_hls.
                     logger.debug(f"The HLS copy of {source.name} never became playable")
                     _update(scoped, hls_pending=False)
                     hls_dir = None
-            if not line.startswith("out_time_us="):
+            if not line.startswith("out_time_us=") or total_us <= 0:
                 continue
             try:
                 done = float(line.split("=", 1)[1])
             except ValueError:
-                continue
-            done_us[0] = done
-            if total_us <= 0:
                 continue
             # Never reports 1.0: only the file landing in place means done,
             # and ffmpeg's last block arrives before the faststart rewrite.
@@ -1395,6 +1400,41 @@ def _follow_ffmpeg(
     detail = _stderr_tail(stderr_file)
     logger.warning(f"ffmpeg could not convert {source}: {detail or returncode}")
     return detail or "This video could not be converted for playback."
+
+
+class _FragmentCounter:
+    """Counts the completed fragments of a growing fragmented MP4.
+
+    Walks top-level box headers only, resuming where it left off, so each
+    call reads a few bytes per new fragment however large the file has grown.
+    A fragment is complete when its ``mdat`` is: ffmpeg writes ``moof`` then
+    ``mdat`` per fragment, and a box is counted only once all of it is on
+    disk.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._offset = 0
+        self._count = 0
+
+    def count(self) -> int:
+        try:
+            with open(self._path, "rb") as handle:
+                size = os.fstat(handle.fileno()).st_size
+                while self._offset + 8 <= size:
+                    handle.seek(self._offset)
+                    header = handle.read(16)
+                    box_size = int.from_bytes(header[:4], "big")
+                    if box_size == 1 and len(header) == 16:
+                        box_size = int.from_bytes(header[8:16], "big")
+                    if box_size < 8 or self._offset + box_size > size:
+                        break  # incomplete — or the file's last, open-ended box
+                    if header[4:8] == b"mdat":
+                        self._count += 1
+                    self._offset += box_size
+        except OSError:
+            pass
+        return self._count
 
 
 # How far into the streamed copy to look for its first fragment. The header

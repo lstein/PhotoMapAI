@@ -297,16 +297,22 @@ function abandonStream() {
  * which refuse the growing MP4 outright. Recent desktop Chrome also says it
  * plays HLS natively, but on a playlist that is still growing its player
  * behaves like a live one: measured, it froze or jumped forward over whole
- * stretches of the clip, while it plays the growing MP4 perfectly. Apple's
- * WebKit is recognised by its vendor string, which every browser built on it
- * reports (Chrome on iOS included) and no other engine does; the HLS test
- * keeps an Apple browser that somehow lacked native HLS on the MP4.
+ * stretches of the clip, while it plays the growing MP4 perfectly.
+ *
+ * Apple's player is recognised by WebKit's vendor string — every browser on
+ * iOS and iPadOS reports it, Chrome included — on an Apple platform. The
+ * platform test is what leaves out WebKit's Linux ports (GNOME Web, WPE),
+ * which report the same vendor and play HLS through GStreamer, which treats
+ * a growing playlist as live just as Chrome does. iPadOS in desktop mode
+ * reports "MacIntel", which still matches.
  */
 function streamForms() {
   let applePlayer = false;
   try {
     applePlayer =
-      navigator.vendor === "Apple Computer, Inc." && Boolean(videoEl?.canPlayType?.("application/vnd.apple.mpegurl"));
+      navigator.vendor === "Apple Computer, Inc." &&
+      /^(Mac|iPhone|iPad|iPod)/.test(navigator.platform || "") &&
+      Boolean(videoEl?.canPlayType?.("application/vnd.apple.mpegurl"));
   } catch {
     applePlayer = false;
   }

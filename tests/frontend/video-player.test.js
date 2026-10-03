@@ -1335,16 +1335,38 @@ describe("streaming to Apple's player", () => {
 
   beforeEach(() => {
     jest.useFakeTimers();
-    window.HTMLMediaElement.prototype.canPlayType = jest.fn((type) =>
-      type === "application/vnd.apple.mpegurl" ? "maybe" : ""
-    );
+    // Spied, not assigned: canPlayType is jsdom's own method on the
+    // prototype, and deleting an assigned stub would remove it for good.
+    jest
+      .spyOn(window.HTMLMediaElement.prototype, "canPlayType")
+      .mockImplementation((type) => (type === "application/vnd.apple.mpegurl" ? "maybe" : ""));
+    // An iPad. (jsdom already reports Apple's vendor; its platform is "".)
     Object.defineProperty(navigator, "vendor", { value: "Apple Computer, Inc.", configurable: true });
+    Object.defineProperty(navigator, "platform", { value: "iPad", configurable: true });
   });
 
   afterEach(() => {
     jest.useRealTimers();
-    delete window.HTMLMediaElement.prototype.canPlayType;
+    jest.restoreAllMocks();
     delete navigator.vendor;
+    delete navigator.platform;
+  });
+
+  it("keeps WebKit's Linux ports on the growing MP4", async () => {
+    // GNOME Web reports Apple's vendor but plays HLS through GStreamer.
+    Object.defineProperty(navigator, "platform", { value: "Linux x86_64", configurable: true });
+    mockConversion(BOTH);
+    openVideoPlayer(AVI);
+    await flush();
+    expect(video().getAttribute("src")).toBe("streaming_video/album/clip.avi");
+  });
+
+  it("treats iPadOS in desktop mode as Apple's player", async () => {
+    Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
+    mockConversion(BOTH);
+    openVideoPlayer(AVI);
+    await flush();
+    expect(video().getAttribute("src")).toBe("streaming_hls/album/clip.avi/hls/index.m3u8");
   });
 
   it("keeps desktop Chrome on the growing MP4 though it claims HLS", async () => {

@@ -1017,6 +1017,30 @@ def test_a_stream_is_offered_only_once_it_holds_a_fragment(tmp_path):
     assert video_transcode._stream_has_data(tmp_path / "missing") is False
 
 
+def test_a_streamed_encode_cuts_keyframes_only_on_the_clock():
+    """Scene-cut keyframes would make MP4 fragments shorter than HLS segments,
+    and the give-up rule counts one to judge the other."""
+    args = _stream_args(copy_video=False, has_audio=True, copy_audio=False)
+    assert args[args.index("-sc_threshold") + 1] == "0"
+    assert "-sc_threshold" not in _args(copy_video=False, has_audio=True, copy_audio=False)
+
+
+def _box(kind: bytes, payload: bytes = b"") -> bytes:
+    return (8 + len(payload)).to_bytes(4, "big") + kind + payload
+
+
+def test_the_fragment_counter_counts_only_complete_fragments(tmp_path):
+    path = tmp_path / "live.stream.tmp"
+    head = _box(b"ftyp", b"isom") + _box(b"moov", b"x" * 20)
+    fragment = _box(b"moof", b"y" * 12) + _box(b"mdat", b"z" * 100)
+    path.write_bytes(head + fragment + fragment[:-10])  # the second is still being written
+    counter = video_transcode._FragmentCounter(path)
+    assert counter.count() == 1
+    path.write_bytes(head + fragment + fragment + fragment)
+    assert counter.count() == 3
+    assert video_transcode._FragmentCounter(tmp_path / "missing").count() == 0
+
+
 def test_a_silent_streamed_encode_asks_no_audio_encoder_for_headers():
     args = _stream_args(copy_video=False, has_audio=False, copy_audio=False)
     assert "-flags:a" not in args
@@ -1500,7 +1524,10 @@ def test_a_dead_hls_output_tells_the_player_to_stop_waiting(tmp_path, monkeypatc
     """The HLS slave is onfail=ignore, so its death is silent; the server must
     say so, by media time, or an HLS-preferring player waits forever."""
     source = tmp_path / "old.avi"
-    _make_old_avi(source, duration=video_transcode.HLS_GIVE_UP_SECONDS + 4)
+    _make_old_avi(
+        source,
+        duration=(video_transcode.HLS_GIVE_UP_FRAGMENTS + 2) * video_transcode.STREAM_KEYFRAME_SECONDS,
+    )
     # An output name in a directory that does not exist: the slave fails to open.
     monkeypatch.setattr(
         video_transcode,
@@ -1542,3 +1569,91 @@ def test_a_relative_ffmpeg_path_survives_the_streamed_encode(tmp_path, monkeypat
     _make_old_avi(source)
     status = _await_conversion("album", source, tmp_path / "cache")
     assert status.state == "ready", status.detail
+
+
+class _ScriptedFfmpeg:
+    """Stands in for a running ffmpeg: replays progress blocks, and before
+    each one lets the test shape what is on disk at that moment."""
+
+    def __init__(self, blocks):
+        lines = []
+        for prepare, out_time_s in blocks:
+            lines.append((prepare, f"out_time_us={int(out_time_s * 1_000_000)}\n".encode()))
+            lines.append((None, b"progress=continue\n"))
+        self._lines = iter(lines)
+        self.stdout = self
+        self.returncode = 1
+
+    def readline(self):
+        try:
+            prepare, line = next(self._lines)
+        except StopIteration:
+            return b""
+        if prepare is not None:
+            prepare()
+        return line
+
+    def close(self):
+        pass
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+    def kill(self):
+        pass
+
+
+def _hls_decisions(tmp_path, monkeypatch, blocks_for):
+    """Run _follow_ffmpeg over scripted progress; report what it decided."""
+    stream = tmp_path / "x.stream.tmp"
+    hls_dir = tmp_path / "x.hls.tmp"
+    hls_dir.mkdir()
+    head = _box(b"ftyp", b"isom") + _box(b"moov", b"x" * 20)
+    fragment = _box(b"moof", b"y" * 12) + _box(b"mdat", b"z" * 100)
+
+    def on_disk(fragments, segments):
+        def prepare():
+            stream.write_bytes(head + fragment * fragments)
+            (hls_dir / "index.m3u8").write_text(
+                "#EXTM3U\n" + "".join(f"#EXTINF:2.0,\nindex{i}.m4s\n" for i in range(segments))
+            )
+        return prepare
+
+    updates, offered = [], []
+    monkeypatch.setattr(video_transcode, "_update", lambda scoped, **f: updates.append(f))
+    monkeypatch.setattr(video_transcode, "_offer_hls", lambda scoped, d: offered.append(d))
+    import io
+
+    plan = video_transcode.TranscodePlan(copy_video=False, has_audio=True, copy_audio=False, duration=120)
+    video_transcode._follow_ffmpeg(
+        "scoped", _ScriptedFfmpeg(blocks_for(on_disk)), tmp_path / "in.avi",
+        tmp_path / "out.tmp", tmp_path / "out.mp4", plan, io.BytesIO(), stream, hls_dir,
+    )
+    return {"hls_pending": False} in updates, bool(offered)
+
+
+def test_a_playlist_lagging_out_time_is_not_given_up_on(tmp_path, monkeypatch):
+    """A low frame rate with audio: out_time follows the audio, and x264's
+    lookahead leaves the video — and so the segments — far behind it. A
+    give-up rule timed on out_time abandoned healthy playlists like this."""
+    gave_up, offered = _hls_decisions(
+        tmp_path, monkeypatch,
+        lambda on_disk: [
+            (on_disk(0, 0), 12.0),
+            (on_disk(1, 1), 30.0),
+            (on_disk(2, 2), 60.0),
+            (on_disk(3, 3), 90.0),
+        ],
+    )
+    assert not gave_up
+    assert offered
+
+
+def test_a_dead_playlist_is_given_up_on_once_the_mp4_moves_on(tmp_path, monkeypatch):
+    fragments = video_transcode.HLS_GIVE_UP_FRAGMENTS
+    gave_up, offered = _hls_decisions(
+        tmp_path, monkeypatch,
+        lambda on_disk: [(on_disk(n, 0), 2.0 * n) for n in range(1, fragments + 1)],
+    )
+    assert gave_up
+    assert not offered
