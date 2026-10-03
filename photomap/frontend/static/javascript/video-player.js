@@ -33,9 +33,9 @@
  *
  * The stream comes in two forms. Apple's player — every browser on iOS and
  * iPadOS, and Safari — refuses a growing MP4 of unknown length, so the
- * backend also offers an HLS playlist (`hls_url`). A browser that says it
- * plays HLS natively gets that first, the growing MP4 (`stream_url`) if HLS
- * fails, and the progress panel if both do.
+ * backend also offers an HLS playlist (`hls_url`). Apple's player gets that
+ * first, the growing MP4 (`stream_url`) if HLS fails, and the progress panel
+ * if both do; every other browser gets the growing MP4 (see streamForms).
  */
 
 import { state } from "./state.js";
@@ -293,17 +293,24 @@ function abandonStream() {
  * The status fields naming each stream form this browser should try, best
  * first.
  *
- * HLS only where the browser claims to play it natively: Apple's player,
- * which needs it, and recent Chrome. Firefox says no, and would need hls.js.
+ * HLS for Apple's player only — every iOS and iPadOS browser and Safari,
+ * which refuse the growing MP4 outright. Recent desktop Chrome also says it
+ * plays HLS natively, but on a playlist that is still growing its player
+ * behaves like a live one: measured, it froze or jumped forward over whole
+ * stretches of the clip, while it plays the growing MP4 perfectly. Apple's
+ * WebKit is recognised by its vendor string, which every browser built on it
+ * reports (Chrome on iOS included) and no other engine does; the HLS test
+ * keeps an Apple browser that somehow lacked native HLS on the MP4.
  */
 function streamForms() {
-  let nativeHls = false;
+  let applePlayer = false;
   try {
-    nativeHls = Boolean(videoEl?.canPlayType?.("application/vnd.apple.mpegurl"));
+    applePlayer =
+      navigator.vendor === "Apple Computer, Inc." && Boolean(videoEl?.canPlayType?.("application/vnd.apple.mpegurl"));
   } catch {
-    nativeHls = false;
+    applePlayer = false;
   }
-  return nativeHls ? ["hls_url", "stream_url"] : ["stream_url"];
+  return applePlayer ? ["hls_url", "stream_url"] : ["stream_url"];
 }
 
 /**

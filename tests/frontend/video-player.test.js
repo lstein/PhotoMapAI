@@ -1315,7 +1315,7 @@ describe("streaming a conversion in progress", () => {
   });
 });
 
-describe("streaming to a browser that plays HLS natively", () => {
+describe("streaming to Apple's player", () => {
   const BOTH = {
     state: "running",
     progress: 0.3,
@@ -1338,11 +1338,22 @@ describe("streaming to a browser that plays HLS natively", () => {
     window.HTMLMediaElement.prototype.canPlayType = jest.fn((type) =>
       type === "application/vnd.apple.mpegurl" ? "maybe" : ""
     );
+    Object.defineProperty(navigator, "vendor", { value: "Apple Computer, Inc.", configurable: true });
   });
 
   afterEach(() => {
     jest.useRealTimers();
     delete window.HTMLMediaElement.prototype.canPlayType;
+    delete navigator.vendor;
+  });
+
+  it("keeps desktop Chrome on the growing MP4 though it claims HLS", async () => {
+    // Its native HLS player freezes and skips on a playlist still growing.
+    Object.defineProperty(navigator, "vendor", { value: "Google Inc.", configurable: true });
+    mockConversion(BOTH);
+    openVideoPlayer(AVI);
+    await flush();
+    expect(video().getAttribute("src")).toBe("streaming_video/album/clip.avi");
   });
 
   it("plays the HLS playlist rather than the growing MP4", async () => {
