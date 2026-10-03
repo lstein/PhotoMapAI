@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -530,11 +531,19 @@ def test_request_fails_cleanly_when_the_source_is_gone(monkeypatch, tmp_path):
 
 
 def _await_conversion(album_key: str, video: Path, root: Path, timeout: float = 180.0):
-    """Poll the way the player does, until the job reaches a terminal state."""
+    """Poll the way the player does, until the job reaches a terminal state.
+
+    Then wait for the worker to finish the job outright. "ready" is reported
+    the moment the converted file is published, and the worker still has its
+    clean-up to do after that (the streamed copies, the cache sweep) — so a
+    test inspecting that clean-up would otherwise race it. Conversions run on
+    a single worker, so an empty task queued behind the job finishes after it.
+    """
     deadline = time.monotonic() + timeout
     while True:
         status = request_transcode(album_key, video, root=root)
         if status.state in ("ready", "failed", "unavailable"):
+            video_transcode._worker_pool().submit(lambda: None).result(timeout=timeout)
             return status
         assert time.monotonic() < deadline, f"conversion never finished: {status}"
         time.sleep(0.05)
@@ -963,3 +972,712 @@ def test_deleting_an_album_reclaims_its_conversions(client, tmp_path):
         VideoFrameCache("solo_album").clear()
 
     assert not directory.exists()
+
+
+# --------------------------------------------------------------------------
+# Watching a re-encode while it runs
+# --------------------------------------------------------------------------
+
+
+def _stream_args(**kwargs) -> list[str]:
+    plan = video_transcode.TranscodePlan(**kwargs)
+    return ffmpeg_args(
+        Path("/out/clip.tmp"), Path("/out/clip.tmp"), plan, Path("/out/clip.stream.tmp")
+    )
+
+
+def test_a_streamed_encode_writes_both_copies_from_one_run():
+    args = _stream_args(copy_video=False, has_audio=True, copy_audio=False)
+    assert args[args.index("-f") + 1] == "tee"
+    kept, watched = args[-1].split("|")
+    # The kept copy is exactly what the unstreamed path writes.
+    assert kept == "[f=mp4:movflags=+faststart]/out/clip.tmp"
+    # The watched copy plays from its first fragment, and a failure writing
+    # it must never cost the copy being kept.
+    assert watched.startswith("[f=mp4:movflags=frag_keyframe+empty_moov+default_base_moof:")
+    assert "onfail=ignore" in watched
+    # Without it the fragments sit in a 256 KB buffer, not on disk.
+    assert "flush_packets=1" in watched
+    assert watched.endswith("/out/clip.stream.tmp")
+    # tee does not ask the encoders for global headers, which MP4 needs.
+    assert args[args.index("-flags:v") + 1] == "+global_header"
+    assert args[args.index("-flags:a") + 1] == "+global_header"
+    # Short fragments, so the player can start within seconds.
+    assert args[args.index("-force_key_frames") + 1].startswith("expr:gte(t,n_forced*")
+    assert "-progress" in args
+
+
+def test_a_streamed_encode_never_copies_audio():
+    """tee keeps the source container's audio tag, which MP4 rejects."""
+    args = _stream_args(copy_video=False, has_audio=True, copy_audio=True)
+    assert args[args.index("-c:a") + 1] == "aac"
+    # The unstreamed path still copies it.
+    args = _args(copy_video=False, has_audio=True, copy_audio=True)
+    assert args[args.index("-c:a") + 1] == "copy"
+
+
+def test_a_stream_is_offered_only_once_it_holds_a_fragment(tmp_path):
+    stream = tmp_path / "clip.stream.tmp"
+    stream.write_bytes(b"\x00\x00\x00\x1cftypisom" + b"\x00" * 16)
+    assert video_transcode._stream_has_data(stream) is False
+    stream.write_bytes(stream.read_bytes() + b"\x00\x00\x01\x00moof")
+    assert video_transcode._stream_has_data(stream) is True
+    assert video_transcode._stream_has_data(tmp_path / "missing") is False
+
+
+def test_a_streamed_encode_cuts_keyframes_only_on_the_clock():
+    """Scene-cut keyframes would make MP4 fragments shorter than HLS segments,
+    and the give-up rule counts one to judge the other."""
+    args = _stream_args(copy_video=False, has_audio=True, copy_audio=False)
+    assert args[args.index("-sc_threshold") + 1] == "0"
+    assert "-sc_threshold" not in _args(copy_video=False, has_audio=True, copy_audio=False)
+
+
+def _box(kind: bytes, payload: bytes = b"") -> bytes:
+    return (8 + len(payload)).to_bytes(4, "big") + kind + payload
+
+
+def test_the_fragment_counter_counts_only_complete_fragments(tmp_path):
+    path = tmp_path / "live.stream.tmp"
+    head = _box(b"ftyp", b"isom") + _box(b"moov", b"x" * 20)
+    fragment = _box(b"moof", b"y" * 12) + _box(b"mdat", b"z" * 100)
+    path.write_bytes(head + fragment + fragment[:-10])  # the second is still being written
+    counter = video_transcode._FragmentCounter(path)
+    assert counter.count() == 1
+    path.write_bytes(head + fragment + fragment + fragment)
+    assert counter.count() == 3
+    assert video_transcode._FragmentCounter(tmp_path / "missing").count() == 0
+
+
+def test_a_silent_streamed_encode_asks_no_audio_encoder_for_headers():
+    args = _stream_args(copy_video=False, has_audio=False, copy_audio=False)
+    assert "-flags:a" not in args
+
+
+def test_an_unstreamed_encode_is_unchanged():
+    args = _args(copy_video=False, has_audio=True, copy_audio=False)
+    assert "tee" not in args
+    assert "-force_key_frames" not in args
+
+
+def test_a_streamed_encode_can_also_write_hls():
+    plan = video_transcode.TranscodePlan(copy_video=False, has_audio=True, copy_audio=False)
+    args = ffmpeg_args(
+        Path("/out/clip.tmp"), Path("/out/clip.tmp"), plan, Path("/out/clip.stream.tmp"), Path("/out/x.hls.tmp")
+    )
+    kept, watched, hls = args[-1].split("|")
+    assert hls.startswith("[f=hls:hls_time=2:hls_playlist_type=event:hls_segment_type=fmp4")
+    assert "hls_fmp4_init_filename=init.m4s" in hls and "onfail=ignore" in hls
+    # Relative: ffmpeg runs from the cache directory, so nothing in the
+    # user's path can reach the hls muxer's segment-name patterns.
+    assert hls.endswith("]x.hls.tmp/index.m3u8")
+
+
+def test_an_hls_playlist_is_offered_only_once_a_player_can_start_it(tmp_path):
+    """Chrome's player fails a live playlist shorter than three segments."""
+    hls_dir = tmp_path / "x.hls.tmp"
+    hls_dir.mkdir()
+    assert video_transcode._hls_is_playable(hls_dir) is False
+    playlist = hls_dir / video_transcode.HLS_PLAYLIST_NAME
+    for n in range(1, video_transcode.HLS_MIN_SEGMENTS + 1):
+        playlist.write_text("#EXTM3U\n" + "".join(f"#EXTINF:2.0,\nindex{i}.m4s\n" for i in range(n)))
+        assert video_transcode._hls_is_playable(hls_dir) is (n >= video_transcode.HLS_MIN_SEGMENTS)
+
+
+def test_an_hls_copy_nobody_was_offered_is_deleted_at_once(tmp_path):
+    hls_dir = tmp_path / "x.hls.tmp"
+    hls_dir.mkdir()
+    video_transcode._end_hls("scoped", hls_dir)
+    assert not hls_dir.exists()
+
+
+def test_an_offered_hls_copy_lingers_then_expires(tmp_path, monkeypatch):
+    started = []
+    monkeypatch.setattr(
+        video_transcode.threading, "Timer", lambda delay, fn, args: started.append((delay, fn, args)) or _NoTimer()
+    )
+    hls_dir = tmp_path / "x.hls.tmp"
+    hls_dir.mkdir()
+    video_transcode._jobs["scoped"] = video_transcode._Job(state="running", hls_pending=True)
+    video_transcode._offer_hls("scoped", hls_dir)
+    assert video_transcode._jobs["scoped"].hls_dir == hls_dir
+    assert video_transcode._jobs["scoped"].hls_pending is False
+
+    video_transcode._end_hls("scoped", hls_dir)
+    # No longer offered to new players, still served to the one watching.
+    assert video_transcode._jobs["scoped"].hls_dir is None
+    assert video_transcode._hls_streams[hls_dir.name] == ("scoped", hls_dir)
+    assert hls_dir.exists()
+    delay, fn, args = started[0]
+    assert delay == video_transcode.HLS_LINGER_SECONDS
+    fn(*args)
+    assert hls_dir.name not in video_transcode._hls_streams
+    assert not hls_dir.exists()
+
+
+def test_an_hls_copy_that_cannot_schedule_its_removal_is_removed_at_once(tmp_path, monkeypatch):
+    """Must not raise: it runs after the conversion has been published."""
+
+    class _Exhausted:
+        daemon = False
+
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(video_transcode.threading, "Timer", lambda *a: _Exhausted())
+    hls_dir = tmp_path / "x.hls.tmp"
+    hls_dir.mkdir()
+    video_transcode._offer_hls("scoped", hls_dir)
+    video_transcode._end_hls("scoped", hls_dir)
+    assert hls_dir.name not in video_transcode._hls_streams
+    assert not hls_dir.exists()
+
+
+def test_a_job_with_no_hls_copy_says_none_is_coming(tmp_path):
+    source = tmp_path / "old.avi"
+    source.write_bytes(b"x")
+    cache = TranscodeCache("album")
+    scoped = video_transcode._scoped_key("album", cache.key_for(source))
+    video_transcode._jobs[scoped] = video_transcode._Job(state="running", hls_pending=True)
+    video_transcode._end_hls(scoped, tmp_path / "never-offered.hls.tmp")
+    assert video_transcode._jobs[scoped].hls_pending is False
+
+
+def test_hls_source_serves_only_the_run_and_video_it_names(tmp_path):
+    source = tmp_path / "old.avi"
+    source.write_bytes(b"x")
+    other = tmp_path / "other.avi"
+    other.write_bytes(b"y")
+    scoped = video_transcode._scoped_key("album", TranscodeCache("album").key_for(source))
+    hls_dir = tmp_path / "abc.x1.hls.tmp"
+    hls_dir.mkdir()
+    video_transcode._offer_hls(scoped, hls_dir)
+
+    assert video_transcode.hls_source("album", source, hls_dir.name) == hls_dir
+    # Another run's token, another video, another album: nothing.
+    assert video_transcode.hls_source("album", source, "abc.zz.hls.tmp") is None
+    assert video_transcode.hls_source("album", other, hls_dir.name) is None
+    assert video_transcode.hls_source("elsewhere", source, hls_dir.name) is None
+
+
+class _NoTimer:
+    daemon = False
+
+    def start(self):
+        pass
+
+
+def test_sweep_reaps_an_abandoned_hls_directory(tmp_path):
+    import os
+
+    hls_dir = tmp_path / "album" / "abc.x.hls.tmp"
+    hls_dir.mkdir(parents=True)
+    (hls_dir / "index0.m4s").write_bytes(b"x")
+    old = time.time() - video_transcode.EVICTION_GRACE_SECONDS - 10
+    os.utime(hls_dir, (old, old))
+    sweep_transcode_cache(root=tmp_path)
+    assert not hls_dir.exists()
+
+
+def test_tee_output_names_are_escaped():
+    """The cache directory lives under the user's home, which can contain any
+    of the characters tee treats as syntax."""
+    escaped = video_transcode._tee_escape(Path("/home/o'neil/[cache]|x/clip.tmp"))
+    assert escaped == "/home/o\\'neil/\\[cache\\]\\|x/clip.tmp"
+
+
+def _running_job_with_stream(tmp_path: Path) -> tuple[Path, Path, str]:
+    source = tmp_path / "old.avi"
+    source.write_bytes(b"x")
+    cache = TranscodeCache("album")
+    scoped = video_transcode._scoped_key("album", cache.key_for(source))
+    stream = tmp_path / "clip.stream.tmp"
+    stream.write_bytes(b"moov")
+    video_transcode._jobs[scoped] = video_transcode._Job(state="running", stream_path=stream)
+    return source, stream, scoped
+
+
+def test_a_running_job_with_a_stream_reports_itself_streamable(monkeypatch, tmp_path):
+    monkeypatch.setattr(video_transcode, "ffmpeg_exe", lambda: "/bin/true")
+    source, _stream, scoped = _running_job_with_stream(tmp_path)
+    assert request_transcode("album", source).streamable is True
+
+    video_transcode._jobs[scoped].stream_path = None
+    assert request_transcode("album", source).streamable is False
+
+
+def test_stream_source_follows_the_job(tmp_path):
+    source, stream, scoped = _running_job_with_stream(tmp_path)
+    found = video_transcode.stream_source("album", source)
+    assert found is not None
+    path, still_writing = found
+    assert path == stream
+    assert still_writing() is True
+
+    # ffmpeg exited: the reader drains what is on disk and stops.
+    video_transcode._end_stream(scoped, stream)
+    assert still_writing() is False
+    assert video_transcode.stream_source("album", source) is None
+    assert not stream.exists()
+
+
+def test_stream_source_is_none_without_a_job(tmp_path):
+    source = tmp_path / "old.avi"
+    source.write_bytes(b"x")
+    assert video_transcode.stream_source("album", source) is None
+
+
+def test_a_reader_never_deletes_a_stream_still_being_written(tmp_path):
+    source, stream, scoped = _running_job_with_stream(tmp_path)
+    video_transcode.release_stream("album", source, stream)
+    assert stream.exists()
+
+    video_transcode._jobs[scoped].stream_path = None
+    video_transcode.release_stream("album", source, stream)
+    assert not stream.exists()
+
+
+def test_prune_spares_a_stream_in_progress(tmp_path):
+    """The watched copy must never look like a stale ".mp4" to the index sweep."""
+    cache = TranscodeCache("album", root=tmp_path)
+    cache.directory.mkdir(parents=True)
+    stream = cache.directory / "abc-def.x1y2.stream.tmp"
+    stream.write_bytes(b"growing")
+    cache.prune(set())
+    assert stream.exists()
+
+
+def _make_old_avi(path: Path, duration: int = 3) -> None:
+    subprocess.run(
+        [ffmpeg_exe(), "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", f"testsrc=size=160x120:rate=10:duration={duration}",
+         "-f", "lavfi", "-i", f"sine=frequency=440:duration={duration}",
+         "-c:v", "mpeg4", "-vtag", "xvid", "-c:a", "libmp3lame", str(path)],
+        check=True,
+    )
+
+
+@requires_ffmpeg
+def test_a_re_encode_offers_a_playable_stream_and_cleans_it_up(tmp_path, monkeypatch):
+    """End to end through the tee muxer, in a cache directory whose name uses
+    every character tee treats as syntax."""
+    source = tmp_path / "old.avi"
+    # Long enough for the HLS playlist to reach HLS_MIN_SEGMENTS and be offered.
+    _make_old_avi(source, duration=8)
+    # "|" is not a legal filename character on Windows; its escaping is
+    # covered there by test_tee_output_names_are_escaped instead.
+    # And a printf pattern, which the hls muxer would expand in a segment name.
+    root = tmp_path / ("it's [a] %05d cache" if sys.platform == "win32" else "it's [a]|%05d cache")
+
+    captured: dict[str, object] = {}
+    real_end = video_transcode._end_stream
+
+    def spy_end(scoped, stream_path):
+        with video_transcode._jobs_lock:
+            captured["offered"] = video_transcode._jobs[scoped].stream_path == stream_path
+        copy = tmp_path / "watched.mp4"
+        shutil.copy(stream_path, copy)
+        captured["copy"] = copy
+        real_end(scoped, stream_path)
+
+    monkeypatch.setattr(video_transcode, "_end_stream", spy_end)
+    status = _await_conversion("album", source, root)
+    assert status.state == "ready", status.detail
+
+    assert captured["offered"] is True
+    watched = probe_streams(captured["copy"])
+    assert watched is not None and watched.video_codec == "h264"
+    assert watched.audio_codec == "aac"
+    # The kept copy is untouched by the second output.
+    kept = probe_streams(TranscodeCache("album", root=root).get(source))
+    assert kept.video_codec == "h264" and kept.duration and kept.duration > 2
+    # The watched MP4 is gone once the job is over...
+    directory = TranscodeCache("album", root=root).directory
+    assert not list(directory.glob("*.stream.tmp"))
+    # ...but the HLS copy lingers for a player that has not swapped yet, and
+    # is a complete playlist by now.
+    token = next(iter(video_transcode._hls_streams))
+    hls_dir = video_transcode.hls_source("album", source, token, root=root)
+    assert hls_dir is not None and hls_dir.is_dir()
+    playlist = (hls_dir / video_transcode.HLS_PLAYLIST_NAME).read_text()
+    assert "#EXT-X-PLAYLIST-TYPE:EVENT" in playlist
+    assert '#EXT-X-MAP:URI="init.m4s"' in playlist
+    assert "index0.m4s" in playlist and playlist.rstrip().endswith("#EXT-X-ENDLIST")
+    assert (hls_dir / "init.m4s").is_file() and (hls_dir / "index0.m4s").is_file()
+
+    # Then it expires, and nothing is left behind.
+    video_transcode._expire_hls(hls_dir)
+    assert video_transcode.hls_source("album", source, token, root=root) is None
+    assert not list(directory.glob("*.tmp"))
+
+
+@requires_ffmpeg
+def test_a_re_encode_with_aac_from_an_avi_still_converts(tmp_path):
+    """Copyable AAC in a non-MP4 container, under a video that needs
+    re-encoding — the case where tee used to fail the whole job."""
+    source = tmp_path / "aac.avi"
+    subprocess.run(
+        [ffmpeg_exe(), "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", "testsrc=size=160x120:rate=10:duration=2",
+         "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+         "-c:v", "mpeg4", "-c:a", "aac", str(source)],
+        check=True,
+    )
+    status = _await_conversion("album", source, tmp_path / "cache")
+    assert status.state == "ready", status.detail
+    kept = probe_streams(TranscodeCache("album", root=tmp_path / "cache").get(source))
+    assert kept.video_codec == "h264" and kept.audio_codec == "aac"
+
+
+@requires_ffmpeg
+def test_a_remux_is_never_streamed(tmp_path, monkeypatch):
+    """A remux finishes in seconds; a second output would only slow it."""
+    source = tmp_path / "modern.mkv"
+    subprocess.run(
+        [ffmpeg_exe(), "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", "testsrc=size=160x120:rate=10:duration=2",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source)],
+        check=True,
+    )
+    targets: list[object] = []
+    real_args = video_transcode.ffmpeg_args
+
+    def spy_args(source, target, plan, stream_target=None, hls_dir=None):
+        targets.append((stream_target, hls_dir))
+        return real_args(source, target, plan, stream_target, hls_dir)
+
+    monkeypatch.setattr(video_transcode, "ffmpeg_args", spy_args)
+    status = _await_conversion("album", source, tmp_path / "cache")
+    assert status.state == "ready", status.detail
+    assert targets == [(None, None)]
+
+
+# --------------------------------------------------------------------------
+# /streaming_video
+# --------------------------------------------------------------------------
+
+
+def test_streaming_video_404s_when_nothing_is_converting(client, mixed_album):
+    assert client.get("/streaming_video/mixed_album/clip.mp4").status_code == 404
+
+
+def test_streaming_video_rejects_a_still_image(client, mixed_album):
+    assert client.get("/streaming_video/mixed_album/building1.jpeg").status_code == 403
+
+
+def _fake_stream(monkeypatch, tmp_path, content: bytes, writing):
+    from photomap.backend.routers import search as search_router
+
+    stream = tmp_path / "live.stream.tmp"
+    stream.write_bytes(content)
+    monkeypatch.setattr(search_router, "stream_source", lambda album, video: (stream, writing))
+    monkeypatch.setattr(search_router, "_STREAM_POLL_SECONDS", 0.01)
+    return stream
+
+
+def test_streaming_video_follows_the_file_until_the_job_ends(client, mixed_album, monkeypatch, tmp_path):
+    polls = {"n": 0}
+    stream = None
+
+    def writing():
+        # Append once while "ffmpeg" is running, then finish.
+        polls["n"] += 1
+        if polls["n"] == 1:
+            with open(stream, "ab") as f:
+                f.write(b"-more")
+            return True
+        return False
+
+    stream = _fake_stream(monkeypatch, tmp_path, b"head", writing)
+    response = client.get("/streaming_video/mixed_album/clip.mp4")
+    assert response.status_code == 200
+    assert response.content == b"head-more"
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.headers["cache-control"] == "no-store"
+    # A growing file has no length to promise.
+    assert "content-length" not in response.headers
+
+
+def test_streaming_video_answers_a_closed_range_probe(client, mixed_album, monkeypatch, tmp_path):
+    """Safari opens every video with ``bytes=0-1`` and will not play one that
+    ignores it."""
+    _fake_stream(monkeypatch, tmp_path, b"abcdef", lambda: True)
+    response = client.get("/streaming_video/mixed_album/clip.mp4", headers={"Range": "bytes=0-1"})
+    assert response.status_code == 206
+    assert response.content == b"ab"
+    assert response.headers["content-range"] == "bytes 0-1/*"
+
+
+def test_streaming_video_treats_bytes_zero_open_as_a_plain_stream(client, mixed_album, monkeypatch, tmp_path):
+    """What Chrome and Firefox send; a 206 of what exists so far breaks both."""
+    _fake_stream(monkeypatch, tmp_path, b"abcdef", lambda: False)
+    response = client.get("/streaming_video/mixed_album/clip.mp4", headers={"Range": "bytes=0-"})
+    assert response.status_code == 200
+    assert response.content == b"abcdef"
+
+
+def test_streaming_video_refuses_to_resume_mid_file(client, mixed_album, monkeypatch, tmp_path):
+    _fake_stream(monkeypatch, tmp_path, b"abcdef", lambda: True)
+    response = client.get("/streaming_video/mixed_album/clip.mp4", headers={"Range": "bytes=3-"})
+    assert response.status_code == 416
+
+
+def test_prepare_video_offers_the_stream_url_while_streamable(client, mixed_album, monkeypatch):
+    from photomap.backend.routers import search as search_router
+
+    monkeypatch.setattr(
+        search_router,
+        "request_transcode",
+        lambda album, video: video_transcode.TranscodeStatus(state="running", progress=0.2, streamable=True),
+    )
+    body = client.post("/prepare_video/mixed_album/clip.mp4").json()
+    assert body["stream_url"] == "streaming_video/mixed_album/clip.mp4"
+    assert body["url"] is None
+
+
+def test_streaming_video_caps_a_closed_range_at_what_exists(client, mixed_album, monkeypatch, tmp_path):
+    """A range naming the whole film is answered with what is on disk, now —
+    not after a long wait, and never all of it in one read."""
+    from photomap.backend.routers import search as search_router
+
+    _fake_stream(monkeypatch, tmp_path, b"abcdef", lambda: True)
+    monkeypatch.setattr(search_router, "_STREAM_RANGE_MAX_BYTES", 4)
+    started = time.monotonic()
+    response = client.get("/streaming_video/mixed_album/clip.mp4", headers={"Range": "bytes=1-99999999"})
+    assert time.monotonic() - started < 2
+    assert response.status_code == 206
+    assert response.content == b"bcde"
+    assert response.headers["content-range"] == "bytes 1-4/*"
+
+
+def _fake_hls(monkeypatch, tmp_path):
+    from photomap.backend.routers import search as search_router
+
+    hls_dir = tmp_path / "x.hls.tmp"
+    hls_dir.mkdir()
+    # Bytes, not text: write_text would turn these into CRLF on Windows.
+    (hls_dir / "index.m3u8").write_bytes(b"#EXTM3U\n#EXTINF:2.0,\nindex0.m4s\n")
+    (hls_dir / "index0.m4s").write_bytes(b"segment")
+    (hls_dir / "init.m4s").write_bytes(b"init")
+    (hls_dir / "index.m3u8.tmp").write_text("half-written")
+    monkeypatch.setattr(
+        search_router, "hls_source", lambda album, video, token: hls_dir if token == "run1" else None
+    )
+    return hls_dir
+
+
+def test_streaming_hls_serves_the_playlist_uncached(client, mixed_album, monkeypatch, tmp_path):
+    _fake_hls(monkeypatch, tmp_path)
+    response = client.get("/streaming_hls/mixed_album/clip.mp4/hls/run1/index.m3u8")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/vnd.apple.mpegurl"
+    assert response.headers["cache-control"] == "no-store"
+    assert "index0.m4s" in response.text
+    # A live playlist would otherwise start near its end, mid-conversion.
+    assert response.text.startswith("#EXTM3U\n#EXT-X-START:TIME-OFFSET=0,PRECISE=YES\n")
+
+
+def test_streaming_hls_serves_segments(client, mixed_album, monkeypatch, tmp_path):
+    _fake_hls(monkeypatch, tmp_path)
+    for name, body in (("index0.m4s", b"segment"), ("init.m4s", b"init")):
+        response = client.get(f"/streaming_hls/mixed_album/clip.mp4/hls/run1/{name}")
+        assert response.status_code == 200
+        assert response.content == body
+        # Not video/mp4, which makes Chrome parse a fragment as a whole file.
+        assert response.headers["content-type"] == "video/iso.segment"
+
+
+def test_streaming_hls_serves_nothing_but_its_own_files(client, mixed_album, monkeypatch, tmp_path):
+    _fake_hls(monkeypatch, tmp_path)
+    for name in ("index.m3u8.tmp", "index7.m4s", "..%2Fsecret", "passwd"):
+        assert client.get(f"/streaming_hls/mixed_album/clip.mp4/hls/run1/{name}").status_code == 404
+
+
+def test_streaming_hls_404s_when_nothing_is_converting(client, mixed_album):
+    assert client.get("/streaming_hls/mixed_album/clip.mp4/hls/run1/index.m3u8").status_code == 404
+
+
+def test_streaming_hls_rejects_a_still_image(client, mixed_album):
+    assert client.get("/streaming_hls/mixed_album/building1.jpeg/hls/run1/index.m3u8").status_code == 403
+
+
+def test_prepare_video_offers_the_hls_url_while_hls_streamable(client, mixed_album, monkeypatch):
+    from photomap.backend.routers import search as search_router
+
+    monkeypatch.setattr(
+        search_router,
+        "request_transcode",
+        lambda album, video: video_transcode.TranscodeStatus(
+            state="running", streamable=True, hls_streamable=True, hls_token="abc.x1.hls.tmp"
+        ),
+    )
+    body = client.post("/prepare_video/mixed_album/clip.mp4").json()
+    # The run's token is in the URL, so cached segments never cross runs.
+    assert body["hls_url"] == "streaming_hls/mixed_album/clip.mp4/hls/abc.x1.hls.tmp/index.m3u8"
+    assert body["stream_url"] == "streaming_video/mixed_album/clip.mp4"
+
+
+def test_streaming_hls_refuses_another_runs_token(client, mixed_album, monkeypatch, tmp_path):
+    _fake_hls(monkeypatch, tmp_path)
+    assert client.get("/streaming_hls/mixed_album/clip.mp4/hls/run0/index.m3u8").status_code == 404
+
+
+def test_streaming_hls_404s_for_a_segment_deleted_mid_request(client, mixed_album, monkeypatch, tmp_path):
+    hls_dir = _fake_hls(monkeypatch, tmp_path)
+    shutil.rmtree(hls_dir)
+    assert client.get("/streaming_hls/mixed_album/clip.mp4/hls/run1/index0.m4s").status_code == 404
+
+
+@requires_ffmpeg
+def test_a_dead_hls_output_tells_the_player_to_stop_waiting(tmp_path, monkeypatch):
+    """The HLS slave is onfail=ignore, so its death is silent; the server must
+    say so, by media time, or an HLS-preferring player waits forever."""
+    source = tmp_path / "old.avi"
+    _make_old_avi(
+        source,
+        duration=(video_transcode.HLS_GIVE_UP_FRAGMENTS + 2) * video_transcode.STREAM_KEYFRAME_SECONDS,
+    )
+    # An output name in a directory that does not exist: the slave fails to open.
+    monkeypatch.setattr(
+        video_transcode,
+        "_tee_hls_output",
+        lambda hls_dir: "|[f=hls:onfail=ignore]no-such-dir/index.m3u8",
+    )
+    updates: list[dict] = []
+    real_update = video_transcode._update
+
+    def spy_update(scoped, **fields):
+        updates.append(fields)
+        return real_update(scoped, **fields)
+
+    monkeypatch.setattr(video_transcode, "_update", spy_update)
+    status = _await_conversion("album", source, tmp_path / "cache")
+    assert status.state == "ready", status.detail
+    assert {"hls_pending": True} in updates
+    assert {"hls_pending": False} in updates
+    # Never offered, and nothing left behind.
+    assert not video_transcode._hls_streams
+    assert not list(TranscodeCache("album", root=tmp_path / "cache").directory.glob("*.tmp"))
+
+
+@requires_ffmpeg
+def test_a_relative_ffmpeg_path_survives_the_streamed_encode(tmp_path, monkeypatch):
+    """ffmpeg runs from the cache directory when streaming, and a relative
+    executable path would resolve there."""
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    exe = tools / Path(ffmpeg_exe()).name
+    shutil.copy(ffmpeg_exe(), exe)
+    monkeypatch.chdir(tmp_path)
+    relative = str(Path("tools") / exe.name)
+    if sys.platform != "win32":
+        relative = "./" + relative
+    monkeypatch.setattr(video_transcode, "ffmpeg_exe", lambda: relative)
+
+    source = tmp_path / "old.avi"
+    _make_old_avi(source)
+    status = _await_conversion("album", source, tmp_path / "cache")
+    assert status.state == "ready", status.detail
+
+
+class _ScriptedFfmpeg:
+    """Stands in for a running ffmpeg: replays progress blocks, and before
+    each one lets the test shape what is on disk at that moment."""
+
+    def __init__(self, blocks):
+        lines = []
+        for prepare, out_time_s in blocks:
+            lines.append((prepare, f"out_time_us={int(out_time_s * 1_000_000)}\n".encode()))
+            lines.append((None, b"progress=continue\n"))
+        self._lines = iter(lines)
+        self.stdout = self
+        self.returncode = 1
+
+    def readline(self):
+        try:
+            prepare, line = next(self._lines)
+        except StopIteration:
+            return b""
+        if prepare is not None:
+            prepare()
+        return line
+
+    def close(self):
+        pass
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+    def kill(self):
+        pass
+
+
+def _hls_decisions(tmp_path, monkeypatch, blocks_for):
+    """Run _follow_ffmpeg over scripted progress; report what it decided."""
+    stream = tmp_path / "x.stream.tmp"
+    hls_dir = tmp_path / "x.hls.tmp"
+    hls_dir.mkdir()
+    head = _box(b"ftyp", b"isom") + _box(b"moov", b"x" * 20)
+    fragment = _box(b"moof", b"y" * 12) + _box(b"mdat", b"z" * 100)
+
+    def on_disk(fragments, segments):
+        def prepare():
+            stream.write_bytes(head + fragment * fragments)
+            (hls_dir / "index.m3u8").write_text(
+                "#EXTM3U\n" + "".join(f"#EXTINF:2.0,\nindex{i}.m4s\n" for i in range(segments))
+            )
+        return prepare
+
+    updates, offered = [], []
+    monkeypatch.setattr(video_transcode, "_update", lambda scoped, **f: updates.append(f))
+    monkeypatch.setattr(video_transcode, "_offer_hls", lambda scoped, d: offered.append(d))
+    import io
+
+    plan = video_transcode.TranscodePlan(copy_video=False, has_audio=True, copy_audio=False, duration=120)
+    video_transcode._follow_ffmpeg(
+        "scoped", _ScriptedFfmpeg(blocks_for(on_disk)), tmp_path / "in.avi",
+        tmp_path / "out.tmp", tmp_path / "out.mp4", plan, io.BytesIO(), stream, hls_dir,
+    )
+    return {"hls_pending": False} in updates, bool(offered)
+
+
+def test_a_playlist_lagging_out_time_is_not_given_up_on(tmp_path, monkeypatch):
+    """A low frame rate with audio: out_time follows the audio, and x264's
+    lookahead leaves the video — and so the segments — far behind it. A
+    give-up rule timed on out_time abandoned healthy playlists like this."""
+    gave_up, offered = _hls_decisions(
+        tmp_path, monkeypatch,
+        lambda on_disk: [
+            (on_disk(0, 0), 12.0),
+            (on_disk(1, 1), 30.0),
+            (on_disk(2, 2), 60.0),
+            (on_disk(3, 3), 90.0),
+        ],
+    )
+    assert not gave_up
+    assert offered
+
+
+def test_a_dead_playlist_is_given_up_on_once_the_mp4_moves_on(tmp_path, monkeypatch):
+    fragments = video_transcode.HLS_GIVE_UP_FRAGMENTS
+    gave_up, offered = _hls_decisions(
+        tmp_path, monkeypatch,
+        lambda on_disk: [(on_disk(n, 0), 2.0 * n) for n in range(1, fragments + 1)],
+    )
+    assert gave_up
+    assert not offered
+
+
+def test_the_start_tag_keeps_the_playlists_line_endings():
+    from photomap.backend.routers.search import _start_at_the_beginning
+
+    tag = b"#EXT-X-START:TIME-OFFSET=0,PRECISE=YES"
+    assert _start_at_the_beginning(b"#EXTM3U\n#EXTINF:2.0,\nindex0.m4s\n") == (
+        b"#EXTM3U\n" + tag + b"\n#EXTINF:2.0,\nindex0.m4s\n"
+    )
+    assert _start_at_the_beginning(b"#EXTM3U\r\n#EXTINF:2.0,\r\nindex0.m4s\r\n") == (
+        b"#EXTM3U\r\n" + tag + b"\r\n#EXTINF:2.0,\r\nindex0.m4s\r\n"
+    )
+    # Already there, or not a playlist: untouched.
+    assert _start_at_the_beginning(b"#EXTM3U\n" + tag + b"\n") == b"#EXTM3U\n" + tag + b"\n"
+    assert _start_at_the_beginning(b"garbage") == b"garbage"

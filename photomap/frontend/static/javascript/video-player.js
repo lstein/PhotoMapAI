@@ -24,6 +24,18 @@
  * also the backend's liveness signal — it drops a job nobody is asking about
  * — so closing the player has to stop the polling, which is what the
  * `session` counter below is for.
+ *
+ * A long re-encode does not have to be waited out. While it runs the backend
+ * offers a `stream_url` that follows the conversion as it is written; the
+ * player plays that at once, with a badge saying seeking comes later, and
+ * keeps polling. When the finished file is ready it swaps to it at the same
+ * timestamp, which is when the scrubber starts working.
+ *
+ * The stream comes in two forms. Apple's player — every browser on iOS and
+ * iPadOS, and Safari — refuses a growing MP4 of unknown length, so the
+ * backend also offers an HLS playlist (`hls_url`). Apple's player gets that
+ * first, the growing MP4 (`stream_url`) if HLS fails, and the progress panel
+ * if both do; every other browser gets the growing MP4 (see streamForms).
  */
 
 import { state } from "./state.js";
@@ -41,6 +53,7 @@ let progressMessageEl = null;
 let progressBarEl = null;
 let progressFillEl = null;
 let progressPercentEl = null;
+let streamBadgeEl = null;
 let initialized = false;
 
 // Set while playing in place: the poster <img> the frame is pinned over, and
@@ -107,6 +120,28 @@ let current = null;
 // conversion itself) is a real dead end and must not loop.
 let usingConversion = false;
 
+// Whether the element is playing the conversion *while it is still being
+// written*. Set when the stream starts and cleared when it is swapped for the
+// finished file, abandoned, or fails.
+let streaming = false;
+// When the current stream was started, for the nothing-arrived timeout;
+// null once the stream has shown it is alive, which disarms it for good — a
+// paused stream, or one whose autoplay was declined, is not a failed one.
+let streamStartedAt = null;
+// How many stream forms have failed during this open — an index into
+// streamForms(). Without it a browser that cannot play a stream would be
+// handed it again by the very next poll, fail again, and flicker between the
+// stream and the progress panel until the end.
+let streamsFailed = 0;
+// Where a stream that failed after playing had got to, so the finished file
+// picks up there rather than at 0:00: { at, play }.
+let resumeAfterFailure = null;
+
+// A stream that has not even produced metadata after this long is treated as
+// failed. Some browsers stall on a response with no length rather than
+// erroring.
+const STREAM_START_TIMEOUT_MS = 15000;
+
 // How often to ask the backend how the conversion is going. Comfortably
 // inside its abandonment window, which is measured in tens of seconds.
 const POLL_INTERVAL_MS = 1000;
@@ -137,6 +172,7 @@ function showFallback(message, url) {
   if (!fallbackEl) {
     return;
   }
+  hideStreamBadge();
   if (progressEl) {
     progressEl.hidden = true;
   }
@@ -168,6 +204,7 @@ function showProgress(message, progress) {
   if (fallbackEl) {
     fallbackEl.hidden = true;
   }
+  hideStreamBadge();
   const known = typeof progress === "number" && Number.isFinite(progress) && progress > 0;
   const percent = known ? Math.round(progress * 100) : 0;
 
@@ -196,6 +233,7 @@ function showProgress(message, progress) {
 }
 
 function hidePanels() {
+  hideStreamBadge();
   if (fallbackEl) {
     fallbackEl.hidden = true;
   }
@@ -205,6 +243,126 @@ function hidePanels() {
   if (videoEl) {
     videoEl.controls = true;
   }
+}
+
+/**
+ * The small note over a stream in progress. Unlike the progress panel it
+ * leaves the picture and the native controls uncovered: the clip is playing,
+ * and only the scrubber is not yet any use.
+ */
+function showStreamBadge(progress) {
+  if (!streamBadgeEl) {
+    return;
+  }
+  const known = typeof progress === "number" && Number.isFinite(progress) && progress > 0;
+  const done = known ? ` ${Math.round(progress * 100)}%` : "";
+  streamBadgeEl.textContent = `Converting…${done} — seeking works once it finishes`;
+  streamBadgeEl.hidden = false;
+}
+
+function hideStreamBadge() {
+  if (streamBadgeEl) {
+    streamBadgeEl.hidden = true;
+  }
+}
+
+/**
+ * Give up on the stream for this open and wait for the finished file.
+ *
+ * Polling carries on untouched — it is already scheduled — so the next
+ * `ready` plays the converted copy exactly as if no stream had been offered.
+ */
+function abandonStream() {
+  if (streamStartedAt === null) {
+    // It had been playing. Something went wrong mid-stream rather than with
+    // the form itself, and the other form would start again from 0:00 — on
+    // Apple's player, in the form it refuses. Wait for the finished file and
+    // resume it where this left off.
+    resumeAfterFailure = { at: videoEl.currentTime || 0, play: !videoEl.paused };
+    streamsFailed = streamForms().length;
+  } else {
+    streamsFailed += 1;
+  }
+  streaming = false;
+  teardownVideo();
+  showProgress("Converting this video for playback…", null);
+  focusPlayer();
+}
+
+/**
+ * The status fields naming each stream form this browser should try, best
+ * first.
+ *
+ * HLS for Apple's player only — every iOS and iPadOS browser and Safari,
+ * which refuse the growing MP4 outright. Recent desktop Chrome also says it
+ * plays HLS natively, but on a playlist that is still growing its player
+ * behaves like a live one: measured, it froze or jumped forward over whole
+ * stretches of the clip, while it plays the growing MP4 perfectly.
+ *
+ * Apple's player is recognised by WebKit's vendor string — every browser on
+ * iOS and iPadOS reports it, Chrome included — on an Apple platform. The
+ * platform test is what leaves out WebKit's Linux ports (GNOME Web, WPE),
+ * which report the same vendor and play HLS through GStreamer, which treats
+ * a growing playlist as live just as Chrome does. iPadOS in desktop mode
+ * reports "MacIntel", which still matches.
+ */
+function streamForms() {
+  let applePlayer = false;
+  try {
+    applePlayer =
+      navigator.vendor === "Apple Computer, Inc." &&
+      /^(Mac|iPhone|iPad|iPod)/.test(navigator.platform || "") &&
+      Boolean(videoEl?.canPlayType?.("application/vnd.apple.mpegurl"));
+  } catch {
+    applePlayer = false;
+  }
+  return applePlayer ? ["hls_url", "stream_url"] : ["stream_url"];
+}
+
+/**
+ * Pass over the HLS form when it is not going to arrive.
+ *
+ * A browser that prefers HLS waits for the playlist even with the MP4 stream
+ * on offer, because Apple's player refuses the MP4. But the playlist may
+ * never come — the server could not create it, or its output died — and the
+ * MP4 stream is then far better than the progress panel. The server says
+ * which (`hls_pending`); no timer here, because a slow but healthy encode
+ * would trip one and strand an iPad on the panel.
+ */
+function skipFormsThatWillNotCome(status) {
+  if (streamForms()[streamsFailed] === "hls_url" && !status.hls_url && !status.hls_pending && status.stream_url) {
+    streamsFailed += 1;
+  }
+}
+
+/**
+ * Swap a stream in progress for the finished file, where the viewer was.
+ *
+ * The position is restored after `loadedmetadata`: before that the element
+ * has no duration and a seek is dropped. Playback resumes only if it was
+ * playing, so a clip the viewer paused stays paused.
+ */
+function swapToConverted(
+  mySession,
+  url,
+  { at: resumeAt, play: resume } = { at: videoEl.currentTime || 0, play: !videoEl.paused && !videoEl.ended }
+) {
+  streaming = false;
+  hidePanels();
+  const onReady = () => {
+    videoEl.removeEventListener("loadedmetadata", onReady);
+    if (mySession !== session) {
+      return;
+    }
+    if (resumeAt > 0) {
+      videoEl.currentTime = resumeAt;
+    }
+    if (resume) {
+      startPlayback();
+    }
+  };
+  videoEl.addEventListener("loadedmetadata", onReady);
+  videoEl.src = url;
 }
 
 /**
@@ -296,6 +454,10 @@ async function pollConversion(mySession, endpoint) {
       pollTimer = setTimeout(() => pollConversion(mySession, endpoint), POLL_INTERVAL_MS * pollFailures);
       return;
     }
+    if (streaming) {
+      streaming = false;
+      teardownVideo();
+    }
     showFallback(`${subject()} could not be prepared for playback.`, current?.url || "");
     return;
   }
@@ -307,15 +469,48 @@ async function pollConversion(mySession, endpoint) {
 
   if (status.state === "ready" && status.url) {
     usingConversion = true;
-    playFrom(status.url);
+    if (streaming) {
+      swapToConverted(mySession, status.url);
+    } else if (resumeAfterFailure) {
+      swapToConverted(mySession, status.url, resumeAfterFailure);
+      resumeAfterFailure = null;
+      // abandonStream left focus on the close button, where Space would
+      // dismiss the player instead of pausing the clip now playing.
+      focusPlayer();
+    } else {
+      playFrom(status.url);
+    }
     return;
   }
 
   if (status.state === "queued" || status.state === "running") {
-    showProgress(
-      status.state === "queued" ? "Waiting to convert this video…" : "Converting this video for playback…",
-      status.progress
-    );
+    // The next form to try, if it is on offer yet. Not the first one that
+    // is: on an iPad the MP4 form can be ready a moment before the HLS one,
+    // and starting it would only fail.
+    if (!streaming) {
+      skipFormsThatWillNotCome(status);
+    }
+    const streamUrl = streaming ? null : status[streamForms()[streamsFailed]];
+    if (streamUrl) {
+      streaming = true;
+      streamStartedAt = Date.now();
+      usingConversion = true;
+      playFrom(streamUrl);
+    } else if (streaming && streamStartedAt !== null) {
+      if (videoEl.readyState >= 1 /* HAVE_METADATA */) {
+        streamStartedAt = null;
+      } else if (Date.now() - streamStartedAt > STREAM_START_TIMEOUT_MS) {
+        abandonStream();
+      }
+    }
+    if (streaming) {
+      showStreamBadge(status.progress);
+    } else {
+      showProgress(
+        status.state === "queued" ? "Waiting to convert this video…" : "Converting this video for playback…",
+        status.progress
+      );
+    }
     pollTimer = setTimeout(() => pollConversion(mySession, endpoint), POLL_INTERVAL_MS);
     return;
   }
@@ -323,6 +518,11 @@ async function pollConversion(mySession, endpoint) {
   // "failed", "unavailable", and the should-not-happen "ready" with no URL.
   // The original file is still offered: it may well play in another
   // application even though no browser will touch it.
+  if (streaming) {
+    // The partial stream would otherwise play on, audibly, behind the panel.
+    streaming = false;
+    teardownVideo();
+  }
   showFallback(status.detail || `${subject()} could not be converted for playback.`, current?.url || "");
 }
 
@@ -640,6 +840,9 @@ export function openVideoPlayer({ url, filename, playable = true, poster = "", t
   pollTimer = null;
   current = { url, filename, transcodeUrl };
   usingConversion = false;
+  streaming = false;
+  streamsFailed = 0;
+  resumeAfterFailure = null;
   pollFailures = 0;
 
   if (titleEl) {
@@ -737,6 +940,9 @@ function close(resumeSlideshow) {
   hidePanels();
   current = null;
   usingConversion = false;
+  streaming = false;
+  streamsFailed = 0;
+  resumeAfterFailure = null;
 
   state.swiper?.keyboard?.enable?.();
   keyboardSwiper?.keyboard?.enable?.();
@@ -767,6 +973,7 @@ export function initializeVideoPlayer() {
   progressBarEl = document.getElementById("videoPlayerProgressBar");
   progressFillEl = document.getElementById("videoPlayerProgressFill");
   progressPercentEl = document.getElementById("videoPlayerProgressPercent");
+  streamBadgeEl = document.getElementById("videoPlayerStreamBadge");
 
   if (videoEl) {
     videoEl.volume = DEFAULT_VOLUME;
@@ -788,6 +995,12 @@ export function initializeVideoPlayer() {
     const url = videoEl.getAttribute("src");
     if (!url) {
       return; // teardown clears src, which fires error; not a real failure
+    }
+    if (streaming) {
+      // Not a dead end: the finished file may well play where the stream of
+      // it would not. Wait for it instead.
+      abandonStream();
+      return;
     }
     if (usingConversion) {
       // The converted copy is H.264/AAC in an MP4. If *that* will not play,
@@ -865,6 +1078,7 @@ export function _resetVideoPlayerForTests() {
   progressBarEl = null;
   progressFillEl = null;
   progressPercentEl = null;
+  streamBadgeEl = null;
   slideshowWasRunning = false;
   clearTimeout(pollTimer);
   pollTimer = null;
@@ -885,5 +1099,8 @@ export function _resetVideoPlayerForTests() {
   session += 1;
   current = null;
   usingConversion = false;
+  streaming = false;
+  streamsFailed = 0;
+  resumeAfterFailure = null;
   pollFailures = 0;
 }
