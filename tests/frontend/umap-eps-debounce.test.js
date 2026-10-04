@@ -135,7 +135,7 @@ function installEpsFetchMock() {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
     }
     if (href.startsWith("umap_data/")) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ points: [], eps: 0.35, requested_eps: 0.35 }) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, eps: 0.35 }) });
   };

@@ -119,7 +119,10 @@ function installFetchMock() {
           ? Promise.reject(new Error("network down"))
           : Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ detail: "boom" }) });
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(POINTS) });
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ points: POINTS, eps: 0.1, requested_eps: 0.1 }),
+      });
     }
     if (target.startsWith("cluster_labels/")) {
       const d = deferred();

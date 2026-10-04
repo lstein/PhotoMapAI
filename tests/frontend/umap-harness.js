@@ -217,13 +217,17 @@ export function currentLandmarkTrace(plotId = "umapPlot") {
 /**
  * A `fetch` stub that answers the two endpoints `fetchUmapData` calls.
  *
+ * `eps` / `requestedEps` are what /umap_data reports it clustered with and
+ * was asked for; they differ when the server shrank the strength to fit its
+ * memory budget.
+ *
  * Cluster labels are answered as "not ok" so the caller falls back to the
  * bare cluster string, which keeps tests independent of the labels feature.
  */
-export function installFetchMock(points) {
+export function installFetchMock(points, { eps = 0.1, requestedEps = 0.1 } = {}) {
   const fetchMock = (url) => {
     if (String(url).startsWith("umap_data/")) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(points) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ points, eps, requested_eps: requestedEps }) });
     }
     return Promise.resolve({ ok: false, json: () => Promise.resolve({}) });
   };

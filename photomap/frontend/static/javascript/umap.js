@@ -169,6 +169,12 @@ export function setUmapClickCallback(callback) {
 let points = [];
 let clusters = [];
 let colors = [];
+// The strength `points` was clustered with, as the server reported it — not
+// what the spinner holds. The two differ mid-debounce, while the field holds
+// text the spinner refuses, and on an album too large to cluster at the
+// requested strength (the server shrinks it to fit a memory budget). Assigned
+// alongside `points` so the two always describe the same clustering.
+let drawnEps = null;
 
 // The points the map should currently draw, after the images/videos filter.
 //
@@ -279,6 +285,51 @@ export function applyResolvedEps(data) {
     );
   }
   setEpsAutoBadge(Boolean(data?.auto));
+}
+
+// Say so when the map was clustered at less than the strength asked for. The
+// server shrinks any strength an album cannot afford within its memory budget,
+// and where that ceiling sits depends on the point cloud — nothing the spinner
+// can know in advance. Without this note a large album tuned above the ceiling
+// shows one number while the map is drawn at another, with no hint why.
+//
+// The used value is not the ceiling itself: the server shrinks the *request*
+// in 0.7x steps until it fits, so where it lands depends on what was asked
+// for. Hence the tooltip says "reduced", not "everything above X is the same".
+//
+// The spinner keeps the requested number: it is what the album stores and what
+// the next fetch will ask for. Only the note reports what was used.
+function showEffectiveEps(data) {
+  const note = document.getElementById("umapEpsEffective");
+  if (!note) {
+    return;
+  }
+  const used = data?.eps;
+  const requested = data?.requested_eps;
+  // A stored strength below the floor comes back *raised*; that case is
+  // already marked on the field itself by applyResolvedEps.
+  const shrunk = typeof used === "number" && typeof requested === "number" && used < requested * (1 - 1e-9);
+  note.hidden = !shrunk;
+  if (shrunk) {
+    const shown = formatEps(used);
+    note.textContent = `map: ${shown}`;
+    note.title =
+      `This album has too many images to cluster at ${formatEps(requested)} within the memory limit, ` +
+      `so the map is drawn at ${shown} instead. Any strength above the album's limit is reduced ` +
+      `the same way, so a larger number will not give a looser map.`;
+  } else {
+    note.textContent = "";
+    note.removeAttribute("title");
+  }
+}
+
+// Three significant figures: enough to tell a shrunk strength from the one
+// typed, without printing the full float the budget loop produced — and
+// unlike a fixed two decimals, a strength shrunk below 0.005 still reads as
+// a number rather than "0.00". Shared by the note and the cluster-info modal
+// so the two never print the same map's strength differently.
+function formatEps(eps) {
+  return String(Number(eps.toPrecision(3)));
 }
 
 function setEpsAutoBadge(isAuto) {
@@ -752,7 +803,15 @@ export async function fetchUmapData() {
       // with the map's own state already half-replaced.
       throw new Error(`umap_data ${response.status}`);
     }
-    points = await response.json();
+    const data = await response.json();
+    // Checked before anything is assigned, for the same reason as the status
+    // check above.
+    if (!Array.isArray(data?.points)) {
+      throw new Error("umap_data: response has no points");
+    }
+    points = data.points;
+    drawnEps = typeof data.eps === "number" ? data.eps : null;
+    showEffectiveEps(data);
 
     // Compute clusters and colors
     clusters = [...new Set(points.map((p) => p.cluster))];
@@ -2609,7 +2668,11 @@ function showClusterInfoModal() {
   }
 
   // Compute stats from the module-level points array
-  const eps = parseFloat(document.getElementById("umapEpsSpinner").value);
+  // The strength the drawn map was clustered with, for the same reason the
+  // counts below come from `points`: the spinner can hold an unsaved edit, a
+  // refused value or half-typed text, and on a large album a strength the
+  // server could not afford.
+  const eps = drawnEps;
   const clustered = points.filter((p) => p.cluster !== -1);
   const clusterIds = [...new Set(clustered.map((p) => p.cluster))];
   const clusterCount = clusterIds.length;
@@ -2631,7 +2694,7 @@ function showClusterInfoModal() {
     smallestSize = 0;
   }
 
-  document.getElementById("umapInfoEps").textContent = isNaN(eps) ? "—" : eps.toFixed(2);
+  document.getElementById("umapInfoEps").textContent = typeof eps === "number" ? formatEps(eps) : "—";
   document.getElementById("umapInfoClusterCount").textContent =
     clusterCount === 1 ? "1 cluster" : `${clusterCount} clusters`;
   document.getElementById("umapInfoLargest").textContent = largestSize === 1 ? "1 image" : `${largestSize} images`;

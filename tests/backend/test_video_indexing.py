@@ -414,7 +414,7 @@ def test_thumbnails_render_for_indexed_videos(client, new_media_album):
 def test_umap_includes_videos(client, new_media_album):
     build_index(client, new_media_album)
 
-    points = client.get(f"umap_data/{new_media_album['key']}").json()
+    points = client.get(f"umap_data/{new_media_album['key']}").json()["points"]
 
     assert len(points) == EXPECTED_TOTAL
 

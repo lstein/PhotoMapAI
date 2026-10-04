@@ -43,7 +43,14 @@ async def get_umap_data(
         cluster_min_samples: Min samples parameter for DBSCAN clustering.
 
     Returns:
-        JSONResponse containing a list of points with x, y, index, and cluster ID.
+        JSONResponse ``{"points": [...], "eps": float, "requested_eps": float | None}``.
+        Each point carries x, y, index, cluster ID and media type. ``eps`` is
+        the strength the points were actually clustered with;
+        ``requested_eps`` is the number that was asked for (the query
+        parameter, else the album's stored value), or ``None`` when the
+        strength was derived. The two differ when the album is too large to
+        cluster at the requested strength within the memory budget, and the
+        UI has no other way to find that out.
     """
     # Load cached UMAP embeddings (will compute/cache if missing). Threaded
     # because "compute if missing" is a full UMAP fit, which is minutes on a
@@ -59,6 +66,7 @@ async def get_umap_data(
     # to the wrong blobs.
     # Threaded: deriving an eps runs several DBSCAN fits, seconds of CPU on a
     # large album, and this endpoint is fetched while the map is opening.
+    requested_eps = cluster_eps if cluster_eps is not None else album_config.umap_eps
     cluster_eps = await asyncio.to_thread(
         resolve_album_cluster_eps,
         umap_embeddings,
@@ -102,4 +110,9 @@ async def get_umap_data(
             zip(umap_embeddings[:, 0], umap_embeddings[:, 1], labels, strict=False)
         )
     ]
-    return JSONResponse(points)
+    # The resolved eps goes back with the points because it can differ from
+    # the requested one: the pair budget shrinks any value an album cannot
+    # afford, typed or not, and that ceiling depends on the point cloud — the
+    # client cannot predict it, so without this the Cluster Strength control
+    # would go on showing a number the map was never clustered with.
+    return JSONResponse({"points": points, "eps": float(cluster_eps), "requested_eps": requested_eps})

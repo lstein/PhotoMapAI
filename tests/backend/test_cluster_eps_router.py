@@ -366,3 +366,81 @@ def test_a_failed_set_umap_eps_does_not_come_back_later(client, new_album, monke
     )
     assert response.status_code == 200
     assert get_config_manager().get_album(key).umap_eps == pytest.approx(0.1)
+
+
+# --- The eps the map was actually clustered with (#380) ---------------------
+#
+# The pair budget shrinks any eps an album cannot afford, typed or derived, and
+# where that ceiling sits depends on the point cloud. The client cannot predict
+# it, so the endpoints have to say what they used.
+
+
+def _tiny_pair_budget(monkeypatch):
+    """Make every album 'too large' for an eps spanning the whole map."""
+    from photomap.backend import cluster_eps
+
+    # Each point is its own neighbor, so n pairs is the floor: anything above
+    # it forces a shrink once eps covers more than the point itself.
+    monkeypatch.setattr(cluster_eps, "MAX_NEIGHBOR_PAIRS", 30)
+
+
+def test_umap_data_reports_the_eps_it_clustered_with_when_the_budget_shrinks_it(
+    client, new_album, monkeypatch
+):
+    build_index(client, new_album)
+    _tiny_pair_budget(monkeypatch)
+
+    from photomap.backend.routers import umap as umap_router
+
+    used = {}
+    real_dbscan = umap_router.DBSCAN
+
+    def recording_dbscan(*, eps, min_samples):
+        used["eps"] = eps
+        return real_dbscan(eps=eps, min_samples=min_samples)
+
+    monkeypatch.setattr(umap_router, "DBSCAN", recording_dbscan)
+
+    body = client.get(f"/umap_data/{new_album['key']}?cluster_eps=50").json()
+
+    assert body["requested_eps"] == 50
+    assert body["eps"] < 50
+    assert body["eps"] == pytest.approx(used["eps"])
+
+
+def test_cluster_labels_reports_the_same_shrunk_eps_as_umap_data(client, new_album, monkeypatch):
+    build_index(client, new_album)
+    _tiny_pair_budget(monkeypatch)
+    monkeypatch.setattr(
+        "photomap.backend.routers.cluster_labels.get_or_build_cluster_labels",
+        lambda embeddings, *, cluster_eps, cluster_min_samples, top_k: {},
+    )
+
+    key = new_album["key"]
+    map_eps = client.get(f"/umap_data/{key}?cluster_eps=50").json()["eps"]
+    labels_eps = client.get(f"/cluster_labels/{key}?cluster_eps=50").json()["eps"]
+
+    assert map_eps < 50
+    assert labels_eps == pytest.approx(map_eps)
+
+
+def test_umap_data_reports_a_stored_eps_as_the_request(client, new_album):
+    build_index(client, new_album)
+    key = new_album["key"]
+    client.post("/set_umap_eps/", json={"album": key, "eps": 0.37})
+
+    body = client.get(f"/umap_data/{key}").json()
+
+    assert body["requested_eps"] == pytest.approx(0.37)
+    assert body["eps"] == pytest.approx(0.37)
+
+
+def test_umap_data_reports_a_derived_eps_with_no_request(client, new_album):
+    build_index(client, new_album)
+    _clear_stored_eps(new_album["key"])
+
+    body = client.get(f"/umap_data/{new_album['key']}").json()
+    derived = client.post("/get_umap_eps/", json={"album": new_album["key"]}).json()
+
+    assert body["requested_eps"] is None
+    assert body["eps"] == pytest.approx(derived["eps"])

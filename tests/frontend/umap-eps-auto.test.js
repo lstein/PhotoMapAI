@@ -149,7 +149,10 @@ describe("Cluster Strength auto badge", () => {
       }
       if (String(url).startsWith("umap_data/")) {
         // The redraw that follows the save; it needs a points array.
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ points: [], eps: 0.1, requested_eps: null }),
+        });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
     };
