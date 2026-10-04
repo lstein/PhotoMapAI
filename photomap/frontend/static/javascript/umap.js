@@ -267,7 +267,12 @@ function hideUmapSpinner() {
 export function applyResolvedEps(data) {
   const epsSpinner = document.getElementById("umapEpsSpinner");
   if (epsSpinner && typeof data?.eps === "number") {
-    epsSpinner.value = data.eps;
+    // A stored strength below the floor is shown unrounded: rounding 0.00996
+    // gives "0.01", the floor itself, which would then sit there marked as
+    // unusable.
+    const belowFloor = !data.auto && !epsIsUsable(data.eps);
+    epsSpinner.value = belowFloor ? String(data.eps) : formatEps(data.eps);
+    spinnerExactEps = { shown: epsSpinner.value, eps: data.eps };
     // Replacing the contents ends whatever edit was in there, guard included.
     // Half-typed text holds the guard even across a blur, on purpose — but it
     // cannot go on holding it once the text it was protecting is gone, or one
@@ -323,14 +328,24 @@ function showEffectiveEps(data) {
   }
 }
 
-// Three significant figures: enough to tell a shrunk strength from the one
-// typed, without printing the full float the budget loop produced — and
-// unlike a fixed two decimals, a strength shrunk below 0.005 still reads as
-// a number rather than "0.00". Shared by the note and the cluster-info modal
-// so the two never print the same map's strength differently.
+// How a strength is printed anywhere in the map's UI: two decimals, matching
+// the spinner's 0.01 step, so a derived 0.11944 reads as the 0.12 the arrows
+// would have produced. Below 0.1 two significant figures are kept instead —
+// a fixed two decimals would turn a large album's 0.0153 into 0.02, a third
+// off, and a strength the budget shrank below 0.005 into "0.00". Shared by the
+// spinner, the note and the cluster-info modal so no two of them print the
+// same strength differently.
 function formatEps(eps) {
-  return String(Number(eps.toPrecision(3)));
+  return String(Number(eps >= 0.1 ? eps.toFixed(2) : eps.toPrecision(2)));
 }
+
+// The exact strength behind a rounded number in the spinner. The field shows
+// formatEps(eps), but the map must still be clustered at eps itself: a derived
+// strength is the one /get_umap_eps reports and /cluster_labels caches, and a
+// stored one is what the server would use anyway. Sending the rounded text
+// would cluster at a number nobody chose. Dropped on the first keystroke —
+// from then on the field holds the user's own number.
+let spinnerExactEps = null;
 
 function setEpsAutoBadge(isAuto) {
   const badge = document.getElementById("umapEpsAutoBadge");
@@ -399,6 +414,7 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
   // the refused ones that have no timer to stand in for them.
   epsEditPending = true;
   epsEditSeq++;
+  spinnerExactEps = null;
   // An empty field means "go back to deriving it" — otherwise the only way
   // out of a value you typed once would be to edit the config file. null is
   // sent verbatim; a numeric fallback here is what used to pin every album
@@ -547,7 +563,16 @@ function epsIsUsable(eps) {
 // is what tells a half-typed number from a cleared field.
 function readSpinnerEps() {
   const raw = document.getElementById("umapEpsSpinner").value.trim();
-  return raw === "" ? null : parseFloat(raw);
+  if (raw === "") {
+    return null;
+  }
+  // Still the rounded number applyResolvedEps put there: mean what it stands
+  // for. Compared against the text rather than trusted on its own, so anything
+  // else that rewrites the field cannot inherit a stale exact value.
+  if (spinnerExactEps && raw === spinnerExactEps.shown) {
+    return spinnerExactEps.eps;
+  }
+  return parseFloat(raw);
 }
 
 // The `?cluster_eps=` both map-shaped endpoints should be asked for, or "" to

@@ -186,8 +186,8 @@ describe("umap.js reports the strength the map was drawn with", () => {
   it("prints a strength shrunk below 0.005 as a number in the modal", async () => {
     await draw({ eps: 0.00412, requestedEps: 0.05 });
 
-    expect(modalEps()).toBe("0.00412");
-    expect(note().textContent).toContain("0.00412");
+    expect(modalEps()).toBe("0.0041");
+    expect(note().textContent).toContain("0.0041");
   });
 
   it("has the modal describe the drawn map, not an unsaved or half-typed edit", async () => {
