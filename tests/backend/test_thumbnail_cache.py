@@ -525,11 +525,23 @@ class TestDisplayCopies:
         import time
 
         digest = tile_hash("a.tif", video=False)
-        fresh = tmp_path / f"{digest}_display.abc.tmp"
-        stale = tmp_path / f"{digest}_display.def.tmp"
+        fresh = tmp_path / f"{digest}_display_00000000.abc.tmp"
+        stale = tmp_path / f"{digest}_display_00000000.def.tmp"
         fresh.write_bytes(b"x")
         stale.write_bytes(b"x")
         old = time.time() - 2 * 3600
         os.utime(stale, (old, old))
         assert prune(tmp_path, {digest}) == 1
         assert fresh.exists() and not stale.exists()
+
+    def test_the_sweep_leaves_hash_named_user_photos_alone(self, tmp_path):
+        """A thumbnails/ folder beside a custom index path may be the user's."""
+        for name in (
+            "d41d8cd98f00b204e9800998ecf8427e.jpg",
+            "d41d8cd98f00b204e9800998ecf8427e.webp",
+            "d41d8cd98f00b204e9800998ecf8427e.png",
+            "d41d8cd98f00b204e9800998ecf8427e_holiday.jpg",
+        ):
+            (tmp_path / name).write_bytes(b"x")
+        assert prune(tmp_path, set()) == 0
+        assert thumbnail_cache.discard(tmp_path, "x", video=False) == 0

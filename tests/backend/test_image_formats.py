@@ -356,9 +356,9 @@ def test_a_source_replaced_with_an_older_mtime_is_reconverted(client, format_alb
 
 
 def test_an_edit_during_conversion_is_not_cached_as_current(client, format_album, tmp_path, monkeypatch):
-    from photomap.backend.routers import search
-
     import time
+
+    from photomap.backend.routers import search
 
     target = tmp_path / "formats" / "race.tif"
     _solid_tif(target, (255, 0, 0), mtime=time.time() - 100)
@@ -446,3 +446,47 @@ def test_a_profile_is_dropped_when_the_mode_changes(tmp_path):
     out = _display_safe(im)
     assert out.mode == "RGBA"
     assert "icc_profile" not in out.info
+
+
+def test_an_edit_before_decoding_is_not_filed_under_the_old_stamp(client, format_album, tmp_path, monkeypatch):
+    """Otherwise restoring the original (``cp -p``, a backup) shows the edit."""
+    import os
+
+    from photomap.backend.routers import search
+
+    target = tmp_path / "formats" / "restore.tif"
+    _solid_tif(target, (255, 0, 0))
+    original = target.stat()
+    backup = tmp_path / "restore.bak"
+    backup.write_bytes(target.read_bytes())
+    real = search._encode_display_copy
+
+    def edited_first(image_path):
+        # Same size, as an uncompressed TIFF of fixed dimensions would be.
+        _solid_tif(target, (0, 0, 255), mtime=original.st_mtime + 10)
+        return real(image_path)
+
+    monkeypatch.setattr(search, "_encode_display_copy", edited_first)
+    client.get("/images/format_album/restore.tif")
+    monkeypatch.setattr(search, "_encode_display_copy", real)
+
+    target.write_bytes(backup.read_bytes())
+    os.utime(target, ns=(original.st_atime_ns, original.st_mtime_ns))
+    assert _shown_color(client.get("/images/format_album/restore.tif"))[0] > 200
+
+
+def test_a_temporary_swept_mid_write_does_not_silence_later_warnings(tmp_path, monkeypatch, caplog):
+    from photomap.backend.routers import search
+
+    source = tmp_path / "scan.tif"
+    Image.new("RGB", (10, 10)).save(source)
+    stem = tmp_path / "thumbs" / ("0" * 32 + "_display_00000000")
+    real_replace = search.os.replace
+
+    def swept(src, dst):
+        Path(src).unlink()
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(search.os, "replace", swept)
+    search._display_copy(source, stem)
+    assert stem.parent not in search._unwritable_display_dirs

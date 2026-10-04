@@ -1361,33 +1361,48 @@ def _store_display_copy(stem: Path, base: Path, payload: bytes, suffix: str, ima
     an index directory on a read-only mount should cost speed, not pictures.
     """
     target = base.with_name(base.name + suffix)
-    tmp_path: Path | None = None
     try:
         stem.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(dir=stem.parent, prefix=f"{stem.name}.", suffix=".tmp")
         tmp_path = Path(tmp_name)
         with os.fdopen(fd, "wb") as handle:
             handle.write(payload)
-        os.replace(tmp_path, target)
-        tmp_path = None
-        # Copies of earlier versions of the source, or in the other format,
-        # can never be asked for again. (Temporaries are "<stem>.*.tmp" and
-        # so do not match.)
-        for stale in stem.parent.glob(f"{stem.name}_*"):
-            if stale != target and stale.suffix in _DISPLAY_FORMATS:
-                stale.unlink(missing_ok=True)
-        if not image_path.exists():
-            # Deleted while it was being converted: the delete's discard ran
-            # before this file existed, and a screen-sized copy of what may
-            # be a private image should not outlive it.
-            target.unlink(missing_ok=True)
     except OSError as e:
         if stem.parent not in _unwritable_display_dirs:
             _unwritable_display_dirs.add(stem.parent)
             logger.warning(f"Could not cache the display copy {target}: {e}")
-    finally:
-        if tmp_path is not None:
-            tmp_path.unlink(missing_ok=True)
+        return
+    try:
+        os.replace(tmp_path, target)
+    except OSError as e:
+        # Usually a delete or sweep that took the temporary away mid-write —
+        # not a sign the directory is unwritable, so not remembered as one.
+        logger.debug(f"Could not publish the display copy {target}: {e}")
+        tmp_path.unlink(missing_ok=True)
+        return
+    # Copies of earlier versions of the source, or in the other format, can
+    # never be asked for again. (Temporaries are "<stem>.*.tmp" and so do not
+    # match.) One at a time: a copy another request still has open cannot be
+    # unlinked on Windows, and that must not skip the rest — least of all the
+    # vanished-source check below.
+    try:
+        siblings = list(stem.parent.glob(f"{stem.name}_*"))
+    except OSError:
+        siblings = []
+    for stale in siblings:
+        if stale != target and stale.suffix in _DISPLAY_FORMATS:
+            try:
+                stale.unlink(missing_ok=True)
+            except OSError as e:
+                logger.debug(f"Could not remove the stale display copy {stale}: {e}")
+    if not image_path.exists():
+        # Deleted while it was being converted: the delete's discard ran
+        # before this file existed, and a screen-sized copy of what may be a
+        # private image should not outlive it.
+        try:
+            target.unlink(missing_ok=True)
+        except OSError as e:
+            logger.debug(f"Could not remove the display copy of deleted {image_path}: {e}")
 
 
 def _display_copy(image_path: Path, stem: Path | None) -> tuple[bytes, str]:
@@ -1402,7 +1417,8 @@ def _display_copy(image_path: Path, stem: Path | None) -> tuple[bytes, str]:
         if stem is None:
             payload, suffix = _encode_display_copy(image_path)
             return payload, _DISPLAY_FORMATS[suffix]
-        base = stem.with_name(f"{stem.name}_{_source_stamp(image_path)}")
+        stamp = _source_stamp(image_path)
+        base = stem.with_name(f"{stem.name}_{stamp}")
         if (cached := _read_display_copy(base)) is not None:
             return cached
         with _display_lock(str(stem)):
@@ -1410,7 +1426,15 @@ def _display_copy(image_path: Path, stem: Path | None) -> tuple[bytes, str]:
             if (cached := _read_display_copy(base)) is not None:
                 return cached
             payload, suffix = _encode_display_copy(image_path)
-            _store_display_copy(stem, base, payload, suffix, image_path)
+            try:
+                unchanged = _source_stamp(image_path) == stamp
+            except FileNotFoundError:
+                unchanged = False  # deleted meanwhile; serve, don't cache
+            if unchanged:
+                # Otherwise the pixels may be the new version filed under the
+                # old version's name, and restoring the old file (cp -p, a
+                # backup) would then show the edit.
+                _store_display_copy(stem, base, payload, suffix, image_path)
             return payload, _DISPLAY_FORMATS[suffix]
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found") from None

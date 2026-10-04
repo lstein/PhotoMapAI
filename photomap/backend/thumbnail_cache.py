@@ -28,12 +28,24 @@ logger = logging.getLogger("photomap")
 
 THUMBNAIL_DIRNAME = "thumbnails"
 
-# What tile_hash emits: blake2b-128, rendered lowercase.
-_DIGEST_RE = re.compile(r"[0-9a-f]{32}")
+# Exactly the names the routes write, with the tile_hash digest (blake2b-128,
+# lowercase) captured: PNG tiles "<digest>_<size>[_<colour>_r<radius>].png",
+# display copies "<digest>_display_<album tag>_<stamp>.<jpg|webp>", and the
+# temporaries a display copy is written through. Anything else was not written
+# by this code and is left alone rather than guessed at — this code deletes
+# files, and a directory beside a custom index path may hold the user's own
+# hash-named photos.
+_OWNED_NAME_RE = re.compile(
+    r"(?P<digest>[0-9a-f]{32})"
+    r"(?:_\d+(?:_[0-9A-Fa-f,]+_r\d+)?\.png"
+    r"|_display_[0-9a-f]{8}_[0-9a-f]{12}\.(?:jpg|webp)"
+    r"|_display_[0-9a-f]{8}\.[^/]+\.tmp)"
+)
 
-# Every suffix this module's writers produce: PNG tiles, JPEG/WebP display
-# copies, and the temporaries a display copy is written through.
-_CACHE_SUFFIXES = frozenset({".png", ".jpg", ".webp", ".tmp"})
+
+def _owned_digest(name: str) -> str | None:
+    match = _OWNED_NAME_RE.fullmatch(name)
+    return match["digest"] if match else None
 
 # A temporary is only ever live for the length of one conversion. One older
 # than this belongs to a writer that crashed or was killed, and is swept even
@@ -126,14 +138,8 @@ def prune(directory: Path, keep_hashes: set[str]) -> int:
     removed = 0
     now = time.time()
     for entry in entries:
-        if entry.suffix not in _CACHE_SUFFIXES:
-            continue
-        # "<32 lowercase hex digits>_<size>[...]"; anything else was not
-        # written by the route and is left alone rather than guessed at. The
-        # hex check is part of that promise: a 32-character stem is not
-        # necessarily a digest, and this code deletes files.
-        digest = entry.stem.split("_", 1)[0]
-        if not _DIGEST_RE.fullmatch(digest):
+        digest = _owned_digest(entry.name)
+        if digest is None:
             continue
         if digest in keep_hashes and not _is_abandoned_tmp(entry, now):
             continue
@@ -162,7 +168,7 @@ def discard(directory: Path, relative_path: str, *, video: bool) -> int:
     digest = tile_hash(relative_path, video=video)
     removed = 0
     for entry in directory.glob(f"{digest}_*"):
-        if entry.suffix not in _CACHE_SUFFIXES:
+        if _owned_digest(entry.name) != digest:
             continue
         try:
             entry.unlink()
