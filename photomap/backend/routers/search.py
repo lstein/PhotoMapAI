@@ -617,9 +617,18 @@ async def serve_image(
 
     if needs_browser_conversion(image_path) and not original:
         stem = None
-        relative_path = config_manager.get_relative_path(str(image_path), album_key)
-        if album_config.index and relative_path is not None:
-            stem = display_copy_stem(thumbnail_dir(Path(album_config.index)), relative_path)
+        try:
+            # Resolved, as the index stores it: get_relative_path resolves the
+            # roots, so an unresolved path under a symlinked root (or a mapped
+            # Windows drive) would fall back to the bare filename — keying
+            # every same-named image in the album onto one cached copy, and
+            # onto a digest the sweep and the delete path never produce.
+            resolved = image_path.resolve()
+        except (OSError, RuntimeError):
+            resolved = None
+        relative_path = resolved and config_manager.get_relative_path(str(resolved), album_key)
+        if album_config.index and relative_path:
+            stem = display_copy_stem(thumbnail_dir(Path(album_config.index)), relative_path, album_key)
         # Decoding a large scanned TIFF takes long enough to stall every other
         # request if done on the loop, so it runs in a worker thread.
         payload, media_type = await asyncio.to_thread(_display_copy, image_path, stem)
@@ -1273,17 +1282,21 @@ def _display_lock(key: str) -> threading.Lock:
 def _display_safe(im: Image.Image) -> Image.Image:
     """Return ``im`` as 8-bit L, RGB or RGBA — what JPEG and WebP can store."""
     im = _png_safe(im)
+    source_mode = im.mode
     if im.mode == "I;16":
         # _png_safe has already mapped deep data onto 0-65535 without
         # clipping; JPEG has no 16-bit mode, so take the top eight bits.
         arr = np.asarray(im, dtype=np.uint16)
         return Image.fromarray((arr >> 8).astype(np.uint8))
     if im.mode == "1":
-        return im.convert("L")
-    if im.mode == "P":
-        return im.convert("RGBA" if "transparency" in im.info else "RGB")
-    if im.mode == "LA":
-        return im.convert("RGBA")
+        im = im.convert("L")
+    elif im.mode == "P":
+        im = im.convert("RGBA" if "transparency" in im.info else "RGB")
+    elif im.mode == "LA":
+        im = im.convert("RGBA")
+    if im.mode != source_mode:
+        # As in _png_safe: a greyscale profile on RGB pixels misleads browsers.
+        im.info.pop("icc_profile", None)
     return im
 
 
@@ -1310,28 +1323,44 @@ def _encode_display_copy(image_path: Path) -> tuple[bytes, str]:
         return buf.getvalue(), ".jpg"
 
 
-def _read_fresh_display_copy(stem: Path, image_path: Path) -> tuple[bytes, str] | None:
+def _source_stamp(image_path: Path) -> str:
+    """A digest of the source's mtime and size, taken before it is decoded.
+
+    Part of the cached copy's name rather than compared against its mtime.
+    "Copy newer than source" misses a file replaced by one with an *older*
+    mtime (``cp -p``, a backup restore, a move out of an import folder), and
+    an edit saved while a slow scan was still being decoded — the copy is
+    written after the edit, so it looks fresh while showing the old picture.
+    A name derived from the stat taken up front misses neither.
+    """
+    st = image_path.stat()
+    return hashlib.blake2b(f"{st.st_mtime_ns}|{st.st_size}".encode(), digest_size=6).hexdigest()
+
+
+def _read_display_copy(base: Path) -> tuple[bytes, str] | None:
     for suffix, media_type in _DISPLAY_FORMATS.items():
-        path = stem.with_name(stem.name + suffix)
-        if not _thumbnail_is_fresh(path, image_path):
-            continue
         try:
-            payload = path.read_bytes()
+            payload = base.with_name(base.name + suffix).read_bytes()
         except OSError:
-            continue  # swept since the freshness check; rebuild it
+            continue  # not built yet, or swept since; rebuild it
         if payload:
             return payload, media_type
     return None
 
 
-def _store_display_copy(stem: Path, payload: bytes, suffix: str) -> None:
-    """Publish ``payload`` atomically, and drop the copy in the other format.
+# Index directories already warned about being unwritable. Once is enough: on
+# a read-only mount every view would otherwise log the same warning.
+_unwritable_display_dirs: set[Path] = set()
+
+
+def _store_display_copy(stem: Path, base: Path, payload: bytes, suffix: str, image_path: Path) -> None:
+    """Publish ``payload`` atomically, then drop every other copy of the file.
 
     Write-then-rename so a concurrent reader never sees half a file. A failed
     write is logged, not raised: the caller still has the bytes to serve, and
     an index directory on a read-only mount should cost speed, not pictures.
     """
-    target = stem.with_name(stem.name + suffix)
+    target = base.with_name(base.name + suffix)
     tmp_path: Path | None = None
     try:
         stem.parent.mkdir(parents=True, exist_ok=True)
@@ -1341,13 +1370,21 @@ def _store_display_copy(stem: Path, payload: bytes, suffix: str) -> None:
             handle.write(payload)
         os.replace(tmp_path, target)
         tmp_path = None
-        for other in _DISPLAY_FORMATS:
-            if other != suffix:
-                # An image edited to gain or lose transparency changes format;
-                # the old copy is stale and nothing would ever ask for it.
-                stem.with_name(stem.name + other).unlink(missing_ok=True)
+        # Copies of earlier versions of the source, or in the other format,
+        # can never be asked for again. (Temporaries are "<stem>.*.tmp" and
+        # so do not match.)
+        for stale in stem.parent.glob(f"{stem.name}_*"):
+            if stale != target and stale.suffix in _DISPLAY_FORMATS:
+                stale.unlink(missing_ok=True)
+        if not image_path.exists():
+            # Deleted while it was being converted: the delete's discard ran
+            # before this file existed, and a screen-sized copy of what may
+            # be a private image should not outlive it.
+            target.unlink(missing_ok=True)
     except OSError as e:
-        logger.warning(f"Could not cache the display copy {target}: {e}")
+        if stem.parent not in _unwritable_display_dirs:
+            _unwritable_display_dirs.add(stem.parent)
+            logger.warning(f"Could not cache the display copy {target}: {e}")
     finally:
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)
@@ -1355,7 +1392,8 @@ def _store_display_copy(stem: Path, payload: bytes, suffix: str) -> None:
 
 def _display_copy(image_path: Path, stem: Path | None) -> tuple[bytes, str]:
     """The display copy of an image browsers cannot render, as (bytes, media
-    type), from the cache at ``stem`` when it is newer than the source.
+    type), from the cache at ``stem`` when one matches the source's current
+    mtime and size.
 
     ``stem`` is ``None`` when the album has nowhere to cache it; the copy is
     then built for this request only. Blocking: call it off the event loop.
@@ -1364,15 +1402,18 @@ def _display_copy(image_path: Path, stem: Path | None) -> tuple[bytes, str]:
         if stem is None:
             payload, suffix = _encode_display_copy(image_path)
             return payload, _DISPLAY_FORMATS[suffix]
-        if (cached := _read_fresh_display_copy(stem, image_path)) is not None:
+        base = stem.with_name(f"{stem.name}_{_source_stamp(image_path)}")
+        if (cached := _read_display_copy(base)) is not None:
             return cached
         with _display_lock(str(stem)):
             # Another request may have built it while this one waited.
-            if (cached := _read_fresh_display_copy(stem, image_path)) is not None:
+            if (cached := _read_display_copy(base)) is not None:
                 return cached
             payload, suffix = _encode_display_copy(image_path)
-            _store_display_copy(stem, payload, suffix)
+            _store_display_copy(stem, base, payload, suffix, image_path)
             return payload, _DISPLAY_FORMATS[suffix]
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found") from None
     except Exception as e:
         logger.warning(f"Error converting image {image_path} for display: {e}")
         raise HTTPException(status_code=500, detail=f"Image processing error: {e}") from e

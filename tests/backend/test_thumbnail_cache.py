@@ -511,10 +511,11 @@ class TestDisplayCopies:
     def test_discard_takes_the_display_copy_too(self, tmp_path):
         from photomap.backend.thumbnail_cache import display_copy_stem
 
-        stem = display_copy_stem(tmp_path, "scans/a.tif")
+        stem = display_copy_stem(tmp_path, "scans/a.tif", "album")
         for suffix in (".jpg", ".webp"):
-            stem.with_name(stem.name + suffix).write_bytes(b"x")
-        other = display_copy_stem(tmp_path, "scans/b.tif").with_suffix(".jpg")
+            stem.with_name(f"{stem.name}_0123456789ab{suffix}").write_bytes(b"x")
+        other = display_copy_stem(tmp_path, "scans/b.tif", "album")
+        other = other.with_name(f"{other.name}_0123456789ab.jpg")
         other.write_bytes(b"x")
         assert thumbnail_cache.discard(tmp_path, "scans/a.tif", video=False) == 2
         assert [p.name for p in tmp_path.iterdir()] == [other.name]

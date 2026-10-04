@@ -80,16 +80,22 @@ def tile_hash(relative_path: str, *, video: bool) -> str:
     ).hexdigest()
 
 
-def display_copy_stem(directory: Path, relative_path: str) -> Path:
-    """Where the display copy of a TIFF/HEIC is cached, minus its suffix.
+def display_copy_stem(directory: Path, relative_path: str, album_key: str) -> Path:
+    """The common prefix of every display copy of one TIFF/HEIC in one album.
 
-    The suffix is the format (``.jpg``, or ``.webp`` for an image with
-    transparency), and is chosen when the copy is written. Keyed with
+    The route appends a stamp of the source's mtime and size and a format
+    suffix (``.jpg``, or ``.webp`` for an image with transparency). Keyed with
     :func:`tile_hash` so :func:`prune` and :func:`discard` reclaim it along
     with the file's tiles — a separate digest would need its own keep-set,
     and the sweep would delete every display copy if the two ever disagreed.
+
+    The album key rides along because the directory is addressed by index
+    location, not album: two albums whose index files sit side by side share
+    it, and camera filenames collide routinely, so without it one album's
+    ``IMG_0001.tif`` would be shown in place of the other's.
     """
-    return directory / f"{tile_hash(relative_path, video=False)}_display"
+    album_tag = hashlib.blake2b(album_key.encode("utf-8", "surrogateescape"), digest_size=4).hexdigest()
+    return directory / f"{tile_hash(relative_path, video=False)}_display_{album_tag}"
 
 
 def prune(directory: Path, keep_hashes: set[str]) -> int:

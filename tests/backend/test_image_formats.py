@@ -291,7 +291,8 @@ def test_concurrent_requests_convert_once(tmp_path, monkeypatch):
         t.join(10)
     assert len(calls) == 1
     assert len(results) == 3 and len({r[0] for r in results}) == 1
-    assert sorted(p.name for p in stem.parent.iterdir()) == ["abc_display.jpg"]
+    names = [p.name for p in stem.parent.iterdir()]
+    assert len(names) == 1 and names[0].startswith("abc_display_") and names[0].endswith(".jpg"), names
 
 
 def test_the_reindex_sweep_keeps_live_display_copies_only(client, format_album, tmp_path):
@@ -301,15 +302,147 @@ def test_the_reindex_sweep_keeps_live_display_copies_only(client, format_album, 
     for name in ("img.tif", "img.heic"):
         assert client.get(f"/images/format_album/{name}").status_code == 200
     tiles = thumbnail_dir(tmp_path / "formats.npz")
-    assert len(list(tiles.glob("*_display.jpg"))) == 2
+    assert len(list(tiles.glob("*_display_*.jpg"))) == 2
 
     # img.heic has since been deleted from the album.
     live = [str((img_dir / "img.tif").resolve())]
     removed = prune(tiles, keep_hashes_for(live, [str(img_dir)], lambda p: False))
     assert removed == 1
-    remaining = list(tiles.glob("*_display.jpg"))
+    remaining = list(tiles.glob("*_display_*.jpg"))
     assert len(remaining) == 1
     # And the survivor is the one the route still asks for.
     with_cache = client.get("/images/format_album/img.tif")
     assert with_cache.status_code == 200
     assert remaining[0].read_bytes() == with_cache.content
+
+
+def _solid_tif(path: Path, color, mtime: float | None = None) -> None:
+    import os
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (40, 40), color).save(path)
+    if mtime is not None:
+        os.utime(path, (mtime, mtime))
+
+
+def _shown_color(response):
+    assert response.status_code == 200, response.text
+    with Image.open(BytesIO(response.content)) as im:
+        return im.convert("RGB").getpixel((20, 20))
+
+
+def _add_album(client, key, root: Path, index: Path):
+    response = client.post(
+        "/add_album/",
+        json={
+            "key": key,
+            "name": key,
+            "image_paths": [root.as_posix()],
+            "index": index.as_posix(),
+            "umap_eps": 0.1,
+            "description": "",
+        },
+    )
+    assert response.status_code == 201, response.text
+
+
+def test_a_source_replaced_with_an_older_mtime_is_reconverted(client, format_album, tmp_path):
+    """``cp -p`` of an edited file, or a restore from backup."""
+    target = tmp_path / "formats" / "swap.tif"
+    _solid_tif(target, (255, 0, 0))
+    assert _shown_color(client.get("/images/format_album/swap.tif"))[0] > 200
+    _solid_tif(target, (0, 0, 255), mtime=target.stat().st_mtime - 3600)
+    assert _shown_color(client.get("/images/format_album/swap.tif"))[2] > 200
+
+
+def test_an_edit_during_conversion_is_not_cached_as_current(client, format_album, tmp_path, monkeypatch):
+    from photomap.backend.routers import search
+
+    import time
+
+    target = tmp_path / "formats" / "race.tif"
+    _solid_tif(target, (255, 0, 0), mtime=time.time() - 100)
+    real = search._encode_display_copy
+
+    def edited_meanwhile(image_path):
+        result = real(image_path)  # decoded the red version...
+        # ...then it was saved, before the copy was written.
+        _solid_tif(target, (0, 0, 255), mtime=time.time() - 50)
+        return result
+
+    monkeypatch.setattr(search, "_encode_display_copy", edited_meanwhile)
+    client.get("/images/format_album/race.tif")
+    monkeypatch.setattr(search, "_encode_display_copy", real)
+    assert _shown_color(client.get("/images/format_album/race.tif"))[2] > 200
+
+
+def test_same_named_images_under_a_symlinked_root_do_not_share_a_copy(client, tmp_path):
+    real = tmp_path / "real"
+    _solid_tif(real / "a" / "scan.tif", (255, 0, 0))
+    _solid_tif(real / "b" / "scan.tif", (0, 0, 255))
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    _add_album(client, "symlinked", link, tmp_path / "idx" / "embeddings.npz")
+    try:
+        assert _shown_color(client.get("/images/symlinked/a/scan.tif"))[0] > 200
+        assert _shown_color(client.get("/images/symlinked/b/scan.tif"))[2] > 200
+    finally:
+        client.delete("/delete_album/symlinked")
+
+
+def test_albums_sharing_an_index_directory_do_not_share_copies(client, tmp_path):
+    _solid_tif(tmp_path / "ra" / "IMG_0001.tif", (255, 0, 0))
+    _solid_tif(tmp_path / "rb" / "IMG_0001.tif", (0, 0, 255))
+    _add_album(client, "side_a", tmp_path / "ra", tmp_path / "indexes" / "a.npz")
+    _add_album(client, "side_b", tmp_path / "rb", tmp_path / "indexes" / "b.npz")
+    try:
+        assert _shown_color(client.get("/images/side_a/IMG_0001.tif"))[0] > 200
+        assert _shown_color(client.get("/images/side_b/IMG_0001.tif"))[2] > 200
+    finally:
+        client.delete("/delete_album/side_a")
+        client.delete("/delete_album/side_b")
+
+
+def test_an_edit_leaves_one_copy_behind_not_two(client, format_album, tmp_path):
+    from photomap.backend.thumbnail_cache import thumbnail_dir
+
+    target = tmp_path / "formats" / "edited.tif"
+    _solid_tif(target, (255, 0, 0))
+    client.get("/images/format_album/edited.tif")
+    _solid_tif(target, (0, 0, 255), mtime=target.stat().st_mtime + 5)
+    client.get("/images/format_album/edited.tif")
+    tiles = thumbnail_dir(tmp_path / "formats.npz")
+    before = {p.name for p in tiles.glob("*_display_*")}
+    client.get("/images/format_album/img.tif")
+    assert len({p.name for p in tiles.glob("*_display_*")} - before) == 1
+    assert len(before) == 1
+
+
+def test_an_image_deleted_mid_conversion_leaves_no_copy(client, format_album, tmp_path, monkeypatch):
+    from photomap.backend.routers import search
+    from photomap.backend.thumbnail_cache import thumbnail_dir
+
+    target = tmp_path / "formats" / "doomed.tif"
+    _solid_tif(target, (255, 0, 0))
+    real = search._encode_display_copy
+
+    def deleted_meanwhile(image_path):
+        result = real(image_path)
+        target.unlink()
+        return result
+
+    monkeypatch.setattr(search, "_encode_display_copy", deleted_meanwhile)
+    assert client.get("/images/format_album/doomed.tif").status_code == 200
+    assert not list(thumbnail_dir(tmp_path / "formats.npz").glob("*_display*"))
+
+
+def test_a_profile_is_dropped_when_the_mode_changes(tmp_path):
+    from PIL import ImageCms
+
+    from photomap.backend.routers.search import _display_safe
+
+    im = Image.new("LA", (4, 4), (100, 255))
+    im.info["icc_profile"] = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    out = _display_safe(im)
+    assert out.mode == "RGBA"
+    assert "icc_profile" not in out.info
