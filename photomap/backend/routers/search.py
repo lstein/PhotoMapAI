@@ -12,6 +12,8 @@ import hashlib
 import json
 import os
 import re
+import tempfile
+import threading
 import zipfile
 from io import BytesIO
 from logging import getLogger
@@ -28,8 +30,8 @@ from ..config import get_config_manager
 from ..embeddings import SUPPORTED_EXTENSIONS, MediaFilter
 from ..media_types import is_video, needs_browser_conversion, video_media_type
 from ..metadata_modules import SlideSummary, video_external_link_html
-from ..thumbnail_cache import thumbnail_dir, tile_hash
-from ..util import is_cuda_oom
+from ..thumbnail_cache import display_copy_stem, thumbnail_dir, tile_hash
+from ..util import BoundedLRU, is_cuda_oom
 from ..video_cache import VideoFrameCache
 from ..video_transcode import (
     HLS_PLAYLIST_NAME,
@@ -384,7 +386,7 @@ def _video_placeholder_response(size: int) -> Response:
 _THUMBNAIL_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 
 
-def _thumbnail_response(request: Request, path: Path) -> Response:
+def _thumbnail_response(request: Request, path: Path, media_type: str = "image/png") -> Response:
     """A tile, or a 304 if the caller already has it.
 
     ``no-cache`` above means the browser revalidates every time, and
@@ -409,13 +411,17 @@ def _thumbnail_response(request: Request, path: Path) -> Response:
         # the next request rebuilds it; 404 rather than a 500 so it reads as
         # a missing tile instead of a broken server.
         raise HTTPException(status_code=404, detail="Thumbnail is no longer available") from None
+    return _validated_response(request, payload, media_type)
 
+
+def _validated_response(request: Request, payload: bytes, media_type: str) -> Response:
+    """``payload`` with a content ETag, or a 304 if the caller already has it."""
     etag = f'"{hashlib.md5(payload, usedforsecurity=False).hexdigest()}"'
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers={**_THUMBNAIL_CACHE_HEADERS, "etag": etag})
     return Response(
         content=payload,
-        media_type="image/png",
+        media_type=media_type,
         headers={**_THUMBNAIL_CACHE_HEADERS, "etag": etag},
     )
 
@@ -581,12 +587,15 @@ async def serve_video_frame(
 # or a converted stream and FastAPI refuses to work with Union types
 # in response_model.
 @search_router.get("/images/{album_key}/{path:path}", tags=["Search"])
-async def serve_image(album_key: str, path: str, album_config: AlbumDep, original: bool = False):
+async def serve_image(
+    request: Request, album_key: str, path: str, album_config: AlbumDep, original: bool = False
+):
     """Serve images from different albums dynamically.
 
-    Formats browsers cannot render are converted to PNG unless ``original`` is
-    set, which the download button uses so a saved ``.tif`` is the user's file
-    rather than a flattened, first-page-only PNG under the same name.
+    Formats browsers cannot render are served as a cached, screen-sized JPEG
+    (WebP if the image has transparency) unless ``original`` is set, which the
+    download button uses so a saved ``.tif`` is the user's file rather than a
+    flattened, downscaled, first-page-only copy under the same name.
     """
     image_path = config_manager.find_image_in_album(album_key, path)
     if not image_path:
@@ -607,9 +616,14 @@ async def serve_image(album_key: str, path: str, album_config: AlbumDep, origina
         raise HTTPException(status_code=404, detail="File not found")
 
     if needs_browser_conversion(image_path) and not original:
+        stem = None
+        relative_path = config_manager.get_relative_path(str(image_path), album_key)
+        if album_config.index and relative_path is not None:
+            stem = display_copy_stem(thumbnail_dir(Path(album_config.index)), relative_path)
         # Decoding a large scanned TIFF takes long enough to stall every other
         # request if done on the loop, so it runs in a worker thread.
-        return await asyncio.to_thread(serve_image_with_conversion, image_path)
+        payload, media_type = await asyncio.to_thread(_display_copy, image_path, stem)
+        return _validated_response(request, payload, media_type)
     return FileResponse(image_path)
 
 
@@ -660,8 +674,8 @@ async def serve_video(
 
     Returns a ``FileResponse`` specifically: Starlette implements HTTP Range
     on it, which is what makes the ``<video>`` scrubber able to seek.  A
-    ``StreamingResponse`` (as the HEIC conversion path uses) has no range
-    support and would silently break seeking.
+    plain ``Response`` or ``StreamingResponse`` has no range support and would
+    silently break seeking.
     """
     video_path = _resolve_album_video(album_key, path, album_config)
 
@@ -1229,20 +1243,136 @@ def _png_safe(im: Image.Image) -> Image.Image:
     return converted
 
 
-def serve_image_with_conversion(image_path: Path) -> StreamingResponse:
-    """Serve an image browsers cannot render (HEIC, TIFF) re-encoded as PNG,
-    with EXIF rotation applied. Blocking: call it off the event loop."""
+# The copy ``/images/`` shows in place of a TIFF or HEIC. A full-resolution PNG
+# of a 24 MP scan is 30-70 MB and took seconds to encode on every view; capped
+# at this long edge and saved as JPEG it is a few MB, still sharper than any
+# screen it is shown on. Downloads ask for ``?original=1`` and never see it.
+_DISPLAY_MAX_EDGE = 4096
+_DISPLAY_QUALITY = 90
+
+# Suffix -> media type, for each format a display copy may be cached in.
+_DISPLAY_FORMATS = {".jpg": "image/jpeg", ".webp": "image/webp"}
+
+# Serializes conversions of one file, so the swiper preloading a slide that is
+# also being shown converts it once rather than twice. Bounded like
+# video_cache's locks: evicting an idle lock costs at worst one duplicate
+# conversion, which the atomic write already makes harmless.
+_display_locks: BoundedLRU[str, threading.Lock] = BoundedLRU(1024)
+_display_locks_guard = threading.Lock()
+
+
+def _display_lock(key: str) -> threading.Lock:
+    with _display_locks_guard:
+        lock = _display_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _display_locks.put(key, lock)
+        return lock
+
+
+def _display_safe(im: Image.Image) -> Image.Image:
+    """Return ``im`` as 8-bit L, RGB or RGBA — what JPEG and WebP can store."""
+    im = _png_safe(im)
+    if im.mode == "I;16":
+        # _png_safe has already mapped deep data onto 0-65535 without
+        # clipping; JPEG has no 16-bit mode, so take the top eight bits.
+        arr = np.asarray(im, dtype=np.uint16)
+        return Image.fromarray((arr >> 8).astype(np.uint8))
+    if im.mode == "1":
+        return im.convert("L")
+    if im.mode == "P":
+        return im.convert("RGBA" if "transparency" in im.info else "RGB")
+    if im.mode == "LA":
+        return im.convert("RGBA")
+    return im
+
+
+def _encode_display_copy(image_path: Path) -> tuple[bytes, str]:
+    """The display copy of ``image_path`` and the suffix it should be stored
+    under: EXIF rotation applied, long edge capped, JPEG unless the image has
+    transparency worth keeping. Blocking."""
+    with Image.open(image_path) as im:
+        # Before anything else: a TIFF keeps its orientation in its own tag
+        # directory, which the first convert() would drop.
+        im = ImageOps.exif_transpose(im)
+        im = _display_safe(im)
+        im.thumbnail((_DISPLAY_MAX_EDGE, _DISPLAY_MAX_EDGE), Image.Resampling.LANCZOS)
+        icc = im.info.get("icc_profile")
+        if im.mode == "RGBA" and im.getchannel("A").getextrema() == (255, 255):
+            # Scanners often write an alpha channel with nothing in it.
+            im = im.convert("RGB")
+        buf = BytesIO()
+        extra = {"icc_profile": icc} if icc else {}
+        if im.mode == "RGBA":
+            im.save(buf, format="WEBP", quality=_DISPLAY_QUALITY, **extra)
+            return buf.getvalue(), ".webp"
+        im.save(buf, format="JPEG", quality=_DISPLAY_QUALITY, **extra)
+        return buf.getvalue(), ".jpg"
+
+
+def _read_fresh_display_copy(stem: Path, image_path: Path) -> tuple[bytes, str] | None:
+    for suffix, media_type in _DISPLAY_FORMATS.items():
+        path = stem.with_name(stem.name + suffix)
+        if not _thumbnail_is_fresh(path, image_path):
+            continue
+        try:
+            payload = path.read_bytes()
+        except OSError:
+            continue  # swept since the freshness check; rebuild it
+        if payload:
+            return payload, media_type
+    return None
+
+
+def _store_display_copy(stem: Path, payload: bytes, suffix: str) -> None:
+    """Publish ``payload`` atomically, and drop the copy in the other format.
+
+    Write-then-rename so a concurrent reader never sees half a file. A failed
+    write is logged, not raised: the caller still has the bytes to serve, and
+    an index directory on a read-only mount should cost speed, not pictures.
+    """
+    target = stem.with_name(stem.name + suffix)
+    tmp_path: Path | None = None
     try:
-        with Image.open(image_path) as im:
-            im = ImageOps.exif_transpose(im)
-            im = _png_safe(im)
-            buf = BytesIO()
-            format = "PNG"
-            # Fast compression: a 24 MP scan takes several seconds to encode
-            # at the default level, and these bytes only cross localhost.
-            im.save(buf, format=format, compress_level=1)
-            buf.seek(0)
-            return StreamingResponse(buf, media_type=f"image/{format.lower()}")
+        stem.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(dir=stem.parent, prefix=f"{stem.name}.", suffix=".tmp")
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        os.replace(tmp_path, target)
+        tmp_path = None
+        for other in _DISPLAY_FORMATS:
+            if other != suffix:
+                # An image edited to gain or lose transparency changes format;
+                # the old copy is stale and nothing would ever ask for it.
+                stem.with_name(stem.name + other).unlink(missing_ok=True)
+    except OSError as e:
+        logger.warning(f"Could not cache the display copy {target}: {e}")
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+
+
+def _display_copy(image_path: Path, stem: Path | None) -> tuple[bytes, str]:
+    """The display copy of an image browsers cannot render, as (bytes, media
+    type), from the cache at ``stem`` when it is newer than the source.
+
+    ``stem`` is ``None`` when the album has nowhere to cache it; the copy is
+    then built for this request only. Blocking: call it off the event loop.
+    """
+    try:
+        if stem is None:
+            payload, suffix = _encode_display_copy(image_path)
+            return payload, _DISPLAY_FORMATS[suffix]
+        if (cached := _read_fresh_display_copy(stem, image_path)) is not None:
+            return cached
+        with _display_lock(str(stem)):
+            # Another request may have built it while this one waited.
+            if (cached := _read_fresh_display_copy(stem, image_path)) is not None:
+                return cached
+            payload, suffix = _encode_display_copy(image_path)
+            _store_display_copy(stem, payload, suffix)
+            return payload, _DISPLAY_FORMATS[suffix]
     except Exception as e:
         logger.warning(f"Error converting image {image_path} for display: {e}")
         raise HTTPException(status_code=500, detail=f"Image processing error: {e}") from e

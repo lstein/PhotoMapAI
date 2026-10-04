@@ -5,6 +5,11 @@ from it — cached beside the album's index. Its filename is a digest of the
 image's album-relative path plus the size (and, for the UMAP landmark overlay,
 a colour and corner radius), so one source file can have several live tiles.
 
+The same directory holds the *display copies* ``/images/`` serves in place of
+a TIFF or HEIC the browser cannot render: one screen-sized JPEG (or WebP, when
+the image has transparency) per source file, named with the same digest so the
+sweep and the per-file discard cover them without a second keep-set.
+
 The key logic lives here rather than in the route because the sweeper has to
 compute exactly the same digest the route does. Two copies of that rule would
 drift the first time either changed, and the failure would be silent: the
@@ -14,6 +19,7 @@ sweeper would delete live tiles, or keep dead ones forever.
 import hashlib
 import logging
 import re
+import time
 from pathlib import Path
 
 from .video import FRAME_SELECTION_GENERATION
@@ -24,6 +30,15 @@ THUMBNAIL_DIRNAME = "thumbnails"
 
 # What tile_hash emits: blake2b-128, rendered lowercase.
 _DIGEST_RE = re.compile(r"[0-9a-f]{32}")
+
+# Every suffix this module's writers produce: PNG tiles, JPEG/WebP display
+# copies, and the temporaries a display copy is written through.
+_CACHE_SUFFIXES = frozenset({".png", ".jpg", ".webp", ".tmp"})
+
+# A temporary is only ever live for the length of one conversion. One older
+# than this belongs to a writer that crashed or was killed, and is swept even
+# when its source image still exists.
+_STALE_TMP_SECONDS = 3600.0
 
 
 def thumbnail_dir(index_path: Path | str) -> Path:
@@ -65,6 +80,18 @@ def tile_hash(relative_path: str, *, video: bool) -> str:
     ).hexdigest()
 
 
+def display_copy_stem(directory: Path, relative_path: str) -> Path:
+    """Where the display copy of a TIFF/HEIC is cached, minus its suffix.
+
+    The suffix is the format (``.jpg``, or ``.webp`` for an image with
+    transparency), and is chosen when the copy is written. Keyed with
+    :func:`tile_hash` so :func:`prune` and :func:`discard` reclaim it along
+    with the file's tiles — a separate digest would need its own keep-set,
+    and the sweep would delete every display copy if the two ever disagreed.
+    """
+    return directory / f"{tile_hash(relative_path, video=False)}_display"
+
+
 def prune(directory: Path, keep_hashes: set[str]) -> int:
     """Delete every tile whose source file is no longer in ``keep_hashes``.
 
@@ -91,15 +118,18 @@ def prune(directory: Path, keep_hashes: set[str]) -> int:
         return 0
 
     removed = 0
+    now = time.time()
     for entry in entries:
-        if entry.suffix != ".png":
+        if entry.suffix not in _CACHE_SUFFIXES:
             continue
         # "<32 lowercase hex digits>_<size>[...]"; anything else was not
         # written by the route and is left alone rather than guessed at. The
         # hex check is part of that promise: a 32-character stem is not
         # necessarily a digest, and this code deletes files.
         digest = entry.stem.split("_", 1)[0]
-        if not _DIGEST_RE.fullmatch(digest) or digest in keep_hashes:
+        if not _DIGEST_RE.fullmatch(digest):
+            continue
+        if digest in keep_hashes and not _is_abandoned_tmp(entry, now):
             continue
         try:
             entry.unlink()
@@ -110,7 +140,8 @@ def prune(directory: Path, keep_hashes: set[str]) -> int:
 
 
 def discard(directory: Path, relative_path: str, *, video: bool) -> int:
-    """Remove every tile of one source file, whatever size or colour.
+    """Remove every tile of one source file, whatever size or colour, and its
+    display copy.
 
     The counterpart to :func:`prune` for a single deletion. The full sweep
     only runs when the index is rewritten wholesale, and the delete endpoints
@@ -124,13 +155,24 @@ def discard(directory: Path, relative_path: str, *, video: bool) -> int:
         return 0
     digest = tile_hash(relative_path, video=video)
     removed = 0
-    for entry in directory.glob(f"{digest}_*.png"):
+    for entry in directory.glob(f"{digest}_*"):
+        if entry.suffix not in _CACHE_SUFFIXES:
+            continue
         try:
             entry.unlink()
             removed += 1
         except OSError as e:
             logger.debug(f"Could not remove tile {entry}: {e}")
     return removed
+
+
+def _is_abandoned_tmp(entry: Path, now: float) -> bool:
+    if entry.suffix != ".tmp":
+        return False
+    try:
+        return now - entry.stat().st_mtime > _STALE_TMP_SECONDS
+    except OSError:
+        return False
 
 
 def keep_hashes_for(filenames, image_roots, is_video) -> set[str]:
