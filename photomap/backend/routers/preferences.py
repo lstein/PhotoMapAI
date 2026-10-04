@@ -30,25 +30,25 @@ def _fingerprint(request: Request) -> tuple[str, str]:
 def resolve_device_id(request: Request) -> str:
     """Return the requesting device's id: cookie, then fingerprint, then new.
 
+    Reads never move a fingerprint; only writes do (``record_client`` in the
+    PATCH/PUT handlers). Otherwise two browsers sharing one — two profiles of
+    the same browser on one machine — would pass it back and forth, and
+    rewrite preferences.json, on every request either made.
+
     The fingerprint is ``request.client.host`` plus the User-Agent header.
     Behind a reverse proxy the host is the proxy's address unless uvicorn's
     proxy-header support is enabled, in which case every cookieless client
     of that proxy with the same browser build shares one record.
     """
-    manager = get_preferences_manager()
-    ip, user_agent = _fingerprint(request)
-
     cookie = request.cookies.get(DEVICE_COOKIE)
     if cookie and _ID_RE.match(cookie):
-        device_id = cookie
-    else:
-        device_id = manager.find_device(ip, user_agent)
-        if device_id:
-            logger.info(f"Re-linked a request without a device cookie to device {device_id[:8]} ({ip})")
-        else:
-            device_id = uuid4().hex
-    manager.record_client(device_id, ip, user_agent)
-    return device_id
+        return cookie
+    ip, user_agent = _fingerprint(request)
+    device_id = get_preferences_manager().find_device(ip, user_agent)
+    if device_id:
+        logger.info(f"Re-linked a request without a device cookie to device {device_id[:8]} ({ip})")
+        return device_id
+    return uuid4().hex
 
 
 def set_device_cookie(response: Response, device_id: str) -> None:
@@ -118,7 +118,8 @@ async def patch_preferences(
         prefs = manager.patch(device_id, patch)
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors()) from e
-    # The dependency could not fingerprint a device whose first PATCH this is.
+    # A write claims the fingerprint, so a later cookieless request from this
+    # browser is re-linked here.
     manager.record_client(device_id, *_fingerprint(request))
     return prefs
 
@@ -139,11 +140,12 @@ async def replace_preferences(
 
 
 @preferences_router.delete("/", status_code=204)
-async def forget_preferences(device_id: DeviceIdDep, response: Response) -> None:
-    """Wipe this device's stored prefs and clear the device cookie.
+async def forget_preferences(request: Request, response: Response) -> None:
+    """Wipe this device's stored prefs and fingerprint, and clear the cookie.
 
     Intended for a Settings → "Forget this device" affordance, and useful
-    in tests that need to start from a clean cookie.
+    in tests that need to start from a clean cookie. Not ``DeviceIdDep``:
+    that would re-send the cookie in the same response as the deletion.
     """
-    get_preferences_manager().forget(device_id)
+    get_preferences_manager().forget(resolve_device_id(request))
     response.delete_cookie(DEVICE_COOKIE)

@@ -21,6 +21,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", (
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: { album: "my album", swiper: null, single_swiper: null },
   persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/index.js", () => ({
   deleteImage: jest.fn(),

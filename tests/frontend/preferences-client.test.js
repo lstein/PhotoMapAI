@@ -9,7 +9,8 @@ import { jest, describe, it, expect, beforeEach, afterEach } from "@jest/globals
 import {
   _peekPendingKeys,
   _resetPreferencesClientForTests,
-  cancelPendingPatches,
+  _peekPending,
+  closePreferencePatches,
   flushPendingPatches,
   queuePreferencePatch,
 } from "../../photomap/frontend/static/javascript/preferences-client.js";
@@ -101,16 +102,85 @@ describe("preferences-client", () => {
     });
   });
 
-  describe("cancelPendingPatches", () => {
-    it("drops queued partials without firing the network request", async () => {
+  describe("closePreferencePatches", () => {
+    it("drops queued partials and refuses new ones", async () => {
       queuePreferencePatch({ currentDelay: 33 });
-      cancelPendingPatches();
+      await closePreferencePatches();
+      queuePreferencePatch({ lastSlideIndex: { a: 4 } });
 
       jest.advanceTimersByTime(DEBOUNCE_MS * 2);
       await flushPendingPatches();
 
       expect(global.fetch).not.toHaveBeenCalled();
       expect(_peekPendingKeys()).toEqual([]);
+    });
+  });
+
+  describe("merging", () => {
+    it("merges the per-album slide map instead of replacing it", () => {
+      queuePreferencePatch({ lastSlideIndex: { a: 1 } });
+      queuePreferencePatch({ lastSlideIndex: { b: 2 } });
+      queuePreferencePatch({ lastSlideIndex: { a: 3 } });
+      expect(_peekPending()).toEqual({ lastSlideIndex: { a: 3, b: 2 } });
+    });
+  });
+
+  describe("failures", () => {
+    it("retries a PATCH the network dropped", async () => {
+      global.fetch.mockRejectedValueOnce(new Error("offline")).mockResolvedValue(mockOkJson({}));
+      queuePreferencePatch({ moveToTrash: false });
+      await flushPendingPatches();
+      expect(_peekPending()).toEqual({ moveToTrash: false });
+
+      await flushPendingPatches(); // fires the scheduled retry now
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toEqual({ moveToTrash: false });
+      expect(_peekPendingKeys()).toEqual([]);
+    });
+
+    it("retries on a server error, keeping newer values for the same key", async () => {
+      global.fetch.mockResolvedValueOnce({ ok: false, status: 503 }).mockResolvedValue(mockOkJson({}));
+      queuePreferencePatch({ currentDelay: 4, mode: "random" });
+      await flushPendingPatches();
+      queuePreferencePatch({ currentDelay: 9 });
+      await flushPendingPatches();
+
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toEqual({ currentDelay: 9, mode: "random" });
+    });
+
+    it("resends a refused batch key by key, dropping only the bad value", async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: false, status: 422 })
+        .mockResolvedValueOnce({ ok: false, status: 422 })
+        .mockResolvedValueOnce(mockOkJson({}));
+      queuePreferencePatch({ currentDelay: 5000, moveToTrash: false });
+      await flushPendingPatches();
+
+      const bodies = global.fetch.mock.calls.map(([, init]) => JSON.parse(init.body));
+      expect(bodies).toEqual([
+        { currentDelay: 5000, moveToTrash: false },
+        { currentDelay: 5000 },
+        { moveToTrash: false },
+      ]);
+      // The refused value is not retried forever.
+      expect(_peekPendingKeys()).toEqual([]);
+    });
+
+    it("never has two PATCHes in the air at once", async () => {
+      let release;
+      global.fetch.mockImplementationOnce(() => new Promise((r) => (release = r))).mockResolvedValue(mockOkJson({}));
+      queuePreferencePatch({ lastSlideIndex: { a: 1 } });
+      jest.advanceTimersByTime(DEBOUNCE_MS);
+      await Promise.resolve(); // let the first flush take the queue and send
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      queuePreferencePatch({ lastSlideIndex: { a: 2 } });
+      const second = flushPendingPatches();
+      await Promise.resolve();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      release(mockOkJson({}));
+      await second;
+      expect(global.fetch).toHaveBeenCalledTimes(2);
     });
   });
 });

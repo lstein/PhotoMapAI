@@ -93,7 +93,7 @@ export const state = {
  *                                   default from screen width.
  * @property {(value: any) => void} [onSet]
  *                                   Extra side-effect after assignment;
- *                                   fires from both `restoreFromLocalStorage`
+ *                                   fires from both `restorePersistedSettings`
  *                                   and the generated setter so the side-effect
  *                                   matches the in-memory state.
  */
@@ -129,8 +129,8 @@ const PERSISTED_SETTINGS = [
     onSet: (value) => window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value } })),
   },
   { key: "showMetadataFields", type: "bool", default: true },
-  // Visual session state: written through persistSettings by umap.js and
-  // slide-state.js rather than by a generated setter.
+  // Visual session state, written by umap.js (persistSettings) and
+  // slide-state.js (persistSlidePosition) rather than by a generated setter.
   { key: "umapWindowOpen", type: "bool", default: true },
   { key: "lastSlideIndex", type: "slideIndexMap", default: {} },
   {
@@ -289,9 +289,17 @@ function _readLocalStorage(key) {
 export async function restorePersistedSettings() {
   const record = window.initialPreferences ?? null;
 
+  // Keys the record lacks but localStorage has — a setting added to the
+  // server model after this device's record was written — are sent up, or
+  // they would be lost at the next iOS eviction.
+  const migrate = [];
   for (const spec of PERSISTED_SETTINGS) {
     const raw = _readLocalStorage(spec.key);
-    const value = _validated(record?.[spec.key], spec.type) ?? _parseStored(raw, spec.type);
+    const fromRecord = _validated(record?.[spec.key], spec.type);
+    const value = fromRecord ?? _parseStored(raw, spec.type);
+    if (record && fromRecord === undefined && value !== undefined) {
+      migrate.push(spec.key);
+    }
     if (value !== undefined) {
       state[spec.key] = value;
     } else if (raw === null && spec.dynamicDefault) {
@@ -316,6 +324,8 @@ export async function restorePersistedSettings() {
   _writeAllToLocalStorage();
   if (!record) {
     queuePreferencePatch(_stateToPrefsPayload());
+  } else if (migrate.length > 0) {
+    queuePreferencePatch(_stateToPrefsPayload(migrate));
   }
 }
 
@@ -364,6 +374,18 @@ function _writeAllToLocalStorage(keys = null) {
 export function persistSettings(...keys) {
   _writeAllToLocalStorage(keys);
   queuePreferencePatch(_stateToPrefsPayload(keys));
+}
+
+/**
+ * Remember `index` as the slide last shown in `album`.
+ *
+ * Sends just this album's entry: the server merges the map per album, so a
+ * second tab's stale copy of the other albums can't overwrite them.
+ */
+export function persistSlidePosition(album, index) {
+  state.lastSlideIndex = { ...state.lastSlideIndex, [album]: index };
+  _writeAllToLocalStorage(["lastSlideIndex"]);
+  queuePreferencePatch({ lastSlideIndex: { [album]: index } });
 }
 
 // Drop every localStorage key this module owns. Called by the "Reset to

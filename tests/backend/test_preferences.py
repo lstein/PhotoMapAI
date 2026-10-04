@@ -198,9 +198,10 @@ def test_delete_clears_state_and_cookie(client: TestClient):
 
     response = client.delete("/preferences/")
     assert response.status_code == 204
+    # Only the deletion is sent, not a re-issue of the cookie alongside it.
+    assert client.cookies.get(DEVICE_COOKIE) is None
 
-    # On the next request, the cookie has been cleared client-side, so the
-    # TestClient mints a brand-new device id and gets defaults.
+    # The next request mints a brand-new device id and gets defaults.
     fresh = client.get("/preferences/").json()
     assert fresh["currentDelay"] == 5
 
@@ -345,8 +346,13 @@ def test_fingerprint_belongs_to_the_device_that_last_used_it():
 
     assert _client().get("/preferences/").json()["currentDelay"] == 20
 
-    # The older device using it again takes it back.
+    # Merely reading doesn't move it — two profiles of one browser would
+    # otherwise trade it (and rewrite the file) on every request.
     older.get("/preferences/")
+    assert _client().get("/preferences/").json()["currentDelay"] == 20
+
+    # Writing does.
+    older.patch("/preferences/", json={"mode": "random"})
     assert _client().get("/preferences/").json()["currentDelay"] == 10
 
 
@@ -438,3 +444,12 @@ def test_root_page_embeds_stored_preferences_and_relinks():
     assert prefs["currentDelay"] == 3
     assert prefs["showControlPanelText"] is False
     assert _device_cookie(response) == original_id
+
+
+def test_slide_map_is_merged_per_album(client: TestClient):
+    """Each tab sends only the album it moved in; the others must survive."""
+    client.patch("/preferences/", json={"lastSlideIndex": {"A": 50, "B": 1}})
+    client.patch("/preferences/", json={"lastSlideIndex": {"B": 8}})
+    client.patch("/preferences/", json={"last_slide_index": {"C": 3}})
+
+    assert client.get("/preferences/").json()["lastSlideIndex"] == {"A": 50, "B": 8, "C": 3}

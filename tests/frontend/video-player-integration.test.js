@@ -16,6 +16,7 @@ const mockState = {
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: mockState,
   persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/index.js", () => ({
   deleteImage: jest.fn(),

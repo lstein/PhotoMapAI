@@ -85,6 +85,17 @@ describe("restorePersistedSettings", () => {
     expect(stateModule.state.currentDelay).toBe(4);
   });
 
+  it("sends up values only localStorage has", async () => {
+    // A record written before mediaFilter was in the server model.
+    localStorage.setItem("mediaFilter", "images");
+    window.initialPreferences = { mediaFilter: null, currentDelay: 4, updatedAt: 1 };
+
+    await stateModule.restorePersistedSettings();
+
+    expect(queuePreferencePatch).toHaveBeenCalledTimes(1);
+    expect(queuePreferencePatch).toHaveBeenCalledWith({ mediaFilter: "images" });
+  });
+
   it("ignores an embedded album that no longer exists", async () => {
     localStorage.setItem("album", "first");
     window.initialPreferences = { album: "deleted-album", updatedAt: 1 };
@@ -132,6 +143,15 @@ describe("persisting a change sends only that key", () => {
     stateModule.persistSettings("album");
 
     expect(queuePreferencePatch).toHaveBeenCalledWith({ album: "second" });
+  });
+
+  it("persistSlidePosition sends only that album's entry", () => {
+    stateModule.state.lastSlideIndex = { a: 1, b: 2 };
+    stateModule.persistSlidePosition("b", 9);
+
+    expect(stateModule.state.lastSlideIndex).toEqual({ a: 1, b: 9 });
+    expect(queuePreferencePatch).toHaveBeenCalledWith({ lastSlideIndex: { b: 9 } });
+    expect(localStorage.getItem("lastSlideIndex")).toBe('{"a":1,"b":9}');
   });
 
   it("a generated setter", () => {

@@ -1,7 +1,7 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { albumManager } from "./album-manager.js";
-import { cancelPendingPatches } from "./preferences-client.js";
+import { closePreferencePatches, reopenPreferencePatches } from "./preferences-client.js";
 import { exitSearchMode } from "./search-ui.js";
 import { setSlideshowMode } from "./slideshow.js";
 import {
@@ -710,9 +710,11 @@ function setupResetAllPreferencesButton() {
     if (!ok) {
       return;
     }
-    // Drop anything queued — we don't want a stale debounce firing a
-    // PATCH against the freshly minted device after the DELETE.
-    cancelPendingPatches();
+    // Drop anything queued and stop sending until the reload, and let a
+    // PATCH already in the air land first: anything reaching the server
+    // after the DELETE (a slideshow's slide change, the unload flush) would
+    // recreate the record being removed.
+    await closePreferencePatches();
     try {
       const response = await fetch("preferences/", {
         method: "DELETE",
@@ -720,11 +722,13 @@ function setupResetAllPreferencesButton() {
       });
       if (!response.ok) {
         console.warn("Reset preferences failed:", response.status);
+        reopenPreferencePatches();
         window.alert("Failed to reset preferences. Please try again.");
         return;
       }
     } catch (err) {
       console.warn("Reset preferences failed:", err);
+      reopenPreferencePatches();
       window.alert("Failed to reset preferences. Please try again.");
       return;
     }

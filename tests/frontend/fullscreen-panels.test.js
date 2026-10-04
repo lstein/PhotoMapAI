@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: {},
   persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/index.js", () => ({
   deleteImage: jest.fn(),

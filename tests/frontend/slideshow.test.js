@@ -29,6 +29,7 @@ const mockState = {
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: mockState,
   persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 
 // Mock umap module

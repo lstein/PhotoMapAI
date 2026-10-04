@@ -35,6 +35,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/slide-state.
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: { album: "board", swiper: null, single_swiper: null },
   persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 
 const { bookmarkManager } = await import("../../photomap/frontend/static/javascript/bookmarks.js");

@@ -1,4 +1,4 @@
-import { persistSettings, state } from "./state.js";
+import { persistSlidePosition, state } from "./state.js";
 
 class SlideStateManager {
   constructor() {
@@ -381,11 +381,10 @@ class SlideStateManager {
   // is the image on screen.
   rememberPosition() {
     const index = this.currentGlobalIndex;
-    if (!this.album || !Number.isInteger(index) || state.lastSlideIndex?.[this.album] === index) {
+    if (!this.album || !Number.isInteger(index) || index < 0 || state.lastSlideIndex?.[this.album] === index) {
       return;
     }
-    state.lastSlideIndex = { ...state.lastSlideIndex, [this.album]: index };
-    persistSettings("lastSlideIndex");
+    persistSlidePosition(this.album, index);
   }
 
   seekToSlideIndex() {

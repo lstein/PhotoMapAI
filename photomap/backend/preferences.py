@@ -76,8 +76,8 @@ class UserPreferences(_CamelModel):
     # it does when the last PATCH's response never landed) would have "both"
     # applied over it and silently lose the setting. A null is skipped by the
     # same check in ``_applyServerPrefs`` that skips a field the server never
-    # sent, so that reconcile leaves the device's own value alone; the value
-    # reaches the server with the next PATCH any setter queues.
+    # sent, so boot keeps the device's own localStorage value and sends it up
+    # (state.js restorePersistedSettings migrates such keys).
     media_filter: Literal["both", "images", "videos"] | None = None
 
     # Metadata drawer / cluster labels
@@ -192,6 +192,11 @@ class PreferencesManager:
             # consistent regardless of which casing the partial uses, since
             # model_validate will accept either.
             merged_dict = {**current.model_dump(), **partial}
+            # The slide map is merged per album, not replaced: each tab sends
+            # only the album it moved in, so another tab's positions survive.
+            for key in ("lastSlideIndex", "last_slide_index"):
+                if isinstance(partial.get(key), dict):
+                    merged_dict[key] = {**current.last_slide_index, **partial[key]}
             merged = UserPreferences.model_validate(merged_dict)
             merged.updated_at = time.time()
             store.devices[device_id] = merged

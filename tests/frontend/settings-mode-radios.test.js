@@ -11,7 +11,8 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/search-ui.js
   exitSearchMode: jest.fn(),
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/preferences-client.js", () => ({
-  cancelPendingPatches: jest.fn(),
+  closePreferencePatches: jest.fn(() => Promise.resolve()),
+  reopenPreferencePatches: jest.fn(),
 }));
 const mockSetSlideshowMode = jest.fn();
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/slideshow.js", () => ({
@@ -21,6 +22,7 @@ const mockState = { mode: "chronological" };
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   clearPersistedSettingsCache: jest.fn(),
   persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
   setAlbum: jest.fn(),
   setAutotaggingEnabled: jest.fn(),
   setWrapNavigation: jest.fn(),

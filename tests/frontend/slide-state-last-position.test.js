@@ -7,8 +7,11 @@ import { beforeEach, describe, expect, jest, test } from "@jest/globals";
 const M = "../../photomap/frontend/static/javascript";
 
 const mockState = { album: "alb", lastSlideIndex: {} };
-const persistSettings = jest.fn();
-jest.unstable_mockModule(`${M}/state.js`, () => ({ state: mockState, persistSettings }));
+// Mirrors state.js's real persistSlidePosition.
+const persistSlidePosition = jest.fn((album, index) => {
+  mockState.lastSlideIndex = { ...mockState.lastSlideIndex, [album]: index };
+});
+jest.unstable_mockModule(`${M}/state.js`, () => ({ state: mockState, persistSlidePosition }));
 
 const { slideState } = await import(`${M}/slide-state.js`);
 
@@ -24,7 +27,7 @@ beforeEach(() => {
   slideState.totalAlbumImages = 0;
   mockState.album = "alb";
   mockState.lastSlideIndex = {};
-  persistSettings.mockReset();
+  persistSlidePosition.mockClear();
 });
 
 describe("restoring the last position on album switch", () => {
@@ -68,7 +71,7 @@ describe("remembering the position", () => {
     slideState.navigateToIndex(42, false);
 
     expect(mockState.lastSlideIndex).toEqual({ alb: 42 });
-    expect(persistSettings).toHaveBeenCalledWith("lastSlideIndex");
+    expect(persistSlidePosition).toHaveBeenCalledWith("alb", 42);
   });
 
   test("does not file a slide under an album whose albumChanged is still pending", () => {
@@ -88,7 +91,7 @@ describe("remembering the position", () => {
 
     slideState.navigateToIndex(5, false);
 
-    expect(persistSettings).not.toHaveBeenCalled();
+    expect(persistSlidePosition).not.toHaveBeenCalled();
   });
 
   test("a refresh keeps the current position rather than the remembered one", () => {

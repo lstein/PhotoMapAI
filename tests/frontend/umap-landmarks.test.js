@@ -81,6 +81,7 @@ jest.unstable_mockModule(`${JS}/state.js`, () => ({
   setUmapExitFullscreenOnSelection: jest.fn(),
   setUmapShowHoverThumbnails: jest.fn(),
   persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 
 jest.unstable_mockModule(`${JS}/album-manager.js`, () => ({
