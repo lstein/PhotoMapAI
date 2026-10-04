@@ -1,8 +1,8 @@
 // preferences-client.js
 //
 // Thin REST wrapper around /preferences/. The server is the source of truth
-// for user preferences; localStorage is a paint-cache so the first frame
-// after page load doesn't flicker while we await the server response.
+// for user preferences; the page arrives with this device's record already
+// embedded (window.initialPreferences), so only writes go through here.
 //
 // All requests go same-origin, so the HttpOnly photomap_device cookie set by
 // the server flows automatically — the client never reads or sets it.
@@ -15,54 +15,9 @@
 const PREFS_URL = "preferences/";
 const DEBOUNCE_MS = 500;
 
-// localStorage key holding the server-stamped updatedAt of our last known
-// server state. Used during boot to decide whether the cached LS values are
-// stale relative to the server.
-export const SERVER_TIMESTAMP_KEY = "_prefServerUpdatedAt";
-
 let _pending = {};
 let _timer = null;
 let _inFlight = Promise.resolve();
-
-/** GET /preferences/ — returns the full record, or null if the request failed. */
-export async function fetchPreferences() {
-  try {
-    const response = await fetch(PREFS_URL, { credentials: "same-origin" });
-    if (!response.ok) {
-      console.warn("Failed to load server preferences:", response.status);
-      return null;
-    }
-    return await response.json();
-  } catch (err) {
-    console.warn("Failed to load server preferences:", err);
-    return null;
-  }
-}
-
-function _recordServerTimestamp(updatedAt) {
-  if (typeof updatedAt !== "number") {
-    return;
-  }
-  try {
-    localStorage.setItem(SERVER_TIMESTAMP_KEY, String(updatedAt));
-  } catch {
-    // localStorage unavailable (private mode etc.) — non-fatal.
-  }
-}
-
-/** Read the last-known server timestamp from localStorage (0 if absent). */
-export function loadServerTimestamp() {
-  try {
-    const raw = localStorage.getItem(SERVER_TIMESTAMP_KEY);
-    if (raw === null) {
-      return 0;
-    }
-    const n = parseFloat(raw);
-    return Number.isFinite(n) ? n : 0;
-  } catch {
-    return 0;
-  }
-}
 
 async function _flushNow() {
   if (Object.keys(_pending).length === 0) {
@@ -76,13 +31,13 @@ async function _flushNow() {
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      // The flush on visibilitychange:hidden must outlive the page: iOS
+      // suspends a backgrounded tab right after that event.
+      keepalive: true,
     });
     if (!response.ok) {
       console.warn("Server prefs PATCH failed:", response.status);
-      return;
     }
-    const updated = await response.json();
-    _recordServerTimestamp(updated.updatedAt);
   } catch (err) {
     console.warn("Server prefs PATCH failed:", err);
   }

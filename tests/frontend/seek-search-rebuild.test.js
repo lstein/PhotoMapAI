@@ -47,7 +47,7 @@ const mockState = {
 
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: mockState,
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
 }));
 
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/slideshow.js", () => ({

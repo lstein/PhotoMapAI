@@ -22,7 +22,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/slideshow.js
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   clearPersistedSettingsCache: jest.fn(),
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
   setAlbum: jest.fn(),
   setAutotaggingEnabled: jest.fn(),
   setMaxSearchResults: jest.fn(),

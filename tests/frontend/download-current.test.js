@@ -20,7 +20,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", (
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: { album: "my album", swiper: null, single_swiper: null },
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/index.js", () => ({
   deleteImage: jest.fn(),

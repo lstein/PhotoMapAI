@@ -375,7 +375,7 @@ describe("the seam with fullscreen handling", () => {
     // this asserts the wiring rather than the module in isolation.
     jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
       state: {},
-      saveSettingsToLocalStorage: jest.fn(),
+      persistSettings: jest.fn(),
     }));
     jest.unstable_mockModule("../../photomap/frontend/static/javascript/index.js", () => ({
       deleteImage: jest.fn(),

@@ -1,19 +1,16 @@
 // Tests for the preferences-client module.
 //
-// The module is intentionally small: GET + debounced PATCH + a flush hook.
+// The module is intentionally small: a debounced PATCH + a flush hook.
 // These tests stub global.fetch and walk the debounce manually with
 // jest fake timers.
 
 import { jest, describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 
 import {
-  SERVER_TIMESTAMP_KEY,
   _peekPendingKeys,
   _resetPreferencesClientForTests,
   cancelPendingPatches,
-  fetchPreferences,
   flushPendingPatches,
-  loadServerTimestamp,
   queuePreferencePatch,
 } from "../../photomap/frontend/static/javascript/preferences-client.js";
 
@@ -27,10 +24,6 @@ function mockOkJson(body) {
   };
 }
 
-function mockNotOk(status) {
-  return { ok: false, status, json: () => Promise.resolve({}) };
-}
-
 describe("preferences-client", () => {
   beforeEach(() => {
     _resetPreferencesClientForTests();
@@ -42,27 +35,6 @@ describe("preferences-client", () => {
   afterEach(() => {
     jest.useRealTimers();
     delete global.fetch;
-  });
-
-  describe("fetchPreferences", () => {
-    it("returns the parsed JSON body on success", async () => {
-      global.fetch.mockResolvedValueOnce(mockOkJson({ currentDelay: 7, mode: "random", updatedAt: 12.5 }));
-      const result = await fetchPreferences();
-      expect(result).toEqual({ currentDelay: 7, mode: "random", updatedAt: 12.5 });
-      expect(global.fetch).toHaveBeenCalledWith("preferences/", {
-        credentials: "same-origin",
-      });
-    });
-
-    it("returns null on non-ok response", async () => {
-      global.fetch.mockResolvedValueOnce(mockNotOk(500));
-      expect(await fetchPreferences()).toBeNull();
-    });
-
-    it("returns null when fetch throws", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("network down"));
-      expect(await fetchPreferences()).toBeNull();
-    });
   });
 
   describe("queuePreferencePatch (debounced)", () => {
@@ -92,25 +64,9 @@ describe("preferences-client", () => {
       expect(init.method).toBe("PATCH");
       expect(init.credentials).toBe("same-origin");
       expect(init.headers).toEqual({ "Content-Type": "application/json" });
+      // Survives iOS suspending the page right after visibilitychange:hidden.
+      expect(init.keepalive).toBe(true);
       expect(JSON.parse(init.body)).toEqual({ currentDelay: 12, mode: "random" });
-    });
-
-    it("records the server-returned updatedAt in localStorage", async () => {
-      global.fetch.mockResolvedValueOnce(mockOkJson({ updatedAt: 42.5 }));
-      queuePreferencePatch({ currentDelay: 9 });
-      jest.advanceTimersByTime(DEBOUNCE_MS);
-      await flushPendingPatches();
-
-      expect(loadServerTimestamp()).toBe(42.5);
-      expect(localStorage.getItem(SERVER_TIMESTAMP_KEY)).toBe("42.5");
-    });
-
-    it("does not record a timestamp when the PATCH fails", async () => {
-      global.fetch.mockResolvedValueOnce(mockNotOk(503));
-      queuePreferencePatch({ currentDelay: 9 });
-      jest.advanceTimersByTime(DEBOUNCE_MS);
-      await flushPendingPatches();
-      expect(localStorage.getItem(SERVER_TIMESTAMP_KEY)).toBeNull();
     });
 
     it("swallows fetch errors without breaking subsequent queues", async () => {
@@ -126,7 +82,6 @@ describe("preferences-client", () => {
       await flushPendingPatches();
 
       expect(global.fetch).toHaveBeenCalledTimes(2);
-      expect(loadServerTimestamp()).toBe(5.0);
     });
   });
 
@@ -156,22 +111,6 @@ describe("preferences-client", () => {
 
       expect(global.fetch).not.toHaveBeenCalled();
       expect(_peekPendingKeys()).toEqual([]);
-    });
-  });
-
-  describe("loadServerTimestamp", () => {
-    it("returns 0 when nothing is stored", () => {
-      expect(loadServerTimestamp()).toBe(0);
-    });
-
-    it("returns 0 for a corrupt value", () => {
-      localStorage.setItem(SERVER_TIMESTAMP_KEY, "not-a-number");
-      expect(loadServerTimestamp()).toBe(0);
-    });
-
-    it("returns the stored float", () => {
-      localStorage.setItem(SERVER_TIMESTAMP_KEY, "12.5");
-      expect(loadServerTimestamp()).toBe(12.5);
     });
   });
 });

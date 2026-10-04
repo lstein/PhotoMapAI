@@ -4,7 +4,7 @@ import { downloadItem } from "./download.js";
 import { deleteImage, getIndexMetadata } from "./index.js";
 import { initializePanelAnchor, syncPanelAnchor } from "./panel-anchor.js";
 import { getCurrentFilepath, getCurrentSlideIndex, slideState } from "./slide-state.js";
-import { saveSettingsToLocalStorage, state } from "./state.js";
+import { persistSettings, state } from "./state.js";
 import { errorDetail, hideSpinner, showSpinner } from "./utils.js";
 
 // Cache DOM elements
@@ -241,7 +241,7 @@ function showDeleteConfirmModal(filepath, globalIndex) {
     function onConfirm() {
       if (dontAsk.checked) {
         state.suppressDeleteConfirm = true;
-        saveSettingsToLocalStorage();
+        persistSettings("suppressDeleteConfirm");
       }
       cleanup(true);
       resolve(true);

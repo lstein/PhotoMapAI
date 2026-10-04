@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: {},
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/index.js", () => ({
   deleteImage: jest.fn(),

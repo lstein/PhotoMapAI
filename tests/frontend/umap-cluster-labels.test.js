@@ -38,7 +38,7 @@ jest.unstable_mockModule(`${JS}/state.js`, () => ({
   setUmapControlsVisible: jest.fn(),
   setUmapExitFullscreenOnSelection: jest.fn(),
   setUmapShowHoverThumbnails: jest.fn(),
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
 }));
 jest.unstable_mockModule(`${JS}/album-manager.js`, () => ({
   albumManager: { fetchAvailableAlbums: jest.fn(() => Promise.resolve([])), setSwiperManager: jest.fn() },

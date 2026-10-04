@@ -18,7 +18,7 @@ import {
 } from "./metadata-drawer.js";
 import { switchAlbum } from "./settings.js";
 import { initializeSlideshowControls, toggleSlideshowWithIndicator, updateSlideshowButtonIcon } from "./slideshow.js";
-import { saveSettingsToLocalStorage, state } from "./state.js";
+import { persistSettings, state } from "./state.js";
 import { initializeSingleSwiper } from "./swiper.js";
 import {} from "./touch.js"; // Import touch event handlers
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
@@ -271,7 +271,7 @@ export async function toggleGridSwiperView(gridView = null) {
     state.gridViewActive = gridView;
   }
 
-  saveSettingsToLocalStorage();
+  persistSettings("gridViewActive");
 
   const singleContainer = document.getElementById("singleSwiperContainer");
   const gridContainer = document.getElementById("gridViewContainer");
