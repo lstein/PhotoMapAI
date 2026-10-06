@@ -238,12 +238,49 @@
   text-align: left;
 }
 
-/* The button row itself: lay the buttons out horizontally inside the cell. */
+/* A button row: lay the buttons out horizontally inside the cell. Image
+   tables have two rows (Send / Append Image, then Remix / Recall). */
 .invoke-recall-buttons {
   display: flex;
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.invoke-recall-buttons + .invoke-recall-buttons {
+  margin-top: 8px;
+}
+
+/* "as a reference for <image generation|video generation>": which InvokeAI
+   tab Send / Append Image feed. Only InvokeAI 7 can place an image in its
+   Video panel, so the choice stays hidden until the backend confirms it. */
+.invoke-ref-target {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: #ccc;
+  font-size: 14px;
+}
+
+body.invoke-video-image-supported .invoke-ref-target {
+  display: inline-flex;
+}
+
+.invoke-ref-target-select {
+  background: #2a2a2a;
+  color: #faea0e;
+  border: 1px solid #555;
+  border-radius: 4px;
+  height: 32px;
+  padding: 0 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.invoke-ref-target-select:hover,
+.invoke-ref-target-select:focus-visible {
+  border-color: #faea0e;
 }
 
 /* Capability gating (see invoke-capabilities.js): every recall button stays
@@ -262,6 +299,14 @@ body:not(.invoke-video-recall-supported) .invoke-video-controls {
 
 body:not(.invoke-append-supported) .invoke-recall-btn[data-recall-mode="append_ref"] {
   display: none;
+}
+
+/* The image-recall append option is irrelevant to the Video panel, whose
+   image placement route always understands append. */
+body.invoke-video-image-supported
+  .invoke-recall-controls[data-ref-target="video"]
+  .invoke-recall-btn[data-recall-mode="append_ref"] {
+  display: inline-flex;
 }
 
 .invoke-recall-btn {

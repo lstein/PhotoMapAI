@@ -572,3 +572,72 @@ class TestVideoRecallCapability:
         caps = self._probe(client, upstream, {"/api/v1/recall/{queue_id}": {"post": {"parameters": []}}})
         assert caps["recall"] is True
         assert caps["video_recall"] is False
+
+    def test_image_placement_detected_from_openapi(self, client, invokeai_configured, upstream):
+        paths = {
+            "/api/v1/recall/{queue_id}": {"post": {"parameters": []}},
+            "/api/v1/recall/video/{queue_id}": {"post": {}},
+        }
+        assert self._probe(client, upstream, paths)["video_image"] is False
+        paths["/api/v1/recall/video/{queue_id}/image"] = {"post": {}}
+        assert self._probe(client, upstream, paths)["video_image"] is True
+
+
+class TestImageToVideoPanel:
+    """``/invokeai/use_ref_image`` with ``target="video"``: the drawer's Send /
+    Append Image buttons with "video generation" chosen."""
+
+    @pytest.fixture
+    def uploaded(self, upstream):
+        upstream["bodies"]["/api/v1/images/upload"] = {"image_name": "uploaded.png"}
+        return upstream
+
+    @pytest.mark.parametrize("append", [False, True])
+    def test_uploads_then_places_the_image_in_the_video_panel(
+        self, client, invokeai_configured, media, uploaded, append
+    ):
+        media("still.png")
+
+        response = client.post(
+            "/invokeai/use_ref_image",
+            json={"album_key": "a", "index": 0, "append": append, "target": "video"},
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["target"] == "video"
+        upload, place = uploaded["calls"]
+        assert upload.url.path == "/api/v1/images/upload"
+        assert place.url.path == "/api/v1/recall/video/default/image"
+        assert dict(place.url.params) == {
+            "image_name": "uploaded.png",
+            "append": "true" if append else "false",
+        }
+        assert place.content == b""
+
+    def test_the_image_target_still_goes_to_the_image_recall(self, client, invokeai_configured, media, uploaded):
+        media("still.png")
+
+        response = client.post("/invokeai/use_ref_image", json={"album_key": "a", "index": 0})
+
+        assert response.status_code == 200, response.text
+        assert uploaded["calls"][-1].url.path == "/api/v1/recall/default"
+
+    def test_an_upstream_refusal_is_a_502(self, client, invokeai_configured, media, uploaded):
+        media("still.png")
+        uploaded["responses"]["/api/v1/recall/video/default/image"] = 404
+
+        response = client.post(
+            "/invokeai/use_ref_image", json={"album_key": "a", "index": 0, "target": "video"}
+        )
+
+        assert response.status_code == 502
+
+    def test_an_unknown_target_is_rejected(self, client, invokeai_configured, media, uploaded):
+        media("still.png")
+
+        response = client.post(
+            "/invokeai/use_ref_image", json={"album_key": "a", "index": 0, "target": "audio"}
+        )
+
+        assert response.status_code == 422
+        assert uploaded["calls"] == []

@@ -13,6 +13,7 @@ import {
   getImageLabelInfo,
   SHOW_CLUSTER_LABELS_IN_BADGES,
 } from "./cluster-utils.js";
+import { applyRefTarget } from "./invoke-ref-target.js";
 import { enhanceReferenceImageThumbnails, registerReferenceThumbnailClickHandler } from "./reference-thumbnails.js";
 
 export { enhanceReferenceImageThumbnails };
@@ -84,6 +85,7 @@ export function updateMetadataOverlay(slide) {
     const recallControls = document.querySelector("#descriptionText .invoke-recall-controls");
     if (recallControls) {
       recallContainer.appendChild(recallControls);
+      applyRefTarget(recallControls);
     }
   }
 

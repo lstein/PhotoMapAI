@@ -42,6 +42,7 @@ export const state = {
   umapWindowOpen: true, // Whether the UMAP window is showing (opened at startup when true)
   lastSlideIndex: {}, // album key -> global index of the slide last shown there
   showMetadataFields: true, // Whether the metadata-drawer fields table is shown
+  invokeRefTarget: "image", // "image" | "video" — the InvokeAI tab the drawer's Send / Append Image feed
   autotaggingEnabled: false, // Whether to build the vocab index and show cluster/image labels
   // Dataset Curator panel state. The curator panel reads these on open and
   // writes them through the standard PERSISTED_SETTINGS setters on every
@@ -129,6 +130,7 @@ const PERSISTED_SETTINGS = [
     onSet: (value) => window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value } })),
   },
   { key: "showMetadataFields", type: "bool", default: true },
+  { key: "invokeRefTarget", type: "string", default: "image" },
   // Visual session state, written by umap.js (persistSettings) and
   // slide-state.js (persistSlidePosition) rather than by a generated setter.
   { key: "umapWindowOpen", type: "bool", default: true },
@@ -447,6 +449,7 @@ export const setUmapClickSelectsCluster = _setters.umapClickSelectsCluster;
 export const setUmapControlsVisible = _setters.umapControlsVisible;
 export const setMediaFilter = _setters.mediaFilter;
 export const setShowMetadataFields = _setters.showMetadataFields;
+export const setInvokeRefTarget = _setters.invokeRefTarget;
 export const setAutotaggingEnabled = _setters.autotaggingEnabled;
 export const setCurationTargetCount = _setters.curationTargetCount;
 export const setCurationIterations = _setters.curationIterations;

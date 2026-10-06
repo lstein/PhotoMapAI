@@ -66,6 +66,7 @@ const mockState = {
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
   setShowMetadataFields: jest.fn(),
+  setInvokeRefTarget: jest.fn(),
 }));
 
 const mockSlideState = { searchResults: [], getCurrentSlide: jest.fn(() => ({ globalIndex: 7 })) };

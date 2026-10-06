@@ -6,6 +6,7 @@ import {
   updateCurrentImageScore,
   updateImageLabel,
 } from "./metadata-drawer.js";
+import { applyRefTarget } from "./invoke-ref-target.js";
 import { fetchImageByIndex } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
@@ -744,6 +745,7 @@ class GridViewManager {
       const recallControls = document.querySelector("#descriptionText .invoke-recall-controls");
       if (recallControls) {
         recallContainer.appendChild(recallControls);
+        applyRefTarget(recallControls);
       }
     }
 

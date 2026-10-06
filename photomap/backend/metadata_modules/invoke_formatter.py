@@ -105,7 +105,8 @@ _APPEND_REF_SVG = (
 
 _USE_REF_BUTTON_HTML = (
     '<button type="button" class="invoke-recall-btn" data-recall-mode="use_ref" '
-    'title="Upload this image to InvokeAI and use it as a reference image">'
+    'title="Upload this image to InvokeAI and use it in place of the current '
+    'reference images (or, for a video model that takes frames, as the first frame)">'
     f'{_USE_REF_SVG}<span class="invoke-recall-label">Send Image</span>'
     '<span class="invoke-recall-status" aria-live="polite"></span>'
     "</button>"
@@ -116,16 +117,35 @@ _USE_REF_BUTTON_HTML = (
 # InvokeAI backend whose recall endpoint understands ``?append=true``.
 _APPEND_REF_BUTTON_HTML = (
     '<button type="button" class="invoke-recall-btn" data-recall-mode="append_ref" '
-    'title="Upload this image to InvokeAI and append it to the existing reference images">'
+    'title="Upload this image to InvokeAI and append it to the existing reference '
+    'images (or, for a video model that takes frames, the free frame slot)">'
     f'{_APPEND_REF_SVG}<span class="invoke-recall-label">Append Image</span>'
     '<span class="invoke-recall-status" aria-live="polite"></span>'
     "</button>"
 )
 
+# Which InvokeAI tab Send / Append Image feed. Hidden unless the backend has
+# InvokeAI 7's image placement route (``invoke-video-image-supported``); the
+# choice is remembered per browser by invoke-recall.js.
+_REF_TARGET_HTML = (
+    '<span class="invoke-ref-target">as a reference for '
+    '<select class="invoke-ref-target-select" aria-label="InvokeAI tab to send the image to">'
+    '<option value="image">image generation</option>'
+    '<option value="video">video generation</option>'
+    "</select></span>"
+)
 
-def _recall_controls_table(buttons_html: str) -> str:
-    """Wrap a set of recall buttons in a two-row table styled like the Image
+_REF_ROW_HTML = (
+    '<div class="invoke-recall-buttons">'
+    f"{_USE_REF_BUTTON_HTML}{_APPEND_REF_BUTTON_HTML}{_REF_TARGET_HTML}"
+    "</div>"
+)
+
+
+def _recall_controls_table(rows_html: str) -> str:
+    """Wrap rows of recall buttons in a two-row table styled like the Image
     Details table: an "InvokeAI" header row above a row holding the buttons.
+    ``rows_html`` is one or more ``invoke-recall-buttons`` rows.
 
     The whole table carries the ``invoke-recall-controls`` class so the
     capability gating in ``invoke-capabilities.js`` can hide it wholesale when
@@ -136,7 +156,7 @@ def _recall_controls_table(buttons_html: str) -> str:
     return (
         '<table class="invoke-recall-controls" data-invoke-recall="1">'
         '<tr><th class="invoke-recall-heading">InvokeAI</th></tr>'
-        f'<tr><td><div class="invoke-recall-buttons">{buttons_html}</div></td></tr>'
+        f"<tr><td>{rows_html}</td></tr>"
         "</table>"
     )
 
@@ -144,8 +164,8 @@ def _recall_controls_table(buttons_html: str) -> str:
 def _recall_buttons_html() -> str:
     """Render the recall / remix / use-ref button group shown at the bottom of the drawer."""
     return _recall_controls_table(
-        f"{_USE_REF_BUTTON_HTML}"
-        f"{_APPEND_REF_BUTTON_HTML}"
+        f"{_REF_ROW_HTML}"
+        '<div class="invoke-recall-buttons">'
         '<button type="button" class="invoke-recall-btn" data-recall-mode="remix" '
         'title="Remix (recall parameters without the seed) to InvokeAI">'
         f'{_REMIX_SVG}<span class="invoke-recall-label">Remix</span>'
@@ -156,6 +176,7 @@ def _recall_buttons_html() -> str:
         f'{_RECALL_SVG}<span class="invoke-recall-label">Recall</span>'
         '<span class="invoke-recall-status" aria-live="polite"></span>'
         "</button>"
+        "</div>"
     )
 
 
@@ -201,7 +222,9 @@ def video_buttons_html(show_recall: bool) -> str:
             "Recall",
             "Recall video parameters (including seed) to InvokeAI",
         )
-    return _recall_controls_table(buttons).replace(
+    return _recall_controls_table(
+        f'<div class="invoke-recall-buttons">{buttons}</div>'
+    ).replace(
         'class="invoke-recall-controls"',
         'class="invoke-recall-controls invoke-video-controls"',
         1,
@@ -216,9 +239,7 @@ def use_ref_button_html() -> str:
     so it is appended to non-Invoke metadata views as well, whenever an
     InvokeAI backend is configured.
     """
-    return _recall_controls_table(
-        f"{_USE_REF_BUTTON_HTML}{_APPEND_REF_BUTTON_HTML}"
-    )
+    return _recall_controls_table(_REF_ROW_HTML)
 
 
 def format_invoke_metadata(

@@ -267,6 +267,33 @@ galleries, then the image will be reused.
     or later; **Append Image** requires InvokeAI 6.13.5 or later. If a
     button you expect is missing, upgrade InvokeAI.
 
+#### Image generation or video generation
+
+When PhotoMapAI is connected to an InvokeAI release with a video
+generation tab, an **as a reference for** pulldown appears next to the
+two buttons. It chooses where **Send Image** and **Append Image** put
+the image: **image generation** (the default, described above) or
+**video generation**. PhotoMapAI remembers the choice on each device.
+
+With **video generation** chosen, where the image lands depends on the
+video model selected in InvokeAI's Video panel:
+
+- **Models that take reference images**, such as MiniMax H3 Ref2VA:
+  **Send Image** replaces the reference images (any reference videos
+  stay), and **Append Image** adds the image to the end of the
+  references.
+- **Models that take a first and last frame**, such as Wan 2.2 I2V and
+  LTX-2: **Send Image** makes the image the first frame and clears the
+  last frame. **Append Image** fills the first frame if it is empty,
+  otherwise the last frame; once both are set, further appends are
+  ignored. An initial video counts as the first frame.
+- **Models that take no images**, such as Wan 2.2 T2V: the image is not
+  placed.
+
+InvokeAI never switches models to make an image fit. It reports what
+happened, including an image it could not place, in a notice in its
+own window.
+
 By default, the selected image is used as a reference image for an
 image edit model or as an IP Adapter reference image. If you wish to
 use it in the InvokeAI Canvas as a raster image or controlnet, go into
@@ -311,7 +338,8 @@ A few situations are not surfaced inline and are worth knowing about:
 - **Boards dropdown is empty or stuck on *Uncategorized*** — usually means authentication failed silently. If your InvokeAI is in multi-user mode, fill in the username and password and re-enter the URL to retrigger the probe.
 - **Recall / Remix succeeds but no image queues in InvokeAI** — switch to InvokeAI's browser tab. The recalled parameters land in the canvas/generation panel; you still have to press *Invoke* to start the queue.
 - **Remix / Recall buttons missing for an InvokeAI-generated image** — the image was probably produced by an InvokeAI version PhotoMapAI does not yet recognise (only **Send Image** and **Append Image** are shown in that case). Check the *View Metadata (JSON)* link at the bottom of the drawer to confirm the metadata is present, and please [open an issue](https://github.com/lstein/PhotoMapAI/issues) so we can add support for the new schema.
-- **Append Image button missing** — the configured InvokeAI backend predates the append option (it shipped in InvokeAI 6.13.5). Upgrade InvokeAI to enable it.
+- **Append Image button missing** — the configured InvokeAI backend predates the append option (it shipped in InvokeAI 6.13.5). Upgrade InvokeAI to enable it. Appending to video generation does not depend on this, so the button reappears when **video generation** is chosen.
+- **No "as a reference for" pulldown** — the configured InvokeAI backend cannot place images in a video generation tab, so Send / Append Image always go to image generation.
 
 ### PhotoMapAI and InvokeAI on different machines
 
