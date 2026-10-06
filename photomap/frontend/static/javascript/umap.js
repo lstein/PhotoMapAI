@@ -12,6 +12,7 @@ import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import {
+  persistSettings,
   setUmapClickSelectsCluster,
   setMediaFilter,
   setUmapControlsVisible,
@@ -2300,12 +2301,24 @@ function applyUmapControlsVisibility() {
 }
 
 // --- Show/Hide UMAP Window ---
+// Every show and hide — including the automatic ones (slideshow start,
+// cluster selection) — goes through toggleUmapWindow, so the next page load
+// reopens the window only if it was showing when the user left.
+function rememberUmapWindowOpen(open) {
+  if (state.umapWindowOpen !== open) {
+    state.umapWindowOpen = open;
+    persistSettings("umapWindowOpen");
+  }
+}
+
 export async function toggleUmapWindow(show = null) {
   const umapWindow = document.getElementById("umapFloatingWindow");
 
   if (show === null) {
     show = document.getElementById("umapFloatingWindow").style.display !== "block";
   }
+
+  rememberUmapWindowOpen(show !== false);
 
   if (show === false) {
     umapWindow.style.display = "none";
@@ -2343,9 +2356,7 @@ export async function toggleUmapWindow(show = null) {
 }
 
 document.getElementById("showUmapBtn").onclick = () => toggleUmapWindow();
-document.getElementById("umapCloseBtn").onclick = () => {
-  document.getElementById("umapFloatingWindow").style.display = "none";
-};
+document.getElementById("umapCloseBtn").onclick = () => toggleUmapWindow(false);
 document.getElementById("umapToggleControlsBtn").onclick = () => {
   setUmapControlsVisible(!state.umapControlsVisible);
   applyUmapControlsVisibility();
@@ -2516,7 +2527,14 @@ function setUmapWindowSize(sizeKey) {
 document.addEventListener("DOMContentLoaded", () => {
   updateUmapColorModeAvailability();
   setupUmapWindowDrag("umapTitlebar", "umapFloatingWindow");
-  toggleUmapWindow();
+  // Reopen the window only if it was showing last time. state.js's
+  // DOMContentLoaded listener (registered first, since this module imports
+  // it) has already restored umapWindowOpen synchronously, but has not yet
+  // picked an album — so this only shows the window, and the map itself is
+  // fetched by the albumChanged that follows, exactly once.
+  if (state.umapWindowOpen) {
+    toggleUmapWindow(true);
+  }
 });
 
 // Shading/restoring
@@ -2597,9 +2615,7 @@ function toggleFullscreen(turnOn = null) {
 }
 
 addButtonHandlers("umapResizeFullscreen", toggleFullscreen);
-addButtonHandlers("umapCloseBtn", () => {
-  document.getElementById("umapFloatingWindow").style.display = "none";
-});
+addButtonHandlers("umapCloseBtn", () => toggleUmapWindow(false));
 
 // --- Cluster Info Modal ---
 function showClusterInfoModal() {

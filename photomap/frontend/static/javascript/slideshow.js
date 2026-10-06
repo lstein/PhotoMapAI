@@ -1,4 +1,4 @@
-import { saveSettingsToLocalStorage, state } from "./state.js";
+import { persistSettings, state } from "./state.js";
 import { slideState } from "./slide-state.js";
 import { isUmapFullscreen, toggleUmapWindow } from "./umap.js";
 
@@ -188,7 +188,7 @@ export async function setSlideshowMode(modeVal) {
   // Everything after this line is driven by the locally captured outgoing
   // mode, never by re-reading state.mode.
   state.mode = modeVal;
-  saveSettingsToLocalStorage();
+  persistSettings("mode");
   // Lets the other mode control (menu icon vs settings radios) mirror the
   // change without either importing the other's DOM.
   window.dispatchEvent(new CustomEvent("slideshowModeChanged", { detail: { mode: modeVal } }));

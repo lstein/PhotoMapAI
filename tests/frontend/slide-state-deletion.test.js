@@ -11,6 +11,7 @@ const M = "../../photomap/frontend/static/javascript";
 
 jest.unstable_mockModule(`${M}/state.js`, () => ({
   state: { album: "alb" },
+  persistSlidePosition: jest.fn(),
 }));
 
 const { slideState } = await import(`${M}/slide-state.js`);

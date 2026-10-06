@@ -22,9 +22,7 @@ jest.unstable_mockModule(`${JS}/index.js`, () => ({
   getIndexMetadata: jest.fn(() => Promise.resolve({ filename_count: 0 })),
 }));
 jest.unstable_mockModule(`${JS}/preferences-client.js`, () => ({
-  fetchPreferences: jest.fn(() => Promise.resolve({})),
   flushPendingPatches: jest.fn(() => Promise.resolve()),
-  loadServerTimestamp: jest.fn(() => Promise.resolve()),
   queuePreferencePatch: jest.fn(),
 }));
 
