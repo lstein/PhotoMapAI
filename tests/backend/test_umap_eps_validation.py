@@ -73,7 +73,10 @@ def test_a_usable_eps_is_still_stored(client, new_album, eps):
     assert get_config_manager().get_album(key).umap_eps == pytest.approx(eps)
 
 
-@pytest.mark.parametrize("eps", [0, -1, 0.005])
+# The non-finite spellings are the ones from issue #379: ``nan`` 500'd out of
+# DBSCAN, and ``inf`` (or ``1e400``, which overflows to it) wedged a worker
+# thread in the pair-budget shrink forever.
+@pytest.mark.parametrize("eps", [0, -1, 0.005, "nan", "NaN", "inf", "Infinity", "-inf", "1e400"])
 def test_an_unusable_query_parameter_is_refused(client, new_album, eps):
     """A 422 from the caller rather than a 500 out of sklearn — or, for the
     value under the floor, rather than a map clustered at something the
