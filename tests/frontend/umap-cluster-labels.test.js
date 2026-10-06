@@ -38,7 +38,8 @@ jest.unstable_mockModule(`${JS}/state.js`, () => ({
   setUmapControlsVisible: jest.fn(),
   setUmapExitFullscreenOnSelection: jest.fn(),
   setUmapShowHoverThumbnails: jest.fn(),
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 jest.unstable_mockModule(`${JS}/album-manager.js`, () => ({
   albumManager: { fetchAvailableAlbums: jest.fn(() => Promise.resolve([])), setSwiperManager: jest.fn() },
@@ -119,7 +120,10 @@ function installFetchMock() {
           ? Promise.reject(new Error("network down"))
           : Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ detail: "boom" }) });
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(POINTS) });
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ points: POINTS, eps: 0.1, requested_eps: 0.1 }),
+      });
     }
     if (target.startsWith("cluster_labels/")) {
       const d = deferred();

@@ -60,7 +60,8 @@ jest.unstable_mockModule(`${JS}/state.js`, () => ({
   setUmapControlsVisible: jest.fn(),
   setUmapExitFullscreenOnSelection: jest.fn(),
   setUmapShowHoverThumbnails: jest.fn(),
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 jest.unstable_mockModule(`${JS}/album-manager.js`, () => ({
   albumManager: { fetchAvailableAlbums: jest.fn(() => Promise.resolve([])), setSwiperManager: jest.fn() },
@@ -135,7 +136,7 @@ function installEpsFetchMock() {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
     }
     if (href.startsWith("umap_data/")) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ points: [], eps: 0.35, requested_eps: 0.35 }) });
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, eps: 0.35 }) });
   };

@@ -237,6 +237,22 @@
   display: none;
 }
 
+/* The strength the map was actually clustered at, when the server had to
+   shrink the requested one to fit its memory budget. The details are in the
+   title; the text only has to signal that the spinner's number is not the
+   map's. */
+.umap-eps-effective {
+  margin-left: 4px;
+  color: #faea0e;
+  font-size: 0.75em;
+  cursor: help;
+  vertical-align: middle;
+}
+
+.umap-eps-effective[hidden] {
+  display: none;
+}
+
 /* The Cluster Strength field holds something the album cannot be set to — a
    half-typed number, or one below the floor the server would silently raise.
    umap.js answers those by doing nothing, so without a mark a refused

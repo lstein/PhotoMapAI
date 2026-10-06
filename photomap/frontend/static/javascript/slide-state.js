@@ -1,4 +1,4 @@
-import { state } from "./state.js";
+import { persistSlidePosition, state } from "./state.js";
 
 class SlideStateManager {
   constructor() {
@@ -14,6 +14,9 @@ class SlideStateManager {
     // search.js): the same array as searchResults then, so identity says
     // whether the current list is a filter or a search.
     this.browseList = null;
+    // The album these indices belong to — set when albumChanged is handled,
+    // not read from state.album, which setAlbum changes before the event.
+    this.album = null;
 
     // Event listeners for updates
     this.setupEventListeners();
@@ -345,8 +348,17 @@ class SlideStateManager {
       return;
     }
 
-    // For other changes (album switch, move, etc.), reset to beginning
-    this.currentGlobalIndex = 0;
+    // For other changes (album switch, move, etc.), start at the slide last
+    // shown in this album, or the beginning if there is none. Indices only
+    // shift on deletion, which is handled above — a deletion made elsewhere
+    // can still leave this pointing at a neighbor, and the clamp keeps it in
+    // range.
+    // Not every dispatcher names the album (album-manager's post-indexing
+    // one doesn't); by the time this runs, state.album is the new one.
+    this.album = detail.album ?? state.album ?? null;
+    const remembered = this.album ? state.lastSlideIndex?.[this.album] : undefined;
+    this.currentGlobalIndex =
+      Number.isInteger(remembered) && detail.totalImages > 0 ? Math.min(remembered, detail.totalImages - 1) : 0;
     this.currentSearchIndex = 0;
     this.browseList = null;
     this.exitSearchMode();
@@ -355,12 +367,24 @@ class SlideStateManager {
 
   // --- Private Methods ---
   notifySlideChanged() {
+    this.rememberPosition();
     const slideInfo = this.getCurrentSlide();
     window.dispatchEvent(
       new CustomEvent("slideChanged", {
         detail: slideInfo,
       })
     );
+  }
+
+  // Save the current slide so the next page load (or a switch back to this
+  // album) returns to it. The global index, even while browsing a search: it
+  // is the image on screen.
+  rememberPosition() {
+    const index = this.currentGlobalIndex;
+    if (!this.album || !Number.isInteger(index) || index < 0 || state.lastSlideIndex?.[this.album] === index) {
+      return;
+    }
+    persistSlidePosition(this.album, index);
   }
 
   seekToSlideIndex() {

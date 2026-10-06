@@ -12,6 +12,7 @@ import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import {
+  persistSettings,
   setUmapClickSelectsCluster,
   setMediaFilter,
   setUmapControlsVisible,
@@ -169,6 +170,12 @@ export function setUmapClickCallback(callback) {
 let points = [];
 let clusters = [];
 let colors = [];
+// The strength `points` was clustered with, as the server reported it — not
+// what the spinner holds. The two differ mid-debounce, while the field holds
+// text the spinner refuses, and on an album too large to cluster at the
+// requested strength (the server shrinks it to fit a memory budget). Assigned
+// alongside `points` so the two always describe the same clustering.
+let drawnEps = null;
 
 // The points the map should currently draw, after the images/videos filter.
 //
@@ -261,7 +268,12 @@ function hideUmapSpinner() {
 export function applyResolvedEps(data) {
   const epsSpinner = document.getElementById("umapEpsSpinner");
   if (epsSpinner && typeof data?.eps === "number") {
-    epsSpinner.value = data.eps;
+    // A stored strength below the floor is shown unrounded: rounding 0.00996
+    // gives "0.01", the floor itself, which would then sit there marked as
+    // unusable.
+    const belowFloor = !data.auto && !epsIsUsable(data.eps);
+    epsSpinner.value = belowFloor ? String(data.eps) : formatEps(data.eps);
+    spinnerExactEps = { shown: epsSpinner.value, eps: data.eps };
     // Replacing the contents ends whatever edit was in there, guard included.
     // Half-typed text holds the guard even across a blur, on purpose — but it
     // cannot go on holding it once the text it was protecting is gone, or one
@@ -280,6 +292,61 @@ export function applyResolvedEps(data) {
   }
   setEpsAutoBadge(Boolean(data?.auto));
 }
+
+// Say so when the map was clustered at less than the strength asked for. The
+// server shrinks any strength an album cannot afford within its memory budget,
+// and where that ceiling sits depends on the point cloud — nothing the spinner
+// can know in advance. Without this note a large album tuned above the ceiling
+// shows one number while the map is drawn at another, with no hint why.
+//
+// The used value is not the ceiling itself: the server shrinks the *request*
+// in 0.7x steps until it fits, so where it lands depends on what was asked
+// for. Hence the tooltip says "reduced", not "everything above X is the same".
+//
+// The spinner keeps the requested number: it is what the album stores and what
+// the next fetch will ask for. Only the note reports what was used.
+function showEffectiveEps(data) {
+  const note = document.getElementById("umapEpsEffective");
+  if (!note) {
+    return;
+  }
+  const used = data?.eps;
+  const requested = data?.requested_eps;
+  // A stored strength below the floor comes back *raised*; that case is
+  // already marked on the field itself by applyResolvedEps.
+  const shrunk = typeof used === "number" && typeof requested === "number" && used < requested * (1 - 1e-9);
+  note.hidden = !shrunk;
+  if (shrunk) {
+    const shown = formatEps(used);
+    note.textContent = `map: ${shown}`;
+    note.title =
+      `This album has too many images to cluster at ${formatEps(requested)} within the memory limit, ` +
+      `so the map is drawn at ${shown} instead. Any strength above the album's limit is reduced ` +
+      `the same way, so a larger number will not give a looser map.`;
+  } else {
+    note.textContent = "";
+    note.removeAttribute("title");
+  }
+}
+
+// How a strength is printed anywhere in the map's UI: two decimals, matching
+// the spinner's 0.01 step, so a derived 0.11944 reads as the 0.12 the arrows
+// would have produced. Below 0.1 two significant figures are kept instead —
+// a fixed two decimals would turn a large album's 0.0153 into 0.02, a third
+// off, and a strength the budget shrank below 0.005 into "0.00". Shared by the
+// spinner, the note and the cluster-info modal so no two of them print the
+// same strength differently.
+function formatEps(eps) {
+  return String(Number(eps >= 0.1 ? eps.toFixed(2) : eps.toPrecision(2)));
+}
+
+// The exact strength behind a rounded number in the spinner. The field shows
+// formatEps(eps), but the map must still be clustered at eps itself: a derived
+// strength is the one /get_umap_eps reports and /cluster_labels caches, and a
+// stored one is what the server would use anyway. Sending the rounded text
+// would cluster at a number nobody chose. Dropped on the first keystroke —
+// from then on the field holds the user's own number.
+let spinnerExactEps = null;
 
 function setEpsAutoBadge(isAuto) {
   const badge = document.getElementById("umapEpsAutoBadge");
@@ -348,6 +415,7 @@ document.getElementById("umapEpsSpinner").oninput = async () => {
   // the refused ones that have no timer to stand in for them.
   epsEditPending = true;
   epsEditSeq++;
+  spinnerExactEps = null;
   // An empty field means "go back to deriving it" — otherwise the only way
   // out of a value you typed once would be to edit the config file. null is
   // sent verbatim; a numeric fallback here is what used to pin every album
@@ -496,7 +564,16 @@ function epsIsUsable(eps) {
 // is what tells a half-typed number from a cleared field.
 function readSpinnerEps() {
   const raw = document.getElementById("umapEpsSpinner").value.trim();
-  return raw === "" ? null : parseFloat(raw);
+  if (raw === "") {
+    return null;
+  }
+  // Still the rounded number applyResolvedEps put there: mean what it stands
+  // for. Compared against the text rather than trusted on its own, so anything
+  // else that rewrites the field cannot inherit a stale exact value.
+  if (spinnerExactEps && raw === spinnerExactEps.shown) {
+    return spinnerExactEps.eps;
+  }
+  return parseFloat(raw);
 }
 
 // The `?cluster_eps=` both map-shaped endpoints should be asked for, or "" to
@@ -752,7 +829,15 @@ export async function fetchUmapData() {
       // with the map's own state already half-replaced.
       throw new Error(`umap_data ${response.status}`);
     }
-    points = await response.json();
+    const data = await response.json();
+    // Checked before anything is assigned, for the same reason as the status
+    // check above.
+    if (!Array.isArray(data?.points)) {
+      throw new Error("umap_data: response has no points");
+    }
+    points = data.points;
+    drawnEps = typeof data.eps === "number" ? data.eps : null;
+    showEffectiveEps(data);
 
     // Compute clusters and colors
     clusters = [...new Set(points.map((p) => p.cluster))];
@@ -2300,12 +2385,24 @@ function applyUmapControlsVisibility() {
 }
 
 // --- Show/Hide UMAP Window ---
+// Every show and hide — including the automatic ones (slideshow start,
+// cluster selection) — goes through toggleUmapWindow, so the next page load
+// reopens the window only if it was showing when the user left.
+function rememberUmapWindowOpen(open) {
+  if (state.umapWindowOpen !== open) {
+    state.umapWindowOpen = open;
+    persistSettings("umapWindowOpen");
+  }
+}
+
 export async function toggleUmapWindow(show = null) {
   const umapWindow = document.getElementById("umapFloatingWindow");
 
   if (show === null) {
     show = document.getElementById("umapFloatingWindow").style.display !== "block";
   }
+
+  rememberUmapWindowOpen(show !== false);
 
   if (show === false) {
     umapWindow.style.display = "none";
@@ -2343,9 +2440,7 @@ export async function toggleUmapWindow(show = null) {
 }
 
 document.getElementById("showUmapBtn").onclick = () => toggleUmapWindow();
-document.getElementById("umapCloseBtn").onclick = () => {
-  document.getElementById("umapFloatingWindow").style.display = "none";
-};
+document.getElementById("umapCloseBtn").onclick = () => toggleUmapWindow(false);
 document.getElementById("umapToggleControlsBtn").onclick = () => {
   setUmapControlsVisible(!state.umapControlsVisible);
   applyUmapControlsVisibility();
@@ -2516,7 +2611,14 @@ function setUmapWindowSize(sizeKey) {
 document.addEventListener("DOMContentLoaded", () => {
   updateUmapColorModeAvailability();
   setupUmapWindowDrag("umapTitlebar", "umapFloatingWindow");
-  toggleUmapWindow();
+  // Reopen the window only if it was showing last time. state.js's
+  // DOMContentLoaded listener (registered first, since this module imports
+  // it) has already restored umapWindowOpen synchronously, but has not yet
+  // picked an album — so this only shows the window, and the map itself is
+  // fetched by the albumChanged that follows, exactly once.
+  if (state.umapWindowOpen) {
+    toggleUmapWindow(true);
+  }
 });
 
 // Shading/restoring
@@ -2597,9 +2699,7 @@ function toggleFullscreen(turnOn = null) {
 }
 
 addButtonHandlers("umapResizeFullscreen", toggleFullscreen);
-addButtonHandlers("umapCloseBtn", () => {
-  document.getElementById("umapFloatingWindow").style.display = "none";
-});
+addButtonHandlers("umapCloseBtn", () => toggleUmapWindow(false));
 
 // --- Cluster Info Modal ---
 function showClusterInfoModal() {
@@ -2609,7 +2709,11 @@ function showClusterInfoModal() {
   }
 
   // Compute stats from the module-level points array
-  const eps = parseFloat(document.getElementById("umapEpsSpinner").value);
+  // The strength the drawn map was clustered with, for the same reason the
+  // counts below come from `points`: the spinner can hold an unsaved edit, a
+  // refused value or half-typed text, and on a large album a strength the
+  // server could not afford.
+  const eps = drawnEps;
   const clustered = points.filter((p) => p.cluster !== -1);
   const clusterIds = [...new Set(clustered.map((p) => p.cluster))];
   const clusterCount = clusterIds.length;
@@ -2631,7 +2735,7 @@ function showClusterInfoModal() {
     smallestSize = 0;
   }
 
-  document.getElementById("umapInfoEps").textContent = isNaN(eps) ? "—" : eps.toFixed(2);
+  document.getElementById("umapInfoEps").textContent = typeof eps === "number" ? formatEps(eps) : "—";
   document.getElementById("umapInfoClusterCount").textContent =
     clusterCount === 1 ? "1 cluster" : `${clusterCount} clusters`;
   document.getElementById("umapInfoLargest").textContent = largestSize === 1 ? "1 image" : `${largestSize} images`;

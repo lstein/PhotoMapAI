@@ -12,7 +12,7 @@ import threading
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic.alias_generators import to_camel
@@ -76,8 +76,8 @@ class UserPreferences(_CamelModel):
     # it does when the last PATCH's response never landed) would have "both"
     # applied over it and silently lose the setting. A null is skipped by the
     # same check in ``_applyServerPrefs`` that skips a field the server never
-    # sent, so that reconcile leaves the device's own value alone; the value
-    # reaches the server with the next PATCH any setter queues.
+    # sent, so boot keeps the device's own localStorage value and sends it up
+    # (state.js restorePersistedSettings migrates such keys).
     media_filter: Literal["both", "images", "videos"] | None = None
 
     # Metadata drawer / cluster labels
@@ -97,15 +97,33 @@ class UserPreferences(_CamelModel):
     album: str | None = None
     curation_export_path: str | None = None
 
-    # Server-stamped; lets the frontend reconcile a stale localStorage cache.
+    # Visual session state, so a reload comes back to what was on screen.
+    umap_window_open: bool = True
+    # Album key -> global index of the slide last shown in that album.
+    last_slide_index: dict[str, Annotated[int, Field(ge=0)]] = Field(default_factory=dict)
+
+    # Server-stamped; tells the page whether this device has a stored record.
     updated_at: float = 0.0
 
 
+class ClientFingerprint(BaseModel):
+    """What a device looked like on its last request.
+
+    iOS WebKit deletes the device cookie along with localStorage, so a request
+    arriving without one is matched back to its record by these two values
+    instead of being handed a fresh, default record.
+    """
+
+    ip: str
+    user_agent: str
+
+
 class _PreferencesStore(BaseModel):
-    """On-disk shape: ``{device_id: UserPreferences}``."""
+    """On-disk shape: ``{device_id: UserPreferences}`` plus fingerprints."""
 
     version: int = 1
     devices: dict[str, UserPreferences] = Field(default_factory=dict)
+    clients: dict[str, ClientFingerprint] = Field(default_factory=dict)
 
 
 class PreferencesManager:
@@ -174,6 +192,11 @@ class PreferencesManager:
             # consistent regardless of which casing the partial uses, since
             # model_validate will accept either.
             merged_dict = {**current.model_dump(), **partial}
+            # The slide map is merged per album, not replaced: each tab sends
+            # only the album it moved in, so another tab's positions survive.
+            for key in ("lastSlideIndex", "last_slide_index"):
+                if isinstance(partial.get(key), dict):
+                    merged_dict[key] = {**current.last_slide_index, **partial[key]}
             merged = UserPreferences.model_validate(merged_dict)
             merged.updated_at = time.time()
             store.devices[device_id] = merged
@@ -189,14 +212,57 @@ class PreferencesManager:
             self._flush()
             return prefs
 
+    def has_record(self, device_id: str) -> bool:
+        """Whether this device has ever stored a preference."""
+        with self._lock:
+            return device_id in self._load().devices
+
     def forget(self, device_id: str) -> bool:
         """Drop this device's record. Returns True if there was one."""
         with self._lock:
             store = self._load()
+            store.clients.pop(device_id, None)
             removed = store.devices.pop(device_id, None) is not None
             if removed:
                 self._flush()
             return removed
+
+    def record_client(self, device_id: str, ip: str, user_agent: str) -> None:
+        """Remember that ``device_id`` was last seen with this fingerprint.
+
+        A fingerprint belongs to one device at a time — the one that most
+        recently used it — so it is taken away from any other device that held
+        it. Otherwise "Reset to defaults" (which forgets the current device)
+        would re-link the next cookieless request to an older record.
+
+        Only devices with a stored record are fingerprinted (there is nothing
+        to re-link a recordless one to); callers repeat this after the first
+        PATCH creates the record. Writes to disk only when something changed.
+        """
+        if not ip or not user_agent:
+            return
+        with self._lock:
+            store = self._load()
+            if device_id not in store.devices:
+                return
+            fingerprint = ClientFingerprint(ip=ip, user_agent=user_agent)
+            if store.clients.get(device_id) == fingerprint:
+                return
+            store.clients = {k: v for k, v in store.clients.items() if v != fingerprint}
+            store.clients[device_id] = fingerprint
+            self._flush()
+
+    def find_device(self, ip: str, user_agent: str) -> str | None:
+        """Return the device that last used this fingerprint, if it has a record."""
+        if not ip or not user_agent:
+            return None
+        fingerprint = ClientFingerprint(ip=ip, user_agent=user_agent)
+        with self._lock:
+            store = self._load()
+            for device_id, seen in store.clients.items():
+                if seen == fingerprint and device_id in store.devices:
+                    return device_id
+            return None
 
     def reload(self) -> None:
         """Drop the in-memory cache so the next read goes back to disk.

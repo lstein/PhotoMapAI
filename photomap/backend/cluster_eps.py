@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 from pathlib import Path
 
 import numpy as np
@@ -160,6 +161,13 @@ def adaptive_cluster_eps(
     return best
 
 
+def _require_finite(eps: float) -> None:
+    """Refuse an eps no clustering can use. ``None`` is not checked here — it
+    means "derive one" and is handled by the callers."""
+    if not math.isfinite(eps):
+        raise ValueError(f"Cluster eps must be a finite number, got {eps!r}")
+
+
 def _shrink_eps_to_pair_budget(coords: np.ndarray, eps: float) -> float:
     """Shrink ``eps`` until DBSCAN's neighbor-pair count fits the budget.
 
@@ -172,7 +180,14 @@ def _shrink_eps_to_pair_budget(coords: np.ndarray, eps: float) -> float:
     user ask for an eps far looser than an album can afford, and on a
     six-figure album that is an out-of-memory crash rather than a slow
     response.
+
+    A non-finite ``eps`` is refused rather than shrunk: ``inf * 0.7`` is still
+    ``inf`` and every pair is in range, so the loop below would never exit,
+    and ``nan`` fails both of its comparisons and would slip through to
+    DBSCAN. The routers refuse both with a 422 before they get here; this
+    keeps the loop bounded for any other caller.
     """
+    _require_finite(eps)
     if coords.shape[0] < 2:
         return eps
 
@@ -245,6 +260,10 @@ def resolve_album_cluster_eps(
     unclamped and no cache entry is written.
     """
     eps = requested if requested is not None else stored
+    if eps is not None:
+        # Checked here as well as in the pair-budget shrink because an empty
+        # album returns before reaching it, and would hand the value back.
+        _require_finite(eps)
     if coords is None or coords.shape[0] == 0:
         return eps if eps is not None else FALLBACK_CLUSTER_EPS
     if eps is None:

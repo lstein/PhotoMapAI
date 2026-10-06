@@ -1,16 +1,17 @@
 """REST surface for per-device UI preferences.
 
-A long-lived ``HttpOnly`` cookie holds an opaque device id; the same device
-keeps the same preferences across browser-storage purges (which is the whole
-point — iOS WebKit evicts localStorage but keeps first-party cookies under
-Max-Age much more reliably).
+A long-lived ``HttpOnly`` cookie holds an opaque device id. iOS WebKit does
+*not* reliably keep it: it is routinely deleted along with localStorage after
+the browser has been closed for a while. So a request that arrives without
+the cookie is matched back to its device by client IP + User-Agent (see
+``resolve_device_id``) before a fresh id is minted.
 """
 import logging
 import re
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import ValidationError
 
 from ..preferences import UserPreferences, get_preferences_manager
@@ -22,24 +23,44 @@ _ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 
 
-def get_device_id(
-    response: Response,
-    photomap_device: Annotated[str | None, Cookie(alias=DEVICE_COOKIE)] = None,
-) -> str:
-    """Read the device cookie or mint a fresh one.
+def _fingerprint(request: Request) -> tuple[str, str]:
+    return (request.client.host if request.client else "", request.headers.get("user-agent", ""))
 
-    The cookie is set on *every* response when missing so the very first
-    request also persists client-side, regardless of which endpoint the
-    frontend hits first. ``HttpOnly`` because the frontend never needs to
-    read the cookie directly — the browser ships it on every same-origin
-    request automatically.
+
+def resolve_device_id(request: Request) -> str:
+    """Return the requesting device's id: cookie, then fingerprint, then new.
+
+    Reads never move a fingerprint; only writes do (``record_client`` in the
+    PATCH/PUT handlers). Otherwise two browsers sharing one — two profiles of
+    the same browser on one machine — would pass it back and forth, and
+    rewrite preferences.json, on every request either made.
+
+    The fingerprint is ``request.client.host`` plus the User-Agent header.
+    Behind a reverse proxy the host is the proxy's address unless uvicorn's
+    proxy-header support is enabled, in which case every cookieless client
+    of that proxy with the same browser build shares one record.
     """
-    if photomap_device and _ID_RE.match(photomap_device):
-        return photomap_device
-    new_id = uuid4().hex
+    cookie = request.cookies.get(DEVICE_COOKIE)
+    if cookie and _ID_RE.match(cookie):
+        return cookie
+    ip, user_agent = _fingerprint(request)
+    device_id = get_preferences_manager().find_device(ip, user_agent)
+    if device_id:
+        logger.info(f"Re-linked a request without a device cookie to device {device_id[:8]} ({ip})")
+        return device_id
+    return uuid4().hex
+
+
+def set_device_cookie(response: Response, device_id: str) -> None:
+    """(Re)issue the device cookie, renewing its Max-Age.
+
+    Sent on every response, not just when minted, so the expiry slides
+    forward with use and a re-linked device gets its cookie back.
+    ``HttpOnly`` because the frontend never needs to read it.
+    """
     response.set_cookie(
         key=DEVICE_COOKIE,
-        value=new_id,
+        value=device_id,
         max_age=_COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
@@ -48,7 +69,19 @@ def get_device_id(
         # would silently drop the cookie. Add it via a reverse proxy or a
         # future setting if the deployment is HTTPS-only.
     )
-    return new_id
+
+
+def get_device_id(
+    request: Request,
+    response: Response,
+    # Declared only so the cookie shows up in the OpenAPI schema;
+    # resolve_device_id reads it from the request.
+    photomap_device: Annotated[str | None, Cookie(alias=DEVICE_COOKIE)] = None,
+) -> str:
+    """Dependency form of ``resolve_device_id`` for JSON endpoints."""
+    device_id = resolve_device_id(request)
+    set_device_cookie(response, device_id)
+    return device_id
 
 
 DeviceIdDep = Annotated[str, Depends(get_device_id)]
@@ -69,6 +102,7 @@ async def read_preferences(device_id: DeviceIdDep) -> UserPreferences:
     "/", response_model=UserPreferences, response_model_by_alias=True
 )
 async def patch_preferences(
+    request: Request,
     device_id: DeviceIdDep,
     patch: dict,
 ) -> UserPreferences:
@@ -79,29 +113,39 @@ async def patch_preferences(
     "all-optional view of a model" without doubling the schema. Validation
     happens inside ``PreferencesManager.patch`` over the merged record.
     """
+    manager = get_preferences_manager()
     try:
-        return get_preferences_manager().patch(device_id, patch)
+        prefs = manager.patch(device_id, patch)
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=e.errors()) from e
+    # A write claims the fingerprint, so a later cookieless request from this
+    # browser is re-linked here.
+    manager.record_client(device_id, *_fingerprint(request))
+    return prefs
 
 
 @preferences_router.put(
     "/", response_model=UserPreferences, response_model_by_alias=True
 )
 async def replace_preferences(
+    request: Request,
     device_id: DeviceIdDep,
     prefs: UserPreferences,
 ) -> UserPreferences:
     """Replace this device's preferences with ``prefs`` in full."""
-    return get_preferences_manager().replace(device_id, prefs)
+    manager = get_preferences_manager()
+    result = manager.replace(device_id, prefs)
+    manager.record_client(device_id, *_fingerprint(request))
+    return result
 
 
 @preferences_router.delete("/", status_code=204)
-async def forget_preferences(device_id: DeviceIdDep, response: Response) -> None:
-    """Wipe this device's stored prefs and clear the device cookie.
+async def forget_preferences(request: Request, response: Response) -> None:
+    """Wipe this device's stored prefs and fingerprint, and clear the cookie.
 
     Intended for a Settings → "Forget this device" affordance, and useful
-    in tests that need to start from a clean cookie.
+    in tests that need to start from a clean cookie. Not ``DeviceIdDep``:
+    that would re-send the cookie in the same response as the deletion.
     """
-    get_preferences_manager().forget(device_id)
+    get_preferences_manager().forget(resolve_device_id(request))
     response.delete_cookie(DEVICE_COOKIE)

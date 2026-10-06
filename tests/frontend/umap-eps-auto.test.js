@@ -38,7 +38,8 @@ jest.unstable_mockModule(`${JS}/state.js`, () => ({
   setUmapControlsVisible: jest.fn(),
   setUmapExitFullscreenOnSelection: jest.fn(),
   setUmapShowHoverThumbnails: jest.fn(),
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 jest.unstable_mockModule(`${JS}/album-manager.js`, () => ({
   albumManager: { fetchAvailableAlbums: jest.fn(() => Promise.resolve([])), setSwiperManager: jest.fn() },
@@ -149,7 +150,10 @@ describe("Cluster Strength auto badge", () => {
       }
       if (String(url).startsWith("umap_data/")) {
         // The redraw that follows the save; it needs a points array.
-        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ points: [], eps: 0.1, requested_eps: null }),
+        });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
     };
@@ -174,5 +178,70 @@ describe("Cluster Strength auto badge", () => {
 
     expect(spinner().value).toBe("1.19");
     expect(Number(spinner().max)).toBeGreaterThanOrEqual(1.19);
+  });
+});
+
+// A derived strength is a raw float (0.11944). The spinner shows it rounded to
+// match its own 0.01 step, but the map must still be clustered at the exact
+// value — otherwise the field's display precision would quietly decide the
+// clustering.
+describe("Cluster Strength display precision", () => {
+  let umap;
+  let mapUrls;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    umap = await boot();
+    mapUrls = [];
+    global.fetch = (url) => {
+      if (String(url).startsWith("umap_data/")) {
+        mapUrls.push(String(url));
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ points: [], eps: 0.11944, requested_eps: 0.11944 }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) });
+    };
+  });
+
+  async function redraw() {
+    mockState.dataChanged = true;
+    await umap.fetchUmapData();
+    return mapUrls.at(-1);
+  }
+
+  it("rounds a derived value to the spinner's step", () => {
+    umap.applyResolvedEps({ success: true, eps: 0.11944, auto: true });
+
+    expect(spinner().value).toBe("0.12");
+  });
+
+  it("keeps two significant figures for a small strength", () => {
+    umap.applyResolvedEps({ success: true, eps: 0.015321, auto: true });
+
+    expect(spinner().value).toBe("0.015");
+  });
+
+  it("shows a stored strength below the floor unrounded", () => {
+    umap.applyResolvedEps({ success: true, eps: 0.00996, auto: false });
+
+    expect(spinner().value).toBe("0.00996");
+  });
+
+  it("still clusters at the exact value behind the rounded one", async () => {
+    umap.applyResolvedEps({ success: true, eps: 0.11944, auto: true });
+
+    expect(await redraw()).toBe("umap_data/test-album?cluster_eps=0.11944");
+  });
+
+  it("sends the user's own number once they edit the field", async () => {
+    umap.applyResolvedEps({ success: true, eps: 0.11944, auto: true });
+    // Typed back to the very text that was shown: it is still their choice
+    // now, and what gets saved is 0.12 — so that is what must be drawn.
+    spinner().value = "0.12";
+    spinner().dispatchEvent(new Event("input"));
+
+    expect(await redraw()).toBe("umap_data/test-album?cluster_eps=0.12");
   });
 });

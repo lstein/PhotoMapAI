@@ -1,12 +1,12 @@
 // settings.js
 // This file manages the settings of the application, including saving and restoring settings to/from local storage
 import { albumManager } from "./album-manager.js";
-import { cancelPendingPatches } from "./preferences-client.js";
+import { closePreferencePatches, reopenPreferencePatches } from "./preferences-client.js";
 import { exitSearchMode } from "./search-ui.js";
 import { setSlideshowMode } from "./slideshow.js";
 import {
   clearPersistedSettingsCache,
-  saveSettingsToLocalStorage,
+  persistSettings,
   setAlbum,
   setAutotaggingEnabled,
   setWrapNavigation,
@@ -155,7 +155,7 @@ function setDelay(newDelay) {
   state.currentDelay = newDelay;
   state.swiper.params.autoplay.delay = state.currentDelay * 1000;
   updateDelayDisplay(newDelay);
-  saveSettingsToLocalStorage();
+  persistSettings("currentDelay");
 }
 
 function updateDelayDisplay(newDelay) {
@@ -304,9 +304,8 @@ function setupModalControls() {
     import("./events.js").then(({ showHidePanelText }) => {
       showHidePanelText(!this.checked);
     });
-    // Optionally, persist to localStorage
     state.showControlPanelText = this.checked;
-    localStorage.setItem("showControlPanelText", this.checked);
+    persistSettings("showControlPanelText");
   });
 }
 
@@ -328,7 +327,7 @@ function setupConfirmDeleteControl() {
   }
   elements.confirmDeleteCheckbox.addEventListener("change", function () {
     state.suppressDeleteConfirm = !this.checked;
-    saveSettingsToLocalStorage();
+    persistSettings("suppressDeleteConfirm");
   });
 }
 
@@ -340,7 +339,7 @@ function setupMoveToTrashControl() {
     radio.addEventListener("change", function () {
       if (this.checked) {
         state.moveToTrash = this.value === "trash";
-        saveSettingsToLocalStorage();
+        persistSettings("moveToTrash");
       }
     });
   });
@@ -673,7 +672,7 @@ function setupGridThumbSizeFactorControl() {
         val = 2.0;
       }
       state.gridThumbSizeFactor = val;
-      saveSettingsToLocalStorage();
+      persistSettings("gridThumbSizeFactor");
       // Notify grid to reinitialize
       window.dispatchEvent(new CustomEvent("gridThumbSizeFactorChanged", { detail: { factor: val } }));
     }, 300); // 300ms debounce
@@ -696,10 +695,10 @@ function setupResetDefaultsControls() {
 }
 
 // "Reset to Defaults" button at the bottom of the modal. Confirms, then
-// DELETE /preferences/ (which also clears the device cookie server-side),
-// wipes the localStorage paint cache for owned keys, and reloads. The
-// reload re-mints a fresh device cookie and the new device starts at
-// model defaults.
+// DELETE /preferences/ (which also clears the device cookie and its
+// fingerprint server-side, so the reload can't be re-linked to it), wipes
+// the localStorage copies of owned keys, and reloads. The reload mints a
+// fresh device cookie and the new device starts at defaults.
 function setupResetAllPreferencesButton() {
   if (!elements.resetAllPreferencesBtn) {
     return;
@@ -711,9 +710,11 @@ function setupResetAllPreferencesButton() {
     if (!ok) {
       return;
     }
-    // Drop anything queued — we don't want a stale debounce firing a
-    // PATCH against the freshly minted device after the DELETE.
-    cancelPendingPatches();
+    // Drop anything queued and stop sending until the reload, and let a
+    // PATCH already in the air land first: anything reaching the server
+    // after the DELETE (a slideshow's slide change, the unload flush) would
+    // recreate the record being removed.
+    await closePreferencePatches();
     try {
       const response = await fetch("preferences/", {
         method: "DELETE",
@@ -721,11 +722,13 @@ function setupResetAllPreferencesButton() {
       });
       if (!response.ok) {
         console.warn("Reset preferences failed:", response.status);
+        reopenPreferencePatches();
         window.alert("Failed to reset preferences. Please try again.");
         return;
       }
     } catch (err) {
       console.warn("Reset preferences failed:", err);
+      reopenPreferencePatches();
       window.alert("Failed to reset preferences. Please try again.");
       return;
     }

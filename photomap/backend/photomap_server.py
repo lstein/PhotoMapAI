@@ -23,13 +23,14 @@ from photomap.backend.browser import open_browser_when_ready, should_open_browse
 from photomap.backend.config import get_config_manager
 from photomap.backend.constants import get_package_resource_path
 from photomap.backend.encoders import start_idle_watcher, stop_idle_watcher
+from photomap.backend.preferences import get_preferences_manager
 from photomap.backend.routers.album import album_router, get_locked_albums
 from photomap.backend.routers.cluster_labels import cluster_labels_router
 from photomap.backend.routers.curation import router as curation_router
 from photomap.backend.routers.filetree import filetree_router
 from photomap.backend.routers.index import index_router
 from photomap.backend.routers.invoke import invoke_router
-from photomap.backend.routers.preferences import preferences_router
+from photomap.backend.routers.preferences import preferences_router, resolve_device_id, set_device_cookie
 from photomap.backend.routers.search import search_router
 from photomap.backend.routers.umap import umap_router
 from photomap.backend.routers.upgrade import upgrade_router
@@ -183,7 +184,19 @@ async def get_root(
     inline_upgrades_allowed = os.environ.get("PHOTOMAP_INLINE_UPGRADE", "1") == "1"
     logger.info(f"Inline upgrades allowed: {inline_upgrades_allowed}")
 
-    return templates.TemplateResponse(
+    # Ship this device's preferences inside the page, so the app starts from
+    # them rather than from defaults (iOS routinely empties localStorage) and
+    # nothing has to be reconciled after the UI is already drawn. ``None``
+    # tells the page the device has no stored record yet.
+    device_id = resolve_device_id(request)
+    prefs_manager = get_preferences_manager()
+    initial_preferences = (
+        prefs_manager.get(device_id).model_dump(by_alias=True, mode="json")
+        if prefs_manager.has_record(device_id)
+        else None
+    )
+
+    response = templates.TemplateResponse(
         request,
         "main.html",
         {
@@ -195,8 +208,15 @@ async def get_root(
             "album_locked": album_locked,
             "multiple_locked_albums": multiple_locked_albums,
             "inline_upgrades_allowed": inline_upgrades_allowed,
+            "initial_preferences": initial_preferences,
         },
     )
+    # FastAPI doesn't merge a dependency's Response into one returned
+    # directly, so the cookie is set here rather than through DeviceIdDep.
+    set_device_cookie(response, device_id)
+    # Embedded preferences go stale; never let the browser reuse this page.
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 def start_photomap_loop():

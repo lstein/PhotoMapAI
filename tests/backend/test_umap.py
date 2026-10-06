@@ -20,7 +20,7 @@ def test_umap_construction(client, new_album, monkeypatch):
     album_key = new_album["key"]
     response = client.get(f"umap_data/{new_album['key']}")
     assert response.status_code == 200
-    umap_data = response.json()
+    umap_data = response.json()["points"]
     # Should match the number of images in the album.
     assert len(umap_data) == TEST_IMAGE_COUNT
     slides = [fetch_filename(client, album_key, i) for i in range(TEST_IMAGE_COUNT)]
@@ -48,7 +48,7 @@ def test_umap_data_reports_media_type(client, new_media_album, monkeypatch):
 
     response = client.get(f"umap_data/{new_media_album['key']}")
     assert response.status_code == 200
-    points = response.json()
+    points = response.json()["points"]
 
     assert all("media" in point for point in points)
     media_counts = Counter(point["media"] for point in points)
@@ -60,7 +60,7 @@ def test_umap_data_reports_image_only_albums_as_all_images(client, new_album, mo
     """An index predating video support must report "image" throughout."""
     build_index(client, new_album)
 
-    points = client.get(f"umap_data/{new_album['key']}").json()
+    points = client.get(f"umap_data/{new_album['key']}").json()["points"]
 
     assert points
     assert all(point["media"] == "image" for point in points)
