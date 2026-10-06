@@ -503,3 +503,45 @@ class TestDiscardOnDelete:
         assert response.status_code == 200, response.text
 
         assert not list(tiles.glob("*_64.png")), "the deleted image kept its tile"
+
+
+class TestDisplayCopies:
+    """The /images/ display copies share the tiles' directory and digest."""
+
+    def test_discard_takes_the_display_copy_too(self, tmp_path):
+        from photomap.backend.thumbnail_cache import display_copy_stem
+
+        stem = display_copy_stem(tmp_path, "scans/a.tif", "album")
+        for suffix in (".jpg", ".webp"):
+            stem.with_name(f"{stem.name}_0123456789ab{suffix}").write_bytes(b"x")
+        other = display_copy_stem(tmp_path, "scans/b.tif", "album")
+        other = other.with_name(f"{other.name}_0123456789ab.jpg")
+        other.write_bytes(b"x")
+        assert thumbnail_cache.discard(tmp_path, "scans/a.tif", video=False) == 2
+        assert [p.name for p in tmp_path.iterdir()] == [other.name]
+
+    def test_an_abandoned_temporary_is_swept_even_for_a_live_image(self, tmp_path):
+        import os
+        import time
+
+        digest = tile_hash("a.tif", video=False)
+        fresh = tmp_path / f"{digest}_display_00000000.abc.tmp"
+        stale = tmp_path / f"{digest}_display_00000000.def.tmp"
+        fresh.write_bytes(b"x")
+        stale.write_bytes(b"x")
+        old = time.time() - 2 * 3600
+        os.utime(stale, (old, old))
+        assert prune(tmp_path, {digest}) == 1
+        assert fresh.exists() and not stale.exists()
+
+    def test_the_sweep_leaves_hash_named_user_photos_alone(self, tmp_path):
+        """A thumbnails/ folder beside a custom index path may be the user's."""
+        for name in (
+            "d41d8cd98f00b204e9800998ecf8427e.jpg",
+            "d41d8cd98f00b204e9800998ecf8427e.webp",
+            "d41d8cd98f00b204e9800998ecf8427e.png",
+            "d41d8cd98f00b204e9800998ecf8427e_holiday.jpg",
+        ):
+            (tmp_path / name).write_bytes(b"x")
+        assert prune(tmp_path, set()) == 0
+        assert thumbnail_cache.discard(tmp_path, "x", video=False) == 0
