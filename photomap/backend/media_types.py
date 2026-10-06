@@ -69,7 +69,7 @@ IMAGE_EXTENSIONS: frozenset[str] = frozenset(
 )
 
 # Images only Safari (TIFF) or nothing (HEIC in Chrome/Firefox) renders
-# natively, so ``/images/`` serves them converted to PNG instead of raw.
+# natively, so ``/images/`` serves them as a cached JPEG/WebP copy instead of raw.
 BROWSER_CONVERTED_EXTENSIONS: frozenset[str] = frozenset({".tif", ".tiff", ".heif", ".heic"})
 
 # Container -> MIME map, and the single source of truth for which containers
