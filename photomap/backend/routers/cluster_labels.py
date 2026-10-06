@@ -52,7 +52,9 @@ async def get_cluster_labels(
 
     Returns:
         `{"labels": {"<cluster_id>": {"label": str, "alternates": [str, ...],
-        "score": float}, ...}}`. Cluster `-1` (DBSCAN noise) is omitted.
+        "score": float}, ...}, "eps": float}`. Cluster `-1` (DBSCAN noise)
+        is omitted. ``eps`` is the strength actually clustered with, as in
+        ``/umap_data``'s response.
     """
     # Resolve through the same helper ``routers/umap.py`` uses, against the
     # same coordinates, so ``/cluster_labels`` and ``/umap_data`` agree for
@@ -80,8 +82,10 @@ async def get_cluster_labels(
         cluster_min_samples=cluster_min_samples,
         top_k=top_k,
     )
-    # FastAPI will stringify the int cluster IDs in the JSON keys.
-    return JSONResponse({"labels": labels})
+    # FastAPI will stringify the int cluster IDs in the JSON keys. ``eps`` is
+    # the strength the labels were computed at, which — as for /umap_data —
+    # can be below the requested one on an album too large to afford it.
+    return JSONResponse({"labels": labels, "eps": float(cluster_eps)})
 
 
 @cluster_labels_router.get("/image_label/{album_key}/{index}", tags=["UMAP"])

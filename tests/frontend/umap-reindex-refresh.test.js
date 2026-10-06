@@ -134,6 +134,12 @@ function restoreValidity() {
 /** Blur the field, the way clicking anywhere else on the page does. */
 const blurField = () => spinner().dispatchEvent(new Event("blur"));
 
+// What /umap_data answers for an album with nothing in it; any other endpoint
+// gets an empty array, which none of these tests read.
+function emptyMapFor(url) {
+  return String(url).startsWith("umap_data/") ? { points: [], eps: 0.1, requested_eps: 0.1 } : [];
+}
+
 // A fetch mock whose get_umap_eps reply is held open until released, so a
 // test can act inside the window the real resolve leaves open.
 function deferredEpsFetch(eps) {
@@ -148,7 +154,7 @@ function deferredEpsFetch(eps) {
       await held;
       return { ok: true, json: () => Promise.resolve({ success: true, eps, auto: true }) };
     }
-    return { ok: true, json: () => Promise.resolve([]) };
+    return { ok: true, json: () => Promise.resolve(emptyMapFor(url)) };
   };
   return { calls, release: () => release() };
 }
@@ -162,7 +168,7 @@ function immediateFetch({ eps = 0.49, epsFails = false } = {}) {
         ? Promise.reject(new Error("connection lost"))
         : Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, eps, auto: true }) });
     }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(emptyMapFor(url)) });
   };
   return calls;
 }
@@ -258,7 +264,7 @@ describe("albumIndexUpdated on the album being shown", () => {
       Promise.resolve(
         String(url).startsWith("get_umap_eps")
           ? { ok: true, json: () => Promise.resolve({ success: true, eps: 0.49, auto: true }) }
-          : { ok: true, json: () => Promise.resolve([]) }
+          : { ok: true, json: () => Promise.resolve(emptyMapFor(url)) }
       );
     spinner().value = "0.55";
     spinner().dispatchEvent(new Event("input"));
@@ -350,7 +356,7 @@ describe("albumIndexUpdated on the album being shown", () => {
       if (String(url).startsWith("get_umap_eps")) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, eps: 0.49, auto: true }) });
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(emptyMapFor(url)) });
     };
 
     spinner().value = "0.5";
@@ -383,7 +389,7 @@ describe("albumIndexUpdated on the album being shown", () => {
       if (String(url).startsWith("get_umap_eps")) {
         return { ok: true, json: () => Promise.resolve({ success: true, eps: 0.2, auto: true }) };
       }
-      return { ok: true, json: () => Promise.resolve([]) };
+      return { ok: true, json: () => Promise.resolve(emptyMapFor(url)) };
     };
 
     spinner().value = "0.5";

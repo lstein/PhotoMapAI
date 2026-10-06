@@ -76,7 +76,9 @@ def test_endpoint_handles_empty_result(client, new_album, monkeypatch):
     )
     response = client.get(f"/cluster_labels/{new_album['key']}")
     assert response.status_code == 200
-    assert response.json() == {"labels": {}}
+    body = response.json()
+    assert body["labels"] == {}
+    assert isinstance(body["eps"], float)
 
 
 def test_endpoint_404_for_missing_album(client):

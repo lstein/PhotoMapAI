@@ -124,7 +124,12 @@ Get UMAP embedding data and DBSCAN cluster labels for an album.
 - `cluster_min_samples` (int, optional): DBSCAN min_samples
 
 **Response:**  
-- `200 OK`: List of points with `x`, `y`, `index`, `cluster`.
+- `200 OK`: `{ "points": [...], "eps": float, "requested_eps": float | null }`.
+  Each point has `x`, `y`, `index`, `cluster` and `media` (`"image"` or `"video"`).
+  `eps` is the epsilon the points were actually clustered with; `requested_eps` is the one
+  asked for (the `cluster_eps` parameter, else the album's stored value), or `null` when it
+  was derived from the coordinates. `eps` is smaller than `requested_eps` when the album is
+  too large to cluster at the requested value within the server's memory budget.
 - `404 Not Found`: If album or embeddings not found.
 
 ---
