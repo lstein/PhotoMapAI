@@ -28,7 +28,8 @@ const mockState = {
 // Mock state module before importing slideshow
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: mockState,
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
 }));
 
 // Mock umap module
@@ -47,7 +48,7 @@ const {
   initializeSlideshowControls,
 } = await import("../../photomap/frontend/static/javascript/slideshow.js");
 
-const { state, saveSettingsToLocalStorage } = await import("../../photomap/frontend/static/javascript/state.js");
+const { state, persistSettings } = await import("../../photomap/frontend/static/javascript/state.js");
 
 describe("slideshow.js", () => {
   beforeEach(() => {
@@ -514,7 +515,7 @@ describe("slideshow.js", () => {
 
         // The handler did run (it persisted the choice); it just had no
         // shuffled buffer to rebuild.
-        expect(saveSettingsToLocalStorage).toHaveBeenCalled();
+        expect(persistSettings).toHaveBeenCalledWith("mode");
         expect(resetAllSlides).not.toHaveBeenCalled();
         expect(state.mode).toBe("chronological");
       });

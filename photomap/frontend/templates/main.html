@@ -58,6 +58,8 @@
         album: {% if album %}"{{ album }}"{% else %}null{% endif %},
         albumLocked: {% if album_locked %}true{% else %}false{% endif %}
       };
+        // This device's stored preferences, or null if it has none yet.
+        window.initialPreferences = {{ initial_preferences | tojson }};
     </script>
     <script type="module" src="{{ static_url('main.js') }}"></script>
 </head>

@@ -15,14 +15,16 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/search-ui.js
   exitSearchMode: jest.fn(),
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/preferences-client.js", () => ({
-  cancelPendingPatches: jest.fn(),
+  closePreferencePatches: jest.fn(() => Promise.resolve()),
+  reopenPreferencePatches: jest.fn(),
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/slideshow.js", () => ({
   setSlideshowMode: jest.fn(),
 }));
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   clearPersistedSettingsCache: jest.fn(),
-  saveSettingsToLocalStorage: jest.fn(),
+  persistSettings: jest.fn(),
+  persistSlidePosition: jest.fn(),
   setAlbum: jest.fn(),
   setAutotaggingEnabled: jest.fn(),
   setMaxSearchResults: jest.fn(),
