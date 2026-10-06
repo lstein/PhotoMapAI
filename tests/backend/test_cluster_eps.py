@@ -167,6 +167,25 @@ def test_pair_budget_shrinks_an_absurd_eps():
     assert pairs <= MAX_NEIGHBOR_PAIRS
 
 
+@pytest.mark.parametrize("eps", [float("inf"), float("nan")])
+def test_a_non_finite_eps_is_refused_not_resolved(eps):
+    """``inf`` never shrinks (``inf * 0.7`` is ``inf``), so on an album big
+    enough to be over the pair budget the shrink loop never exits; ``nan``
+    fails every comparison and reaches DBSCAN, which raises. The routers 422
+    both, but the resolver must not depend on that."""
+    with pytest.raises(ValueError, match="finite"):
+        resolve_cluster_eps(blobs(), eps)
+
+
+@pytest.mark.parametrize("requested, stored", [(float("inf"), None), (None, float("nan"))])
+@pytest.mark.parametrize("coords", [blobs(), np.empty((0, 2), dtype=np.float32), None])
+def test_album_resolver_refuses_a_non_finite_eps(tmp_path, coords, requested, stored):
+    """Including for an album with nothing to cluster, which returns before
+    the pair-budget shrink would have caught it."""
+    with pytest.raises(ValueError, match="finite"):
+        resolve_album_cluster_eps(coords, tmp_path, requested=requested, stored=stored)
+
+
 def test_pair_budget_leaves_a_reasonable_eps_alone():
     coords = blobs()
     assert resolve_cluster_eps(coords, 0.3) == pytest.approx(0.3)

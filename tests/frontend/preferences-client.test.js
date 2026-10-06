@@ -1,19 +1,17 @@
 // Tests for the preferences-client module.
 //
-// The module is intentionally small: GET + debounced PATCH + a flush hook.
+// The module is intentionally small: a debounced PATCH + a flush hook.
 // These tests stub global.fetch and walk the debounce manually with
 // jest fake timers.
 
 import { jest, describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 
 import {
-  SERVER_TIMESTAMP_KEY,
   _peekPendingKeys,
   _resetPreferencesClientForTests,
-  cancelPendingPatches,
-  fetchPreferences,
+  _peekPending,
+  closePreferencePatches,
   flushPendingPatches,
-  loadServerTimestamp,
   queuePreferencePatch,
 } from "../../photomap/frontend/static/javascript/preferences-client.js";
 
@@ -27,10 +25,6 @@ function mockOkJson(body) {
   };
 }
 
-function mockNotOk(status) {
-  return { ok: false, status, json: () => Promise.resolve({}) };
-}
-
 describe("preferences-client", () => {
   beforeEach(() => {
     _resetPreferencesClientForTests();
@@ -42,27 +36,6 @@ describe("preferences-client", () => {
   afterEach(() => {
     jest.useRealTimers();
     delete global.fetch;
-  });
-
-  describe("fetchPreferences", () => {
-    it("returns the parsed JSON body on success", async () => {
-      global.fetch.mockResolvedValueOnce(mockOkJson({ currentDelay: 7, mode: "random", updatedAt: 12.5 }));
-      const result = await fetchPreferences();
-      expect(result).toEqual({ currentDelay: 7, mode: "random", updatedAt: 12.5 });
-      expect(global.fetch).toHaveBeenCalledWith("preferences/", {
-        credentials: "same-origin",
-      });
-    });
-
-    it("returns null on non-ok response", async () => {
-      global.fetch.mockResolvedValueOnce(mockNotOk(500));
-      expect(await fetchPreferences()).toBeNull();
-    });
-
-    it("returns null when fetch throws", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("network down"));
-      expect(await fetchPreferences()).toBeNull();
-    });
   });
 
   describe("queuePreferencePatch (debounced)", () => {
@@ -92,25 +65,9 @@ describe("preferences-client", () => {
       expect(init.method).toBe("PATCH");
       expect(init.credentials).toBe("same-origin");
       expect(init.headers).toEqual({ "Content-Type": "application/json" });
+      // Survives iOS suspending the page right after visibilitychange:hidden.
+      expect(init.keepalive).toBe(true);
       expect(JSON.parse(init.body)).toEqual({ currentDelay: 12, mode: "random" });
-    });
-
-    it("records the server-returned updatedAt in localStorage", async () => {
-      global.fetch.mockResolvedValueOnce(mockOkJson({ updatedAt: 42.5 }));
-      queuePreferencePatch({ currentDelay: 9 });
-      jest.advanceTimersByTime(DEBOUNCE_MS);
-      await flushPendingPatches();
-
-      expect(loadServerTimestamp()).toBe(42.5);
-      expect(localStorage.getItem(SERVER_TIMESTAMP_KEY)).toBe("42.5");
-    });
-
-    it("does not record a timestamp when the PATCH fails", async () => {
-      global.fetch.mockResolvedValueOnce(mockNotOk(503));
-      queuePreferencePatch({ currentDelay: 9 });
-      jest.advanceTimersByTime(DEBOUNCE_MS);
-      await flushPendingPatches();
-      expect(localStorage.getItem(SERVER_TIMESTAMP_KEY)).toBeNull();
     });
 
     it("swallows fetch errors without breaking subsequent queues", async () => {
@@ -126,7 +83,6 @@ describe("preferences-client", () => {
       await flushPendingPatches();
 
       expect(global.fetch).toHaveBeenCalledTimes(2);
-      expect(loadServerTimestamp()).toBe(5.0);
     });
   });
 
@@ -146,10 +102,11 @@ describe("preferences-client", () => {
     });
   });
 
-  describe("cancelPendingPatches", () => {
-    it("drops queued partials without firing the network request", async () => {
+  describe("closePreferencePatches", () => {
+    it("drops queued partials and refuses new ones", async () => {
       queuePreferencePatch({ currentDelay: 33 });
-      cancelPendingPatches();
+      await closePreferencePatches();
+      queuePreferencePatch({ lastSlideIndex: { a: 4 } });
 
       jest.advanceTimersByTime(DEBOUNCE_MS * 2);
       await flushPendingPatches();
@@ -159,19 +116,71 @@ describe("preferences-client", () => {
     });
   });
 
-  describe("loadServerTimestamp", () => {
-    it("returns 0 when nothing is stored", () => {
-      expect(loadServerTimestamp()).toBe(0);
+  describe("merging", () => {
+    it("merges the per-album slide map instead of replacing it", () => {
+      queuePreferencePatch({ lastSlideIndex: { a: 1 } });
+      queuePreferencePatch({ lastSlideIndex: { b: 2 } });
+      queuePreferencePatch({ lastSlideIndex: { a: 3 } });
+      expect(_peekPending()).toEqual({ lastSlideIndex: { a: 3, b: 2 } });
+    });
+  });
+
+  describe("failures", () => {
+    it("retries a PATCH the network dropped", async () => {
+      global.fetch.mockRejectedValueOnce(new Error("offline")).mockResolvedValue(mockOkJson({}));
+      queuePreferencePatch({ moveToTrash: false });
+      await flushPendingPatches();
+      expect(_peekPending()).toEqual({ moveToTrash: false });
+
+      await flushPendingPatches(); // fires the scheduled retry now
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toEqual({ moveToTrash: false });
+      expect(_peekPendingKeys()).toEqual([]);
     });
 
-    it("returns 0 for a corrupt value", () => {
-      localStorage.setItem(SERVER_TIMESTAMP_KEY, "not-a-number");
-      expect(loadServerTimestamp()).toBe(0);
+    it("retries on a server error, keeping newer values for the same key", async () => {
+      global.fetch.mockResolvedValueOnce({ ok: false, status: 503 }).mockResolvedValue(mockOkJson({}));
+      queuePreferencePatch({ currentDelay: 4, mode: "random" });
+      await flushPendingPatches();
+      queuePreferencePatch({ currentDelay: 9 });
+      await flushPendingPatches();
+
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body)).toEqual({ currentDelay: 9, mode: "random" });
     });
 
-    it("returns the stored float", () => {
-      localStorage.setItem(SERVER_TIMESTAMP_KEY, "12.5");
-      expect(loadServerTimestamp()).toBe(12.5);
+    it("resends a refused batch key by key, dropping only the bad value", async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: false, status: 422 })
+        .mockResolvedValueOnce({ ok: false, status: 422 })
+        .mockResolvedValueOnce(mockOkJson({}));
+      queuePreferencePatch({ currentDelay: 5000, moveToTrash: false });
+      await flushPendingPatches();
+
+      const bodies = global.fetch.mock.calls.map(([, init]) => JSON.parse(init.body));
+      expect(bodies).toEqual([
+        { currentDelay: 5000, moveToTrash: false },
+        { currentDelay: 5000 },
+        { moveToTrash: false },
+      ]);
+      // The refused value is not retried forever.
+      expect(_peekPendingKeys()).toEqual([]);
+    });
+
+    it("never has two PATCHes in the air at once", async () => {
+      let release;
+      global.fetch.mockImplementationOnce(() => new Promise((r) => (release = r))).mockResolvedValue(mockOkJson({}));
+      queuePreferencePatch({ lastSlideIndex: { a: 1 } });
+      jest.advanceTimersByTime(DEBOUNCE_MS);
+      await Promise.resolve(); // let the first flush take the queue and send
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      queuePreferencePatch({ lastSlideIndex: { a: 2 } });
+      const second = flushPendingPatches();
+      await Promise.resolve();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      release(mockOkJson({}));
+      await second;
+      expect(global.fetch).toHaveBeenCalledTimes(2);
     });
   });
 });
