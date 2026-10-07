@@ -68,6 +68,8 @@ class TestExifMetadata:
         assert 'data-recall-mode="use_ref"' in result.description
         assert 'data-recall-mode="recall"' not in result.description
         assert 'data-recall-mode="remix"' not in result.description
+        # Any image can go to either InvokeAI tab.
+        assert 'class="invoke-ref-target-select"' in result.description
 
 
 class TestExifFieldRendering:
@@ -126,6 +128,21 @@ class TestInvokeMetadata:
         # recall buttons (one container, three buttons), not a duplicate
         # standalone container appended afterwards.
         assert result.description.count('class="invoke-recall-controls"') == 1
+
+    def test_send_and_append_share_a_row_with_the_tab_choice_above_remix_and_recall(
+        self, with_invokeai_url
+    ):
+        description = format_metadata(_filepath(), self.INVOKE, 0, 1).description
+        rows = description.split('<div class="invoke-recall-buttons">')[1:]
+
+        assert len(rows) == 2
+        assert 'data-recall-mode="use_ref"' in rows[0]
+        assert 'data-recall-mode="append_ref"' in rows[0]
+        assert 'class="invoke-ref-target-select"' in rows[0]
+        assert '<option value="image">image generation</option>' in rows[0]
+        assert '<option value="video">video generation</option>' in rows[0]
+        assert 'data-recall-mode="remix"' in rows[1]
+        assert 'data-recall-mode="recall"' in rows[1]
 
 
 class TestVideoMetadata:
@@ -300,6 +317,7 @@ class TestGeneratedVideoMetadata:
             assert f'data-recall-mode="{mode}"' in result.description
         for mode in ("use_ref", "append_ref", "remix", "recall"):
             assert f'data-recall-mode="{mode}"' not in result.description
+        assert "invoke-ref-target-select" not in result.description
         # Exactly one controls table: the Invoke panel must not add its own.
         assert result.description.count("invoke-recall-controls") == 1
 

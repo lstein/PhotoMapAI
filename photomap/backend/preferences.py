@@ -82,6 +82,8 @@ class UserPreferences(_CamelModel):
 
     # Metadata drawer / cluster labels
     show_metadata_fields: bool = True
+    # Which InvokeAI tab the drawer's Send / Append Image buttons feed.
+    invoke_ref_target: Literal["image", "video"] = "image"
     autotagging_enabled: bool = False
 
     # Dataset Curator panel. Ranges mirror the HTML input min/max attrs in

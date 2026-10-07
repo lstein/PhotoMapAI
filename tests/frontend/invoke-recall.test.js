@@ -147,6 +147,7 @@ describe("invoke-recall.js", () => {
         album_key: "vacation",
         index: 3,
         append: false,
+        target: "image",
       });
       expect(result.uploaded_image_name).toBe("abc.png");
     });
@@ -293,6 +294,44 @@ describe("invoke-recall.js", () => {
       expect(body.index).toBe(5);
       expect(body.append).toBe(true);
       expect(body.include_seed).toBeUndefined();
+    });
+
+    describe("image or video generation", () => {
+      const imageControls = () => document.querySelector(".invoke-recall-controls:not(.invoke-video-controls)");
+
+      async function clickAndReadBody(mode) {
+        const fetchMock = jest.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) }));
+        global.fetch = fetchMock;
+        document.querySelector(`[data-recall-mode="${mode}"]`).click();
+        await flushPromises();
+        return JSON.parse(fetchMock.mock.calls[0][1].body);
+      }
+
+      afterEach(() => {
+        document.body.className = "";
+      });
+
+      it.each(["use_ref", "append_ref"])("sends %s to the video tab when video generation is chosen", async (mode) => {
+        document.body.classList.add("invoke-video-image-supported");
+        imageControls().dataset.refTarget = "video";
+
+        const body = await clickAndReadBody(mode);
+
+        expect(body.target).toBe("video");
+        expect(body.append).toBe(mode === "append_ref");
+      });
+
+      it("sends to the image tab by default", async () => {
+        document.body.classList.add("invoke-video-image-supported");
+
+        expect((await clickAndReadBody("use_ref")).target).toBe("image");
+      });
+
+      it("ignores a remembered video choice on a backend that cannot place images in its Video panel", async () => {
+        imageControls().dataset.refTarget = "video";
+
+        expect((await clickAndReadBody("use_ref")).target).toBe("image");
+      });
     });
 
     it("shows a red X on failure", async () => {

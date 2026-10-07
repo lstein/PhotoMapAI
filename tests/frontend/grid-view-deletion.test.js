@@ -119,6 +119,7 @@ const mockState = {
 
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/state.js", () => ({
   state: mockState,
+  setInvokeRefTarget: jest.fn(),
 }));
 
 // Mock global Swiper constructor

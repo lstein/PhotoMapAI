@@ -11,7 +11,8 @@ Provides:
 * ``POST /invokeai/use_ref_image`` — upload the selected image to InvokeAI
   and then call the same recall endpoint with the uploaded image as a
   reference image parameter, so the next generation uses it for visual
-  guidance.
+  guidance. With ``target="video"`` the image goes to InvokeAI 7's Video
+  panel instead (``/api/v1/recall/video/{queue_id}/image``).
 * ``POST /invokeai/video/recall`` — the video counterpart of ``/recall``:
   send a video generation record to InvokeAI 7's
   ``/api/v1/recall/video/{queue_id}``.
@@ -204,6 +205,15 @@ class UseRefImageRequest(BaseModel):
             "reference-image list instead of replacing it"
         ),
     )
+    target: Literal["image", "video"] = Field(
+        "image",
+        description=(
+            "``image`` sends the image to InvokeAI's image generation tab; "
+            "``video`` sends it to InvokeAI 7's Video panel, where a model that "
+            "takes reference images gets it as one and a model that takes "
+            "frames gets it as a frame"
+        ),
+    )
     queue_id: str = Field(
         "default",
         description="InvokeAI queue id to target",
@@ -292,10 +302,12 @@ async def _probe_capabilities(
     ``/api/v1/app/version``: recall shipped in 6.13.0, append in 6.13.5.
 
     The video recall router (``/api/v1/recall/video/{queue_id}``, InvokeAI 7)
-    is detected from the schema only.
+    and its image placement route (``…/image``) are detected from the schema
+    only.
 
     Returns ``{"reachable": bool, "recall": bool, "append": bool,
-    "video_recall": bool, "source": "openapi" | "version" | "unreachable"}``.
+    "video_recall": bool, "video_image": bool,
+    "source": "openapi" | "version" | "unreachable"}``.
     """
     openapi_url = f"{base_url.rstrip('/')}/openapi.json"
 
@@ -306,13 +318,13 @@ async def _probe_capabilities(
         resp = await _request_with_auth_fallback(base_url, username, password, _do)
         if resp.status_code == 200:
             spec = resp.json()
-            recall_post = (
-                spec.get("paths", {}).get("/api/v1/recall/{queue_id}", {}).get("post")
-            )
+            paths = spec.get("paths", {})
+            recall_post = paths.get("/api/v1/recall/{queue_id}", {}).get("post")
             video_recall = (
-                spec.get("paths", {})
-                .get("/api/v1/recall/video/{queue_id}", {})
-                .get("post")
+                paths.get("/api/v1/recall/video/{queue_id}", {}).get("post") is not None
+            )
+            video_image = (
+                paths.get("/api/v1/recall/video/{queue_id}/image", {}).get("post")
                 is not None
             )
             if recall_post is None:
@@ -321,6 +333,7 @@ async def _probe_capabilities(
                     "recall": False,
                     "append": False,
                     "video_recall": video_recall,
+                    "video_image": video_image,
                     "source": "openapi",
                 }
             params = {
@@ -331,6 +344,7 @@ async def _probe_capabilities(
                 "recall": True,
                 "append": "append" in params,
                 "video_recall": video_recall,
+                "video_image": video_image,
                 "source": "openapi",
             }
     except (httpx.RequestError, HTTPException, ValueError) as exc:
@@ -355,6 +369,7 @@ async def _probe_capabilities(
             # No release ships the video recall router yet, so there is no
             # version to infer it from: only the schema can advertise it.
             "video_recall": False,
+            "video_image": False,
             "source": "version",
             "version": version,
         }
@@ -363,6 +378,7 @@ async def _probe_capabilities(
         "recall": False,
         "append": False,
         "video_recall": False,
+        "video_image": False,
         "source": "unreachable",
     }
 
@@ -379,6 +395,9 @@ async def invokeai_capabilities(refresh: bool = False) -> dict:
       Append (an old backend would silently treat append as replace);
     * recall with append — all buttons.
 
+    ``video_image`` additionally reveals the drawer's choice between image and
+    video generation as the destination of Send / Append.
+
     Results are cached per configured URL; pass ``?refresh=true`` to force a
     re-probe (used right after the settings are saved).
     """
@@ -393,6 +412,7 @@ async def invokeai_capabilities(refresh: bool = False) -> dict:
             "recall": False,
             "append": False,
             "video_recall": False,
+            "video_image": False,
         }
 
     now = time.monotonic()
@@ -738,6 +758,13 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
     With ``append=True`` the recall is sent with ``?append=true``, which asks
     InvokeAI to add the image to its existing reference-image list instead of
     replacing it (the drawer's "Append to InvokeAI" button).
+
+    With ``target="video"`` the uploaded image is placed in InvokeAI 7's Video
+    panel through ``/api/v1/recall/video/{queue_id}/image`` instead. Where it
+    lands depends on the panel's model, which InvokeAI reports to the user
+    there: a model that takes reference images gets it as one (replacing the
+    reference images, or joining them with ``append``); a model that takes
+    frames gets it as the first frame, or with ``append`` the free frame slot.
     """
     settings = config_manager.get_invokeai_settings()
     base_url = settings["url"]
@@ -774,7 +801,12 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
     password = settings["password"]
     board_id = settings["board_id"]
 
-    recall_url = f"{base_url.rstrip('/')}/api/v1/recall/{request.queue_id}"
+    if request.target == "video":
+        recall_url = (
+            f"{base_url.rstrip('/')}/api/v1/recall/video/{request.queue_id}/image"
+        )
+    else:
+        recall_url = f"{base_url.rstrip('/')}/api/v1/recall/{request.queue_id}"
 
     try:
         async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
@@ -795,12 +827,19 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
                     client, base_url, image_path, username, password, board_id=board_id
                 )
 
-            # Deliberately omit ``strict=true`` so that the recall only
-            # *adds* the reference image to whatever the user already has
-            # set up in InvokeAI rather than resetting every other
-            # parameter back to defaults.
-            payload = {"reference_images": [{"image_name": image_name}]}
-            recall_params = {"append": "true"} if request.append else None
+            if request.target == "video":
+                payload = None
+                recall_params = {
+                    "image_name": image_name,
+                    "append": "true" if request.append else "false",
+                }
+            else:
+                # Deliberately omit ``strict=true`` so that the recall only
+                # *adds* the reference image to whatever the user already has
+                # set up in InvokeAI rather than resetting every other
+                # parameter back to defaults.
+                payload = {"reference_images": [{"image_name": image_name}]}
+                recall_params = {"append": "true"} if request.append else None
 
             async def _do_recall(headers: dict[str, str]) -> httpx.Response:
                 return await client.post(
@@ -838,7 +877,8 @@ async def use_ref_image(request: UseRefImageRequest) -> dict:
 
     result = {
         "success": True,
-        "sent": payload,
+        "target": request.target,
+        "sent": payload if payload is not None else recall_params,
         "uploaded_image_name": image_name,
         "reused_existing": reused_existing,
         "response": remote,

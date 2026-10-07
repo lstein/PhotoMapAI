@@ -85,10 +85,20 @@ describe("invoke-capabilities.js", () => {
 
     const caps = await refreshInvokeCapabilities();
 
-    expect(caps).toEqual({ recall: false, append: false, video_recall: false });
+    expect(caps).toEqual({ recall: false, append: false, video_recall: false, video_image: false });
     expect(document.body.classList.contains("invoke-recall-supported")).toBe(false);
     expect(document.body.classList.contains("invoke-append-supported")).toBe(false);
     expect(document.body.classList.contains("invoke-video-recall-supported")).toBe(false);
+  });
+
+  it("sets the video-image class only when InvokeAI can place an image in its Video panel", async () => {
+    mockCapabilities({ configured: true, reachable: true, recall: true, video_recall: true, video_image: true });
+    await refreshInvokeCapabilities();
+    expect(document.body.classList.contains("invoke-video-image-supported")).toBe(true);
+
+    mockCapabilities({ configured: true, reachable: true, recall: true, video_recall: true, video_image: false });
+    await refreshInvokeCapabilities();
+    expect(document.body.classList.contains("invoke-video-image-supported")).toBe(false);
   });
 
   it("requests a forced re-probe with refresh: true", async () => {

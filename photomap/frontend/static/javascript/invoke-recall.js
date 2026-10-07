@@ -4,8 +4,10 @@
 // request to the PhotoMap backend which in turn proxies a recall payload to
 // the configured InvokeAI backend. Videos get their own group (Initial Video,
 // Ref Video, and Recall / Remix for InvokeAI-generated videos), whose modes
-// are prefixed ``video_``.
+// are prefixed ``video_``. Send / Append Image go to InvokeAI's image or video
+// generation tab, as chosen in the drawer's "as a reference for" pulldown.
 
+import { refTargetFor } from "./invoke-ref-target.js";
 import { state } from "./state.js";
 import { fetchJson } from "./utils.js";
 
@@ -103,10 +105,10 @@ export async function sendRecall({ albumKey, index, includeSeed }) {
   }
 }
 
-export async function sendUseRefImage({ albumKey, index, append = false }) {
+export async function sendUseRefImage({ albumKey, index, append = false, target = "image" }) {
   try {
     return await fetchJson("invokeai/use_ref_image", {
-      json: { album_key: albumKey, index, append },
+      json: { album_key: albumKey, index, append, target },
     });
   } catch (err) {
     throw _withDetailMessage(err);
@@ -142,13 +144,18 @@ const FAILURE_MESSAGES = {
   video_ref: "Sending the reference video to InvokeAI failed",
 };
 
-async function dispatch(mode, albumKey, index) {
+async function dispatch(mode, albumKey, index, button) {
   switch (mode) {
     case "use_ref":
     case "append_ref":
       // append_ref adds the image to InvokeAI's existing reference-image
       // list; use_ref replaces it.
-      return sendUseRefImage({ albumKey, index, append: mode === "append_ref" });
+      return sendUseRefImage({
+        albumKey,
+        index,
+        append: mode === "append_ref",
+        target: refTargetFor(button),
+      });
     case "video_initial":
       return sendVideoMedia({ albumKey, index, target: "initial" });
     case "video_ref":
@@ -203,7 +210,7 @@ async function handleRecallClick(button) {
 
   button.disabled = true;
   try {
-    const result = await dispatch(mode, albumKey, parsed.index);
+    const result = await dispatch(mode, albumKey, parsed.index, button);
     if (result && result.success === false) {
       // InvokeAI answered, but recalled nothing (e.g. no model installed).
       showStatus(button, "error");
