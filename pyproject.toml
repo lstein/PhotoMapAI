@@ -45,6 +45,9 @@ dependencies = [
     # an Apple Silicon resolve falls back to the sdist, which contains no
     # binary at all and fails only later, at the first video indexed.
     "imageio-ffmpeg>=0.6.0",
+    # Imported by the InvokeAI client and router. It used to arrive transitively
+    # via huggingface_hub 1.x, but huggingface_hub 2.x depends on httpx2 instead.
+    "httpx",
     "jinja2",
     "networkx",
     "numpy",
