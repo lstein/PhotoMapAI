@@ -270,6 +270,9 @@ class ImageTextEncoder(ABC):
             logger.info("Reloaded encoder %s onto %s", self.model_id, self.device)
 
 
+_clip_import_lock = threading.Lock()
+
+
 def import_openai_clip() -> types.ModuleType:
     """Import the ``clip`` package (clip-anytorch), working around its ``pkg_resources`` import.
 
@@ -280,22 +283,29 @@ def import_openai_clip() -> types.ModuleType:
     ``packaging``. The stand-in is removed afterwards. Other libraries probe
     ``import pkg_resources`` and fall back on ImportError, and a lingering
     stand-in with no other attributes would break them in a less forgiving way.
+
+    The lock matters: indexing and search can build encoders on different
+    threads at the same time. ``clip`` is in ``sys.modules`` before its body has
+    finished running, so checking ``sys.modules`` without the lock could return
+    a half-imported module with no ``load``. A thread that waits on the lock
+    also cannot lose the stand-in partway through another thread's import.
     """
-    if "clip" in sys.modules:
-        return sys.modules["clip"]
+    with _clip_import_lock:
+        if "clip" in sys.modules:
+            return sys.modules["clip"]
 
-    import packaging.version
+        import packaging.version
 
-    shim = None
-    if "pkg_resources" not in sys.modules:
-        shim = types.ModuleType("pkg_resources")
-        shim.packaging = packaging  # type: ignore[attr-defined]
-        sys.modules["pkg_resources"] = shim
-    try:
-        return importlib.import_module("clip")
-    finally:
-        if shim is not None and sys.modules.get("pkg_resources") is shim:
-            del sys.modules["pkg_resources"]
+        shim = None
+        if "pkg_resources" not in sys.modules:
+            shim = types.ModuleType("pkg_resources")
+            shim.packaging = packaging  # type: ignore[attr-defined]
+            sys.modules["pkg_resources"] = shim
+        try:
+            return importlib.import_module("clip")
+        finally:
+            if shim is not None and sys.modules.get("pkg_resources") is shim:
+                del sys.modules["pkg_resources"]
 
 
 class OpenAIClipEncoder(ImageTextEncoder):

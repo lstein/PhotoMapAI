@@ -134,7 +134,7 @@ The backend uses FastAPI with modular routers:
 
 - Keep dependencies minimal and well-maintained
 - Use `pillow-heif` for HEIC image support
-- Pin setuptools<67 to avoid CLIP deprecation warnings
+- Import CLIP via `encoders.import_openai_clip()`, never `import clip` (it needs `pkg_resources`, which current setuptools lacks)
 - All image processing is local; no data sent to external services
 
 ### Documentation

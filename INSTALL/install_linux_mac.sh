@@ -34,14 +34,14 @@ detect_os() {
 # Function to check Python version
 check_python() {
     if ! command -v python3 &> /dev/null; then
-        print_error "Python 3 is not installed. Please install Python 3.10 or higher."
+        print_error "Python 3 is not installed. Please install Python 3.11 or higher."
         exit 1
     fi
     
     local python_version=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-    local required_version="3.10"
+    local required_version="3.11"
     
-    if ! python3 -c "import sys; exit(0 if sys.version_info >= (3, 10) else 1)" 2>/dev/null; then
+    if ! python3 -c "import sys; exit(0 if sys.version_info >= (3, 11) else 1)" 2>/dev/null; then
         print_error "Python ${python_version} detected. PhotoMap requires Python ${required_version} or higher."
         exit 1
     fi
