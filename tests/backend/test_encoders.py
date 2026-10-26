@@ -703,6 +703,19 @@ def test_import_openai_clip_leaves_existing_pkg_resources(monkeypatch: pytest.Mo
     assert sys.modules["pkg_resources"] is existing
 
 
+def test_import_openai_clip_bypasses_an_empty_pkg_resources(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A leftover ``pkg_resources/`` directory imports as an empty namespace
+    package. ``from pkg_resources import packaging`` would fail on it."""
+    _forget_clip(monkeypatch)
+    empty = types.ModuleType("pkg_resources")
+    monkeypatch.setitem(sys.modules, "pkg_resources", empty)
+
+    clip = import_openai_clip()
+
+    assert callable(clip.load)
+    assert sys.modules["pkg_resources"] is empty
+
+
 @pytest.mark.parametrize(
     ("raised", "expected_message"),
     [

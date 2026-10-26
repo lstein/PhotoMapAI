@@ -280,7 +280,11 @@ def import_openai_clip() -> types.ModuleType:
     to compare torch versions. setuptools 81+ no longer ships ``pkg_resources``,
     and the older setuptools that did carry known advisories. While ``clip``
     imports, ``pkg_resources`` is replaced by a stand-in that exposes only
-    ``packaging``. The stand-in is removed afterwards. Other libraries probe
+    ``packaging``, unless the one already imported has ``packaging``. An
+    existing one without it is replaced too. An upgrade from old setuptools
+    can leave an empty ``pkg_resources/`` directory behind (seen on macOS
+    runners), which imports as a namespace package with nothing in it. The
+    previous entry is restored afterwards. Other libraries probe
     ``import pkg_resources`` and fall back on ImportError, and a lingering
     stand-in with no other attributes would break them in a less forgiving way.
 
@@ -296,8 +300,9 @@ def import_openai_clip() -> types.ModuleType:
 
         import packaging.version
 
+        previous = sys.modules.get("pkg_resources")
         shim = None
-        if "pkg_resources" not in sys.modules:
+        if not hasattr(previous, "packaging"):
             shim = types.ModuleType("pkg_resources")
             shim.packaging = packaging  # type: ignore[attr-defined]
             sys.modules["pkg_resources"] = shim
@@ -305,7 +310,10 @@ def import_openai_clip() -> types.ModuleType:
             return importlib.import_module("clip")
         finally:
             if shim is not None and sys.modules.get("pkg_resources") is shim:
-                del sys.modules["pkg_resources"]
+                if previous is None:
+                    del sys.modules["pkg_resources"]
+                else:
+                    sys.modules["pkg_resources"] = previous
 
 
 class OpenAIClipEncoder(ImageTextEncoder):
