@@ -701,3 +701,25 @@ def test_import_openai_clip_leaves_existing_pkg_resources(monkeypatch: pytest.Mo
     import_openai_clip()
 
     assert sys.modules["pkg_resources"] is existing
+
+
+@pytest.mark.parametrize(
+    ("raised", "expected_message"),
+    [
+        (ModuleNotFoundError("No module named 'clip'", name="clip"), "requires the `clip-anytorch` package"),
+        (ModuleNotFoundError("No module named 'torchvision'", name="torchvision"), "torchvision"),
+        (ImportError("cannot import name 'x' from partially initialized module"), "partially initialized"),
+    ],
+)
+def test_openai_clip_import_failures_keep_their_cause(
+    monkeypatch: pytest.MonkeyPatch, raised: ImportError, expected_message: str
+) -> None:
+    """Only a missing ``clip`` is reported as "install clip-anytorch"; a failure
+    inside its own imports must surface as itself."""
+
+    def fail() -> None:
+        raise raised
+
+    monkeypatch.setattr(encoders_module, "import_openai_clip", fail)
+    with pytest.raises(ImportError, match=expected_message):
+        OpenAIClipEncoder(device="cpu")

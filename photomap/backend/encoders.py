@@ -321,7 +321,12 @@ class OpenAIClipEncoder(ImageTextEncoder):
     ):
         try:
             clip = import_openai_clip()
-        except ImportError as e:
+        except ModuleNotFoundError as e:
+            # Only a missing ``clip`` means the package isn't installed. Any
+            # other import failure inside it (torchvision, ftfy, ...) has to
+            # stay visible rather than be reported as this.
+            if e.name != "clip":
+                raise
             raise ImportError(
                 "openai-clip backend requires the `clip-anytorch` package."
             ) from e
