@@ -92,7 +92,7 @@ $version = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_
 if (-not $version) {
     Install-Python "Could not determine Python version."
 }
-if ([version]$version -lt [version]"3.10" -or [version]$version -ge [version]"3.15") {
+if ([version]$version -lt [version]"3.11" -or [version]$version -ge [version]"3.15") {
     Install-Python "An incompatible Python version is installed."
 }
 
@@ -186,7 +186,7 @@ pip install "$PSScriptRoot\..\.."
 
 # 7. install the clip model
 Write-Host "Installing the CLIP model..."
-python -c "import clip; clip.load('ViT-B/32')"
+python -c "from photomap.backend.encoders import import_openai_clip; import_openai_clip().load('ViT-B/32')"
 
 # 8. Create a batch script to start the server
 $desktopPath = [Environment]::GetFolderPath('Desktop')

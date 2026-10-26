@@ -71,7 +71,7 @@ To also remove the downloaded Python/libraries, run `photomap --uninstall` (path
 
 ## Alternative: install from PyPI
 
-If you are comfortable with the command line and already have Python 3.10–3.14, you can install the package directly. We recommend [uv](https://docs.astral.sh/uv/):
+If you are comfortable with the command line and already have Python 3.11–3.14, you can install the package directly. We recommend [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv tool install photomapai --torch-backend auto

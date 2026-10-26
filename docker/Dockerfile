@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu . \
     && python /tmp/remove_bundled_ffmpeg.py \
     && rm /tmp/remove_bundled_ffmpeg.py
-RUN python -c "import clip; clip.load('ViT-B/32')"
+RUN python -c "from photomap.backend.encoders import import_openai_clip; import_openai_clip().load('ViT-B/32')"
 
 RUN rm -rf ./photomap ./build ./dist ./demo_images/photomap_index/
 

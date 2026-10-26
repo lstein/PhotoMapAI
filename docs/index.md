@@ -127,7 +127,7 @@ See the [Installation guide](installation.md) for PyPI, Docker, source, GPU over
 
 ### Install from the command line
 
-If you already have Python 3.10–3.14:
+If you already have Python 3.11–3.14:
 
 ```bash
 uv tool install photomapai --torch-backend auto   # or: pip install photomapai

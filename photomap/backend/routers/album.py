@@ -566,7 +566,7 @@ async def update_album(album_data: dict) -> JSONResponse:
                         # unresolvable path is interpreter-dependent (a symlink
                         # loop is a RuntimeError up to 3.12 and an OSError from
                         # 3.13, an embedded NUL a ValueError), and this project
-                        # supports 3.10–3.13. Whatever it is, the path is not
+                        # supports 3.11–3.14. Whatever it is, the path is not
                         # one of the album's own — leave it unnormalized so it
                         # falls through to the 400 rather than a 500.
                         normalized.add(str(path))

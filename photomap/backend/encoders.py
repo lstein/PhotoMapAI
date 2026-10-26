@@ -19,6 +19,7 @@ import math
 import sys
 import threading
 import time
+import types
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator
 from typing import ClassVar
@@ -269,6 +270,52 @@ class ImageTextEncoder(ABC):
             logger.info("Reloaded encoder %s onto %s", self.model_id, self.device)
 
 
+_clip_import_lock = threading.Lock()
+
+
+def import_openai_clip() -> types.ModuleType:
+    """Import the ``clip`` package (clip-anytorch), working around its ``pkg_resources`` import.
+
+    ``clip/clip.py`` does ``from pkg_resources import packaging`` and only uses it
+    to compare torch versions. setuptools 81+ no longer ships ``pkg_resources``,
+    and the older setuptools that did carry known advisories. While ``clip``
+    imports, ``pkg_resources`` is replaced by a stand-in that exposes only
+    ``packaging``, unless the one already imported has ``packaging``. An
+    existing one without it is replaced too. An upgrade from old setuptools
+    can leave an empty ``pkg_resources/`` directory behind (seen on macOS
+    runners), which imports as a namespace package with nothing in it. The
+    previous entry is restored afterwards. Other libraries probe
+    ``import pkg_resources`` and fall back on ImportError, and a lingering
+    stand-in with no other attributes would break them in a less forgiving way.
+
+    The lock matters: indexing and search can build encoders on different
+    threads at the same time. ``clip`` is in ``sys.modules`` before its body has
+    finished running, so checking ``sys.modules`` without the lock could return
+    a half-imported module with no ``load``. A thread that waits on the lock
+    also cannot lose the stand-in partway through another thread's import.
+    """
+    with _clip_import_lock:
+        if "clip" in sys.modules:
+            return sys.modules["clip"]
+
+        import packaging.version
+
+        previous = sys.modules.get("pkg_resources")
+        shim = None
+        if not hasattr(previous, "packaging"):
+            shim = types.ModuleType("pkg_resources")
+            shim.packaging = packaging  # type: ignore[attr-defined]
+            sys.modules["pkg_resources"] = shim
+        try:
+            return importlib.import_module("clip")
+        finally:
+            if shim is not None and sys.modules.get("pkg_resources") is shim:
+                if previous is None:
+                    del sys.modules["pkg_resources"]
+                else:
+                    sys.modules["pkg_resources"] = previous
+
+
 class OpenAIClipEncoder(ImageTextEncoder):
     """Original OpenAI CLIP via the ``clip`` package — preserves legacy behavior."""
 
@@ -281,8 +328,13 @@ class OpenAIClipEncoder(ImageTextEncoder):
         download_root: str | None = None,
     ):
         try:
-            import clip  # type: ignore[import-not-found]
-        except ImportError as e:
+            clip = import_openai_clip()
+        except ModuleNotFoundError as e:
+            # Only a missing ``clip`` means the package isn't installed. Any
+            # other import failure inside it (torchvision, ftfy, ...) has to
+            # stay visible rather than be reported as this.
+            if e.name != "clip":
+                raise
             raise ImportError(
                 "openai-clip backend requires the `clip-anytorch` package."
             ) from e

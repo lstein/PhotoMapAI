@@ -9,7 +9,7 @@ PhotoMapAI is a local-first image browser for large photo collections. It uses C
 ## Common Commands
 
 ```bash
-# Install for development (Python 3.10–3.13) — uv is preferred (see below)
+# Install for development (Python 3.11–3.14) — uv is preferred (see below)
 uv sync --extra testing --extra development   # creates .venv + editable install + locked deps
 npm install
 # (legacy equivalent: pip install -e .[testing,development])
@@ -44,7 +44,7 @@ uv sync --extra testing --extra development
 git fetch origin && git rebase origin/master && git push --force-with-lease
 ```
 
-Ruff is configured for line-length 120, target py310, rules E/W/F/I/UP/B (see pyproject.toml). Jest runs in jsdom with experimental ESM (the project is `"type": "module"`).
+Ruff is configured for line-length 120, target py311, rules E/W/F/I/UP/B (see pyproject.toml). Jest runs in jsdom with experimental ESM (the project is `"type": "module"`).
 
 ## Worktrees are mandatory for ANY code change — read before editing
 
@@ -140,7 +140,7 @@ This is the area under active refactor (current branch: `lstein/feature/refactor
 From `.github/copilot-instructions.md` — the parts that actually affect how you write code here:
 
 - **Python:** type hints on public functions, `pathlib.Path` (not `os.path`) for file operations, f-strings, imports ordered stdlib → third-party → local (`photomap` is first-party to isort). Code must pass `ruff check photomap tests`.
-- **Pinned quirk:** `setuptools<67` is intentional — avoids a deprecation warning from the CLIP dependency. Don't "fix" it.
+- **CLIP and `pkg_resources`:** `clip-anytorch` does `from pkg_resources import packaging`, and setuptools 81+ no longer ships `pkg_resources`. `OpenAIClipEncoder` supplies a throwaway stand-in while it imports `clip`. Don't bring back the old `setuptools<67` pin: those releases carry known advisories.
 - **New API endpoints:** add/extend a router under `photomap/backend/routers/`, use Pydantic models for request/response, include the router in `photomap_server.py`, add a `tests/backend/test_<name>.py`.
 - **New frontend features:** create a module in `static/javascript/`, wire shared state through `state.js`, register shortcuts in `events.js`, add a Jest test.
 - **JavaScript:** ES6 modules only, `const`/`let`, must pass `npm run lint` and `npm run format:check`.
