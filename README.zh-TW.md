@@ -98,7 +98,7 @@ PhotoMapAI 也支援多相簿管理、依時間瀏覽照片、簡潔的全螢幕
 
 ### 從 PyPI 安裝（命令列）
 
-如果你已經安裝 Python 3.10–3.14，並偏好使用命令列：
+如果你已經安裝 Python 3.11–3.14，並偏好使用命令列：
 
 ```bash
 uv tool install photomapai --torch-backend auto   # 或：pip install photomapai

@@ -8,6 +8,8 @@ End-to-end indexing/search tests live elsewhere and exercise the default
 from __future__ import annotations
 
 import math
+import sys
+import types
 
 import numpy as np
 import pytest
@@ -27,6 +29,7 @@ from photomap.backend.encoders import (
     clear_encoder_cache,
     default_encoder_spec,
     get_cached_encoder,
+    import_openai_clip,
 )
 
 
@@ -666,3 +669,35 @@ def test_capture_swallows_callback_errors():
         bar = module.tqdm(total=100, unit="B", file=io.StringIO())
         bar.update(50)  # must not raise
         bar.close()
+
+
+def _forget_clip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop ``clip`` from the import cache (restored on teardown) so it re-imports."""
+    for name in [n for n in sys.modules if n == "clip" or n.startswith("clip.")]:
+        monkeypatch.delitem(sys.modules, name)
+
+
+def test_import_openai_clip_without_pkg_resources(monkeypatch: pytest.MonkeyPatch) -> None:
+    """clip-anytorch imports ``pkg_resources``, which current setuptools no longer ships."""
+    _forget_clip(monkeypatch)
+    monkeypatch.delitem(sys.modules, "pkg_resources", raising=False)
+
+    clip = import_openai_clip()
+
+    assert callable(clip.load)
+    # The stand-in must not linger: other libraries probe ``import pkg_resources``
+    # and expect either the real thing or an ImportError.
+    assert "pkg_resources" not in sys.modules
+
+
+def test_import_openai_clip_leaves_existing_pkg_resources(monkeypatch: pytest.MonkeyPatch) -> None:
+    import packaging
+
+    _forget_clip(monkeypatch)
+    existing = types.ModuleType("pkg_resources")
+    existing.packaging = packaging  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "pkg_resources", existing)
+
+    import_openai_clip()
+
+    assert sys.modules["pkg_resources"] is existing

@@ -19,6 +19,7 @@ import math
 import sys
 import threading
 import time
+import types
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator
 from typing import ClassVar
@@ -269,6 +270,34 @@ class ImageTextEncoder(ABC):
             logger.info("Reloaded encoder %s onto %s", self.model_id, self.device)
 
 
+def import_openai_clip() -> types.ModuleType:
+    """Import the ``clip`` package (clip-anytorch), working around its ``pkg_resources`` import.
+
+    ``clip/clip.py`` does ``from pkg_resources import packaging`` and only uses it
+    to compare torch versions. setuptools 81+ no longer ships ``pkg_resources``,
+    and the older setuptools that did carry known advisories. While ``clip``
+    imports, ``pkg_resources`` is replaced by a stand-in that exposes only
+    ``packaging``. The stand-in is removed afterwards. Other libraries probe
+    ``import pkg_resources`` and fall back on ImportError, and a lingering
+    stand-in with no other attributes would break them in a less forgiving way.
+    """
+    if "clip" in sys.modules:
+        return sys.modules["clip"]
+
+    import packaging.version
+
+    shim = None
+    if "pkg_resources" not in sys.modules:
+        shim = types.ModuleType("pkg_resources")
+        shim.packaging = packaging  # type: ignore[attr-defined]
+        sys.modules["pkg_resources"] = shim
+    try:
+        return importlib.import_module("clip")
+    finally:
+        if shim is not None and sys.modules.get("pkg_resources") is shim:
+            del sys.modules["pkg_resources"]
+
+
 class OpenAIClipEncoder(ImageTextEncoder):
     """Original OpenAI CLIP via the ``clip`` package — preserves legacy behavior."""
 
@@ -281,7 +310,7 @@ class OpenAIClipEncoder(ImageTextEncoder):
         download_root: str | None = None,
     ):
         try:
-            import clip  # type: ignore[import-not-found]
+            clip = import_openai_clip()
         except ImportError as e:
             raise ImportError(
                 "openai-clip backend requires the `clip-anytorch` package."

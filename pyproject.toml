@@ -11,12 +11,11 @@ authors = [
 ]
 readme = { content-type = "text/markdown", file = "README.md" }
 license = { text = "MIT" }
-requires-python = ">=3.10, <3.15"
+requires-python = ">=3.11, <3.15"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -26,7 +25,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "Pillow>=11.3.0",  # first release whose wheels bundle AVIF support
+    # 13.0.0 fixes a long list of decoder memory-safety advisories (several
+    # critical, reachable from Image.open() on an untrusted file). It is also the
+    # release that dropped Python 3.10, which is why requires-python is >=3.11.
+    # (11.3.0, the previous floor, was the first with AVIF in the wheels.)
+    "Pillow>=13.0.0",
     "clip-anytorch",
     "colorama",
     "dash",
@@ -37,8 +40,9 @@ dependencies = [
     # and 0.115.1 both pin starlette<0.39.0, so a fastapi>=0.115 floor is
     # satisfied by a Starlette that ignores Range and answers 200 with the
     # whole file, making <video> re-download the clip on every scrub.
-    # 0.49.1 additionally fixes a Range-parser advisory in this exact path.
-    "starlette>=0.49.1",
+    # 0.49.1 additionally fixes a Range-parser advisory in this exact path, and
+    # 1.3.1 makes request.form() enforce its size limits on urlencoded bodies.
+    "starlette>=1.3.1",
     # Bundles a static ffmpeg binary used to extract a still frame from videos.
     # Floor is 0.6.0 because that is the first release publishing a
     # macosx_11_0_arm64 wheel — earlier ones ship Intel-only macOS wheels, so
@@ -60,7 +64,6 @@ dependencies = [
     "PyYAML",
     "requests",
     "scikit-learn",
-    "setuptools<67",  # Avoid deprecation warning from CLIP dependency
     "torch",
     "tqdm",
     "transformers",  # SigLIP encoder backend
@@ -85,9 +88,9 @@ testing = [
 ]
 development = [
     "build",
-    "mkdocs<1.6",
-    "mkdocs-material",
-    "pymdown-extensions",
+    "mkdocs>=1.6.1",  # mkdocs-material 9.7.7+ (search XSS fix) requires mkdocs 1.6
+    "mkdocs-material>=9.7.7",  # DOM XSS in search suggestions before 9.7.7
+    "pymdown-extensions>=11.0.1",  # ReDoS in inline processors before 11.0.1
     "twine",
     "ruff",
 ]
@@ -112,7 +115,7 @@ start_photomap = "photomap.backend.launch:main"
 [tool.ruff]
 # Set line length to match the project's style
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 
 # Enable selected rule sets
 lint.select = [

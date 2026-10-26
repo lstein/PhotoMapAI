@@ -8,7 +8,7 @@ PhotoMapAI is an AI-powered image browser and search tool that enables semantic 
 
 ### Tech Stack
 - **Frontend**: HTML, CSS, JavaScript (ES6 modules), Swiper.js, Plotly.js
-- **Backend**: Python 3.10-3.13, FastAPI, Uvicorn
+- **Backend**: Python 3.11-3.14, FastAPI, Uvicorn
 - **AI/ML**: CLIP (clip-anytorch), PyTorch, scikit-learn, UMAP
 - **Image Processing**: Pillow, pillow-heif
 - **Testing**: pytest (Python), Jest (JavaScript)

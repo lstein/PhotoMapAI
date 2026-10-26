@@ -235,7 +235,7 @@ main() {
 
     # Step 6: Install the CLIP model
     print_info "Downloading CLIP model..."
-    python -c "import clip; clip.load('ViT-B/32')"
+    python -c "from photomap.backend.encoders import import_openai_clip; import_openai_clip().load('ViT-B/32')"
     
     # Step 7: Create desktop launcher
     print_info "Creating desktop launcher..."

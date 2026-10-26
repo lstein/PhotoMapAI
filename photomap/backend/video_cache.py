@@ -126,8 +126,8 @@ def _path_digest(video_path: Path) -> str:
     ``OSError`` — and take down a request or an indexing worker:
 
     * ``resolve()`` raises ``RuntimeError`` on a symlink loop on Python
-      3.10-3.12 (it only switched to ``os.path.realpath`` in 3.13), and this
-      project supports 3.10.
+      3.11-3.12 (it only switched to ``os.path.realpath`` in 3.13), and this
+      project supports 3.11.
     * a filename holding non-UTF-8 bytes — routine on Linux ext4, e.g. a
       latin-1 name from an old camera — surrogate-escapes into the ``str`` and
       ``encode("utf-8")`` raises ``UnicodeEncodeError``.

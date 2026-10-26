@@ -947,7 +947,7 @@ def test_one_hot_pixel_cannot_vouch_for_a_black_frame():
     frame = _dimmed("building1.jpeg", 0.01)
     for x in range(12):
         frame.putpixel((x, 0), (255, 255, 255))
-    assert max(frame.convert("L").getdata()) == 255
+    assert frame.convert("L").getextrema()[1] == 255
     assert _frame_highlight_luma(frame) < FRAME_LUMA_FLOOR
     assert not _is_kept(frame)
 

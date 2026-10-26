@@ -84,7 +84,7 @@ For PyPI, Docker, and manual install instructions, see the [Installation guide](
 
 ### Install from PyPI (command line)
 
-If you already have Python 3.10–3.14 and prefer the command line:
+If you already have Python 3.11–3.14 and prefer the command line:
 
 ```bash
 uv tool install photomapai --torch-backend auto   # or: pip install photomapai
