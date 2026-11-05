@@ -14,14 +14,13 @@ import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import {
   persistSettings,
   setUmapClickSelectsCluster,
-  setMediaFilter,
   setUmapControlsVisible,
   setUmapExitFullscreenOnSelection,
   setUmapShowHoverThumbnails,
   setUmapShowLandmarks,
   state,
 } from "./state.js";
-import { filterPointsByMediaType, findLandmarkClusterAt, hasVideoPoints } from "./umap-helpers.js";
+import { filterPointsByMediaType, findLandmarkClusterAt } from "./umap-helpers.js";
 import { checkUmapReindexOngoing, initUmapReindexButton } from "./umap-reindex.js";
 import { debounce, getPercentile, isColorLight, makeDraggable } from "./utils.js";
 
@@ -196,11 +195,9 @@ function visiblePoints() {
 // plotted during an album switch.
 //
 // A filter this album cannot honour keeps everything rather than blanking the
-// map. The radios disable themselves for exactly this case, but the setting
-// can also arrive from the server *after* they were disabled (state.js
-// reconciles asynchronously, which is the whole reason this branch added the
-// mediaFilterSettingChanged listener), and a disabled radio is not a filter
-// that stopped applying.
+// map, which would read as "the semantic map is broken". The stored preference
+// is left alone: an album that cannot honour it is a fact about the album, not
+// a choice by the user, and it still applies on the next album that can.
 function effectiveMapFilter() {
   const filter = state.mediaFilter;
   if (filter !== "images" && filter !== "videos") {
@@ -851,15 +848,6 @@ export async function fetchUmapData() {
     const yMin = getPercentile(ys, 1);
     const yMax = getPercentile(ys, 99);
 
-    // Reconcile the filter against this album *before* the trace is built.
-    // The album may have no videos at all, in which case a persisted
-    // "videos only" would otherwise plot an empty trace. Doing it afterwards
-    // still ended up looking right, but only because the setUmapColorMode()
-    // at the end of this function happens to redraw trace 0 from the
-    // corrected filter — a rescue that reads like a coincidence and would
-    // stop working the moment that call moved or became conditional.
-    updateMediaFilterAvailability();
-
     // Prepare marker arrays
     const drawn = visiblePoints();
     const markerColors = drawn.map((p) => getClusterColor(p.cluster));
@@ -1410,29 +1398,6 @@ window.addEventListener("stateReady", () => {
       }
     });
   }
-
-  // Media filter radio buttons - initialize from state
-  const mediaFilterRadios = MEDIA_FILTER_RADIO_IDS.map((id) => document.getElementById(id));
-  if (mediaFilterRadios.every(Boolean)) {
-    const active =
-      mediaFilterRadios.find((radio) => radio.value === state.mediaFilter) ||
-      mediaFilterRadios.find((radio) => radio.value === DEFAULT_MEDIA_FILTER);
-    if (active) {
-      active.checked = true;
-    }
-
-    mediaFilterRadios.forEach((radio) => {
-      radio.addEventListener("change", (e) => {
-        if (!e.target.checked) {
-          return;
-        }
-        // Just record it. The redraw hangs off mediaFilterSettingChanged,
-        // which this setter dispatches, so the click and a value arriving from
-        // the server take the identical path — and take it once.
-        setMediaFilter(e.target.value);
-      });
-    });
-  }
 });
 
 // Height of the controls block before this file started measuring it. Used as
@@ -1463,94 +1428,13 @@ function reservedControlsHeight(gap, hiddenFallback) {
   return (measured > 0 ? measured : UNMEASURED_CONTROLS_HEIGHT) + gap;
 }
 
-// Listed in the order they appear in the control row.
-const MEDIA_FILTER_RADIO_IDS = ["umapMediaFilterImagesRadio", "umapMediaFilterVideosRadio", "umapMediaFilterBothRadio"];
-
-// Selected when nothing is persisted, and fallen back to when the stored
-// value isn't one we recognize. Matched by value rather than by position in
-// the list above, so reordering the radios in the UI cannot silently change
-// which one is the default.
+// Fallen back to when the stored filter isn't one we recognize, or is one the
+// album cannot honour.
 const DEFAULT_MEDIA_FILTER = "both";
 
-// Offer the filter only when there is something to filter.
-//
-// A persisted "videos only" restored on an all-photo album would otherwise
-// render a blank map, which reads as "the semantic map is broken". The
-// controls are disabled rather than hidden so the control row keeps its
-// height — the window-sizing constants depend on that.
-function updateMediaFilterAvailability() {
-  const container = document.getElementById("umapMediaFilterContainer");
-  if (!container) {
-    return;
-  }
-  const albumHasVideos = hasVideoPoints(points);
-
-  // Deliberately NOT setMediaFilter(DEFAULT_MEDIA_FILTER) here. An album that
-  // cannot honour the filter is a fact about the album, not a choice by the
-  // user, and since this branch put mediaFilter in the server model that write
-  // would travel: browse an all-photo album once and "videos" is gone from
-  // state, localStorage and the server record, so switching back to a mixed
-  // album comes up "Both". `effectiveMapFilter` degrades the drawing instead,
-  // leaving the stored preference to mean what the user meant by it.
-  MEDIA_FILTER_RADIO_IDS.forEach((id) => {
-    const radio = document.getElementById(id);
-    if (!radio) {
-      return;
-    }
-    radio.disabled = !albumHasVideos;
-    if (!albumHasVideos) {
-      radio.checked = radio.value === DEFAULT_MEDIA_FILTER;
-    }
-  });
-  if (albumHasVideos) {
-    // Re-enabling is the other half of the listener below: a filter that
-    // arrived while these were disabled was dropped rather than shown, since
-    // the album it arrived on could not honour it. This album can, so the
-    // radios have to catch up with the filter that is actually in force —
-    // otherwise they read "Both" while every view browses videos only.
-    syncMediaFilterRadios(state.mediaFilter);
-  }
-  container.style.opacity = albumHasVideos ? "1" : "0.5";
-  container.title = albumHasVideos ? "" : "This album contains no videos";
-}
-
-// Move the checked radio to `value`, unless this album has taken the controls
-// away — while they are disabled updateMediaFilterAvailability owns what they
-// read, and it calls this itself once they come back.
-function syncMediaFilterRadios(value) {
-  const radios = MEDIA_FILTER_RADIO_IDS.map((id) => document.getElementById(id));
-  if (!radios.every(Boolean) || radios.some((radio) => radio.disabled)) {
-    return;
-  }
-  // Falls back the way the build-time init does: an unrecognized value (a
-  // hand-edited or corrupt localStorage entry — _parseStored does no
-  // validation) must not leave the previous album's radio checked over a map
-  // that is no longer filtered that way.
-  const match =
-    radios.find((radio) => radio.value === value) || radios.find((radio) => radio.value === DEFAULT_MEDIA_FILTER);
-  if (match) {
-    // Assigning `checked` fires no change event, so this cannot loop back
-    // through the radios' own handler.
-    match.checked = true;
-  }
-}
-
-// Keep the radios reading what the filter actually is.
-//
-// They are checked from `state.mediaFilter` when the controls are built, which
-// is before the server's copy of the preference can arrive — state.js
-// reconciles asynchronously after boot, and the server is authoritative when
-// the localStorage cache is missing or stale (the case an iOS storage eviction
-// leaves behind). Now that the filter is stored server-side at all, a device
-// restoring "videos" that way would filter every view to videos while the map's
-// own controls still read "Both".
-window.addEventListener("mediaFilterSettingChanged", async (e) => {
-  syncMediaFilterRadios(e.detail?.value);
-  // And redraw. Moving the radio is not enough on its own: assigning `checked`
-  // fires no change event (which is what stops this looping), so before this
-  // the map kept drawing the old visible set under a radio that had already
-  // flipped — and the user could not fix it by clicking the radio that was
-  // already checked.
+// Redraw when the filter changes: from the Search panel's Show menu, or when
+// state.js applies the server's copy of the preference after boot.
+window.addEventListener("mediaFilterSettingChanged", async () => {
   if (!mapExists) {
     return;
   }

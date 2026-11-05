@@ -40,9 +40,3 @@ export function filterPointsByMediaType(points, filter) {
   }
   return points;
 }
-
-// True if any point is a video. Drives whether the filter is offered at all —
-// a "videos only" radio on an all-photo album can only produce a blank map.
-export function hasVideoPoints(points) {
-  return Array.isArray(points) && points.some((p) => p?.media === "video");
-}

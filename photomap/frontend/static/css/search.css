@@ -208,12 +208,15 @@
    nothing to clear. updateSearchCheckmarks() owns the disabled attribute.
    Both rules outrank the #searchPanel button / :hover opacities. */
 #clearSearchBtn:disabled,
-#clearSearchBtn:disabled:hover {
+#clearSearchBtn:disabled:hover,
+#showMediaBtn:disabled,
+#showMediaBtn:disabled:hover {
   opacity: 0.25;
   cursor: default;
 }
 
-#clearSearchBtn:disabled + .button-label {
+#clearSearchBtn:disabled + .button-label,
+#showMediaBtn:disabled + .button-label {
   opacity: 0.25;
 }
 

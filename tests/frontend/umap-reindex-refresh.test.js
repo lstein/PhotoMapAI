@@ -34,7 +34,6 @@ const mockState = {
 
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
-  setMediaFilter: jest.fn(),
   setUmapShowLandmarks: jest.fn(),
   setUmapClickSelectsCluster: jest.fn(),
   setUmapControlsVisible: jest.fn(),

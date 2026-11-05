@@ -59,7 +59,7 @@ const mockState = {
 
 // Mirrors the real setter (state.js `_makeSetter` + the mediaFilter spec's
 // onSet): no-op when unchanged, otherwise assign and announce. umap.js redraws
-// off that event, so a mock that only assigned would leave the radios changing
+// off that event, so a mock that only assigned would leave the filter changing
 // nothing.
 const setMediaFilter = jest.fn((v) => {
   if (mockState.mediaFilter === v) {
@@ -169,13 +169,7 @@ describe("umap.js landmarks", () => {
   }
 
   async function selectFilter(value) {
-    const radio = document.getElementById(
-      { both: "umapMediaFilterBothRadio", images: "umapMediaFilterImagesRadio", videos: "umapMediaFilterVideosRadio" }[
-        value
-      ]
-    );
-    radio.checked = true;
-    radio.dispatchEvent(new Event("change"));
+    setMediaFilter(value);
     await settle();
   }
 

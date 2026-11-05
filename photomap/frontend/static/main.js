@@ -18,6 +18,7 @@ import "./javascript/search-ui.js";
 import "./javascript/search.js";
 import "./javascript/seek-slider.js";
 import "./javascript/settings.js";
+import "./javascript/show-menu.js";
 import { slideState } from "./javascript/slide-state.js";
 import "./javascript/state.js";
 import "./javascript/swiper.js";

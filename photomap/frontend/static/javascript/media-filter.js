@@ -12,7 +12,8 @@
 //   1. which album indices are videos, fetched from /media_indices on every
 //      album change (a deletion is renumbered locally instead — slideState
 //      does the same to the live list, and a refetch would force a rebuild of
-//      the very slides the deletion path is careful to keep in place);
+//      the very slides the deletion path is careful to keep in place). Each
+//      update fires `mediaIndicesUpdated`, whether or not the filter changed;
 //   2. the derived views the rest of the app needs — a predicate over global
 //      indices, a filter for result lists, and the "browse list": every index
 //      the filter keeps, which search.js hands to the slide machinery as the
@@ -28,6 +29,8 @@ import { fetchJson } from "./utils.js";
 let videoIndices = new Set();
 let totalIndices = 0;
 let loadedAlbum = null;
+// The last /media_indices fetch failed, so the album's contents are unknown.
+let loadFailed = false;
 let loadSequence = 0;
 // The album whose /media_indices fetch is in flight, or null. A filter change
 // during the fetch must not announce from the previous album's set; the load
@@ -44,16 +47,30 @@ let announcedFilter = "both";
 // nothing. Either way there is nothing to filter, and a browse list would be
 // a slower spelling of "the whole album" — or a blank screen. So the stored
 // preference only takes effect on an album that has both kinds, which is also
-// what the map's radio buttons require before they enable themselves.
+// when the Show menu enables itself.
 export function effectiveMediaFilter() {
   const filter = state.mediaFilter;
   if (filter !== "images" && filter !== "videos") {
     return "both";
   }
-  if (videoIndices.size === 0 || videoIndices.size >= totalIndices) {
+  if (albumMediaMix() !== "mixed") {
     return "both";
   }
   return filter;
+}
+
+// What the loaded album holds: "mixed" is the only case with anything to filter
+// here. "unknown" means the fetch failed; browsing fails open then, but the map
+// classifies its own points and may still be filtered. An album not loaded yet
+// counts as "images".
+export function albumMediaMix() {
+  if (loadFailed) {
+    return "unknown";
+  }
+  if (videoIndices.size === 0) {
+    return "images";
+  }
+  return videoIndices.size >= totalIndices ? "videos" : "mixed";
 }
 
 // Whether the active filter shows the album entry at `index`.
@@ -119,9 +136,11 @@ export async function loadMediaIndices(album, reason = "album") {
   const sequence = ++loadSequence;
   loadingAlbum = album;
   let data = { total: 0, video_indices: [] };
+  let failed = false;
   try {
     data = await fetchJson(`media_indices/${encodeURIComponent(album)}`);
   } catch (err) {
+    failed = true;
     // No index yet, or the server is away: fail open. An album with no known
     // videos is one the filter leaves alone.
     console.warn("Failed to load media indices; media filter is inactive:", err);
@@ -130,10 +149,12 @@ export async function loadMediaIndices(album, reason = "album") {
     return;
   }
   loadingAlbum = null;
+  loadFailed = failed;
   videoIndices = new Set(data?.video_indices || []);
   totalIndices = data?.total || 0;
   loadedAlbum = album;
   announce(reason);
+  window.dispatchEvent(new CustomEvent("mediaIndicesUpdated"));
 }
 
 // Renumber the video set after `deletedIndices` were removed from the album,
@@ -161,6 +182,7 @@ function applyDeletion(deletedIndices, totalImages) {
 export function _setMediaIndicesForTest({ album = null, total = 0, videoIndices: videos = [] } = {}) {
   loadedAlbum = album;
   loadingAlbum = null;
+  loadFailed = false;
   totalIndices = total;
   videoIndices = new Set(videos);
   announcedFilter = "both";
@@ -173,6 +195,7 @@ window.addEventListener("albumChanged", (e) => {
     // The live list has already been renumbered in place by slideState;
     // keep our set in step and stay quiet so nothing is rebuilt.
     applyDeletion(detail.deletedIndices, detail.totalImages);
+    window.dispatchEvent(new CustomEvent("mediaIndicesUpdated"));
     return;
   }
   if (detail.changeType !== "refresh") {
@@ -186,7 +209,7 @@ window.addEventListener("albumChanged", (e) => {
 });
 
 // Fired by the mediaFilter setting's onSet hook in state.js — which runs for
-// the user's radio click, and also when a server-side preference record is
+// the user's choice in the Show menu, and also when a server-side preference record is
 // applied at boot, where no settingsUpdated event is dispatched.
 window.addEventListener("mediaFilterSettingChanged", () => {
   if (loadingAlbum !== null) {
