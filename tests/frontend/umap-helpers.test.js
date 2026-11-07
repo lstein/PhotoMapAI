@@ -6,7 +6,6 @@ import {
   MEDIA_FILTERS,
   filterPointsByMediaType,
   findLandmarkClusterAt,
-  hasVideoPoints,
 } from "../../photomap/frontend/static/javascript/umap-helpers.js";
 
 describe("findLandmarkClusterAt", () => {
@@ -121,22 +120,5 @@ describe("filterPointsByMediaType", () => {
 
   it("is one of the documented filter values", () => {
     expect(MEDIA_FILTERS).toEqual(["both", "images", "videos"]);
-  });
-});
-
-describe("hasVideoPoints", () => {
-  it("detects a video among the points", () => {
-    expect(hasVideoPoints([{ media: "image" }, { media: "video" }])).toBe(true);
-  });
-
-  it("reports false for an all-image album", () => {
-    // Drives disabling the filter: a "videos only" radio on an all-photo
-    // album can only ever produce a blank map.
-    expect(hasVideoPoints([{ media: "image" }, {}])).toBe(false);
-  });
-
-  it("reports false for empty or missing input", () => {
-    expect(hasVideoPoints([])).toBe(false);
-    expect(hasVideoPoints(undefined)).toBe(false);
   });
 });

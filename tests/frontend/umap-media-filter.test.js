@@ -147,13 +147,7 @@ const plotDiv = () => document.getElementById("umapPlot");
 const mainTrace = () => plotDiv().data[0];
 
 function selectFilter(value) {
-  const radio = document.getElementById(
-    { both: "umapMediaFilterBothRadio", images: "umapMediaFilterImagesRadio", videos: "umapMediaFilterVideosRadio" }[
-      value
-    ]
-  );
-  radio.checked = true;
-  radio.dispatchEvent(new Event("change"));
+  setMediaFilter(value);
 }
 
 /** Indices handed to setSearchResults by the most recent selection. */
@@ -353,23 +347,12 @@ describe("an album with no videos", () => {
     expect(setMediaFilter).not.toHaveBeenCalled();
     expect(mockState.mediaFilter).toBe("videos");
   });
-
-  it("disables the radios and checks Both", () => {
-    expect(document.getElementById("umapMediaFilterVideosRadio").disabled).toBe(true);
-    expect(document.getElementById("umapMediaFilterImagesRadio").disabled).toBe(true);
-    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(true);
-  });
-
-  it("explains why the control is unavailable", () => {
-    expect(document.getElementById("umapMediaFilterContainer").title).toMatch(/no videos/i);
-  });
 });
 
-// The filter can also change without anyone touching the radios: state.js
-// applies the server's copy of the preference after boot, which is how a
-// device whose localStorage was evicted gets its settings back. That happens
-// after the controls were built from the value the radios currently show.
-describe("a filter applied from outside the controls", () => {
+// state.js applies the server's copy of the preference after boot, which is how
+// a device whose localStorage was evicted gets its settings back. It announces
+// the value without going through the setter.
+describe("a filter applied from outside the setter", () => {
   beforeEach(async () => {
     setMediaFilter.mockClear();
     mockState.mediaFilter = "both";
@@ -377,22 +360,7 @@ describe("a filter applied from outside the controls", () => {
     await boot(MIXED_POINTS);
   });
 
-  it("moves the checked radio to match", () => {
-    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(true);
-
-    mockState.mediaFilter = "videos";
-    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
-
-    expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(true);
-    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(false);
-  });
-
-  it("redraws the map, not just the radio", async () => {
-    // Assigning `checked` fires no change event — that is what stops this
-    // looping back through the radios' own handler — so the redraw has to be
-    // driven from here too. Otherwise the radio reads Videos over a map still
-    // drawing all 13 points, and clicking the radio that is already checked
-    // fires nothing, so the user cannot even correct it.
+  it("redraws the map", async () => {
     expect(mainTrace().x).toHaveLength(MIXED_POINTS.length);
 
     mockState.mediaFilter = "videos";
@@ -404,10 +372,9 @@ describe("a filter applied from outside the controls", () => {
   });
 });
 
-// Each case boots its own module: the radios are only disabled by a real
-// fetchUmapData, and a second boot() inside one test would reuse the cached
-// module, whose map is already current and skips the redraw.
-describe("a filter applied from outside the controls, on an album with no videos", () => {
+// Each case boots its own module: a second boot() inside one test would reuse
+// the cached module, whose map is already current and skips the redraw.
+describe("a filter applied from outside the setter, on an album with no videos", () => {
   let umapModule;
 
   beforeEach(async () => {
@@ -417,23 +384,18 @@ describe("a filter applied from outside the controls, on an album with no videos
     umapModule = await boot(IMAGE_ONLY_POINTS);
   });
 
-  it("does not re-check radios the album has disabled", () => {
-    // The album disables the controls and pins them to Both; a late-arriving
-    // "videos" must not tick a radio the album cannot honour.
-    expect(document.getElementById("umapMediaFilterVideosRadio").disabled).toBe(true);
-
+  it("does not blank the map", async () => {
+    mockState.mediaFilter = "videos";
     window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+    await settle();
 
-    expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(false);
-    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(true);
+    expect(mainTrace().x).toHaveLength(IMAGE_ONLY_POINTS.length);
   });
 
-  it("catches the radios up once an album that has videos re-enables them", async () => {
-    // The filter dropped above is still in force — it was never un-set, only
-    // left unshown. An album that can honour it must not go on reading "Both"
-    // while every view browses videos only.
-    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
+  it("applies once an album that can honour it is loaded", async () => {
+    // The filter was never un-set, only unable to apply.
     mockState.mediaFilter = "videos";
+    window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: "videos" } }));
 
     currentSlideIndex = [-1, MIXED_POINTS.length, null];
     installFetchMock(MIXED_POINTS);
@@ -441,8 +403,6 @@ describe("a filter applied from outside the controls, on an album with no videos
     await umapModule.fetchUmapData();
     await settle();
 
-    expect(document.getElementById("umapMediaFilterVideosRadio").disabled).toBe(false);
-    expect(document.getElementById("umapMediaFilterVideosRadio").checked).toBe(true);
-    expect(document.getElementById("umapMediaFilterBothRadio").checked).toBe(false);
+    expect(mainTrace().x).toHaveLength(3);
   });
 });

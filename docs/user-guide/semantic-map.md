@@ -88,13 +88,15 @@ With "Show hover thumbnails" turned on and "Show landmarks" turned off:
 
 ## Showing images, videos, or both
 
-If the album contains videos as well as photos, the **Show** radio buttons choose
-which of them to show: **Both**, **Images only**, or **Videos only**.
+If the album contains videos as well as photos, the **Show** icon in the Search
+panel chooses which of them to show: **Images**, **Videos**, or **Both**. The icon
+changes to a camera, a clapper, or the two together to indicate the current choice.
+It is greyed out for an album that holds only one kind.
 Videos are placed by the same semantic embedding as photos — computed from a
 still captured shortly after the video starts — so a clip lands next to the
 pictures it looks like.
 
-The choice applies everywhere, not just to the map. With **Videos only**
+The choice applies everywhere, not just to the map. With **Videos**
 selected, the slideshow and the grid view step through the album's videos
 alone, shuffle mode draws only from them, the seek slider covers just them,
 and text and image searches return videos only (up to the album's maximum

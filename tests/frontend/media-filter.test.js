@@ -222,3 +222,52 @@ describe("albumChanged", () => {
     expect(mf.mediaBrowseList()).toEqual([{ index: 1 }, { index: 2 }, { index: 3 }]);
   });
 });
+
+describe("mediaIndicesUpdated", () => {
+  let updates;
+  const onUpdate = () => updates++;
+
+  beforeEach(() => {
+    updates = 0;
+    window.addEventListener("mediaIndicesUpdated", onUpdate);
+  });
+
+  afterEach(() => {
+    window.removeEventListener("mediaIndicesUpdated", onUpdate);
+  });
+
+  it("fires on a load even when no filter is announced", async () => {
+    fetchJson.mockResolvedValueOnce({ total: 3, video_indices: [] });
+    mockState.mediaFilter = "both";
+    await mf.loadMediaIndices("alb");
+    expect(updates).toBe(1);
+    expect(mf.albumMediaMix()).toBe("images");
+  });
+
+  it("reports the mix as unknown after a failed fetch, and recovers on the next", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    fetchJson.mockRejectedValueOnce(new Error("500"));
+    await mf.loadMediaIndices("alb");
+    expect(updates).toBe(1);
+    expect(mf.albumMediaMix()).toBe("unknown");
+    mockState.mediaFilter = "videos";
+    expect(mf.effectiveMediaFilter()).toBe("both");
+
+    fetchJson.mockResolvedValueOnce({ total: 3, video_indices: [1] });
+    await mf.loadMediaIndices("alb");
+    expect(mf.albumMediaMix()).toBe("mixed");
+    warn.mockRestore();
+  });
+
+  it("fires for a deletion that uses up the album's videos", () => {
+    mf._setMediaIndicesForTest({ album: "alb", total: 3, videoIndices: [1] });
+    expect(mf.albumMediaMix()).toBe("mixed");
+    window.dispatchEvent(
+      new CustomEvent("albumChanged", {
+        detail: { album: "alb", changeType: "deletion", deletedIndices: [1], totalImages: 2 },
+      })
+    );
+    expect(updates).toBe(1);
+    expect(mf.albumMediaMix()).toBe("images");
+  });
+});

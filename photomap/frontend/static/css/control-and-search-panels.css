@@ -147,6 +147,48 @@
   border-color: #fff;
 }
 
+/* ===== "Show" menu (images / videos / both) ===== */
+
+#showMediaMenu {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(30, 30, 30, 0.95);
+  border: 1px solid #444;
+  padding: 4px;
+  border-radius: 6px;
+  z-index: 10000;
+}
+
+.show-media-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.95em;
+  cursor: pointer;
+}
+
+.show-media-item svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.show-media-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.show-media-item[aria-current="true"] {
+  background: rgba(255, 255, 255, 0.22);
+  font-weight: bold;
+}
+
 /* Drag-over highlight for search panel */
 #searchPanel.drag-over {
   border: 2px dashed #00ff99;
@@ -221,6 +263,9 @@
   #controlPanel {
     position: static !important;
     width: 100vw;
+    /* Without this the side padding is added to 100vw, pushing the centred
+       icon row off the right-hand edge. */
+    box-sizing: border-box;
     margin: 0;
     border-radius: 0;
     box-shadow: none;
@@ -266,12 +311,23 @@
   }
 }
 
-/* The Search panel carries six icons since Clear became always-visible and
-   About moved across. At the phone layout's 48px that needs 328px of row,
-   which a 320px viewport cannot give — and html/body are overflow:hidden, so
-   the excess is clipped off both ends rather than scrolled. Step the buttons
-   back down on the narrowest screens: 6x40 + 5x4 = 260px fits with room over. */
-@media (max-width: 380px) {
+/* The two panels share the bottom edge until they stack at 600px, and with
+   seven icons in the Search panel they would run into each other on a tablet
+   in portrait (768-820px). The room comes out of the gaps between icons. Below
+   about 745px they still overlap, by less than they would otherwise. */
+@media (min-width: 601px) and (max-width: 860px) {
+  .control-icons-row,
+  .search-icons-row {
+    gap: 1px;
+  }
+}
+
+/* Labels make some icons wider than their buttons. At the phone layout's 48px
+   the Search panel's seven icons need 399px of row and the Control panel 426px,
+   plus padding, which most phones cannot give — and html/body are
+   overflow:hidden, so the excess is clipped off both ends rather than scrolled.
+   Step the buttons back down on the narrower screens. */
+@media (max-width: 429px) {
   #controlPanel button,
   #searchPanel button {
     width: 40px;
@@ -289,5 +345,15 @@
   .control-icons-row,
   .search-icons-row {
     gap: 0.25em;
+  }
+}
+
+/* Under about 360px even the 40px rows need more than the width on offer. This
+   fits the Search row down to 320px; at 320px the Control row's outer labels
+   still lose about 6px a side. */
+@media (max-width: 357px) {
+  .control-icons-row,
+  .search-icons-row {
+    gap: 0;
   }
 }

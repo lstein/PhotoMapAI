@@ -43,16 +43,12 @@ const mockState = {
   searchResults: [],
 };
 
-const setMediaFilter = jest.fn((v) => {
-  mockState.mediaFilter = v;
-});
 const setSearchResults = jest.fn();
 // Mutable so a test can put the swiper on a specific image.
 const currentSlideIndex = [-1, 0, null];
 
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
-  setMediaFilter,
   setUmapShowLandmarks: jest.fn((v) => {
     mockState.umapShowLandmarks = v;
   }),
