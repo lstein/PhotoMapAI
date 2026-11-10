@@ -268,6 +268,86 @@ describe("resampling after the viewport settles", () => {
   });
 });
 
+describe("rotation on Chrome for iOS", () => {
+  // Chrome on iOS fires resize/orientationchange before the rotated
+  // dimensions are in place, and the rotation animation can outlast a single
+  // short resample. The published height then stayed at the old
+  // orientation's value with no later event to correct it.
+  const heightVar = () => document.documentElement.style.getPropertyValue("--visible-viewport-height");
+
+  it("still converges when the new dimensions arrive after the first resample", () => {
+    jest.useFakeTimers();
+    setVisualViewport({ height: 870 });
+    initializePanelAnchor([panel()]);
+    expect(heightVar()).toBe("870px");
+
+    // Event fires with the portrait geometry still in place...
+    window.dispatchEvent(new Event("orientationchange"));
+    jest.advanceTimersByTime(400);
+    expect(heightVar()).toBe("870px");
+
+    // ...and landscape only lands later, with no further event.
+    setLayoutViewportHeight(768);
+    setVisualViewport({ height: 700 });
+    jest.advanceTimersByTime(2000);
+
+    expect(heightVar()).toBe("700px");
+    expect(panel().style.transform).toBe("translateY(-68px)");
+    jest.useRealTimers();
+  });
+
+  it("resyncs when the orientation media query flips", () => {
+    const mediaListeners = [];
+    window.matchMedia = () => ({ addEventListener: (_name, fn) => mediaListeners.push(fn) });
+    try {
+      initializePanelAnchor([panel()]);
+      setVisualViewport({ height: 700 });
+
+      mediaListeners.forEach((fn) => fn());
+
+      expect(panel().style.transform).toBe("translateY(-300px)");
+    } finally {
+      delete window.matchMedia;
+    }
+  });
+
+  it("blurs a focused <select> once it is hidden, so shortcuts are not left dead", () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div id="dlg"><select id="albumSelect"><option>a</option></select></div>`
+    );
+    initializePanelAnchor([panel()]);
+    document.getElementById("albumSelect").focus();
+
+    document.getElementById("dlg").style.display = "none";
+    syncPanelAnchor();
+
+    expect(document.activeElement).not.toBe(document.getElementById("albumSelect"));
+  });
+
+  it.each(["checkbox", "radio", "range", "button"])("is not held by a focused %s input", (type) => {
+    document.body.insertAdjacentHTML("beforeend", `<input id="control" type="${type}" />`);
+    initializePanelAnchor([panel()]);
+    document.getElementById("control").focus();
+
+    setVisualViewport({ height: 700 });
+    window.dispatchEvent(new Event("orientationchange"));
+
+    expect(panel().style.transform).toBe("translateY(-300px)");
+  });
+
+  it("is still held by a focused search-type text field", () => {
+    document.body.insertAdjacentHTML("beforeend", `<input id="query" type="search" />`);
+    initializePanelAnchor([panel()]);
+    document.getElementById("query").focus();
+
+    setVisualViewport({ height: 620 });
+    syncPanelAnchor();
+
+    expect(panel().style.transform).toBe("");
+  });
+});
+
 describe("the --visible-viewport-height custom property", () => {
   // The swiper container and slide images are sized with 100dvh, which
   // resolves against the same stranded layout viewport as the panels: after a

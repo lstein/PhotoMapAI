@@ -564,34 +564,51 @@ class GridViewManager {
   }
 
   setupGridResizeHandler() {
-    let resizeTimeout;
-
+    // The timers live on the instance, not in this closure: a rebuild calls
+    // this again, and the new handler has to be able to cancel checks the
+    // previous one left pending.
     const handleResize = async () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(async () => {
-        if (!state.gridViewActive) {
-          return;
-        }
+      clearTimeout(this.resizeTimeout);
+      clearTimeout(this.resizeRecheckTimeout);
+      // Chrome on iOS fires resize before a rotation's new dimensions are in
+      // place, and the rotation can still be animating 300ms later. Check the
+      // geometry once more after it has certainly settled; when it has not
+      // changed since the first check this does nothing.
+      this.resizeRecheckTimeout = setTimeout(() => checkGeometry(), 1500);
+      this.resizeTimeout = setTimeout(() => checkGeometry(), 300);
+    };
 
-        const newGeometry = this.calculateGridGeometry();
+    const checkGeometry = async () => {
+      // Still hidden while the grid fades in: the container measures zero
+      // wide, and showing it re-measures anyway.
+      if (!state.gridViewActive || !this.isVisible()) {
+        return;
+      }
 
-        if (this.gridGeometryChanged(newGeometry)) {
-          // New instance first, then the reset — the order the thumbnail-size
-          // handler uses. The other way round, the reset built the pages at the
-          // old geometry and scrolled past the page it prepends; the instance
-          // created afterwards then started at slide 0, which is that
-          // previous page, and — since creating it forgets which images are
-          // loaded but keeps their slides — the batch loads that followed
-          // appended a second copy of every tile. Visible on every resize that
-          // changes the grid's shape, including entering and leaving
-          // fullscreen, as the grid coming back one page early.
-          this.initializeGridSwiper();
-          await this.resetAllSlides();
-        }
-      }, 300);
+      const newGeometry = this.calculateGridGeometry();
+
+      if (this.gridGeometryChanged(newGeometry)) {
+        // New instance first, then the reset — the order the thumbnail-size
+        // handler uses. The other way round, the reset built the pages at the
+        // old geometry and scrolled past the page it prepends; the instance
+        // created afterwards then started at slide 0, which is that
+        // previous page, and — since creating it forgets which images are
+        // loaded but keeps their slides — the batch loads that followed
+        // appended a second copy of every tile. Visible on every resize that
+        // changes the grid's shape, including entering and leaving
+        // fullscreen, as the grid coming back one page early.
+        this.initializeGridSwiper();
+        await this.resetAllSlides();
+      }
     };
 
     this.addEventListener(window, "resize", handleResize);
+    // Flips when layout actually adopts the new orientation — on Chrome for
+    // iOS that can come after the resize event carried stale dimensions.
+    const orientationQuery = window.matchMedia?.("(orientation: portrait)");
+    if (orientationQuery?.addEventListener) {
+      this.addEventListener(orientationQuery, "change", handleResize);
+    }
   }
 
   updateCurrentSlideHighlight(globalIndex = null) {
