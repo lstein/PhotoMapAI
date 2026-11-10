@@ -24,10 +24,15 @@
 // than this, so nothing real is filtered out.
 const MIN_OVERSHOOT_PX = 24;
 
-// A resample after the viewport has had time to settle. The iPadOS fullscreen
+// Resamples after the viewport has had time to settle. The iPadOS fullscreen
 // exit is animated, so a sample taken mid-transition can be wrong, and the
-// event that would correct it may already have fired.
-const SETTLE_DELAY_MS = 300;
+// event that would correct it may already have fired. Rotation is worse:
+// Chrome on iOS fires resize/orientationchange before the new dimensions are
+// in place, and the rotation animation can outlast a single short resample,
+// leaving --visible-viewport-height pinned at the old orientation's height
+// with nothing left to correct it. A few spaced samples cover the slow case;
+// each is a cheap no-op once the geometry has settled.
+const SETTLE_DELAYS_MS = [150, 400, 800, 1500];
 
 // How long after a text field blurs the correction stays held. On iPad the
 // blur arrives while the software keyboard is still fully on screen — hiding
@@ -39,16 +44,45 @@ const SETTLE_DELAY_MS = 300;
 const KEYBOARD_COLLAPSE_MS = 700;
 
 let anchored = [];
-let settleTimer = null;
+let settleTimers = [];
 let keyboardSettling = false;
 let keyboardCollapseTimer = null;
 
-/** Can focusing this element summon the software keyboard? */
+// <input> types that do not summon the software keyboard. A focused checkbox,
+// radio, range or button must not hold the correction: nothing ever moves
+// focus off it again, so the hold would outlive every later rotation.
+const NON_TEXT_INPUT_TYPES = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit",
+]);
+
+/** Is this a form control that can hold focus? */
+function isFormControl(element) {
+  return Boolean(element) && (element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName));
+}
+
+/**
+ * Can focusing this element summon the software keyboard?
+ *
+ * <select> stays in: on iPhone its option picker can take the keyboard's
+ * place and shrink the visual viewport just as the keyboard does.
+ */
 function isTextEntry(element) {
-  if (!element) {
+  if (!isFormControl(element)) {
     return false;
   }
-  return element.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName);
+  if (element.tagName !== "INPUT") {
+    return true;
+  }
+  return !NON_TEXT_INPUT_TYPES.has((element.type || "text").toLowerCase());
 }
 
 /** Is this element actually laid out, rather than inside a display: none subtree? */
@@ -79,15 +113,18 @@ function isRendered(element) {
  */
 function isTextEntryFocused() {
   const element = document.activeElement;
-  if (!isTextEntry(element)) {
+  if (!isFormControl(element)) {
     return false;
   }
+  // Any hidden control is blurred, not only text fields: events.js ignores
+  // shortcuts while an INPUT or SELECT has focus, so a checkbox or select
+  // left focused inside a closed dialog would otherwise keep them dead.
   if (!isRendered(element)) {
     noteTextEntryBlur(element);
     element.blur();
     return false;
   }
-  return true;
+  return isTextEntry(element);
 }
 
 /** Keep the correction held across the keyboard's hide animation. */
@@ -195,11 +232,11 @@ export function syncPanelAnchor() {
   }
 }
 
-/** Resync once more after the viewport has settled, coalescing repeat calls. */
+/** Resync now and again as the viewport settles, coalescing repeat calls. */
 function scheduleSettleResync() {
   syncPanelAnchor();
-  clearTimeout(settleTimer);
-  settleTimer = setTimeout(syncPanelAnchor, SETTLE_DELAY_MS);
+  settleTimers.forEach(clearTimeout);
+  settleTimers = SETTLE_DELAYS_MS.map((delay) => setTimeout(syncPanelAnchor, delay));
 }
 
 /**
@@ -214,6 +251,10 @@ export function initializePanelAnchor(panels) {
 
   window.addEventListener("resize", scheduleSettleResync);
   window.addEventListener("orientationchange", scheduleSettleResync);
+  // The orientation media query flips when layout actually adopts the new
+  // orientation, which on Chrome for iOS can be well after the resize and
+  // orientationchange events above have fired with stale dimensions.
+  window.matchMedia?.("(orientation: portrait)")?.addEventListener?.("change", scheduleSettleResync);
   if (window.visualViewport) {
     // The visible area shrinking is the signal that fires most reliably on the
     // platform this exists for: the layout viewport does not change on a
