@@ -25,7 +25,7 @@ const mockState = {
   dataChanged: true,
   autotaggingEnabled: false,
   mediaFilter: "both",
-  umapShowLandmarks: true,
+  umapLandmarkStyle: "thumbnails",
   umapShowHoverThumbnails: false,
   umapExitFullscreenOnSelection: true,
   umapClickSelectsCluster: true,
@@ -35,13 +35,13 @@ const mockState = {
   searchResults: [],
 };
 
-const setUmapShowLandmarks = jest.fn((v) => {
-  mockState.umapShowLandmarks = v;
+const setUmapLandmarkStyle = jest.fn((v) => {
+  mockState.umapLandmarkStyle = v;
 });
 
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
-  setUmapShowLandmarks,
+  setUmapLandmarkStyle,
   setUmapClickSelectsCluster: jest.fn(),
   setUmapControlsVisible: jest.fn(),
   setUmapExitFullscreenOnSelection: jest.fn(),
@@ -122,7 +122,7 @@ describe("umap.js reports the strength the map was drawn with", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    Object.assign(mockState, { mediaFilter: "both", umapShowLandmarks: false, dataChanged: true });
+    Object.assign(mockState, { mediaFilter: "both", umapLandmarkStyle: "none", dataChanged: true });
     loadUmapDom();
     installPlotlyMock();
     installFetchMock(POINTS);

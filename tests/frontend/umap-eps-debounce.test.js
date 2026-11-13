@@ -33,7 +33,7 @@ const mockState = {
   dataChanged: true,
   autotaggingEnabled: false,
   mediaFilter: "both",
-  umapShowLandmarks: false,
+  umapLandmarkStyle: "none",
   umapShowHoverThumbnails: false,
   umapExitFullscreenOnSelection: false,
   umapClickSelectsCluster: true,
@@ -49,8 +49,8 @@ const currentSlideIndex = [-1, 0, null];
 
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
-  setUmapShowLandmarks: jest.fn((v) => {
-    mockState.umapShowLandmarks = v;
+  setUmapLandmarkStyle: jest.fn((v) => {
+    mockState.umapLandmarkStyle = v;
   }),
   setUmapClickSelectsCluster: jest.fn(),
   setUmapControlsVisible: jest.fn(),

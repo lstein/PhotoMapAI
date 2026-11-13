@@ -16,8 +16,8 @@ import {
   setUmapClickSelectsCluster,
   setUmapControlsVisible,
   setUmapExitFullscreenOnSelection,
+  setUmapLandmarkStyle,
   setUmapShowHoverThumbnails,
-  setUmapShowLandmarks,
   state,
 } from "./state.js";
 import { filterPointsByMediaType, findLandmarkClusterAt } from "./umap-helpers.js";
@@ -31,6 +31,10 @@ const UMAP_SIZES = {
   fullscreen: { width: window.innerWidth, height: window.innerHeight },
 };
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
+// How the clusters are marked on the map: not at all, by a thumbnail of a
+// representative image, or by a text label in the cluster's colour.
+const LANDMARK_STYLES = ["none", "thumbnails", "text"];
+const DEFAULT_LANDMARK_STYLE = "thumbnails";
 const randomWalkMaxSize = 5000; // Max cluster size to use random walk ordering
 const MARKER_UPDATE_IGNORE_WINDOW_MS = 1000; // Time window to ignore marker updates after manual navigation
 
@@ -215,7 +219,7 @@ let umapWindowHasBeenShown = false; // Track if window has been shown at least o
 let isFullscreen = true;
 let lastUnshadedSize = "medium"; // Track last non-fullscreen size
 const lastUnshadedPosition = { left: null, top: null }; // Track last position
-let landmarksVisible = false;
+let landmarkStyle = "none"; // one of LANDMARK_STYLES; set from state when the controls are wired
 let hoverThumbnailsEnabled = true; // default ON
 
 // Helper to get current window size
@@ -699,7 +703,7 @@ function fetchClusterLabels(query) {
       // supply one, and they were drawn before this landed (the map no longer
       // waits for the labels). Re-render so they pick it up; the debounced
       // form because a relayout may be drawing them at this moment too.
-      if (landmarksVisible) {
+      if (landmarkStyle !== "none") {
         debouncedUpdateLandmarkTrace();
       }
       return labels;
@@ -951,6 +955,12 @@ export async function fetchUmapData() {
     const savedPlotWidth = parseInt(umapPlotDiv.style.width, 10);
     const savedPlotHeight = parseInt(umapPlotDiv.style.height, 10);
     Plotly.newPlot("umapPlot", [allPointsTrace, currentImageTrace], layout, config).then(async (gd) => {
+      // newPlot starts from a layout with no thumbnails or text labels, so
+      // what the landmark code last drew is no longer on screen. Forget it,
+      // or an identical redraw would be skipped as a no-op and leave the
+      // landmarks missing until the next pan.
+      lastImagesJSON = null;
+      lastAnnotationsJSON = null;
       document.getElementById("umapContent").style.display = "block";
       applyUmapControlsVisibility();
       enableWheelZoom(gd);
@@ -1045,7 +1055,7 @@ export async function fetchUmapData() {
           eventData["yaxis.range"] !== undefined;
 
         const isResize = eventData.width !== undefined || eventData.height !== undefined;
-        const isImageUpdate = eventData.images !== undefined;
+        const isImageUpdate = eventData.images !== undefined || eventData.annotations !== undefined;
 
         // Only update landmarks for pan/zoom, not for our own image updates or resizes
         if (isPanZoom && !isImageUpdate && !isResize) {
@@ -1061,7 +1071,7 @@ export async function fetchUmapData() {
       });
 
       // Initial landmark update
-      if (landmarksVisible) {
+      if (landmarkStyle !== "none") {
         setTimeout(updateLandmarkTrace, 500);
       }
 
@@ -1138,6 +1148,31 @@ export async function fetchUmapData() {
             await handleImageClick(pt.customdata);
           }
         }
+      }
+    });
+
+    // Text landmark click: the same as clicking a thumbnail landmark — go to
+    // the cluster's representative image, as a cluster or a single image
+    // depending on the click mode.
+    clickPlotEl.on("plotly_clickannotation", async (event) => {
+      if (clickPlotEl._lastPinchAt && Date.now() - clickPlotEl._lastPinchAt < 500) {
+        return;
+      }
+      const cluster = textLandmarkClusters[event?.index];
+      if (cluster === undefined) {
+        return;
+      }
+      const clusterPoints = visiblePoints().filter((p) => p.cluster === cluster);
+      if (clusterPoints.length === 0) {
+        return;
+      }
+      const targetIndex = getLandmarkImageIndex(cluster, clusterPoints);
+      if (externalClickCallback) {
+        externalClickCallback(targetIndex);
+      } else if (state.umapClickSelectsCluster) {
+        await handleClusterClick(targetIndex);
+      } else {
+        await handleImageClick(targetIndex);
       }
     });
 
@@ -1350,14 +1385,22 @@ window.addEventListener("stateReady", () => {
     });
   }
 
-  // Landmarks checkbox - initialize from state
-  const landmarkCheckbox = document.getElementById("umapShowLandmarks");
-  if (landmarkCheckbox) {
-    landmarkCheckbox.checked = state.umapShowLandmarks;
-    landmarksVisible = state.umapShowLandmarks;
-    landmarkCheckbox.addEventListener("change", (e) => {
-      landmarksVisible = e.target.checked;
-      setUmapShowLandmarks(e.target.checked);
+  // Landmark style pulldown - initialize from state. The stored value is a
+  // free string as far as the preference loader is concerned, so anything
+  // unrecognised falls back to the default rather than leaving the select
+  // blank and the map in a style no code path draws.
+  const landmarkSelect = document.getElementById("umapLandmarkStyle");
+  if (landmarkSelect) {
+    landmarkStyle = LANDMARK_STYLES.includes(state.umapLandmarkStyle)
+      ? state.umapLandmarkStyle
+      : DEFAULT_LANDMARK_STYLE;
+    landmarkSelect.value = landmarkStyle;
+    landmarkSelect.addEventListener("change", (e) => {
+      landmarkStyle = LANDMARK_STYLES.includes(e.target.value) ? e.target.value : DEFAULT_LANDMARK_STYLE;
+      setUmapLandmarkStyle(landmarkStyle);
+      // Hand focus back to the page so the global keyboard shortcuts work
+      // again straight away (a focused <select> swallows the arrow keys).
+      e.target.blur();
       updateLandmarkTrace();
     });
   }
@@ -1874,7 +1917,11 @@ function getLandmarkForCluster(pts) {
 }
 
 // Helper: get cluster centers and representatives
-function getLargestClustersInView(maxLandmarks = 10) {
+//
+// `anchor` picks which point of a cluster must be in view and is reported as
+// `center`: "top" is the landmark point a thumbnail hangs above, "centroid" the
+// mean position, where a text label sits.
+function getLargestClustersInView(maxLandmarks = 10, anchor = "top") {
   const plotDiv = document.getElementById("umapPlot");
   if (!plotDiv || !plotDiv.layout) {
     return [];
@@ -1896,7 +1943,13 @@ function getLargestClustersInView(maxLandmarks = 10) {
 
   const clustersInView = [];
   for (const [cluster, pts] of clusterMap.entries()) {
-    const landmark = getLandmarkForCluster(pts);
+    const landmark =
+      anchor === "centroid"
+        ? {
+            x: pts.reduce((sum, p) => sum + p.x, 0) / pts.length,
+            y: pts.reduce((sum, p) => sum + p.y, 0) / pts.length,
+          }
+        : getLandmarkForCluster(pts);
     // Only include if landmark is in view
     if (landmark.x >= xMin && landmark.x <= xMax && landmark.y >= yMin && landmark.y <= yMax) {
       clustersInView.push({
@@ -1929,15 +1982,20 @@ let suppressRelayoutEvent = false; // Add this flag
  * leaves the thumbnails behind.
  *
  * ``lastImagesJSON`` is reset so the next draw is not mistaken for a no-op.
+ * Both it and the draw side update the cache synchronously, at the moment the
+ * relayout is issued: Plotly applies the images to the layout straight away
+ * but resolves the promise only once they have loaded, so a cache updated in
+ * the ``.then`` reads "nothing drawn" while slow thumbnails are on screen —
+ * and a switch to text labels in that window skipped clearing them.
  */
 function clearLandmarkImages(plotDiv) {
   if (lastImagesJSON === null) {
     return;
   }
+  lastImagesJSON = null;
   suppressRelayoutEvent = true;
   Plotly.relayout(plotDiv, { images: [] }).then(() => {
     suppressRelayoutEvent = false;
-    lastImagesJSON = null;
   });
 }
 
@@ -1978,20 +2036,34 @@ function updateLandmarkTrace() {
       });
     }
 
-    if (!landmarksVisible) {
+    // Whatever the other style left behind goes, so switching between them
+    // never shows both at once.
+    if (landmarkStyle !== "thumbnails") {
       clearLandmarkImages(plotDiv);
+    }
+    if (landmarkStyle !== "text") {
+      clearTextLandmarks(plotDiv);
+    }
+    if (landmarkStyle === "none") {
       return;
     }
 
     // Get clusters in view
-    const clusters = getLargestClustersInView(100);
+    const clusters = getLargestClustersInView(100, landmarkStyle === "text" ? "centroid" : "top");
     if (!clusters.length) {
       // The triangle traces were deleted above, but the thumbnails live in
-      // layout.images and need clearing separately — otherwise they hang over
-      // a region that no longer has any points under it. Reachable whenever
-      // the last cluster in view stops being drawn: most easily by switching
-      // the media filter to one that hides every member of it.
+      // layout.images (and text labels in layout.annotations) and need
+      // clearing separately — otherwise they hang over a region that no
+      // longer has any points under it. Reachable whenever the last cluster
+      // in view stops being drawn: most easily by switching the media filter
+      // to one that hides every member of it.
       clearLandmarkImages(plotDiv);
+      clearTextLandmarks(plotDiv);
+      return;
+    }
+
+    if (landmarkStyle === "text") {
+      drawTextLandmarks(plotDiv, clusters);
       return;
     }
 
@@ -2084,13 +2156,14 @@ function updateLandmarkTrace() {
     const imagesJSON = JSON.stringify(images);
     if (imagesJSON !== lastImagesJSON) {
       suppressRelayoutEvent = true;
+      // Recorded now, not when the images finish loading: see clearLandmarkImages.
+      lastImagesJSON = imagesJSON;
       Plotly.addTraces(plotDiv, [landmarkTrace, clickableTrace])
         .then(() => {
           return Plotly.relayout(plotDiv, { images });
         })
         .then(() => {
           suppressRelayoutEvent = false;
-          lastImagesJSON = imagesJSON;
         });
     } else {
       suppressRelayoutEvent = true;
@@ -2112,6 +2185,141 @@ function updateLandmarkTrace() {
 
 // Debounced version for event handlers
 const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 500);
+
+// --- Text landmarks ---
+//
+// Drawn as Plotly annotations: a rounded tag filled with the cluster's colour,
+// its text black or white for contrast, centred on the cluster's mean position the way a map labels a
+// region. (A thumbnail hangs above the cluster's top edge instead; a label
+// there drifts away from a large cluster's mass.) Annotations live
+// in layout.annotations, entirely separate from the thumbnails' layout.images
+// and the triangle traces, so each has its own clear path. Nothing else in
+// umap.js uses annotations, which is what lets these own the whole array.
+
+const TEXT_LANDMARK_FONT_PX = 13;
+const TEXT_LANDMARK_PAD_PX = 3;
+const TEXT_LANDMARK_MAX_CHARS = 32;
+// Text is far more compact than a thumbnail, so more of them fit before the
+// map turns into a word cloud.
+const TEXT_LANDMARK_COUNT = 24;
+
+let lastAnnotationsJSON = null;
+// Annotation index -> cluster id, for plotly_clickannotation. Kept beside the
+// annotations rather than on them because Plotly drops attributes it doesn't
+// know when it validates the layout.
+let textLandmarkClusters = [];
+
+// Plotly renders annotation text as its own small HTML subset, so a cluster
+// label containing "<" or "&" must be escaped to show literally.
+function escapeAnnotationText(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// The cluster's autotag phrase when the labels endpoint has one, else its
+// number — the same fallback every other cluster-naming surface uses.
+function textLandmarkLabel(cluster) {
+  const label = getClusterLabelInfo(cluster)?.label;
+  const text = typeof label === "string" && label.trim() ? label.trim() : `Cluster ${cluster}`;
+  return text.length > TEXT_LANDMARK_MAX_CHARS ? `${text.slice(0, TEXT_LANDMARK_MAX_CHARS - 1)}…` : text;
+}
+
+function clearTextLandmarks(plotDiv) {
+  textLandmarkClusters = [];
+  if (lastAnnotationsJSON === null) {
+    return;
+  }
+  lastAnnotationsJSON = null;
+  suppressRelayoutEvent = true;
+  Plotly.relayout(plotDiv, { annotations: [] }).then(() => {
+    suppressRelayoutEvent = false;
+  });
+}
+
+/**
+ * Greedily keep the largest clusters whose labels don't collide.
+ *
+ * Each label's box is estimated in pixels from its length (there is no text
+ * metric to hand before Plotly draws it) and converted to data units, since
+ * that is what the cluster positions are in. Labels are centred on their
+ * cluster, so two boxes collide when their centres are closer than half their
+ * summed widths and heights.
+ */
+function placeTextLandmarks(plotDiv, clusters) {
+  const [xMin, xMax] = plotDiv.layout.xaxis.range;
+  const [yMin, yMax] = plotDiv.layout.yaxis.range;
+  // The plot area, not the whole div: margins hold no data.
+  const widthPx = plotDiv._fullLayout?._size?.w || plotDiv.offsetWidth || 800;
+  const heightPx = plotDiv._fullLayout?._size?.h || plotDiv.offsetHeight || 560;
+  const xPerPx = (xMax - xMin) / widthPx;
+  const yPerPx = (yMax - yMin) / heightPx;
+  // A little air between neighbours, on top of the pill itself.
+  const boxHeightPx = TEXT_LANDMARK_FONT_PX + 2 * TEXT_LANDMARK_PAD_PX + 6;
+
+  const placed = [];
+  for (const c of clusters) {
+    if (placed.length >= TEXT_LANDMARK_COUNT) {
+      break;
+    }
+    const text = textLandmarkLabel(c.cluster);
+    const boxWidthPx = text.length * TEXT_LANDMARK_FONT_PX * 0.62 + 2 * TEXT_LANDMARK_PAD_PX + 10;
+    const candidate = { ...c, text, w: boxWidthPx * xPerPx, h: boxHeightPx * yPerPx };
+    const collides = placed.some(
+      (p) =>
+        Math.abs(p.center.x - candidate.center.x) < (p.w + candidate.w) / 2 &&
+        Math.abs(p.center.y - candidate.center.y) < (p.h + candidate.h) / 2
+    );
+    if (!collides) {
+      placed.push(candidate);
+    }
+  }
+  return placed;
+}
+
+function drawTextLandmarks(plotDiv, clusters) {
+  const placed = placeTextLandmarks(plotDiv, clusters);
+  const annotations = placed.map((c) => ({
+    x: c.center.x,
+    y: c.center.y,
+    xref: "x",
+    yref: "y",
+    xanchor: "center",
+    yanchor: "middle",
+    showarrow: false,
+    text: `<b>${escapeAnnotationText(c.text)}</b>`,
+    font: { color: isColorLight(c.color) ? "#111" : "#fff", size: TEXT_LANDMARK_FONT_PX },
+    bgcolor: c.color,
+    // A dark rim keeps the tag distinct from its own cluster's dots, which
+    // are the same colour and sit right behind it. The rounded corners come
+    // from umap-floating-window.css; Plotly has no option for them.
+    bordercolor: "rgba(0, 0, 0, 0.55)",
+    borderwidth: 1,
+    borderpad: TEXT_LANDMARK_PAD_PX,
+    // Lets plotly_clickannotation fire, so a label is as clickable as a
+    // thumbnail is.
+    captureevents: true,
+    hovertext: `Cluster ${c.cluster} (size=${c.size})`,
+  }));
+  textLandmarkClusters = placed.map((c) => c.cluster);
+
+  const annotationsJSON = JSON.stringify(annotations);
+  if (annotationsJSON === lastAnnotationsJSON) {
+    return;
+  }
+  lastAnnotationsJSON = annotationsJSON;
+  suppressRelayoutEvent = true;
+  Plotly.relayout(plotDiv, { annotations }).then(() => {
+    suppressRelayoutEvent = false;
+  });
+}
+
+// A text label's cluster changes its phrase when the labels arrive, are
+// invalidated by a recluster, or autotagging is switched — none of which is a
+// pan or zoom, so redraw on the announcement itself.
+window.addEventListener("clusterLabelsUpdated", () => {
+  if (mapExists && landmarkStyle === "text") {
+    debouncedUpdateLandmarkTrace();
+  }
+});
 
 // Helper function to get non-overlapping landmarks
 function getNonOverlappingLandmarks(clusters, imageSize, landmarkCount = landmarkCount) {
@@ -2384,7 +2592,7 @@ function setUmapWindowSize(sizeKey) {
   const win = document.getElementById("umapFloatingWindow");
   const plotDiv = document.getElementById("umapPlot");
   const contentDiv = document.getElementById("umapContent");
-  const landmarkCheckbox = document.getElementById("umapShowLandmarks");
+  const landmarkSelect = document.getElementById("umapLandmarkStyle");
   const controlsDiv = document.getElementById("umapControls");
 
   win.style.opacity = "0.75"; // default opacity for all sizes
@@ -2394,7 +2602,7 @@ function setUmapWindowSize(sizeKey) {
   controlsDiv.style.height = "";
 
   if (sizeKey === "shaded") {
-    // Do not change landmarksVisible or checkbox
+    // Do not change the landmark style or its pulldown
     if (contentDiv) {
       contentDiv.style.display = "none";
     }
@@ -2460,10 +2668,12 @@ function setUmapWindowSize(sizeKey) {
     plotDiv.style.height = height - bottomPadding + "px"; // plot area shorter
     Plotly.relayout(plotDiv, { width, height: height - bottomPadding });
 
-    // Turn landmarks OFF in small
-    if (sizeKey === "small" && landmarkCheckbox) {
-      landmarkCheckbox.checked = false;
-      landmarksVisible = false;
+    // Thumbnails swamp the small window, so turn them off there. Only for
+    // this view — the stored preference is left alone, as it always was.
+    // Text labels are compact enough to stay.
+    if (sizeKey === "small" && landmarkSelect && landmarkStyle === "thumbnails") {
+      landmarkSelect.value = "none";
+      landmarkStyle = "none";
       updateLandmarkTrace();
     }
   }

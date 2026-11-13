@@ -170,17 +170,13 @@
     <div id="umapPlot"></div>
 
     <div id="umapControls">
-      <div
-        style="
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          align-items: center;
-          margin-top: 4px;
-        "
-      >
-        <!-- Row 1: Cluster Strength + Click behavior (inline) -->
-        <div style="display: flex; flex-direction: row; gap: 12px; align-items: center;">
+      <!-- Two balanced columns: the first holds the two map-shaping controls
+           (strength, landmarks) over the click behaviour; the second holds
+           the four on/off preferences. Each cell is a fixed grid slot, so a
+           control that is hidden until the plot is ready (the strength
+           spinner) never lets its neighbours slide into its place. -->
+      <div id="umapControlsGrid">
+        <div class="umap-control-cell">
           <div id="umapEpsContainer" style="display: none; padding: 0px">
             <button id="umapClusterInfoBtn" type="button" class="umap-info-btn" title="Cluster information">i</button>
             <label for="umapEpsSpinner">Cluster Strength</label>
@@ -206,65 +202,46 @@
                  asked for, because the album is too large to afford it. -->
             <span id="umapEpsEffective" class="umap-eps-effective" hidden></span>
           </div>
-          <div id="umapClickBehaviorContainer" style="display: flex; flex-direction: row; gap: 12px;">
-            <label style="display: flex; align-items: center; gap: 6px;">
-              <input
-                type="radio"
-                name="umapClickBehavior"
-                id="umapClickSelectsClusterRadio"
-                value="cluster"
-                checked
-              />
-              Click selects cluster
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px;">
-              <input
-                type="radio"
-                name="umapClickBehavior"
-                id="umapClickSelectsImageRadio"
-                value="image"
-              />
-              Click selects image
-            </label>
-          </div>
         </div>
+        <label class="umap-control-cell">
+          <input type="checkbox" id="umapShowHoverThumbnails" checked />
+          Show hover thumbnails
+        </label>
 
-        <!-- Rows 2-3: Checkboxes in 2 aligned columns -->
-        <div
-          id="umapColorModeContainer"
-          style="display: grid; grid-template-columns: auto auto; gap: 2px 16px;"
-        >
-          <label style="display: flex; align-items: center; gap: 6px">
+        <div class="umap-control-cell">
+          <label for="umapLandmarkStyle">Landmarks</label>
+          <select id="umapLandmarkStyle" autocomplete="off">
+            <option value="none">None</option>
+            <option value="thumbnails">Thumbnails</option>
+            <option value="text">Text labels</option>
+          </select>
+        </div>
+        <label class="umap-control-cell">
+          <input type="checkbox" id="umapHighlightSelection" />
+          <span>Highlight selection (<a id="umapClearSelectionLink" href="#">clear</a>)</span>
+        </label>
+
+        <div id="umapClickBehaviorContainer" class="umap-control-cell">
+          <span>Click selects</span>
+          <label>
             <input
-              type="checkbox"
-              id="umapShowLandmarks"
-            />
-            Show landmarks
-          </label>
-          <label id="umapExitFullscreenLabel" style="display: flex; align-items: center; gap: 6px">
-            <input
-              type="checkbox"
-              id="umapExitFullscreenOnSelection"
+              type="radio"
+              name="umapClickBehavior"
+              id="umapClickSelectsClusterRadio"
+              value="cluster"
               checked
             />
-            Exit fullscreen on selection
+            cluster
           </label>
-          <label style="display: flex; align-items: center; gap: 6px">
-            <input
-              type="checkbox"
-              id="umapShowHoverThumbnails"
-              checked
-            />
-            Show hover thumbnails
-          </label>
-          <label style="display: flex; align-items: center; gap: 6px">
-            <input
-              type="checkbox"
-              id="umapHighlightSelection"
-            />
-            <span>Highlight selection (<a id="umapClearSelectionLink" href="#" style="color:#4a9eff;text-decoration:none;">clear</a>)</span>
+          <label>
+            <input type="radio" name="umapClickBehavior" id="umapClickSelectsImageRadio" value="image" />
+            image
           </label>
         </div>
+        <label id="umapExitFullscreenLabel" class="umap-control-cell">
+          <input type="checkbox" id="umapExitFullscreenOnSelection" checked />
+          Exit fullscreen on selection
+        </label>
       </div>
     </div>
   </div>

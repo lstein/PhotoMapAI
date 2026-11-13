@@ -96,6 +96,50 @@ describe("restorePersistedSettings", () => {
     expect(queuePreferencePatch).toHaveBeenCalledWith({ mediaFilter: "images" });
   });
 
+  it("derives the landmark style from the old checkbox when none is stored", async () => {
+    // A record from before the three-way choice: landmarks were switched off.
+    window.initialPreferences = { umapShowLandmarks: false, umapLandmarkStyle: null, updatedAt: 1 };
+
+    await stateModule.restorePersistedSettings();
+
+    expect(stateModule.state.umapLandmarkStyle).toBe("none");
+  });
+
+  it("keeps thumbnails for a device that had landmarks on", async () => {
+    window.initialPreferences = { umapShowLandmarks: true, umapLandmarkStyle: null, updatedAt: 1 };
+
+    await stateModule.restorePersistedSettings();
+
+    expect(stateModule.state.umapLandmarkStyle).toBe("thumbnails");
+  });
+
+  it("prefers a stored landmark style over the old checkbox", async () => {
+    window.initialPreferences = { umapShowLandmarks: false, umapLandmarkStyle: "text", updatedAt: 1 };
+
+    await stateModule.restorePersistedSettings();
+
+    expect(stateModule.state.umapLandmarkStyle).toBe("text");
+  });
+
+  it("never restores or sends an unrecognised landmark style", async () => {
+    // No record yet, so everything restored is seeded to the server; a bogus
+    // value there would get the whole seed PATCH rejected.
+    localStorage.setItem("umapShowLandmarks", "false");
+    localStorage.setItem("umapLandmarkStyle", "bogus");
+
+    await stateModule.restorePersistedSettings();
+
+    expect(stateModule.state.umapLandmarkStyle).toBe("none");
+    expect(queuePreferencePatch.mock.calls[0][0].umapLandmarkStyle).toBe("none");
+  });
+
+  it("refuses an unrecognised landmark style from the setter", () => {
+    stateModule.setUmapLandmarkStyle("text");
+    stateModule.setUmapLandmarkStyle("bogus");
+
+    expect(stateModule.state.umapLandmarkStyle).toBe("text");
+  });
+
   it("ignores an embedded album that no longer exists", async () => {
     localStorage.setItem("album", "first");
     window.initialPreferences = { album: "deleted-album", updatedAt: 1 };
