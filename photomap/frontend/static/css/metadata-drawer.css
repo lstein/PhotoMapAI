@@ -93,6 +93,14 @@
   cursor: move;
 }
 
+/* Value cells use "anywhere" (not "break-word") so a long unbroken token,
+   e.g. a URL in a prompt, doesn't inflate the drawer's min-content width
+   (see .banner-drawer-container min-width). Header cells keep break-word so
+   labels like "Model" don't break mid-word. */
+#descriptionText td {
+  overflow-wrap: anywhere;
+}
+
 .exif-metadata {
   white-space: normal !important;
 }
@@ -251,6 +259,27 @@
   margin-top: 8px;
 }
 
+/* Keep Send / Append Image and the "as a reference for" pulldown on one
+   line. Not wrapping makes the row's min-content width the sum of its items;
+   the drawer's min-width: min-content (below) then lets the drawer grow past
+   its 50vw cap just enough to hold it. Only the row with the pulldown is
+   affected. Phones (<=768px) have no room for it, so it wraps there. */
+@media (min-width: 769px) {
+  .invoke-recall-buttons:has(.invoke-ref-target) {
+    flex-wrap: nowrap;
+  }
+
+  .invoke-recall-buttons:has(.invoke-ref-target) > * {
+    flex-shrink: 0;
+  }
+
+  .invoke-recall-buttons:has(.invoke-ref-target) .invoke-ref-target,
+  .invoke-recall-buttons:has(.invoke-ref-target) .invoke-recall-btn {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+}
+
 /* "as a reference for <image generation|video generation>": which InvokeAI
    tab Send / Append Image feed. Only InvokeAI 7 can place an image in its
    Video panel, so the choice stays hidden until the backend confirms it. */
@@ -391,6 +420,16 @@ body.invoke-video-image-supported
   pointer-events: auto;
   display: flex;
   flex-direction: row;
+}
+
+/* Beyond phone widths, never narrower than the drawer's unbreakable content
+   (notably the one-line Send / Append Image row). min-width wins over the
+   50vw max-width, so in a narrow window the drawer grows past half the
+   screen rather than wrapping or clipping that row. */
+@media (min-width: 769px) {
+  .banner-drawer-container {
+    min-width: min-content;
+  }
 }
 
 .banner-drawer-container.visible {
