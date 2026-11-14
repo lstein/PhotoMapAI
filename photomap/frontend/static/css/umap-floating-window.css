@@ -180,9 +180,81 @@
   font-weight: bold;
 }
 
-#umapEpsContainer,
-#umapColorModeContainer {
+/* The controls under the map: two columns of equal standing. Map-shaping
+   controls (strength, landmarks, click behaviour) on the left, on/off
+   preferences on the right, each cell vertically centred in its row so the
+   select and the spinner don't push their row partners out of line. */
+/* The container for the narrow-window rule below. Not #umapControls itself:
+   on a phone that block is absolutely positioned and sized to its content,
+   and inline-size containment would size it as if it had none — zero wide. */
+#umapContent {
+  container-type: inline-size;
+}
+
+#umapControlsGrid {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  justify-content: center;
+  align-items: center;
+  column-gap: 28px;
+  row-gap: 4px;
+  margin-top: 4px;
   font-size: 0.85em;
+}
+
+.umap-control-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 1.9em;
+  white-space: nowrap;
+}
+
+label.umap-control-cell,
+#umapClickBehaviorContainer label {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Tile landmarks are Plotly annotations, whose background is an SVG <rect>
+   with no corner-radius option. rx/ry are CSS properties in SVG2, so this
+   reaches every rect Plotly draws, including the ones it re-creates on each
+   frame of a pan. umap.js draws no other annotations on this plot. */
+#umapPlot .annotation rect.bg {
+  rx: 6px;
+  ry: 6px;
+}
+
+#umapClearSelectionLink {
+  color: #4a9eff;
+  text-decoration: none;
+}
+
+#umapLandmarkStyle {
+  background: rgba(10, 20, 55, 0.85);
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 1em;
+  cursor: pointer;
+}
+
+/* A narrow window can't fit both columns at their natural width. Stacking
+   them would double the block's height, which the phone fullscreen layout
+   pins at 60px, so let the labels wrap inside two shrinkable columns
+   instead. */
+@container (max-width: 480px) {
+  #umapControlsGrid {
+    grid-template-columns: auto auto;
+    column-gap: 12px;
+    row-gap: 0;
+    font-size: 0.75em;
+  }
+  .umap-control-cell {
+    white-space: normal;
+    gap: 4px;
+  }
 }
 
 .umap-info-btn {
@@ -264,13 +336,10 @@
   outline: none;
 }
 
-#umapClickBehaviorContainer {
-  font-size: 0.85em;
-}
-
 #umapClickBehaviorContainer label {
-  cursor: pointer;
-  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 #umapClickBehaviorContainer input[type="radio"] {

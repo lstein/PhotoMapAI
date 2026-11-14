@@ -45,8 +45,9 @@ for each photo. The largest clusters are labeled with landmark images
 shown in the screenshot above as map markers pointing to major
 clusters. Hover the mouse over areas of interest to see larger
 thumbnail previews of the corresponding images. You can control
-whether landmarks and/or hover thumbnails are displayed by selecting
-those options in the checkboxes at the bottom of the screen.
+whether landmarks are shown as thumbnails, tiles, text labels or not at all
+with the "Landmarks" pulldown at the bottom of the screen, and turn hover
+thumbnails on and off with the checkbox beside it.
 
 Click on the album title ("Open Images Demo" in the screenshot) to
 switch from one album to another.

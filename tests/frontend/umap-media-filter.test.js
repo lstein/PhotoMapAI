@@ -50,7 +50,7 @@ const mockState = {
   dataChanged: true,
   autotaggingEnabled: false,
   mediaFilter: "both",
-  umapShowLandmarks: false,
+  umapLandmarkStyle: "none",
   umapShowHoverThumbnails: false,
   umapExitFullscreenOnSelection: false,
   umapClickSelectsCluster: true,
@@ -78,8 +78,8 @@ let currentSlideIndex = [-1, MIXED_POINTS.length, null];
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
   setMediaFilter,
-  setUmapShowLandmarks: jest.fn((v) => {
-    mockState.umapShowLandmarks = v;
+  setUmapLandmarkStyle: jest.fn((v) => {
+    mockState.umapLandmarkStyle = v;
   }),
   setUmapClickSelectsCluster: jest.fn(),
   setUmapControlsVisible: jest.fn(),
@@ -181,7 +181,7 @@ describe("selecting from a filtered map", () => {
     jest.clearAllMocks();
     Object.assign(mockState, {
       mediaFilter: "both",
-      umapShowLandmarks: false,
+      umapLandmarkStyle: "none",
       umapClickSelectsCluster: true,
       dataChanged: true,
       searchType: "clear",
@@ -217,9 +217,9 @@ describe("selecting from a filtered map", () => {
       // images so the cluster is mixed but only partly drawn.
       plotDiv().layout.xaxis.range = [-5, 8];
       plotDiv().layout.yaxis.range = [-5, 8];
-      const checkbox = document.getElementById("umapShowLandmarks");
-      checkbox.checked = true;
-      checkbox.dispatchEvent(new Event("change"));
+      const select = document.getElementById("umapLandmarkStyle");
+      select.value = "thumbnails";
+      select.dispatchEvent(new Event("change"));
       await settle();
 
       selectFilter("videos");
@@ -318,7 +318,7 @@ describe("an album with no videos", () => {
     Object.assign(mockState, {
       // What localStorage restores after the user picked Videos elsewhere.
       mediaFilter: "videos",
-      umapShowLandmarks: false,
+      umapLandmarkStyle: "none",
       dataChanged: true,
       searchType: "clear",
       searchResults: [],

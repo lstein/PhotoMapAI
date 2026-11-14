@@ -20,7 +20,7 @@ const mockState = {
   dataChanged: true,
   autotaggingEnabled: false,
   mediaFilter: "both",
-  umapShowLandmarks: false,
+  umapLandmarkStyle: "none",
   umapShowHoverThumbnails: false,
   umapExitFullscreenOnSelection: false,
   umapClickSelectsCluster: true,
@@ -32,7 +32,7 @@ const mockState = {
 
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
-  setUmapShowLandmarks: jest.fn(),
+  setUmapLandmarkStyle: jest.fn(),
   setUmapClickSelectsCluster: jest.fn(),
   setUmapControlsVisible: jest.fn(),
   setUmapExitFullscreenOnSelection: jest.fn(),

@@ -56,7 +56,11 @@ class UserPreferences(_CamelModel):
     move_to_trash: bool = True
 
     # UMAP
-    umap_show_landmarks: bool = True
+    umap_show_landmarks: bool = True  # legacy; seeds umap_landmark_style on the client
+    # ``None`` for a device that has never sent one, so the client derives it
+    # from ``umap_show_landmarks`` instead of a concrete default overriding an
+    # old "landmarks off" choice (same reasoning as ``media_filter`` below).
+    umap_landmark_style: Literal["none", "thumbnails", "tiles", "text"] | None = None
     umap_show_hover_thumbnails: bool = True
     umap_exit_fullscreen_on_selection: bool = True
     umap_click_selects_cluster: bool = True
