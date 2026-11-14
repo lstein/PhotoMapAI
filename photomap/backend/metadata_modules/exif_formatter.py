@@ -162,52 +162,110 @@ def format_exif_metadata(
             {map_html}
         </div>
         """
-    else:
-        # Still need a left column for alignment, even if empty
-        html_doc += "<div class='gps-info' style='min-width:0px;'></div>"
 
-    # Right column: EXIF table
+    # Right column: EXIF table. With no GPS there is no left column at all —
+    # an empty one would still take the flex gap and indent the table.
     html_doc += "<div style='flex:1;'><table class='exif-table'>"
 
-    # Prioritize important fields
-    priority_fields = {
-        "DateTimeOriginal": "Date Taken",
-        "DateTime": "Date/Time",
-        "Make": "Camera Make",
-        "Model": "Camera Model",
-        "Software": "Software",
-        "FNumber": "Aperture",
-        "ExposureTime": "Shutter Speed",
-        "ISOSpeedRatings": "ISO",
-        "FocalLength": "Focal Length",
-        "Flash": "Flash",
-        "WhiteBalance": "White Balance",
-        "Orientation": "Orientation",
-        "ImageWidth": "Width",
-        "ExifImageWidth": "Width",
-        "ImageLength": "Height",
-        "ExifImageHeight": "Height",
-        "GPSLatitudeDecimal": "GPS Latitude",
-        "GPSLongitudeDecimal": "GPS Longitude",
-        "GPSAltitude": "GPS Altitude",
-        "GPSTimeStamp": "GPS Time",
-    }
-
-    # Add priority fields first. display_name comes from the hardcoded
-    # priority_fields dict above, so it's already trusted; value comes from
-    # the image's EXIF and must be escaped. Skip duplicate labels so that
-    # e.g. ImageWidth and ExifImageWidth don't both render a "Width" row.
-    seen_labels: set[str] = set()
-    for field, display_name in priority_fields.items():
-        if field in metadata and display_name not in seen_labels:
-            value = _format_field_value(field, metadata[field])
-            html_doc += f"<tr><th>{display_name}</th><td>{_esc(value)}</td></tr>"
-            seen_labels.add(display_name)
+    # Labels are hardcoded and trusted; values come from the image's EXIF and
+    # must be escaped.
+    for label, value in _exif_rows(metadata):
+        html_doc += f"<tr><th>{label}</th><td>{_esc(value)}</td></tr>"
 
     html_doc += "</table></div></div>"  # Close right column and flex container
 
     slide_data.description = html_doc
     return slide_data
+
+
+def _first_present(metadata: dict, *fields: str) -> tuple[str, object] | None:
+    """The first of ``fields`` present in ``metadata``, as ``(field, value)``."""
+    for field in fields:
+        if metadata.get(field) is not None:
+            return field, metadata[field]
+    return None
+
+
+def _exif_rows(metadata: dict) -> list[tuple[str, str]]:
+    """The EXIF table's rows, as ``(label, formatted value)`` pairs.
+
+    Related fields share a row so the drawer stays short: camera make and
+    model, the four exposure settings, width and height, and the GPS
+    coordinates each collapse into one line. ``DateTime`` (when the file was
+    last written) is shown only when it says something ``DateTimeOriginal``
+    does not.
+    """
+    rows: list[tuple[str, str]] = []
+
+    def fmt(field: str) -> str:
+        return _format_field_value(field, metadata[field])
+
+    taken = metadata.get("DateTimeOriginal")
+    if taken is not None:
+        rows.append(("Date Taken", fmt("DateTimeOriginal")))
+    if metadata.get("DateTime") is not None and str(metadata["DateTime"]) != str(taken):
+        rows.append(("Date/Time", fmt("DateTime")))
+
+    make = str(metadata.get("Make") or "").strip()
+    model = str(metadata.get("Model") or "").strip()
+    # Many makers repeat themselves in the model ("Canon" / "Canon EOS R5",
+    # "NIKON CORPORATION" / "NIKON D90", "Eastman Kodak Company" / "KODAK
+    # EASYSHARE"); the model alone says it all then. Whole words only, so
+    # "LG Electronics" / "LGE-Nexus" keeps its maker.
+    model_brand = model.split()[0].lower() if model else ""
+    if model_brand and model_brand in make.lower().split():
+        camera = model
+    else:
+        camera = " ".join(filter(None, (make, model)))
+    if camera:
+        rows.append(("Camera", camera))
+
+    if metadata.get("Software") is not None:
+        rows.append(("Software", fmt("Software")))
+
+    exposure_fields = ("FNumber", "ExposureTime", "ISOSpeedRatings", "FocalLength")
+    exposure = [
+        f"ISO {metadata[field]}" if field == "ISOSpeedRatings" else fmt(field)
+        for field in exposure_fields
+        if metadata.get(field) is not None
+    ]
+    if exposure:
+        rows.append(("Exposure", " · ".join(exposure)))
+
+    for field, label in (("Flash", "Flash"), ("WhiteBalance", "White Balance"), ("Orientation", "Orientation")):
+        if metadata.get(field) is not None:
+            rows.append((label, fmt(field)))
+
+    width = _first_present(metadata, "ImageWidth", "ExifImageWidth")
+    height = _first_present(metadata, "ImageLength", "ExifImageHeight")
+    if width and height:
+        rows.append(("Size", f"{width[1]} × {height[1]} pixels"))
+    elif width:
+        rows.append(("Width", _format_field_value(*width)))
+    elif height:
+        rows.append(("Height", _format_field_value(*height)))
+
+    # One "GPS" row for a full position; a lone coordinate keeps the label
+    # that says which one it is.
+    lat, lon = metadata.get("GPSLatitudeDecimal"), metadata.get("GPSLongitudeDecimal")
+    altitude = metadata.get("GPSAltitude")
+    if lat is not None and lon is not None:
+        position = [fmt("GPSLatitudeDecimal"), fmt("GPSLongitudeDecimal")]
+        if altitude is not None:
+            position.append(fmt("GPSAltitude"))
+        rows.append(("GPS", ", ".join(position)))
+    else:
+        for field, label in (
+            ("GPSLatitudeDecimal", "GPS Latitude"),
+            ("GPSLongitudeDecimal", "GPS Longitude"),
+            ("GPSAltitude", "GPS Altitude"),
+        ):
+            if metadata.get(field) is not None:
+                rows.append((label, fmt(field)))
+    if metadata.get("GPSTimeStamp") is not None:
+        rows.append(("GPS Time", fmt("GPSTimeStamp")))
+
+    return rows
 
 
 def _format_field_value(field_name: str, value) -> str:

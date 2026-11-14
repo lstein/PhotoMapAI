@@ -59,24 +59,10 @@ export function updateMetadataOverlay(slide) {
 
   const rawDescription = slide.dataset.description || "";
   const referenceImages = slide.dataset.reference_images || [];
-  const metadataUrl = slide.dataset.metadata_url || "#";
 
   const descriptionText = document.getElementById("descriptionText");
   descriptionText.innerHTML = rawDescription;
   enhanceReferenceImageThumbnails(descriptionText, referenceImages, state.album);
-
-  // Inject filepath as first row of the metadata table
-  const filepath = slide.dataset.filepath || "";
-  if (filepath) {
-    const table = document.querySelector("#descriptionText .invoke-metadata");
-    if (table) {
-      const row = document.createElement("tr");
-      row.innerHTML = `<th>Path</th><td style="word-break:break-all">${filepath}</td>`;
-      table.tBodies[0]
-        ? table.tBodies[0].insertBefore(row, table.tBodies[0].firstChild)
-        : table.insertBefore(row, table.firstChild);
-    }
-  }
 
   // Move recall/remix buttons out of the scrollable description area
   const recallContainer = document.getElementById("recallButtonsContainer");
@@ -89,48 +75,34 @@ export function updateMetadataOverlay(slide) {
     }
   }
 
-  document.getElementById("filenameText").textContent = slide.dataset.filename || "";
-
-  // Two metadata-link slots: the master sits in #metadataLinkContainer below
-  // the scrollable description and never moves; a clone is inserted into the
-  // bottom of the details table. The clone shares the .metadata-link class so
-  // the document-level delegated click handler activates it. Cloning instead
-  // of moving the master means an innerHTML wipe of descriptionText (by this
-  // function or by grid-view's equivalent) can never destroy the only
-  // metadata link in the page.
-  const masterLink = document.getElementById("metadataLink");
-  if (masterLink) {
-    masterLink.href = metadataUrl;
-  }
-  const detailsTable =
-    document.querySelector("#descriptionText .invoke-metadata") ||
-    document.querySelector("#descriptionText .exif-metadata table");
-  const linkContainer = document.getElementById("metadataLinkContainer");
-  if (detailsTable) {
-    const cloneLink = document.createElement("a");
-    cloneLink.className = "metadata-link";
-    cloneLink.href = metadataUrl;
-    cloneLink.target = "_blank";
-    cloneLink.rel = "noopener noreferrer";
-    cloneLink.textContent = "View Metadata (JSON)";
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = 2;
-    cell.className = "details-link-cell";
-    cell.appendChild(cloneLink);
-    row.appendChild(cell);
-    (detailsTable.tBodies[0] || detailsTable).appendChild(row);
-    if (linkContainer) {
-      linkContainer.style.display = "none";
-    }
-  } else if (linkContainer) {
-    linkContainer.style.display = "";
-  }
+  setDrawerFileInfo(slide.dataset);
 
   // Update cluster information display
   updateClusterInfo(slide.dataset);
   updateImageLabel(slide.dataset);
   updateCurrentImageScore(slide.dataset);
+}
+
+// Fill the drawer's titlebar: the file name, its full path on the line below
+// (issue #432), and the target of the "{ }" metadata button. Shared by the
+// swiper and grid views, which keep their metadata in different places but
+// with the same field names. textContent, not innerHTML: a path is
+// filesystem-controlled and may contain markup characters.
+export function setDrawerFileInfo(data) {
+  const filepath = data?.filepath || "";
+  const filenameText = document.getElementById("filenameText");
+  if (filenameText) {
+    filenameText.textContent = data?.filename || "";
+  }
+  const filepathText = document.getElementById("filepathText");
+  if (filepathText) {
+    filepathText.textContent = filepath;
+    filepathText.title = filepath;
+  }
+  const metadataLink = document.getElementById("metadataLink");
+  if (metadataLink) {
+    metadataLink.href = data?.metadata_url || "#";
+  }
 }
 
 // The metadata backing whatever the drawer is currently showing, or null when
@@ -398,10 +370,8 @@ const metadataModal = document.getElementById("metadataModal");
 const metadataTextArea = document.getElementById("metadataTextArea");
 const closeMetadataModalBtn = document.getElementById("closeMetadataModalBtn");
 
-// Delegated click on any .metadata-link (the master in #metadataLinkContainer
-// and any per-table clone) — using delegation rather than binding to a single
-// element lets updateMetadataOverlay clone the link into the details table
-// without losing the handler if the table is later wiped by innerHTML.
+// Delegated click on any .metadata-link (the "{ }" button in the drawer's
+// titlebar) — delegation keeps working however the drawer's DOM is rebuilt.
 document.addEventListener("click", async (e) => {
   const link = e.target.closest(".metadata-link");
   if (!link) {
@@ -533,11 +503,13 @@ const drawer = document.getElementById("bannerDrawerContainer");
 if (drawer) {
   makeDraggable(drawer, drawer, {
     // The drawer is its own handle — restrict to the titlebar region and
-    // exclude the copy button so its click still works.
+    // exclude the copy button so its click still works. The path line
+    // (#filepathText) is deliberately not a handle, so it can be selected.
     shouldDrag: (e) => {
       const isTitlebar =
         e.target.id === "filenameTitlebar" ||
         e.target.classList.contains("filename-titlebar") ||
+        e.target.classList.contains("filename-titles") ||
         e.target.id === "filenameText";
       const isCopyButton = e.target.id === "copyTextBtn" || e.target.closest("#copyTextBtn");
       return isTitlebar && !isCopyButton;

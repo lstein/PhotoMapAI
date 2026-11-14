@@ -169,8 +169,8 @@ the seed, the init image, and any LoRAs or reference images attached
 to the generation. Most fields have an icon next to them that lets you
 copy their values into the system clipboard.
 
-Click on "View Metadata" to see the full metadata with all generation
-parameters listed.
+Click the `{ }` button in the drawer's title bar to see the full metadata
+with all generation parameters listed.
 
 <img src="../../img/invokeai_metadata.png" width="320" class="img-hover-zoom" alt="PhotoMapAI summarizing the metadata from an InvokeAI image">
 <img src="../../img/invokeai_metadata_full.png" width="320" class="img-hover-zoom" alt="Complete InvokeAI metadata">
@@ -337,7 +337,7 @@ A few situations are not surfaced inline and are worth knowing about:
 
 - **Boards dropdown is empty or stuck on *Uncategorized*** — usually means authentication failed silently. If your InvokeAI is in multi-user mode, fill in the username and password and re-enter the URL to retrigger the probe.
 - **Recall / Remix succeeds but no image queues in InvokeAI** — switch to InvokeAI's browser tab. The recalled parameters land in the canvas/generation panel; you still have to press *Invoke* to start the queue.
-- **Remix / Recall buttons missing for an InvokeAI-generated image** — the image was probably produced by an InvokeAI version PhotoMapAI does not yet recognise (only **Send Image** and **Append Image** are shown in that case). Check the *View Metadata (JSON)* link at the bottom of the drawer to confirm the metadata is present, and please [open an issue](https://github.com/lstein/PhotoMapAI/issues) so we can add support for the new schema.
+- **Remix / Recall buttons missing for an InvokeAI-generated image** — the image was probably produced by an InvokeAI version PhotoMapAI does not yet recognise (only **Send Image** and **Append Image** are shown in that case). Check the `{ }` (view metadata) button in the drawer's title bar to confirm the metadata is present, and please [open an issue](https://github.com/lstein/PhotoMapAI/issues) so we can add support for the new schema.
 - **Append Image button missing** — the configured InvokeAI backend predates the append option (it shipped in InvokeAI 6.13.5). Upgrade InvokeAI to enable it. Appending to video generation does not depend on this, so the button reappears when **video generation** is chosen.
 - **No "as a reference for" pulldown** — the configured InvokeAI backend cannot place images in a video generation tab, so Send / Append Image always go to image generation.
 

@@ -2,6 +2,7 @@ import { addBookmarkIconToSlide } from "./bookmarks.js";
 import { toggleGridSwiperView } from "./events.js";
 import {
   enhanceReferenceImageThumbnails,
+  setDrawerFileInfo,
   updateClusterInfo,
   updateCurrentImageScore,
   updateImageLabel,
@@ -742,19 +743,6 @@ class GridViewManager {
     descriptionText.innerHTML = rawDescription;
     enhanceReferenceImageThumbnails(descriptionText, referenceImages, state.album);
 
-    // Inject filepath as first row of the metadata table
-    const filepath = data["filepath"] || "";
-    if (filepath) {
-      const table = document.querySelector("#descriptionText .invoke-metadata");
-      if (table) {
-        const row = document.createElement("tr");
-        row.innerHTML = `<th>Path</th><td style="word-break:break-all">${filepath}</td>`;
-        table.tBodies[0]
-          ? table.tBodies[0].insertBefore(row, table.tBodies[0].firstChild)
-          : table.insertBefore(row, table.firstChild);
-      }
-    }
-
     // Move recall/remix buttons out of the scrollable description area
     const recallContainer = document.getElementById("recallButtonsContainer");
     if (recallContainer) {
@@ -766,18 +754,7 @@ class GridViewManager {
       }
     }
 
-    document.getElementById("filenameText").textContent = data["filename"] || "";
-    const masterLink = document.getElementById("metadataLink");
-    if (masterLink) {
-      masterLink.href = data["metadata_url"] || "#";
-    }
-    // Make sure the link is visible — a prior swiper render may have set
-    // linkContainer.style.display = "none" when it cloned the link into
-    // its details table.
-    const linkContainer = document.getElementById("metadataLinkContainer");
-    if (linkContainer) {
-      linkContainer.style.display = "";
-    }
+    setDrawerFileInfo(data);
 
     // Update cluster information display
     updateClusterInfo(data);

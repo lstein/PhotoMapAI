@@ -57,6 +57,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/search.js", 
 // Mock metadata-drawer.js
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/metadata-drawer.js", () => ({
   enhanceReferenceImageThumbnails: jest.fn(),
+  setDrawerFileInfo: jest.fn(),
   updateCurrentImageScore: jest.fn(),
   updateClusterInfo: jest.fn(),
   updateImageLabel: jest.fn(),

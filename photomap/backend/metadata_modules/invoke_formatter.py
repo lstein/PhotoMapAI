@@ -150,8 +150,8 @@ def _recall_controls_table(rows_html: str) -> str:
     The whole table carries the ``invoke-recall-controls`` class so the
     capability gating in ``invoke-capabilities.js`` can hide it wholesale when
     no InvokeAI backend is configured. It deliberately does *not* reuse the
-    ``invoke-metadata`` class (which the drawer's "Path" row injection targets);
-    its styling is mirrored in CSS instead.
+    ``invoke-metadata`` class, which marks the details table itself; its
+    styling is mirrored in CSS instead.
     """
     return (
         '<table class="invoke-recall-controls" data-invoke-recall="1">'
