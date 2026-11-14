@@ -23,7 +23,7 @@
   justify-content: space-between;
   gap: 0.5em;
   background: rgba(50, 50, 50, 0.9);
-  padding: 0.6em 1em;
+  padding: 0.4em 0.6em 0.4em 1em;
   border-bottom: 1px solid rgba(128, 128, 128, 0.3);
   cursor: move;
   user-select: none;
@@ -43,7 +43,17 @@
   align-items: flex-start;
   justify-content: center;
   margin-bottom: 0;
-  padding: 1em 2em 0;
+  padding: 0.5em 1em 0;
+}
+
+/* Cluster badge and per-image tags share a row, wrapping only when the
+   drawer is too narrow for both. Collapses to nothing when both are hidden. */
+.drawer-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35em 0.75em;
+  width: 100%;
 }
 
 .filenameRow {
@@ -58,7 +68,7 @@
 #descriptionText {
   color: #ccc;
   font-size: 1em;
-  margin: 0.5em 0;
+  margin: 0.4em 0;
   max-width: 100%;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -68,15 +78,30 @@
   cursor: auto;
 }
 
+/* Filename over full path, filling the titlebar beside its buttons. */
+.filename-titles {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 0.15em;
+  cursor: move;
+}
+
+/* Full path (issue #432): small and dim under the filename. Selectable,
+   unlike the rest of the titlebar, and excluded from the drag handle. */
 #filepathText {
-  color: #ccc;
-  font-size: 0.8em;
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
+  color: #bbb;
+  font-size: 0.78em;
+  font-weight: normal;
   text-align: left;
-  word-break: break-word;
-  white-space: pre-line;
-  cursor: auto;
+  overflow-wrap: anywhere;
+  user-select: text;
+  cursor: text;
+}
+
+#filepathText:empty {
+  display: none;
 }
 
 #filenameText {
@@ -115,7 +140,7 @@
 .exif-metadata th,
 .exif-metadata td {
   border: 1px solid #555;
-  padding: 6px 10px;
+  padding: 3px 8px;
   vertical-align: top;
 }
 
@@ -126,13 +151,42 @@
   font-size: 14px;
 }
 
+/* "{ }" — opens the raw metadata (JSON) modal. Sized to sit beside the copy
+   button in the titlebar. */
+.titlebar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 0.2em;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0.8;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.titlebar-icon-btn:hover,
+.titlebar-icon-btn:focus-visible {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
 .cluster-info-badge {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: 6px;
   font-size: 0.9em;
   font-weight: bold;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .cluster-info-badge:hover {
@@ -145,7 +199,7 @@
   border-collapse: collapse;
   border: 1px solid #bbb;
   width: 100%;
-  margin: 0.5em 0 0;
+  margin: 0;
 }
 
 .invoke-metadata th,
@@ -153,7 +207,7 @@
 .invoke-tuples th,
 .invoke-tuples td {
   border: 1px solid #555;
-  padding: 6px 10px;
+  padding: 3px 8px;
 }
 
 .ref-image-thumb {
@@ -194,36 +248,20 @@
   color: #faea0e;
 }
 
-.details-link-cell {
-  text-align: left;
-  /* Pin the link to the bottom of the scrollable description area so it
-     remains visible even when reference-image thumbnails push the table
-     past the 40vh scroll cap. Solid background keeps preceding rows from
-     showing through as they scroll under the sticky cell. */
-  position: sticky;
-  bottom: 0;
-  background: #1a1a1a;
-}
-
 /* ===== Recall / Remix buttons (pinned outside scrollable area) ===== */
 #recallButtonsContainer:empty {
   display: none;
 }
 
 #recallButtonsContainer {
-  padding: 0 2em;
-}
-
-#metadataLinkContainer {
-  padding: 0.4em 2em 0.8em;
-  text-align: left;
+  padding: 0 1em 0.5em;
 }
 
 /* The recall controls are a two-row table styled to match the Image Details
    table (.invoke-metadata): an "InvokeAI" header row above a row of buttons.
-   The borders/width/padding are mirrored here rather than via the shared class
-   because the drawer's "Path" row injection targets .invoke-metadata. The
-   table is relocated out of #descriptionText (see metadata-drawer.js), so the
+   The borders/width/padding are mirrored here rather than via the shared
+   class so drawer code that looks for the details table (.invoke-metadata)
+   never mistakes this one for it. The table is relocated out of #descriptionText (see metadata-drawer.js), so the
    foreground color the field headers inherit (#ccc) is set explicitly. */
 .invoke-recall-controls {
   border-collapse: collapse;
@@ -235,11 +273,11 @@
 .invoke-recall-controls th,
 .invoke-recall-controls td {
   border: 1px solid #555;
-  padding: 6px 10px;
+  padding: 3px 8px;
 }
 
 /* Header cell ("InvokeAI"): bold and left-aligned to match the Image Details
-   field headers (e.g. "Path"). */
+   field headers (e.g. "Date"). */
 .invoke-recall-heading {
   color: #ccc;
   font-weight: bold;
@@ -256,7 +294,7 @@
 }
 
 .invoke-recall-buttons + .invoke-recall-buttons {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 /* Keep Send / Append Image and the "as a reference for" pulldown on one
@@ -352,7 +390,9 @@ body.invoke-video-image-supported
   line-height: 1;
   height: 32px;
   box-sizing: border-box;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .invoke-recall-btn:hover:not(:disabled) {
@@ -416,7 +456,9 @@ body.invoke-video-image-supported
   width: auto;
   max-width: 50vw;
   z-index: 4001;
-  transition: transform 0.4s ease, top 0.2s;
+  transition:
+    transform 0.4s ease,
+    top 0.2s;
   pointer-events: auto;
   display: flex;
   flex-direction: row;
@@ -506,7 +548,9 @@ body.invoke-video-image-supported
   border-radius: 4px;
   cursor: pointer;
   opacity: 0.7;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -564,7 +608,9 @@ body.invoke-video-image-supported
   font-size: 1em;
   vertical-align: middle;
   opacity: 0.7;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 .copy-icon:hover {
   opacity: 1;
@@ -576,7 +622,6 @@ body.invoke-video-image-supported
    describes the cluster's overall centroid). Smaller and dimmer because
    it's secondary information. */
 .image-label-row {
-  margin-top: 0.35em;
   font-size: 0.9em;
   font-weight: bold;
 }
@@ -595,9 +640,19 @@ body.invoke-video-image-supported
    to anything matching `.settings-accordion .accordion-header`, which
    cancelled this drawer's own toggle. */
 .metadata-fields-accordion {
-  margin-top: 1em;
+  margin-top: 0.5em;
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
   overflow: hidden;
+}
+
+/* The drawer's accordion is denser than the Settings ones it borrows its
+   look from: it sits above every image, so each pixel of chrome costs. */
+.metadata-fields-accordion .accordion-header {
+  padding: 0.35em 0.8em;
+}
+
+.metadata-fields-accordion .accordion-body {
+  padding: 0 0.5em 0.5em;
 }

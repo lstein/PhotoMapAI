@@ -89,20 +89,73 @@ class TestExifFieldRendering:
         result = format_metadata(_filepath(), {"Orientation": 6}, 0, 1)
         assert "Rotated 90° CW" in result.description
 
-    def test_exif_image_dimensions_rendered_with_pixel_suffix(self, clear_invokeai_config):
+    def test_exif_image_dimensions_share_one_size_row(self, clear_invokeai_config):
         metadata = {"ExifImageWidth": 2048, "ExifImageHeight": 1536}
         result = format_metadata(_filepath(), metadata, 0, 1)
-        assert "2048 pixels" in result.description
-        assert "1536 pixels" in result.description
+        assert "<th>Size</th><td>2048 × 1536 pixels</td>" in result.description
+        assert "<th>Width</th>" not in result.description
+        assert "<th>Height</th>" not in result.description
+
+    def test_lone_dimension_keeps_its_own_label(self, clear_invokeai_config):
+        result = format_metadata(_filepath(), {"ExifImageWidth": 2048}, 0, 1)
+        assert "<th>Width</th><td>2048 pixels</td>" in result.description
 
     def test_image_and_exif_image_dimensions_dedupe(self, clear_invokeai_config):
-        # When both ImageWidth and ExifImageWidth are present, only one
-        # "Width" row should render (ImageWidth wins because it comes first).
-        metadata = {"ImageWidth": 4000, "ExifImageWidth": 2048}
+        # ImageWidth wins over ExifImageWidth because it comes first.
+        metadata = {"ImageWidth": 4000, "ExifImageWidth": 2048, "ImageLength": 3000}
         result = format_metadata(_filepath(), metadata, 0, 1)
-        assert result.description.count("<th>Width</th>") == 1
-        assert "4000 pixels" in result.description
-        assert "2048 pixels" not in result.description
+        assert result.description.count("<th>Size</th>") == 1
+        assert "4000 × 3000 pixels" in result.description
+        assert "2048" not in result.description
+
+
+class TestExifRowMerging:
+    """Related EXIF fields share a row to keep the drawer short."""
+
+    def test_camera_make_and_model_share_a_row(self, clear_invokeai_config):
+        result = format_metadata(_filepath(), {"Make": "Nikon", "Model": "LS-5000"}, 0, 1)
+        assert "<th>Camera</th><td>Nikon LS-5000</td>" in result.description
+        assert "Camera Make" not in result.description
+
+    @pytest.mark.parametrize(
+        ("make", "model"),
+        [("Canon", "Canon EOS R5"), ("NIKON CORPORATION", "NIKON D90")],
+    )
+    def test_brand_repeated_in_model_is_not_doubled(self, clear_invokeai_config, make, model):
+        result = format_metadata(_filepath(), {"Make": make, "Model": model}, 0, 1)
+        assert f"<th>Camera</th><td>{model}</td>" in result.description
+
+    def test_exposure_settings_share_a_row(self, clear_invokeai_config):
+        metadata = {"FNumber": 2.8, "ExposureTime": 0.004, "ISOSpeedRatings": 200, "FocalLength": 50}
+        result = format_metadata(_filepath(), metadata, 0, 1)
+        assert "<th>Exposure</th><td>f/2.8 · 1/250s · ISO 200 · 50mm</td>" in result.description
+        assert result.description.count("<tr>") == 1
+
+    def test_identical_datetime_is_not_repeated(self, clear_invokeai_config):
+        stamp = "2021:08:28 13:40:19"
+        result = format_metadata(_filepath(), {"DateTimeOriginal": stamp, "DateTime": stamp}, 0, 1)
+        assert result.description.count(stamp) == 1
+        assert "Date/Time" not in result.description
+
+    def test_differing_datetime_is_kept(self, clear_invokeai_config):
+        metadata = {"DateTimeOriginal": "2021:08:28 13:40:19", "DateTime": "2022:01:01 00:00:00"}
+        result = format_metadata(_filepath(), metadata, 0, 1)
+        assert "Date Taken" in result.description
+        assert "<th>Date/Time</th><td>2022:01:01 00:00:00</td>" in result.description
+
+    def test_gps_coordinates_share_a_row(self, clear_invokeai_config):
+        metadata = {"GPSLatitudeDecimal": 40.5, "GPSLongitudeDecimal": -74.25, "GPSAltitude": 12}
+        result = format_metadata(_filepath(), metadata, 0, 1)
+        assert "<th>GPS</th><td>40.500000°, -74.250000°, 12m</td>" in result.description
+
+    def test_no_empty_location_column_without_gps(self, clear_invokeai_config):
+        result = format_metadata(_filepath(), {"Make": "Nikon"}, 0, 1)
+        assert "gps-info" not in result.description
+
+    def test_exif_values_are_escaped(self, clear_invokeai_config):
+        result = format_metadata(_filepath(), {"Make": "<b>x</b>", "Software": "<i>y</i>"}, 0, 1)
+        assert "<b>" not in result.description
+        assert "<i>y" not in result.description
 
 
 class TestInvokeMetadata:
