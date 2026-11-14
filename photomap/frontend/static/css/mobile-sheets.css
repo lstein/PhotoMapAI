@@ -1,0 +1,566 @@
+/* ===== Phone layout: top and bottom sheets =====
+
+   On small screens the Control and Search panels share one sheet at the
+   bottom of the window and the album badge and seek slider share one at the
+   top. Each slides between expanded and collapsed (only its grab handle left
+   showing), dragged or tapped — see mobile-sheets.js. The bottom sheet also
+   holds the metadata drawer's contents below the panels: at the expanded stop
+   only their title row shows, and its third, "details" stop opens them.
+
+   Everything here is keyed off html.mobile-sheets, set from the media query in
+   main.html's <meta name="mobile-sheets-query">, and the sheet states off
+   html[data-top-sheet] / html[data-bottom-sheet]. This file loads after the
+   panel and slider stylesheets, so at equal specificity its rules win. */
+
+:root {
+  --bottom-sheet-peek: 24px;
+  /* The progress strip (4px) above the handle (22px). */
+  --top-sheet-peek: 26px;
+  --sheet-background: rgba(20, 20, 20, 0.82);
+  --sheet-handle-color: rgba(255, 255, 255, 0.6);
+  /* The details' title row (file name over path): what of them shows at the
+     expanded stop. */
+  --sheet-details-peek: 52px;
+}
+
+/* Outside the phone layout the wrapper is not there as far as layout goes, and
+   the handles are not shown. */
+#topSheetContainer {
+  display: contents;
+}
+
+.sheet-handle,
+#sheetDetails {
+  display: none;
+}
+
+/* ----- Common to both sheets ----- */
+
+.mobile-sheets .mobile-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  background: var(--sheet-background);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  /* The sheet owns vertical drags; nothing on it should scroll or zoom the
+     page. Range inputs still drag their thumb. */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+
+.mobile-sheets.sheets-ready .mobile-sheet {
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-sheets.sheets-ready .mobile-sheet.sheet-dragging {
+  transition: none;
+}
+
+.mobile-sheets .sheet-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The pill. */
+.mobile-sheets .sheet-handle::before {
+  content: "";
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--sheet-handle-color);
+}
+
+.mobile-sheets .sheet-handle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+/* Hidden with the rest of the controls in fullscreen. */
+html.mobile-sheets:fullscreen .mobile-sheet,
+html.mobile-sheets:-webkit-full-screen .mobile-sheet {
+  display: none !important;
+}
+
+/* ----- Bottom sheet: Search and Control panels ----- */
+
+.mobile-sheets #panelStackContainer {
+  /* panel-anchor.js publishes how far an iPadOS-stranded layout viewport
+     hangs below the visible one; the sheet has to clear it just as the
+     free-floating panels did. */
+  bottom: var(--visible-viewport-overshoot, 0px);
+  width: auto;
+  z-index: 4000;
+  display: flex;
+  flex-direction: row;
+  /* Upright, the second panel wraps under the first. Sideways the two share
+     one row, with the smaller buttons set below for short screens. */
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: stretch;
+  padding: 0 4px;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.mobile-sheets #bottomSheetHandle {
+  flex-basis: 100%;
+  height: var(--bottom-sheet-peek);
+}
+
+html.mobile-sheets[data-bottom-sheet="collapsed"] #panelStackContainer {
+  transform: translateY(calc(100% - var(--bottom-sheet-peek)));
+}
+
+/* A phone held sideways has no toolbar under the page: the bottom edge is
+   where iOS takes a swipe up to go home (the home indicator's strip is about
+   21px), and a handle that low loses its drags to it. Collapsed, the handle
+   grows to 40px and its pill moves to the top, about 30px clear of the edge,
+   so it is grabbed above that strip (34px proved too short on an iPhone 15).
+   Without viewport-fit=cover, env(safe-area-inset-bottom) reports nothing to
+   go by. */
+@media (max-height: 500px) and (pointer: coarse) {
+  html.mobile-sheets[data-bottom-sheet="collapsed"] {
+    --bottom-sheet-peek: 40px;
+  }
+
+  html.mobile-sheets[data-bottom-sheet="collapsed"] #bottomSheetHandle {
+    align-items: flex-start;
+    padding-top: 8px;
+  }
+}
+
+/* Once collapsed, nothing below the handle shows: the Grid View checkmark
+   overhangs its button upwards, into the strip left on screen. Hidden only
+   after the sheet has slid down (the delay), never while it is dragged, and
+   shown again at once when it opens. */
+html.mobile-sheets[data-bottom-sheet="collapsed"] #panelStackContainer:not(.sheet-dragging) > :not(.sheet-handle) {
+  visibility: hidden;
+  transition: visibility 0s linear 0.28s;
+}
+
+/* Expanded: the details hang below the window, all but their title row. */
+html.mobile-sheets[data-bottom-sheet="expanded"] #panelStackContainer {
+  transform: translateY(calc(var(--sheet-details-height) - var(--sheet-details-peek)));
+}
+
+/* The panels are now rows of the sheet rather than floating boxes. The sheet
+   supplies the background; panel-anchor.js's translate is applied to the
+   sheet through its bottom offset instead, so it must not move them within it. */
+.mobile-sheets #searchPanel,
+.mobile-sheets #controlPanel {
+  position: static !important;
+  transform: none !important;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0.3em 0.3em;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+  pointer-events: auto;
+}
+
+.mobile-sheets #searchPanel {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Keep icons in a horizontal row. */
+.mobile-sheets .control-icons-row,
+.mobile-sheets .search-icons-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Thumb-sized targets, as the stacked phone panels always had. The narrow
+   screen rules in control-and-search-panels.css step them back down. */
+.mobile-sheets #controlPanel button,
+.mobile-sheets #searchPanel button {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+}
+
+/* Higher specificity than the rule above, so the chevron keeps its own width;
+   only its height follows the 48px button it is attached to. */
+.mobile-sheets #controlPanel button.menu-chevron {
+  width: 24px;
+  min-width: 24px;
+  height: 48px;
+  min-height: 48px;
+}
+
+/* Phones held sideways: the window is too short to give two rows of panels,
+   so both share one. At 38px, with the gaps taken out, the two rows of icons
+   need about 610px, which every phone in landscape has. */
+@media (max-height: 500px) {
+  .mobile-sheets #panelStackContainer {
+    justify-content: space-evenly;
+  }
+
+  .mobile-sheets #searchPanel,
+  .mobile-sheets #controlPanel {
+    flex: 0 1 auto;
+    padding: 0.15em 0.2em;
+  }
+
+  .mobile-sheets #searchPanel {
+    border-bottom: none;
+  }
+
+  .mobile-sheets .control-icons-row,
+  .mobile-sheets .search-icons-row {
+    gap: 1px;
+  }
+
+  .mobile-sheets #controlPanel button,
+  .mobile-sheets #searchPanel button {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  .mobile-sheets #controlPanel button.menu-chevron {
+    width: 20px;
+    min-width: 20px;
+    height: 38px;
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 429px) {
+  .mobile-sheets #controlPanel button,
+  .mobile-sheets #searchPanel button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .mobile-sheets #controlPanel button.menu-chevron {
+    height: 40px;
+    min-height: 40px;
+  }
+}
+
+/* The text search box opens from the Search panel; sit it above the sheet
+   instead of behind it, across the width of the phone. */
+.mobile-sheets #textSearchPanel {
+  left: 8px;
+  right: 8px;
+  min-width: 0;
+  /* panel-anchor.js lifts this box by the stranded-viewport overshoot with
+     its own translate, as it does the sheet with its bottom offset; so the
+     overshoot is not added here as well. */
+  bottom: calc(var(--bottom-sheet-height, 160px) + 8px);
+  z-index: 4001;
+  box-sizing: border-box;
+  padding: 0.9em 0.9em;
+  /* Whatever room is left between the two sheets; scroll beyond that. */
+  max-height: calc(
+    var(--visible-viewport-height, 100dvh) - var(--bottom-sheet-height, 160px) - var(--top-sheet-height, 26px) - 16px
+  );
+  overflow-y: auto;
+}
+
+/* Its two columns (image query beside the text fields) need well over a
+   phone's width; stack them, with each text field's label above it. */
+.mobile-sheets #textSearchPanel .search-input-container.vertical-search-inputs {
+  flex-direction: column;
+  gap: 0.8em;
+}
+
+.mobile-sheets #textSearchPanel .search-image-column {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.4em 1em;
+  min-width: 0;
+  max-width: none;
+  margin-right: 0;
+}
+
+.mobile-sheets #textSearchPanel .search-image-label {
+  flex-basis: 100%;
+}
+
+.mobile-sheets #textSearchPanel .search-image-column .search-row {
+  flex: 1 1 120px;
+  width: auto;
+}
+
+.mobile-sheets #textSearchPanel .search-fields-column {
+  grid-template-columns: 1fr;
+  padding-right: 0;
+}
+
+.mobile-sheets #textSearchPanel .search-fields-column .search-label,
+.mobile-sheets #textSearchPanel .search-fields-column .search-field-wrapper {
+  grid-column: 1;
+}
+
+.mobile-sheets #textSearchPanel .search-fields-column .search-label {
+  width: auto;
+  text-align: left;
+}
+
+/* ----- Top sheet: album badge and seek slider ----- */
+
+.mobile-sheets #topSheetContainer {
+  top: 0;
+  /* Under the semantic map (1000), as the badge always was, so the map's
+     titlebar is not covered; above the photo and grid. */
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 6px 0 0;
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+html.mobile-sheets[data-top-sheet="collapsed"] #topSheetContainer {
+  transform: translateY(calc(-100% + var(--top-sheet-peek)));
+}
+
+/* The badge keeps its own pill (it carries the cluster colour) but sits in the
+   sheet instead of floating over the corner of the photo. */
+.mobile-sheets .fixed-score-display {
+  position: static;
+  align-self: flex-start;
+  max-width: calc(100% - 16px);
+  margin: 0 8px;
+  box-shadow: none;
+  order: 1;
+}
+
+/* The slider gets the full width of the sheet, under the badge. seek-slider.js
+   leaves its left edge alone in this layout. Room is left at the sides for the
+   end tick labels, which centre on the slider's ends, and below for the tick
+   row, which hangs under the slider. */
+.mobile-sheets .score-slider-row {
+  position: static;
+  left: auto;
+  right: auto;
+  order: 2;
+  margin: 10px 0 0;
+  padding: 0 32px 34px;
+  transition: none;
+}
+
+.mobile-sheets .slider-with-ticks-container {
+  min-width: 0;
+}
+
+/* Drag the thumb, not the sheet: make the slider a comfortable target. */
+.mobile-sheets .slide-seek-slider {
+  height: 28px;
+}
+
+/* No caption beside the slider, and no hover zone: the sheet opens and closes
+   the slider here, and the zone, which hangs 20px below the slider row, would
+   sit over the handle and swallow taps meant for it. */
+.mobile-sheets .context-label,
+.mobile-sheets .slider-hover-zone {
+  display: none;
+}
+
+/* Ten date labels do not fit across a phone held upright; show every other. */
+@media (max-width: 600px) {
+  .mobile-sheets .slider-tick:nth-child(even) .slider-tick-label {
+    visibility: hidden;
+  }
+}
+
+/* The progress strip is what remains of the slider when the sheet is
+   collapsed: it sits on the sheet's bottom edge, above the handle, and is part
+   of the target that opens the sheet rather than a hover target of its own. */
+.mobile-sheets .slider-hover-strip {
+  position: static;
+  order: 3;
+  flex: 0 0 4px;
+  margin: 0 12px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.mobile-sheets #topSheetHandle {
+  order: 4;
+  height: calc(var(--top-sheet-peek) - 4px);
+}
+
+/* ----- Bottom sheet: the metadata details ----- */
+
+/* The drawer they came from is empty in this layout. */
+.mobile-sheets #bannerDrawerContainer {
+  display: none;
+}
+
+/* The details reach from under the panels to just below the top sheet's
+   handle, whatever they hold, and never further (so the sheet's own handle
+   stays on screen), so the expanded stop (and with it everything
+   that clears the sheet) does not move from one photo to the next; longer
+   details scroll. mobile-sheets.js publishes the panels' height. */
+html.mobile-sheets {
+  --sheet-details-height: max(
+    var(--sheet-details-peek),
+    calc(
+      var(--visible-viewport-height, 100dvh) - var(--top-sheet-peek) - 8px - var(--bottom-sheet-panels-height, 140px)
+    )
+  );
+}
+
+.mobile-sheets #sheetDetails {
+  display: block;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  /* Edge to edge, past the sheet's side padding. */
+  width: calc(100% + 8px);
+  margin: 0 -4px;
+  height: var(--sheet-details-height);
+}
+
+.mobile-sheets #sheetDetails .filename-banner {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border-radius: 0;
+  font-size: 0.95em;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Scrolling the details never scrolls the page, and a downward drag with
+     them at the top is the sheet's (mobile-sheets.js). */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The title row stays in place as the details scroll, and is a sheet target:
+   dragged, it moves the sheet; tapped, it opens or closes the details. At the
+   expanded stop exactly --sheet-details-peek of it shows, so there the file
+   name and path take one line each; opened, the path wraps to show in full
+   and the row grows into the details. */
+.mobile-sheets #sheetDetails .filename-titlebar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  min-height: var(--sheet-details-peek);
+  padding: 6px 12px;
+  /* Opaque: the details scroll under it. */
+  background: #282828;
+  /* Inside the row's height, so the row is exactly what the expanded stop
+     leaves showing. */
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: none;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.mobile-sheets #sheetDetails .filename-titles {
+  cursor: pointer;
+}
+
+.mobile-sheets #sheetDetails #filenameText,
+.mobile-sheets #sheetDetails #filepathText {
+  display: block;
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
+
+html.mobile-sheets[data-bottom-sheet="details"] #sheetDetails #filepathText {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Which way the row takes the details. */
+.mobile-sheets #sheetDetails .filename-titlebar::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin: 5px 4px 0;
+  border-left: 2px solid var(--sheet-handle-color);
+  border-top: 2px solid var(--sheet-handle-color);
+  transform: rotate(45deg);
+  transition: transform 0.2s;
+}
+
+html.mobile-sheets[data-bottom-sheet="details"] #sheetDetails .filename-titlebar::after {
+  margin-top: -5px;
+  transform: rotate(225deg);
+}
+
+.mobile-sheets #sheetDetails .filenameDescContainer {
+  padding: 0.8em 12px 0;
+}
+
+.mobile-sheets #sheetDetails #recallButtonsContainer {
+  padding: 0 12px 1em;
+}
+
+/* The drawer caps its description at 40vh and scrolls it on its own. Here
+   the whole of the details scrolls instead: a second scroller inside it
+   would also take the downward drags that close the sheet. */
+.mobile-sheets #sheetDetails #descriptionText {
+  max-height: none;
+  overflow: visible;
+}
+
+/* metadata-drawer.css breaks words anywhere in the drawer on narrow screens,
+   which lets the table squeeze its label column down to a few letters
+   ("Positi / ve Pro / mpt"). Break labels only between words and give them a
+   fixed share of the width; values still break anywhere (long paths, URLs). */
+.mobile-sheets #sheetDetails .filename-banner {
+  word-break: normal;
+}
+
+.mobile-sheets #sheetDetails .invoke-metadata > tbody > tr > th,
+.mobile-sheets #sheetDetails .invoke-metadata > tr > th,
+.mobile-sheets #sheetDetails .exif-metadata table > tbody > tr > th,
+.mobile-sheets #sheetDetails .exif-metadata table > tr > th {
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Held upright there is little width to share; sideways the labels already
+   get enough. */
+@media (max-width: 600px) {
+  .mobile-sheets #sheetDetails .invoke-metadata > tbody > tr > th,
+  .mobile-sheets #sheetDetails .invoke-metadata > tr > th,
+  .mobile-sheets #sheetDetails .exif-metadata table > tbody > tr > th,
+  .mobile-sheets #sheetDetails .exif-metadata table > tr > th {
+    width: 30%;
+  }
+}
+
+.mobile-sheets #sheetDetails .invoke-metadata th,
+.mobile-sheets #sheetDetails .invoke-metadata td,
+.mobile-sheets #sheetDetails .exif-metadata th,
+.mobile-sheets #sheetDetails .exif-metadata td {
+  padding: 6px 8px;
+}

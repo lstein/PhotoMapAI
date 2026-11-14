@@ -2,6 +2,10 @@
      Line 1 mirrors the semantic-map titlebar: reindex button (swapped for a
      progress ring while an index update runs) and the album pulldown.
      Line 2 is the slide position / search score written by score-display.js. -->
+<!-- In the phone layout this wrapper is the top sheet (mobile-sheets.js); on
+     larger screens it is display: contents and its children lay themselves out
+     exactly as if it were not there. -->
+<div id="topSheetContainer" class="mobile-sheet">
 <div id="fixedScoreDisplay" class="fixed-score-display" tabindex="0">
   <div id="albumBadgeRow" class="album-badge-row">
     <button id="albumReindexBtn" class="icon-btn" title="Update this album's index" aria-label="Update this album's index">
@@ -39,7 +43,7 @@
 </div>
 
 <!-- Yellow hover strip at top - always visible when slider is hidden -->
-<div id="sliderHoverStrip" class="slider-hover-strip"></div>
+<div id="sliderHoverStrip" class="slider-hover-strip" data-sheet-peek></div>
 
 <!-- Slider row that animates in/out -->
 <div id="scoreSliderRow" class="score-slider-row">
@@ -63,4 +67,9 @@
       <div id="sliderTicks" class="slider-ticks"></div>
     </div>
   </div>
+</div>
+
+<!-- Only shown in the phone layout. Last, so it sits at the sheet's bottom edge. -->
+<button id="topSheetHandle" class="sheet-handle" type="button" aria-label="Show or hide the seek slider"
+  aria-controls="topSheetContainer"></button>
 </div>

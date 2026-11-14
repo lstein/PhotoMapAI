@@ -224,11 +224,17 @@ export function syncPanelAnchor() {
   // to — so after a stranded fullscreen exit the bottom of the photo hangs off
   // the screen too. Publish the visible height for those rules to consume
   // (they fall back to 100dvh when it is unset).
+  //
+  // The phone layout's bottom sheet (mobile-sheets.css) cannot take the
+  // translate the panels get above — it uses its own transform to slide — so
+  // it lifts itself by the overshoot through its bottom offset instead.
   const root = document.documentElement;
   if (overshoot) {
     root.style.setProperty("--visible-viewport-height", `${root.clientHeight - overshoot}px`);
+    root.style.setProperty("--visible-viewport-overshoot", `${overshoot}px`);
   } else {
     root.style.removeProperty("--visible-viewport-height");
+    root.style.removeProperty("--visible-viewport-overshoot");
   }
 }
 

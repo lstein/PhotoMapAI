@@ -12,6 +12,7 @@ import "./javascript/bookmarks.js";
 import "./javascript/cluster-utils.js";
 import "./javascript/events.js";
 import "./javascript/metadata-drawer.js";
+import "./javascript/mobile-sheets.js";
 import "./javascript/invoke-recall.js";
 import "./javascript/page-visibility.js";
 import "./javascript/search-ui.js";

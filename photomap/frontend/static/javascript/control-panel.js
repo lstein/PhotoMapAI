@@ -39,6 +39,14 @@ function isDocumentFullscreen() {
   );
 }
 
+/**
+ * Can this browser put the page into fullscreen? iPhone Safari cannot (only a
+ * video can go fullscreen there), and its Fullscreen button did nothing.
+ */
+export function pageFullscreenSupported() {
+  return Boolean(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+}
+
 // Toggle fullscreen mode.
 //
 // The exit chain has to cover every spelling the state check above accepts, or
@@ -291,7 +299,11 @@ async function handleSuccessfulDelete(globalIndex) {
 
 // Setup button event listeners
 function setupControlPanelEventListeners() {
-  // Fullscreen button
+  // Fullscreen button, where there is a fullscreen to go to
+  if (elements.fullscreenBtn && !pageFullscreenSupported()) {
+    const container = elements.fullscreenBtn.closest(".control-icon-container") || elements.fullscreenBtn;
+    container.style.display = "none";
+  }
   if (elements.fullscreenBtn) {
     elements.fullscreenBtn.addEventListener("click", (e) => {
       e.stopPropagation();
