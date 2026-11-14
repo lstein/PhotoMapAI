@@ -84,6 +84,10 @@ DIMENSION_PROBE_MAX_BYTES = 500 * 1024
 # editable side by side in the album editor).
 DIMENSION_REJECT_MIN_BYTES = 8 * 1024
 
+# The directory, next to an album's first image folder, that holds its index
+# and everything derived from it (UMAP cache, thumbnails, scan bookkeeping).
+DEFAULT_INDEX_DIRNAME = "photomap_index"
+
 # Directory names (matched case-insensitively) that hold derived previews,
 # never originals — pruned from the scan alongside our own photomap_index.
 # NAS and desktop indexers can stash as many thumbnails as there are photos,
@@ -93,7 +97,7 @@ DIMENSION_REJECT_MIN_BYTES = 8 * 1024
 # .dtrash, ...), and some hold thumbnails big enough to pass BOTH gates —
 # Shotwell's 360px thumbs would otherwise be indexed as photos.
 EXCLUDED_SCAN_DIRS = {
-    "photomap_index",
+    DEFAULT_INDEX_DIRNAME,
     "@eadir",  # Synology
     "__macosx",  # AppleDouble cruft from unzipped archives
 }

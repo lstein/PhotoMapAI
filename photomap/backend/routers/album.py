@@ -18,8 +18,9 @@ from ..config import (
     default_board_index_path,
     get_config_manager,
 )
-from ..embeddings import Embeddings
+from ..embeddings import DEFAULT_INDEX_DIRNAME, Embeddings, _open_npz_file
 from ..encoders import default_encoder_spec, default_min_search_score
+from ..progress import progress_tracker
 from ..util import json_safe
 from ..video_cache import VideoFrameCache
 from ..video_transcode import TranscodeCache, forget_album
@@ -226,26 +227,84 @@ def require_no_lock() -> None:
     check_album_lock()
 
 
-def _cleanup_derived_index(album: Album | None) -> None:
-    """Remove a board album's backend-derived index directory.
+def _derived_index_dir(album: Album) -> Path | None:
+    """The index directory PhotoMap created for ``album``, or None.
 
-    Board-album indexes live in the per-user data directory
-    (``.../indexes/<key>/``) rather than next to the images, so nothing
-    else cleans them up when the album goes away. Only the derived
-    location is touched — a custom index path is left alone.
+    Only a directory PhotoMap itself chose is ever returned, so deleting it
+    can never take a user's own folder with it:
+
+    * board albums: ``.../indexes/<key>/`` in the per-user data directory;
+    * directory albums: a ``photomap_index`` folder — the name the album form
+      fills in next to the first image folder.
+
+    A custom index path anywhere else is the user's to manage and is left
+    alone (returns None).
     """
-    if album is None or album.source_type != "invokeai_board":
+    index_dir = Path(album.index).expanduser().parent
+    if album.source_type == "invokeai_board":
+        try:
+            derived_dir = default_board_index_path(album.key).parent
+        except ValueError:
+            return None
+        return derived_dir if index_dir == derived_dir else None
+    return index_dir if index_dir.name == DEFAULT_INDEX_DIRNAME else None
+
+
+def _cleanup_derived_index(album: Album | None) -> None:
+    """Remove a deleted album's PhotoMap-created index directory.
+
+    The index directory holds the embeddings plus everything derived from
+    them (UMAP cache, thumbnails, scan bookkeeping), none of which is useful
+    once the album is gone — and for directory albums it sits inside the
+    user's photo folder, where it is plainly visible clutter (issue #433).
+
+    Must be called *after* the album has been removed from the config: a
+    directory still used as the index location by another album (two
+    albums over the same photo folder) is kept, and the check reads the
+    remaining albums. Never raises: a failure here costs disk space, not
+    correctness.
+    """
+    if album is None:
         return
+    derived_dir = _derived_index_dir(album)
+    if derived_dir is None or derived_dir.is_symlink() or not derived_dir.is_dir():
+        return
+
     try:
-        derived_dir = default_board_index_path(album.key).parent
-    except ValueError:
+        for other in config_manager.get_albums().values():
+            if _same_directory(Path(other.index).expanduser().parent, derived_dir):
+                logger.info(
+                    f"Keeping index directory {derived_dir}: still used by album '{other.key}'"
+                )
+                return
+    except Exception as e:
+        # Unable to prove nobody else uses it — keeping it is the safe answer.
+        logger.warning(f"Not removing index directory {derived_dir}: {e}")
         return
-    if Path(album.index).parent != derived_dir or not derived_dir.is_dir():
-        return
+
     try:
         shutil.rmtree(derived_dir)
+        logger.info(f"Removed index directory {derived_dir}")
     except OSError as e:
         logger.warning(f"Could not remove index directory {derived_dir}: {e}")
+    finally:
+        # ``_open_npz_file`` is an lru_cache keyed on the path; drop the
+        # removed index so a new album at the same path starts clean.
+        _open_npz_file.cache_clear()
+
+
+def _same_directory(a: Path, b: Path) -> bool:
+    """Whether two paths name the same directory on disk.
+
+    Compared by device/inode, not by spelling: on a case-insensitive
+    filesystem (macOS) ``~/Pictures`` and ``~/pictures`` are one folder that
+    ``resolve()`` leaves spelled two ways, and so are a bind mount's two
+    paths. Falls back to the resolved spelling when either side is missing.
+    """
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return a.resolve() == b.resolve()
 
 
 def _cleanup_video_frames(album_key: str) -> None:
@@ -653,10 +712,21 @@ async def update_album(album_data: dict) -> JSONResponse:
 )
 async def delete_album(album_key: str) -> JSONResponse:
     """Delete an album from the configuration."""
+    # An indexing run writes into the album's index directory at points
+    # that never check for cancellation (the scan, UMAP fitting, the final
+    # save), so deleting under it would leave a freshly recreated orphan
+    # ``photomap_index`` behind. Make the user stop it first.
+    if progress_tracker.is_running(album_key):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Album '{album_key}' is being indexed. Cancel indexing (or let it finish) before deleting it.",
+        )
     try:
         album = config_manager.get_album(album_key)
         if config_manager.delete_album(album_key):
-            _cleanup_derived_index(album)
+            # Off the event loop: a thumbnail directory can hold tens of
+            # thousands of files, possibly on a network share.
+            await asyncio.to_thread(_cleanup_derived_index, album)
             _cleanup_video_frames(album_key)
             return JSONResponse(
                 content={
@@ -670,6 +740,8 @@ async def delete_album(album_key: str) -> JSONResponse:
                 status_code=404, detail=f"Album '{album_key}' not found"
             )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete album: {str(e)}") from e
 
