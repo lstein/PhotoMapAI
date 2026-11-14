@@ -209,9 +209,14 @@ def _exif_rows(metadata: dict) -> list[tuple[str, str]]:
     make = str(metadata.get("Make") or "").strip()
     model = str(metadata.get("Model") or "").strip()
     # Many makers repeat themselves in the model ("Canon" / "Canon EOS R5",
-    # "NIKON CORPORATION" / "NIKON D90"); the model alone says it all then.
-    brand = make.split()[0].lower() if make else ""
-    camera = model if brand and model.lower().startswith(brand) else " ".join(filter(None, (make, model)))
+    # "NIKON CORPORATION" / "NIKON D90", "Eastman Kodak Company" / "KODAK
+    # EASYSHARE"); the model alone says it all then. Whole words only, so
+    # "LG Electronics" / "LGE-Nexus" keeps its maker.
+    model_brand = model.split()[0].lower() if model else ""
+    if model_brand and model_brand in make.lower().split():
+        camera = model
+    else:
+        camera = " ".join(filter(None, (make, model)))
     if camera:
         rows.append(("Camera", camera))
 
@@ -240,13 +245,23 @@ def _exif_rows(metadata: dict) -> list[tuple[str, str]]:
     elif height:
         rows.append(("Height", _format_field_value(*height)))
 
-    position = [
-        fmt(field) for field in ("GPSLatitudeDecimal", "GPSLongitudeDecimal") if metadata.get(field) is not None
-    ]
-    if metadata.get("GPSAltitude") is not None:
-        position.append(fmt("GPSAltitude"))
-    if position:
+    # One "GPS" row for a full position; a lone coordinate keeps the label
+    # that says which one it is.
+    lat, lon = metadata.get("GPSLatitudeDecimal"), metadata.get("GPSLongitudeDecimal")
+    altitude = metadata.get("GPSAltitude")
+    if lat is not None and lon is not None:
+        position = [fmt("GPSLatitudeDecimal"), fmt("GPSLongitudeDecimal")]
+        if altitude is not None:
+            position.append(fmt("GPSAltitude"))
         rows.append(("GPS", ", ".join(position)))
+    else:
+        for field, label in (
+            ("GPSLatitudeDecimal", "GPS Latitude"),
+            ("GPSLongitudeDecimal", "GPS Longitude"),
+            ("GPSAltitude", "GPS Altitude"),
+        ):
+            if metadata.get(field) is not None:
+                rows.append((label, fmt(field)))
     if metadata.get("GPSTimeStamp") is not None:
         rows.append(("GPS Time", fmt("GPSTimeStamp")))
 

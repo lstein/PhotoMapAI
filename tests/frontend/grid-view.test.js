@@ -66,9 +66,10 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/search.js", 
 }));
 
 // Mock metadata-drawer.js
+const mockSetDrawerFileInfo = jest.fn();
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/metadata-drawer.js", () => ({
   enhanceReferenceImageThumbnails: jest.fn(),
-  setDrawerFileInfo: jest.fn(),
+  setDrawerFileInfo: mockSetDrawerFileInfo,
   updateCurrentImageScore: jest.fn(),
   updateClusterInfo: jest.fn(),
   updateImageLabel: jest.fn(),
@@ -217,6 +218,19 @@ describe("grid-view.js", () => {
 
       // The key assertion: hideSpinner must be called to prevent infinite spinning
       expect(mockHideSpinner).toHaveBeenCalled();
+    });
+  });
+
+  describe("updateMetadataOverlay", () => {
+    it("fills the drawer titlebar (name, full path, metadata link) for the selected tile", async () => {
+      gridViewManager = await initializeGridSwiper();
+      const data = { filename: "a.jpg", filepath: "/photos/a.jpg", metadata_url: "m/0", description: "" };
+      gridViewManager.slideData[0] = data;
+      mockSetDrawerFileInfo.mockClear();
+
+      gridViewManager.updateMetadataOverlay();
+
+      expect(mockSetDrawerFileInfo).toHaveBeenCalledWith(data);
     });
   });
 

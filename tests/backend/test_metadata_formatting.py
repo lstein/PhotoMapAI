@@ -119,11 +119,15 @@ class TestExifRowMerging:
 
     @pytest.mark.parametrize(
         ("make", "model"),
-        [("Canon", "Canon EOS R5"), ("NIKON CORPORATION", "NIKON D90")],
+        [("Canon", "Canon EOS R5"), ("NIKON CORPORATION", "NIKON D90"), ("Eastman Kodak Company", "KODAK EASYSHARE")],
     )
     def test_brand_repeated_in_model_is_not_doubled(self, clear_invokeai_config, make, model):
         result = format_metadata(_filepath(), {"Make": make, "Model": model}, 0, 1)
         assert f"<th>Camera</th><td>{model}</td>" in result.description
+
+    def test_brand_match_is_whole_word(self, clear_invokeai_config):
+        result = format_metadata(_filepath(), {"Make": "LG Electronics", "Model": "LGE-Nexus"}, 0, 1)
+        assert "<th>Camera</th><td>LG Electronics LGE-Nexus</td>" in result.description
 
     def test_exposure_settings_share_a_row(self, clear_invokeai_config):
         metadata = {"FNumber": 2.8, "ExposureTime": 0.004, "ISOSpeedRatings": 200, "FocalLength": 50}
@@ -147,6 +151,11 @@ class TestExifRowMerging:
         metadata = {"GPSLatitudeDecimal": 40.5, "GPSLongitudeDecimal": -74.25, "GPSAltitude": 12}
         result = format_metadata(_filepath(), metadata, 0, 1)
         assert "<th>GPS</th><td>40.500000°, -74.250000°, 12m</td>" in result.description
+
+    def test_lone_gps_coordinate_keeps_its_label(self, clear_invokeai_config):
+        result = format_metadata(_filepath(), {"GPSLatitudeDecimal": 40.5}, 0, 1)
+        assert "<th>GPS Latitude</th><td>40.500000°</td>" in result.description
+        assert "<th>GPS</th>" not in result.description
 
     def test_no_empty_location_column_without_gps(self, clear_invokeai_config):
         result = format_metadata(_filepath(), {"Make": "Nikon"}, 0, 1)
