@@ -124,18 +124,19 @@ html.mobile-sheets[data-bottom-sheet="collapsed"] #panelStackContainer {
 }
 
 /* A phone held sideways has no toolbar under the page: the bottom edge is
-   where iOS takes a swipe up to go home, and a handle that low loses its
-   drags to it. Collapsed, the handle grows upwards and its pill moves to the
-   top, so it is grabbed clear of that zone. (env() reports nothing without
-   viewport-fit=cover, hence the floor.) */
+   where iOS takes a swipe up to go home (the home indicator's strip is about
+   21px), and a handle that low loses its drags to it. Collapsed, the handle
+   grows upwards by a little and its pill moves to the top, about 25px clear
+   of the edge, so it is grabbed above that strip. (Without
+   viewport-fit=cover, env(safe-area-inset-bottom) reports nothing to go by.) */
 @media (max-height: 500px) and (pointer: coarse) {
   html.mobile-sheets[data-bottom-sheet="collapsed"] {
-    --bottom-sheet-peek: calc(24px + max(22px, env(safe-area-inset-bottom, 0px)));
+    --bottom-sheet-peek: 34px;
   }
 
   html.mobile-sheets[data-bottom-sheet="collapsed"] #bottomSheetHandle {
     align-items: flex-start;
-    padding-top: 10px;
+    padding-top: 6px;
   }
 }
 
