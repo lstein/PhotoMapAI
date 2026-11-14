@@ -11,7 +11,7 @@ import {
 import { exitSearchMode } from "./search-ui.js";
 import { closeSettingsModal, loadAvailableAlbums, openSettingsModal } from "./settings.js";
 import { refreshActiveAlbumSearchSettings, setAlbum, state } from "./state.js";
-import { fetchJson, hideSpinner, showSpinner } from "./utils.js";
+import { errorDetail, fetchJson, hideSpinner, showSpinner } from "./utils.js";
 
 // Encoder backends offered in the album manager dropdown. Values must match
 // the spec format consumed by photomap.backend.encoders.build_encoder.
@@ -1303,7 +1303,12 @@ export class AlbumManager {
   }
 
   async deleteAlbum(albumKey) {
-    if (!confirm(`Are you sure you want to delete album "${albumKey}"? This action cannot be undone.`)) {
+    if (
+      !confirm(
+        `Are you sure you want to delete album "${albumKey}"? Its search index will be removed too ` +
+          `(your photos are not touched). This action cannot be undone.`
+      )
+    ) {
       return;
     }
 
@@ -1316,7 +1321,7 @@ export class AlbumManager {
       }
     } catch (error) {
       console.error("Failed to delete album:", error);
-      alert("Failed to delete album");
+      alert(`Failed to delete album: ${errorDetail(error)}`);
     }
   }
 
