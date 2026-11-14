@@ -1,6 +1,7 @@
 import { backStack } from "./back-stack.js";
 import { bookmarkManager } from "./bookmarks.js";
 import { scoreDisplay } from "./score-display.js";
+import { isMobileSheetsMode } from "./mobile-sheets.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { debounce } from "./utils.js";
@@ -45,6 +46,12 @@ class SeekSlider {
     this.lastFetchTime = 0;
     this.FETCH_THROTTLE_MS = 200;
     this.slideChangedTimer = null;
+    // In the phone layout the slider lives in the top sheet and is open for
+    // exactly as long as the sheet is (mobile-sheets.js). While pinned, none
+    // of the hover / fade-out / badge-tap paths may close it.
+    this.sheetPinned = false;
+    // When a pinned slider was last released; see onSliderInput.
+    this.lastSliderChangeAt = 0;
   }
 
   initialize() {
@@ -74,6 +81,54 @@ class SeekSlider {
 
     // Update slider position when score display content changes
     window.addEventListener("scoreDisplayContentChanged", () => this.updateSliderPosition());
+
+    window.addEventListener("mobileSheetChanged", (event) => this.onMobileSheetChanged(event.detail));
+  }
+
+  /** Open the slider with the top sheet, and close it with the sheet. */
+  async onMobileSheetChanged(detail) {
+    if (!detail) {
+      return;
+    }
+    if (detail.sheet === "top") {
+      if (detail.mobile && detail.expanded) {
+        await this.pinForSheet();
+      } else if (this.sheetPinned) {
+        this.unpinForSheet();
+      }
+    }
+    // The layout switched one way or the other: the row's left edge is either
+    // measured from the badge again or must stop being.
+    this.updateSliderPosition();
+  }
+
+  async pinForSheet() {
+    this.sheetPinned = true;
+    this.clearHideTimer();
+    this.clearFadeOutTimer();
+    this.sliderVisible = true;
+    this.hoverStrip?.classList.add("hidden");
+    this.scoreSliderRow?.classList.add("visible");
+    this.sliderContainer?.classList.add("visible");
+    await this.refreshPinnedSlider();
+  }
+
+  /** Bring a pinned slider's range, value and ticks up to date. */
+  async refreshPinnedSlider() {
+    if (!this.sheetPinned || !this.slider) {
+      return;
+    }
+    await this.updateSliderRange();
+    this.slider.value = slideState.getCurrentIndex() + 1;
+    this.updateHoverStripProgress();
+    await this.renderSliderTicks();
+    this.searchResultsChanged = false;
+  }
+
+  unpinForSheet() {
+    this.sheetPinned = false;
+    this.hideSlider();
+    this.clearFadeOutTimer();
   }
 
   /**
@@ -84,6 +139,13 @@ class SeekSlider {
    */
   updateSliderPosition() {
     if (!this.scoreDisplayElement || !this.scoreSliderRow || !this.hoverStrip) {
+      return;
+    }
+    // In the phone layout the slider has its own full-width row under the
+    // badge (mobile-sheets.css); an inline left would squeeze it back beside it.
+    if (isMobileSheetsMode()) {
+      this.scoreSliderRow.style.left = "";
+      this.hoverStrip.style.left = "";
       return;
     }
 
@@ -168,7 +230,8 @@ class SeekSlider {
       this.scoreDisplayElement.addEventListener("click", (e) => {
         // Don't toggle slider if clicking on the star icon (for bookmark toggle)
         // or anywhere in the album row (pulldown, reindex button, progress ring).
-        if (e.target.closest(".score-star") || e.target.closest(".album-badge-row")) {
+        // In the phone layout the top sheet opens and closes the slider instead.
+        if (e.target.closest(".score-star") || e.target.closest(".album-badge-row") || this.sheetPinned) {
           return;
         }
         this.toggleSlider();
@@ -206,13 +269,17 @@ class SeekSlider {
     }
 
     window.addEventListener("slideChanged", async (event) => await this.onSlideChanged(event));
+    // A closed slider picks these up the next time it opens; a pinned one is
+    // open now, so it has to be brought up to date straight away.
     window.addEventListener("searchResultsChanged", () => {
       this.searchResultsChanged = true;
       this.updateHoverStripProgress();
+      this.refreshPinnedSlider();
     });
     window.addEventListener("albumChanged", () => {
       this.searchResultsChanged = true;
       this.updateHoverStripProgress();
+      this.refreshPinnedSlider();
     });
   }
 
@@ -221,6 +288,9 @@ class SeekSlider {
    */
   scheduleHide() {
     this.clearHideTimer();
+    if (this.sheetPinned) {
+      return;
+    }
     this.hideTimerId = setTimeout(() => {
       this.hideSlider();
       this.hideTimerId = null;
@@ -294,7 +364,10 @@ class SeekSlider {
       panelText = "";
     }
 
-    if (panelText) {
+    // A pinned slider's bubble is put away on release (onSliderChange); a date
+    // lookup for a drag that has since been released must not bring it back.
+    const released = this.sheetPinned && this.lastSliderChangeAt >= now;
+    if (panelText && !released) {
       this.infoPanel.textContent = panelText;
       this.infoPanel.style.display = "block";
       let left = 0;
@@ -353,6 +426,16 @@ class SeekSlider {
 
   async onSliderChange() {
     this.infoPanel.textContent = "";
+    // A closed slider takes the date bubble with it; a pinned one stays open,
+    // so put the bubble away once any date lookup still in flight has landed.
+    if (this.sheetPinned) {
+      this.lastSliderChangeAt = Date.now();
+      setTimeout(() => {
+        if (this.infoPanel) {
+          this.infoPanel.style.display = "none";
+        }
+      }, 800);
+    }
     const targetIndex = parseInt(this.slider.value, 10) - 1;
     // Update hover strip with final slider position
     this.updateHoverStripProgress(targetIndex + 1);
@@ -408,6 +491,9 @@ class SeekSlider {
   }
 
   hideSlider() {
+    if (this.sheetPinned) {
+      return;
+    }
     if (this.sliderVisible && this.sliderContainer) {
       this.sliderVisible = false;
       this.sliderContainer.classList.remove("visible");
@@ -426,6 +512,9 @@ class SeekSlider {
   }
 
   hideSliderWithDelay(event) {
+    if (this.sheetPinned) {
+      return;
+    }
     if (!this.sliderContainer.contains(event.relatedTarget)) {
       this.clearFadeOutTimer();
       this.fadeOutTimeoutId = setTimeout(() => {
@@ -449,6 +538,9 @@ class SeekSlider {
 
   resetFadeOutTimer() {
     this.clearFadeOutTimer();
+    if (this.sheetPinned) {
+      return;
+    }
     this.fadeOutTimeoutId = setTimeout(() => {
       if (!this.sliderContainer.querySelector(":hover")) {
         this.sliderContainer.classList.remove("visible");
@@ -563,6 +655,9 @@ class SeekSlider {
   }
 
   async toggleSlider() {
+    if (this.sheetPinned) {
+      return;
+    }
     this.sliderVisible = !this.sliderVisible;
     if (this.sliderVisible) {
       // Hide the yellow strip and show the slider row with animation

@@ -3,6 +3,7 @@
 
 import { showBackFlyout } from "./back-button.js";
 import { backStack } from "./back-stack.js";
+import { isMobileSheetsMode, SHEET_DETAILS, setSheetState } from "./mobile-sheets.js";
 import { showSlideshowModeMenu, toggleSlideshowWithIndicator } from "./slideshow.js";
 import { state } from "./state.js";
 import { attachLongPress } from "./utils.js";
@@ -14,6 +15,11 @@ let touchStartTime = null;
 const swipeThreshold = 50; // Minimum distance in px for a swipe
 const tapThreshold = 10; // Maximum movement in px for a tap
 const tapTimeThreshold = 500; // Maximum time in ms for a tap
+
+// A zoomed photo pans under a one-finger drag; that is not a swipe.
+function photoIsZoomed() {
+  return Boolean(document.querySelector("#singleSwiper .swiper-slide-zoomed")) || window.visualViewport?.scale > 1.01;
+}
 
 function handleTouchStart(e) {
   // Only track single-finger touches
@@ -127,11 +133,13 @@ function handleTouchEnd(e) {
 
   if (isTap && isFullscreen && !tappedAControl) {
     toggleSlideshowWithIndicator();
-  } else {
-    // Only detect horizontal swipe (left/right) for pausing slideshow
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
-      state.single_swiper.pauseSlideshow();
-    }
+  } else if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > swipeThreshold) {
+    // A horizontal swipe changes slide; pause the slideshow for it.
+    state.single_swiper.pauseSlideshow();
+  } else if (deltaY < -swipeThreshold && isMobileSheetsMode() && !isFullscreen && !tappedAControl && !photoIsZoomed()) {
+    // Phone layout: swiping up on the photo opens its details, as in Photos.
+    // Not in fullscreen, where the sheets are hidden.
+    setSheetState("bottom", SHEET_DETAILS);
   }
 
   // Reset touch tracking

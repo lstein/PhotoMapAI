@@ -155,6 +155,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     e.stopPropagation();
   });
 
+  // In the phone layout the box sits above the bottom sheet, and the sheet's
+  // details stop rises over the space it would need: close it.
+  window.addEventListener("mobileSheetChanged", (e) => {
+    if (e.detail?.state === "details" && textSearchPanel.style.display === "block") {
+      releaseSearchFocus();
+      textSearchPanel.style.display = "none";
+      textSearchPanel.style.opacity = 0;
+    }
+  });
+
   const doSearchBtn = document.getElementById("doSearchBtn");
   const searchInput = document.getElementById("searchInput");
   const negativeSearchInput = document.getElementById("negativeSearchInput");

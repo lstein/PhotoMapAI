@@ -8,6 +8,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link rel="icon" type="image/x-icon" href="{{ static_url('icons/favicon.ico') }}" />
 
+    <!-- Screens that get the phone layout: the panels, album badge and seek
+         slider fold into sheets that slide in from the top and bottom edges
+         (mobile-sheets.js). Narrow windows, and phones held sideways. -->
+    <meta name="mobile-sheets-query" content="(max-width: 600px), (max-height: 500px) and (pointer: coarse)" />
+    <!-- Set the layout and the remembered sheet state before first paint, so
+         the page does not lay out for the desktop and then rearrange itself.
+         mobile-sheets.js keeps these current afterwards. -->
+    <script>
+        (function () {
+            var root = document.documentElement;
+            var meta = document.querySelector('meta[name="mobile-sheets-query"]');
+            if (meta && window.matchMedia && window.matchMedia(meta.content).matches) {
+                root.classList.add("mobile-sheets");
+            }
+            var bottom = "expanded";
+            try {
+                if (localStorage.getItem("bottomSheetState") === "collapsed") {
+                    bottom = "collapsed";
+                }
+            } catch (e) { /* storage blocked: start expanded */ }
+            root.setAttribute("data-bottom-sheet", bottom);
+            root.setAttribute("data-top-sheet", "collapsed");
+        }());
+    </script>
+
     <!-- Detect legacy EdgeHTML (Edge ≤18 / Edge 44) before loading any ES2020 scripts.
          window.StyleMedia is unique to EdgeHTML and absent from Chromium-based Edge.
          window.location.replace() performs a full navigation so the original page
@@ -49,6 +74,7 @@
     <link rel="stylesheet" type="text/css" href="{{ static_url('css/umap-floating-window.css') }}" />
     <link rel="stylesheet" type="text/css" href="{{ static_url('css/album-select.css') }}" />
     <link rel="stylesheet" type="text/css" href="{{ static_url('css/curation.css') }}" />
+    <link rel="stylesheet" type="text/css" href="{{ static_url('css/mobile-sheets.css') }}" />
 
     <script>
         window.slideshowConfig = {
@@ -81,9 +107,15 @@
     </div>
 
     {% include "modules/metadata-drawer.html" %}
-    <div id="panelStackContainer">
+    <div id="panelStackContainer" class="mobile-sheet">
+        <!-- Only shown in the phone layout, where this container is the bottom sheet. -->
+        <button id="bottomSheetHandle" class="sheet-handle" type="button" aria-label="Show or hide the controls"
+            aria-controls="panelStackContainer"></button>
         {% include "modules/search-panel.html" %}
         {% include "modules/control-panel.html" %}
+        <!-- Phone layout only: mobile-sheets.js moves the metadata drawer's
+             contents here, as the sheet's "details" stop. -->
+        <div id="sheetDetails" class="sheet-details"></div>
     </div>
     {% include "modules/search.html" %}
     {% include "modules/umap-floating-window.html" %}

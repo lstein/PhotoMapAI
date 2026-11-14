@@ -8,6 +8,7 @@ import {
   setClusterLabels,
   trackVocabBuildRequest,
 } from "./cluster-utils.js";
+import { isMobileSheetsMode, sheetVisibleHeight } from "./mobile-sheets.js";
 import { exitSearchMode } from "./search-ui.js";
 import { getImagePath, setSearchResults } from "./search.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
@@ -2647,10 +2648,18 @@ function setUmapWindowSize(sizeKey) {
     const controlsHeight = reservedControlsHeight(50, 40);
     // Measure how much vertical space the bottom Control/Search panels occupy.
     // The window covers the full viewport; its dark background fills the dead zone behind the panels.
+    // In the phone layout both panels are in the bottom sheet, so clear that
+    // as it settles (open, or down to its handle; its details stop, which
+    // floats over everything, counts as open).
     const bottomPanel = document.getElementById("controlPanel");
-    const panelReservedHeight = bottomPanel
-      ? Math.round(window.innerHeight - bottomPanel.getBoundingClientRect().top) + 16
-      : 96; // +16 ≈ 1em gap above the panels
+    let panelReservedHeight;
+    if (isMobileSheetsMode()) {
+      panelReservedHeight = Math.round(sheetVisibleHeight("bottom")) + 16;
+    } else {
+      panelReservedHeight = bottomPanel
+        ? Math.round(window.innerHeight - bottomPanel.getBoundingClientRect().top) + 16
+        : 96; // +16 ≈ 1em gap above the panels
+    }
     const windowHeight = window.innerHeight;
     win.style.left = "0px";
     win.style.top = "0px";
@@ -2886,7 +2895,7 @@ document.getElementById("umapClusterInfoModal").addEventListener("click", (e) =>
   }
 });
 
-window.addEventListener("resize", () => {
+function refitFullscreenUmapWindow() {
   // Only resize if UMAP window is in fullscreen mode
   const win = document.getElementById("umapFloatingWindow");
   if (!win || win.style.display !== "block") {
@@ -2897,6 +2906,15 @@ window.addEventListener("resize", () => {
     // Optionally, update landmarks and current image marker
     updateLandmarkTrace();
     updateCurrentImageMarker();
+  }
+}
+
+window.addEventListener("resize", refitFullscreenUmapWindow);
+// The fullscreen map stops above the phone layout's bottom sheet, which is
+// open or down to its handle; follow it when it moves or changes height.
+window.addEventListener("mobileSheetChanged", (e) => {
+  if (e.detail?.sheet === "bottom") {
+    refitFullscreenUmapWindow();
   }
 });
 

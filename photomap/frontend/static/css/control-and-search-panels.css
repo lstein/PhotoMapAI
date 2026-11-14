@@ -245,75 +245,12 @@
   display: none !important;
 }
 
-@media (max-width: 600px) {
-  #panelStackContainer {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100vw;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    z-index: 4000;
-    pointer-events: none;
-  }
+/* On phones the two panels stack inside the bottom sheet, which slides up and
+   down; that layout lives in mobile-sheets.css. */
 
-  #searchPanel,
-  #controlPanel {
-    position: static !important;
-    width: 100vw;
-    /* Without this the side padding is added to 100vw, pushing the centred
-       icon row off the right-hand edge. */
-    box-sizing: border-box;
-    margin: 0;
-    border-radius: 0;
-    box-shadow: none;
-    pointer-events: auto;
-    /* Remove any max-width if present */
-  }
-
-  #searchPanel {
-    order: 0;
-    border-bottom: 1px solid #222;
-  }
-
-  #controlPanel {
-    order: 1;
-    border-top: 1px solid #222;
-  }
-
-  /* Keep icons in a horizontal row */
-  .control-icons-row,
-  .search-icons-row {
-    flex-direction: row !important;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5em;
-    width: 100%;
-  }
-
-  #controlPanel button,
-  #searchPanel button {
-    width: 48px;
-    height: 48px;
-    min-width: 48px;
-    min-height: 48px;
-    font-size: 2em;
-  }
-
-  /* The rule above is less specific than #controlPanel button.menu-chevron, so
-     the chevron keeps its 16px width here; only the height needs restating to
-     stay flush with the 48px button it is attached to. */
-  #controlPanel button.menu-chevron {
-    height: 48px;
-    min-height: 48px;
-  }
-}
-
-/* The two panels share the bottom edge until they stack at 600px, and with
-   seven icons in the Search panel they would run into each other on a tablet
-   in portrait (768-820px). The room comes out of the gaps between icons. Below
+/* The two panels share the bottom edge until they move into the phone layout's
+   bottom sheet at 600px, and with seven icons in the Search panel they would
+   run into each other on a tablet in portrait (768-820px). The room comes out of the gaps between icons. Below
    about 745px they still overlap, by less than they would otherwise. */
 @media (min-width: 601px) and (max-width: 860px) {
   .control-icons-row,

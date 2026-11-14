@@ -8,6 +8,7 @@ import {
   updateImageLabel,
 } from "./metadata-drawer.js";
 import { applyRefTarget } from "./invoke-ref-target.js";
+import { isMobileSheetsMode, sheetVisibleHeight } from "./mobile-sheets.js";
 import { fetchImageByIndex } from "./search.js";
 import { slideState } from "./slide-state.js";
 import { state } from "./state.js";
@@ -55,7 +56,12 @@ class GridViewManager {
     // The grid is pushed down (grid-view.css) to clear the album badge; take
     // that off the height so the bottom row still clears the panels.
     const topReserve = parseFloat(getComputedStyle(gridContainer).marginTop) || 0;
-    const availableHeight = window.innerHeight - 120 - topReserve;
+    // The bottom panels' share. In the phone layout they are a sheet that
+    // covers the grid, by its full height when open and by its handle when
+    // closed; grid-view.css stops the container above it, and the grid is
+    // re-measured whenever it opens or closes.
+    const bottomReserve = isMobileSheetsMode() ? sheetVisibleHeight("bottom") + 6 : 120;
+    const availableHeight = window.innerHeight - bottomReserve - topReserve;
 
     const factor = state.gridThumbSizeFactor || 1.0;
     const targetTileSize = 200 * factor;
@@ -604,6 +610,7 @@ class GridViewManager {
     };
 
     this.addEventListener(window, "resize", handleResize);
+    this.addEventListener(window, "mobileSheetChanged", handleResize);
     // Flips when layout actually adopts the new orientation — on Chrome for
     // iOS that can come after the resize event carried stale dimensions.
     const orientationQuery = window.matchMedia?.("(orientation: portrait)");

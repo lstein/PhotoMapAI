@@ -14,6 +14,14 @@ import {
   SHOW_CLUSTER_LABELS_IN_BADGES,
 } from "./cluster-utils.js";
 import { applyRefTarget } from "./invoke-ref-target.js";
+import {
+  closeSheetDetails,
+  isMobileSheetsMode,
+  setSheetState,
+  SHEET_DETAILS,
+  sheetState,
+  sheetVisibleHeight,
+} from "./mobile-sheets.js";
 import { enhanceReferenceImageThumbnails, registerReferenceThumbnailClickHandler } from "./reference-thumbnails.js";
 
 export { enhanceReferenceImageThumbnails };
@@ -27,14 +35,26 @@ scoreDisplay.setToggleBookmarkCallback((globalIndex) => {
   scoreDisplay.refreshDisplay();
 });
 
-// Show the banner by moving container up
+// In the phone layout the drawer's contents are the bottom sheet's details
+// stop (mobile-sheets.js), so opening and closing the drawer means moving the
+// sheet to that stop or back down to the panels.
+
+// Show the banner by sliding the drawer out
 export function showMetadataOverlay() {
+  if (isMobileSheetsMode()) {
+    setSheetState("bottom", SHEET_DETAILS);
+    return;
+  }
   const container = document.getElementById("bannerDrawerContainer");
   container.classList.add("visible");
 }
 
-// Hide the banner by moving container down
+// Hide the banner by sliding the drawer back in
 export function hideMetadataOverlay() {
+  if (isMobileSheetsMode()) {
+    closeSheetDetails();
+    return;
+  }
   const container = document.getElementById("bannerDrawerContainer");
   container.classList.remove("visible");
 }
@@ -42,7 +62,9 @@ export function hideMetadataOverlay() {
 // Toggle the banner container
 export function toggleMetadataOverlay() {
   const container = document.getElementById("bannerDrawerContainer");
-  const isVisible = container.classList.contains("visible");
+  const isVisible = isMobileSheetsMode()
+    ? sheetState("bottom") === SHEET_DETAILS
+    : container.classList.contains("visible");
 
   if (isVisible) {
     hideMetadataOverlay();
@@ -564,6 +586,8 @@ export function initializeMetadataDrawer() {
   // label, score row), so re-measure when it does; otherwise the drawer's tab
   // ends up overlapping a badge that grew after the drawer was placed.
   window.addEventListener("scoreDisplayContentChanged", positionMetadataDrawer);
+  // The phone layout's top sheet opening or closing moves the edge to clear.
+  window.addEventListener("mobileSheetChanged", positionMetadataDrawer);
 
   // Metadata-fields accordion: mirrors the open/closed pattern used by the
   // Settings dialog accordions, with the open state persisted in
@@ -615,6 +639,12 @@ const DRAWER_TOP_FALLBACK = 78;
 const DRAWER_TOP_GAP = 12;
 
 function drawerRestingTop() {
+  // In the phone layout the badge rides in the top sheet, and measuring it
+  // mid-slide would catch the sheet part-way. Clear the sheet in the state it
+  // is settling to instead; it reports a change whenever that moves.
+  if (isMobileSheetsMode()) {
+    return Math.round(sheetVisibleHeight("top") + DRAWER_TOP_GAP);
+  }
   const badge = document.getElementById("fixedScoreDisplay");
   const rect = badge ? badge.getBoundingClientRect() : null;
   if (!rect || rect.height === 0) {
