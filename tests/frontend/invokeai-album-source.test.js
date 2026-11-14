@@ -34,6 +34,7 @@ jest.unstable_mockModule(`${M}/state.js`, () => ({
   state: {},
 }));
 jest.unstable_mockModule(`${M}/utils.js`, () => ({
+  errorDetail: jest.fn((error) => error.message),
   fetchJson,
   hideSpinner: jest.fn(),
   showSpinner: jest.fn(),

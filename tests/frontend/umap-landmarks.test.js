@@ -13,6 +13,7 @@
 import { jest, describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 
 import {
+  currentLandmarkAnnotations,
   currentLandmarkImages,
   currentLandmarkTrace,
   installFetchMock,
@@ -47,7 +48,7 @@ const mockState = {
   dataChanged: true,
   autotaggingEnabled: false,
   mediaFilter: "both",
-  umapShowLandmarks: true,
+  umapLandmarkStyle: "thumbnails",
   umapShowHoverThumbnails: false,
   umapExitFullscreenOnSelection: true,
   umapClickSelectsCluster: true,
@@ -68,14 +69,14 @@ const setMediaFilter = jest.fn((v) => {
   mockState.mediaFilter = v;
   window.dispatchEvent(new CustomEvent("mediaFilterSettingChanged", { detail: { value: v } }));
 });
-const setUmapShowLandmarks = jest.fn((v) => {
-  mockState.umapShowLandmarks = v;
+const setUmapLandmarkStyle = jest.fn((v) => {
+  mockState.umapLandmarkStyle = v;
 });
 
 jest.unstable_mockModule(`${JS}/state.js`, () => ({
   state: mockState,
   setMediaFilter,
-  setUmapShowLandmarks,
+  setUmapLandmarkStyle,
   setUmapClickSelectsCluster: jest.fn(),
   setUmapControlsVisible: jest.fn(),
   setUmapExitFullscreenOnSelection: jest.fn(),
@@ -91,9 +92,12 @@ jest.unstable_mockModule(`${JS}/album-manager.js`, () => ({
 jest.unstable_mockModule(`${JS}/back-stack.js`, () => ({
   backStack: { markNextAsJump: jest.fn(), popOne: jest.fn(), init: jest.fn(), setNavigator: jest.fn() },
 }));
+// Cluster id -> what /cluster_labels would have said about it. Empty by
+// default, so labels fall back to "Cluster N"; individual tests fill it in.
+const clusterLabels = {};
 jest.unstable_mockModule(`${JS}/cluster-utils.js`, () => ({
   CLUSTER_PALETTE: ["#ff0000", "#00ff00", "#0000ff"],
-  getClusterLabelInfo: jest.fn(() => null),
+  getClusterLabelInfo: jest.fn((c) => clusterLabels[c] ?? null),
   getImageLabelInfo: jest.fn(() => null),
   setClusterLabels: jest.fn(),
   trackVocabBuildRequest: jest.fn((p) => p),
@@ -144,14 +148,19 @@ describe("umap.js landmarks", () => {
   let plotly;
 
   /** Bring both cluster landmarks into view and redraw them. */
-  async function showLandmarksAcross(xRange, yRange) {
+  async function showLandmarksAcross(xRange, yRange, style = "thumbnails") {
     const plotDiv = document.getElementById("umapPlot");
     plotDiv.layout.xaxis.range = xRange;
     plotDiv.layout.yaxis.range = yRange;
 
-    const checkbox = document.getElementById("umapShowLandmarks");
-    checkbox.checked = true;
-    checkbox.dispatchEvent(new Event("change"));
+    await chooseStyle(style);
+  }
+
+  /** Pick a landmark style from the pulldown, as the user would. */
+  async function chooseStyle(style) {
+    const select = document.getElementById("umapLandmarkStyle");
+    select.value = style;
+    select.dispatchEvent(new Event("change"));
     await settle();
   }
 
@@ -178,7 +187,7 @@ describe("umap.js landmarks", () => {
 
     Object.assign(mockState, {
       mediaFilter: "both",
-      umapShowLandmarks: true,
+      umapLandmarkStyle: "thumbnails",
       dataChanged: true,
       searchType: "clear",
       searchResults: [],
@@ -287,13 +296,178 @@ describe("umap.js landmarks", () => {
     it("removes both the triangles and the thumbnails", async () => {
       expect(currentLandmarkImages()).toHaveLength(2);
 
-      const checkbox = document.getElementById("umapShowLandmarks");
-      checkbox.checked = false;
-      checkbox.dispatchEvent(new Event("change"));
-      await settle();
+      await chooseStyle("none");
 
       expect(currentLandmarkTrace()).toBeNull();
       expect(currentLandmarkImages()).toHaveLength(0);
+    });
+  });
+
+  describe("tiles", () => {
+    beforeEach(async () => {
+      for (const key of Object.keys(clusterLabels)) {
+        delete clusterLabels[key];
+      }
+      await showLandmarksAcross([-40, 30], [-20, 35], "tiles");
+    });
+
+    it("fills each cluster's label with its colour, with no thumbnails or triangles", () => {
+      const labels = currentLandmarkAnnotations();
+      expect(labels).toHaveLength(2);
+      for (const label of labels) {
+        // Filled with the cluster colour (the mocked palette), text in a
+        // contrasting black or white (isColorLight is mocked dark -> white).
+        expect(["#ff0000", "#00ff00", "#0000ff"]).toContain(label.bgcolor);
+        expect(label.font.color).toBe("#fff");
+        expect(label.captureevents).toBe(true);
+      }
+      expect(currentLandmarkImages()).toHaveLength(0);
+      expect(currentLandmarkTrace()).toBeNull();
+    });
+
+    it("falls back to the cluster number without autotag labels", () => {
+      const texts = currentLandmarkAnnotations().map((a) => a.text);
+      expect(texts).toEqual(expect.arrayContaining(["<b>Cluster 0</b>", "<b>Cluster 1</b>"]));
+    });
+
+    it("uses the cluster's autotag phrase once the labels arrive, escaped", async () => {
+      clusterLabels[1] = { label: "cats & <dogs>", alternates: [] };
+      window.dispatchEvent(new CustomEvent("clusterLabelsUpdated", { detail: { count: 1 } }));
+      await settle();
+
+      const texts = currentLandmarkAnnotations().map((a) => a.text);
+      expect(texts).toContain("<b>cats &amp; &lt;dogs&gt;</b>");
+    });
+
+    it("follows the media filter like thumbnails do", async () => {
+      await selectFilter("videos");
+
+      const labels = currentLandmarkAnnotations();
+      expect(labels).toHaveLength(1);
+      expect(labels[0].x).toBeGreaterThan(0);
+    });
+
+    it("removes the labels when the filter empties the view", async () => {
+      const plotDiv = document.getElementById("umapPlot");
+      plotDiv.layout.xaxis.range = [-30, -10];
+      plotDiv.layout.yaxis.range = [-5, 10];
+      await chooseStyle("tiles");
+      expect(currentLandmarkAnnotations()).toHaveLength(1);
+
+      await selectFilter("videos");
+
+      expect(currentLandmarkAnnotations()).toHaveLength(0);
+    });
+
+    it("swaps cleanly to thumbnails and back", async () => {
+      await chooseStyle("thumbnails");
+      expect(currentLandmarkAnnotations()).toHaveLength(0);
+      expect(currentLandmarkImages()).toHaveLength(2);
+
+      await chooseStyle("tiles");
+      expect(currentLandmarkAnnotations()).toHaveLength(2);
+      expect(currentLandmarkImages()).toHaveLength(0);
+      expect(currentLandmarkTrace()).toBeNull();
+    });
+
+    it("clears the labels when landmarks are turned off", async () => {
+      await chooseStyle("none");
+
+      expect(currentLandmarkAnnotations()).toHaveLength(0);
+      expect(currentLandmarkImages()).toHaveLength(0);
+    });
+
+    it("redraws the labels after the map is re-plotted", async () => {
+      // newPlot wipes layout.annotations; the same labels must come back
+      // rather than being skipped as unchanged.
+      mockState.dataChanged = true;
+      await umap.fetchUmapData();
+      await settle();
+      const plotDiv = document.getElementById("umapPlot");
+      plotDiv.layout.xaxis.range = [-40, 30];
+      plotDiv.layout.yaxis.range = [-20, 35];
+      plotDiv.emit("plotly_relayout", { "xaxis.range[0]": -40 });
+      await settle();
+
+      expect(currentLandmarkAnnotations()).toHaveLength(2);
+    });
+
+    it("persists the chosen style", () => {
+      expect(setUmapLandmarkStyle).toHaveBeenLastCalledWith("tiles");
+    });
+
+    it("navigates to the cluster's representative when a label is clicked", async () => {
+      const { slideState } = await import(`${JS}/slide-state.js`);
+      mockState.umapClickSelectsCluster = false;
+      const plotDiv = document.getElementById("umapPlot");
+      const labels = currentLandmarkAnnotations();
+      const videoLabel = labels.findIndex((a) => a.x > 0);
+
+      plotDiv.emit("plotly_clickannotation", { index: videoLabel });
+      await settle();
+
+      const target = slideState.navigateToIndex.mock.calls.at(-1)?.[0];
+      expect(target).toBeGreaterThanOrEqual(100);
+      mockState.umapClickSelectsCluster = true;
+    });
+  });
+  describe("text labels", () => {
+    beforeEach(async () => {
+      for (const key of Object.keys(clusterLabels)) {
+        delete clusterLabels[key];
+      }
+      await showLandmarksAcross([-40, 30], [-20, 35], "text");
+    });
+
+    it("draws bare text in the cluster's colour, with no box", () => {
+      const labels = currentLandmarkAnnotations();
+      expect(labels).toHaveLength(2);
+      for (const label of labels) {
+        expect(["#ff0000", "#00ff00", "#0000ff"]).toContain(label.font.color);
+        expect(label.bgcolor).toBe("rgba(0, 0, 0, 0)");
+        expect(label.borderwidth).toBe(0);
+        // A dark halo stands in for the box, for legibility over the dots.
+        expect(label.font.shadow).toBeTruthy();
+        expect(label.captureevents).toBe(true);
+      }
+      expect(currentLandmarkImages()).toHaveLength(0);
+      expect(currentLandmarkTrace()).toBeNull();
+    });
+
+    it("restyles in place when switching to tiles and back", async () => {
+      await chooseStyle("tiles");
+      let labels = currentLandmarkAnnotations();
+      expect(labels).toHaveLength(2);
+      expect(labels.every((a) => a.bgcolor !== "rgba(0, 0, 0, 0)")).toBe(true);
+
+      await chooseStyle("text");
+      labels = currentLandmarkAnnotations();
+      expect(labels).toHaveLength(2);
+      expect(labels.every((a) => a.bgcolor === "rgba(0, 0, 0, 0)")).toBe(true);
+    });
+
+    it("clears the labels when landmarks are turned off", async () => {
+      await chooseStyle("none");
+
+      expect(currentLandmarkAnnotations()).toHaveLength(0);
+    });
+
+    it("persists the chosen style", () => {
+      expect(setUmapLandmarkStyle).toHaveBeenLastCalledWith("text");
+    });
+
+    it("navigates to the cluster's representative when a label is clicked", async () => {
+      const { slideState } = await import(`${JS}/slide-state.js`);
+      mockState.umapClickSelectsCluster = false;
+      const plotDiv = document.getElementById("umapPlot");
+      const imageLabel = currentLandmarkAnnotations().findIndex((a) => a.x < 0);
+
+      plotDiv.emit("plotly_clickannotation", { index: imageLabel });
+      await settle();
+
+      const target = slideState.navigateToIndex.mock.calls.at(-1)?.[0];
+      expect(target).toBeLessThan(100);
+      mockState.umapClickSelectsCluster = true;
     });
   });
 });
