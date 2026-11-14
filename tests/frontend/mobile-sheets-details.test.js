@@ -165,6 +165,14 @@ describe("mobile-sheets.js details stop", () => {
   });
 
   describe("heights", () => {
+    it("measures the collapsed peek from the handle, whatever the CSS says", () => {
+      // Sideways, the peek is a calc() with env(), which reads back unevaluated.
+      Object.defineProperty($("bottomSheetHandle"), "offsetHeight", { configurable: true, value: 46 });
+      mod.setSheetState("bottom", "collapsed");
+      expect(mod.sheetVisibleHeight("bottom")).toBe(46);
+      expect(root.style.getPropertyValue("--bottom-sheet-height")).toBe("46px");
+    });
+
     it("counts the title row, not the details below it, as the open sheet", () => {
       expect(mod.sheetVisibleHeight("bottom")).toBe(244);
       expect(root.style.getPropertyValue("--bottom-sheet-height")).toBe("244px");

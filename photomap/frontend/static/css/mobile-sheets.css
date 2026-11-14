@@ -123,6 +123,31 @@ html.mobile-sheets[data-bottom-sheet="collapsed"] #panelStackContainer {
   transform: translateY(calc(100% - var(--bottom-sheet-peek)));
 }
 
+/* A phone held sideways has no toolbar under the page: the bottom edge is
+   where iOS takes a swipe up to go home, and a handle that low loses its
+   drags to it. Collapsed, the handle grows upwards and its pill moves to the
+   top, so it is grabbed clear of that zone. (env() reports nothing without
+   viewport-fit=cover, hence the floor.) */
+@media (max-height: 500px) and (pointer: coarse) {
+  html.mobile-sheets[data-bottom-sheet="collapsed"] {
+    --bottom-sheet-peek: calc(24px + max(22px, env(safe-area-inset-bottom, 0px)));
+  }
+
+  html.mobile-sheets[data-bottom-sheet="collapsed"] #bottomSheetHandle {
+    align-items: flex-start;
+    padding-top: 10px;
+  }
+}
+
+/* Once collapsed, nothing below the handle shows: the Grid View checkmark
+   overhangs its button upwards, into the strip left on screen. Hidden only
+   after the sheet has slid down (the delay), never while it is dragged, and
+   shown again at once when it opens. */
+html.mobile-sheets[data-bottom-sheet="collapsed"] #panelStackContainer:not(.sheet-dragging) > :not(.sheet-handle) {
+  visibility: hidden;
+  transition: visibility 0s linear 0.28s;
+}
+
 /* Expanded: the details hang below the window, all but their title row. */
 html.mobile-sheets[data-bottom-sheet="expanded"] #panelStackContainer {
   transform: translateY(calc(var(--sheet-details-height) - var(--sheet-details-peek)));

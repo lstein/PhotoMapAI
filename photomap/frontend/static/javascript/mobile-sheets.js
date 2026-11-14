@@ -163,6 +163,12 @@ class Sheet {
 
   /** Collapsed height: what stays on screen, in px. */
   peekHeight() {
+    // The bottom sheet's handle is exactly its peek, and its height is the
+    // one to trust: a phone held sideways sets the peek with calc() and env()
+    // (mobile-sheets.css), which a custom property hands back unevaluated.
+    if (this.name === "bottom" && this.handle.offsetHeight > 0) {
+      return this.handle.offsetHeight;
+    }
     const raw = getComputedStyle(this.element).getPropertyValue(this.peekVar);
     const value = parseFloat(raw);
     return Number.isFinite(value) ? value : this.peekFallback;
@@ -611,7 +617,9 @@ export function sheetVisibleHeight(name) {
 }
 
 /**
- * Collapsed height of a sheet, in px; 0 outside the phone layout.
+ * Height of a sheet's handle strip, in px; 0 outside the phone layout. For the
+ * bottom sheet held sideways on a touch screen that is its collapsed height
+ * only while it is collapsed: the handle grows when it collapses.
  *
  * @param {"top"|"bottom"} name
  */
