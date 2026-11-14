@@ -34,7 +34,7 @@ export const state = {
   albumEncoderSpec: null, // mirrored from the active album's config
   // persisted UMAP settings
   umapShowLandmarks: true, // Legacy on/off switch; only read to seed umapLandmarkStyle
-  umapLandmarkStyle: "thumbnails", // "none" | "thumbnails" | "text" — how UMAP clusters are labelled
+  umapLandmarkStyle: "thumbnails", // "none" | "thumbnails" | "tiles" | "text" — how UMAP clusters are labelled
   umapShowHoverThumbnails: true, // Show hover thumbnails in UMAP
   umapExitFullscreenOnSelection: true, // Exit fullscreen when cluster is selected
   umapClickSelectsCluster: true, // Whether click selects cluster or single image
@@ -125,7 +125,7 @@ const PERSISTED_SETTINGS = [
   // the registry only so a device that predates the three-way choice still
   // restores it, which is what umapLandmarkStyle's dynamicDefault reads.
   { key: "umapShowLandmarks", type: "bool", default: true },
-  // "none" | "thumbnails" | "text". Must stay *after* umapShowLandmarks: the
+  // "none" | "thumbnails" | "tiles" | "text". Must stay *after* umapShowLandmarks: the
   // restore loop runs in registry order, and the dynamicDefault below is how a
   // device that only ever had the old checkbox keeps what it chose (unchecked
   // becomes "none" rather than snapping back to thumbnails).
@@ -133,7 +133,7 @@ const PERSISTED_SETTINGS = [
     key: "umapLandmarkStyle",
     type: "string",
     default: "thumbnails",
-    choices: ["none", "thumbnails", "text"],
+    choices: ["none", "thumbnails", "tiles", "text"],
     dynamicDefault: () => (state.umapShowLandmarks ? "thumbnails" : "none"),
   },
   { key: "umapShowHoverThumbnails", type: "bool", default: true },

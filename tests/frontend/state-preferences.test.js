@@ -114,11 +114,11 @@ describe("restorePersistedSettings", () => {
   });
 
   it("prefers a stored landmark style over the old checkbox", async () => {
-    window.initialPreferences = { umapShowLandmarks: false, umapLandmarkStyle: "text", updatedAt: 1 };
+    window.initialPreferences = { umapShowLandmarks: false, umapLandmarkStyle: "tiles", updatedAt: 1 };
 
     await stateModule.restorePersistedSettings();
 
-    expect(stateModule.state.umapLandmarkStyle).toBe("text");
+    expect(stateModule.state.umapLandmarkStyle).toBe("tiles");
   });
 
   it("never restores or sends an unrecognised landmark style", async () => {

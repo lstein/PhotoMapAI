@@ -32,8 +32,11 @@ const UMAP_SIZES = {
 };
 const landmarkCount = 18; // Maximum number of non-overlapping landmarks to show at any time
 // How the clusters are marked on the map: not at all, by a thumbnail of a
-// representative image, or by a text label in the cluster's colour.
-const LANDMARK_STYLES = ["none", "thumbnails", "text"];
+// representative image, by a tile (a rounded tag filled with the cluster's
+// colour), or by bare text in the cluster's colour. Tiles and text are both
+// drawn as annotations and share everything but their styling.
+const LANDMARK_STYLES = ["none", "thumbnails", "tiles", "text"];
+const ANNOTATION_STYLES = ["tiles", "text"];
 const DEFAULT_LANDMARK_STYLE = "thumbnails";
 const randomWalkMaxSize = 5000; // Max cluster size to use random walk ordering
 const MARKER_UPDATE_IGNORE_WINDOW_MS = 1000; // Time window to ignore marker updates after manual navigation
@@ -2041,7 +2044,7 @@ function updateLandmarkTrace() {
     if (landmarkStyle !== "thumbnails") {
       clearLandmarkImages(plotDiv);
     }
-    if (landmarkStyle !== "text") {
+    if (!ANNOTATION_STYLES.includes(landmarkStyle)) {
       clearTextLandmarks(plotDiv);
     }
     if (landmarkStyle === "none") {
@@ -2049,7 +2052,7 @@ function updateLandmarkTrace() {
     }
 
     // Get clusters in view
-    const clusters = getLargestClustersInView(100, landmarkStyle === "text" ? "centroid" : "top");
+    const clusters = getLargestClustersInView(100, ANNOTATION_STYLES.includes(landmarkStyle) ? "centroid" : "top");
     if (!clusters.length) {
       // The triangle traces were deleted above, but the thumbnails live in
       // layout.images (and text labels in layout.annotations) and need
@@ -2062,8 +2065,8 @@ function updateLandmarkTrace() {
       return;
     }
 
-    if (landmarkStyle === "text") {
-      drawTextLandmarks(plotDiv, clusters);
+    if (ANNOTATION_STYLES.includes(landmarkStyle)) {
+      drawTextLandmarks(plotDiv, clusters, landmarkStyle);
       return;
     }
 
@@ -2188,8 +2191,9 @@ const debouncedUpdateLandmarkTrace = debounce(updateLandmarkTrace, 500);
 
 // --- Text landmarks ---
 //
-// Drawn as Plotly annotations: a rounded tag filled with the cluster's colour,
-// its text black or white for contrast, centred on the cluster's mean position the way a map labels a
+// Drawn as Plotly annotations, in one of two looks: a tile (a rounded tag
+// filled with the cluster's colour, its text black or white for contrast) or
+// bare text in the cluster's colour. Either is centred on the cluster's mean position the way a map labels a
 // region. (A thumbnail hangs above the cluster's top edge instead; a label
 // there drifts away from a large cluster's mass.) Annotations live
 // in layout.annotations, entirely separate from the thumbnails' layout.images
@@ -2275,7 +2279,35 @@ function placeTextLandmarks(plotDiv, clusters) {
   return placed;
 }
 
-function drawTextLandmarks(plotDiv, clusters) {
+// The style-specific part of a label: a filled tile, or bare coloured text.
+function textLandmarkLook(color, style) {
+  if (style === "tiles") {
+    return {
+      font: { color: isColorLight(color) ? "#111" : "#fff", size: TEXT_LANDMARK_FONT_PX },
+      bgcolor: color,
+      // A dark rim keeps the tile distinct from its own cluster's dots, which
+      // are the same colour and sit right behind it. The rounded corners come
+      // from umap-floating-window.css; Plotly has no option for them.
+      bordercolor: "rgba(0, 0, 0, 0.55)",
+      borderwidth: 1,
+      borderpad: TEXT_LANDMARK_PAD_PX,
+    };
+  }
+  return {
+    // No box at all, so the text needs a dark halo of its own to stay legible
+    // over the same-coloured dots of its cluster (the map background is dark).
+    font: {
+      color,
+      size: TEXT_LANDMARK_FONT_PX + 1,
+      shadow: "0 0 2px #000, 0 0 4px #000, 0 0 6px rgba(0, 0, 0, 0.8)",
+    },
+    bgcolor: "rgba(0, 0, 0, 0)",
+    borderwidth: 0,
+    borderpad: TEXT_LANDMARK_PAD_PX,
+  };
+}
+
+function drawTextLandmarks(plotDiv, clusters, style) {
   const placed = placeTextLandmarks(plotDiv, clusters);
   const annotations = placed.map((c) => ({
     x: c.center.x,
@@ -2286,14 +2318,7 @@ function drawTextLandmarks(plotDiv, clusters) {
     yanchor: "middle",
     showarrow: false,
     text: `<b>${escapeAnnotationText(c.text)}</b>`,
-    font: { color: isColorLight(c.color) ? "#111" : "#fff", size: TEXT_LANDMARK_FONT_PX },
-    bgcolor: c.color,
-    // A dark rim keeps the tag distinct from its own cluster's dots, which
-    // are the same colour and sit right behind it. The rounded corners come
-    // from umap-floating-window.css; Plotly has no option for them.
-    bordercolor: "rgba(0, 0, 0, 0.55)",
-    borderwidth: 1,
-    borderpad: TEXT_LANDMARK_PAD_PX,
+    ...textLandmarkLook(c.color, style),
     // Lets plotly_clickannotation fire, so a label is as clickable as a
     // thumbnail is.
     captureevents: true,
@@ -2316,7 +2341,7 @@ function drawTextLandmarks(plotDiv, clusters) {
 // invalidated by a recluster, or autotagging is switched — none of which is a
 // pan or zoom, so redraw on the announcement itself.
 window.addEventListener("clusterLabelsUpdated", () => {
-  if (mapExists && landmarkStyle === "text") {
+  if (mapExists && ANNOTATION_STYLES.includes(landmarkStyle)) {
     debouncedUpdateLandmarkTrace();
   }
 });
@@ -2670,7 +2695,7 @@ function setUmapWindowSize(sizeKey) {
 
     // Thumbnails swamp the small window, so turn them off there. Only for
     // this view — the stored preference is left alone, as it always was.
-    // Text labels are compact enough to stay.
+    // Tiles and text labels are compact enough to stay.
     if (sizeKey === "small" && landmarkSelect && landmarkStyle === "thumbnails") {
       landmarkSelect.value = "none";
       landmarkStyle = "none";

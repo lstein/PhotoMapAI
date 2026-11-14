@@ -216,7 +216,7 @@ label.umap-control-cell,
   user-select: none;
 }
 
-/* Text landmarks are Plotly annotations, whose background is an SVG <rect>
+/* Tile landmarks are Plotly annotations, whose background is an SVG <rect>
    with no corner-radius option. rx/ry are CSS properties in SVG2, so this
    reaches every rect Plotly draws, including the ones it re-creates on each
    frame of a pan. umap.js draws no other annotations on this plot. */

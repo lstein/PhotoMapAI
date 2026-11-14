@@ -303,12 +303,12 @@ describe("umap.js landmarks", () => {
     });
   });
 
-  describe("text labels", () => {
+  describe("tiles", () => {
     beforeEach(async () => {
       for (const key of Object.keys(clusterLabels)) {
         delete clusterLabels[key];
       }
-      await showLandmarksAcross([-40, 30], [-20, 35], "text");
+      await showLandmarksAcross([-40, 30], [-20, 35], "tiles");
     });
 
     it("fills each cluster's label with its colour, with no thumbnails or triangles", () => {
@@ -351,7 +351,7 @@ describe("umap.js landmarks", () => {
       const plotDiv = document.getElementById("umapPlot");
       plotDiv.layout.xaxis.range = [-30, -10];
       plotDiv.layout.yaxis.range = [-5, 10];
-      await chooseStyle("text");
+      await chooseStyle("tiles");
       expect(currentLandmarkAnnotations()).toHaveLength(1);
 
       await selectFilter("videos");
@@ -364,7 +364,7 @@ describe("umap.js landmarks", () => {
       expect(currentLandmarkAnnotations()).toHaveLength(0);
       expect(currentLandmarkImages()).toHaveLength(2);
 
-      await chooseStyle("text");
+      await chooseStyle("tiles");
       expect(currentLandmarkAnnotations()).toHaveLength(2);
       expect(currentLandmarkImages()).toHaveLength(0);
       expect(currentLandmarkTrace()).toBeNull();
@@ -393,7 +393,7 @@ describe("umap.js landmarks", () => {
     });
 
     it("persists the chosen style", () => {
-      expect(setUmapLandmarkStyle).toHaveBeenLastCalledWith("text");
+      expect(setUmapLandmarkStyle).toHaveBeenLastCalledWith("tiles");
     });
 
     it("navigates to the cluster's representative when a label is clicked", async () => {
@@ -408,6 +408,65 @@ describe("umap.js landmarks", () => {
 
       const target = slideState.navigateToIndex.mock.calls.at(-1)?.[0];
       expect(target).toBeGreaterThanOrEqual(100);
+      mockState.umapClickSelectsCluster = true;
+    });
+  });
+  describe("text labels", () => {
+    beforeEach(async () => {
+      for (const key of Object.keys(clusterLabels)) {
+        delete clusterLabels[key];
+      }
+      await showLandmarksAcross([-40, 30], [-20, 35], "text");
+    });
+
+    it("draws bare text in the cluster's colour, with no box", () => {
+      const labels = currentLandmarkAnnotations();
+      expect(labels).toHaveLength(2);
+      for (const label of labels) {
+        expect(["#ff0000", "#00ff00", "#0000ff"]).toContain(label.font.color);
+        expect(label.bgcolor).toBe("rgba(0, 0, 0, 0)");
+        expect(label.borderwidth).toBe(0);
+        // A dark halo stands in for the box, for legibility over the dots.
+        expect(label.font.shadow).toBeTruthy();
+        expect(label.captureevents).toBe(true);
+      }
+      expect(currentLandmarkImages()).toHaveLength(0);
+      expect(currentLandmarkTrace()).toBeNull();
+    });
+
+    it("restyles in place when switching to tiles and back", async () => {
+      await chooseStyle("tiles");
+      let labels = currentLandmarkAnnotations();
+      expect(labels).toHaveLength(2);
+      expect(labels.every((a) => a.bgcolor !== "rgba(0, 0, 0, 0)")).toBe(true);
+
+      await chooseStyle("text");
+      labels = currentLandmarkAnnotations();
+      expect(labels).toHaveLength(2);
+      expect(labels.every((a) => a.bgcolor === "rgba(0, 0, 0, 0)")).toBe(true);
+    });
+
+    it("clears the labels when landmarks are turned off", async () => {
+      await chooseStyle("none");
+
+      expect(currentLandmarkAnnotations()).toHaveLength(0);
+    });
+
+    it("persists the chosen style", () => {
+      expect(setUmapLandmarkStyle).toHaveBeenLastCalledWith("text");
+    });
+
+    it("navigates to the cluster's representative when a label is clicked", async () => {
+      const { slideState } = await import(`${JS}/slide-state.js`);
+      mockState.umapClickSelectsCluster = false;
+      const plotDiv = document.getElementById("umapPlot");
+      const imageLabel = currentLandmarkAnnotations().findIndex((a) => a.x < 0);
+
+      plotDiv.emit("plotly_clickannotation", { index: imageLabel });
+      await settle();
+
+      const target = slideState.navigateToIndex.mock.calls.at(-1)?.[0];
+      expect(target).toBeLessThan(100);
       mockState.umapClickSelectsCluster = true;
     });
   });

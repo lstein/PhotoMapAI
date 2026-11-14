@@ -76,7 +76,7 @@ These functions are controlled by the checkboxes in the bottom right of the wind
 
 <img src="../../img/photomap_landmarks_and_thumbnails.png" width="480" alt="Thumbnail controls" class="img-hover-zoom">
 
-The "Landmarks" pulldown chooses how the most prominent clusters are marked: "Thumbnails" positions small static thumbnails on the clusters, "Text labels" places a rounded tag in each cluster's colour showing its autotag phrase (or "Cluster N" when autotagging is off), and "None" marks nothing. "Show hover thumbnails" pops up a larger preview window as you hover the mouse over the image dots. Landmarks give you an overview of what's in your collection; hover thumbnails give you only one preview image at a time, but it is larger and more detailed. Clicking a thumbnail or a text label works the same way as clicking a dot in that cluster.
+The "Landmarks" pulldown chooses how the most prominent clusters are marked: "Thumbnails" positions small static thumbnails on the clusters; "Tiles" places a rounded tag filled with each cluster's colour showing its autotag phrase (or "Cluster N" when autotagging is off); "Text labels" shows the same phrase as plain text in the cluster's colour, with no box; and "None" marks nothing. "Show hover thumbnails" pops up a larger preview window as you hover the mouse over the image dots. Landmarks give you an overview of what's in your collection; hover thumbnails give you only one preview image at a time, but it is larger and more detailed. Clicking a thumbnail, tile or text label works the same way as clicking a dot in that cluster.
 
 With "Landmarks" set to "Thumbnails" and "Show hover thumbnails" turned off:
 
@@ -116,7 +116,7 @@ By default, landmarks will be turned on and hover images turned off when you ent
 
 ## Selecting Clusters
 
-Clicking on any colored image dot or a landmark (thumbnail or text label) will select all the images in its cluster and add them to the main display's search results. You will see the selected cluster become brighter, while all the other clusters will dim. This effect can be turned on and off by clicking on the checkbox in the bottom right corner labeld "Highlight selection."
+Clicking on any colored image dot or a landmark (thumbnail, tile or text label) will select all the images in its cluster and add them to the main display's search results. You will see the selected cluster become brighter, while all the other clusters will dim. This effect can be turned on and off by clicking on the checkbox in the bottom right corner labeld "Highlight selection."
 
 When a cluster is selected, the image search results will be sorted according to their distance from the image you clicked on in the semantic map. If you leave the semantic map window open and scroll through the results, you will see the yellow map position marker move increasingly far away from the original point. At the same time, the displayed full-size images will slowly diverge and become more diverse.
 

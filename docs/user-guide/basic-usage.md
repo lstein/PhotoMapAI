@@ -45,7 +45,7 @@ for each photo. The largest clusters are labeled with landmark images
 shown in the screenshot above as map markers pointing to major
 clusters. Hover the mouse over areas of interest to see larger
 thumbnail previews of the corresponding images. You can control
-whether landmarks are shown as thumbnails, as text labels or not at all
+whether landmarks are shown as thumbnails, tiles, text labels or not at all
 with the "Landmarks" pulldown at the bottom of the screen, and turn hover
 thumbnails on and off with the checkbox beside it.
 
