@@ -119,6 +119,7 @@ export function installPlotlyMock() {
         xaxis: { range: [-10, 10], ...(layout.xaxis || {}) },
         yaxis: { range: [-10, 10], ...(layout.yaxis || {}) },
         images: layout.images || [],
+        annotations: layout.annotations || [],
       };
       attachEmitter(div);
       // Recorded as a real snapshot, not a reference to div.data. Sharing the
@@ -207,6 +208,11 @@ export function removePlotlyMock() {
 /** The landmark thumbnails currently on the plot. */
 export function currentLandmarkImages(plotId = "umapPlot") {
   return document.getElementById(plotId)?.layout?.images || [];
+}
+
+/** The text landmark labels currently on the plot. */
+export function currentLandmarkAnnotations(plotId = "umapPlot") {
+  return document.getElementById(plotId)?.layout?.annotations || [];
 }
 
 /** The landmark triangle trace, if one is currently plotted. */

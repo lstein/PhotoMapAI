@@ -43,7 +43,7 @@ The curator offers two distinct algorithms for selecting images, selectable via 
 1.  **Setup your UI**: 
     - When the curator panel opens, the UMAP visualization automatically switches to grey mode - all points turn grey to make the colored selection overlays more visible.
     - Unclustered points (normally very faint) increase in opacity to match clustered points, providing a uniform background.
-    - It is recommended to turn off "Show landmarks" and "Show hover thumbnails" in the UMAP controls for a cleaner view.
+    - It is recommended to set "Landmarks" to "None" and turn off "Show hover thumbnails" in the UMAP controls for a cleaner view.
 2.  **Set Target Count**: Choose how many images you want in your final set (e.g., 50, 150).
 3.  **Set Iterations**: 
     -   Algorithms like FPS can be sensitive to the starting point. Running multiple iterations (Monte Carlo simulation) helps identify the "consensus" selections—images that are statistically important regardless of the random start.

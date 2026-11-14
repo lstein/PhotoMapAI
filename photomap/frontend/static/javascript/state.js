@@ -33,7 +33,8 @@ export const state = {
   useQueryOptimization: true, // SigLIP-only; ignored by other encoders
   albumEncoderSpec: null, // mirrored from the active album's config
   // persisted UMAP settings
-  umapShowLandmarks: true, // Show landmarks in UMAP
+  umapShowLandmarks: true, // Legacy on/off switch; only read to seed umapLandmarkStyle
+  umapLandmarkStyle: "thumbnails", // "none" | "thumbnails" | "tiles" | "text" — how UMAP clusters are labelled
   umapShowHoverThumbnails: true, // Show hover thumbnails in UMAP
   umapExitFullscreenOnSelection: true, // Exit fullscreen when cluster is selected
   umapClickSelectsCluster: true, // Whether click selects cluster or single image
@@ -92,6 +93,12 @@ export const state = {
  *                                   wins over `default`. Used by
  *                                   `showControlPanelText` which derives its
  *                                   default from screen width.
+ * @property {string[]} [choices]  For a "string" setting with a closed set of
+ *                                   values: anything else is treated as absent
+ *                                   on restore and refused by the setter, so a
+ *                                   corrupt stored value is never sent to the
+ *                                   server (whose Literal field would reject
+ *                                   the whole PATCH with it).
  * @property {(value: any) => void} [onSet]
  *                                   Extra side-effect after assignment;
  *                                   fires from both `restorePersistedSettings`
@@ -114,7 +121,21 @@ const PERSISTED_SETTINGS = [
   { key: "moveToTrash", type: "bool", default: true },
   { key: "wrapNavigation", type: "bool", default: false },
   { key: "gridThumbSizeFactor", type: "float", default: 1.0 },
+  // Superseded by umapLandmarkStyle, and no longer shown in the UI. Kept in
+  // the registry only so a device that predates the three-way choice still
+  // restores it, which is what umapLandmarkStyle's dynamicDefault reads.
   { key: "umapShowLandmarks", type: "bool", default: true },
+  // "none" | "thumbnails" | "tiles" | "text". Must stay *after* umapShowLandmarks: the
+  // restore loop runs in registry order, and the dynamicDefault below is how a
+  // device that only ever had the old checkbox keeps what it chose (unchecked
+  // becomes "none" rather than snapping back to thumbnails).
+  {
+    key: "umapLandmarkStyle",
+    type: "string",
+    default: "thumbnails",
+    choices: ["none", "thumbnails", "tiles", "text"],
+    dynamicDefault: () => (state.umapShowLandmarks ? "thumbnails" : "none"),
+  },
   { key: "umapShowHoverThumbnails", type: "bool", default: true },
   { key: "umapExitFullscreenOnSelection", type: "bool", default: true },
   { key: "umapClickSelectsCluster", type: "bool", default: true },
@@ -296,9 +317,14 @@ export async function restorePersistedSettings() {
   // they would be lost at the next iOS eviction.
   const migrate = [];
   for (const spec of PERSISTED_SETTINGS) {
-    const raw = _readLocalStorage(spec.key);
-    const fromRecord = _validated(record?.[spec.key], spec.type);
-    const value = fromRecord ?? _parseStored(raw, spec.type);
+    const allowed = (v) => (v !== undefined && spec.choices && !spec.choices.includes(v) ? undefined : v);
+    let raw = _readLocalStorage(spec.key);
+    const fromRecord = allowed(_validated(record?.[spec.key], spec.type));
+    const fromStorage = allowed(_parseStored(raw, spec.type));
+    if (fromStorage === undefined && spec.choices) {
+      raw = null; // an unrecognised value counts as none stored, so dynamicDefault applies
+    }
+    const value = fromRecord ?? fromStorage;
     if (record && fromRecord === undefined && value !== undefined) {
       migrate.push(spec.key);
     }
@@ -419,6 +445,9 @@ function _makeSetter(spec) {
       // Refuse NaN / Infinity rather than clobbering a valid state value.
       return;
     }
+    if (spec.choices && !spec.choices.includes(coerced)) {
+      return;
+    }
     if (state[spec.key] === coerced) {
       return;
     }
@@ -442,7 +471,7 @@ export const setDelay = _setters.currentDelay;
 export const setMode = _setters.mode;
 export const setShowControlPanelText = _setters.showControlPanelText;
 export const setWrapNavigation = _setters.wrapNavigation;
-export const setUmapShowLandmarks = _setters.umapShowLandmarks;
+export const setUmapLandmarkStyle = _setters.umapLandmarkStyle;
 export const setUmapShowHoverThumbnails = _setters.umapShowHoverThumbnails;
 export const setUmapExitFullscreenOnSelection = _setters.umapExitFullscreenOnSelection;
 export const setUmapClickSelectsCluster = _setters.umapClickSelectsCluster;
