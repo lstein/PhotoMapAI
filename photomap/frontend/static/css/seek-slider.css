@@ -118,11 +118,14 @@
   flex-direction: column;
 }
 
+/* Fullscreen selectors go inside :is(), whose selector list is forgiving: a
+   browser drops just the alternative it does not know there. In a plain
+   selector list one unknown pseudo-class (Firefox rejects
+   :-webkit-full-screen, Chromium :-moz-full-screen) throws out the whole rule
+   (#442). The prefixed form is for Safari before 16.4. */
+
 /* Hide score display in fullscreen mode */
-:fullscreen .fixed-score-display,
-:-webkit-full-screen .fixed-score-display,
-:-moz-full-screen .fixed-score-display,
-:-ms-fullscreen .fixed-score-display {
+:is(:fullscreen, :-webkit-full-screen) .fixed-score-display {
   display: none !important;
 }
 

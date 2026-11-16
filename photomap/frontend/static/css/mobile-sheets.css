@@ -87,9 +87,9 @@
   outline-offset: -2px;
 }
 
-/* Hidden with the rest of the controls in fullscreen. */
-html.mobile-sheets:fullscreen .mobile-sheet,
-html.mobile-sheets:-webkit-full-screen .mobile-sheet {
+/* Hidden with the rest of the controls in fullscreen. (:is() keeps an unknown
+   prefixed pseudo-class from dropping the rule; see seek-slider.css.) */
+html.mobile-sheets:is(:fullscreen, :-webkit-full-screen) .mobile-sheet {
   display: none !important;
 }
 

@@ -22,14 +22,14 @@
 }
 
 /* The sheets are hidden in fullscreen, so the grid gets the whole height. */
-html.mobile-sheets:fullscreen #gridViewSwiper,
-html.mobile-sheets:-webkit-full-screen #gridViewSwiper {
+/* (:is() keeps an unknown prefixed pseudo-class from dropping the rule; see
+   seek-slider.css.) */
+html.mobile-sheets:is(:fullscreen, :-webkit-full-screen) #gridViewSwiper {
   height: var(--visible-viewport-height, 100dvh);
 }
 
 /* The badge is hidden in fullscreen (seek-slider.css), so give the row back. */
-:fullscreen #gridViewSwiper,
-:-webkit-full-screen #gridViewSwiper {
+:is(:fullscreen, :-webkit-full-screen) #gridViewSwiper {
   --grid-top-reserve: 0px;
 }
 
