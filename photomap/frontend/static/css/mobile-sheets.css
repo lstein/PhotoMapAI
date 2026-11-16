@@ -97,10 +97,12 @@
   outline-offset: -2px;
 }
 
-/* Hidden with the rest of the controls in fullscreen. (:is() keeps an unknown
-   prefixed pseudo-class from dropping the rule; see seek-slider.css.) */
+/* Hidden with the rest of the controls in fullscreen. On larger screens the
+   top sheet stays, without the badge (seek-slider.css hides it), so the
+   slider can still be pulled down to seek. (:is() keeps an unknown prefixed
+   pseudo-class from dropping the rule; see seek-slider.css.) */
 html.mobile-sheets:is(:fullscreen, :-webkit-full-screen) #panelStackContainer,
-html.top-sheet:is(:fullscreen, :-webkit-full-screen) #topSheetContainer {
+html.mobile-sheets.top-sheet:is(:fullscreen, :-webkit-full-screen) #topSheetContainer {
   display: none !important;
 }
 

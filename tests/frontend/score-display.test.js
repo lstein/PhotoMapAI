@@ -246,6 +246,16 @@ describe("score-display.js", () => {
       expect(scoreDisplayInstance.scoreText.style.color).toBe("rgb(0, 0, 0)");
     });
 
+    it("moves the colour back onto the whole badge when the top sheet goes away", () => {
+      scoreDisplayInstance.showCluster(3, "#ff5500", 0, 10);
+      document.documentElement.classList.remove("top-sheet");
+      window.dispatchEvent(new CustomEvent("mobileSheetChanged", { detail: { sheet: "top", mobile: false } }));
+      const { scoreElement, scoreText } = scoreDisplayInstance;
+      expect(scoreElement.style.backgroundColor).toBe("rgb(255, 85, 0)");
+      expect(scoreText.style.backgroundColor).toBe("");
+      expect(scoreText.classList.contains("cluster-colored")).toBe(false);
+    });
+
     it("drops the cluster pill when the badge goes back to a plain index", () => {
       scoreDisplayInstance.showCluster(3, "#ff5500", 0, 10);
       scoreDisplayInstance.showIndex(1, 10);

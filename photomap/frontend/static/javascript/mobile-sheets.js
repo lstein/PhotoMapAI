@@ -95,9 +95,13 @@ function sheetModeActive(name) {
   return name === "top" ? isTopSheetMode() : isMobileSheetsMode();
 }
 
-// mobile-sheets.css hides both sheets while the page is fullscreen.
-function sheetsHiddenByFullscreen() {
-  return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+// mobile-sheets.css hides the bottom sheet while the page is fullscreen, and
+// the top sheet too in the phone layout. On larger screens the top sheet stays
+// (the badge in it is hidden), so the slider can still be reached to seek, as
+// the hover strip always allowed there.
+function sheetsHiddenByFullscreen(name) {
+  const fullscreen = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+  return fullscreen && (name === "bottom" || isMobileSheetsMode());
 }
 
 function readStoredBottomState() {
@@ -251,7 +255,7 @@ class Sheet {
    * expanded height: what is under the sheet does not reflow as it opens.
    */
   visibleHeight() {
-    if (!this.active() || sheetsHiddenByFullscreen()) {
+    if (!this.active() || sheetsHiddenByFullscreen(this.name)) {
       return 0;
     }
     if (!this.expanded) {
@@ -266,6 +270,10 @@ class Sheet {
     this.element.addEventListener("pointerup", this.onPointerUp);
     this.element.addEventListener("pointercancel", this.onPointerCancel);
     this.element.addEventListener("click", this.onClick);
+    // The handle is the keyboard's way in (events.js leaves it in the tab
+    // order, unlike other buttons), but a mouse press should not leave focus
+    // on it for the next Space or Enter to land there.
+    this.handle.addEventListener("mousedown", (event) => event.preventDefault());
     if (this.details) {
       const scroller = this.details.banner;
       scroller.addEventListener("touchstart", this.onScrollerTouchStart, { passive: true });
@@ -672,7 +680,7 @@ export function sheetState(name) {
  * for, when fullscreen ends.
  */
 export function setSheetState(name, state) {
-  if (sheetModeActive(name) && !sheetsHiddenByFullscreen()) {
+  if (sheetModeActive(name) && !sheetsHiddenByFullscreen(name)) {
     sheets[name]?.setState(state);
   }
 }
@@ -680,7 +688,7 @@ export function setSheetState(name, state) {
 /** Close the bottom sheet's details, back to the stop they were opened from. */
 export function closeSheetDetails() {
   const sheet = sheets.bottom;
-  if (sheet && sheet.state === SHEET_DETAILS && !sheetsHiddenByFullscreen()) {
+  if (sheet && sheet.state === SHEET_DETAILS && !sheetsHiddenByFullscreen("bottom")) {
     sheet.setState(sheet.stateBeforeDetails === SHEET_COLLAPSED ? SHEET_COLLAPSED : SHEET_EXPANDED);
   }
 }

@@ -23,6 +23,16 @@ export class ScoreDisplay {
     // in, so it cannot be re-rendered when the labels change underneath it;
     // these can. Null whenever the pill is showing something else.
     this.lastClusterArgs = null;
+    // The cluster colour the badge is showing, or null; see applyColors.
+    this.currentColor = null;
+
+    // Which element carries the cluster colour depends on whether the badge
+    // is in the top sheet; recolour if that changes under a shown badge.
+    window.addEventListener("mobileSheetChanged", (event) => {
+      if (event.detail?.sheet === "top" && this.isVisible) {
+        this.applyColors(this.currentColor);
+      }
+    });
 
     // Set up click listener for the star icon (deferred until DOM is ready)
     if (document.readyState === "loading") {
@@ -228,6 +238,7 @@ export class ScoreDisplay {
    * @param {string|null} clusterColor
    */
   applyColors(clusterColor) {
+    this.currentColor = clusterColor || null;
     const defaultBackground = `rgba(0, 0, 0, ${this.opacity})`;
     const textColor = clusterColor && isColorLight(clusterColor) ? "#000" : "#fff";
     const inSheet = isTopSheetMode();

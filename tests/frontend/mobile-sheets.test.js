@@ -376,6 +376,30 @@ describe("mobile-sheets.js", () => {
     });
   });
 
+  describe("fullscreen", () => {
+    const enterFullscreen = () =>
+      Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => root });
+    afterEach(() => delete document.fullscreenElement);
+
+    it("hides both sheets in the phone layout", () => {
+      mod.initializeMobileSheets();
+      enterFullscreen();
+      expect(mod.sheetVisibleHeight("top")).toBe(0);
+      expect(mod.sheetVisibleHeight("bottom")).toBe(0);
+      mod.setSheetState("top", "expanded");
+      expect(root.dataset.topSheet).toBe("collapsed");
+    });
+
+    it("keeps the top sheet on larger screens, so the slider can still seek", () => {
+      installMatchMedia(false);
+      mod.initializeMobileSheets();
+      enterFullscreen();
+      expect(mod.sheetVisibleHeight("top")).toBe(26);
+      mod.setSheetState("top", "expanded");
+      expect(root.dataset.topSheet).toBe("expanded");
+    });
+  });
+
   describe("switching layouts", () => {
     beforeEach(() => mod.initializeMobileSheets());
 

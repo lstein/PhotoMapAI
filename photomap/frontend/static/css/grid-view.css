@@ -37,6 +37,12 @@ html.mobile-sheets:is(:fullscreen, :-webkit-full-screen) #gridViewSwiper {
   --grid-top-reserve: 0px;
 }
 
+/* Except to the top sheet's strip, which stays in fullscreen outside the
+   phone layout (mobile-sheets.css). */
+html.top-sheet:not(.mobile-sheets):is(:fullscreen, :-webkit-full-screen) #gridViewSwiper {
+  --grid-top-reserve: calc(var(--top-sheet-peek) + 6px);
+}
+
 #swiperGridView {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(256px, 1fr));
