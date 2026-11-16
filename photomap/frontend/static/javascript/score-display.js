@@ -1,6 +1,7 @@
 // score-display.js
 // This file manages the score display functionality, showing and hiding the score overlay.
 import { getClusterLabelInfo, SHOW_CLUSTER_LABELS_IN_BADGES } from "./cluster-utils.js";
+import { isTopSheetMode } from "./mobile-sheets.js";
 import { isColorLight } from "./utils.js"; // Utility function to check if a color is light
 
 // Star SVG icons for favorites display
@@ -134,8 +135,7 @@ export class ScoreDisplay {
       this.scoreElement.style.display = "flex";
       this.scoreElement.classList.add("visible");
       this.scoreElement.classList.remove("hidden");
-      this.scoreElement.style.backgroundColor = `rgba(0, 0, 0, ${this.opacity})`; // Default background color
-      this.scoreElement.style.color = "#fff"; // Default text color
+      this.applyColors(null);
       this.isVisible = true;
       this.dispatchContentChangedEvent();
     }
@@ -155,8 +155,7 @@ export class ScoreDisplay {
       this.scoreElement.style.display = "flex";
       this.scoreElement.classList.add("visible");
       this.scoreElement.classList.remove("hidden");
-      this.scoreElement.style.backgroundColor = `rgba(0, 0, 0, ${this.opacity})`; // Default background color
-      this.scoreElement.style.color = "#fff"; // Default text color
+      this.applyColors(null);
       this.isVisible = true;
       this.dispatchContentChangedEvent();
     }
@@ -214,15 +213,39 @@ export class ScoreDisplay {
       this.isVisible = true;
 
       if (color) {
-        this.scoreElement.style.backgroundColor = color;
         this.scoreElement.style.opacity = this.opacity;
-        if (isColorLight(color)) {
-          this.scoreElement.style.color = "#000"; // Dark text for light background
-        } else {
-          this.scoreElement.style.color = "#fff"; // Light text for dark background
-        }
+        this.applyColors(color);
       }
       this.dispatchContentChangedEvent();
+    }
+  }
+
+  /**
+   * Colour the badge for a cluster, or back to its default dark pill (null).
+   * With the badge in the top sheet the cluster colour goes on the slide
+   * count and cluster text alone (a pill of its own, mobile-sheets.css), and
+   * the album pulldown beside it stays on the badge's dark background.
+   * @param {string|null} clusterColor
+   */
+  applyColors(clusterColor) {
+    const defaultBackground = `rgba(0, 0, 0, ${this.opacity})`;
+    const textColor = clusterColor && isColorLight(clusterColor) ? "#000" : "#fff";
+    const inSheet = isTopSheetMode();
+    const pill = inSheet ? this.scoreText : this.scoreElement;
+    if (inSheet) {
+      this.scoreElement.style.backgroundColor = defaultBackground;
+      this.scoreElement.style.color = "#fff";
+    } else if (this.scoreText) {
+      this.scoreText.style.backgroundColor = "";
+      this.scoreText.style.color = "";
+    }
+    if (!pill) {
+      return;
+    }
+    pill.style.backgroundColor = clusterColor || (inSheet ? "" : defaultBackground);
+    pill.style.color = clusterColor ? textColor : inSheet ? "" : "#fff";
+    if (this.scoreText) {
+      this.scoreText.classList.toggle("cluster-colored", inSheet && Boolean(clusterColor));
     }
   }
 

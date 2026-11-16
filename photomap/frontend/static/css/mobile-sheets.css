@@ -7,7 +7,11 @@
    holds the metadata drawer's contents below the panels: at the expanded stop
    only their title row shows, and its third, "details" stop opens them.
 
-   Everything here is keyed off html.mobile-sheets, set from the media query in
+   The top sheet has its own switch, html.top-sheet (main.html's
+   <meta name="top-sheet-query">), which is currently on everywhere: tablets
+   and desktop browsers get the top sheet too, but not the bottom one.
+
+   Everything else here is keyed off html.mobile-sheets, set from the media query in
    main.html's <meta name="mobile-sheets-query">, and the sheet states off
    html[data-top-sheet] / html[data-bottom-sheet]. This file loads after the
    panel and slider stylesheets, so at equal specificity its rules win. */
@@ -36,7 +40,8 @@
 
 /* ----- Common to both sheets ----- */
 
-.mobile-sheets .mobile-sheet {
+.mobile-sheets #panelStackContainer,
+.top-sheet #topSheetContainer {
   position: fixed;
   left: 0;
   right: 0;
@@ -51,15 +56,18 @@
   pointer-events: auto;
 }
 
-.mobile-sheets.sheets-ready .mobile-sheet {
+.mobile-sheets.sheets-ready #panelStackContainer,
+.top-sheet.sheets-ready #topSheetContainer {
   transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.mobile-sheets.sheets-ready .mobile-sheet.sheet-dragging {
+.mobile-sheets.sheets-ready #panelStackContainer.sheet-dragging,
+.top-sheet.sheets-ready #topSheetContainer.sheet-dragging {
   transition: none;
 }
 
-.mobile-sheets .sheet-handle {
+.mobile-sheets #bottomSheetHandle,
+.top-sheet #topSheetHandle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -74,7 +82,8 @@
 }
 
 /* The pill. */
-.mobile-sheets .sheet-handle::before {
+.mobile-sheets #bottomSheetHandle::before,
+.top-sheet #topSheetHandle::before {
   content: "";
   width: 40px;
   height: 5px;
@@ -82,14 +91,16 @@
   background: var(--sheet-handle-color);
 }
 
-.mobile-sheets .sheet-handle:focus-visible {
+.mobile-sheets #bottomSheetHandle:focus-visible,
+.top-sheet #topSheetHandle:focus-visible {
   outline: 2px solid #fff;
   outline-offset: -2px;
 }
 
 /* Hidden with the rest of the controls in fullscreen. (:is() keeps an unknown
    prefixed pseudo-class from dropping the rule; see seek-slider.css.) */
-html.mobile-sheets:is(:fullscreen, :-webkit-full-screen) .mobile-sheet {
+html.mobile-sheets:is(:fullscreen, :-webkit-full-screen) #panelStackContainer,
+html.top-sheet:is(:fullscreen, :-webkit-full-screen) #topSheetContainer {
   display: none !important;
 }
 
@@ -321,7 +332,7 @@ html.mobile-sheets[data-bottom-sheet="expanded"] #panelStackContainer {
 
 /* ----- Top sheet: album badge and seek slider ----- */
 
-.mobile-sheets #topSheetContainer {
+.top-sheet #topSheetContainer {
   top: 0;
   /* Under the semantic map (1000), as the badge always was, so the map's
      titlebar is not covered; above the photo and grid. */
@@ -329,60 +340,82 @@ html.mobile-sheets[data-bottom-sheet="expanded"] #panelStackContainer {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: 6px 0 0;
+  padding: 4px 0 0;
   border-radius: 0 0 14px 14px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
 }
 
-html.mobile-sheets[data-top-sheet="collapsed"] #topSheetContainer {
+html.top-sheet[data-top-sheet="collapsed"] #topSheetContainer {
   transform: translateY(calc(-100% + var(--top-sheet-peek)));
 }
 
 /* The badge keeps its own pill (it carries the cluster colour) but sits in the
-   sheet instead of floating over the corner of the photo. */
-.mobile-sheets .fixed-score-display {
+   sheet instead of floating over the corner of the photo. Its two lines become
+   one, the slide counter ahead of the reindex button and album pulldown, to
+   keep the sheet short. */
+.top-sheet .fixed-score-display {
   position: static;
   align-self: flex-start;
   max-width: calc(100% - 16px);
   margin: 0 8px;
   box-shadow: none;
   order: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-sheet .album-badge-row {
+  flex: 0 1 auto;
+}
+
+.top-sheet .fixed-score-display #scoreText {
+  order: -1;
+  flex: 0 1 auto;
+  padding: 2px 4px;
+  border-radius: 8px;
+}
+
+/* A selected cluster colours the slide count and cluster name only
+   (score-display.js), as a pill of their own. */
+.top-sheet .fixed-score-display #scoreText.cluster-colored {
+  padding: 2px 8px;
 }
 
 /* The slider gets the full width of the sheet, under the badge. seek-slider.js
    leaves its left edge alone in this layout. Room is left at the sides for the
    end tick labels, which centre on the slider's ends, and below for the tick
    row, which hangs under the slider. */
-.mobile-sheets .score-slider-row {
+.top-sheet .score-slider-row {
   position: static;
   left: auto;
   right: auto;
   order: 2;
-  margin: 10px 0 0;
-  padding: 0 32px 34px;
+  margin: 0;
+  padding: 0 32px 26px;
   transition: none;
 }
 
-.mobile-sheets .slider-with-ticks-container {
+.top-sheet .slider-with-ticks-container {
   min-width: 0;
 }
 
 /* Drag the thumb, not the sheet: make the slider a comfortable target. */
-.mobile-sheets .slide-seek-slider {
+.top-sheet .slide-seek-slider {
   height: 28px;
 }
 
 /* No caption beside the slider, and no hover zone: the sheet opens and closes
    the slider here, and the zone, which hangs 20px below the slider row, would
    sit over the handle and swallow taps meant for it. */
-.mobile-sheets .context-label,
-.mobile-sheets .slider-hover-zone {
+.top-sheet .context-label,
+.top-sheet .slider-hover-zone {
   display: none;
 }
 
 /* Ten date labels do not fit across a phone held upright; show every other. */
 @media (max-width: 600px) {
-  .mobile-sheets .slider-tick:nth-child(even) .slider-tick-label {
+  .top-sheet .slider-tick:nth-child(even) .slider-tick-label {
     visibility: hidden;
   }
 }
@@ -390,7 +423,7 @@ html.mobile-sheets[data-top-sheet="collapsed"] #topSheetContainer {
 /* The progress strip is what remains of the slider when the sheet is
    collapsed: it sits on the sheet's bottom edge, above the handle, and is part
    of the target that opens the sheet rather than a hover target of its own. */
-.mobile-sheets .slider-hover-strip {
+.top-sheet .slider-hover-strip {
   position: static;
   order: 3;
   flex: 0 0 4px;
@@ -399,7 +432,7 @@ html.mobile-sheets[data-top-sheet="collapsed"] #topSheetContainer {
   pointer-events: none;
 }
 
-.mobile-sheets #topSheetHandle {
+.top-sheet #topSheetHandle {
   order: 4;
   height: calc(var(--top-sheet-peek) - 4px);
 }

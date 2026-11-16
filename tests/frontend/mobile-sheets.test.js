@@ -39,18 +39,25 @@ function drag(target, y0, y1, { steps = 10, duration = 400, release = true, kind
   }
 }
 
+// The phone layout's query, and the top sheet's own ("all" when main.html's
+// <meta name="top-sheet-query"> is absent, as it is here).
+const TOP_QUERY = "all";
 let queryListeners;
+let topQueryListeners;
 let queryMatches;
+let topQueryMatches;
 
-function installMatchMedia(matches) {
+function installMatchMedia(matches, topMatches = true) {
   queryMatches = matches;
+  topQueryMatches = topMatches;
   queryListeners = [];
+  topQueryListeners = [];
   window.matchMedia = jest.fn((query) => ({
     media: query,
     get matches() {
-      return queryMatches;
+      return query === TOP_QUERY ? topQueryMatches : queryMatches;
     },
-    addEventListener: (type, listener) => queryListeners.push(listener),
+    addEventListener: (type, listener) => (query === TOP_QUERY ? topQueryListeners : queryListeners).push(listener),
     removeEventListener: jest.fn(),
   }));
 }
@@ -58,6 +65,11 @@ function installMatchMedia(matches) {
 function flipQuery(matches) {
   queryMatches = matches;
   queryListeners.forEach((listener) => listener({ matches }));
+}
+
+function flipTopQuery(matches) {
+  topQueryMatches = matches;
+  topQueryListeners.forEach((listener) => listener({ matches }));
 }
 
 function buildDom() {
@@ -124,6 +136,31 @@ describe("mobile-sheets.js", () => {
       expect(mod.sheetVisibleHeight("bottom")).toBe(0);
       expect(document.getElementById("controlPanel").inert).toBe(false);
       expect(root.style.getPropertyValue("--bottom-sheet-height")).toBe("");
+    });
+
+    it("keeps the top sheet outside the phone layout", () => {
+      installMatchMedia(false);
+      mod.initializeMobileSheets();
+      expect(mod.isTopSheetMode()).toBe(true);
+      expect(mod.sheetVisibleHeight("top")).toBe(26);
+      expect(root.style.getPropertyValue("--top-sheet-height")).toBe("26px");
+      expect(document.getElementById("fixedScoreDisplay").inert).toBe(true);
+      expect(events).toEqual(
+        expect.arrayContaining([
+          { sheet: "top", state: "collapsed", expanded: false, mobile: true },
+          { sheet: "bottom", state: "expanded", expanded: true, mobile: false },
+        ])
+      );
+    });
+
+    it("leaves the badge and slider alone when the top-sheet query does not match", () => {
+      installMatchMedia(false, false);
+      mod.initializeMobileSheets();
+      expect(mod.isTopSheetMode()).toBe(false);
+      expect(mod.sheetVisibleHeight("top")).toBe(0);
+      expect(document.getElementById("fixedScoreDisplay").inert).toBe(false);
+      document.getElementById("topSheetHandle").click();
+      expect(root.dataset.topSheet).toBe("collapsed");
     });
 
     it("restores a bottom sheet the user had closed", () => {
@@ -347,12 +384,31 @@ describe("mobile-sheets.js", () => {
       expect(mod.isMobileSheetsMode()).toBe(false);
       expect(events).toEqual(
         expect.arrayContaining([
-          { sheet: "top", state: "collapsed", expanded: false, mobile: false },
+          // The top sheet has its own switch, still on.
+          { sheet: "top", state: "collapsed", expanded: false, mobile: true },
           { sheet: "bottom", state: "expanded", expanded: true, mobile: false },
         ])
       );
       expect(root.style.getPropertyValue("--bottom-sheet-height")).toBe("");
+      expect(root.style.getPropertyValue("--top-sheet-height")).toBe("26px");
+      expect(document.getElementById("controlPanel").inert).toBe(false);
+    });
+
+    it("still opens the top sheet outside the phone layout", () => {
+      flipQuery(false);
+      document.getElementById("topSheetHandle").click();
+      expect(root.dataset.topSheet).toBe("expanded");
+      expect(events.at(-1)).toEqual({ sheet: "top", state: "expanded", expanded: true, mobile: true });
+    });
+
+    it("closes and releases the top sheet when its own query stops matching", () => {
+      document.getElementById("topSheetHandle").click();
+      flipTopQuery(false);
+      expect(mod.isTopSheetMode()).toBe(false);
+      expect(root.dataset.topSheet).toBe("collapsed");
+      expect(events.at(-1)).toEqual({ sheet: "top", state: "collapsed", expanded: false, mobile: false });
       expect(document.getElementById("fixedScoreDisplay").inert).toBe(false);
+      expect(root.style.getPropertyValue("--top-sheet-height")).toBe("");
     });
 
     it("comes back with the slider closed", () => {

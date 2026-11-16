@@ -8,14 +8,18 @@
   height: calc(var(--visible-viewport-height, 100dvh) - var(--grid-top-reserve));
 }
 
-/* In the phone layout the badge is in the top sheet, which covers the grid
-   only by its handle unless the user pulls it open to seek. The bottom sheet
+/* With the badge in the top sheet, the sheet covers the grid only by its
+   handle unless the user pulls it open to seek. */
+.top-sheet #gridViewSwiper {
+  --grid-top-reserve: calc(var(--top-sheet-peek) + 6px);
+}
+
+/* In the phone layout the bottom sheet
    is another matter: open, it is two rows of buttons tall, and Swiper divides
    the container's height between the grid rows, so the container has to stop
    above it. --bottom-sheet-height follows the sheet as it opens and closes
    (mobile-sheets.js), and grid-view.js re-counts the rows when it does. */
 .mobile-sheets #gridViewSwiper {
-  --grid-top-reserve: calc(var(--top-sheet-peek) + 6px);
   height: calc(
     var(--visible-viewport-height, 100dvh) - var(--grid-top-reserve) - var(--bottom-sheet-height, 0px) - 6px
   );
