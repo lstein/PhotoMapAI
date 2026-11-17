@@ -390,13 +390,13 @@ describe("mobile-sheets.js", () => {
       expect(root.dataset.topSheet).toBe("collapsed");
     });
 
-    it("keeps the top sheet on larger screens, so the slider can still seek", () => {
+    it("hides the top sheet on larger screens too", () => {
       installMatchMedia(false);
       mod.initializeMobileSheets();
       enterFullscreen();
-      expect(mod.sheetVisibleHeight("top")).toBe(26);
+      expect(mod.sheetVisibleHeight("top")).toBe(0);
       mod.setSheetState("top", "expanded");
-      expect(root.dataset.topSheet).toBe("expanded");
+      expect(root.dataset.topSheet).toBe("collapsed");
     });
   });
 

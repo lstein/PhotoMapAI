@@ -95,13 +95,9 @@ function sheetModeActive(name) {
   return name === "top" ? isTopSheetMode() : isMobileSheetsMode();
 }
 
-// mobile-sheets.css hides the bottom sheet while the page is fullscreen, and
-// the top sheet too in the phone layout. On larger screens the top sheet stays
-// (the badge in it is hidden), so the slider can still be reached to seek, as
-// the hover strip always allowed there.
-function sheetsHiddenByFullscreen(name) {
-  const fullscreen = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
-  return fullscreen && (name === "bottom" || isMobileSheetsMode());
+// mobile-sheets.css hides both sheets, whole, while the page is fullscreen.
+function sheetsHiddenByFullscreen() {
+  return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
 }
 
 function readStoredBottomState() {
@@ -255,7 +251,7 @@ class Sheet {
    * expanded height: what is under the sheet does not reflow as it opens.
    */
   visibleHeight() {
-    if (!this.active() || sheetsHiddenByFullscreen(this.name)) {
+    if (!this.active() || sheetsHiddenByFullscreen()) {
       return 0;
     }
     if (!this.expanded) {
@@ -680,7 +676,7 @@ export function sheetState(name) {
  * for, when fullscreen ends.
  */
 export function setSheetState(name, state) {
-  if (sheetModeActive(name) && !sheetsHiddenByFullscreen(name)) {
+  if (sheetModeActive(name) && !sheetsHiddenByFullscreen()) {
     sheets[name]?.setState(state);
   }
 }
@@ -688,7 +684,7 @@ export function setSheetState(name, state) {
 /** Close the bottom sheet's details, back to the stop they were opened from. */
 export function closeSheetDetails() {
   const sheet = sheets.bottom;
-  if (sheet && sheet.state === SHEET_DETAILS && !sheetsHiddenByFullscreen("bottom")) {
+  if (sheet && sheet.state === SHEET_DETAILS && !sheetsHiddenByFullscreen()) {
     sheet.setState(sheet.stateBeforeDetails === SHEET_COLLAPSED ? SHEET_COLLAPSED : SHEET_EXPANDED);
   }
 }
