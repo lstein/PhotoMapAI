@@ -214,8 +214,10 @@ window.addEventListener("slideshowStartRequested", async () => {
 });
 
 function setupAccessibility() {
-  // Disable tabbing on buttons to prevent focus issues
-  document.querySelectorAll("button").forEach((btn) => (btn.tabIndex = -1));
+  // Disable tabbing on buttons to prevent focus issues. The sheet handles stay
+  // tabbable: a collapsed top sheet makes the album pulldown inside it inert,
+  // and its handle is then the keyboard's only way to it.
+  document.querySelectorAll("button:not(.sheet-handle)").forEach((btn) => (btn.tabIndex = -1));
 
   // Handle radio button accessibility
   document.querySelectorAll('input[type="radio"]').forEach((rb) => {

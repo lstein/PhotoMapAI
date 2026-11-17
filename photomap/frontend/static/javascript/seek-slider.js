@@ -1,7 +1,7 @@
 import { backStack } from "./back-stack.js";
 import { bookmarkManager } from "./bookmarks.js";
 import { scoreDisplay } from "./score-display.js";
-import { isMobileSheetsMode } from "./mobile-sheets.js";
+import { isTopSheetMode } from "./mobile-sheets.js";
 import { getCurrentSlideIndex, slideState } from "./slide-state.js";
 import { state } from "./state.js";
 import { debounce } from "./utils.js";
@@ -143,7 +143,7 @@ class SeekSlider {
     }
     // In the phone layout the slider has its own full-width row under the
     // badge (mobile-sheets.css); an inline left would squeeze it back beside it.
-    if (isMobileSheetsMode()) {
+    if (isTopSheetMode()) {
       this.scoreSliderRow.style.left = "";
       this.hoverStrip.style.left = "";
       return;

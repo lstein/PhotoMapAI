@@ -25,6 +25,7 @@ jest.unstable_mockModule("../../photomap/frontend/static/javascript/utils.js", (
 let mobile = true;
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/mobile-sheets.js", () => ({
   isMobileSheetsMode: () => mobile,
+  isTopSheetMode: () => mobile,
 }));
 
 const { seekSlider } = await import("../../photomap/frontend/static/javascript/seek-slider.js");
@@ -106,7 +107,7 @@ describe("seek slider pinned by the top sheet", () => {
     expect(document.getElementById("sliderHoverStrip").classList.contains("hidden")).toBe(false);
   });
 
-  it("closes when the phone layout ends, and measures from the badge again", async () => {
+  it("closes when the top-sheet layout ends, and measures from the badge again", async () => {
     sheetChanged(true);
     await flush();
     mobile = false;

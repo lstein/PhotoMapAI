@@ -16,6 +16,7 @@ const closeSheetDetails = jest.fn(() => {
 
 jest.unstable_mockModule("../../photomap/frontend/static/javascript/mobile-sheets.js", () => ({
   isMobileSheetsMode: () => mobile,
+  isTopSheetMode: () => mobile,
   setSheetState,
   closeSheetDetails,
   sheetState: () => bottomState,

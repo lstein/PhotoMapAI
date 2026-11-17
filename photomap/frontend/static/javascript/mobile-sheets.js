@@ -20,6 +20,13 @@
 // An inline script in main.html's <head> sets all three before first paint;
 // this module keeps them current afterwards.
 //
+// The top sheet has a switch of its own: the media query in
+// <meta name="top-sheet-query"> and the `top-sheet` class on <html>. It is
+// currently "all", so the badge and slider sit in the top sheet on every
+// screen, tablets and desktop browsers included, while the bottom sheet (and
+// the details in it) is still for phones only. Wherever the phone layout is on
+// the top sheet must be too: its rules lean on --top-sheet-peek.
+//
 // Listeners learn about changes from a `mobileSheetChanged` window event,
 // detail { sheet: "top" | "bottom", state, expanded, mobile }, where state is
 // "collapsed", "expanded" or (bottom only) "details", and expanded is true for
@@ -28,6 +35,8 @@
 
 const FALLBACK_QUERY = "(max-width: 600px), (max-height: 500px) and (pointer: coarse)";
 const MODE_CLASS = "mobile-sheets";
+const TOP_FALLBACK_QUERY = "all";
+const TOP_MODE_CLASS = "top-sheet";
 const DRAGGING_CLASS = "sheet-dragging";
 const BOTTOM_STATE_KEY = "bottomSheetState";
 
@@ -70,7 +79,23 @@ export function isMobileSheetsMode() {
   return document.documentElement.classList.contains(MODE_CLASS);
 }
 
-// mobile-sheets.css hides both sheets while the page is fullscreen.
+/** The media query that puts the badge and slider in the top sheet. */
+export function topSheetQuery() {
+  const meta = document.querySelector('meta[name="top-sheet-query"]');
+  return meta?.content || TOP_FALLBACK_QUERY;
+}
+
+/** Are the badge and seek slider in the top sheet? */
+export function isTopSheetMode() {
+  return document.documentElement.classList.contains(TOP_MODE_CLASS);
+}
+
+/** Is the named sheet's layout in effect? */
+function sheetModeActive(name) {
+  return name === "top" ? isTopSheetMode() : isMobileSheetsMode();
+}
+
+// mobile-sheets.css hides both sheets, whole, while the page is fullscreen.
 function sheetsHiddenByFullscreen() {
   return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
 }
@@ -148,6 +173,11 @@ class Sheet {
     this.onScrollerTouchMove = this.onScrollerTouchMove.bind(this);
   }
 
+  /** Is this sheet's layout in effect? */
+  active() {
+    return sheetModeActive(this.name);
+  }
+
   /** "collapsed", "expanded" or, for a sheet with details, "details". */
   get state() {
     const value = document.documentElement.dataset[this.attribute];
@@ -184,7 +214,7 @@ class Sheet {
    * the details under their title row, which hang below the window there.
    */
   detailsOffset() {
-    if (!this.details || !isMobileSheetsMode() || !this.details.slot.contains(this.details.banner)) {
+    if (!this.details || !this.active() || !this.details.slot.contains(this.details.banner)) {
       return 0;
     }
     const { slot } = this.details;
@@ -221,7 +251,7 @@ class Sheet {
    * expanded height: what is under the sheet does not reflow as it opens.
    */
   visibleHeight() {
-    if (!isMobileSheetsMode() || sheetsHiddenByFullscreen()) {
+    if (!this.active() || sheetsHiddenByFullscreen()) {
       return 0;
     }
     if (!this.expanded) {
@@ -236,6 +266,10 @@ class Sheet {
     this.element.addEventListener("pointerup", this.onPointerUp);
     this.element.addEventListener("pointercancel", this.onPointerCancel);
     this.element.addEventListener("click", this.onClick);
+    // The handle is the keyboard's way in (events.js leaves it in the tab
+    // order, unlike other buttons), but a mouse press should not leave focus
+    // on it for the next Space or Enter to land there.
+    this.handle.addEventListener("mousedown", (event) => event.preventDefault());
     if (this.details) {
       const scroller = this.details.banner;
       scroller.addEventListener("touchstart", this.onScrollerTouchStart, { passive: true });
@@ -288,7 +322,8 @@ class Sheet {
           sheet: this.name,
           state,
           expanded: state !== SHEET_COLLAPSED,
-          mobile: isMobileSheetsMode(),
+          // Whether this sheet's layout is in effect.
+          mobile: this.active(),
         },
       })
     );
@@ -314,7 +349,7 @@ class Sheet {
    * slid out of view, and say on the handle which way it goes.
    */
   syncAccessibility() {
-    const mobile = isMobileSheetsMode();
+    const mobile = this.active();
     const state = this.state;
     const hidden = mobile && state === SHEET_COLLAPSED;
     for (const child of this.element.children) {
@@ -351,7 +386,7 @@ class Sheet {
   }
 
   onPointerDown(event) {
-    if (!isMobileSheetsMode() || !event.isPrimary) {
+    if (!this.active() || !event.isPrimary) {
       return;
     }
     if (event.pointerType === "mouse" && event.button !== 0) {
@@ -547,7 +582,7 @@ class Sheet {
   }
 
   onClick(event) {
-    if (!isMobileSheetsMode()) {
+    if (!this.active()) {
       return;
     }
     const state = this.state;
@@ -578,7 +613,7 @@ function publishSheetHeights() {
   const mobile = isMobileSheetsMode();
   for (const sheet of Object.values(sheets)) {
     const property = `--${sheet.name}-sheet-height`;
-    if (mobile) {
+    if (sheet.active()) {
       root.style.setProperty(property, `${Math.round(sheet.visibleHeight())}px`);
     } else {
       root.style.removeProperty(property);
@@ -624,7 +659,7 @@ export function sheetVisibleHeight(name) {
  * @param {"top"|"bottom"} name
  */
 export function sheetPeekHeight(name) {
-  if (!isMobileSheetsMode()) {
+  if (!sheetModeActive(name)) {
     return 0;
   }
   return sheets[name]?.peekHeight() ?? 0;
@@ -641,7 +676,7 @@ export function sheetState(name) {
  * for, when fullscreen ends.
  */
 export function setSheetState(name, state) {
-  if (isMobileSheetsMode() && !sheetsHiddenByFullscreen()) {
+  if (sheetModeActive(name) && !sheetsHiddenByFullscreen()) {
     sheets[name]?.setState(state);
   }
 }
@@ -659,6 +694,15 @@ export function setSheetExpanded(name, expanded) {
   setSheetState(name, expanded ? SHEET_EXPANDED : SHEET_COLLAPSED);
 }
 
+/** Reset a sheet whose layout just switched on or off. */
+function resetSheetForMode(sheet) {
+  // A drag cannot survive the layout changing under it.
+  sheet.drag = null;
+  sheet.touchGate = null;
+  sheet.element.classList.remove(DRAGGING_CLASS);
+  sheet.element.style.transform = "";
+}
+
 function applyMode(mobile) {
   const root = document.documentElement;
   const wasMobile = root.classList.contains(MODE_CLASS);
@@ -666,12 +710,8 @@ function applyMode(mobile) {
   if (mobile === wasMobile) {
     return;
   }
-  // A drag cannot survive the layout changing under it.
   for (const sheet of Object.values(sheets)) {
-    sheet.drag = null;
-    sheet.touchGate = null;
-    sheet.element.classList.remove(DRAGGING_CLASS);
-    sheet.element.style.transform = "";
+    resetSheetForMode(sheet);
   }
   placeDetails(mobile);
   // The slider row is only ever opened by the user; coming back into the
@@ -684,6 +724,19 @@ function applyMode(mobile) {
     const state = sheet.state === SHEET_DETAILS ? SHEET_EXPANDED : sheet.state;
     sheet.setState(state, { force: true });
   }
+}
+
+function applyTopMode(topMode) {
+  const root = document.documentElement;
+  const was = root.classList.contains(TOP_MODE_CLASS);
+  root.classList.toggle(TOP_MODE_CLASS, topMode);
+  const sheet = sheets.top;
+  if (topMode === was || !sheet) {
+    return;
+  }
+  resetSheetForMode(sheet);
+  root.dataset.topSheet = SHEET_COLLAPSED;
+  sheet.setState(SHEET_COLLAPSED, { force: true });
 }
 
 /** Find the sheets in the page and start following the media query. */
@@ -724,12 +777,15 @@ export function initializeMobileSheets() {
   const query = window.matchMedia?.(mobileSheetsQuery());
   const mobile = Boolean(query?.matches);
   root.classList.toggle(MODE_CLASS, mobile);
+  const topQuery = window.matchMedia?.(topSheetQuery());
+  root.classList.toggle(TOP_MODE_CLASS, Boolean(topQuery?.matches));
   placeDetails(mobile);
   for (const sheet of Object.values(sheets)) {
     sheet.syncAccessibility();
   }
   publishSheetHeights();
   query?.addEventListener?.("change", (event) => applyMode(event.matches));
+  topQuery?.addEventListener?.("change", (event) => applyTopMode(event.matches));
 
   // Heights change with rotation and with what the sheets hold (the panel
   // labels can be switched off; a search changes the badge).

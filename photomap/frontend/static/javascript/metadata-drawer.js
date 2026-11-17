@@ -17,6 +17,7 @@ import { applyRefTarget } from "./invoke-ref-target.js";
 import {
   closeSheetDetails,
   isMobileSheetsMode,
+  isTopSheetMode,
   setSheetState,
   SHEET_DETAILS,
   sheetState,
@@ -642,7 +643,7 @@ function drawerRestingTop() {
   // In the phone layout the badge rides in the top sheet, and measuring it
   // mid-slide would catch the sheet part-way. Clear the sheet in the state it
   // is settling to instead; it reports a change whenever that moves.
-  if (isMobileSheetsMode()) {
+  if (isTopSheetMode()) {
     return Math.round(sheetVisibleHeight("top") + DRAWER_TOP_GAP);
   }
   const badge = document.getElementById("fixedScoreDisplay");

@@ -12,6 +12,9 @@
          slider fold into sheets that slide in from the top and bottom edges
          (mobile-sheets.js). Narrow windows, and phones held sideways. -->
     <meta name="mobile-sheets-query" content="(max-width: 600px), (max-height: 500px) and (pointer: coarse)" />
+    <!-- Screens whose album badge and seek slider sit in the top sheet. Every
+         screen, for now; it must match wherever mobile-sheets-query does. -->
+    <meta name="top-sheet-query" content="all" />
     <!-- Set the layout and the remembered sheet state before first paint, so
          the page does not lay out for the desktop and then rearrange itself.
          mobile-sheets.js keeps these current afterwards. -->
@@ -21,6 +24,10 @@
             var meta = document.querySelector('meta[name="mobile-sheets-query"]');
             if (meta && window.matchMedia && window.matchMedia(meta.content).matches) {
                 root.classList.add("mobile-sheets");
+            }
+            var topMeta = document.querySelector('meta[name="top-sheet-query"]');
+            if (window.matchMedia && window.matchMedia(topMeta ? topMeta.content : "all").matches) {
+                root.classList.add("top-sheet");
             }
             var bottom = "expanded";
             try {
